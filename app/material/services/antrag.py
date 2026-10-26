@@ -765,8 +765,10 @@ def ohne_verwalter_melden():
     Mail an den Versand ging (DEMO, Umgebungssperre, ohne Mailserver: nur ins Log)."""
     if not db.query("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'mat_antrag_ohne_verwalter'", one=True):
         return False                                  # Schema vor Schritt 29 (nur in Tests, die früher anhalten)
-    ohne = {fid: n for fid, n in _offen_je_ordner().items() if not zustaendige_ordner(fid)}
     with db.transaction(sofort=True):
+        # Unter der Schreibsperre gerechnet (Sicherheitsprüfung vom 26.10.2026): Rechnete ein Vorgang vorher, könnte er mit
+        # altem Stand die Zeile eines gleichzeitigen löschen – der nächste Lauf meldete denselben Wegfall dann noch einmal.
+        ohne = {fid: n for fid, n in _offen_je_ordner().items() if not zustaendige_ordner(fid)}
         gemeldet = {r["folder_id"] for r in db.query("SELECT folder_id FROM mat_antrag_ohne_verwalter")}
         weg = gemeldet - set(ohne)
         if weg:

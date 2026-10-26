@@ -178,6 +178,70 @@ def test_n5_ausloeser_und_einmaligkeit():
     print("N5 bestanden.")
 
 
+def test_n5_wettlauf():
+    """Sicherheitsprüfung vom 26.10.2026, Befund 1 (wie p30 Teil 3): Vorgang A entzieht eine von zwei
+    Verwalterfreigaben und rechnet langsam; währenddessen entzieht B die letzte. A darf mit seinem Stand B's Vermerk
+    nicht löschen – sonst meldete der nächste Lauf denselben Wegfall ein zweites Mal. Erwartet: genau eine Mail, der
+    Vermerk bleibt, ein weiterer Lauf (wie der Tageslauf) meldet nichts."""
+    import threading
+    import time
+    from app.material.services import antrag
+    post = []
+    alt = mails_abfangen(antrag, lambda an, betreff, text: post.append(an) or True)
+    echt = antrag.zustaendige_ordner
+    try:
+        with tempfile.TemporaryDirectory() as tmp:
+            t = aufbau(tmp)
+            fach = t.w.post(f"{API}/ordner", json={"name": "Fach Wettlauf", "kind": "standort", "parent_id": t.ga})
+            fach = fach.json["ordner"]["id"]
+            a1 = neuer_artikel(t.w, t.ids["hms"], fach, serial_no="WL-1")["id"]
+            _geprueft(t, a1)
+            w1, w1_id = neues_konto(t.app, "wl1@example.org")
+            w2, w2_id = neues_konto(t.app, "wl2@example.org")
+            freigeben(t.adm, fach, w1_id, "verwalten")
+            freigeben(t.adm, fach, w2_id, "verwalten")
+            t.adm.delete(f"{API}/freigaben/{_grant(t, t.ga, t.k['wart_id'])}", headers=H)
+            _antrag(t, a1)
+            post.clear()
+            langsam = threading.Event()
+
+            def zustaendige_langsam(fid):
+                ergebnis = echt(fid)
+                if threading.current_thread().name == "A":
+                    langsam.set()
+                    time.sleep(1.0)              # das Fenster, in dem B entzieht
+                return ergebnis
+            antrag.zustaendige_ordner = zustaendige_langsam
+
+            def entziehen(uid):
+                conn = sqlite3.connect(t.app.config["DB_PATH"], timeout=30)
+                with conn:
+                    conn.execute("DELETE FROM mat_folder_grant WHERE folder_id = ? AND user_id = ?", (fach, uid))
+                conn.close()
+                with t.app.app_context():
+                    antrag.ohne_verwalter_melden()
+
+            def vorgang_b():
+                langsam.wait(10)
+                entziehen(w2_id)
+            fa = threading.Thread(target=entziehen, args=(w1_id,), name="A")
+            fb = threading.Thread(target=vorgang_b, name="B")
+            fa.start()
+            fb.start()
+            fa.join(60)
+            fb.join(60)
+            antrag.zustaendige_ordner = echt
+            assert post == ["katalog@example.org"], post
+            assert [r["folder_id"] for r in zeilen(t.app, "SELECT folder_id FROM mat_antrag_ohne_verwalter")] == [fach]
+            with t.app.app_context():
+                assert antrag.ohne_verwalter_melden() is False
+            assert len(post) == 1, post
+    finally:
+        antrag.zustaendige_ordner = echt
+        mails_zurueck(alt)
+    print("Wettlauf bestanden.")
+
+
 def test_n5_antrag_ohne_zustaendige_einmal():
     """Ein Antrag, für den es schon beim Stellen keinen Materialwart gibt, geht mit seiner Mail an die
     Material-Verwaltung – das zählt als Meldung: Ein späterer Vorgang meldet den Ordner nicht ein zweites Mal."""
@@ -241,6 +305,7 @@ if __name__ == "__main__":
     test_a4_zaehlung_und_filter()
     test_n5_ausloeser_und_einmaligkeit()
     test_n5_antrag_ohne_zustaendige_einmal()
+    test_n5_wettlauf()
     test_schritt_29()
     test_oberflaeche_statisch()
     print("Alle Tests zu A4 und N5 bestanden.")

@@ -4195,6 +4195,10 @@ Produktwert, nur nach vorne“. **Schemaschritt 29.**
   Material-Verwaltung als Meldung. Nicht ausgelöst: Verschieben eines Ordners in eine andere Gliederung (verliert er
   dabei seine geerbten Verwalter, meldet ihn der nächste Auslöser oder der tägliche Lauf).
 - „Bitte bestätigen“ N5 der Freigabeliste: **entschieden** (Mail gewünscht, gebaut).
+- Nachbesserung nach der Sicherheitsprüfung (26.10.2026, Befund 1): Welche Ordner ohne Verwalter sind, wird erst unter
+  der Schreibsperre gerechnet – zwei gleichzeitige Entzüge konnten sonst den Vermerk des anderen löschen, und der
+  nächste Lauf meldete denselben Wegfall ein zweites Mal. Test `test_n5_wettlauf` (wie p30 Teil 3; ohne die Änderung
+  rot).
 
 ### W2 – Lebensende nie hinter den Produktwert (keine Änderung)
 Geprüft, dass kein Weg ein Lebensende hinter die Rechnung aus Herstellung + Lebensdauer setzt: Anlegen
