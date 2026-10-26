@@ -5,8 +5,12 @@ Lebenslauf-PDF sollen dasselbe Wort für dasselbe Feld benutzen.
 Was hier nicht steht, erscheint mit seinem technischen Namen – wie in der Oberfläche.
 
 Betroffene stehen im Journal nur als Kontoverweis („konto“, Phase 2); das PDF nennt sie nie – nicht einmal den Namen,
-den journal.lesen beim Lesen auflöst: Dort steht „(Person)“. Der Lebenslauf geht weiter, an wen er auch geht. Ebenso
-steht bei „Mangel gemeldet“ als Handelnder „(Person)“ – der Melder kann die zugeordnete Person sein (Phase 3 · L1)."""
+den journal.lesen beim Lesen auflöst: Dort steht „(Person)“. Der Lebenslauf geht weiter, an wen er auch geht.
+
+Bei „Mangel gemeldet“ nennt der Lebenslauf seit dem 26.10.2026 (Wunsch des Nutzers) den Melder und die Beschreibung der
+Meldung – nach derselben Regel wie die Oberfläche: für Prüfer und Materialwart des Artikels (mangel.darf_inhalt) und für
+den Melder bei seiner eigenen Meldung (journal_zeilen, maengel). Für alle anderen bleibt es bei „(Person)“ ohne Text –
+der Melder kann die zugeordnete Person sein (Phase 3 · L1). Fotos stehen nie im PDF."""
 import json
 
 from ..models import ANHANGARTEN, ERGEBNISSE, MATERIALARTEN, ORDNERARTEN, PRUEFARTEN
@@ -223,12 +227,14 @@ def wert_text(v, feld, verweise=None):
     return str(v)
 
 
-def journal_zeilen(eintraege, verweise=None, mit_entitaet=False):
+def journal_zeilen(eintraege, verweise=None, mit_entitaet=False, maengel=None):
     """Journaleinträge (journal.lesen) als fertige Zeilen fürs PDF: {zeit, aktion, von, felder: [(Feld, vorher,
     nachher)]}. Wie journalHtml(): Bei „angelegt“ und „gelöscht“ keine Felder – nur die Ablage, wenn bekannt –, und
     die technische Ordner- bzw. Produktkennung fällt weg, wo der Pfad bzw. der Produktname dabeisteht. mit_entitaet:
     True – vor jeder Aktion steht, woran sie geschah („Produkt geändert“); eine Menge von Entitäten – nur bei diesen
-    (der Lebenslauf: nur bei den Einträgen des Produkts)."""
+    (der Lebenslauf: nur bei den Einträgen des Produkts). maengel: {Kennung der Meldung: (Name des Melders,
+    Beschreibung)} – nur die Meldungen, deren Inhalt der Leser sehen darf (lebenslauf._maengel); bei „Mangel gemeldet“
+    stehen dann der Name als Handelnder und die Beschreibung als Feld „Mangelbeschreibung“, sonst „(Person)“."""
     out = []
     for j in eintraege:
         vorher, nachher = j.get("vorher") or {}, j.get("nachher") or {}
@@ -242,11 +248,15 @@ def journal_zeilen(eintraege, verweise=None, mit_entitaet=False):
         aktion = AKTION.get(j["action"], j["action"])
         if mit_entitaet is True or (mit_entitaet and j["entity"] in mit_entitaet):
             aktion = f"{ENTITAET.get(j['entity'], j['entity'])} {aktion}"
-        # Wer einen Mangel meldet, kann die zugeordnete Person sein – im Lebenslauf ohne Namen.
-        von = PERSON if j["action"] == "mangel_gemeldet" else (j.get("user_name") or "–")
-        out.append({"zeit": zeit_text(j["created_at"]), "aktion": aktion, "von": von,
-                    "felder": [{"feld": feld_name(f, j), "vorher": wert_text(vorher.get(f), f, verweise),
-                                "nachher": wert_text(nachher.get(f), f, verweise),
-                                "nur_nachher": j["action"] in ("angelegt",) or f not in vorher}
-                               for f in felder]})
+        zeilen = [{"feld": feld_name(f, j), "vorher": wert_text(vorher.get(f), f, verweise),
+                   "nachher": wert_text(nachher.get(f), f, verweise),
+                   "nur_nachher": j["action"] in ("angelegt",) or f not in vorher} for f in felder]
+        von = j.get("user_name") or "–"
+        if j["action"] == "mangel_gemeldet":
+            # Wer einen Mangel meldet, kann die zugeordnete Person sein – Name und Text nur, wo der Leser sie sehen darf.
+            meldung = (maengel or {}).get(nachher.get("mangel"))
+            von = meldung[0] if meldung else PERSON
+            if meldung:
+                zeilen.append({"feld": "Mangelbeschreibung", "vorher": "", "nachher": meldung[1], "nur_nachher": True})
+        out.append({"zeit": zeit_text(j["created_at"]), "aktion": aktion, "von": von, "felder": zeilen})
     return out

@@ -10,8 +10,10 @@ templates/material/pdf/lebenslauf.html). Gelesen wird ohne Transaktion – das S
 Inhalt: Stammdaten (wie im Protokoll), Zustand (Status, Sperre, Fälligkeit, wirksames Intervall, Lebensdauer,
 Bemerkung), alle abgeschlossenen Prüfungen und die Aussonderung in zeitlicher Reihenfolge, die Prüfdurchgänge, in
 denen der Artikel stand, und die Ereignisse aus seinem Journal mit lesbaren Beschriftungen – bei Änderungsanträgen für
-Konten, die nur lesen, ohne Begründung und Namen (antrag.journal_verbergen). Dazu die Änderungen an den Daten seines
-Produkts seit dem Anlegen des Artikels (PRODUKT_AKTIONEN, als „Produkt …“ – Entscheidung E8 vom 24.10.2026: Die
+Konten, die nur lesen, ohne Begründung und Namen (antrag.journal_verbergen); bei „Mangel gemeldet“ mit dem Namen des
+Melders und der Mangelbeschreibung für Prüfer und Materialwart und für den Melder bei seiner eigenen Meldung, sonst
+„(Person)“ ohne Text wie in der Oberfläche (_maengel, Wunsch vom 26.10.2026; Fotos nie). Dazu die Änderungen an den
+Daten seines Produkts seit dem Anlegen des Artikels (PRODUKT_AKTIONEN, als „Produkt …“ – Entscheidung E8 vom 24.10.2026: Die
 Material-Verwaltung pflegt Katalogprodukte weiter, jede Änderung steht im Produktjournal und im Lebenslauf der Artikel);
 Rückrufe stehen in ihrem eigenen Abschnitt, Meldungen gehören zum Katalog."""
 from datetime import date
@@ -201,6 +203,18 @@ def _rueckrufe(item):
     return out
 
 
+def _maengel(item):
+    """{Kennung: (Name des Melders, Beschreibung)} der Meldungen am Artikel, deren Inhalt das Konto sehen darf – wie in
+    der Oberfläche (mangel.darf_inhalt; bestand._melder_verbergen): Prüfer und Materialwart alle, sonst nur die eigenen.
+    Der Name ist der beim Melden gespeicherte – er bleibt, auch wenn das Konto später gelöscht wird (F3)."""
+    from . import mangel
+    alle = mangel.darf_inhalt(item)
+    return {r["id"]: (r["reporter_name"], r["description"])
+            for r in db.query("SELECT id, reporter_id, reporter_name, description FROM mat_defect_report WHERE item_id = ?",
+                              (item["id"],))
+            if alle or mangel.eigen(r)}
+
+
 def daten(iid):
     """Alle Werte für die Vorlage, fertig formatiert."""
     item = bestand.artikel(iid)
@@ -245,7 +259,8 @@ def daten(iid):
         "pruefungen": pruefungen,
         "durchgaenge": _durchgaenge(iid, baum_pfad),
         "rueckrufe": _rueckrufe(item),
-        "ereignisse": journal_zeilen(list(reversed(eintraege)), verweise, mit_entitaet={"product"}),
+        "ereignisse": journal_zeilen(list(reversed(eintraege)), verweise, mit_entitaet={"product"},
+                                     maengel=_maengel(item)),
         "ereignisse_gekuerzt": gekuerzt,
     }
 
