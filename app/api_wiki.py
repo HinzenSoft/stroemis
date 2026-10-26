@@ -190,9 +190,9 @@ def inherits_public(parent_id):
 
 BESCHRAENKUNG_VERLASSEN = ("Diese Seite liegt in einem lesebeschränkten Abschnitt. Dort herausverschieben darf "
                            "nur, wer die Beschränkung aufheben dürfte – der Ersteller des Abschnitts oder "
-                           "ein Administrator.")
+                           "die Wiki-Verwaltung.")
 FREMDE_UNTERSEITEN = ("Darunter liegen %d Seiten, die andere angelegt haben. Die kann nur ihr Ersteller oder "
-                      "ein Administrator löschen – bitte zuerst verschieben lassen.")
+                      "die Wiki-Verwaltung löschen – bitte zuerst verschieben lassen.")
 
 
 def _elternseite(parent_id):
@@ -658,8 +658,8 @@ def create_page():
     if parent_id and not _elternseite(parent_id):
         return jsonify(error="Übergeordnete Seite nicht gefunden."), 400
     if inherits_public(parent_id) and not verwaltet("wiki"):
-        return jsonify(error="Dieser Abschnitt ist ohne Anmeldung sichtbar. Seiten darin dürfen nur "
-                             "Administratoren anlegen."), 403
+        return jsonify(error="Dieser Abschnitt ist ohne Anmeldung sichtbar. Seiten darin darf nur "
+                             "die Wiki-Verwaltung anlegen."), 403
     content = d.get("content") or ""
     ts = db.now()
     uid = current_user()["id"]
@@ -727,7 +727,7 @@ def update_page(pid):
                 return jsonify(error="Übergeordnete Seite nicht gefunden."), 400
         if parent_id != p["parent_id"] and inherits_public(parent_id) and not verwaltet("wiki"):
             return jsonify(error="Dieser Abschnitt ist ohne Anmeldung sichtbar. Seiten dorthin verschieben "
-                                 "dürfen nur Administratoren."), 403
+                                 "darf nur die Wiki-Verwaltung."), 403
         if parent_id != p["parent_id"] and _beschraenkung_verlassen(p, parent_id):
             return jsonify(error=BESCHRAENKUNG_VERLASSEN), 403
         vals["parent_id"] = parent_id
@@ -820,7 +820,7 @@ def delete_page(pid):
     if not p:
         return jsonify(error="Seite nicht gefunden"), 404
     if not can_delete(p):
-        return jsonify(error="Nur der Ersteller oder ein Administrator kann diese Seite löschen."), 403
+        return jsonify(error="Nur der Ersteller oder die Wiki-Verwaltung kann diese Seite löschen."), 403
     ids = _subtree_ids(pid)
     fremd = _fremde_seiten(ids, nur_lebende=True)
     if fremd:
@@ -867,7 +867,7 @@ def restore_page(pid):
     if not p:
         return jsonify(error="Diese Seite liegt nicht im Papierkorb."), 404
     if not can_delete(p):
-        return jsonify(error="Nur der Ersteller oder ein Administrator kann wiederherstellen."), 403
+        return jsonify(error="Nur der Ersteller oder die Wiki-Verwaltung kann wiederherstellen."), 403
     # Liegt die frühere Elternseite noch im Papierkorb, kommt die Seite auf die oberste Ebene.
     parent = p["parent_id"]
     if parent and not db.query("SELECT 1 FROM wiki_pages WHERE id = ? AND deleted_at IS NULL", (parent,), one=True):
@@ -876,7 +876,7 @@ def restore_page(pid):
     # das dürfen nur Administratoren, genau wie Anlegen und Verschieben dorthin.
     if parent and inherits_public(parent) and not verwaltet("wiki"):
         return jsonify(error="Der frühere Ort dieser Seite ist inzwischen ohne Anmeldung sichtbar. "
-                             "Dorthin wiederherstellen dürfen nur Administratoren."), 403
+                             "Dorthin wiederherstellen darf nur die Wiki-Verwaltung."), 403
     ids = _subtree_ids(pid)
     marks = ",".join("?" * len(ids))
     with db.transaction():
@@ -903,7 +903,7 @@ def purge_page(pid):
     if not p:
         return jsonify(error="Diese Seite liegt nicht im Papierkorb."), 404
     if not can_delete(p):
-        return jsonify(error="Nur der Ersteller oder ein Administrator kann endgültig löschen."), 403
+        return jsonify(error="Nur der Ersteller oder die Wiki-Verwaltung kann endgültig löschen."), 403
     ids = _subtree_ids(pid)
     fremd = _fremde_seiten(ids)
     if fremd:
@@ -1231,7 +1231,7 @@ def set_creator(pid):
     if not p:
         return jsonify(error="Seite nicht gefunden"), 404
     if not verwaltet("wiki"):
-        return jsonify(error="Den Ersteller kann nur ein Administrator ändern."), 403
+        return jsonify(error="Den Ersteller kann nur die Wiki-Verwaltung ändern."), 403
     d = json_body()
     uid = d.get("user_id")
     if not isinstance(uid, int) and not (isinstance(uid, str) and uid.isdigit()):
@@ -1277,8 +1277,8 @@ def duplicate_page(pid):
     if not can_read(p):
         return jsonify(error="Diese Seite ist nur für freigegebene Nutzer sichtbar."), 403
     if inherits_public(p["parent_id"]) and not verwaltet("wiki"):
-        return jsonify(error="Dieser Abschnitt ist ohne Anmeldung sichtbar. Seiten darin dürfen nur "
-                             "Administratoren anlegen."), 403
+        return jsonify(error="Dieser Abschnitt ist ohne Anmeldung sichtbar. Seiten darin darf nur "
+                             "die Wiki-Verwaltung anlegen."), 403
     title = f"{p['title']} (Kopie)"
     ts = db.now()
     uid = current_user()["id"]
@@ -1324,8 +1324,8 @@ def reorder():
                 return jsonify(error="Übergeordnete Seite nicht gefunden."), 400
         # Verschieben in einen öffentlichen Abschnitt ist Veröffentlichen – nur für Administratoren.
         if parent_id != page["parent_id"] and inherits_public(parent_id) and not verwaltet("wiki"):
-            return jsonify(error="Dieser Abschnitt ist ohne Anmeldung sichtbar. Dorthin dürfen nur "
-                                 "Administratoren verschieben."), 403
+            return jsonify(error="Dieser Abschnitt ist ohne Anmeldung sichtbar. Dorthin darf nur "
+                                 "die Wiki-Verwaltung verschieben."), 403
         if parent_id != page["parent_id"] and _beschraenkung_verlassen(page, parent_id):
             return jsonify(error=BESCHRAENKUNG_VERLASSEN), 403
         prepared.append((parent_id, position, cid))
@@ -1362,7 +1362,7 @@ def set_restrict(pid):
     if not p:
         return jsonify(error="Seite nicht gefunden"), 404
     if not can_delete(p):
-        return jsonify(error="Nur der Ersteller oder ein Administrator kann das umstellen."), 403
+        return jsonify(error="Nur der Ersteller oder die Wiki-Verwaltung kann das umstellen."), 403
     on = 1 if json_body().get("read_restricted") else 0
     if on and (p["is_public"] or is_public(p)):
         return jsonify(error="Diese Seite ist öffentlich freigegeben. Bitte zuerst die "
@@ -1498,17 +1498,28 @@ def export_page(pid):
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
         by_id = {q["id"]: q for q in pages}
         vergeben = set()          # zwei Geschwister „Foo“ und „Foo.“ ergäben denselben Pfad
-        for q in pages:
-            # Ordnerpfad aus den Titeln der Elternseiten aufbauen
-            parts, cur, guard = [], q, 0
-            while cur is not None and guard < 40:
-                parts.append(_export_name(cur["title"]))
+        pfade = {}                # Kennung → Pfad ohne „.md“, je Seite genau einmal festgelegt
+
+        def pfad(q):
+            """Pfad einer Seite: Pfad der Elternseite (falls im Export) plus eigener Titel. Ein Geschwister mit
+            gleichem Namen bekommt „-<slug>“ angehängt – und seine Unterseiten liegen unter genau DIESEM Pfad. Früher
+            setzte jede Seite den Pfad neu aus den Titeln der Vorfahren zusammen; die Unterseiten des zweiten „Foo“
+            landeten so im Ordner des ersten, und der Import hängte sie dort ein (ablauf_module Befund 1)."""
+            kette, cur = [], q
+            while cur is not None and cur["id"] not in pfade and len(kette) < 40:
+                kette.append(cur)
                 cur = by_id.get(cur["parent_id"])
-                guard += 1
-            rel = "/".join(reversed(parts))
-            if rel.lower() in vergeben:
-                rel = f"{rel}-{q['slug']}"
-            vergeben.add(rel.lower())
+            for seite in reversed(kette):          # von oben nach unten: die Elternseite steht immer schon fest
+                oben = pfade.get(seite["parent_id"]) if seite["parent_id"] in by_id else None
+                rel = (oben + "/" if oben else "") + _export_name(seite["title"])
+                if rel.lower() in vergeben:
+                    rel = f"{rel}-{seite['slug']}"
+                vergeben.add(rel.lower())
+                pfade[seite["id"]] = rel
+            return pfade[q["id"]]
+
+        for q in pages:
+            rel = pfad(q)
             z.writestr(rel + ".md", q["content"] or "")
             for ref in file_refs(q["content"]):
                 if ref in gepackt:
@@ -1543,7 +1554,7 @@ def import_pages():
     from . import wiki_import
 
     if not verwaltet("wiki"):
-        return jsonify(error="Seiten importieren dürfen nur Redakteure und Administratoren."), 403
+        return jsonify(error="Seiten importieren darf nur die Wiki-Verwaltung."), 403
     parent_id = request.form.get("parent_id") or None
     if parent_id is not None:
         ziel = _elternseite(parent_id)
@@ -1577,7 +1588,7 @@ def set_editors(pid):
     if not p:
         return jsonify(error="Seite nicht gefunden"), 404
     if not can_delete(p):
-        return jsonify(error="Nur der Ersteller oder ein Administrator kann Bearbeiter freigeben."), 403
+        return jsonify(error="Nur der Ersteller oder die Wiki-Verwaltung kann Bearbeiter freigeben."), 403
     roh = json_body().get("user_ids") or []
     if not isinstance(roh, list):
         return jsonify(error="user_ids muss eine Liste sein."), 400
@@ -1599,7 +1610,7 @@ def set_share(pid):
     if not p:
         return jsonify(error="Seite nicht gefunden"), 404
     if not verwaltet("wiki"):
-        return jsonify(error="Veröffentlichen dürfen nur Administratoren."), 403
+        return jsonify(error="Veröffentlichen darf nur die Wiki-Verwaltung."), 403
     d = json_body()
     if d.get("is_public") and restricted_ids(p)[1]:
         # Auch ein beschränkter Abschnitt darüber zählt: sonst läse jedermann im Netz, was
@@ -1735,7 +1746,7 @@ def delete_comment(cid):
     if not p or not can_read(p):
         return jsonify(error="Diese Seite ist nur für freigegebene Nutzer sichtbar."), 403
     if not _comment_json(c, p)["can_delete"]:
-        return jsonify(error="Nur der Kommentator, der Seitenersteller oder ein Administrator darf löschen."), 403
+        return jsonify(error="Nur der Kommentator, der Seitenersteller oder die Wiki-Verwaltung darf löschen."), 403
     db.execute("DELETE FROM wiki_comments WHERE id = ?", (cid,))
     return jsonify(ok=True)
 
@@ -1756,7 +1767,7 @@ def upload_file():
     # Inhaltstyp lief sonst an dieser Prüfung vorbei und wurde erst in der Ablage zum .html.
     ext = wiki_endung(f)
     if ext in EMBED_EXT and not verwaltet("wiki"):
-        return jsonify(error="HTML-Bausteine dürfen nur Redakteure und Administratoren einstellen."), 403
+        return jsonify(error="HTML-Bausteine darf nur die Wiki-Verwaltung einstellen."), 403
     try:
         name, kind = store_wiki_file(f, current_app.config["MEDIA_DIR"])
     except ValueError as exc:

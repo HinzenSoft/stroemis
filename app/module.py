@@ -23,6 +23,8 @@ UMLAUT = {"wiki": "/strömipedia", "karte": "/ankerplätze"}
 # Präfix → neues Präfix, längste zuerst (keins ist Anfang eines anderen, die Ordnung hält das auch künftig sicher).
 _WEITER = sorted([(ALT[m], PFAD[m]) for m in ALT] + [(UMLAUT[m], PFAD[m]) for m in UMLAUT],
                  key=lambda x: -len(x[0]))
+# Startseiten mit Schrägstrich am Ende (Lesezeichen, von Hand getippt) gab es nie – sie führen auf die Adresse ohne.
+_MIT_STRICH = {PFAD[m] + "/": PFAD[m] for m in PFAD}
 # Was in einem Pfadsegment unkodiert stehen darf (RFC 3986, pchar ohne „%“) – alles andere wird kodiert, auch der
 # Rückstrich: Ein Browser läse „/\\“ sonst wie „//“.
 _PFAD_ZEICHEN = "/!$&'()*+,;=:@-._~"
@@ -31,10 +33,14 @@ _PFAD_ZEICHEN = "/!$&'()*+,;=:@-._~"
 def weiterleitung(pfad, abfrage=""):
     """Neue Adresse für einen alten Seitenpfad – oder None. pfad ist der dekodierte Pfad der Anfrage (request.path),
     abfrage der rohe Abfrageteil ohne „?“ (bleibt, wie er kam). Das Ziel ist immer ein eigener Pfad: festes Präfix plus
-    der Rest des angefragten Pfads, kodiert – nie ein anderer Host, nie ein Schema, nie „//“ am Anfang."""
+    der Rest des angefragten Pfads, kodiert – nie ein anderer Host, nie ein Schema, nie „//“ am Anfang. Ein
+    Schrägstrich am Ende der Startseite eines Moduls („/stroemipedia/“, auch „/wiki/“) fällt weg."""
     pfad = unicodedata.normalize("NFC", pfad or "")
+    if pfad in _MIT_STRICH:
+        return _MIT_STRICH[pfad] + ("?" + abfrage if abfrage else "")
     for alt, neu in _WEITER:
         if pfad == alt or pfad.startswith(alt + "/"):
-            ziel = neu + quote(pfad[len(alt):], safe=_PFAD_ZEICHEN)
+            rest = pfad[len(alt):]
+            ziel = neu + ("" if rest == "/" else quote(rest, safe=_PFAD_ZEICHEN))
             return ziel + ("?" + abfrage if abfrage else "")
     return None

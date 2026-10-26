@@ -32,7 +32,7 @@ NUR_NACH_MANGEL = "Eine Nachprüfung gibt es nur nach einer mangelhaften Bewertu
 ERGEBNISSE_LEHRGANG = ("bestanden", "nicht_bestanden")
 EINGEFROREN = ("Für diese Person ist das Lehrgangsergebnis vermerkt – die Prüfungsdaten sind eingefroren. "
                "Die Lehrgangsleitung kann das Ergebnis aufheben.")
-NUR_LEITUNG = "Nur die Lehrgangsleitung oder die Administration darf das."
+NUR_LEITUNG = "Nur die Lehrgangsleitung oder die Verwaltung der Riegenkarten darf das."
 GERADE_GELOESCHT = ("Die Person, die Leistung oder der Lehrgang wurde inzwischen von jemand anderem gelöscht – "
                     "bitte die Seite neu laden.")
 EINGEFROREN_LOESCHEN = ("Für diese Person ist das Lehrgangsergebnis vermerkt – die Prüfungsdaten sind eingefroren. "
@@ -312,7 +312,7 @@ def _katalog_admin():
     Deshalb bleibt das Anlegen, Ändern und Löschen der Administration vorbehalten; jede:r Prüfer:in
     darf sie lesen und beim Anlegen eines Lehrgangs als Vorlage wählen."""
     if not verwaltet("pruefungen"):
-        raise Abgelehnt("Kataloge verwaltet nur die Administration.", 403)
+        raise Abgelehnt("Kataloge pflegt nur die Verwaltung der Riegenkarten.", 403)
 
 
 # Ein Versuch samt dem, was zur Anzeige immer dazugehört: Leistung und Teilnehmende:r.
