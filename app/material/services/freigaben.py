@@ -7,7 +7,7 @@ Was eine Freigabe ist und wie sie wirkt, steht in rechte.py. Hier stehen die Reg
   1  Die Material-Verwaltung (Stufe Verwaltung in der Materialablage) vergibt überall, ohne die Grenzen 3–7. Für
      Prüffreigaben gilt auch für sie Nr. 8 – Sachkunde lässt sich nicht verwalten, nur nachweisen.
   2  Wer einen Ordner verwaltet, vergibt dort und darunter – an jedes aktive Konto mit Namen und Zugang zum Modul
-     (Stufe Mitglied oder Verwaltung, die gibt die Plattform-Verwaltung in der Nutzerverwaltung), auch aus anderen
+     (Stufe Mitglied oder Verwaltung, die gibt die Plattform-Verwaltung in der Leitstelle), auch aus anderen
      Gliederungen (rechte.waehlbares_konto mit modulzugang).
   3  Was er vergibt oder nach einer Änderung hinterlässt, endet nicht später als sein eigenes Verwalten am Anker
      (Sicht.ende). Unbefristet vergibt nur, wer selbst unbefristet verwaltet.

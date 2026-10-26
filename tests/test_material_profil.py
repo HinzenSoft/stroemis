@@ -136,7 +136,7 @@ def test_urkundennummer_im_profil():
             r = c.put(URL, json={"urkundennummer": "1012-0999"})
             assert r.status_code == 403, r.get_json()
         r = k["wart"].put(URL, json={"urkundennummer": "1012-0999"})
-        assert "Häkchen" in r.json["error"] and "Nutzerverwaltung" in r.json["error"], r.get_json()
+        assert "Häkchen" in r.json["error"] and "Leitstelle" in r.json["error"], r.get_json()
         with app.app_context():
             from app import db
             assert db.query("SELECT COUNT(*) AS n FROM users WHERE urkundennummer = '1012-0999'", one=True)["n"] == 0

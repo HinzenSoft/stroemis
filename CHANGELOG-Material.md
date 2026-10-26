@@ -4162,6 +4162,38 @@ Danach liefen die ganze Suite (`st-test`) grün, `st-py`, `st-js` und `st-css` o
     Antwort), bei 360 px umbrochen etwa 170 px hoch; die Antwort des Mailservers ließe sich noch hinter „Technische
     Antwort“ einklappen – bitte am Gerät ansehen.
 
+## Nachbesserung nach den Prüfungen der Umbenennung (26.10.2026)
+
+Prüfungen von fa5ef38 (Sicherheit und Ablauf: lieferbar; Browser: nach Befund 1).
+- **B1 (hoch, Browser)**: `wiki.js` `slugFromPath()` schnitt nur `/wiki/` ab – die Startseite `/stroemipedia` und die
+  Zurück-/Vor-Taste nach einem Seitenwechsel luden „Seite nicht gefunden“ (`/api/wiki/pages/stroemipedia`). Jetzt
+  `/^\/(?:(?:stroemipedia|wiki)(?:\/|$))?/`: „/“, „/stroemipedia“ → Startseite, „/stroemipedia/<slug>“ und
+  „/wiki/<slug>“ → Slug. Alle JS-Dateien und Vorlagen nach weiteren Stellen durchsucht, die ein Präfix abschneiden,
+  vergleichen oder zerlegen: `public.js` (Präfix aus `data-prefix`, Umschreiben beider Schreibweisen), `wiki.js`
+  (Klickweiche beider Schreibweisen, `slugAus` mit `SEITEN`, Adresse nach dem Speichern), `error.html`
+  (`/materialablage`), `material.js`/`map.js`/`common.js`/`pruefungen.js`/`auth.js` (nur `location.pathname` für
+  `next=` bzw. `replaceState` ohne Präfixlogik) – sonst keine.
+- **B2 (niedrig, Browser)**: Hauptnavigation – die Überlaufprüfung (`common.js`) ohne 1-px-Spielraum, und die
+  Bauchbinde hat rechts mindestens 8 px (`max(8px, env(safe-area-inset-right))`; vorher setzte die Regel für Kerben den
+  Rand am Rechner und am Telefon auf 0). „Abmelden“ bzw. „Mehr“ steht nicht mehr am Fensterrand.
+- **Befund 1 (niedrig, Sicherheit)**: Verlauf des Kontos (E3) – Löschen und Ablehnen eines Kontos schreiben einen
+  Grenzstein „geloescht“ ins Journal am Konto; `journal.lesen` schneidet dort (nach der Journalkennung, nicht nach der
+  Uhr), ein Nachfolger mit derselben Kennung sieht nichts davor – auch in derselben Sekunde. Kein Schemaschritt. Für
+  Löschungen vor dieser Nachbesserung (ohne Grenzstein) bleibt der Vergleich mit dem Anlagezeitpunkt – dort ist der
+  Randfall „gleiche Kennung in derselben Sekunde“ weiter möglich.
+- **Ablauf**: `st-test` nimmt `tests/test_umbenennung.py` ohne Angabe mit (Satz im Abschnitt „Neue Modulnamen“ korrigiert).
+- **Verbesserungen**: Zugangsmeldungen „… das macht/gibt/setzt die Plattform-Verwaltung in der Leitstelle“ (statt „die
+  Verwaltung in der Nutzerverwaltung“; rechte.py, pruefung.py, material.js, freigaben.js). Die 403-Seite eines Moduls
+  nennt es wie die Schnittstelle („Für dein Konto sind die Riegenkarten nicht freigeschaltet.“ usw.; `abort(403,
+  description=…)`, Ankerplätze, Strömipedia, Riegenkarten, Leitstelle). Rechte-Matrix in der Reihenfolge der Kopfleiste
+  (Strömipedia vor Ankerplätze). Nutzerdialog: „Das Konto braucht einen Namen, damit es in der Materialablage handeln
+  kann.“ Rückfrage „Ordner … endgültig löschen? Danach ist er weg. …“. Hilfe der Leitstelle in Absätzen mit einer
+  Liste je Stufe. Tippflächen nur unter `@media (pointer: coarse)` auf 44 px: Zoom und „◎“ der Ankerplätze (auch ohne
+  `.leaflet-touch`), Filter-Chips, „Alben“, „Neues Album“, im Profil Eingabefelder und Knöpfe (`.profil-seite`).
+- Tests: `test_umbenennung.py` (Ausdruck von `slugFromPath` gegen Start-, Seiten- und alte Pfade, 403-Seite je Modul,
+  Spaltenreihenfolge), `test_material_feinschliff.py` (Vorgänger nach Löschen und nach Ablehnen, Anlagezeit
+  zurückgesetzt – nur der Grenzstein hält ihn fern; Rückfragetext).
+
 ## Feinschliff aus den Wiki-Fragen (26.10.2026)
 
 Die 25 „Offenen Fragen“ des Wiki-Artikels „Materialablage“ (W5), eingeordnet im Bauentwurf
@@ -4276,7 +4308,7 @@ Protokolle und Lebensläufe drucken `strömis.de/materialablage/pruefen`.
   `SEITEN`/`slugAus` statt `slice(6)`; Klickweiche, `public.js` (Umschreiben auf das Präfix) und die Prüfanleitung
   nehmen `/wiki/…` und `/stroemipedia/…`; der Editor schreibt neue Links als `/stroemipedia/<slug>`.
 
-**Tests.** `tests/test_umbenennung.py` (neu, nicht in der Vorgabeliste von `st-test` – einzeln aufrufen): jede alte
+**Tests.** `tests/test_umbenennung.py` (neu; `st-test` nimmt die Datei ohne Angabe mit, wenn es sie gibt): jede alte
 Adresse → neue (301, `Location`, Abfrage, `Cache-Control`, GET und HEAD, ohne Anmeldung, Plattform-Verwaltung, ohne
 Stufe), Umlaute auch NFD, nichts sonst erfasst (`/materialx`, `/api/…`, `/media/…`, `/static/…`, `/m/…`, `/oeffentlich/`,
 Wiki-Subdomain), keine Weiterleitung für POST/PUT/DELETE/PATCH, kein offener Sprung (`//`, Rückstrich, CRLF, `@`,

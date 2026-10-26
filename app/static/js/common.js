@@ -189,7 +189,10 @@ window.S = (function () {
     const knopf = mehr.querySelector(".nav-mehr-knopf");
     const liste = mehr.querySelector(".nav-mehr-liste");
     const punkte = Array.from(nav.children).filter((el) => el !== mehr);
-    const zuBreit = () => nav.scrollWidth > nav.clientWidth + 1;
+    // Ohne Spielraum: Schon ein überstehendes Pixel (gerundete Breiten) schickt den hintersten Punkt ins Menü – sonst
+    // lief er bei 375 px 1 px über den Rand (Browserprüfung der Umbenennung, B2). Den Abstand zum Fensterrand hält
+    // der rechte Rand der Bauchbinde (app.css, mindestens 8 px).
+    const zuBreit = () => nav.scrollWidth > nav.clientWidth;
     const zu = () => { liste.hidden = true; knopf.setAttribute("aria-expanded", "false"); };
     let breite = -1;
     function anordnen() {

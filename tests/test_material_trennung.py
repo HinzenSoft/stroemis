@@ -873,7 +873,7 @@ def test_ablauf():
         sql(app, "UPDATE users SET recht_material = 0 WHERE id = ?", (k["fuehrung_id"],))
         r = k["fuehrung"].get("/api/material/start")
         assert r.status_code == 403 and r.json["error"] == rechte.NICHT_FREIGESCHALTET, r.get_json()
-        assert "Nutzerverwaltung" in rechte.NICHT_FREIGESCHALTET
+        assert "Plattform-Verwaltung in der Leitstelle" in rechte.NICHT_FREIGESCHALTET
         assert k["fuehrung"].get("/materialablage").status_code == 403
     print("Ablauf bestanden.")
 

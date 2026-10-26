@@ -151,6 +151,7 @@ def _nav(html):
 
 
 def test_namen_in_der_oberflaeche():
+    from app import auth
     with tempfile.TemporaryDirectory() as tmp:
         app, k = _app(tmp)
         voll, _ = neues_konto(app, "voll@example.org", name="Voll Platzhalter",
@@ -185,6 +186,16 @@ def test_namen_in_der_oberflaeche():
         r = k["wart"].get("/materialablage/artikel/999999")
         assert "Zur Übersicht der Materialablage" in r.text
         # Zugangsmeldungen der Schnittstellen nennen die neuen Namen.
+        # Die 403-Seite eines Moduls nennt es (wie die Schnittstelle, Verbesserung 2 der Browserprüfung).
+        for pfad, modul in (("/riegenkarten", "pruefungen"), ("/ankerplaetze", "karte"), ("/leitstelle", "verwaltung"),
+                            ("/pruefungen/kataloge", "pruefungen")):
+            r = k["wart"].get(pfad, follow_redirects=True)
+            assert r.status_code == 403 and auth.KEIN_ZUGANG[modul] in r.text, (pfad, r.text[-600:])
+        # Spalten der Rechte-Matrix in der Reihenfolge der Kopfleiste.
+        html = voll.get("/leitstelle").text
+        spalten = [html.index(f"<th>{n}</th>") for n in ("Strömipedia", "Ankerplätze", "Riegenkarten", "Materialablage",
+                                                         "Leitstelle")]
+        assert spalten == sorted(spalten), spalten
         r = k["wart"].get("/api/map")
         assert r.status_code == 403 and r.json["error"] == "Für dein Konto sind die Ankerplätze nicht freigeschaltet."
         r = k["wart"].get("/api/pruefungen/lehrgaenge")
@@ -319,6 +330,14 @@ def test_wiki_links():
     oeff = open(os.path.join(WURZEL, "app/static/js/public.js"), encoding="utf-8").read()
     assert "/^\\/(?:stroemipedia|wiki)\\//.test(href)" in wiki and 'urlEl.value = "/stroemipedia/" + b.dataset.slug' in wiki
     assert "a[href^=\"/stroemipedia/\"], a[href^=\"/wiki/\"]" in oeff
+    # Startseite und Zurück-Taste (Browserprüfung B1): slugFromPath erkennt beide Präfixe und die Startadressen. Der
+    # Ausdruck aus wiki.js, nach Python übertragen (nur „\/“ → „/“), gegen die Pfade, die der Browser zeigt.
+    m = re.search(r"function slugFromPath\(\) \{ return MD\.entziffern\(location\.pathname\.replace\(/(.+?)/, \"\"\)\); \}", wiki)
+    assert m, "slugFromPath nicht gefunden"
+    ausdruck = re.compile(m.group(1).replace("\\/", "/"))
+    for pfad, slug in (("/", ""), ("/stroemipedia", ""), ("/stroemipedia/", ""), ("/stroemipedia/demo-zwei", "demo-zwei"),
+                       ("/wiki", ""), ("/wiki/alt-seite", "alt-seite")):
+        assert ausdruck.sub("", pfad, count=1) == slug, (pfad, ausdruck.sub("", pfad, count=1))
     print("Wiki-Links bestanden.")
 
 

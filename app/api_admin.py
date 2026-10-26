@@ -313,6 +313,10 @@ def delete_user(uid):
         # Entwürfe, Meldungen und Suchprotokoll ohne Namen – vor dem Löschen, solange der
         # Kontoverweis noch auflösbar ist.
         mat_loeschung.konto_loeschen_vorbereiten(uid)
+        # Grenzstein im Journal am Konto: users.id wird nach dem Löschen der höchsten Kennung neu vergeben – der
+        # Verlauf eines Nachfolgers mit derselben Kennung beginnt nach diesem Eintrag (journal.lesen schneidet an der
+        # letzten Löschung, unabhängig von der Uhrzeit). Ohne Inhalt, nur Aktion und Handelnder.
+        mat_journal.eintragen("user", uid, "geloescht")
         db.execute("UPDATE albums SET owner_id = ? WHERE owner_id = ?", (me, uid))
         db.execute("UPDATE photos SET owner_id = ? WHERE owner_id = ?", (me, uid))
         db.execute("UPDATE wiki_pages SET created_by = ? WHERE created_by = ?", (me, uid))
@@ -349,8 +353,10 @@ def konto_journal(uid):
     KONTO_JOURNAL_MAX Einträge des Journals am Konto (entity „user“) – Stufe und Häkchen „Prüfer“ (rollen),
     Urkundennummer, Unterschrift –, je mit Zeit und Handelndem (Name, nie die E-Mail), als fertige Zeilen
     (beschriftung.journal_zeilen). Die Unterschrift steht nur als „hinterlegt“ bzw. „–“ da, ohne Bild und ohne den
-    Fingerabdruck, den das Journal trägt. Einträge von vor der Anlage des Kontos gehören einem gelöschten Konto, das
-    dieselbe Kennung hatte (users.id wird nach dem Löschen der höchsten neu vergeben) – sie bleiben draußen."""
+    Fingerabdruck, den das Journal trägt. Einträge eines gelöschten Kontos, das dieselbe Kennung hatte (users.id wird
+    nach dem Löschen der höchsten neu vergeben), bleiben draußen: Seit dem 26.10.2026 schreibt delete_user einen
+    Eintrag „geloescht“, an dem journal.lesen schneidet (nach der Journalkennung, nicht nach der Uhr); für ältere
+    Löschungen ohne ihn bleibt der Vergleich mit dem Anlagezeitpunkt (sekundengenau)."""
     u = db.query("SELECT id, created_at FROM users WHERE id = ?", (uid,), one=True)
     if not u:
         return jsonify(error="Nutzer nicht gefunden"), 404
@@ -399,5 +405,9 @@ def reject_user(uid):
     u = db.query("SELECT * FROM users WHERE id = ? AND status = 'pending'", (uid,), one=True)
     if not u:
         return jsonify(error="Keine offene Anfrage zu diesem Nutzer."), 404
-    db.execute("DELETE FROM users WHERE id = ?", (uid,))
+    with db.transaction():
+        # Auch eine Anfrage kann schon Einträge am Konto haben (Stufe vor der Freigabe geändert) – Grenzstein wie in
+        # delete_user, damit ein Nachfolger mit derselben Kennung sie nicht in seinem Verlauf sieht.
+        mat_journal.eintragen("user", uid, "geloescht")
+        db.execute("DELETE FROM users WHERE id = ?", (uid,))
     return jsonify(ok=True)

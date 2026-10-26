@@ -13,7 +13,7 @@ from datetime import timedelta
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from test_material import (_flach, festschreiben, gliederung, katalog_grund, neuer_artikel, neues_konto,  # noqa: E402
+from test_material import (H, _flach, festschreiben, gliederung, katalog_grund, neuer_artikel, neues_konto,  # noqa: E402
                            pdf_seiten, protokoll_zeile, pruef_formulare, starten, umgebung, unterschrift_daten)
 from test_material_erinnerung import (T0, an, artikel, aufbau, lauf, planen, post, psa_log, psa_mail,  # noqa: E402
                                       psa_person, sql, uhr, um, versand, zuordnen_sql)
@@ -118,6 +118,37 @@ def test_e3_verlauf_des_kontos():
                            (nid, '{"urkundennummer": "VORGAENGER"}', "2000-01-01T00:00:00+00:00"))
         d = k["adm"].get(f"/api/admin/users/{nid}/journal").json
         assert "VORGAENGER" not in str(d), d
+        # Dieselbe Kennung in derselben Sekunde (Sicherheitsprüfung, Befund 1): Löschen setzt einen Grenzstein
+        # „geloescht“ am Konto, der Nachfolger sieht nichts davor – unabhängig von der Uhr. Ebenso eine abgelehnte Anfrage.
+        from app.material.services import journal as mat_journal
+        for weg in ("loeschen", "ablehnen"):
+            adm = k["adm"]
+            if weg == "loeschen":
+                r = adm.post("/api/admin/users", json={"email": f"vorg-{weg}@example.org", "password": "passwort1",
+                                                       "name": "Vorgänger Platzhalter", "mat_pruefer": True,
+                                                       "urkundennummer": "VORG-1"})
+                alt_id = r.json["user"]["id"]
+                assert adm.delete(f"/api/admin/users/{alt_id}", headers=H).status_code == 200
+            else:
+                c = app.test_client()
+                c.post("/api/auth/register", json={"email": f"vorg-{weg}@example.org", "password": "passwort1",
+                                                   "name": "Anfrage Platzhalter", "gliederung": "OG Platzhalter"})
+                alt_id = [u for u in adm.get("/api/admin/users").json["users"] if u["email"] == f"vorg-{weg}@example.org"][0]["id"]
+                assert adm.put(f"/api/admin/users/{alt_id}", json={"mat_pruefer": True, "urkundennummer": "VORG-2"}).status_code == 200
+                assert adm.post(f"/api/admin/users/{alt_id}/reject", json={}).status_code == 200
+            r = adm.post("/api/admin/users", json={"email": f"nach-{weg}@example.org", "password": "passwort1",
+                                                   "name": "Nachfolger Platzhalter"})
+            neu_id = r.json["user"]["id"]
+            assert neu_id == alt_id, (neu_id, alt_id)                    # dieselbe Kennung wird neu vergeben
+            with app.app_context():
+                from app import db
+                # Der Schnitt hängt an der Journalkennung, nicht an der Uhr: journal.lesen allein lässt den Vorgänger weg.
+                assert "VORG" not in str(mat_journal.lesen([("user", neu_id)]))
+                # Anlage des Nachfolgers „vor“ allen Einträgen – so ließe der Zeitvergleich allein den Vorgänger durch.
+                with db.transaction():
+                    db.execute("UPDATE users SET created_at = '2000-01-01T00:00:00+00:00' WHERE id = ?", (neu_id,))
+            d = adm.get(f"/api/admin/users/{neu_id}/journal").json
+            assert "VORG" not in str(d) and d["eintraege"], (weg, d)
     # Oberfläche: eingeklappt im Dialog „Bearbeiten“, geladen erst beim Aufklappen.
     js = lesen("app/static/js/admin.js")
     assert '<details class="accordion" id="u-verlauf"><summary>Verlauf (Materialablage)</summary>' in js
@@ -172,7 +203,8 @@ def test_texte_statisch():
             "Sperren und Freiprüfungen im Jahr",
             "ohne Unterordner und Artikel, ohne Prüfdurchgänge und Set-Protokolle, ohne offene Nacharbeit eines "
             "Bestandsimports und ohne gesperrte Artikel, die hierher zurückkehren; vorher wird nachgefragt.",
-            "Das geht nur bei einem leeren Ordner – ohne Unterordner und Artikel, ohne Prüfdurchgänge und Set-Protokolle,",
+            "endgültig löschen? Danach ist er weg. Das geht nur bei einem leeren Ordner – ohne Unterordner und Artikel, "
+            "ohne Prüfdurchgänge und Set-Protokolle,",
             "„Deine PSA“ an die Personen, denen hier etwas zugeordnet ist",
             # K9: geerbtes generisches Formular in der Angabenzeile der Kategorie.
             "pfad.slice(0, -1).reverse().find((x) => x.aktives_formular)", "generisches Prüfformular von ${DARF.katalog",

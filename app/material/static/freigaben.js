@@ -339,7 +339,7 @@
       liste.innerHTML = r.nutzer.length ? r.nutzer.map((p) => `<li><button type="button" class="mf-person" data-id="${p.id}">
           ${personHtml(p)}${p.qualifiziert ? ' <span class="badge grey">Prüfer</span>' : ""}</button></li>`).join("")
           + (r.mehr ? '<li class="mf-treffer-leer">Mehr als 20 – bitte genauer.</li>' : "")
-        : '<li class="mf-treffer-leer">Niemand gefunden – nur aktive Konten mit Namen und Zugang zur Materialablage (den gibt die Verwaltung).</li>';
+        : '<li class="mf-treffer-leer">Niemand gefunden – nur aktive Konten mit Namen und Zugang zur Materialablage (den gibt die Plattform-Verwaltung).</li>';
       liste.hidden = false;
       $$("button.mf-person", liste).forEach((b) => b.addEventListener("click", () => personWaehlen(r.nutzer.find((p) => p.id === +b.dataset.id))));
     }

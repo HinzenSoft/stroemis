@@ -275,6 +275,9 @@ input:focus, select:focus, textarea:focus { border-color: var(--anthrazit); outl
 .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 0 12px; }
 @media (max-width: 480px) { .field-row { grid-template-columns: 1fr; } }
 .help { color: var(--grau); font-size: var(--fs-klein); margin-top: 3px; }
+/* Hilfe der Leitstelle in Absätzen und einer Liste je Stufe (admin.html). */
+.leitstelle-hilfe p { margin: 0 0 6px; }
+.leitstelle-hilfe ul { margin: 0 0 6px; padding-left: 1.2em; }
 .error { color: var(--rot); font-weight: 600; margin: 10px 0; }
 .notice { background: var(--grau-hell); border-left: 4px solid var(--gelb); padding: 10px 12px; margin: 12px 0; }
 .notice a { color: var(--rot-auf-flaeche); }
@@ -2146,8 +2149,13 @@ dialog.us-dlg { width: min(640px, 96vw); }
   .th-sort { padding: 6px; opacity: 1; }
   .code-copy { padding: 6px 10px; }
   .locate-banner .loc-treffer button { min-height: 44px; }
-  .leaflet-touch .leaflet-bar a { width: 40px; height: 40px; line-height: 40px; font-size: 20px; }
-  .leaflet-touch .leaflet-control-layers-toggle { width: 40px; height: 40px; }
+  /* Tippflächen der Ankerplätze und des Profils mindestens 44 px (Browserprüfung der Umbenennung, Verbesserung 7):
+     Zoom und „◎“ auch ohne .leaflet-touch (Leaflet erkennt Touch nicht in jedem Browser), Filter-Chips, „Alben“,
+     „Neues Album“; im Profil Eingabefelder und Knöpfe. */
+  .leaflet-bar a, .leaflet-touch .leaflet-bar a { width: 44px; height: 44px; line-height: 44px; font-size: 20px; }
+  .leaflet-touch .leaflet-control-layers-toggle { width: 44px; height: 44px; }
+  .map-tools .btn, .map-tools .chip { min-height: 44px; }
+  .profil-seite input:not([type=checkbox]):not([type=radio]):not([type=file]), .profil-seite .btn { min-height: 44px; }
   .comment-fab { padding: 11px 16px; font-size: 1rem; }
   .panel-body, .lb-side, .wiki-side { overscroll-behavior: contain; }
   /* Der Toast lag unten – auf dem Telefon hinter der Tastatur. Oben, unter der Bauchbinde. */
@@ -2195,7 +2203,9 @@ dialog.us-dlg { width: min(640px, 96vw); }
 }
 /* Geräte mit Kerbe und Wischleiste: Ränder freihalten. env() ist am Rechner null. */
 @supports (padding: env(safe-area-inset-left)) {
-  .bauchbinde { padding-left: env(safe-area-inset-left); padding-right: env(safe-area-inset-right); }
+  /* Rechts mindestens 8 px: Der letzte Punkt der Hauptnavigation („Abmelden“ bzw. „Mehr“) stand sonst bündig am
+     Fensterrand (Browserprüfung der Umbenennung, B2 – die längeren Modulnamen füllen die Leiste bis zum Rand). */
+  .bauchbinde { padding-left: env(safe-area-inset-left); padding-right: max(8px, env(safe-area-inset-right)); }
   @media (max-width: 800px) {
     .wiki-side { padding-left: calc(12px + env(safe-area-inset-left)); padding-bottom: calc(40px + env(safe-area-inset-bottom)); }
   }

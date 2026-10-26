@@ -365,7 +365,8 @@
   /* ======================================================================
      Navigation
      ====================================================================== */
-  function slugFromPath() { return MD.entziffern(location.pathname.replace(/^\/(wiki\/?)?/, "")); }
+  // Startseite „/“ oder „/stroemipedia“ → „“; „/stroemipedia/<slug>“ und (vor der Umbenennung) „/wiki/<slug>“ → Slug.
+  function slugFromPath() { return MD.entziffern(location.pathname.replace(/^\/(?:(?:stroemipedia|wiki)(?:\/|$))?/, "")); }
 
   function navigate(ziel, push = true) {
     // "seite#abschnitt" oder "seite?x": Nur der Slug sucht die Seite, der Anker springt danach.

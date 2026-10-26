@@ -246,7 +246,7 @@ def page_modul_required(modul):
             if not current_user():
                 return redirect(url_for("pages.login", next=request.path))
             if not nutzt(modul):
-                abort(403)
+                abort(403, description=KEIN_ZUGANG[modul])
             return f(*a, **kw)
         return wrapper
     return deko

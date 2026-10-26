@@ -14,7 +14,7 @@ Woher die Rechte kommen (Bauentwurf Phase 2 · Lieferung 1, Abschnitt 1, mit der
                           deutscher Kalendertag; der letzte Tag zählt mit). Rechte addieren sich nur. Eine Prüffreigabe
                           ohne Ende (dauerhaft) wirkt nur, solange das Konto an ihrem Anker oder darüber ein Grundrecht
                           hat – befristet ist nur noch der externe Prüfer (Nachbesserung vom 18.10.2026, Schritt 9).
-  Qualifikation Prüfer    Häkchen mat_pruefer (setzt die Plattform-Verwaltung in der Nutzerverwaltung) und gültige
+  Qualifikation Prüfer    Häkchen mat_pruefer (setzt die Plattform-Verwaltung in der Leitstelle) und gültige
                           Urkundennummer (trägt der Prüfer selbst im Profil ein, urkunde_setzen). Voraussetzung jeder
                           Prüfhandlung und dafür, dass eine Prüffreigabe überhaupt wirkt – aber nur mit Modulzugang
                           (qualifiziert); allein gibt sie keinen Zugang mehr.
@@ -79,8 +79,8 @@ DURCHGANG_FEHLT = "Prüfdurchgang nicht gefunden."
 KONTO_FEHLT = "Konto nicht gefunden."
 
 NAME_FEHLT = "Für die Materialablage braucht dein Konto einen Namen – trag ihn im Profil ein."
-NICHT_FREIGESCHALTET = ("Für dein Konto ist die Materialablage nicht freigeschaltet – das macht die Verwaltung in der "
-                        "Nutzerverwaltung.")
+NICHT_FREIGESCHALTET = ("Für dein Konto ist die Materialablage nicht freigeschaltet – das macht die "
+                        "Plattform-Verwaltung in der Leitstelle.")
 KEINE_PRUEFFREIGABE = ("Häkchen und Urkundennummer hast du, aber für diesen Ordner keine Prüffreigabe – die vergibt der "
                        "Materialwart des Ordners unter Ordner → Bearbeiten → Freigaben.")
 NUR_GRUNDRECHT = ("Dafür braucht es eine Lese- oder Verwalterfreigabe für diesen Ordner – die Prüffreigabe allein "
@@ -89,12 +89,12 @@ NUR_VERWALTUNG_GLOBAL = "Ohne Ordner nur für die Material-Verwaltung."
 NUR_MATERIAL_VERWALTUNG = "Das macht die Material-Verwaltung (Stufe „Verwaltung“ in der Materialablage)."
 ENTSCHEIDEN_NUR_ZUSTAENDIG = ("Entscheiden dürfen die Materialwarte dieses Ordners (eigene Freigabe „verwalten“ hier "
                               "oder darüber).")
-KONTO_OHNE_ZUGANG = ("Dieses Konto hat keinen Zugang zur Materialablage – den gibt die Verwaltung in der "
-                     "Nutzerverwaltung.")
+KONTO_OHNE_ZUGANG = ("Dieses Konto hat keinen Zugang zur Materialablage – den gibt die "
+                     "Plattform-Verwaltung in der Leitstelle.")
 
 URKUNDE_UNGUELTIG = "Eine Urkundennummer braucht Buchstaben oder Ziffern."
-URKUNDE_NUR_PRUEFER = ("Die Urkundennummer trägt nur ein, wer das Häkchen „Prüfer“ hat – das setzt die Verwaltung in der "
-                       "Nutzerverwaltung.")
+URKUNDE_NUR_PRUEFER = ("Die Urkundennummer trägt nur ein, wer das Häkchen „Prüfer“ hat – das setzt die "
+                       "Plattform-Verwaltung in der Leitstelle.")
 KATALOG_HAEKCHEN_WEG = ("Das Häkchen „Produktkatalogpfleger“ gibt es nicht mehr – Katalogpflege gehört zur Stufe "
                         "„Verwaltung“ in der Materialablage.")
 # Für ein Konto mit Häkchen, aber ohne Urkundennummer: wo es weitergeht.

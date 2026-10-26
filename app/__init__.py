@@ -12,6 +12,7 @@ from urllib.parse import urlsplit
 from flask import (Blueprint, Flask, Request, abort, current_app, g, jsonify, redirect, render_template,
                    request, send_from_directory, url_for)
 from itsdangerous import BadSignature, URLSafeTimedSerializer
+from werkzeug.exceptions import Forbidden
 from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.security import safe_join
 
@@ -127,7 +128,7 @@ def _wiki(slug):
         return render_template("wiki.html", user=auth.current_user(), slug=slug)
     if auth.wiki_lesemodus():
         return render_template("wiki_lesemodus.html", user=auth.current_user(), slug=slug)
-    abort(403)
+    abort(403, description=auth.KEIN_ZUGANG["wiki"])
 
 
 @pages.get("/stroemipedia")
@@ -235,7 +236,7 @@ def profile():
 @auth.page_login_required
 def admin():
     if not auth.is_admin():
-        abort(403)
+        abort(403, description=auth.KEIN_ZUGANG["verwaltung"])
     return render_template("admin.html", user=auth.current_user())
 
 
@@ -246,7 +247,7 @@ def admin():
 
 def _pruefungen_seite(ansicht, lehrgang_id=None, katalog_id=None):
     if not auth.is_pruefer():
-        abort(403)
+        abort(403, description=auth.KEIN_ZUGANG["pruefungen"])
     return render_template("pruefungen.html", user=auth.current_user(), ansicht=ansicht,
                            lehrgang_id=lehrgang_id, katalog_id=katalog_id)
 
@@ -669,7 +670,11 @@ def create_app():
     def forbidden(_e):
         if request.path.startswith("/api/"):
             return jsonify(error="Keine Berechtigung"), 403
-        return render_template("error.html", user=auth.current_user(), code=403, message="Dafür fehlt die Berechtigung."), 403
+        # Seiten eines Moduls ohne Stufe nennen das Modul (auth.KEIN_ZUGANG, wie die Schnittstellen) – abort(403,
+        # description=…); sonst bleibt der allgemeine Satz (Werkzeugs englischer Vorgabetext kommt nie zur Anzeige).
+        meldung = _e.description if getattr(_e, "description", None) not in (None, Forbidden.description) \
+            else "Dafür fehlt die Berechtigung."
+        return render_template("error.html", user=auth.current_user(), code=403, message=meldung), 403
 
     @app.errorhandler(401)
     def unauthorized(_e):

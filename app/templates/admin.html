@@ -11,14 +11,21 @@
   </div>
   <section id="bereich-nutzer">
   <section id="pending" class="section"></section>
-  <p class="help">Rechte gelten je Modul: „–“ heißt kein Zugriff, „Mitglied“ arbeitet im Modul mit eigenen Inhalten
-    (bei den Riegenkarten: nimmt Prüfungen ab; bei der Materialablage: nutzt sie, den Bestand zeigen Freigaben, die der
-    Verwalter eines Ordners vergibt), „Verwaltung“ darf im Modul alles – bei der Materialablage auch den Produktkatalog
-    pflegen, alle Bestände sehen und Gliederungen anlegen. Neue Konten starten als Mitglied in der Materialablage, sonst
-    ohne Zugriff. Prüfer ist ein Häkchen unter „Bearbeiten“: Es wirkt nur mit Materialablage „Mitglied“ oder
-    „Verwaltung“, und Prüfen braucht zusätzlich eine Prüffreigabe am Ordner (befristet nur für externe Prüfer).
-    Wer die Verwaltung in der Leitstelle hat, hat sie überall – nur Prüfer ist niemand von selbst.
-    Änderungen in der Tabelle greifen sofort. Beim Löschen eines Nutzers gehen seine Inhalte auf dich über.</p>
+  {# In Absätzen statt in einem Block (Browserprüfung der Umbenennung, Verbesserung 6): je Stufe ein Punkt. #}
+  <div class="help leitstelle-hilfe">
+    <p>Rechte gelten je Modul:</p>
+    <ul>
+      <li>„–“ heißt kein Zugriff (in der Strömipedia: nur die öffentlichen Seiten lesen).</li>
+      <li>„Mitglied“ arbeitet im Modul mit eigenen Inhalten – in den Riegenkarten: nimmt Prüfungen ab; in der
+        Materialablage: nutzt sie, den Bestand zeigen Freigaben, die der Verwalter eines Ordners vergibt.</li>
+      <li>„Verwaltung“ darf im Modul alles – in der Materialablage auch den Produktkatalog pflegen, alle Bestände sehen
+        und Gliederungen anlegen. Wer die Verwaltung in der Leitstelle hat, hat sie überall.</li>
+    </ul>
+    <p>Neue Konten starten als Mitglied in der Materialablage, sonst ohne Zugriff. Prüfer ist ein Häkchen unter
+      „Bearbeiten“: Es wirkt nur mit Materialablage „Mitglied“ oder „Verwaltung“, und Prüfen braucht zusätzlich eine
+      Prüffreigabe am Ordner (befristet nur für externe Prüfer) – Prüfer ist niemand von selbst.</p>
+    <p>Änderungen in der Tabelle greifen sofort. Beim Löschen eines Nutzers gehen seine Inhalte auf dich über.</p>
+  </div>
   <p class="help hidden" id="videopflege"></p>
   <table class="list" id="users">
     <!-- Feste Spaltenbreiten (table-layout: fixed in app.css): So passt die Tabelle in jeder
@@ -27,7 +34,7 @@
          90 px); dafür ist die Seite breiter als sonst (.page.breit), und „Zuletzt da“ wie Inhalte
          sind schmaler und brechen in mehrere Zeilen um. -->
     <colgroup><col style="width:9%"><col style="width:11%"><col style="width:8%"><col style="width:10%"><col style="width:10%"><col style="width:10%"><col style="width:10%"><col style="width:10%"><col style="width:6.5%"><col style="width:6%"><col class="col-aktionen"></colgroup>
-    <thead><tr><th>Name</th><th>E-Mail</th><th>Gliederung</th><th>{{ modul.name.karte }}</th><th>{{ modul.name.wiki }}</th><th>{{ modul.name.pruefungen }}</th><th>{{ modul.name.material }}</th><th>{{ modul.name.verwaltung }}</th><th>Zuletzt da</th><th>Inhalte</th><th></th></tr></thead><tbody></tbody>
+    <thead><tr><th>Name</th><th>E-Mail</th><th>Gliederung</th><th>{{ modul.name.wiki }}</th><th>{{ modul.name.karte }}</th><th>{{ modul.name.pruefungen }}</th><th>{{ modul.name.material }}</th><th>{{ modul.name.verwaltung }}</th><th>Zuletzt da</th><th>Inhalte</th><th></th></tr></thead><tbody></tbody>
   </table>
   {# Protokoll der Blicke über den eigenen Bereich hinaus (Materialablage, Phase 2): selten gebraucht, daher
      zugeklappt; admin_globalsuche.js lädt es erst beim Aufklappen. #}

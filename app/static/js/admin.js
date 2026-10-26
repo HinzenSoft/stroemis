@@ -31,9 +31,10 @@
      Die sichtbaren Namen (t) kommen aus app/module.py (STROEMIS.module) – die Schlüssel k bleiben. */
   const NAME = (STROEMIS.module || {}).name || {};
   const PFAD = (STROEMIS.module || {}).pfad || {};
+  // Reihenfolge wie die Kopfleiste (Strömipedia, Ankerplätze, Riegenkarten, Materialablage, Leitstelle).
   const MODULE = [
-    { k: "karte", t: NAME.karte, hilfe: "Mitglied: eigene Alben anlegen und bearbeiten. Verwaltung: alle Alben." },
     { k: "wiki", t: NAME.wiki, hilfe: "Ohne Zugriff (–): nur die öffentlich freigegebenen Seiten lesen. Mitglied: eigene und freigegebene Seiten. Verwaltung: alle Seiten, beschränkte lesen, veröffentlichen, HTML-Bausteine, Ersteller ändern." },
+    { k: "karte", t: NAME.karte, hilfe: "Mitglied: eigene Alben anlegen und bearbeiten. Verwaltung: alle Alben." },
     { k: "pruefungen", t: NAME.pruefungen, hilfe: "Mitglied: Prüfungen abnehmen (Prüfer). Verwaltung: zusätzlich Kataloge pflegen und jeden Lehrgang leiten." },
     { k: "material", t: NAME.material, hilfe: "Mitglied: die Materialablage nutzen – Katalog, Suche, Profil; Bestand nur über Freigaben, die der Verwalter eines Ordners vergibt. Verwaltung: zusätzlich Produktkatalog pflegen (Kategorien, Produkte, Dokumente, Prüfformulare, Meldungen, Rückrufe), alle Bestände aller Gliederungen, Gliederungen anlegen, jede Freigabe. Prüfen nur mit Häkchen „Prüfer“, Urkundennummer und Prüffreigabe." },
     { k: "verwaltung", t: NAME.verwaltung, nurVoll: true,
@@ -218,7 +219,7 @@
         <div class="help">Das Häkchen wirkt nur mit Stufe „Mitglied“ oder „Verwaltung“ in der Materialablage. Urkundennummer und Unterschrift
           trägt der Prüfer selbst in seinem Profil ein („Urkundennummer und Unterschrift“); beides steht später auf jedem Prüfprotokoll.
           Prüfen kann er erst mit Urkundennummer und einer Prüffreigabe am Ordner (befristet nur für externe Prüfer) – auch die
-          Verwaltung. Mit der Materialablage braucht das Konto einen Namen.</div>
+          Verwaltung. Das Konto braucht einen Namen, damit es in der Materialablage handeln kann.</div>
       </fieldset>
       ${u.id ? `<fieldset class="mat-rollen"><legend>Freigaben in der Materialablage</legend>
         <p class="notice u-freigaben-kein-zugang" ${(rechte.material | 0) || !(u.mat_freigaben | 0) ? "hidden" : ""}>Diese Freigaben wirken nicht – das Konto hat keinen Zugang zur Materialablage.</p>

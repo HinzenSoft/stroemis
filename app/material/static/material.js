@@ -342,7 +342,7 @@
 
   /* Warum hier nicht geprüft werden kann – als HTML. obj: der Ordner, Artikel oder die Prüfung (mit „darf“); ohne obj
      gilt die Frage für das ganze Konto (Seite „Prüfungen“). Prüfen braucht seit Phase 2 dreierlei: das Häkchen
-     „Prüfer“ (setzt die Verwaltung in der Nutzerverwaltung), die Urkundennummer (trägt der Prüfer selbst im Profil ein)
+     „Prüfer“ (setzt die Plattform-Verwaltung in der Leitstelle), die Urkundennummer (trägt der Prüfer selbst im Profil ein)
      und eine Prüffreigabe für den Ordner (vergibt dessen Materialwart). Wer das Häkchen schon hat, dem fehlt vielleicht
      nur die Nummer: Er bekommt den Weg dorthin als Link. Wer qualifiziert ist, dem fehlt die Prüffreigabe. */
   const URKUNDE_IM_PROFIL = 'Du bist als Prüfer eingetragen, aber deine Urkundennummer fehlt noch – trage sie im '
@@ -351,8 +351,8 @@
   const pruefHinweis = (obj) => (DARF.qualifiziert
     ? (obj ? KEINE_PRUEFFREIGABE : "Du hast noch keine gültige Prüffreigabe – die vergibt der Materialwart eines Ordners unter Ordner → Bearbeiten → Freigaben.")
     : DARF.pruefer_haekchen ? URKUNDE_IM_PROFIL
-      : "Prüfen dürfen nur Prüfer mit Urkundennummer und Prüffreigabe: Das Häkchen „Prüfer“ setzt die Verwaltung in der "
-        + "Nutzerverwaltung, die Urkundennummer trägt der Prüfer selbst in seinem Profil ein, die Prüffreigabe für einen "
+      : "Prüfen dürfen nur Prüfer mit Urkundennummer und Prüffreigabe: Das Häkchen „Prüfer“ setzt die Plattform-Verwaltung "
+        + "in der Leitstelle, die Urkundennummer trägt der Prüfer selbst in seinem Profil ein, die Prüffreigabe für einen "
         + "Ordner vergibt dessen Materialwart.");
 
   // „2026-12-04“ → „04.12.2026“, „2026-12“ → „12/2026“ – ohne Date-Objekt, damit keine Zeitzone den Tag verschiebt.
@@ -2192,7 +2192,7 @@
           catch (e) { toast(e.message, true); }
         },
         loeschen: async () => {
-          if (!(await confirm(`Ordner „${d.name}“ löschen? Das geht nur bei einem leeren Ordner – ohne Unterordner und Artikel, ohne Prüfdurchgänge und Set-Protokolle, ohne offene Nacharbeit und ohne gesperrte Artikel, die hierher zurückkehren.`, "Löschen"))) return;
+          if (!(await confirm(`Ordner „${d.name}“ endgültig löschen? Danach ist er weg. Das geht nur bei einem leeren Ordner – ohne Unterordner und Artikel, ohne Prüfdurchgänge und Set-Protokolle, ohne offene Nacharbeit und ohne gesperrte Artikel, die hierher zurückkehren.`, "Löschen"))) return;
           try { await api(`${API}/ordner/${d.id}`, { method: "DELETE" }); location.href = d.parent_id && offenbar(d.parent_id) ? `/materialablage/ordner/${d.parent_id}` : "/materialablage/bestand"; }
           catch (e) { toast(e.message, true); }
         },

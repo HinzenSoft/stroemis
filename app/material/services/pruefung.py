@@ -58,8 +58,8 @@ from .interval import plus_monate, wirksam
 BEFUND_TEXT = {"ok": "in Ordnung", "mangel": "Mangel", "nicht_zutreffend": "nicht zutreffend"}
 ABGESCHLOSSEN = ("Die Prüfung ist festgeschrieben und lässt sich nicht mehr ändern – eine Korrektur geht nur als "
                  "Berichtigung.")
-URKUNDE_FEHLT = ("Prüfen dürfen nur Prüfer mit Urkundennummer – das Häkchen „Prüfer“ setzt die Verwaltung in der "
-                 "Nutzerverwaltung, die Urkundennummer trägt der Prüfer selbst im Profil ein.")
+URKUNDE_FEHLT = ("Prüfen dürfen nur Prüfer mit Urkundennummer – das Häkchen „Prüfer“ setzt die Plattform-Verwaltung "
+                 "in der Leitstelle, die Urkundennummer trägt der Prüfer selbst im Profil ein.")
 # Aussondern nur durch den Materialwart (Schritt 28, Wunsch vom 25.10.2026).
 NICHT_AUSSONDERN = ("Prüfer sondern nicht mehr aus – bitte „aussondern empfohlen“ wählen: Das sperrt den Artikel, "
                     "aussondern kann danach der Materialwart.")
