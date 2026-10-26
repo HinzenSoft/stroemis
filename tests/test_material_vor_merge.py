@@ -382,6 +382,14 @@ def test_oberflaeche_statisch():
     assert ".us-aktionen .btn { min-height: 44px; }" in touch
     assert "#toast, #toast[popover] { bottom: auto; top: calc(var(--topbar) + 12px" in touch
     assert "#toast[popover].bei-dialog { left: var(--toast-x, 50%); bottom: auto;" in app_css     # Dialog geht vor
+    # Nachtrag 1: kein grauer GESPERRT-Banner, wenn eine offene Mangelmeldung sperrt und ihr roter Banner steht.
+    assert 'const sperreDurchMangel = /^Mangel gemeldet am /.test(a.lock_reason || "") && offeneMaengel.length > 0;' in js
+    assert '${a.status === "gesperrt" && !sperreDurchMangel ? `<p class="mat-banner s-gesperrt">GESPERRT' in js
+    assert "${offeneMaengel.map(mangelBanner).join(\"\")}" in js
+    # Nachtrag 2: der Sperr-Banner ist rot wie der Mangel-Banner; Marke, Kachel und Zahl bleiben.
+    assert ".mat-banner.s-gesperrt { background: var(--rot); }" in css
+    assert ".s-gesperrt.mat-status { background: var(--mat-gesperrt); }" in css
+    assert ".mat-zahl.s-gesperrt { background: var(--mat-gesperrt); }" in css
     print("Oberfläche (statisch) bestanden.")
 
 

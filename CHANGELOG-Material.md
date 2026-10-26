@@ -4234,6 +4234,16 @@ und die kleinen reproduzierten Fehler vor dem Merge; Tippflächen und Designspra
 - **B4 Toast unter Touch oben** (app.css): Die Touch-Regel nennt `#toast[popover]` mit – vorher gewann
   `#toast[popover] { bottom: 24px }` und die Meldung lag am Telefon über „Festschreiben“ bzw. hinter der Tastatur. Mit
   offenem Dialog gilt weiter die Fahne am Dialog; am Rechner unverändert unten. Gilt für alle Module (gemeinsamer Toast).
+- **Nachtrag des Nutzers: kein doppelter Sperr-Banner** (material.js, Artikelseite; wörtlich „Die grau meldung ist
+  redundant, sie kann weg.“): Sperrt eine offene Mangelmeldung den Artikel (Sperrgrund „Mangel gemeldet am …“) und steht
+  ihr roter Banner „MANGEL GEMELDET …“ (auch für Leser, dort ohne Text), entfällt der Banner „GESPERRT – Mangel gemeldet
+  am … Nicht verwenden, bis eine Freiprüfung ihn freigibt.“. Bei jedem anderen Sperrgrund (Prüfung „instandsetzen“,
+  Aussonderung empfohlen, Rückruf, Verlust) bleibt er; die Marke „gesperrt“ im Kopf bleibt immer; „Meine PSA“
+  unverändert.
+- **Nachtrag 2: Sperr-Banner rot** (material.css `.mat-banner.s-gesperrt`; wörtlich „Sperrungsbanner sollte dann aber
+  auch rot sein“): `--rot` wie der Mangel-Banner (Weiß auf Rot 4,9 : 1) – auf der Artikelseite, in der Prüfung
+  (Freiprüfung, gesperrter Artikel) und auf den Karten von „Meine PSA“ (gleiche Klasse). Marke, Kachel und Zahl
+  „gesperrt“ behalten `--mat-gesperrt`.
 
 ### Doku und Betrieb
 - README: Stand der Materialablage ohne „wartet auf Freigabe“, „Leitstelle → Nutzer“, „Materialablage → Bestand“,

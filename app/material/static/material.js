@@ -2687,13 +2687,18 @@
     // Hat die Empfehlung selbst gesperrt, steht ihr Grund nur im Hinweis darunter – der Banner sagt nur „Aussonderung
     // empfohlen“ (Browserprüfung vom 25.10.2026: dreimal derselbe Grund).
     const sperrText = empf && /aussondern empfohlen/.test(a.lock_reason || "") ? "Aussonderung empfohlen" : a.lock_reason;
+    // Kommt die Sperre von einer offenen Mangelmeldung (Sperrgrund „Mangel gemeldet am …“, mangel.melden) und steht deren
+    // roter Banner, sagt der graue GESPERRT-Banner dasselbe noch einmal – er entfällt (Nutzer, 26.10.2026). Bei jedem
+    // anderen Sperrgrund bleibt er; die Marke „gesperrt“ im Kopf bleibt immer.
+    const offeneMaengel = maengel.filter((m) => m.offen);
+    const sperreDurchMangel = /^Mangel gemeldet am /.test(a.lock_reason || "") && offeneMaengel.length > 0;
     const zuordnung = darf.grund ? zeile("Zugeordnet an", `${zu ? `${esc(zu.name)}${zu.gliederung ? ` <span class="muted">· ${esc(zu.gliederung)}</span>` : ""}${zu.aktiv ? "" : ' <span class="muted">(deaktiviert)</span>'}`
       : '<span class="muted">–</span>'}${zuKnoepfe}`) : "";
     inhalt.innerHTML = `${quittungHtml()}${a.demo ? `<p class="mat-demo-banner">${DEMO_ARTIKEL}</p>` : ""}
       ${a.status === "ausgesondert" ? `<p class="mat-banner s-ausgesondert">AUSGESONDERT – dieser Artikel ist außer Dienst und darf nicht mehr verwendet werden.</p>` : ""}
-      ${a.status === "gesperrt" ? `<p class="mat-banner s-gesperrt">GESPERRT${sperrText ? ` – ${esc(sperrText)}` : ""}. Nicht verwenden, bis eine Freiprüfung ihn freigibt.</p>` : ""}
+      ${a.status === "gesperrt" && !sperreDurchMangel ? `<p class="mat-banner s-gesperrt">GESPERRT${sperrText ? ` – ${esc(sperrText)}` : ""}. Nicht verwenden, bis eine Freiprüfung ihn freigibt.</p>` : ""}
       ${empf ? `<p class="notice mat-empfehlung"><strong>Aussonderung empfohlen</strong> – ${esc(empf.pruefer || "Prüfer")} am ${esc(fmtTag(empf.datum))} (<a href="/materialablage/pruefung/${Number(empf.pruefung)}">${empf.protokoll_id ? `Protokoll ${esc(empf.protokoll_id)}` : "Prüfung ansehen"}</a>)${empf.grund ? `: ${esc(empf.grund)}` : ""}. Aussondern kann der Materialwart.</p>` : ""}
-      ${maengel.filter((m) => m.offen).map(mangelBanner).join("")}
+      ${offeneMaengel.map(mangelBanner).join("")}
       ${a.status === "lebensdauer" ? `<p class="mat-banner s-lebensdauer">LEBENSDAUER ERREICHT – nicht mehr verwenden, prüfen lassen und aussondern.</p>` : ""}
       ${a.status === "neu" ? '<p class="mat-banner s-neu">NEU – die Eingangsprüfung steht aus. Bis dahin nicht einsetzen.</p>' : ""}
       ${rueckrufBanner(a)}
@@ -7518,7 +7523,7 @@
     });
   }
 
-  // Banner am Artikel: je offener Meldung ein roter Kasten unter dem GESPERRT-Banner. Text, Fotos und Melder schickt der
+  // Banner am Artikel: je offener Meldung ein roter Kasten (unter dem GESPERRT-Banner, wenn ein anderer Grund sperrt). Text, Fotos und Melder schickt der
   // Server nur Prüfern und Materialwarten des Artikels und dem Melder selbst (inhalt; Entscheidung vom 21.10.2026) – wer
   // nur liest, sieht den Zeitpunkt und den Satz MANGEL_VERBORGEN.
   const MANGEL_VERBORGEN = "Was gemeldet wurde, sehen nur Prüfer und Materialwart.";
