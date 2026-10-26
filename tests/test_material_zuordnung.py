@@ -479,7 +479,11 @@ def test_loeschkonzept():
         for e in geloest:
             assert e["before_json"] is None
             nur_verweis(e["after_json"], ref, ("Person Geht", "geht"), uid, grund="Konto gelöscht")
-        assert {e["action"] for e in neu} == {"freigabe_entfernt", "zuordnung_geloest"}, neu
+        # Dazu seit 26.10.2026 der Grenzstein am Konto (ohne Inhalt): Ein Nachfolger mit derselben Kennung sieht im
+        # Verlauf der Leitstelle nichts davor.
+        assert {e["action"] for e in neu} == {"freigabe_entfernt", "zuordnung_geloest", "geloescht"}, neu
+        grenze = [e for e in neu if e["action"] == "geloescht"]
+        assert [(e["entity"], e["entity_id"], e["before_json"], e["after_json"]) for e in grenze] == [("user", uid, None, None)]
         # Der Entwurf: ohne Namen, ohne Urkundennummer, ohne Kennung – eine Reservierung, die der Materialwart freigibt.
         x = zeilen(app, "SELECT * FROM mat_inspection WHERE id = ?", (entwurf,))[0]
         assert (x["inspector_name"], x["inspector_certificate"], x["inspector_user_id"]) == ("(gelöschtes Konto)", "", None)
