@@ -1,5 +1,5 @@
 """Nachbesserung vor dem Merge, Runde 3 – Tippflächen und Verbesserungen aus der Browserprüfung (26.10.2026):
-python tests/test_vor_merge_3.py  oder  pytest tests/test_vor_merge_3.py
+python tests/test_material_vor_merge_3.py  oder  pytest tests/test_material_vor_merge_3.py
 
   B-1  Brotkrumen: Glieder unter Touch mindestens 44 × 44 px, der Schrägstrich hängt am folgenden Glied (pfadHtml).
   B-2  „Deine Meldungen (n)“ (Meine PSA) unter Touch mindestens 44 px hoch.

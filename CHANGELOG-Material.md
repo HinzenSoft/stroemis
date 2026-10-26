@@ -4229,7 +4229,7 @@ V14 (nur Hinweis); V4 und V7 warten auf Entscheidungen des Nutzers.
   statt Grau (vorher 4,48 : 1).
 - **README:** Absatz „Katalog“ ergänzt (Liste oben nach der Wahl, Dokumente zugeklappt, „Löschen“ unter „Bearbeiten“,
   zurück an dieselbe Stelle).
-- Tests: `tests/test_vor_merge_3.py` (neu) – Seitentitel vom Server je Ansicht, Vorlagen (Ankerplätze, Leitstelle, ☰),
+- Tests: `tests/test_material_vor_merge_3.py` (neu) – Seitentitel vom Server je Ansicht, Vorlagen (Ankerplätze, Leitstelle, ☰),
   statische Prüfungen der Stellen in JS und CSS; `test_umbenennung.py` und `test_material_mangel.py` auf den neuen Titel
   angepasst.
 

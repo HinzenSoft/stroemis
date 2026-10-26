@@ -181,7 +181,7 @@ def test_namen_in_der_oberflaeche():
         stellen = [nav.index(n) for n in ("Strömipedia", "Ankerplätze", "Riegenkarten", "Materialablage", "Leitstelle",
                                           "Profil")]
         assert stellen == sorted(stellen), stellen
-        # Die Materialablage nennt seit Runde 3 vor dem Merge die Ansicht vorn (test_vor_merge_3, V2).
+        # Die Materialablage nennt seit Runde 3 vor dem Merge die Ansicht vorn (test_material_vor_merge_3, V2).
         for pfad, titel in (("/", "Strömipedia"), ("/stroemipedia", "Strömipedia"), ("/ankerplaetze", "Ankerplätze"),
                             ("/riegenkarten", "Riegenkarten"), ("/materialablage", "Übersicht – Materialablage"),
                             ("/leitstelle", "Leitstelle")):

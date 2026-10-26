@@ -1330,7 +1330,7 @@ def test_oberflaeche_statisch():
     assert "if (!matNav || !reiter) return;" in js and "if (!leiste || !MIT_LEISTE.has(ANSICHT)" in js
     seite = lesen("app/material/templates/material/seite.html")
     assert seite.count("{% if not nur_psa %}") == 2
-    assert "{% block title %}{% if nur_psa %}Meine PSA{% else %}{% with teil = " in seite        # Ansicht vorn: test_vor_merge_3
+    assert "{% block title %}{% if nur_psa %}Meine PSA{% else %}{% with teil = " in seite        # Ansicht vorn: test_material_vor_merge_3
     assert "{{ modul.name.material }}{% endif %} – strömis.de{% endblock %}" in seite
     # Marke in Listen und in der Suche, Container-Abfrage für schmale Karten.
     assert "${mangelMarke(a.mangel)}" in js
