@@ -28,6 +28,7 @@ für sich deploybar.
 | Nachbesserung Sets und Anträge nach den Prüfungen | Sets: Kennungen der Kopie, „Anzahl verringert“, Texte; Anträge: Produktgeschichte nach Wechsel, Intervall-Obergrenze nur bei Änderung, Fälligkeit ohne Namen, 409 statt 500, Texte, Zähl-Aufruf | gebaut 25.10.2026, wartet auf Prüfung und Freigabe |
 | Neue Modulnamen | Strömipedia, Ankerplätze, Riegenkarten, Materialablage, Leitstelle samt Adressen; alte Adressen leiten dauerhaft weiter (301, Abfrage bleibt, Umlaut-Schreibweisen), neue Protokolle mit `/materialablage/pruefen` | gebaut 26.10.2026, wartet auf Prüfung und Freigabe |
 | Feinschliff aus den Wiki-Fragen | „Deine PSA“ auch in Ordnern mit „Erinnerungsmails aus“ (E2 B), Verlauf des Kontos im Nutzerdialog der Leitstelle (E3 A), geerbtes generisches Formular in der Kategorie (K9), Texte (K19, K21, T, E1, E6), README | gebaut 26.10.2026, wartet auf Prüfung und Freigabe |
+| Katalog am Telefon (26.10.2026) | „☰ Kategorien“ links in der mitlaufenden Suchzeile der Katalogliste; keine Nummernsuche in den Katalogansichten | gebaut 26.10.2026 (kein Schemaschritt), wartet auf Prüfung und Freigabe |
 
 ## Abgleich mit dem Bestand (vor Lieferung 1)
 
@@ -4161,6 +4162,28 @@ Danach liefen die ganze Suite (`st-test`) grün, `st-py`, `st-js` und `st-css` o
 14. **Kasten „Mailversand“ am Telefon**: Eine Karte hat vier Inhaltszeilen (Mail mit Betreff, Empfänger, Fehler mit
     Antwort), bei 360 px umbrochen etwa 170 px hoch; die Antwort des Mailservers ließe sich noch hinter „Technische
     Antwort“ einklappen – bitte am Gerät ansehen.
+
+## Katalog am Telefon: „☰ Kategorien“ in der Suchzeile, keine Nummernsuche im Katalog (26.10.2026)
+
+Wünsche des Nutzers: „In der mobilen Ansicht vom Katalog scrollt das linke Burgermenü nicht mit runter. Es könnte
+neben den Suchbalken links rutschen, der mitscrollt“ und „Im Katalog soll die Suche nach Artikeln oben rechts
+verschwinden, das führt sonst nur zu Verwirrungen“.
+
+- **„☰ Kategorien“ in der Suchzeile** (material.js `leisteKnopfSetzen`, material.css): In der Ansicht „Katalog“ steht
+  der Knopf, solange die Kategorienleiste eine Schublade ist (unter 1024 px, kein Doppelbildschirm), links neben dem
+  Suchfeld der Produktliste und klebt mit ihr unter der Kopfleiste – auch weit unten in der Liste kommt man an die
+  Kategorien. Es ist derselbe Knopf (verschoben, nicht doppelt): Handler, `aria-expanded` und die Fokus-Rückkehr
+  bleiben; dort steht nur „☰“, der Name „Kategorien“ bleibt für Vorleseprogramme. So hoch wie das Suchfeld, unter
+  Touch 44 × 44 px. Wird das Fenster breiter (Leiste daneben, Tablet gedreht), kehrt er in die Modulnavigation zurück
+  und wieder hinein; eine Kategorie aus der Schublade oder dem Pfad lässt ihn in der Suchzeile. Schließen mit ✕,
+  Esc, Wischen oder Kategoriewahl gibt den Fokus an den Knopf zurück (Wischen und Kategoriewahl nur, wenn er in der
+  Suchzeile steht – dort rollt der Fokus die Seite nicht). Produkt, Formular, Meldungen und die übrigen Ansichten:
+  unverändert; am Rechner ab 1024 px unverändert.
+- **Keine Nummernsuche im Katalog** (seite.html): In Katalog, Produkt, Formular und Meldungen liefert die
+  Modulnavigation weder das Feld „Nummer suchen“ noch die Lupe aus; Übersicht, Prüfungen, Bestand, Ordner, Artikel
+  und Trefferseite behalten sie. `navAnordnen` prüft die Einzeiligkeit jetzt auch über die Reiter selbst – stehen nur
+  noch sie in der Zeile, rollen sie am Telefon seitlich statt umzubrechen.
+- Test: `test_material_l5.py::test_katalog_ohne_nummernsuche_knopf_in_suchzeile`.
 
 ## Nachbesserung nach den Prüfungen der Umbenennung (26.10.2026)
 

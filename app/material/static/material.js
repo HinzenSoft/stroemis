@@ -526,9 +526,10 @@
     reiter.classList.toggle("rollt-links", reiter.scrollLeft > 2);
     reiter.classList.toggle("rollt-rechts", rest > 2);
   }
-  // Eine Zeile, wenn kein sichtbares Element unterhalb des ersten beginnt.
+  // Eine Zeile, wenn kein sichtbares Element unterhalb des ersten beginnt – auch kein Reiter: Im Katalog am Telefon
+  // stehen nur noch die Reiter in der Navigation (ohne Nummernsuche, „☰“ in der Suchzeile), die sonst umbrächen.
   function einzeilig() {
-    const kinder = Array.from(matNav.children).filter((el) => el.offsetParent);
+    const kinder = [...matNav.children].flatMap((el) => (el === reiter ? [...reiter.children] : [el])).filter((el) => el.offsetParent);
     if (kinder.length < 2) return true;
     const erstes = kinder[0].getBoundingClientRect();
     return kinder.every((el) => el.getBoundingClientRect().top < erstes.bottom - 4);

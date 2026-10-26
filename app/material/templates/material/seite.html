@@ -37,7 +37,9 @@
       <a href="/materialablage/bestand" data-nav="bestand">Bestand</a>
       <a href="/materialablage/katalog" data-nav="katalog">Katalog</a>
     </div>
-    <button class="btn secondary small mat-lupe" type="button" id="mat-lupe" aria-controls="mat-suche" aria-expanded="false"
+    {# Im Katalog keine Nummernsuche (Wunsch vom 26.10.2026): Sie sucht Artikel im Bestand, nicht Produkte – neben der
+       Katalogsuche führte sie nur zu Verwechslungen. Die Lupe öffnet sie am Telefon, also entfällt sie mit. #}
+    {% if ansicht not in ("katalog", "produkt", "formular", "meldungen") %}<button class="btn secondary small mat-lupe" type="button" id="mat-lupe" aria-controls="mat-suche" aria-expanded="false"
             aria-label="Nummernsuche" title="Nummernsuche" hidden><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"
             focusable="false"><circle cx="10.5" cy="10.5" r="6.5" fill="none" stroke="currentColor" stroke-width="2.4"/><path
             d="M15.5 15.5 21 21" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/></svg></button>
@@ -45,7 +47,7 @@
       <input type="search" name="q" placeholder="Nummer suchen" title="Serien-, Inventar- oder Herstellernummer – auch Teile davon" aria-label="Nummer suchen: Serien-, Inventar- oder Herstellernummer"
              autocomplete="off" autocapitalize="characters" autocorrect="off" spellcheck="false" enterkeyhint="search">
       <button class="btn secondary small" type="submit">Suchen</button>
-    </form>
+    </form>{% endif %}
   </nav>{% endif %}
   {# Ausgesondert, gesperrt, Lebensdauer erreicht: steht nach einem QR-Scan schon im HTML; material.js ersetzt den
      Inhalt beim Zeichnen durch die Ansicht mit ihrem eigenen Banner. #}
