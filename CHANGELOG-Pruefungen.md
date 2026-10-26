@@ -689,3 +689,25 @@ Annahme jenes Nachtrags (Kriterien-Haken zählen nicht als „bearbeitet“) gil
   - Wiederverwendet den vorhandenen `.linkbtn`-Baustein (wie der Name in der Teilnehmenden-Liste, der den
     Bearbeiten-Dialog öffnet) – keine neue Gestaltung nötig. Funktioniert auch für eingefrorene Personen,
     da nur das Ansehen betroffen ist.
+
+## Nachtrag (26.10.2026): Nachbesserung vor dem Merge – Esc, Fokus und Meldungen
+
+Aus der Durchsicht vor dem Merge dev → main (bericht_pruefung_vor_merge_browser_module.md N3, N5).
+
+- **Esc schließt „Prüfungsleistung anlegen/bearbeiten“ auch aus der Beschreibung.** ProseMirror (im Toast-UI-Editor)
+  verschluckt jede Esc-Taste (`preventDefault`), der Dialog blieb deshalb offen, solange der Fokus im Editor stand.
+  `mdEditorEinrichten` hört jetzt am Editor auf Esc und schließt den Dialog selbst – gilt für die Leistung im Lehrgang
+  und im Katalog. Der Fokus geht danach wie bei jedem Dialog an den auslösenden Knopf zurück.
+- **Fokus beim Öffnen auf „Bezeichnung“** – beim Anlegen wie beim Bearbeiten. Toast UI nahm sich beim Anlegen des
+  Editors selbst den Fokus (`autofocus`, Vorgabe an); jetzt `autofocus: false`. Am Touchgerät gilt weiter die app-weite
+  Regel: Fokus auf den Titel, die Bildschirmtastatur geht nicht von selbst auf.
+- **„Lehrgang bearbeiten“** (und jeder andere lange Dialog über `S.dialog`): Fokus aufs erste Feld statt auf den
+  rollenden Dialogkörper (common.js; siehe CHANGELOG-Material.md, „Nachbesserung vor dem Merge – übrige Module“).
+- **Meldungen ohne „Administration“:** „Nur die Lehrgangsleitung oder die Verwaltung der Riegenkarten darf das.“,
+  „Kataloge pflegt nur die Verwaltung der Riegenkarten.“, Leerzustand der Kataloge „Die Verwaltung der Riegenkarten legt
+  sie an.“ – die Stufe „Verwaltung“ in den Riegenkarten (die Plattform-Verwaltung hat sie überall). Bitte bestätigen:
+  „Verwaltung der Riegenkarten“ statt eines neuen Rollennamens („Riegenkarten-Verwaltung“ steht nicht in der
+  Designsprache).
+- Tests: `tests/test_module_vor_merge.py` (Meldungen über die Schnittstelle, Editor-Einstellungen statisch),
+  `tests/test_pruefungen.py` (Wortlaut der Katalog-Meldung); Browserprobe Chromium 1280 und Touch 390: Esc aus
+  „Bezeichnung“ und aus der Beschreibung schließt, Fokus zurück auf „+ Prüfungsleistung anlegen“ bzw. „Bearbeiten“.
