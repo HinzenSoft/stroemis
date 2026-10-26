@@ -231,7 +231,7 @@ def durchgang_json(r, voll=False, pruefer_id=None):
     out = {"id": r["id"], "titel": r["title"], "folder_id": r["folder_id"], "ordner": bestand._pfad_text(r["folder_id"]),
            "eroeffnet_von": r["opened_by_name"], "eroeffnet_am": r["opened_on"], "geschlossen_am": r["closed_on"],
            "geschlossen_von": r["closed_by_name"], "offen": not geschlossen, "abgebrochen": bool(r["aborted"]), "zaehlung": z,
-           "protokoll": protokoll.protokoll_json(r, f"/material/durchgang/{r['id']}/sammelprotokoll"),
+           "protokoll": protokoll.protokoll_json(r, f"/materialablage/durchgang/{r['id']}/sammelprotokoll"),
            "darf": rechte.rechte_ordner(r["folder_id"])}
     if geschlossen:
         out["set_protokolle"] = [set_protokoll_json(s) for s in protokoll.set_protokolle(r["id"])]
@@ -302,7 +302,7 @@ def durchgang_json(r, voll=False, pruefer_id=None):
 def set_protokoll_json(s):
     """Ein Set-Protokoll (Zeile von mat_round_setprotokoll) für die Oberfläche; der Link zum Set-Ordner nur, wenn das
     Konto ihn sieht."""
-    url = f"/material/durchgang/{s['round_id']}/set/{s['id']}.pdf"
+    url = f"/materialablage/durchgang/{s['round_id']}/set/{s['id']}.pdf"
     return {"id": s["id"], "protokoll": protokoll.protokoll_json(s, url), "ordner": s["ordner"], "folder_id": s["folder_id"],
             "ordner_sichtbar": rechte.sicht().sichtbar(s["folder_id"]), "artikel": s["artikel"]}
 

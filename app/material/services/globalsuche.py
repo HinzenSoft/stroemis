@@ -165,6 +165,6 @@ def steckbrief_qr(d):
     if not i:
         raise Abgelehnt(rechte.ARTIKEL_FEHLT, 404)
     if rechte.darf_artikel("lesen", i):
-        return {"weiter": f"/material/artikel/{i['id']}"}
+        return {"weiter": f"/materialablage/artikel/{i['id']}"}
     globalprotokoll.eintragen("qr", i["inventory_no"], [i["id"]])
     return {"treffer": [steckbrief(i)], "mehr": False, "hinweis": HINWEIS}

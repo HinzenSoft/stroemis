@@ -78,33 +78,33 @@ FELDER = [
          hilfe="Damit werden die Links in E-Mails gebaut – etwa der zum Zurücksetzen des "
                "Passworts. Ohne Schrägstrich am Ende.",
          platzhalter="https://strömis.de"),
-    Feld("PUBLIC_URL", "Seite", "Adresse des öffentlichen Wikis",
+    Feld("PUBLIC_URL", "Seite", "Adresse der öffentlichen Strömipedia",
          platzhalter="https://wiki.strömis.de"),
-    Feld("PUBLIC_HOST", "Seite", "Hostname des öffentlichen Wikis",
+    Feld("PUBLIC_HOST", "Seite", "Hostname der öffentlichen Strömipedia",
          wandeln=_idna,
          hilfe="Anfragen an diesen Namen landen im öffentlichen Bereich."),
     Feld("ALLOW_REGISTRATION", "Seite", "Kontoanfragen erlauben", art="schalter",
          hilfe="Aus heißt: Konten legt nur ein Administrator an."),
     Feld("LOGIN_SLIDESHOW", "Seite", "Bilder auf der Anmeldeseite", art="schalter",
-         hilfe="Zeigt zufällige Bilder aus den Spots hinter dem Anmeldeformular."),
+         hilfe="Zeigt zufällige Bilder aus den Ankerplätzen hinter dem Anmeldeformular."),
 
-    # --- Prüfungen --------------------------------------------------------------------------
-    Feld("SPRACHEINGABE", "Prüfungen", "Diktieren per Mikrofon", art="schalter",
-         hilfe="Mikrofon-Knopf an den Kommentarfeldern der Prüfungen – für draußen, mit Handschuhen. "
+    # --- Riegenkarten (Modul pruefungen) ----------------------------------------------------
+    Feld("SPRACHEINGABE", "Riegenkarten", "Diktieren per Mikrofon", art="schalter",
+         hilfe="Mikrofon-Knopf an den Kommentarfeldern der Riegenkarten – für draußen, mit Handschuhen. "
                "Die Erkennung übernimmt der Browser; Chrome und Safari können das Audio dafür an "
                "Google bzw. Apple senden. Aus, wenn der Datenschutz das nicht zulässt."),
 
-    # --- Material ---------------------------------------------------------------------------
-    Feld("MATERIAL_BALD_FAELLIG_TAGE", "Material", "„Bald fällig“ ab … Tagen vor der Prüfung", art="zahl",
+    # --- Materialablage (Modul material) ----------------------------------------------------
+    Feld("MATERIAL_BALD_FAELLIG_TAGE", "Materialablage", "„Bald fällig“ ab … Tagen vor der Prüfung", art="zahl",
          wandeln=lambda roh: max(0, min(365, int(str(roh).strip()))) if str(roh).strip().isdigit() else None,
          hilfe="So viele Tage vor der nächsten Prüfung steht ein Artikel im Dashboard und in den Listen als "
                "„bald fällig“. Vorgabe 30.", platzhalter="30"),
-    Feld("MATERIAL_ERINNERUNGEN", "Material", "Erinnerungsmails verschicken", art="schalter",
+    Feld("MATERIAL_ERINNERUNGEN", "Materialablage", "Erinnerungsmails verschicken", art="schalter",
          hilfe="Jeden Morgen ab 6 Uhr bekommen die Materialwarte eine Sammelmail zu Fälligkeiten, Lebensende und "
                "ablaufenden Freigaben; wessen Freigabe abläuft, bekommt sie auch selbst. Aus: keine Mails – Journal "
                "und Aufräumen laufen trotzdem. Jede Fälligkeit wird je Stufe einmal gemeldet: 30 und 7 Tage vorher und "
                "einmal, wenn sie überschritten ist; das Lebensende 90 Tage vorher, eine Freigabe 30 Tage vor ihrem "
-               "Ende. Stand und Probelauf: Material → Übersicht (unten). Hier einschalten, nicht in der .env: Die "
+               "Ende. Stand und Probelauf: Materialablage → Übersicht (unten). Hier einschalten, nicht in der .env: Die "
                "Entwicklung kopiert die .env der Produktion."),
 
     # --- E-Mail -----------------------------------------------------------------------------
@@ -149,12 +149,12 @@ FELDER = [
     # --- Grenzen ----------------------------------------------------------------------------
     Feld("MAX_UPLOAD_MB", "Grenzen", "Größte Datei (MB)", art="zahl",
          config="MAX_CONTENT_LENGTH", wandeln=_mb,
-         hilfe="Gilt für Bilder, Filme, Wiki-Anhänge und die Medien zu Prüfungen – Videos vom "
+         hilfe="Gilt für Bilder, Filme, Anhänge der Strömipedia und die Medien der Riegenkarten – Videos vom "
                "Telefon sind schnell einige hundert Megabyte groß."),
     Feld("MAX_REQUEST_MB", "Grenzen", "Größte gewöhnliche Anfrage (MB)", art="zahl",
          config="MAX_REQUEST_LENGTH", wandeln=_mb,
-         hilfe="Alles außer Dateiuploads – eine Wiki-Seite etwa."),
-    Feld("WIKI_MAX_REVISIONS", "Grenzen", "Aufbewahrte Fassungen je Wiki-Seite", art="zahl",
+         hilfe="Alles außer Dateiuploads – eine Seite der Strömipedia etwa."),
+    Feld("WIKI_MAX_REVISIONS", "Grenzen", "Aufbewahrte Fassungen je Seite der Strömipedia", art="zahl",
          config="MAX_REVISIONS"),
 
     # --- Sicherheit -------------------------------------------------------------------------

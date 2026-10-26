@@ -364,7 +364,7 @@ def _verwaltung_benachrichtigen(r):
         zeilen += ["", "Links:"] + [f"  {x}" for x in m["links"]]
     if r["note"]:
         zeilen += ["", "Bemerkung:", r["note"]]
-    zeilen += ["", f"Einpflegen oder ablehnen: {cfg['BASE_URL'].rstrip('/')}/material/katalog/meldungen"]
+    zeilen += ["", f"Einpflegen oder ablehnen: {cfg['BASE_URL'].rstrip('/')}/materialablage/katalog/meldungen"]
     betreff = f"{cfg['SITE_NAME']} – Produktmeldung: {r['manufacturer']} {r['model']}"
     HINTERGRUND(_senden, [(a, betreff, "\n".join(zeilen) + "\n", uid, "verwaltung") for a, uid in an], r["id"],
                 r["folder_id"])
@@ -392,13 +392,13 @@ def _melder_benachrichtigen(r):
         imp = db.query("SELECT i.folder_id FROM mat_import_row r JOIN mat_import i ON i.id = r.import_id "
                        "WHERE r.request_id = ? LIMIT 1", (r["id"],), one=True)
         if imp:
-            zeilen += ["", f"Nacharbeit des Bestandsimports: {basis}/material/ordner/{imp['folder_id']}/import"]
+            zeilen += ["", f"Nacharbeit des Bestandsimports: {basis}/materialablage/ordner/{imp['folder_id']}/import"]
         else:
-            ziel = f"{basis}/material/artikel/neu?produkt={r['product_id']}" + (f"&ordner={r['folder_id']}" if r["folder_id"] else "")
+            ziel = f"{basis}/materialablage/artikel/neu?produkt={r['product_id']}" + (f"&ordner={r['folder_id']}" if r["folder_id"] else "")
             zeilen += ["", f"Artikel anlegen: {ziel}"]
     else:
         betreff = f"{cfg['SITE_NAME']} – Produktmeldung „{gemeldet}“ nicht aufgenommen"
         zeilen += [f"{r['resolved_by_name']} hat deine Meldung „{gemeldet}“ nicht in den Katalog aufgenommen.", "",
-                   "Begründung:", r["answer"], "", f"Deine Meldungen: {basis}/material/katalog/meldungen"]
+                   "Begründung:", r["answer"], "", f"Deine Meldungen: {basis}/materialablage/katalog/meldungen"]
     HINTERGRUND(_senden, [(u["email"], betreff, "\n".join(zeilen) + "\n", u["id"], "melder")], r["id"],
                 r["folder_id"])

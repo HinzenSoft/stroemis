@@ -481,8 +481,8 @@ def _mailtext(r, p, liste):
     zeilen += ["", "Artikel in Bereichen, die du nicht siehst, gehen an deren Materialwarte."]
     zeilen += ["", "Sperren: Prüfer sperren betroffene Artikel ohne Prüfung mit dem Grund „Rückruf“ (am Artikel: "
                "„Sperren (Rückruf)“). Eine Prüfung nach diesem Rückruf erledigt ihn für den Artikel ebenso.", "",
-               f"Produkt und betroffene Artikel: {basis}/material/katalog/produkt/{p['id']}",
-               f"Übersicht: {basis}/material"]
+               f"Produkt und betroffene Artikel: {basis}/materialablage/katalog/produkt/{p['id']}",
+               f"Übersicht: {basis}/materialablage"]
     betreff = " ".join(f"Rückruf: {name} – {r['title']}".split())       # auch U+2028/U+0085: ein Betreff ist eine Zeile
     return betreff, "\n".join(zeilen) + "\n"
 

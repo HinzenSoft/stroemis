@@ -111,7 +111,7 @@ def _trocken(stichtag, demo=False):
                    "DEMO weiter aus.")
     if not erinnerung.versand_an():
         grund = ("gesperrt (MATERIAL_ERINNERUNGEN_SPERRE)" if erinnerung.gesperrt()
-                 else "ausgeschaltet (Verwaltung → Einstellungen)")
+                 else "ausgeschaltet (Leitstelle → Einstellungen)")
         click.echo(f"Hinweis: Erinnerungsmails sind {grund} – so gingen sie hinaus, wenn sie an wären.")
     plan = erinnerung.planen(stichtag, demo=demo)
     if not plan.mails:
@@ -179,7 +179,7 @@ def remind(trocken, stichtag, erneut, demo):
         _trocken(tag, demo=demo)
         return
     if not current_app.config.get("MATERIAL_ERINNERUNGEN"):
-        click.echo("Erinnerungsmails sind ausgeschaltet (Verwaltung → Einstellungen) – nur --trocken.", err=True)
+        click.echo("Erinnerungsmails sind ausgeschaltet (Leitstelle → Einstellungen) – nur --trocken.", err=True)
         sys.exit(2)
     if erinnerung.gesperrt():
         click.echo("Erinnerungsmails sind in dieser Umgebung gesperrt (MATERIAL_ERINNERUNGEN_SPERRE) – nur --trocken.",
@@ -251,7 +251,7 @@ def dok_zusammenfuehren(probe):
 @click.option(zuruecksetzen.SCHALTER, "ja", is_flag=True, help="Wirklich zurücksetzen (nur auf dev).")
 @with_appcontext
 def dev_zuruecksetzen(trocken, ja):
-    """Das Modul Material auf dev leeren, um von null an zu testen: erst die ganze Datenbank sichern und media/material
+    """Die Materialablage auf dev leeren, um von null an zu testen: erst die ganze Datenbank sichern und media/material
     und pdf/ in die Sicherung verschieben (<DATA_DIR>/sicherung-material-<Zeitstempel>), dann alle mat_-Tabellen samt
     Triggern und Volltextindizes entfernen und das Schema frisch anlegen. Konten, Wiki, Spots, Prüfungen und
     Einstellungen bleiben. Nur auf dev (STROEMIS_NAME endet auf -dev, BASE_URL mit Host dev.… oder localhost) und nur mit

@@ -1,4 +1,4 @@
-"""Löschkonzept (Phase 2 · Lieferung 1, Abschnitt 7): was das Löschen eines Kontos im Modul Material bewirkt.
+"""Löschkonzept (Phase 2 · Lieferung 1, Abschnitt 7): was das Löschen eines Kontos in der Materialablage bewirkt.
 
 Grundsatz – im Verfahrensverzeichnis als Pseudonymisierung, nicht als Anonymisierung:
   - Handelnde bleiben namentlich, wo die Aufzeichnung es verlangt oder als Nachweis dient: Prüfer mit Name,
@@ -39,7 +39,7 @@ Abgeschlossene Prüfungen, Durchgänge, Ausnahmen, Anhänge, Rückrufe und das J
 Freitext-Bemerkungen früherer Set-Einträge, bis Schritt 26). Deaktivieren
 ändert im Modul nichts: Freigaben wirken nicht mehr (current_user verlangt ein aktives Konto), Zuordnungen bleiben und
 erscheinen mit „(deaktiviert)“. Ablauf beim Austritt: PSA zurücknehmen (Zuordnung lösen), Konto deaktivieren, nach
-Klärung offener Prüfungen löschen. Die Stufe im Modul Material steht am Konto und geht mit ihm; die Einträge „rollen“
+Klärung offener Prüfungen löschen. Die Stufe in der Materialablage steht am Konto und geht mit ihm; die Einträge „rollen“
 am Konto (Nutzerverwaltung, Profil, „Migration Schritt 10“) bleiben unter der Kontokennung stehen wie bisher.
 
 Prüfnachweise werden unbefristet aufbewahrt, auch nach der Aussonderung (Entscheidung des Betreibers vom 18.10.2026):
@@ -57,7 +57,7 @@ GRUND = "Konto gelöscht"
 
 
 def folgen(uid):
-    """Was das Löschen des Kontos im Modul Material bewirkt – Zahlen für den Dialog der Nutzerverwaltung: Freigaben
+    """Was das Löschen des Kontos in der Materialablage bewirkt – Zahlen für den Dialog der Nutzerverwaltung: Freigaben
     (werden entfernt, auch abgelaufene), Zuordnungen (werden gelöst), offene Entwürfe (werden Reservierungen ohne
     Prüfer), abgeschlossene Prüfungen, Mangelmeldungen und Änderungsanträge (gestellt oder entschieden; behalten den
     Namen)."""

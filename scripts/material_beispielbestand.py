@@ -1,4 +1,4 @@
-"""Beispielbestand für das Modul Material – NUR für dev und Tests, nie für echte Prüfungen.
+"""Beispielbestand für die Materialablage – NUR für dev und Tests, nie für echte Prüfungen.
 
 Ein realistischer Bestand einer großen Gliederung mit gut zwei Jahren Geschichte, gebaut allein aus dem vorhandenen
 Katalog (Wunsch des Nutzers vom 25.10.2026): der „DEMO-Kreisverband Flussland“ mit Zentrallager (Regale, Reserve), fünf
@@ -15,7 +15,7 @@ nicht. Es läuft nur mit ausdrücklichem Schalter:
 --artikel N: so viele Artikel zu Beginn und als geplante Nachkäufe (Vorgabe 800; Ersatz für Ausgesondertes kommt dazu).
 Ohne Angabe landen die Daten wie bei run.py in ./data; für eine andere Datenbank vorher DATA_DIR setzen. Auf dem
 dev-Server: README, Abschnitt „Beispielbestand (nur dev)“. Nur auf dev oder lokal: BASE_URL muss gesetzt sein (das
-Skript belegt sie nicht vor) und in der Umgebung UND in der Anwendung (Verwaltung → Einstellungen) die Positivliste von
+Skript belegt sie nicht vor) und in der Umgebung UND in der Anwendung (Leitstelle → Einstellungen) die Positivliste von
 flask material dev-zuruecksetzen erfüllen (Host mit „dev.“ davor oder localhost/127.0.0.1, zuruecksetzen.adresse_frei);
 dazu die dev-Kennung (STROEMIS_NAME endet auf „-dev“) – nur lokal (beide Adressen localhost/127.0.0.1) geht es ohne.
 Sonst legt das Skript nichts an.
@@ -60,7 +60,7 @@ Alles läuft über die Dienste der App (bestand, pruefung, durchgang, zuordnung,
 Transaktionen – je Vorgang eine; scheitert einer, steht er unter „Hinweise“ im Bericht. Im Journal steht als Akteur
 „Beispielbestand“ bzw. das handelnde DEMO-Konto. Mails gehen keine hinaus (auch nicht ins Mailprotokoll): Die
 Hintergrund-Versender der Dienste sind in diesem Prozess abgeschaltet. Die Konten legt das Skript direkt an (ohne Anmeldung
-gibt es dafür keinen Dienst), mit Journaleintrag „rollen“ und nur mit Zugang zum Modul Material; gibt es ein passendes
+gibt es dafür keinen Dienst), mit Journaleintrag „rollen“ und nur mit Zugang zur Materialablage; gibt es ein passendes
 DEMO-Konto mit derselben Adresse schon (aktiv, freigeschaltet, mit der Stufe der Rolle), nimmt es dieses unverändert
 (Passwort, Name und Rollen bleiben) – sonst bricht es vor jedem Schreiben ab. Laufzeit: Jede Prüfung bekommt ihr
 Protokoll (gut eine halbe Sekunde je PDF), nach jedem Vorgang eine kurze Pause für andere Schreiber – bei 800 Artikeln
@@ -750,7 +750,7 @@ class Beispielbestand:
     def konten_pruefen(konten):
         """Vor jedem Schreiben: Gibt es zu einer Adresse schon ein Konto, übernimmt der Lauf es nur, wenn es „DEMO-…“
         heißt, aktiv und freigeschaltet ist (keine offene Kontoanfrage – die kann jeder über die Registrierung stellen) und
-        schon hat, was die Rolle braucht (Stufe im Modul Material, bei Prüfern Häkchen und gültige Urkundennummer). Der
+        schon hat, was die Rolle braucht (Stufe in der Materialablage, bei Prüfern Häkchen und gültige Urkundennummer). Der
         Lauf stuft kein Konto hoch und ändert keine Rolle (Sicherheitsprüfung vom 25.10.2026, Befund 2). Liefert je
         unpassendem Konto „Adresse (Grund)“."""
         from app import db
@@ -769,7 +769,7 @@ class Beispielbestand:
             elif not u["active"] or (u.get("status") or "active") != "active":
                 grund = "deaktiviert"
             elif (u["recht_material"] or 0) < k["stufe"]:
-                grund = f"Stufe im Modul Material {u['recht_material'] or 0}, gebraucht {k['stufe']}"
+                grund = f"Stufe in der Materialablage {u['recht_material'] or 0}, gebraucht {k['stufe']}"
             elif k.get("urkunde") and not rechte.ist_pruefer(u):
                 grund = "kein Prüfer mit gültiger Urkundennummer"
             else:
@@ -778,7 +778,7 @@ class Beispielbestand:
         return unpassend
 
     def konto_anlegen(self, k):
-        """Ein DEMO-Konto nur für das Modul Material (Karte, Wiki, Prüfungen und Verwaltung aus) – mit zufälligem Passwort,
+        """Ein DEMO-Konto nur für die Materialablage (Karte, Wiki, Prüfungen und Verwaltung aus) – mit zufälligem Passwort,
         die Einsatzkräfte mit einem gemeinsamen –, mit dem Journaleintrag „rollen“ wie in der Nutzerverwaltung. Prüfer und
         Materialwarte hinterlegen ihre DEMO-Unterschrift über den Dienst des Profils. Gibt es ein passendes DEMO-Konto mit
         der Adresse schon (konten_pruefen, etwa aus einem früheren Lauf), bleibt es mit Name, Passwort und Rollen; der
@@ -794,7 +794,7 @@ class Beispielbestand:
         with db.transaction(sofort=True):
             if alt:
                 uid = alt["id"]
-                anders = [f"Stufe im Modul Material {alt['recht_material']} statt {k['stufe']}"
+                anders = [f"Stufe in der Materialablage {alt['recht_material']} statt {k['stufe']}"
                           if (alt["recht_material"] or 0) != k["stufe"] else ""]
                 anders += [f"{name} an" for spalte, name in (("recht_verwaltung", "Verwaltung"), ("recht_karte", "Karte"),
                                                              ("recht_wiki", "Wiki"), ("recht_pruefungen", "Prüfungen"),

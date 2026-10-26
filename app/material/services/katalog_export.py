@@ -282,7 +282,7 @@ def sammeln(mit_dateien=True):
 def bericht_text(b):
     """bericht.txt im Archiv: für Menschen, nicht für den Import."""
     e, a = b["enthalten"], b["ausgelassen"]
-    zeilen = ["Katalog-Export – Modul Material", f"Quelle:   {b['quelle']}", f"Erstellt: {b['erstellt']}",
+    zeilen = ["Katalog-Export – Materialablage", f"Quelle:   {b['quelle']}", f"Erstellt: {b['erstellt']}",
               f"Format:   {importer.FORMAT}, Version 2", "",
               "Im Export:",
               f"  Kategorien  {e['kategorien']}", f"  Produkte    {e['produkte']} (davon {e['bilder']} mit Bild)",

@@ -21,7 +21,7 @@ Ablauf – alles geprüft, bevor die erste Seite entsteht:
      Bilder neu geschrieben, ohne EXIF), jede Archivdatei einmal. Videos werden übergangen (Entscheidung F6: einzeln
      hochladen – die Wandlung dauert Minuten), ebenso fremde Endungen und unbenutzte Dateien; das Ergebnis sagt es.
   6. Verweise außerhalb von Code: „](…)“ und src="…" auf „/media/wiki/<ref>“ (so schreibt der Export: Eintrag
-     „media/<ref>“) oder relativ zur .md → die neue Datei; ein relativer Verweis auf eine importierte .md → /wiki/<slug>.
+     „media/<ref>“) oder relativ zur .md → die neue Datei; ein relativer Verweis auf eine importierte .md → /stroemipedia/<slug>.
      Fragment (#w=…) bleibt. Was sich nicht auflösen lässt, bleibt stehen und steht als Hinweis im Ergebnis.
   7. Geschrieben wird in EINER Transaktion (Seiten wie api_wiki.create_page: freie Adresse, Fassung, Verknüpfungen zu
      Dateien und Seiten); scheitert etwas, bleibt keine Seite und keine abgelegte Datei übrig. Keine Mails.
@@ -274,7 +274,7 @@ class _Import:
             self.hinweis("Videos", f"Video „{pfad}“ übergangen – Videos einzeln hochladen.")
             return None
         if ext not in WIKI_EXT:
-            self.hinweis("Dateityp", f"„{pfad}“ übergangen – Dateityp {ext or '(ohne Endung)'} wird im Wiki nicht "
+            self.hinweis("Dateityp", f"„{pfad}“ übergangen – Dateityp {ext or '(ohne Endung)'} wird in der Strömipedia nicht "
                                      "unterstützt.")
             return None
         tmp = tempfile.SpooledTemporaryFile(max_size=4 * 1024 * 1024, dir=current_app.config["TMP_DIR"])
@@ -307,7 +307,7 @@ class _Import:
             self.benutzt.add(pfad)
             if self.vorlauf:
                 return ziel
-            return f"/wiki/{self.seiten[pfad].slug}" + (anhang if anhang.startswith("#") else "")
+            return f"/stroemipedia/{self.seiten[pfad].slug}" + (anhang if anhang.startswith("#") else "")
         if pfad not in self.eintraege:
             self.hinweis("Verweise", f"Verweis ohne Datei in „{md_pfad}“: {ziel[:200]}")
             return ziel
@@ -459,7 +459,7 @@ def importieren(fh, parent_id, uid):
         if k.titel.casefold() in vorhanden:
             wo = f"Unter „{ziel['title']}“" if ziel else "Auf der obersten Ebene"
             hinweise.insert(0, f"{wo} gibt es schon eine Seite „{vorhanden[k.titel.casefold()]}“ – die importierte "
-                               f"steht daneben unter eigener Adresse (/wiki/{k.slug}).")
+                               f"steht daneben unter eigener Adresse (/stroemipedia/{k.slug}).")
     for pfad in imp.eintraege:
         if pfad in imp.seiten or pfad in imp.benutzt:
             continue
@@ -469,7 +469,7 @@ def importieren(fh, parent_id, uid):
         elif ext in WIKI_EXT:
             imp.hinweis("unbenutzt", f"„{pfad}“ – keine Seite verweist darauf, nicht übernommen.")
         else:
-            imp.hinweis("Dateityp", f"„{pfad}“ übergangen – Dateityp {ext or '(ohne Endung)'} wird im Wiki nicht "
+            imp.hinweis("Dateityp", f"„{pfad}“ übergangen – Dateityp {ext or '(ohne Endung)'} wird in der Strömipedia nicht "
                                     "unterstützt.")
     imp.zusammenfassen()
     return {"seiten": [{"id": k.pid, "title": k.titel, "slug": k.slug, "parent_id": oben.pid if oben else parent_id}

@@ -1,6 +1,6 @@
 """Routen des Moduls Material.
 
-Seiten (/material/…, /m/<token>) sind dünne Hüllen: Sie prüfen das Recht, nennen die Ansicht und
+Seiten (/materialablage/…, /m/<token>) sind dünne Hüllen: Sie prüfen das Recht, nennen die Ansicht und
 überlassen den Inhalt material.js, das ihn über die Schnittstelle (/api/material/…) holt – dasselbe
 Muster wie im Prüfungsbereich. Jede Route prüft ihr Recht selbst; ein ausgeblendeter Knopf ist kein
 Schutz. Fachregeln stehen in services/, hier wird nur gelesen, aufgerufen und geantwortet.
@@ -155,7 +155,7 @@ def _seite(ansicht, katalog_seite=False, warnung=None, bezug=None, **daten):
                            warnung=warnung() if warnung else None)
 
 
-@seiten.get("/material")
+@seiten.get("/materialablage")
 def dashboard():
     """Die Übersicht. Ohne Modulzugang, aber mit zugeordneter PSA führt „Material“ (alte Links, Lesezeichen) zu „Meine
     PSA“ (Phase 3 · L1); sonst wie jede Modulseite."""
@@ -165,17 +165,17 @@ def dashboard():
     return _seite("dashboard")
 
 
-@seiten.get("/material/pruefungen")
+@seiten.get("/materialablage/pruefungen")
 def pruefungen():
     return _seite("pruefungen", ordner=request.args.get("ordner", type=int))
 
 
-@seiten.get("/material/bestand")
+@seiten.get("/materialablage/bestand")
 def bestand_seite():
     return _seite("bestand")
 
 
-@seiten.get("/material/bestand/antraege")
+@seiten.get("/materialablage/bestand/antraege")
 def antraege_seite():
     """Änderungsanträge an Stammdaten (Wunsch vom 24.10.2026): die eigenen und die, die das Konto als Materialwart des
     Ordners entscheidet – Liste und Rechte prüft die Schnittstelle (GET /antraege)."""
@@ -183,12 +183,12 @@ def antraege_seite():
     return _seite("antraege", status=status if status in antrag.FILTER else None)
 
 
-@seiten.get("/material/ordner/<int:fid>")
+@seiten.get("/materialablage/ordner/<int:fid>")
 def ordner_seite(fid):
     return _seite("ordner", bezug=("ordner", fid), id=fid)
 
 
-@seiten.get("/material/artikel/neu")
+@seiten.get("/materialablage/artikel/neu")
 def artikel_neu():
     """Artikel anlegen nur, wer irgendwo verwaltet; den Ordner aus der Adresse übernimmt die Seite nur, wenn das Konto
     ihn verwaltet."""
@@ -200,7 +200,7 @@ def artikel_neu():
                   produkt=request.args.get("produkt", type=int))
 
 
-@seiten.get("/material/artikel/<int:iid>")
+@seiten.get("/materialablage/artikel/<int:iid>")
 def artikel_seite(iid):
     """Ziel jedes QR-Scans: Ist der Artikel ausgesondert, gesperrt oder am Lebensende, steht das schon im HTML –
     sofort sichtbar, bevor material.js die Ansicht (mit eigenem Banner) zeichnet. Ein fremder Artikel antwortet vorher
@@ -213,19 +213,19 @@ def artikel_seite(iid):
     return _seite("artikel", bezug=("artikel", iid), warnung=lambda: ueberblick.warnung(iid), id=iid, **weiter)
 
 
-@seiten.get("/material/artikel/<int:iid>/pruefung/neu")
+@seiten.get("/materialablage/artikel/<int:iid>/pruefung/neu")
 def pruefung_neu(iid):
     """Sehen genügt für die Seite; den Knopf zum Beginnen blendet die Oberfläche ohne Prüffreigabe aus, und die
     Schnittstelle prüft selbst."""
     return _seite("pruefung_neu", bezug=("artikel", iid), id=iid, durchgang=request.args.get("durchgang", type=int))
 
 
-@seiten.get("/material/pruefung/<int:pid>")
+@seiten.get("/materialablage/pruefung/<int:pid>")
 def pruefung_seite(pid):
     return _seite("pruefung", bezug=("pruefung", pid), id=pid)
 
 
-@seiten.get("/material/durchgang/<int:rid>")
+@seiten.get("/materialablage/durchgang/<int:rid>")
 def durchgang_seite(rid):
     return _seite("durchgang", bezug=("durchgang", rid), id=rid)
 
@@ -259,27 +259,27 @@ def _protokoll_senden(row, quelle, kennung_wert, inventarnummer=None, auch=()):
     return resp
 
 
-@seiten.get("/material/pruefung/<int:pid>/pdf")
+@seiten.get("/materialablage/pruefung/<int:pid>/pdf")
 def pruefung_pdf(pid):
     row = db.query("SELECT x.*, i.inventory_no FROM mat_inspection x JOIN mat_item i ON i.id = x.item_id "
                    "WHERE x.id = ? AND x.locked_at IS NOT NULL", (pid,), one=True)
     return _protokoll_senden(row, "pid", pid, row["inventory_no"] if row else None)
 
 
-@seiten.get("/material/durchgang/<int:rid>/sammelprotokoll")
+@seiten.get("/materialablage/durchgang/<int:rid>/sammelprotokoll")
 def sammelprotokoll(rid):
     row = db.query("SELECT * FROM mat_round WHERE id = ? AND locked_at IS NOT NULL", (rid,), one=True)
     return _protokoll_senden(row, "rid", rid)
 
 
-@seiten.get("/material/durchgang/<int:rid>/set/<int:sid>.pdf")
+@seiten.get("/materialablage/durchgang/<int:rid>/set/<int:sid>.pdf")
 def setprotokoll(rid, sid):
     """Ein Set-Protokoll (Schritt 27): wer den Durchgang sieht – und, wer den Set-Ordner lesen darf (F4 a)."""
     row = db.query("SELECT * FROM mat_round_setprotokoll WHERE id = ? AND round_id = ?", (sid, rid), one=True)
     return _protokoll_senden(row, "rid", rid, auch=(row["folder_id"],) if row else ())
 
 
-@seiten.get("/material/pruefen")
+@seiten.get("/materialablage/pruefen")
 def pruefseite():
     """Prüfseite: Jeder – auch ohne Anmeldung – lädt ein Protokoll hoch und erfährt, ob es unverändert ist.
     Sie zeigt nur das Ergebnis und die Protokoll-ID, keine Personendaten; den Link zur Prüfung nur, wer sie sehen darf."""
@@ -288,33 +288,33 @@ def pruefseite():
                            angemeldet=bool(u and zugang(u)))
 
 
-@seiten.get("/material/katalog")
+@seiten.get("/materialablage/katalog")
 def katalog_seite():
     return _seite("katalog", katalog_seite=True, kategorie=request.args.get("kategorie", type=int))
 
 
-@seiten.get("/material/katalog/produkt/<int:pid>")
+@seiten.get("/materialablage/katalog/produkt/<int:pid>")
 def produkt_seite(pid):
     return _seite("produkt", katalog_seite=True, id=pid)
 
 
-@seiten.get("/material/katalog/formular/<int:fid>")
+@seiten.get("/materialablage/katalog/formular/<int:fid>")
 def formular_seite(fid):
     return _seite("formular", katalog_seite=True, id=fid)
 
 
-@seiten.get("/material/katalog/meldungen")
+@seiten.get("/materialablage/katalog/meldungen")
 def meldungen_seite():
     """Die Material-Verwaltung arbeitet hier die Meldungen fehlender Produkte ab; Materialwarte sehen ihre eigenen
     (oder alle), wer sonst Zugang zum Modul hat, liest alle. Die Änderungsanträge standen bis zum 24.10.2026 hier unter
     ?bereich=antraege – alte Links (Mails, Lesezeichen) führen jetzt auf ihre Seite im Bestand."""
     if request.args.get("bereich") == "antraege":
         status = request.args.get("status")
-        return redirect("/material/bestand/antraege" + (f"?status={status}" if status in antrag.FILTER else ""))
+        return redirect("/materialablage/bestand/antraege" + (f"?status={status}" if status in antrag.FILTER else ""))
     return _seite("meldungen", katalog_seite=True, status=request.args.get("status"))
 
 
-@seiten.get("/material/suche")
+@seiten.get("/materialablage/suche")
 def suche_seite():
     """Ein eindeutiger Treffer öffnet den Artikel direkt; sonst zeigt die Seite die Trefferliste und darunter das
     Angebot der globalen Suche. Gezählt wird nur, was das Konto sieht (search.artikel filtert selbst) – die
@@ -1162,10 +1162,10 @@ def _protokoll_link(pid):
     sonst None (ein fremdes Protokoll prüft die Seite trotzdem, sie verlinkt nur nicht)."""
     if pid.startswith("S-"):
         r = db.query("SELECT id, folder_id FROM mat_round WHERE protocol_id = ?", (pid,), one=True)
-        return f"/material/durchgang/{r['id']}" if r and darf("lesen", r["folder_id"]) else None
+        return f"/materialablage/durchgang/{r['id']}" if r and darf("lesen", r["folder_id"]) else None
     r = db.query("SELECT x.id, i.folder_id, i.origin_folder_id, i.lock_state FROM mat_inspection x "
                  "JOIN mat_item i ON i.id = x.item_id WHERE x.protocol_id = ?", (pid,), one=True)
-    return f"/material/pruefung/{r['id']}" if r and darf_artikel("lesen", r) else None
+    return f"/materialablage/pruefung/{r['id']}" if r and darf_artikel("lesen", r) else None
 
 
 # --- Schnittstelle: Prüfdurchgänge ---------------------------------------------------------------------------

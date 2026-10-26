@@ -1,5 +1,5 @@
 """Routen des Bestandsimports (Phase 2 · Lieferung 3): Probelauf und Übernehmen einer Bestandsliste (CSV oder .xlsx)
-in einen Zielordner, die Nacharbeit dieses Ordners samt CSV und die Seite /material/ordner/<fid>/import.
+in einen Zielordner, die Nacharbeit dieses Ordners samt CSV und die Seite /materialablage/ordner/<fid>/import.
 
 Alles nur mit „verwalten“ am Zielordner (die Material-Verwaltung überall) – requires_folder mit der Kennung aus dem
 Pfad. Zeilenkennungen im Inhalt (zeilen) prüft der Dienst gegen genau diesen Zielordner: Eine fremde antwortet wie eine
@@ -46,7 +46,7 @@ def _datei_und_zuordnung():
 
 # --- Seite --------------------------------------------------------------------------------------------------------
 
-@seiten.get("/material/ordner/<int:fid>/import", endpoint="bestandsimport")
+@seiten.get("/materialablage/ordner/<int:fid>/import", endpoint="bestandsimport")
 def bestandsimport_seite(fid):
     """Import und Nacharbeit dieses Zielordners. Wer den Ordner nicht sieht: 404 wie für Unbekanntes; wer ihn sieht,
     aber nicht verwaltet: 403; ein Systemordner: 409. Den Inhalt zeichnet material.js (Ansicht „bestandsimport“)."""
@@ -60,7 +60,7 @@ def bestandsimport_seite(fid):
 
 
 
-@seiten.get("/material/ordner/<int:fid>/nacharbeit.csv")
+@seiten.get("/materialablage/ordner/<int:fid>/nacharbeit.csv")
 def nacharbeit_csv(fid):
     """Die offenen Zeilen der Nacharbeit als CSV – eine Seite wie der Export: ohne Anmeldung zur Anmeldung, ohne
     Modulzugang 403, Fremdes 404, ohne Verwalten 403; Fehler als Seite."""

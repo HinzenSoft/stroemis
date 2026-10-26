@@ -1,4 +1,4 @@
-"""Rechte im Modul Material – Stufe im Modul und Freigaben je Ordner.
+"""Rechte in der Materialablage – Stufe im Modul und Freigaben je Ordner.
 
 Woher die Rechte kommen (Bauentwurf Phase 2 · Lieferung 1, Abschnitt 1, mit der Nachbesserung „Modulstufe“ vom
 18.10.2026):
@@ -78,25 +78,25 @@ PRUEFUNG_FEHLT = "Prüfung nicht gefunden."
 DURCHGANG_FEHLT = "Prüfdurchgang nicht gefunden."
 KONTO_FEHLT = "Konto nicht gefunden."
 
-NAME_FEHLT = "Für das Modul Material braucht dein Konto einen Namen – trag ihn im Profil ein."
-NICHT_FREIGESCHALTET = ("Für dein Konto ist das Modul Material nicht freigeschaltet – das macht die Verwaltung in der "
+NAME_FEHLT = "Für die Materialablage braucht dein Konto einen Namen – trag ihn im Profil ein."
+NICHT_FREIGESCHALTET = ("Für dein Konto ist die Materialablage nicht freigeschaltet – das macht die Verwaltung in der "
                         "Nutzerverwaltung.")
 KEINE_PRUEFFREIGABE = ("Häkchen und Urkundennummer hast du, aber für diesen Ordner keine Prüffreigabe – die vergibt der "
                        "Materialwart des Ordners unter Ordner → Bearbeiten → Freigaben.")
 NUR_GRUNDRECHT = ("Dafür braucht es eine Lese- oder Verwalterfreigabe für diesen Ordner – die Prüffreigabe allein "
                   "reicht nicht.")
 NUR_VERWALTUNG_GLOBAL = "Ohne Ordner nur für die Material-Verwaltung."
-NUR_MATERIAL_VERWALTUNG = "Das macht die Material-Verwaltung (Stufe „Verwaltung“ im Modul Material)."
+NUR_MATERIAL_VERWALTUNG = "Das macht die Material-Verwaltung (Stufe „Verwaltung“ in der Materialablage)."
 ENTSCHEIDEN_NUR_ZUSTAENDIG = ("Entscheiden dürfen die Materialwarte dieses Ordners (eigene Freigabe „verwalten“ hier "
                               "oder darüber).")
-KONTO_OHNE_ZUGANG = ("Dieses Konto hat keinen Zugang zum Modul Material – den gibt die Verwaltung in der "
+KONTO_OHNE_ZUGANG = ("Dieses Konto hat keinen Zugang zur Materialablage – den gibt die Verwaltung in der "
                      "Nutzerverwaltung.")
 
 URKUNDE_UNGUELTIG = "Eine Urkundennummer braucht Buchstaben oder Ziffern."
 URKUNDE_NUR_PRUEFER = ("Die Urkundennummer trägt nur ein, wer das Häkchen „Prüfer“ hat – das setzt die Verwaltung in der "
                        "Nutzerverwaltung.")
 KATALOG_HAEKCHEN_WEG = ("Das Häkchen „Produktkatalogpfleger“ gibt es nicht mehr – Katalogpflege gehört zur Stufe "
-                        "„Verwaltung“ im Modul Material.")
+                        "„Verwaltung“ in der Materialablage.")
 # Für ein Konto mit Häkchen, aber ohne Urkundennummer: wo es weitergeht.
 URKUNDE_IM_PROFIL = ("Deine Urkundennummer fehlt noch – trage sie im Profil ein (Profil → Urkundennummer und "
                      "Unterschrift), dann kannst du prüfen.")
@@ -145,7 +145,7 @@ def urkunde_fehlt(user=None):
 
 
 def zugang(user=None):
-    """Modulzugang: Stufe Mitglied oder Verwaltung im Modul Material (auth.nutzt – die Plattform-Verwaltung hat sie
+    """Modulzugang: Stufe Mitglied oder Verwaltung in der Materialablage (auth.nutzt – die Plattform-Verwaltung hat sie
     überall) UND ein Name. Wer ihn hat, sieht Katalog, Suchfeld und Profil – vom Bestand nur, was seine Freigaben zeigen
     (die Material-Verwaltung alles). Ohne ihn wirken weder Freigaben noch das Häkchen „Prüfer“. Keine Abfrage."""
     user = user or current_user()
@@ -153,7 +153,7 @@ def zugang(user=None):
 
 
 def ist_material_verwaltung(user=None):
-    """Material-Verwaltung: Stufe Verwaltung im Modul Material (die Plattform-Verwaltung eingeschlossen) und Zugang.
+    """Material-Verwaltung: Stufe Verwaltung in der Materialablage (die Plattform-Verwaltung eingeschlossen) und Zugang.
     Pflegt den Produktkatalog, arbeitet Meldungen ab, legt Rückrufe an, sieht und verwaltet alle Bestände, legt
     Gliederungen an und vergibt jede Freigabe – prüfen nur mit eigener Qualifikation und Prüffreigabe."""
     user = user or current_user()
@@ -467,7 +467,7 @@ def verwalter_von(fid, ohne_freigabe=None):
 
 
 def grundrecht_ueberall(user):
-    """Stufe Verwaltung im Modul Material (die Plattform-Verwaltung eingeschlossen): Das Konto hat das Grundrecht an
+    """Stufe Verwaltung in der Materialablage (die Plattform-Verwaltung eingeschlossen): Das Konto hat das Grundrecht an
     jedem Ordner – für die Regel „dauerhafte Prüffreigabe nur mit Grundrecht“. Ohne Blick auf den Namen (wirken tut
     trotzdem nur, was zugang() erlaubt)."""
     return bool(user and verwaltet("material", user))
@@ -475,7 +475,7 @@ def grundrecht_ueberall(user):
 
 def grundrecht_an(user, fid):
     """Hat das Konto an fid oder darüber heute ein Grundrecht (lesen oder verwalten) – oder hat es die Stufe
-    Verwaltung im Modul Material (Material-Verwaltung, die Plattform-Verwaltung eingeschlossen)? Frisch aus der
+    Verwaltung in der Materialablage (Material-Verwaltung, die Plattform-Verwaltung eingeschlossen)? Frisch aus der
     Datenbank, auch mitten in einer Transaktion: Eine Prüffreigabe ohne Ende ist nur so erlaubt (freigaben._schreiben),
     und ein Grundrecht aus derselben Anfrage zählt schon mit. Ohne Sicht, ohne Blick auf Name oder Aktivität."""
     if grundrecht_ueberall(user):
@@ -490,7 +490,7 @@ def grundrecht_an(user, fid):
 def waehlbares_konto(user_id, modulzugang=False):
     """Ein Konto, das man auswählen darf (Freigabe, Personenzuordnung): aktiv und mit Namen. Nicht vorhanden,
     deaktiviert und ohne Namen antworten gleich – die Auswahl verrät nicht, welche Konten es gibt (1.6 Nr. 12).
-    modulzugang (Freigaben): dazu die Stufe Mitglied oder Verwaltung im Modul Material – ohne sie wirkte die Freigabe
+    modulzugang (Freigaben): dazu die Stufe Mitglied oder Verwaltung in der Materialablage – ohne sie wirkte die Freigabe
     nicht; 409 mit Klartext (die Personensuche für Freigaben zeigt solche Konten gar nicht erst). Die
     Personenzuordnung fragt ohne: Wer PSA trägt, braucht keinen Modulzugang."""
     uid = kennung(user_id, "Konto")
@@ -743,7 +743,7 @@ katalog_required = material_verwaltung_required
 
 def material_verwaltung_konten():
     """Wer Mails zu neuen Produktmeldungen und zu Rückrufen an Artikeln ohne Verwalter bekommt: die Material-Verwaltung –
-    aktive Konten mit Namen und Stufe Verwaltung im Modul Material, ohne die Plattform-Verwaltung (sie bekommt keine
+    aktive Konten mit Namen und Stufe Verwaltung in der Materialablage, ohne die Plattform-Verwaltung (sie bekommt keine
     Fachmails, solange es eine Material-Verwaltung gibt). Gibt es keine, die Plattform-Verwaltung (aktive Konten).
     Zeilen mit id und email, nach Kennung."""
     rows = db.query("SELECT id, email FROM users WHERE active = 1 AND status = 'active' AND trim(name) <> '' "
@@ -760,7 +760,7 @@ def rollen_lesen(d, user_row, rechte):
     """Material-Kennzeichen aus einer Anfrage der Nutzerverwaltung über den Bestand legen.
 
     d: JSON der Anfrage; user_row: bisheriger Datensatz (oder {} beim Anlegen); rechte: die schon gelesenen Stufen der
-    Matrix (bleiben unberührt – die Stufe im Modul Material liest api_admin._rechte_lesen wie jede andere). Liefert die
+    Matrix (bleiben unberührt – die Stufe in der Materialablage liest api_admin._rechte_lesen wie jede andere). Liefert die
     zu schreibenden Spalten. Das Häkchen „Produktkatalogpfleger“ (mat_katalog) gibt es seit Schritt 10 nicht mehr –
     Katalogpflege gehört zur Stufe Verwaltung; wer es noch schickt, bekommt 400 statt einer stillen Übergehung. Das
     Häkchen „Prüfer“ geht auch ohne Urkundennummer – die trägt der Prüfer selbst im Profil ein, bis dahin darf er nicht

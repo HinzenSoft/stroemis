@@ -15,7 +15,7 @@ from itsdangerous import BadSignature, URLSafeTimedSerializer
 from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.security import safe_join
 
-from . import api_admin, api_albums, api_pruefungen, api_wiki, auth, db, einstellungen, material, medienpflege
+from . import api_admin, api_albums, api_pruefungen, api_wiki, auth, db, einstellungen, material, medienpflege, module
 from .images import AVATAR_MAX_BYTES, EMBED_EXT, VIDEO_EXT
 
 
@@ -95,32 +95,31 @@ pages = Blueprint("pages", __name__)
 @pages.get("/")
 @auth.page_login_required
 def index():
-    """Startseite ist das Wiki – oder das erste Modul, das die Rechte-Matrix dem Konto öffnet. Ohne jedes Modul der
-    Lesemodus des Wikis (die öffentlichen Seiten) statt einer Sackgasse; ein Modul mit eigener Stufe geht ihm vor.
-    Das Modul Material öffnet sich nur mit Stufe UND Namen (rechte.zugang) – ein namenloses Konto von früher landete
-    sonst auf der Fehlerseite des Moduls."""
+    """Startseite ist die Strömipedia (Modul wiki) – oder das erste Modul, das die Rechte-Matrix dem Konto öffnet.
+    Ohne jedes Modul der Lesemodus der Strömipedia (die öffentlichen Seiten) statt einer Sackgasse; ein Modul mit
+    eigener Stufe geht ihm vor. Die Materialablage öffnet sich nur mit Stufe UND Namen (rechte.zugang) – ein namenloses
+    Konto von früher landete sonst auf ihrer Fehlerseite."""
     if auth.nutzt("wiki"):
         return render_template("wiki.html", user=auth.current_user(), slug="")
     from .material.services import rechte as mat_rechte
-    for modul, ziel in (("karte", "/karte"), ("pruefungen", "/pruefungen"), ("material", "/material"),
-                        ("verwaltung", "/admin")):
+    for modul in ("karte", "pruefungen", "material", "verwaltung"):
         if mat_rechte.zugang() if modul == "material" else auth.nutzt(modul):
-            return redirect(ziel)
+            return redirect(module.PFAD[modul])
     if auth.wiki_lesemodus():
         return redirect(url_for("pages.wiki"))
     # Mit Kopfleiste (user): Profil und Abmelden bleiben erreichbar – ohne sie saß man auf der Fehlerseite fest.
     return render_template("error.html", user=auth.current_user(), code=403, message="Für dein Konto ist noch kein "
-                           "Bereich freigeschaltet. Bitte wende dich an die Verwaltung."), 403
+                           "Bereich freigeschaltet. Bitte wende dich an die Plattform-Verwaltung."), 403
 
 
-@pages.get("/karte")
+@pages.get("/ankerplaetze")
 @auth.page_modul_required("karte")
 def karte():
     return render_template("index.html", user=auth.current_user())
 
 
 def _wiki(slug):
-    """Mitglied und Verwaltung bekommen das Wiki. Ein Konto ohne Stufe im Wiki bekommt den Lesemodus: genau die Seiten,
+    """Mitglied und Verwaltung bekommen die Strömipedia. Ein Konto ohne Stufe darin bekommt den Lesemodus: genau die Seiten,
     die der öffentliche Teil zeigt, unter der eigenen Kopfleiste. Die Vorlage lädt dafür den Leser des öffentlichen
     Teils (public.js), der nur /api/public abfragt. Was „öffentlich“ ist, entscheidet so weiter eine Stelle
     (api_wiki.is_public), und keine interne Schnittstelle musste dafür aufgehen – die bleiben bei wiki_required."""
@@ -131,19 +130,19 @@ def _wiki(slug):
     abort(403)
 
 
-@pages.get("/wiki")
+@pages.get("/stroemipedia")
 @auth.page_login_required
 def wiki():
     return _wiki("")
 
 
-@pages.get("/wiki/<slug>")
+@pages.get("/stroemipedia/<slug>")
 @auth.page_login_required
 def wiki_page(slug):
     return _wiki(slug)
 
 
-# --- Öffentliches Wiki (ohne Login; unter der Subdomain wiki.* oder unter /oeffentlich) ---------
+# --- Öffentliche Strömipedia (ohne Login; unter der Subdomain wiki.* oder unter /oeffentlich) -----
 
 @pages.get("/oeffentlich/")
 def public_index():
@@ -232,7 +231,7 @@ def profile():
                                               or u.get("signature_png")))
 
 
-@pages.get("/admin")
+@pages.get("/leitstelle")
 @auth.page_login_required
 def admin():
     if not auth.is_admin():
@@ -240,7 +239,7 @@ def admin():
     return render_template("admin.html", user=auth.current_user())
 
 
-# --- Prüfungen: nur für Nutzer mit dem Zusatzrecht „Prüfer“ -------------------------------------
+# --- Riegenkarten (Modul pruefungen): nur für Nutzer mit dem Zusatzrecht „Prüfer“ --------------
 # Der Bereich hat drei Ansichten unter einer Seite: die Lehrgangsliste, ein Lehrgang mit seinen
 # Reitern und eine druckfreundliche Mängelübersicht. Was zu zeigen ist, liest das JavaScript aus
 # den Datenattributen; das Recht prüft jede Route selbst – ein ausgeblendeter Reiter ist kein Schutz.
@@ -252,7 +251,7 @@ def _pruefungen_seite(ansicht, lehrgang_id=None, katalog_id=None):
                            lehrgang_id=lehrgang_id, katalog_id=katalog_id)
 
 
-@pages.get("/pruefungen")
+@pages.get("/riegenkarten")
 @auth.page_login_required
 def pruefungen():
     return _pruefungen_seite("liste")
@@ -261,25 +260,25 @@ def pruefungen():
 # Kataloge sind kein Lehrgang – eigene, wortgleiche Routen (nicht unter <int:lid>, sonst gäbe es
 # einen Lehrgang mit der Nummer „kataloge“ nie zu sehen). Vor der <int:lid>-Route eingetragen ist
 # das nicht nötig: Flasks Konverter lässt „kataloge“ dort ohnehin nie durch.
-@pages.get("/pruefungen/kataloge")
+@pages.get("/riegenkarten/kataloge")
 @auth.page_login_required
 def pruefungen_kataloge():
     return _pruefungen_seite("kataloge")
 
 
-@pages.get("/pruefungen/kataloge/<int:kid>")
+@pages.get("/riegenkarten/kataloge/<int:kid>")
 @auth.page_login_required
 def pruefungen_katalog(kid):
     return _pruefungen_seite("katalog", katalog_id=kid)
 
 
-@pages.get("/pruefungen/<int:lid>")
+@pages.get("/riegenkarten/<int:lid>")
 @auth.page_login_required
 def pruefungen_lehrgang(lid):
     return _pruefungen_seite("lehrgang", lid)
 
 
-@pages.get("/pruefungen/<int:lid>/druck")
+@pages.get("/riegenkarten/<int:lid>/druck")
 @auth.page_login_required
 def pruefungen_druck(lid):
     return _pruefungen_seite("druck", lid)
@@ -443,7 +442,7 @@ def create_app():
         # Modul Material: Ab wie vielen Tagen vor der Fälligkeit ein Artikel „bald fällig“ heißt.
         MATERIAL_BALD_FAELLIG_TAGE=int(os.environ.get("MATERIAL_BALD_FAELLIG_TAGE", "30")),
         # Modul Material: Erinnerungsmails an die Materialwarte (täglich ab 6 Uhr). Vorgabe aus – eingeschaltet wird in
-        # der Produktion unter Verwaltung → Einstellungen; MATERIAL_ERINNERUNGEN_SPERRE (nur Umgebung) sperrt hart.
+        # der Produktion unter Leitstelle → Einstellungen; MATERIAL_ERINNERUNGEN_SPERRE (nur Umgebung) sperrt hart.
         MATERIAL_ERINNERUNGEN=_env_bool("MATERIAL_ERINNERUNGEN", False),
         PUBLIC_HOST=_idna(os.environ.get("PUBLIC_HOST", "wiki.strömis.de")),
         PUBLIC_URL=os.environ.get("PUBLIC_URL", "https://wiki.strömis.de").rstrip("/"),
@@ -500,7 +499,7 @@ def create_app():
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
     db.init_app(app)
-    # Das Modul Material bringt Schema, Blueprints und Kommandozeile selbst mit; es meldet seine
+    # Die Materialablage bringt Schema, Blueprints und Kommandozeile selbst mit; es meldet seine
     # Migration an, bevor die Datenbank eingerichtet wird.
     material.init_app(app)
     with app.app_context():
@@ -547,6 +546,23 @@ def create_app():
     IMPORT_ROUTEN = ("pruefungen.import_vorschau", "pruefungen.import_uebernehmen")
     # Modul Material: Produkt- und Ordnerfotos, Herstellerdokumente – eigene, feste Grenzen.
     MATERIAL_UPLOADS = material.upload_grenzen()
+
+    @app.before_request
+    def alte_adressen():
+        """Alte Seitenadressen der Module (vor der Umbenennung vom 26.10.2026) leiten dauerhaft auf die neuen – für
+        immer: gedruckte Protokolle tragen /material/pruefen, Mails und Lesezeichen /wiki/…, /karte, /pruefungen…,
+        /admin. Läuft als erster Haken: Eine Weiterleitung kostet keine Datenbankabfrage. Ohne Anmeldung und ohne
+        Rechteprüfung – das Ziel prüft wie bisher selbst. Nur GET und HEAD (Seiten kennen nichts anderes); die
+        Abfrage bleibt, den Anker behält der Browser. Der Zwischenspeicher darf sich die 301 einen Tag merken, nicht
+        unbegrenzt – so bliebe ein Rückbau möglich."""
+        if request.method not in ("GET", "HEAD"):
+            return None
+        ziel = module.weiterleitung(request.path, request.query_string.decode("latin-1"))
+        if ziel is None:
+            return None
+        resp = redirect(ziel, 301)
+        resp.headers["Cache-Control"] = "public, max-age=86400"
+        return resp
 
     @app.before_request
     def einstellungen_anwenden():
@@ -617,7 +633,7 @@ def create_app():
 
     @app.context_processor
     def inject():
-        # material_zugang: der Reiter „Material“ der Kopfleiste nur, wenn sich das Modul auch öffnet (Stufe und Name,
+        # material_zugang: der Reiter „Materialablage“ der Kopfleiste nur, wenn sich das Modul auch öffnet (Stufe und Name,
         # ohne Abfrage) – rechte.material allein zeigte ihn einem namenlosen Konto, das dort nur 403 bekäme.
         # meine_psa: der Eintrag „Meine PSA“ für Konten mit Zuordnung, die nirgends im Bestand lesen dürfen (Phase 3 ·
         # L1) – eine Abfrage über den Index der Zuordnung, die Sicht nur mit Zuordnung und Modulzugang.
@@ -628,6 +644,8 @@ def create_app():
                 "rechte": auth.rechte_von(auth.current_user()) if auth.current_user() else {},
                 "wiki_lesemodus": auth.wiki_lesemodus(),
                 "material_zugang": material_zugang(),
+                # Sichtbare Modulnamen und Seitenadressen (app/module.py) für Reiter, Titel und Links.
+                "modul": {"name": module.NAME, "pfad": module.PFAD},
                 "csp_nonce": getattr(g, "csp_nonce", "")}
 
     @app.errorhandler(413)

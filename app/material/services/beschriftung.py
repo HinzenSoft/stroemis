@@ -24,7 +24,7 @@ FELD = {
     "title": "Titel", "version": "Version", "valid_from": "Gültig ab", "withdrawn_on": "Zurückgezogen ab",
     "active": "Aktiv", "punkte": "Prüfpunkte", "default_material_kind": "Materialart (Vorgabe)",
     "default_interval_months": "Prüfintervall (Vorgabe)", "default_lifetime_years": "Lebensdauer (Vorgabe)",
-    "recht_material": "Stufe Material", "mat_pruefer": "Prüfer", "mat_katalog": "Katalogpfleger",
+    "recht_material": "Stufe Materialablage", "mat_pruefer": "Prüfer", "mat_katalog": "Katalogpfleger",
     "urkundennummer": "Urkundennummer", "system_kind": "Systemordner", "url": "Adresse", "file_path": "Datei",
     "sha256": "SHA-256", "size": "Größe", "lock_state": "Sperrzustand", "lock_reason": "Grund der Sperre",
     "origin_folder_id": "Herkunftsordner", "herkunft": "Herkunftsordner", "last_inspected_on": "Zuletzt geprüft",
@@ -49,7 +49,7 @@ FELD = {
     "artikel_angelegt": "Artikel angelegt", "schon_im_bestand": "schon im Bestand", "nacharbeit": "Nacharbeit (Zeilen)",
     "ersetzt": "neu eingelesen (Zeilen)", "aus_nacharbeit": "aus der Nacharbeit",
     "liste_inventarnummer": "bisherige Inventarnummer", "liste_zuletzt_geprueft": "zuletzt geprüft laut Liste",
-    "liste_naechste_pruefung": "nächste Prüfung laut Liste", "seite": "Wiki-Seite Nr.",
+    "liste_naechste_pruefung": "nächste Prüfung laut Liste", "seite": "Seite der Strömipedia Nr.",
     # Phase 3 · Lieferung 1: Mangelmeldung
     "mangel": "Mangelmeldung Nr.",
     # Änderungsanträge an festen Stammdaten (Entscheidungen vom 21.10.2026)
@@ -103,7 +103,7 @@ AKTION = {
     # Im Lebenslauf ohne Namen: Wem der Artikel zugeordnet war, gehört nicht in ein Dokument zur Weitergabe.
     "zugeordnet": "Zuordnung geändert", "zuordnung_geloest": "Zuordnung geändert",
     "bestandsimport": "Bestandsimport", "nacharbeit_uebernommen": "Nacharbeit übernommen",
-    "nacharbeit_verworfen": "Nacharbeit verworfen", "wiki": "Prüfanleitung (Wiki) geändert",
+    "nacharbeit_verworfen": "Nacharbeit verworfen", "wiki": "Prüfanleitung (Strömipedia) geändert",
     "mangel_gemeldet": "Mangel gemeldet",
     "antrag_gestellt": "Änderung beantragt", "antrag_bestaetigt": "Änderung bestätigt (Antrag)",
     "antrag_abgelehnt": "Änderungsantrag abgelehnt", "antrag_zurueckgezogen": "Änderungsantrag zurückgezogen",
@@ -146,7 +146,7 @@ SET_WERTE = {"lock_cause": {"eigen": "eigener Grund", "set": "mit dem Set"},
                            "ausgesondert": "Set ausgesondert", "bestandteil": "Bestandteil ersetzt – Set prüfen",
                            "stueckliste": "Stückliste übertragen"},
              "austausch": {"ja": "ja", "nein": "nein", "nicht_belegt": "nicht belegt"}}
-# Stufe im Modul Material – mit der Zahl dahinter: Einträge vor „Migration Schritt 10“ meinten die Stufen aus Phase 1
+# Stufe in der Materialablage – mit der Zahl dahinter: Einträge vor „Migration Schritt 10“ meinten die Stufen aus Phase 1
 # (1 Führungskraft, 2 Materialwart), die Zahl hält das eindeutig.
 STUFE_MATERIAL = {0: "kein Zugriff", 1: "Mitglied", 2: "Verwaltung"}
 _VERWEISE = ("pruefung", "aussonderung", "basis", "empfehlung", "berichtigung", "berichtigt")

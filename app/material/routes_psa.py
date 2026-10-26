@@ -1,7 +1,7 @@
 """Routen zu „Meine PSA“ und zur Mangelmeldung (Phase 3 · Lieferung 1, Bauentwurf 2.2 und 6.1).
 
 „Meine PSA“ hat einen eigenen, engen Zugangsweg neben rechte.zugang: jedes aktive Konto mit Namen (psa.konto), auch
-ohne Stufe im Modul Material – und nur die eigenen, nicht ausgesonderten Artikel als Karte (psa.artikel_json). Die
+ohne Stufe in der Materialablage – und nur die eigenen, nicht ausgesonderten Artikel als Karte (psa.artikel_json). Die
 Seite fragt nicht _seite() (das verlangt den Modulzugang); requires_folder und die 404-Regel bleiben, wie sie sind.
 Mangel melden darf die zugeordnete Person (auch ohne Stufe) und jeder mit Leserecht am Artikel
 (rechte.requires_artikel_oder_zugeordnet); der Dienst prüft vor den Fotos und in der Transaktion noch einmal
@@ -51,12 +51,12 @@ def _psa_seite(iid=None):
                            darf=json.dumps(darf_alles(u)), warnung=None)
 
 
-@seiten.get("/material/meine-psa")
+@seiten.get("/materialablage/meine-psa")
 def meine_psa():
     return _psa_seite()
 
 
-@seiten.get("/material/meine-psa/<int:iid>")
+@seiten.get("/materialablage/meine-psa/<int:iid>")
 def meine_psa_artikel(iid):
     return _psa_seite(iid)
 

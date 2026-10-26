@@ -6,7 +6,7 @@ hier gibt es keinen Markdown- oder HTML-Parser und keine eigene Route für den I
 lesen darf (darf_lesen – dieselbe Regel wie die beiden Endpunkte); ohne Leserecht nie den Titel. Titel und Slug gehen nur
 an Konten, für die darf_lesen gilt; das Journal nennt nur die Seitennummer.
 
-Verknüpfen darf, wer Stufe Verwaltung im Modul Material hat (Material-Verwaltung, die Plattform-Verwaltung zählt mit)
+Verknüpfen darf, wer Stufe Verwaltung in der Materialablage hat (Material-Verwaltung, die Plattform-Verwaltung zählt mit)
 UND mindestens Stufe Mitglied im Wiki (Entscheidung vom 19.10.2026; die Plattform-Verwaltung hat im Wiki ohnehin
 Verwaltung) – auch an benutzten Formularen: Die Verknüpfung ist Hilfe zum Prüfen, kein Prüfinhalt, und steht in keinem
 Protokoll. Geschrieben wird genau diese eine Spalte.
@@ -20,9 +20,9 @@ from flask import has_request_context
 from ... import db
 from . import Abgelehnt, journal, katalog, kennung
 
-FEHLT = "Wiki-Seite nicht gefunden."          # nicht vorhanden, im Papierkorb und nicht lesbar antworten gleich
-NUR_MIT_WIKI = ("Prüfanleitungen verknüpft, wer im Modul Material die Stufe „Verwaltung“ und im Wiki mindestens die "
-                "Stufe „Mitglied“ hat – dir fehlt die Stufe im Wiki (Nutzerverwaltung).")
+FEHLT = "Seite der Strömipedia nicht gefunden."          # nicht vorhanden, im Papierkorb und nicht lesbar antworten gleich
+NUR_MIT_WIKI = ("Prüfanleitungen verknüpft, wer in der Materialablage die Stufe „Verwaltung“ und in der Strömipedia "
+                "mindestens die Stufe „Mitglied“ hat – dir fehlt die Stufe in der Strömipedia (Nutzerverwaltung).")
 TREFFER_MAX = 30
 
 
@@ -110,7 +110,7 @@ def editor_json(page_id, user=None):
         return {"seite": page_id, "titel": None, "url": None, "reichweite": None, "zustand": "papierkorb"}
     if not darf_lesen(p, user):
         return {"seite": page_id, "titel": None, "url": None, "reichweite": None, "zustand": "kein_zugang"}
-    return {"seite": page_id, "titel": p["title"], "url": f"/wiki/{quote(p['slug'], safe='')}",
+    return {"seite": page_id, "titel": p["title"], "url": f"/stroemipedia/{quote(p['slug'], safe='')}",
             "reichweite": reichweite(p), "zustand": "ok"}
 
 
@@ -121,8 +121,8 @@ def setzen(fid, d):
     geschrieben wird genau diese eine Spalte (kein updated_at), mit dem Journal in einer Transaktion – dort nur die
     Seitennummer, nie der Titel."""
     if not isinstance(d, dict) or "seite" not in d:
-        raise Abgelehnt("„seite“ fehlt (Kennung der Wiki-Seite oder null).")
-    neu = kennung(d.get("seite"), "Wiki-Seite", leer_erlaubt=True)
+        raise Abgelehnt("„seite“ fehlt (Kennung der Seite in der Strömipedia oder null).")
+    neu = kennung(d.get("seite"), "Seite der Strömipedia", leer_erlaubt=True)
     with db.transaction(sofort=True):
         f = katalog.formular(fid)
         alt = f.get("wiki_page_id")
@@ -151,4 +151,4 @@ def anleitung(form_id, user=None):
         return {"kein_zugang": True}
     slug = quote(p["slug"], safe="")
     quelle = f"/api/wiki/pages/{slug}?leise=1" if nutzt("wiki", user) else f"/api/public/pages/{slug}"
-    return {"titel": p["title"], "url": f"/wiki/{slug}", "quelle": quelle}
+    return {"titel": p["title"], "url": f"/stroemipedia/{slug}", "quelle": quelle}

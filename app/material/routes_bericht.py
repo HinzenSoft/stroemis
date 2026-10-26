@@ -63,7 +63,7 @@ def _protokollieren(fid, jahr, pruefer_nennen, was):
 
 # --- Seite und Daten ------------------------------------------------------------------------------------------------
 
-@seiten.get("/material/ordner/<int:fid>/bericht")
+@seiten.get("/materialablage/ordner/<int:fid>/bericht")
 def bericht_seite(fid):
     """Die Seite mit Jahr-Auswahl und Haken; den Inhalt zeichnet material.js (Ansicht „bericht“) aus den Daten unten."""
     nein = bericht_zugang(fid)
@@ -86,13 +86,13 @@ def bericht_daten(fid):
 
 # --- PDF und CSV ----------------------------------------------------------------------------------------------------
 
-@seiten.get("/material/ordner/<int:fid>/bericht-<int:jahr>.pdf")
+@seiten.get("/materialablage/ordner/<int:fid>/bericht-<int:jahr>.pdf")
 def bericht_pdf(fid, jahr):
     """Der Bericht als PDF/A-3b – im Browser geöffnet wie der Lebenslauf, nicht festgeschrieben; ohne Prüfernamen."""
     return _pdf(fid, jahr, False)
 
 
-@seiten.get("/material/ordner/<int:fid>/bericht-<int:jahr>-mit-pruefern.pdf")
+@seiten.get("/materialablage/ordner/<int:fid>/bericht-<int:jahr>-mit-pruefern.pdf")
 def bericht_pdf_mit_pruefern(fid, jahr):
     """Dasselbe mit dem Block „Prüfer im Jahr“ und den Namen der Aussondernden (Haken „Prüfer nennen“)."""
     return _pdf(fid, jahr, True)
@@ -113,13 +113,13 @@ def _pdf(fid, jahr, pruefer_nennen):
     return antwort_privat(resp)
 
 
-@seiten.get("/material/export/<int:fid>-pruefungen-<int:jahr>.csv")
+@seiten.get("/materialablage/export/<int:fid>-pruefungen-<int:jahr>.csv")
 def bericht_csv(fid, jahr):
     """Die Prüfungen und Aussonderungen des Jahres im Zweig als CSV für Excel – ohne Kappung, ohne Prüfernamen."""
     return _csv(fid, jahr, False)
 
 
-@seiten.get("/material/export/<int:fid>-pruefungen-<int:jahr>-mit-pruefern.csv")
+@seiten.get("/materialablage/export/<int:fid>-pruefungen-<int:jahr>-mit-pruefern.csv")
 def bericht_csv_mit_pruefern(fid, jahr):
     """Dasselbe mit den Spalten Prüfer und Urkundennummer gefüllt."""
     return _csv(fid, jahr, True)

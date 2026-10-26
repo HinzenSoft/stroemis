@@ -68,7 +68,7 @@ MAX_EMPFAENGER = 10
 FILTER = {"offen": ("offen",), "erledigt": ("bestaetigt", "abgelehnt", "zurueckgezogen"), "alle": tuple(ANTRAGSSTATUS)}
 # Monatsfelder (Monat oder Tag wie im Dialog „Bearbeiten“; das Lebensende ist ein Tag).
 MONATSFELDER = {"manufactured_on": "Herstelldatum", "purchased_on": "Kaufdatum", "first_use_on": "Erstgebrauch"}
-SEITE = "/material/bestand/antraege"
+SEITE = "/materialablage/bestand/antraege"
 FEHLT = "Änderungsantrag nicht gefunden."
 NICHT_FEST = "Der Artikel ist noch nicht geprüft – seine Stammdaten änderst du direkt im Dialog „Bearbeiten“."
 AUSGESONDERT = "Der Artikel ist ausgesondert – an ihm ändert sich nichts mehr."
@@ -815,7 +815,7 @@ def _ohne_verwalter_mail(fid, anzahl):
     zeilen = [f"Der Ordner „{ordner}“ hat keinen Materialwart mehr (keine gültige Freigabe „verwalten“ dort oder "
               f"darüber). {anzahl_text} auf eine Entscheidung – entscheiden darf nur, wer dort verwaltet.", "",
               f"Gliederung:    {gl['name'] if gl else '(ohne Gliederung)'}", f"Ordner:        {ordner}", "",
-              f"Freigabe vergeben (Ordner → Bearbeiten → Freigaben): {basis}/material/ordner/{fid}?freigaben=",
+              f"Freigabe vergeben (Ordner → Bearbeiten → Freigaben): {basis}/materialablage/ordner/{fid}?freigaben=",
               f"Änderungsanträge: {basis}{SEITE}", "",
               "Du bekommst diese Mail, weil du zur Material-Verwaltung gehörst. Sie kommt je Ordner einmal – erneut erst, "
               "wenn er wieder einen Materialwart hatte und ihn wieder verliert."]
@@ -908,7 +908,7 @@ def _antragsteller_benachrichtigen(kid):
         zeilen += [f"{k['resolved_by_name']} hat deinen Antrag vom {_datum(k['created_at'])} abgelehnt; am Artikel "
                    "ändert sich nichts.", ""]
         zeilen += _kopfzeilen(item) + [""] + _aenderungen_text(rows) + ["", "Begründung:", k["answer"]]
-    zeilen += ["", f"Artikel ansehen: {basis}/material/artikel/{item['id']}"]
+    zeilen += ["", f"Artikel ansehen: {basis}/materialablage/artikel/{item['id']}"]
     betreff = f"{cfg.get('SITE_NAME') or 'strömis.de'} – {betreff}"
     if demo:
         betreff = f"[DEMO] {betreff}"

@@ -1242,9 +1242,9 @@ def sammelprotokolle_set(fid):
         "AND r.locked_at IS NOT NULL ORDER BY locked_at DESC, art LIMIT :n", {"fid": fid, "n": SAMMELPROTOKOLLE_MAX})
     s = rechte.sicht()
     return [{"art": x["art"], "geschlossen_am": x["closed_on"],
-             "protokoll": protokoll.protokoll_json(x, f"/material/durchgang/{x['round_id']}/set/{x['id']}.pdf"
+             "protokoll": protokoll.protokoll_json(x, f"/materialablage/durchgang/{x['round_id']}/set/{x['id']}.pdf"
                                                    if x["art"] == "set" else
-                                                   f"/material/durchgang/{x['round_id']}/sammelprotokoll"),
+                                                   f"/materialablage/durchgang/{x['round_id']}/sammelprotokoll"),
              "durchgang": {"id": x["round_id"], "titel": x["title"], "sichtbar": s.sichtbar(x["runde_ordner"])}}
             for x in rows]
 

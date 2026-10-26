@@ -36,7 +36,7 @@ Regeln und mit eigenem Vermerk im Log, aber nie als Verwalter, sondern im Abschn
 Pfad des Ankers, seine offenen Prüfungen und wer verlängern kann, nicht mehr, als „Meine Freigaben“ ihm zeigt
 (inhaber_eintrag). Je Empfänger und Tag eine Mail, gruppiert nach Ordnerpfad.
 
-Der Versand hängt am Schalter MATERIAL_ERINNERUNGEN (Verwaltung → Einstellungen, Vorgabe aus) und an der Sperre
+Der Versand hängt am Schalter MATERIAL_ERINNERUNGEN (Leitstelle → Einstellungen, Vorgabe aus) und an der Sperre
 MATERIAL_ERINNERUNGEN_SPERRE (nur Umgebung, ohne Eintrag an, wenn STROEMIS_NAME auf -dev endet). Der Pflegeteil
 (Journal „freigabe_abgelaufen“, Aufräumen des Logs nach 13 Monaten, des Suchprotokolls und des Mailfehler-Protokolls)
 läuft unabhängig davon täglich, der Probelauf immer. Einmaligkeit: Tagesmarken und Herzschlag in mat_meta unter BEGIN
@@ -140,7 +140,7 @@ class Plan:
 # --- Schalter --------------------------------------------------------------------------------------------------
 
 def gesperrt():
-    """Die Sperre aus der Umgebung – kein Wert in der Datenbank (Verwaltung → Einstellungen) übersteuert sie. Wahr bei
+    """Die Sperre aus der Umgebung – kein Wert in der Datenbank (Leitstelle → Einstellungen) übersteuert sie. Wahr bei
     1/true/yes/on, falsch bei 0/false/no/off; ohne Eintrag wahr, wenn STROEMIS_NAME auf „-dev“ endet – so bleibt die
     Entwicklung still, auch wenn dort jemand den Schalter einschaltet oder eine Datenbank der Produktion einspielt."""
     roh = (os.environ.get(SPERRE) or "").strip().lower()
@@ -651,9 +651,9 @@ def _zaehlgruppen(eintraege, stichtag, texte):
 
 
 def _betreff(eintraege, stichtag):
-    """„strömis.de – Material: 2 überfällig, 1 Freigabe läuft ab“; eigene Freigaben vorn: „Deine Freigabe läuft ab“
+    """„strömis.de – Materialablage: 2 überfällig, 1 Freigabe läuft ab“; eigene Freigaben vorn: „Deine Freigabe läuft ab“
     bzw. „…, außerdem 2 überfällig“. Eine eigene zählt nur dort (wie im Text). Die eigene PSA ganz vorn: nur sie –
-    „strömis.de – Deine PSA: 1 überfällig“, sonst „Material: Deine PSA (1 überfällig), außerdem …“."""
+    „strömis.de – Deine PSA: 1 überfällig“, sonst „Materialablage: Deine PSA (1 überfällig), außerdem …“."""
     deine = {e.kennung for e in eintraege if e.inhaber}
     teile, zahl = _zaehlgruppen(
         [e for e in eintraege if not e.psa and not (e.art == "freigabe" and e.kennung in deine)], stichtag,
@@ -675,7 +675,7 @@ def _betreff(eintraege, stichtag):
         vorn.append("Deine Freigabe läuft ab" if n == 1 else f"{n} deiner Freigaben laufen ab")
     vorn = ", ".join(vorn)
     inhalt = f"{vorn}, außerdem {', '.join(teile)}" if vorn and teile else vorn or ", ".join(teile)
-    return " ".join(f"{site} – Material: {inhalt}".split())
+    return " ".join(f"{site} – Materialablage: {inhalt}".split())
 
 
 def _namen(liste):
@@ -768,12 +768,12 @@ def mailtext(mail, stichtag, pfade=None):
         teile.append(f"hier steht, was an der Ausrüstung, die dir persönlich zugeordnet ist, ansteht (Stand "
                      f"{stichtag.strftime('%d.%m.%Y')}). Jede Erinnerung kommt nur einmal.")
     elif nur_deine:
-        teile.append(f"hier steht, welche deiner Freigaben im Modul Material bald ablaufen (Stand "
+        teile.append(f"hier steht, welche deiner Freigaben in der Materialablage bald ablaufen (Stand "
                      f"{stichtag.strftime('%d.%m.%Y')}) und wer sie verlängern kann.")
     else:
         teile.append(f"hier steht nur, was seit der letzten Erinnerung neu fällig ist oder eine neue Stufe erreicht "
                      f"hat (Stand {stichtag.strftime('%d.%m.%Y')}) – was schon gemeldet wurde, kommt nicht noch "
-                     f"einmal. Alles Fällige: {basis}/material/pruefungen")
+                     f"einmal. Alles Fällige: {basis}/materialablage/pruefungen")
     if zeilen_p:
         # Keine Ordner, kein Ordnerlink: Die Person sieht ihre PSA unter „Meine PSA“ – auch ohne Modulstufe.
         teile += ["", "DEINE PSA", ""]
@@ -787,7 +787,7 @@ def mailtext(mail, stichtag, pfade=None):
                 teile.append("    Die Eingangsprüfung steht noch aus.")
         if len(reihe) > MAIL_PSA_MAX:
             teile.append(f"  … und {len(reihe) - MAIL_PSA_MAX} weitere – alle unter Meine PSA")
-        teile += ["", f"Deine PSA im Überblick: {basis}/material/meine-psa"]
+        teile += ["", f"Deine PSA im Überblick: {basis}/materialablage/meine-psa"]
     if deine:
         teile += ["", "DEINE FREIGABEN, DIE BALD ABLAUFEN"]
         je_anker = {}
@@ -809,7 +809,7 @@ def mailtext(mail, stichtag, pfade=None):
         if any(e.daten.get("offen") for e in deine):
             teile.append("Offene Prüfungen schließt du am besten vor dem Ablauf ab – danach kannst du sie nicht mehr "
                          "fortsetzen.")
-        teile.append(f"Deine Freigaben im Überblick („Meine Freigaben“): {basis}/material")
+        teile.append(f"Deine Freigaben im Überblick („Meine Freigaben“): {basis}/materialablage")
     if zeilen_a:
         teile += ["", "ARTIKEL"]
         for fid, liste in gruppen(zeilen_a):
@@ -829,9 +829,9 @@ def mailtext(mail, stichtag, pfade=None):
             rest = sum(1 for k, _ in liste if k not in zeigen_a)
             if rest:
                 teile.append(f"  … und {rest} weitere in diesem Ordner")
-            teile.append(f"  Ordner: {basis}/material/ordner/{fid}")
+            teile.append(f"  Ordner: {basis}/materialablage/ordner/{fid}")
             if rf:
-                teile.append(f"  Materialwart vergeben: {basis}/material/ordner/{fid}?freigaben=materialwart")
+                teile.append(f"  Materialwart vergeben: {basis}/materialablage/ordner/{fid}?freigaben=materialwart")
     if zeilen_f:
         teile += ["", "FREIGABEN, DIE BALD ABLAUFEN"]
         for fid, liste in gruppen(zeilen_f):
@@ -852,9 +852,9 @@ def mailtext(mail, stichtag, pfade=None):
             rest = sum(1 for k, _ in liste if k not in zeigen_f)
             if rest:
                 teile.append(f"  … und {rest} weitere in diesem Ordner")
-            teile.append(f"  Verlängern: {basis}/material/ordner/{fid}?freigaben=verlaengern")
+            teile.append(f"  Verlängern: {basis}/materialablage/ordner/{fid}?freigaben=verlaengern")
             if rf and not rf.endswith("_inhaber"):
-                teile.append(f"  Materialwart vergeben: {basis}/material/ordner/{fid}?freigaben=materialwart")
+                teile.append(f"  Materialwart vergeben: {basis}/materialablage/ordner/{fid}?freigaben=materialwart")
     # Der erste Satz nur, wenn die Mail auch eigene Ordner nennt – sonst stimmte er für die Verwaltung im Rückfall nicht.
     saetze = ["Du bekommst diese Mail, weil du diese Ordner verwaltest."] if eigene else []
     for stelle in ("material", "plattform"):
@@ -866,7 +866,7 @@ def mailtext(mail, stichtag, pfade=None):
         saetze.append("Du bekommst diese Mail, weil es deine eigenen Freigaben sind – einmal je Freigabe und Enddatum."
                       if nur_deine else "„Deine Freigaben“ bekommst du, weil es deine eigenen sind.")
     if nur_psa:
-        saetze.append("Du bekommst diese Mail, weil dir diese Ausrüstung im Modul Material zugeordnet ist. Abbestellen: "
+        saetze.append("Du bekommst diese Mail, weil dir diese Ausrüstung in der Materialablage zugeordnet ist. Abbestellen: "
                       f"Profil → „Erinnerungen zu meiner PSA“ ({basis}/profil).")
     elif zeilen_p:
         saetze.append("„Deine PSA“ bekommst du, weil dir diese Ausrüstung zugeordnet ist (abbestellen im Profil).")

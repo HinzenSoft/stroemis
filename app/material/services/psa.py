@@ -1,5 +1,5 @@
 """Meine PSA (Phase 3 · Lieferung 1, Bauentwurf Abschnitt 2): Jedes aktive Konto mit Namen sieht die Artikel, die ihm
-zugeordnet sind – auch ohne Stufe im Modul Material.
+zugeordnet sind – auch ohne Stufe in der Materialablage.
 
 Ein eigener, enger Zugangsweg neben rechte.zugang: Er öffnet nur die eigenen, nicht ausgesonderten Artikel und von ihnen
 nur die Karte (artikel_json – eine feste Liste von Schlüsseln): Status, Fälligkeit, Lebensende, Länge (Schritt 20),

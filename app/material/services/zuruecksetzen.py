@@ -3,15 +3,15 @@
 Vor Lieferung 3 soll sich das Modul auf dev von null an testen lassen. Zurückgesetzt wird nur das Modul: alle Tabellen,
 Trigger, Views und Volltextindizes mit dem Vorsatz mat_ (Katalog, Ordner und Gliederungen, Bestand, Prüfungen,
 Protokolle, Durchgänge, Importe, Rückrufe, Anträge, Meldungen, Journal, Erinnerungslog und Mailfehler-Protokoll, mat_meta
-mit den Laufmarken des Tageslaufs) und seine Dateien unter media/material und pdf/. Konten, Wiki, Spots, das
-Prüfungen-Modul und die Tabelle einstellungen (auch „Bald fällig“ und der Schalter Erinnerungsmails) bleiben, ebenso die
+mit den Laufmarken des Tageslaufs) und seine Dateien unter media/material und pdf/. Konten, Strömipedia,
+Ankerplätze, Riegenkarten und die Tabelle einstellungen (auch „Bald fällig“ und der Schalter Erinnerungsmails) bleiben, ebenso die
 Spalten des Moduls an users (Modulstufe, Häkchen Prüfer, Urkundennummer, Unterschrift, mat_ref, PSA-Mails): Keine davon
 verweist auf eine Zeile des Moduls – mat_ref ist der Verweis, auf den das Journal zeigt, nicht umgekehrt –, nach dem
 Leeren zeigt also nichts ins Leere und nichts muss zurückgesetzt werden. Die DEMO-Konten (@example.invalid) bleiben auch;
 der Befehl nennt sie nur.
 
 Sperren gegen die Produktion, alle drei nötig: STROEMIS_NAME endet auf „-dev“ (erinnerung.dev_umgebung, dieselbe Regel
-wie die harte Sperre der Erinnerungsmails), BASE_URL zeigt in der Umgebung UND in der Anwendung (Verwaltung →
+wie die harte Sperre der Erinnerungsmails), BASE_URL zeigt in der Umgebung UND in der Anwendung (Leitstelle →
 Einstellungen) auf eine Adresse der Entwicklung, und der ausdrückliche Schalter --ja-alles-loeschen. --trocken zeigt nur,
 was geschähe (auch er nur auf dev). Die Adresse prüft eine Positivliste (adresse_frei, Nachbesserung nach der
 Sicherheitsprüfung vom 23.10.2026): Der Host wird bereinigt (Leerraum, fehlendes Schema, Unicode NFKC, Punktvarianten wie
@@ -35,7 +35,7 @@ Ablauf (zuruecksetzen):
   3. Sicherung: die ganze Datenbank über die Backup-API (eine zweite, lesende Verbindung; WAL lässt sie neben der
      Sperre lesen) nach <DATA_DIR>/sicherung-material-<Zeitstempel>/stroemis.db, umgestellt auf das gewöhnliche
      Journal, mit quick_check und denselben Zeilenzahlen je mat_-Tabelle. Scheitert sie: Abbruch, nichts gelöscht.
-     Ordner 0700, Kopie 0600: Sie enthält alle Konten (Passwort-Hash, Urkundennummer, Unterschrift), Wiki und Prüfungen
+     Ordner 0700, Kopie 0600: Sie enthält alle Konten (Passwort-Hash, Urkundennummer, Unterschrift), Strömipedia und Riegenkarten
      – README und LIESMICH.txt fordern auf, sie nach dem ersten erfolgreichen Test zu löschen; der Bericht nennt ältere.
   4. LIESMICH.txt mit dem Rückweg für einen abgebrochenen Lauf, dann media/material und pdf/ in die Sicherung
      VERSCHIEBEN (umbenannt, nie kopiert – kein doppelter Platz; auf einem anderen Dateisystem scheitert das, und es
@@ -122,7 +122,7 @@ def sperrgrund():
         return (f"Das ist nicht die Entwicklung: STROEMIS_NAME ist „{name or 'nicht gesetzt'}“ – auf dev endet er auf "
                 "„-dev“ (scripts/dev-einrichten.sh).")
     for herkunft, adresse in (("BASE_URL in der Umgebung", os.environ.get("BASE_URL")),
-                              ("BASE_URL der Anwendung (Verwaltung → Einstellungen)", current_app.config.get("BASE_URL"))):
+                              ("BASE_URL der Anwendung (Leitstelle → Einstellungen)", current_app.config.get("BASE_URL"))):
         if not adresse_frei(adresse):
             zeigt = f"ist „{adresse.strip()}“" if (adresse or "").strip() else "fehlt"
             return (f"{herkunft} {zeigt} – frei ist nur eine Adresse der Entwicklung (Host mit „dev.“ davor) oder "
@@ -183,7 +183,7 @@ def _mb(n):
 
 def _bleibt(b):
     return [f"Bleibt: Konten ({b['konten']}) samt Modulstufe, Häkchen Prüfer, Urkundennummer, Unterschrift und "
-            "PSA-Mails, Wiki, Spots, Prüfungen-Modul und Einstellungen (Verwaltung → Einstellungen)."]
+            "PSA-Mails, Strömipedia, Ankerplätze, Riegenkarten und Einstellungen (Leitstelle → Einstellungen)."]
 
 
 def _demo_text(b):
@@ -223,7 +223,7 @@ def trocken_text(b, ziel):
 def bericht_text(e):
     """Der Bericht nach dem Zurücksetzen."""
     b = e["vorher"]
-    zeilen = [f"Modul Material zurückgesetzt. Sicherung: {e['sicherung']}",
+    zeilen = [f"Materialablage zurückgesetzt. Sicherung: {e['sicherung']}",
               f"  Datenbank (vorher, ganz): stroemis.db, {_mb(b['db_bytes'])}"]
     zeilen += [f"  {rel:<15} {n} Dateien, {_mb(g)} verschoben" for rel, n, g in b["medien"] if n]
     if b["katalogimport"][0]:
@@ -236,7 +236,7 @@ def bericht_text(e):
     zeilen += _bleibt(b) + _demo_text(b)
     zeilen += ["", "Jetzt den Container neu starten: docker compose restart",
                f"Rückweg: {os.path.join(e['sicherung'], 'LIESMICH.txt')}",
-               "", "Die Sicherung enthält alle Konten mit Passwort-Hash, Urkundennummern, Wiki und Prüfungen – löschen, "
+               "", "Die Sicherung enthält alle Konten mit Passwort-Hash, Urkundennummern, Strömipedia und Riegenkarten – löschen, "
                "sobald der Neustart und ein erster Test geklappt haben:",
                f"  rm -rf data/{os.path.basename(e['sicherung'])}"]
     zeilen += _aeltere_text(e.get("aeltere"))
@@ -266,7 +266,7 @@ def aeltere_sicherungen(ausser=None):
 def _aeltere_text(liste):
     if not liste:
         return []
-    return (["", "Ältere Sicherungen – sie enthalten alle Konten mit Passwort-Hash, Urkundennummern, Wiki und Prüfungen;",
+    return (["", "Ältere Sicherungen – sie enthalten alle Konten mit Passwort-Hash, Urkundennummern, Strömipedia und Riegenkarten;",
              "löschen, sobald sie nicht mehr gebraucht werden (im Klon: rm -rf data/<Ordner>):"]
             + [f"  {name}  {zeit:%d.%m.%Y %H:%M}  {_mb(groesse)}" for name, zeit, groesse in liste])
 
@@ -376,8 +376,8 @@ def _anlegen(conn, vorlage):
 
 
 LOESCHEN = ["BITTE LÖSCHEN, sobald der Neustart und ein erster Test auf dev geklappt haben (spätestens vor Lieferung 3):",
-            "Die Kopie enthält ALLE Konten mit E-Mail, Passwort-Hash, Urkundennummer und Unterschrift, dazu Wiki und",
-            "Prüfungen – das Löschen eines Kontos auf dev erreicht sie nicht. Im Klon der Entwicklung:"]
+            "Die Kopie enthält ALLE Konten mit E-Mail, Passwort-Hash, Urkundennummer und Unterschrift, dazu Strömipedia",
+            "und Riegenkarten – das Löschen eines Kontos auf dev erreicht sie nicht. Im Klon der Entwicklung:"]
 
 
 def _liesmich(ordner, zeit, medien, fertig):
@@ -402,8 +402,8 @@ def _liesmich(ordner, zeit, medien, fertig):
         text += ["  docker compose up -d", "", *inhalt, *loeschen]
     else:
         text = kopf + inhalt + [
-            "", "Rückweg im Klon der Entwicklung – was seit dem Zurücksetzen auf dev entstand, auch an Konten, Wiki,",
-            "Spots und Prüfungen, geht dabei verloren:", *sudo, "",
+            "", "Rückweg im Klon der Entwicklung – was seit dem Zurücksetzen auf dev entstand, auch an Konten,",
+            "Strömipedia, Ankerplätzen und Riegenkarten, geht dabei verloren:", *sudo, "",
             "  docker compose stop",
             "  rm -f data/stroemis.db-wal data/stroemis.db-shm",
             f"  cp data/{name}/stroemis.db data/stroemis.db"]
@@ -525,7 +525,7 @@ def zuruecksetzen(jetzt=None):
         e["start_fehler"] = str(exc)
     finally:
         start.close()
-    log.warning("Modul Material zurückgesetzt (dev): %d Tabellen, %d Zeilen geleert, Medien verschoben; Sicherung %s",
+    log.warning("Materialablage zurückgesetzt (dev): %d Tabellen, %d Zeilen geleert, Medien verschoben; Sicherung %s",
                 len(vorher["zeilen"]), sum(vorher["zeilen"].values()), ordner)
     return e
 

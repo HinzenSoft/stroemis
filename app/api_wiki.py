@@ -290,7 +290,9 @@ def sync_page_files(pid, content):
         db.execute("INSERT OR IGNORE INTO wiki_page_files (page_id, file) VALUES (?, ?)", (pid, ref))
 
 
-_LINK_REF_RE = re.compile(r"\]\(\s*/wiki/([A-Za-z0-9][A-Za-z0-9\-_]*)")
+# Interne Links: /stroemipedia/<slug> und – in Seiten und Fassungen von vor der Umbenennung (26.10.2026), die nicht
+# umgeschrieben werden – /wiki/<slug>. Beide zählen gleich (Rückverweise, wiki_page_links).
+_LINK_REF_RE = re.compile(r"\]\(\s*/(?:stroemipedia|wiki)/([A-Za-z0-9][A-Za-z0-9\-_]*)")
 # Ein eingebundener Abschnitt (":::einbau seite#abschnitt") ist ein Verweis wie jeder andere –
 # er zählt sogar schwerer: Wer den Abschnitt auf der Quellseite ändert, ändert ihn hier mit.
 # Über die Rückverweise sieht man dort, wen das betrifft, bevor man ihn anfasst.
@@ -1420,7 +1422,7 @@ def notify_watchers(page, what):
         if not rows:
             return
         cfg = current_app.config
-        link = f"{cfg['BASE_URL'].rstrip('/')}/wiki/{page['slug']}"
+        link = f"{cfg['BASE_URL'].rstrip('/')}/stroemipedia/{page['slug']}"
         who = (me or {}).get("name") or (me or {}).get("email") or "jemand"
         for r in rows:
             # Wer die Seite inzwischen nicht mehr lesen darf, bekommt auch keine Nachricht. Dazu gehört ein Konto, dem

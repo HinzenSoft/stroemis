@@ -52,7 +52,7 @@ def _download(daten, mimetype, name):
     return _privat(resp)
 
 
-@seiten.get("/material/export/<int:fid>.csv")
+@seiten.get("/materialablage/export/<int:fid>.csv")
 def export_csv(fid):
     """Alle Artikel des Ordners und seiner Unterordner als CSV für Excel (services/export.py)."""
     nein = _zugang("fid", fid)
@@ -65,7 +65,7 @@ def export_csv(fid):
     return _download(io.BytesIO(daten), "text/csv", name)
 
 
-@seiten.get("/material/export/<int:fid>-protokolle.zip")
+@seiten.get("/materialablage/export/<int:fid>-protokolle.zip")
 def export_protokolle(fid):
     """Alle Protokolle der Artikel des Ordners, die Sammelprotokolle seiner Durchgänge und die Set-Protokolle der Sets im
     Zweig mit Verzeichnis.csv."""
@@ -79,7 +79,7 @@ def export_protokolle(fid):
     return _download(buf, "application/zip", name)
 
 
-@seiten.get("/material/durchgang/<int:rid>/protokolle.zip")
+@seiten.get("/materialablage/durchgang/<int:rid>/protokolle.zip")
 def durchgang_protokolle(rid):
     """„Alle Protokolle“ eines Durchgangs (Schritt 27, F5 a): Sammelprotokoll, Set-Protokolle und Verzeichnis.csv – wer
     den Durchgang sieht (Leserecht an seinem Ordner, wie das Sammelprotokoll)."""
@@ -98,7 +98,7 @@ def durchgang_protokolle(rid):
     return _download(buf, "application/zip", name)
 
 
-@seiten.get("/material/artikel/<int:iid>/lebenslauf.pdf")
+@seiten.get("/materialablage/artikel/<int:iid>/lebenslauf.pdf")
 def lebenslauf_pdf(iid):
     """Lebenslauf eines Artikels als PDF – im Browser geöffnet wie die Protokolle, aber auf Abruf gesetzt und nicht
     festgeschrieben (services/lebenslauf.py)."""

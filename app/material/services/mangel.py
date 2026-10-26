@@ -471,7 +471,7 @@ def _mailtext(r, item, produkt, warum):
                f"Ordner:     {bestand._pfad_text(bestand.heimat(item))}",
                f"Fotos:      {n}" + (" (am Artikel)" if n else ""),
                "", "Beschreibung:", r["description"], "",
-               f"Artikel ansehen: {basis}/material/artikel/{item['id']}", "",
+               f"Artikel ansehen: {basis}/materialablage/artikel/{item['id']}", "",
                f"Du bekommst diese Mail, {WARUM[warum]}"]
     betreff = (f"{site} – Mangel gemeldet: {item['inventory_no']} {_produkt_kurz(produkt)} – "
                + ("gesperrt" if gesperrt else "war schon gesperrt"))
@@ -494,8 +494,8 @@ def _mailtext_zugeordnet(item, produkt, r, u):
               f"an deiner Ausrüstung {item['inventory_no']} – {katalog.produktname(produkt)}, SN {item['serial_no']} "
               f"wurde am {_datum(r['created_at'])} ein Mangel gemeldet. {zustand}", "",
               f"{tun} Freigeben kann sie nur ein Prüfer nach einer Prüfung.", "",
-              f"Deine PSA: {basis}/material/meine-psa/{item['id']}", "",
-              "Du bekommst diese Mail, weil dir diese Ausrüstung im Modul Material zugeordnet ist. Sie kommt einmal je "
+              f"Deine PSA: {basis}/materialablage/meine-psa/{item['id']}", "",
+              "Du bekommst diese Mail, weil dir diese Ausrüstung in der Materialablage zugeordnet ist. Sie kommt einmal je "
               "Meldung und lässt sich nicht abbestellen, weil sie deine Sicherheit betrifft."]
     betreff = (f"{site} – Deine PSA {item['inventory_no']} "
                + ("ist als verloren gemeldet" if vorher == "verloren" else "ist gesperrt") + " – nicht verwenden")

@@ -20,19 +20,19 @@ bp = Blueprint("admin", __name__, url_prefix="/api/admin")
 eingabefehler_abfangen(bp)
 
 
-# Vorgabe für neue Konten: Mitglied im Modul Material, sonst nichts (auth.VORGABE_NEU, gilt auch für Kontoanfragen).
+# Vorgabe für neue Konten: Mitglied in der Materialablage, sonst nichts (auth.VORGABE_NEU, gilt auch für Kontoanfragen).
 VORGABE = dict(VORGABE_NEU)
 # Was am Konto zum Modul Material gehört – Änderungen daran stehen im Journal des Moduls. mat_katalog wird seit
 # Schritt 10 weder gelesen noch geschrieben (Rückweg).
 MATERIAL_SPALTEN = ("recht_material", "mat_pruefer", "urkundennummer")
-OHNE_NAMEN = ("Erst einen Namen eintragen – im Modul Material steht jeder mit Namen in Journal und Protokollen. Ohne "
+OHNE_NAMEN = ("Erst einen Namen eintragen – in der Materialablage steht jeder mit Namen in Journal und Protokollen. Ohne "
               "Namen geht nur Material „–“.")
 
 
 def _rechte_lesen(d, basis):
     """Stufen aus der Anfrage über den Bestand legen. Nur bekannte Module, nur 0/1/2 – ein Tippfehler
-    verteilt keine Rechte. Verwaltung kennt kein Mitglied, und Verwaltung im Modul Verwaltung zieht
-    alle anderen Module auf Verwaltung: So steht in der Matrix, was gilt. Das Modul Material ist seit Schritt 10
+    verteilt keine Rechte. Verwaltung kennt kein Mitglied, und Verwaltung in der Leitstelle zieht
+    alle anderen Module auf Verwaltung: So steht in der Matrix, was gilt. Die Materialablage ist seit Schritt 10
     wieder ein Modul wie die anderen (Mitglied: Modulzugang, Bestand über Freigaben; Verwaltung: Material-Verwaltung)."""
     neu = dict(basis)
     angaben = d.get("rechte")
@@ -44,7 +44,7 @@ def _rechte_lesen(d, basis):
         if isinstance(wert, bool) or wert not in STUFEN:
             raise ValueError("Eine Stufe ist 0 (kein Zugriff), 1 (Mitglied) oder 2 (Verwaltung).")
         if modul == "verwaltung" and wert == 1:
-            raise ValueError("Im Modul Verwaltung gibt es nur „kein Zugriff“ oder „Verwaltung“.")
+            raise ValueError("In der Leitstelle gibt es nur „kein Zugriff“ oder „Verwaltung“.")
         neu[modul] = wert
     if neu["verwaltung"] == VERWALTUNG:
         neu = {m: VERWALTUNG for m in MODULE}
@@ -52,7 +52,7 @@ def _rechte_lesen(d, basis):
 
 
 def _braucht_namen(rechte, mat):
-    """Braucht das Konto einen Namen? Mit Stufe Mitglied oder Verwaltung im Modul Material (die Plattform-Verwaltung
+    """Braucht das Konto einen Namen? Mit Stufe Mitglied oder Verwaltung in der Materialablage (die Plattform-Verwaltung
     ausgenommen – sie hat die Stufe von selbst, ihr Konto bleibt auch ohne Namen bearbeitbar) oder mit dem Häkchen
     Prüfer. Ohne Namen gäbe es im Modul ohnehin keinen Zugang – wer handelt, steht namentlich im Journal."""
     return bool((int(rechte.get("material") or 0) >= 1 and int(rechte.get("verwaltung") or 0) < VERWALTUNG)
@@ -133,7 +133,7 @@ def videos():
 @bp.get("/users")
 @admin_required
 def list_users():
-    """Alle Konten mit ihren Inhalten. Im Modul Material zusätzlich die Zahl gültiger Freigaben (mat_freigaben, für die
+    """Alle Konten mit ihren Inhalten. In der Materialablage zusätzlich die Zahl gültiger Freigaben (mat_freigaben, für die
     Marken „n Freigaben“ und „wirkt nicht – kein Zugang“) – für alle Konten aus einer gruppierten Abfrage, nicht je
     Konto eine."""
     rows = db.query(
@@ -156,7 +156,7 @@ def list_users():
 @bp.post("/users")
 @admin_required
 def create_user():
-    """Ein Konto anlegen – ohne Angabe mit der Vorgabe (Mitglied im Modul Material). Stufe Mitglied oder Verwaltung im
+    """Ein Konto anlegen – ohne Angabe mit der Vorgabe (Mitglied in der Materialablage). Stufe Mitglied oder Verwaltung im
     Modul Material und das Häkchen Prüfer gibt es nur mit Namen. Der Rolleneintrag im Journal des Moduls trägt keine
     E-Mail – er bleibt auch nach dem Löschen des Kontos stehen."""
     d = json_body()
@@ -236,7 +236,7 @@ def update_user(uid):
         for m in MODULE:
             vals[f"recht_{m}"] = rechte[m]
         vals.update(mat)
-    # Stufe im Modul Material und Häkchen Prüfer nur mit Namen – geprüft, wenn eines neu dazukommt (die Stufe steigt,
+    # Stufe in der Materialablage und Häkchen Prüfer nur mit Namen – geprüft, wenn eines neu dazukommt (die Stufe steigt,
     # das Häkchen kommt) oder der Name verschwindet: So lässt sich ein namenloses Konto aus der Zeit davor weiter
     # bearbeiten (etwa um die Stufe zu senken oder das Häkchen zu nehmen).
     name = vals.get("name", u["name"] or "")
@@ -305,7 +305,7 @@ def delete_user(uid):
     bild = u.get("avatar") or ""
     # Inhalte bleiben erhalten und gehen an den ausführenden Administrator über –
     # entweder vollständig oder gar nicht, sonst stünde der Bestand halb umgeschrieben da.
-    # Die Schreibsperre von Anfang an: Zwischen dem Aufräumen im Modul Material und dem Löschen
+    # Die Schreibsperre von Anfang an: Zwischen dem Aufräumen in der Materialablage und dem Löschen
     # soll keine neue Freigabe oder Zuordnung an das Konto dazukommen.
     with db.transaction(sofort=True):
         # Modul Material (Löschkonzept): Journal je Freigabe und Zuordnung, Zuordnungen lösen,
@@ -327,7 +327,7 @@ def delete_user(uid):
 @bp.get("/users/<int:uid>/material-folgen")
 @admin_required
 def material_folgen(uid):
-    """Was das Löschen des Kontos im Modul Material bewirkt – Zahlen für den Dialog „Löschen“: Freigaben, Zuordnungen,
+    """Was das Löschen des Kontos in der Materialablage bewirkt – Zahlen für den Dialog „Löschen“: Freigaben, Zuordnungen,
     offene Entwürfe und abgeschlossene Prüfungen (material.services.loeschung.folgen). Dazu „letzter_materialwart“: die
     Gliederungen, deren einziger Materialwart heute dieses Konto ist (freigaben.einziger_materialwart) – Löschen,
     Deaktivieren und Material „–“ ließen sie ohne Materialwart, Dialog und Tabelle fragen dann nach. Nur eine Warnung:
@@ -350,7 +350,7 @@ def approve_user(uid):
                              "wird über die Nutzerbearbeitung wieder aktiviert."), 400
     with db.transaction():
         db.execute("UPDATE users SET status = 'active', active = 1 WHERE id = ?", (uid,))
-        # Mit der Freischaltung wirkt die Stufe aus der Kontoanfrage (Vorgabe: Mitglied im Modul Material) – sie steht
+        # Mit der Freischaltung wirkt die Stufe aus der Kontoanfrage (Vorgabe: Mitglied in der Materialablage) – sie steht
         # wie beim Anlegen in der Nutzerverwaltung im Journal des Moduls, mit der freischaltenden Verwaltung als
         # Handelnder. Abgelehnte Anfragen hinterlassen dort nichts.
         neu = {"recht_material": u["recht_material"] or 0, "mat_pruefer": int(bool(u["mat_pruefer"]))}

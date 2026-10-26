@@ -4,7 +4,7 @@ Was eine Freigabe ist und wie sie wirkt, steht in rechte.py. Hier stehen die Reg
 1.6, mit der Nachbesserung vom 18.10.2026 zu Nr. 8), und die Listen für den Reiter „Freigaben“ in „Ordner bearbeiten“
 (freigaben.js), „Meine Freigaben“ und die Nutzerverwaltung:
 
-  1  Die Material-Verwaltung (Stufe Verwaltung im Modul Material) vergibt überall, ohne die Grenzen 3–7. Für
+  1  Die Material-Verwaltung (Stufe Verwaltung in der Materialablage) vergibt überall, ohne die Grenzen 3–7. Für
      Prüffreigaben gilt auch für sie Nr. 8 – Sachkunde lässt sich nicht verwalten, nur nachweisen.
   2  Wer einen Ordner verwaltet, vergibt dort und darunter – an jedes aktive Konto mit Namen und Zugang zum Modul
      (Stufe Mitglied oder Verwaltung, die gibt die Plattform-Verwaltung in der Nutzerverwaltung), auch aus anderen
@@ -69,7 +69,7 @@ NUR_VERWALTUNG = "Nur für die Plattform-Verwaltung."
 # Warum eine Freigabe nicht wirkt (Feld „wirkt_nicht“ der Listen) – in dieser Reihenfolge geprüft.
 DEAKTIVIERT = "Konto deaktiviert"
 OHNE_NAMEN = "Konto ohne Namen"
-OHNE_ZUGANG = "kein Zugang zum Modul Material"
+OHNE_ZUGANG = "kein Zugang zur Materialablage"
 OHNE_QUALI = "Qualifikation fehlt"
 OHNE_GRUNDRECHT_DORT = "dauerhaft nur mit lesen oder verwalten"
 # Wofür die Personensuche sucht: Freigabe (nur Konten mit Zugang zum Modul) oder Personenzuordnung (alle mit Namen).
@@ -399,7 +399,7 @@ def aendern(gid, d):
 
 def entziehen(gid):
     """DELETE /freigaben/<gid>. Liefert die Zahl offener Prüfungen des Kontos im Zweig des Ankers, die es danach nicht
-    mehr fortsetzen darf – die gibt ein Verwalter unter Material → Prüfungen → Offene Prüfungen frei. Das gilt auch für
+    mehr fortsetzen darf – die gibt ein Verwalter unter Materialablage → Prüfungen → Offene Prüfungen frei. Das gilt auch für
     ein Grundrecht: An ihm kann eine dauerhafte Prüffreigabe hängen, die ohne es nicht mehr wirkt."""
     ich, s = current_user(), rechte.sicht()
     alt = zeile(gid)
@@ -476,7 +476,7 @@ _ZEILEN_SQL = ("SELECT g.*, u.name AS u_name, u.gliederung AS u_gliederung, u.ac
 def _grundlage(rows, verwaltung=None):
     """Was neben einer Zeile für „grundrecht_dort“, „wirkt“ und „traegt_pruefen“ zählt (eine Abfrage für alle Konten
     der Liste): je Konto die gültigen Grundrechte {Kennung: Ordner}, die Anker der dauerhaften Prüffreigaben und ob es
-    die Stufe Verwaltung im Modul Material hat (Material-Verwaltung – die hat das Grundrecht überall, wie
+    die Stufe Verwaltung in der Materialablage hat (Material-Verwaltung – die hat das Grundrecht überall, wie
     rechte.grundrecht_an). verwaltung: diese Konten sind es (sonst aus u_stufe und u_verwaltung der Zeilen)."""
     uids = sorted({r["user_id"] for r in rows})
     if verwaltung is None:
@@ -528,7 +528,7 @@ def _von_system(rows):
 
 
 def _stufe(r):
-    """Stufe im Modul Material eines Kontos aus einer Zeile von _ZEILEN_SQL (die Plattform-Verwaltung hat 2)."""
+    """Stufe in der Materialablage eines Kontos aus einer Zeile von _ZEILEN_SQL (die Plattform-Verwaltung hat 2)."""
     return 2 if int(r["u_verwaltung"] or 0) >= 2 else int(r["u_stufe"] or 0)
 
 

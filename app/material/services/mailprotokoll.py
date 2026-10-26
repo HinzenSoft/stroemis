@@ -220,7 +220,7 @@ def sichtfilter(alias="m", user=None):
 # Der Bezug einer Zeile als Weg ins Modul (nur Modul-Routen, aus Kennungen gebaut – nie aus Datenbanktexten).
 BEZUG_TEXT = {"item": "Artikel", "folder": "Ordner", "report": "Mangelmeldung", "change": "Änderungsantrag",
               "request": "Produktmeldung", "recall": "Rückruf", "none": ""}
-BEZUG_PFAD = {"change": "/material/bestand/antraege", "request": "/material/katalog/meldungen"}
+BEZUG_PFAD = {"change": "/materialablage/bestand/antraege", "request": "/materialablage/katalog/meldungen"}
 
 
 def _nach_id(sql, ids):
@@ -255,13 +255,13 @@ def _bezuege(rows):
         text, pfad = BEZUG_TEXT.get(art, ""), BEZUG_PFAD.get(art)
         iid = meldung_artikel.get(bid) if art == "report" else bid if art == "item" else None
         if iid is not None and iid in artikel:
-            text, pfad = f"{text} {artikel[iid]}", f"/material/artikel/{int(iid)}"
+            text, pfad = f"{text} {artikel[iid]}", f"/materialablage/artikel/{int(iid)}"
         elif art == "recall" and bid in produkte:
-            pfad = f"/material/katalog/produkt/{int(produkte[bid])}"
+            pfad = f"/materialablage/katalog/produkt/{int(produkte[bid])}"
         elif art in ("folder", "none"):
             fid = bid if art == "folder" else r["folder_id"]
             if fid in ordner:
-                text, pfad = ordner[fid], f"/material/ordner/{int(fid)}"
+                text, pfad = ordner[fid], f"/materialablage/ordner/{int(fid)}"
         out[r["id"]] = {"text": text, "pfad": pfad}
     return out
 

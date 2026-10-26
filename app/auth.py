@@ -32,7 +32,7 @@ MAX_REGISTER_TRIES = 10
 
 # Genau eine Mail je Kontoanfrage: bei mehreren Admins würde sonst die Antwortzeit verraten,
 # ob die Adresse schon ein Konto hat (eine Hinweismail) oder nicht (eine Mail je Admin).
-# Die übrigen Admins sehen die Anfrage weiterhin unter /admin.
+# Die übrigen Admins sehen die Anfrage weiterhin in der Leitstelle (/leitstelle).
 MAX_NOTIFY_MAILS = 1
 
 # Fester Wegwerf-Hash für Anmeldungen ohne Treffer: auch dann wird die KDF gerechnet,
@@ -73,7 +73,7 @@ def sitzung_beginnen(u):
 def _einzeilig(text, n=120):
     """Ein Feld für eine Zeile: Steuerzeichen und Zeilenumbrüche raus, Länge gedeckelt. Ein
     Zeilenumbruch im Namen landete sonst im Betreff der Admin-Mail – die der Mailer zu Recht
-    verwirft, womit die Anfrage unbemerkt nur unter /admin läge."""
+    verwirft, womit die Anfrage unbemerkt nur in der Leitstelle läge."""
     text = "".join(c for c in (text or "") if c >= " " and c != "\x7f")
     return text.strip()[:n]
 
@@ -110,7 +110,7 @@ def _im_hintergrund(funktion, *args):
 MODULE = ("karte", "wiki", "pruefungen", "material", "verwaltung")
 KEIN_ZUGRIFF, MITGLIED, VERWALTUNG = 0, 1, 2
 STUFEN = (KEIN_ZUGRIFF, MITGLIED, VERWALTUNG)
-# Vorgabe für neue Konten (Kontoanfrage und Nutzerverwaltung): Mitglied im Modul Material, sonst nichts – Spots und
+# Vorgabe für neue Konten (Kontoanfrage und Nutzerverwaltung): Mitglied in der Materialablage, sonst nichts – Spots und
 # Wiki gibt es nicht mehr von selbst (Wunsch vom 18.10.2026; ohne Wiki-Stufe bleibt der Lesemodus). Vorhandene Konten
 # behalten ihre Stufen.
 VORGABE_NEU = {"karte": KEIN_ZUGRIFF, "wiki": KEIN_ZUGRIFF, "pruefungen": KEIN_ZUGRIFF, "material": MITGLIED,
@@ -152,12 +152,12 @@ def rechte_von(user):
 
 
 def is_admin(user=None):
-    """Verwaltung im Modul Verwaltung: Nutzer und Einstellungen – und alle Rechte überall."""
+    """Verwaltung in der Leitstelle: Nutzer und Einstellungen – und alle Rechte überall."""
     return verwaltet("verwaltung", user)
 
 
 def is_pruefer(user=None):
-    """Darf Prüfungen abnehmen (Mitglied oder Verwaltung im Modul Prüfungen). Der Bereich enthält
+    """Darf Prüfungen abnehmen (Mitglied oder Verwaltung in den Riegenkarten). Der Bereich enthält
     personenbezogene Daten von Teilnehmenden – wer ihn nicht braucht, bekommt die Stufe nicht."""
     return nutzt("pruefungen", user)
 
@@ -200,11 +200,12 @@ def login_required(f):
     return wrapper
 
 
-KEIN_ZUGANG = {"karte": "Für dein Konto sind die Spots nicht freigeschaltet.",
-               "wiki": "Für dein Konto ist das Wiki nicht freigeschaltet.",
-               "pruefungen": "Nur für Prüfer",
-               "material": "Für dein Konto ist das Modul Material nicht freigeschaltet.",
-               "verwaltung": "Nur für die Verwaltung"}
+# Die Meldungen nennen die sichtbaren Modulnamen (app/module.py); die Schlüssel bleiben.
+KEIN_ZUGANG = {"karte": "Für dein Konto sind die Ankerplätze nicht freigeschaltet.",
+               "wiki": "Für dein Konto ist die Strömipedia nicht freigeschaltet.",
+               "pruefungen": "Für dein Konto sind die Riegenkarten nicht freigeschaltet.",
+               "material": "Für dein Konto ist die Materialablage nicht freigeschaltet.",
+               "verwaltung": "Für dein Konto ist die Leitstelle nicht freigeschaltet."}
 
 
 def modul_required(modul, mindestens=MITGLIED):
@@ -384,7 +385,7 @@ def notify_admins_about_request(user):
         f"Gliederung:  {user['gliederung']}\n"
         f"Telefon:     {user['phone'] or '–'}\n"
         f"Begründung:  {user['reason'] or '–'}\n\n"
-        f"Freigeben oder ablehnen: {cfg['BASE_URL'].rstrip('/')}/admin\n"
+        f"Freigeben oder ablehnen: {cfg['BASE_URL'].rstrip('/')}/leitstelle\n"
     )
     for addr in to:
         try:

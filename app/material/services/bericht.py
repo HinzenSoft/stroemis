@@ -491,7 +491,7 @@ def daten(fid, jahr, sicht=None, pruefer_nennen=False):
     return {
         # Der Titel steht als Überschrift, im Fuß jeder Seite und in den PDF-Metadaten – mit „[DEMO]“, sobald DEMO-Artikel
         # enthalten sind.
-        "dokument": {"art": "bericht", "titel": ("[DEMO] " if demo else "") + f"Jahresbericht Material {o['name']} {jahr}",
+        "dokument": {"art": "bericht", "titel": ("[DEMO] " if demo else "") + f"Jahresbericht {o['name']} {jahr}",
                      "stand": zeit_text(db.now()), "plattform": qr.anzeige(qr.basis()).split("://", 1)[-1],
                      "demo": demo > 0},
         "kopf": {"ordner_id": fid, "ordner": o["name"], "pfad": bestand._pfad_text(fid),

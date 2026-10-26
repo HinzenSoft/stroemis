@@ -41,7 +41,7 @@ PRUEFART_TEXT = {"eingang": "Eingangsprüfung", "periodisch": "periodische Prüf
                  "ausserplanmaessig": "außerplanmäßige Prüfung", "reparatur": "Prüfung nach Reparatur",
                  "aussonderung": "Aussonderung"}
 BEFUND_TEXT = {"ok": "in Ordnung", "mangel": "Mangel", "nicht_zutreffend": "nicht zutreffend"}
-PRUEFSEITE = "/material/pruefen"
+PRUEFSEITE = "/materialablage/pruefen"
 
 
 # --- Formatierung ---------------------------------------------------------------------------------------

@@ -47,7 +47,7 @@ def _abgewiesen_text(abgewiesen):
     return "; ".join(teile)
 
 
-# Womit eine Fehlermeldung von versand() beginnt – je Fehlerklasse ein fester Anfang, damit das Modul Material
+# Womit eine Fehlermeldung von versand() beginnt – je Fehlerklasse ein fester Anfang, damit die Materialablage
 # (services/mailprotokoll) die Klasse aus der Meldung lesen kann, ohne den Wortlaut zu kennen. Der Text dahinter
 # (Serverantwort, Host und Port) bleibt, wie er war.
 ANFANG = {

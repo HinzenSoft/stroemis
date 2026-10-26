@@ -1,6 +1,6 @@
 """Schnittstelle für den Katalogaustausch (Lieferung 4): Export des Katalogs als ZIP, Import aus ZIP oder JSON.
 
-Nur die Material-Verwaltung (Stufe Verwaltung im Modul Material). Der Export enthält keine DEMO-Einträge, keinen
+Nur die Material-Verwaltung (Stufe Verwaltung in der Materialablage). Der Export enthält keine DEMO-Einträge, keinen
 Bestand und keine Prüfungen (services/katalog_export.py); der Import gleicht ab statt doppelt anzulegen und löscht nie
 etwas (services/importer.py). Die Oberfläche macht vor jedem Import einen Probelauf und zeigt dessen Bericht.
 

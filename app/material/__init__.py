@@ -6,7 +6,7 @@ Fahrzeuginventar werden nie aufgenommen – das Modul ist kein Lagerverwaltungss
 
 Aufbau:
   models.py      Tabellen mat_*, Schemaversion in mat_meta, Migrationsschritte
-  routes.py      Seiten (/material/…, /m/<token>), Schnittstelle (/api/material/…), Medien
+  routes.py      Seiten (/materialablage/…, /m/<token>), Schnittstelle (/api/material/…), Medien
   routes_export.py, routes_katalog.py, routes_rueckruf.py
                  Routen der Lieferung 4: Export (CSV, Protokoll-ZIP, Lebenslauf), Katalogaustausch, Rückrufe
   routes_import.py, routes_wiki.py

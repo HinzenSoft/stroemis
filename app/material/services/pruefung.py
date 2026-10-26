@@ -193,7 +193,7 @@ def kurz_json(p):
             "grund": p["reason"], "bemerkung": p["remarks"], "naechste": p["next_due_on"],
             "entwurf": p["completed_at"] is None, "abgeschlossen_am": p["completed_at"], "begonnen_am": p["created_at"],
             "basis_id": p["basis_inspection_id"],
-            "protokoll": protokoll.protokoll_json(p, f"/material/pruefung/{p['id']}/pdf"),
+            "protokoll": protokoll.protokoll_json(p, f"/materialablage/pruefung/{p['id']}/pdf"),
             "berichtigt": _verweis(p["corrects_inspection_id"]),
             "berichtigt_durch": _berichtigung_von(p["id"]) if p["completed_at"] else None}
 
