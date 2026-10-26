@@ -16,7 +16,8 @@
      von Dialogen; so gilt es auch für Dialoge, die erst nach einem Laden öffnen (Ordner verschieben, Löschen,
      Katalog exportieren, Als Variante kopieren). Zurückgegeben wird der Fokus nur, wenn er sonst verloren wäre (auf
      der Seite oder im geschlossenen Dialog) und kein anderer Dialog offen ist. Folgedialoge im selben #dlg (Ergebnis
-     nach dem Anlegen) erben das Ziel des ersten. */
+     nach dem Anlegen) erben das Ziel des ersten; hat die Ansicht neu gezeichnet, nimmt er den neuen Knopf gleichen
+     Texts. */
   let letzterKlick = null;
   document.addEventListener("click", (e) => {
     const el = e.target.closest && e.target.closest("button, a[href], summary, [data-act]");
@@ -32,8 +33,13 @@
   }
   function fokusZurueckgeben(ziel) {
     const jetzt = document.activeElement;
-    if (!ziel || !ziel.isConnected || document.querySelector("dialog[open]")) return;
-    if (!jetzt || jetzt === document.body || jetzt.closest("dialog")) ziel.focus();
+    if (!ziel || document.querySelector("dialog[open]")) return;
+    if (jetzt && jetzt !== document.body && !jetzt.closest("dialog")) return;
+    // Hat die Ansicht inzwischen neu gezeichnet (nach dem Speichern), steht dort ein neuer Knopf mit demselben Text.
+    const text = ziel.textContent.trim();
+    const el = ziel.isConnected ? ziel : [...document.querySelectorAll(ziel.tagName)]
+      .find((x) => x.textContent.trim() === text && x.getClientRects().length && !x.closest("dialog"));
+    if (el) el.focus();
   }
   let dlgZiel = null;
   const dlgEl = document.getElementById("dlg");

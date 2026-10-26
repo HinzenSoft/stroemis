@@ -4225,8 +4225,9 @@ und die kleinen reproduzierten Fehler vor dem Merge; Tippflächen und Designspra
 - **B2 Fokus nach Esc oder „Abbrechen“** (material.js `dialog`, `confirm`): Die Materialablage merkt sich den zuletzt
   angeklickten Knopf außerhalb von Dialogen und gibt ihm den Fokus beim Schließen zurück – aus einem Untermenü dem
   Menüknopf. Das gilt jetzt auch für Dialoge, die erst nach einem Laden öffnen (Ordner verschieben, Löschen mit Rückfrage,
-  Katalog exportieren, Als Variante kopieren) und für Folgedialoge im selben Fenster; der bisherige Einzelfall im
-  Klick-Handler (B5 P4-L2) entfällt. Zurückgegeben wird nur, wenn der Fokus sonst verloren wäre.
+  Katalog exportieren, Als Variante kopieren) und für Folgedialoge im selben Fenster (Rückruf anlegen → „Rückruf
+  angelegt“); hat die Ansicht nach dem Speichern neu gezeichnet, bekommt der neue Knopf gleichen Texts den Fokus. Der
+  bisherige Einzelfall im Klick-Handler (B5 P4-L2) entfällt. Zurückgegeben wird nur, wenn der Fokus sonst verloren wäre.
 - **B3 Tippflächen** (nur unter `@media (pointer: coarse)`): „Notiz“ im Freigaben-Dialog (freigaben.css, hinter der
   Grundregel), „Leeren“/„Abbrechen“/„Übernehmen“ im Unterschrift-Dialog (app.css, auch im Profil), „Prüfen“ auf der
   Prüfseite (material.css) – je 44 px hoch.
