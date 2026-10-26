@@ -27,6 +27,7 @@ für sich deploybar.
 | Nachbesserung L2c nach den Prüfungen | Bestandteile: Kennung nie an eine andere Position, Bezeichnung mitverglichen; Berichtigung gegen den wirksamen Wert; Protokoll ohne „neu“, wo nichts übernommen wurde; Wettlauf Prüfung ↔ Antrag 409; Steuerzeichen; Rückweg 25; Ordnerliste ohne Überlauf (Kategorie über dem Hersteller), Prüfung „fehlt“, doppelte Nummer als Hinweis, Schublade, Produktseite „Mehr“ | gebaut 25.10.2026, wartet auf Freigabe |
 | Nachbesserung Sets und Anträge nach den Prüfungen | Sets: Kennungen der Kopie, „Anzahl verringert“, Texte; Anträge: Produktgeschichte nach Wechsel, Intervall-Obergrenze nur bei Änderung, Fälligkeit ohne Namen, 409 statt 500, Texte, Zähl-Aufruf | gebaut 25.10.2026, wartet auf Prüfung und Freigabe |
 | Neue Modulnamen | Strömipedia, Ankerplätze, Riegenkarten, Materialablage, Leitstelle samt Adressen; alte Adressen leiten dauerhaft weiter (301, Abfrage bleibt, Umlaut-Schreibweisen), neue Protokolle mit `/materialablage/pruefen` | gebaut 26.10.2026, wartet auf Prüfung und Freigabe |
+| Feinschliff aus den Wiki-Fragen | „Deine PSA“ auch in Ordnern mit „Erinnerungsmails aus“ (E2 B), Verlauf des Kontos im Nutzerdialog der Leitstelle (E3 A), geerbtes generisches Formular in der Kategorie (K9), Texte (K19, K21, T, E1, E6), README | gebaut 26.10.2026, wartet auf Prüfung und Freigabe |
 
 ## Abgleich mit dem Bestand (vor Lieferung 1)
 
@@ -4161,6 +4162,57 @@ Danach liefen die ganze Suite (`st-test`) grün, `st-py`, `st-js` und `st-css` o
     Antwort), bei 360 px umbrochen etwa 170 px hoch; die Antwort des Mailservers ließe sich noch hinter „Technische
     Antwort“ einklappen – bitte am Gerät ansehen.
 
+## Feinschliff aus den Wiki-Fragen (26.10.2026)
+
+Die 25 „Offenen Fragen“ des Wiki-Artikels „Materialablage“ (W5), eingeordnet im Bauentwurf
+`entwurf_feinschliff_wiki_fragen.md`: 16 × Text/Doku (T), 3 × kleiner Code-Fehler (K), 6 × Entscheidung (E1–E6, am
+26.10.2026 entschieden). Gebaut mit den neuen Modulnamen. Kein Schemaschritt.
+
+**Entscheidungen.** E1 A: Die E-Mail-Adresse im Feld „Anmeldung“ der Prüf- und Aussonderungsprotokolle bleibt (die
+„Login-Identität“ der einfachen elektronischen Unterschrift, Lieferung 3); die Texte sagen es jetzt ehrlich (README,
+Profil „… zusammen mit deiner Anmeldung (E-Mail-Adresse) …“). E2 B: „Deine PSA“ läuft immer – auch in Ordnern mit
+„Erinnerungsmails aus“; nur der eigene Haken im Profil zählt. E3 A: Verlauf des Kontos für die Leitstelle. E4 A:
+Rückrufe bleiben (anlegen und beenden mit Vermerk; README sagt, wie man berichtigt). E5 B: betrifft nur den
+Wiki-Artikel (Migrationshinweis ohne Kontaktadresse). E6 C: „Qualifikation 1012“ entfällt aus der Oberfläche.
+
+**Code.**
+- **E2 B** (`erinnerung.py`): `artikel_kandidaten` nimmt einen zugeordneten Artikel aus einem Ordner mit „Erinnerungsmails
+  aus“ (auch geerbt) trotzdem mit – als Eintrag `nur_psa`; `planen` gibt ihn nur der zugeordneten Person als „Deine
+  PSA“ (Stufe nach `PSA_STUFE`, Vermerk wie bisher je Kontoverweis), auch wenn sie den Ordner selbst verwaltet (sie
+  bekäme ihn dort ja nicht unter ARTIKEL). Keine Sammelmail an Verwalter, kein „ohne Empfänger“; der Ordner zählt
+  weiter unter „Erinnerungen aus in …“ (alle Artikel dort). Abbestellt (`mat_psa_mails = 0`): nichts.
+- **E3 A** (`api_admin.py`): `GET /api/admin/users/<id>/journal` (nur Plattform-Verwaltung, `admin_required`; 401 ohne
+  Anmeldung, 403 sonst, 404 unbekannt) – die letzten 50 Einträge des Journals am Konto (`entity = 'user'`: rollen,
+  Urkundennummer, Unterschrift) als fertige Zeilen (`beschriftung.journal_zeilen`, Handelnde mit Namen). Die Unterschrift
+  steht nur als „hinterlegt“/„–“ da, ohne Bild und ohne den Fingerabdruck aus dem Journal. Einträge von vor der Anlage
+  des Kontos gehören einem gelöschten Konto mit derselben Kennung (`users.id` ohne AUTOINCREMENT) und bleiben draußen.
+  Oberfläche (admin.js): im Dialog „Bearbeiten“ unter den Freigaben eingeklappt „Verlauf (Materialablage)“, geladen
+  beim ersten Aufklappen; Tabelle Zeit · Was · Von · Änderung (auf dem Telefon Karten). Pfad wie die übrigen Routen der
+  Nutzerverwaltung (`/users/<id>/…`) statt `/nutzer/<id>/journal` aus dem Entwurf.
+- **K9** (material.js, Katalog): Ohne eigenes generisches Formular nennt die Angabenzeile einer Kategorie das der
+  nächsten Oberkategorie – „· generisches Prüfformular von „<Name>““, Link zur Kategorie (Material-Verwaltung, dort
+  steht der Knopf) bzw. zum Formular; ohne jedes weiter „kein aktives generisches Prüfformular“. Server unverändert.
+- **K19** (material.js): Menütext „Löschen …“ und Rückfrage nennen alle Bedingungen des Servers (ohne Unterordner und
+  Artikel, ohne Prüfdurchgänge und Set-Protokolle, ohne offene Nacharbeit, ohne gesperrte Artikel, die zurückkehren).
+- **K21** (freigaben.js, admin.js): Hinweis nach „Entziehen“ „… unter Prüfungen → „Offene Prüfungen“ mit „Reservierung
+  aufheben““ (so heißen Abschnitt und Knopf).
+
+**Texte.** T12 neue Protokolle: QR-Beschriftung „Artikel online“ (basis.html; alte PDFs unverändert); T20 CSV-Menü
+„… auch die von hier gesperrten und ausgesonderten …“; T24 „Sperren und Freiprüfungen im Jahr …“ (Seite und PDF des
+Jahresberichts); E6 C „Urkundennummer (Prüfernummer)“ (Profil), „Prüfer (Sachkundiger)“ (Nutzerdialog); E2 B
+Ordnerhilfe „Erinnerungsmails aus“ und Profil („… auch wenn der Materialwart für den Ordner die Erinnerungsmails
+abgeschaltet hat“). README nachgezogen zu T1 (Ordner zur Gliederung: Material-Verwaltung), T2 (Prüfsicht), T6
+(Fälligkeit nachziehen), T7 („bis“-Vorgaben), T8 (Katalogimport ändert, was die Datei nennt), T10 („n. z.“), E1 A, T12,
+T13 („Alle Protokolle (ZIP)“ nur mit Set-Protokollen), T14 (wer abschließt, unterschreibt nicht), T16 („Zugeordnet an“),
+T17/T18 („Nächste Prüfung“ erst nach der ersten Prüfung; Lebensende vor ihr nur vorziehen), T24, E2 B, E3 A, E4 A.
+Vermerke im CHANGELOG: „Bitte bestätigen“ der Wünsche vom 25.10.2026 Nr. 2 und der Anträge Nr. 2 (T17, T18), Stand der
+Punkte 1–5 von „Aussondern nur durch den Materialwart“ (T25).
+
+**Tests.** `tests/test_material_feinschliff.py` (neu): E2 B im Plan und im Tageslauf (Person, Materialwart mit eigener
+PSA, nicht zugeordneter Artikel bleibt still, Zählung „ausgelassen“, abbestellt, Schalter wieder an), E3 A je Rolle,
+Inhalt ohne Bild und E-Mail, höchstens 50, Vorgänger mit derselben Kennung; neues Prüfprotokoll mit „Artikel online“
+(veraPDF PDF/A-3b bestanden); Texte von K9, K19, K21, T12, T20, T24, E1, E2, E6 statisch.
+
 ## Neue Modulnamen (Wunsch des Nutzers, 26.10.2026)
 
 Wunsch des Nutzers, wörtlich: „Strömipedia für Wiki / Ankerplätze für Karte / Materialablage für Materialmodul /
@@ -4465,6 +4517,11 @@ vom 25.10.2026: E1 „aussondern empfohlen“ sperrt nur, E2 Bedingungen des Mat
    Zahl auf der Übersicht wäre der nächste Schritt – gewünscht?
 5. Der ausgegraute Knopf „Aussondern“ behält seine Hilfezeile darunter (wie bisher bei der Mangelsperre), obwohl die
    Designsprache Erklärtexte unter Knöpfen meidet – sonst stünde ein toter Knopf ohne Grund da.
+
+Stand der Punkte (Feinschliff aus den Wiki-Fragen, 26.10.2026): 1–3 gelten wie gebaut (Freigabeliste L2c A1–A3, ohne
+Antwort gilt der Vorschlag – der Grund bleibt vorbelegt); 4 gebaut mit A4, Schema 29 (Filter „Aussonderung empfohlen“
+und Übersichtszahl); 5 entschieden am 25.10.2026 – „an die Designsprache anpassen“ (siehe „Designsprache: keine
+Erklärzeilen unter Knöpfen“).
 
 ## Nachbesserung Set-Rückbau und Set-Protokolle nach den Prüfungen (25.10.2026)
 
@@ -5180,7 +5237,9 @@ waagerechter Bildlauf.
 
 1. Zahlen im Filtermenü mit den übrigen Filtern (siehe Abweichungen).
 2. Vor der ersten Prüfung lässt der Dialog „Bearbeiten“ das Lebensende weiterhin nur vorziehen; nach hinten (bis zur
-   Rechnung) geht es nur per Antrag. Soll „Bearbeiten“ das auch können?
+   Rechnung) geht es nur per Antrag. Soll „Bearbeiten“ das auch können? **Entschieden am 25.10.2026 (W2 der
+   Freigabeliste L2c): bleibt so** – vor der ersten Prüfung nur vorziehen; zurück erst nach ihr per Antrag, höchstens
+   bis zur Rechnung.
 3. W4: Ein Bild, das sich nicht verarbeiten lässt, bricht den Import nicht ab (Hinweis, der Verweis bleibt).
 4. W4: Über den Feldern des Import-Dialogs steht ein Satz zum Aufbau des ZIP.
 
@@ -5459,7 +5518,8 @@ auf dem Zweig `sets-l2c` (Schema 22). **Schema 23.**
 - **Rückweg** auf Schema 23: die zwei Trigger in der Fassung `TRIGGER_23_ARTIKEL[0]` und `[2]` neu anlegen und
   `schema_version` auf 23 – Artikel mit leerem `retire_by_manual` nach einem Rücksetzen stören Code 23 nicht.
 - Unverändert: Vor der ersten Prüfung lässt der Dialog „Bearbeiten“ das Lebensende weiterhin nur vorziehen (siehe
-  „Bitte bestätigen“ im Abschnitt „Wünsche vom 25.10.2026“).
+  „Bitte bestätigen“ im Abschnitt „Wünsche vom 25.10.2026“). Entschieden am 25.10.2026 (W2): bleibt so – vor der ersten
+  Prüfung nur vorziehen; zurück erst nach ihr per Antrag, höchstens bis zur Rechnung.
 
 ### Bitte bestätigen
 
@@ -5467,7 +5527,10 @@ auf dem Zweig `sets-l2c` (Schema 22). **Schema 23.**
    vorgezogenes Lebensende auch wieder nach hinten setzen, höchstens bis zum berechneten Lebensende (Herstellung +
    Lebensdauer des Produkts) – umgesetzt mit Schritt 24, siehe „Nachtrag: Lebensende per Antrag auch nach hinten“.
 2. Prüfer bearbeiten Bemerkung, Länge und nächste Prüfung auch **vor** der ersten Prüfung (Entscheidung E2 nennt keinen
-   Zeitpunkt); die übrigen Felder bleiben dann dem Materialwart.
+   Zeitpunkt); die übrigen Felder bleiben dann dem Materialwart. Präzisiert am 26.10.2026 (Feinschliff aus den
+   Wiki-Fragen, Punkt 17 – gilt wie gebaut, N1 der Freigabeliste L2c): Bemerkung und Länge vor und nach der ersten
+   Prüfung; das Feld „Nächste Prüfung“ zeigt der Dialog erst nach ihr – vorher steht dort „Eingangsprüfung
+   ausstehend“, für Prüfer wie für den Materialwart (so seit Lieferung 2).
 3. Die Zahl an „Änderungsanträge“ und auf der Übersicht zählt die eigenen offenen Anträge mit, wenn man zuständig ist.
 4. Altanträge (vor Schritt 23 gestellt) bleiben Einzelanträge – ein damals gemeinsam gestellter Antrag auf Seriennummer
    und Herstellung erscheint als zwei Karten; Mails dazu gehen beim Umstieg keine.
