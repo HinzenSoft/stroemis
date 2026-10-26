@@ -2166,8 +2166,13 @@ dialog.us-dlg { width: min(640px, 96vw); }
   .profil-seite label.inline { min-height: 44px; }
   .comment-fab { padding: 11px 16px; font-size: 1rem; }
   .panel-body, .lb-side, .wiki-side { overscroll-behavior: contain; }
-  /* Der Toast lag unten – auf dem Telefon hinter der Tastatur. Oben, unter der Bauchbinde. */
-  #toast { bottom: auto; top: calc(var(--topbar) + 12px + env(safe-area-inset-top, 0px)); max-width: calc(100vw - 24px); }
+  /* Der Toast lag unten – auf dem Telefon hinter der Tastatur. Oben, unter der Bauchbinde. #toast[popover] mit: Die
+     Popover-Regel oben ist genauer und setzte sonst wieder „bottom: 24px“ (Browserprüfung vor dem Merge, B4 – der Toast
+     lag über „Festschreiben“). Bei einem offenen Dialog gilt weiter #toast[popover].bei-dialog (noch genauer). */
+  #toast, #toast[popover] { bottom: auto; top: calc(var(--topbar) + 12px + env(safe-area-inset-top, 0px));
+    max-width: calc(100vw - 24px); }
+  /* Unterschrift-Dialog (Profil und Materialablage): „Leeren“, „Abbrechen“, „Übernehmen“ (B3). */
+  .us-aktionen .btn { min-height: 44px; }
 }
 /* Dialoge füllen das Telefon fast ganz; die Höhe folgt dem sichtbaren Bereich (Tastatur!). */
 @media (max-width: 640px) {

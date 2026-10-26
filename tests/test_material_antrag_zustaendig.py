@@ -28,7 +28,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from test_material import H, _heute, freigeben, make_app, neuer_artikel, neues_konto  # noqa: E402
 from test_material_antrag import (_ohne_trigger, _pdf_text, _schema, _schema_in, _tabelle_sql, _zahlen,  # noqa: E402
                                   ablehnen, antraege, aufbau, beantragen, bestaetigen, item, journal, lesen, post,
-                                  pruefen, sql, trigger_25, trigger_27, zeilen, zurueckziehen)
+                                  pruefen, sql, trigger_25, trigger_27, trigger_30, zeilen, zurueckziehen)
 from test_material_trennung import bis_schritt, endversion  # noqa: E402
 
 FEST = ("Seit der ersten Prüfung stehen die Stammdaten fest – sie sind Teil des Prüfnachweises. Eine Änderung beantragst "
@@ -520,9 +520,10 @@ def test_migration_23():
         make_app(tmp)
         v23, t23, _ = _schema(pfad)
         # Seit Schritt 25 dazu dessen Trigger (Seriennummern der Bestandteile), seit Schritt 26 die Wächter des Rückbaus
-        # der Set-Funktion statt der entfallenen Set-Trigger.
+        # der Set-Funktion statt der entfallenen Set-Trigger, seit Schritt 30 dessen Trigger (Kennungen, Kontoverweise).
         neu_26 = {x.split("CREATE TRIGGER IF NOT EXISTS ", 1)[1].split()[0] for x in models.TRIGGER_26}
-        erwartet = (set(t22) | {"mat_item_change_gruppe"} | trigger_25() | neu_26 | trigger_27()) - set(models.TRIGGER_WEG_26)
+        erwartet = ((set(t22) | {"mat_item_change_gruppe"} | trigger_25() | neu_26 | trigger_27() | trigger_30())
+                    - set(models.TRIGGER_WEG_26))
         assert v23 == endversion() and set(t23) == erwartet, set(t23) ^ erwartet
         for n in ("mat_item_stammdaten_fest", "mat_item_produkt_fest", "mat_item_antrag_angewendet",
                   "mat_item_change_inhalt"):

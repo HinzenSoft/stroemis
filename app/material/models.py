@@ -237,13 +237,23 @@ Feldnamen folgen dem Konzept vom 16.10.2026 (englisch, wie dort festgelegt). Abw
   - Schritt 29 (Anträge ohne Materialwart, Wunsch vom 25.10.2026, N5): mat_antrag_ohne_verwalter – je Ordner die Meldung
     an die Material-Verwaltung, dass er mit offenem Antrag keinen Verwalter mehr hat (Einmaligkeit). Rein additiv,
     wiederholbar (IF NOT EXISTS). Rückweg: ein älterer Stand ignoriert die Tabelle.
+  - Schritt 30 (Nachbesserung vor dem Merge, Sicherheitsprüfung Befund 1): Lücken der Unveränderlichkeit bei SQL von Hand
+    geschlossen. Trigger „BEFORE UPDATE OF id“ feuern nicht bei „SET rowid = …“ (die Kennung ist ein Alias der rowid);
+    die neuen Trigger *_zeile haben deshalb keine Spaltenliste und vergleichen NEW.rowid mit OLD.rowid – an Journal,
+    Mangelmeldung, Antrag, Mailfehler-Zeile, Artikel, Produkt, Set-Prüflauf immer, an Prüfung, Befundzeile, Anhang und
+    Durchgang samt Zeilen, sobald abgeschlossen. Kontoverweise (Journal, abgeschlossener Durchgang samt Zeilen, Anhang)
+    und der Prüfpunkt einer Befundzeile nur noch auf NULL (*_konto, mat_result_pruefpunkt – wie mat_defect_melder); am
+    Journal kein INSERT OR REPLACE auf eine vorhandene Kennung (mat_audit_ersetzen – ohne
+    recursive_triggers, etwa im sqlite3-Werkzeug, griffe der Lösch-Trigger dabei nicht). Rein additiv (keine Zeile, kein
+    alter Trigger ändert sich), wiederholbar (IF NOT EXISTS). Rückweg: ein älterer Stand lässt die Trigger stehen – sie
+    sperren nur, was er nie tut.
 """
 import json
 import re
 import sqlite3
 from datetime import datetime, timezone
 
-SCHEMA_VERSION = 29
+SCHEMA_VERSION = 30
 
 # --- Wertelisten -------------------------------------------------------------------------------
 # Was die Datenbank per CHECK erzwingt, steht hier ein zweites Mal – mit den Wörtern, die die
@@ -2689,6 +2699,54 @@ SCHRITT_29 = [
 ]
 
 
+# --- Schritt 30: Kennungen und Journal auch gegen SQL von Hand (Nachbesserung vor dem Merge) ----------------------------
+# Ein Trigger mit Spaltenliste („OF id“) sieht „UPDATE … SET rowid = …“ nicht – die Kennung ist ein Alias der rowid, die
+# Anweisung nennt die Spalte aber nicht. Die Trigger hier haben keine Spaltenliste und vergleichen die rowid selbst; sie
+# feuern bei jeder Änderung und lassen alles durch, was die Kennung nicht ändert (die App ändert nie eine). Wer von Hand
+# repariert, braucht trotzdem PRAGMA foreign_keys = ON und recursive_triggers = ON (README, Betrieb).
+_JOURNAL_FEST = "'Das Journal des Moduls Material ist unveränderlich.'"
+_KENNUNG = "NEW.rowid IS NOT OLD.rowid"
+_PRUEFUNG_ZU = "EXISTS (SELECT 1 FROM mat_inspection x WHERE x.id = OLD.inspection_id AND x.completed_at IS NOT NULL)"
+_DURCHGANG_ZU_ALT = "EXISTS (SELECT 1 FROM mat_round r WHERE r.id = OLD.round_id AND r.closed_on IS NOT NULL)"
+SCHRITT_30 = [
+    _trigger("mat_audit_zeile", "BEFORE UPDATE ON mat_audit", _KENNUNG, _JOURNAL_FEST),
+    # Die Kontokennung setzt nur die Datenbank selbst auf NULL (Konto gelöscht, ON DELETE SET NULL) – nie auf ein Konto.
+    _trigger("mat_audit_konto", "BEFORE UPDATE OF user_id ON mat_audit",
+             "NEW.user_id IS NOT NULL AND NEW.user_id IS NOT OLD.user_id", _JOURNAL_FEST),
+    # INSERT OR REPLACE löscht ohne Lösch-Trigger, wenn recursive_triggers aus ist – deshalb schon beim Einfügen.
+    _trigger("mat_audit_ersetzen", "BEFORE INSERT ON mat_audit",
+             "EXISTS (SELECT 1 FROM mat_audit a WHERE a.id = NEW.id)", _JOURNAL_FEST),
+    _trigger("mat_inspection_zeile", "BEFORE UPDATE ON mat_inspection", f"OLD.completed_at IS NOT NULL AND {_KENNUNG}",
+             _ABGESCHLOSSEN),
+    _trigger("mat_result_zeile", "BEFORE UPDATE ON mat_inspection_result", f"{_KENNUNG} AND {_PRUEFUNG_ZU}",
+             _ABGESCHLOSSEN),
+    _trigger("mat_attachment_zeile", "BEFORE UPDATE ON mat_inspection_attachment", f"{_KENNUNG} AND {_PRUEFUNG_ZU}",
+             _ABGESCHLOSSEN),
+    _trigger("mat_round_zeile", "BEFORE UPDATE ON mat_round", f"OLD.closed_on IS NOT NULL AND {_KENNUNG}", _DURCHGANG_ZU),
+    _trigger("mat_round_item_zeile", "BEFORE UPDATE ON mat_round_item", f"{_KENNUNG} AND {_DURCHGANG_ZU_ALT}",
+             _DURCHGANG_ZU),
+    _trigger("mat_defect_zeile", "BEFORE UPDATE ON mat_defect_report", _KENNUNG, MANGEL_FEST),
+    _trigger("mat_item_change_zeile", "BEFORE UPDATE ON mat_item_change", _KENNUNG, ANTRAG_FEST),
+    _trigger("mat_mail_fehler_zeile", "BEFORE UPDATE ON mat_mail_fehler", _KENNUNG, MAILFEHLER_FEST),
+    _trigger("mat_item_zeile", "BEFORE UPDATE ON mat_item", _KENNUNG, ERSETZEN),
+    _trigger("mat_product_zeile", "BEFORE UPDATE ON mat_product", _KENNUNG, ERSETZEN),
+    _trigger("mat_set_lauf_zeile", "BEFORE UPDATE ON mat_set_lauf", _KENNUNG, LAUF_FEST),
+    # Verweise, die beim Löschen des Kontos bzw. Prüfpunkts NULL werden (ON DELETE SET NULL) – an abgeschlossenen
+    # Nachweisen nur noch dahin, nie auf ein anderes Konto oder einen anderen Prüfpunkt (Probe p05 der Sicherheitsprüfung).
+    _trigger("mat_round_konto", "BEFORE UPDATE OF opened_by, closed_by ON mat_round",
+             "OLD.closed_on IS NOT NULL AND ((NEW.opened_by IS NOT NULL AND NEW.opened_by IS NOT OLD.opened_by) "
+             "OR (NEW.closed_by IS NOT NULL AND NEW.closed_by IS NOT OLD.closed_by))", _DURCHGANG_ZU),
+    _trigger("mat_round_item_konto", "BEFORE UPDATE OF excluded_by ON mat_round_item",
+             f"NEW.excluded_by IS NOT NULL AND NEW.excluded_by IS NOT OLD.excluded_by AND {_DURCHGANG_ZU_ALT}",
+             _DURCHGANG_ZU),
+    _trigger("mat_attachment_konto", "BEFORE UPDATE OF uploaded_by ON mat_inspection_attachment",
+             f"NEW.uploaded_by IS NOT NULL AND NEW.uploaded_by IS NOT OLD.uploaded_by AND {_PRUEFUNG_ZU}", _ABGESCHLOSSEN),
+    _trigger("mat_result_pruefpunkt", "BEFORE UPDATE OF checklist_item_id ON mat_inspection_result",
+             f"NEW.checklist_item_id IS NOT NULL AND NEW.checklist_item_id IS NOT OLD.checklist_item_id AND {_PRUEFUNG_ZU}",
+             _ABGESCHLOSSEN),
+]
+
+
 # Je Version die Schritte, die von der Vorversion dorthin führen: eine Liste von SQL-Befehlen (für sich
 # wiederholbar, IF NOT EXISTS) oder eine Funktion. Alle Schritte eines Starts laufen in EINER
 # Transaktion – bricht einer ab, bleibt die Datenbank, wie sie war, und der nächste Start versucht es neu.
@@ -2696,7 +2754,7 @@ SCHRITTE = {1: SCHRITT_1, 2: _schritt_2, 3: _schritt_3, 4: SCHRITT_4, 5: _schrit
             8: _schritt_8, 9: _schritt_9, 10: _schritt_10, 11: _schritt_11, 12: _schritt_12, 13: _schritt_13,
             14: _schritt_14, 15: _schritt_15, 16: _schritt_16, 17: _schritt_17, 18: SCHRITT_18, 19: SCHRITT_19,
             20: _schritt_20, 21: _schritt_21, 22: _schritt_22, 23: _schritt_23, 24: _schritt_24,
-            25: _schritt_25, 26: _schritt_26, 27: _schritt_27, 28: _schritt_28, 29: SCHRITT_29}
+            25: _schritt_25, 26: _schritt_26, 27: _schritt_27, 28: _schritt_28, 29: SCHRITT_29, 30: SCHRITT_30}
 
 
 def _meta(conn, schluessel, vorgabe=None):

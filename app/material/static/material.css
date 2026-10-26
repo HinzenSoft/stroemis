@@ -44,7 +44,9 @@
 /* Groß und unübersehbar: gesperrt, ausgesondert, Lebensdauer erreicht – auch nach einem QR-Scan */
 .mat-banner { padding: 12px 16px; font-weight: 700; margin: 0 0 14px; color: var(--weiss); letter-spacing: .01em; }
 .mat-banner.s-ausgesondert { background: var(--grau); }
-.mat-banner.s-gesperrt { background: var(--mat-gesperrt); }
+/* Sperr-Banner rot wie der Mangel-Banner (Nutzer, 26.10.2026: „Sperrungsbanner sollte dann aber auch rot sein“; Weiß
+   auf --rot 4,9 : 1). Nur der Banner – Marke, Kachel und Zahl „gesperrt“ behalten --mat-gesperrt. */
+.mat-banner.s-gesperrt { background: var(--rot); }
 .mat-banner.s-lebensdauer { background: var(--mat-lebensdauer); }
 .mat-banner.s-neu { background: var(--wasser); }
 .mat-demo { display: inline-block; font-size: var(--fs-marke); font-weight: 700; padding: 1px 6px; margin-left: 6px;
@@ -1193,6 +1195,7 @@ table.list.mat-artikel tr:has(.mat-wahl-art:checked) { background: var(--co-info
    seit der Geräte-Prüfung vom 21.10.2026 eine echte Fläche (Abschnitt am Ende). */
 @media (pointer: coarse) {
   :where(#mat-inhalt, #dlg, dialog .dlg-actions) .btn { min-height: 44px; }   /* auch die Rückfrage aus common.js */
+  .mat-pruefen-form .btn { min-height: 44px; }                                  /* Prüfseite „Prüfen“ (B3 vor dem Merge) */
   .mat-filter button, .mat-sortwahl select { min-height: 44px; }
   .mat-pdf { min-height: 44px; }
   :where(#mat-inhalt, #dlg) input:is([type=checkbox], [type=radio]) { width: 24px; height: 24px; flex: none; }
@@ -1726,6 +1729,21 @@ table.list.mat-na-zeilen tr:has(.mat-na-wahl:checked) { background: var(--co-inf
 @media (pointer: coarse) {
   .mat-bericht-sprung a { min-height: 44px; display: inline-flex; align-items: center; }
   .mat-be-rr > summary { min-height: 44px; display: flex; align-items: center; }
+}
+/* Die breiten Tabellen des Jahresberichts (je Unterordner: Bestand und sieben Zustände; Prüfdurchgänge: vier Zahlen)
+   brauchen gut 700 bzw. 620 px – bis 760 px Inhaltsbreite sind sie deshalb schon Karten wie die übrigen Listen unter
+   600 px (Browserprüfung vor dem Merge, B1: Bildlauf bei 645–723 px). */
+@container mat-seite (max-width: 760px) {
+  #mat-inhalt table.list.mat-bericht-breit, #mat-inhalt table.list.mat-bericht-breit tbody,
+  #mat-inhalt table.list.mat-bericht-breit tr, #mat-inhalt table.list.mat-bericht-breit td { display: block; }
+  #mat-inhalt table.list.mat-bericht-breit thead { display: none; }
+  #mat-inhalt table.list.mat-bericht-breit tr { padding: 10px 0 12px; border-bottom: 1px solid var(--linie); }
+  #mat-inhalt table.list.mat-bericht-breit td { border: 0; padding: 2px 0; white-space: normal; }
+  #mat-inhalt table.list.mat-bericht-breit tr:hover td { background: none; }
+  #mat-inhalt table.list.mat-bericht-breit td.mat-be-zahl { display: inline-block; width: auto; margin-right: 14px; text-align: left; }
+  #mat-inhalt table.list.mat-bericht-breit td.mat-be-null { display: none; }
+  #mat-inhalt table.list.mat-bericht-breit td.mat-be-zahl::before { content: attr(data-l) " "; color: var(--grau);
+    font-size: var(--fs-klein); }
 }
 @container mat-seite (max-width: 600px) {
   #mat-inhalt table.list.mat-tabelle td.mat-be-zahl { display: inline-block; width: auto; margin-right: 14px; text-align: left; white-space: normal; }

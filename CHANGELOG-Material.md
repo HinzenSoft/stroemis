@@ -1,9 +1,11 @@
-# Changelog: Modul „Material“ (Phase 1, MVP, und Phase 2)
+# Changelog: Materialablage (Modul „material“, Phasen 1–4)
 
 Material- und Prüfmanagement für strömis.de nach dem Konzept vom 16.10.2026: Ausrüstungsbestand der
-Gliederungen, Prüfnachweise je Ausrüstungsteil, später unveränderliche PDF-Prüfprotokolle. Phase 1 ist in fünf
-Lieferungen umgesetzt, Phase 2 (mehrere Gliederungen und externe Prüfer in einer Instanz) folgt in drei; jede ist
-für sich deploybar.
+Gliederungen, Prüfnachweise je Ausrüstungsteil, unveränderliche PDF-Prüfprotokolle. Phase 1 ist in fünf Lieferungen
+umgesetzt, Phase 2 (mehrere Gliederungen und externe Prüfer in einer Instanz) in drei, Phase 3 und 4 in Lieferungen
+und Wünschen des Nutzers; jede war für sich deploybar. Seit dem 26.10.2026 heißt das Modul „Materialablage“ (im Code,
+in Tabellen und unter `/api/material` weiter `material`). Ältere Abschnitte sagen noch „Modul Material“ – sie bleiben als
+Geschichte stehen. Schemaversion nach der Nachbesserung vor dem Merge: 30.
 
 | Lieferung | Inhalt | Stand |
 | --- | --- | --- |
@@ -13,23 +15,32 @@ für sich deploybar.
 | 4 – Überblick | Übersicht mit Fälligkeiten je Ordner, Führungskraft nur lesend, QR-Adresse mit Status, Export (CSV, Protokoll-ZIP, Lebenslauf-PDF); dazu Katalogaustausch (Katalog und Formulare von dev in die Produktion, ohne Bestand und Prüfungen) und Rückrufe zu Produkten (Hinweis in der Anwendung und per Mail). Kein Etikettenbogen (nicht gewünscht) | geliefert 17.10.2026, freigegeben 17.10.2026 |
 | 5 – Feinschliff | Rückmeldungen aus dem Pilotbetrieb: Ordnerkopf, einheitliche Knöpfe, Suchvorschläge, Urkundennummer im Profil, Pflicht-Bemerkung bei Mangel, Produktsuche, Bedienung auf Telefon, Foldable und Tablet | geliefert 18.10.2026, freigegeben 18.10.2026 („Starte mit Phase 2“) |
 | Phase 2 · 1 – Freigaben je Ordner | Freigaben lesen/prüfen/verwalten je Ordner mit Vererbung und Enddatum, strenge Trennung je Gliederung, Freigaben im Dialog „Ordner bearbeiten“ (Reiter) mit Vorlagen und Verlängern, „Meine Freigaben“; globale Seriennummernsuche und QR-Steckbrief mit Protokoll; Personenzuordnung; Rückrufe und Meldungen je Bereich; Löschkonzept | geliefert 18.10.2026, die drei offenen Fragen am 18.10.2026 entschieden und eingearbeitet; freigegeben 19.10.2026 („Starte Lieferung 2“) |
-| Phase 2 · 2 – Erinnerungen | Täglicher Erinnerungslauf ab 6 Uhr (eingebaut, abschaltbar, dazu `flask material remind`): Sammelmail an die Verwalter zu Fälligkeit (30/7 Tage, überfällig), Lebensende (90 Tage) und ablaufenden Freigaben (30 Tage); Erinnerungslog mit Kontoverweis; „Erinnerungsmails aus“ je Ordner; Laufstand und Probelauf auf der Übersicht | geliefert 19.10.2026, wartet auf Freigabe |
-| Phase 2 · 3 – Bestandsimport und Prüfanleitung | Bestandslisten aus Excel oder CSV in einen Ordner: Probelauf, Übernehmen in einer Transaktion (Artikel auf „neu“, Fälligkeit aus der Liste, STR-Nummern für Zeilen ohne Seriennummer, eine Liste ganz ohne Seriennummernspalte nur mit Häkchen) und Nacharbeit je Zielordner (Produkte zuordnen, melden oder im Katalog anlegen, erneut prüfen, CSV-Rundweg, Frist ein Monat); Prüfanleitung aus dem Wiki am Prüfformular, Abschnitt „Prüfung“ eingeblendet in offenen Prüfungen | geliefert 19.10.2026, vier Punkte am 20.10.2026 entschieden (einer geändert und eingearbeitet), wartet auf Freigabe |
-| Artikellänge (Schritt 20) | Häkchen „Artikel haben eine Länge“ je Kategorie (vererbt), Feld „Länge (m)“ am Artikel (Steckbrief, Listen, Lebenslauf, Meine PSA, CSV, Bestandsimport), Prüfpunkt-Typ „Länge“ – vorbelegt, ein abweichender Wert geht beim Festschreiben in den Artikel (Journal, Protokoll „alt → neu“) | gebaut 22.10.2026, wartet auf Freigabe |
-| Phase 4 · 2 – Sets mit Komponenten | Hersteller-Sets: Stückliste im Katalog (auch in der Katalogdatei), Set-Artikel mit Teil-Artikeln, Set-Status, -Fälligkeit und -Lebensende, Listen mit der Set-Zeile, Verschieben und Zuordnen mit allen Teilen, Meine PSA; Sperr-Kaskade, Set prüfen mit Set-Protokoll, Austausch, Aussondern mit Wahl je Teil, Oberfläche | geliefert 23.10.2026 (c5e1b06), freigegeben 23.10.2026 |
-| Phase 4 · 2b – Sets, Teil 2 | Vorhandenen Artikel als Teil einsetzen (mit Auswahl, auch über die bisherige Inventarnummer), Set auflösen, „Bestandteil ersetzt“, Prüfumfang eines nie geprüften Sets; dazu (KERN Z) Zahlen, CSV-Spalten, gebündelte Mails | geliefert 23.10.2026 (Schema bleibt 21) – wartet auf Freigabe |
-| Feintuning nach dem Kommentar-Dokument | Produkt am Artikel ändern bis zur ersten Prüfung (Dialog „Bearbeiten“, Weg aus „aus dem Bestand wählen“), Jahresbericht: ausgesondertes Set als eine Zeile, weitergeführte Teile mit eigener Sperre | gebaut 23.10.2026 (Schema bleibt 21) – wartet auf Freigabe |
-| Katalogimport im Hintergrund | Probelauf und Übernehmen laufen als Auftrag im Hintergrund (202, Stand per Abfrage, Bericht wie bisher), „Übernehmen“ ohne neuen Upload, höchstens ein Import gleichzeitig, Abbruch bei Neustart erkannt, Hinweis auf der Katalogseite; Nachbesserung nach der Sicherheitsprüfung (Kontoverweis statt Kontokennung und Name, Plattenplatz, Übernehmen nach Abbruch wiederholbar, dev-zuruecksetzen wartet) | gebaut 24.10.2026 (kein Schemaschritt, Schema bleibt 21) – wartet auf Freigabe |
-| Sets anlegen und Stückliste übertragen (Schritt 22) | Knopf „Set anlegen“ (Produkt und Stückliste in einem Zug, mindestens ein einzeln geführtes Teil), Umstellen Produkt ↔ Set nur per Katalogdatei, „Stückliste übertragen“ auf angelegte Sets mit Vorschau, Fehlendes Produkt oder Set melden, Begriff „Set“, Ordnerart „Set-Ordner“ | gebaut 24.10.2026, wartet auf Prüfung und Freigabe |
-| Änderungsanträge an alle Stammdaten (Schritt 23) | Freigabepflichtig nach der ersten Prüfung: Produkt, Seriennummer, Herstellung, Kauf, Erstgebrauch, Lebensende, Prüfintervall – als ein Sammelantrag; entscheiden die Materialwarte des Ordners (auch den eigenen Antrag, die Material-Verwaltung nur mit eigener Verwalterfreigabe); Liste „Änderungsanträge“ im Bestand, Katalog → Meldungen nur Produkt- und Set-Meldungen; Prüfer bearbeiten Bemerkung, Länge, nächste Prüfung; Produktänderungen im Lebenslauf; Nachtrag 25.10.2026 (Schritt 24): Lebensende per Antrag auch wieder nach hinten bis zur Rechnung | gebaut 24.10.2026, Nachtrag 25.10.2026, wartet auf Prüfung und Freigabe |
-| Wünsche vom 25.10.2026 (W1–W4) | Norm in eigener Zeile auf der Artikelseite; Nacharbeit: „Übernehmen …“ und nach dem Zuordnen direkt übernehmen, „Fehlendes Produkt melden“ vorbelegt; Bestand: Spalte „Kategorie“, Filtermenü in der Seitenleiste mit „Filter (n)“; Wiki: Seiten aus ZIP importieren | gebaut 25.10.2026 (kein Schemaschritt), wartet auf Prüfung und Freigabe |
-| Bestandteil-Liste an normalen Produkten (Schritt 25) | Herstellersets als flache Produkte mit Liste „Bestandteile“ (Bezeichnung und Anzahl): Produktdialog, Produkt- und Artikelseite, Meine PSA, Lebenslauf; jede Prüfung fragt je Position „vorhanden“ ab („fehlt“ = Mangel); Katalogdatei; Set-Meldung → „Produkt anlegen“; dazu Seriennummern der Bestandteile je Stück am Artikel (direkt bis zur ersten Prüfung, dann in der Prüfung oder per Antrag, suchbar) | gebaut 25.10.2026, wartet auf Prüfung und Freigabe |
-| Nachbesserung L2c nach den Prüfungen | Bestandteile: Kennung nie an eine andere Position, Bezeichnung mitverglichen; Berichtigung gegen den wirksamen Wert; Protokoll ohne „neu“, wo nichts übernommen wurde; Wettlauf Prüfung ↔ Antrag 409; Steuerzeichen; Rückweg 25; Ordnerliste ohne Überlauf (Kategorie über dem Hersteller), Prüfung „fehlt“, doppelte Nummer als Hinweis, Schublade, Produktseite „Mehr“ | gebaut 25.10.2026, wartet auf Freigabe |
-| Nachbesserung Sets und Anträge nach den Prüfungen | Sets: Kennungen der Kopie, „Anzahl verringert“, Texte; Anträge: Produktgeschichte nach Wechsel, Intervall-Obergrenze nur bei Änderung, Fälligkeit ohne Namen, 409 statt 500, Texte, Zähl-Aufruf | gebaut 25.10.2026, wartet auf Prüfung und Freigabe |
-| Neue Modulnamen | Strömipedia, Ankerplätze, Riegenkarten, Materialablage, Leitstelle samt Adressen; alte Adressen leiten dauerhaft weiter (301, Abfrage bleibt, Umlaut-Schreibweisen), neue Protokolle mit `/materialablage/pruefen` | gebaut 26.10.2026, wartet auf Prüfung und Freigabe |
-| Feinschliff aus den Wiki-Fragen | „Deine PSA“ auch in Ordnern mit „Erinnerungsmails aus“ (E2 B), Verlauf des Kontos im Nutzerdialog der Leitstelle (E3 A), geerbtes generisches Formular in der Kategorie (K9), Texte (K19, K21, T, E1, E6), README | gebaut 26.10.2026, wartet auf Prüfung und Freigabe |
-| Katalog am Telefon (26.10.2026) | „☰ Kategorien“ links in der mitlaufenden Suchzeile der Katalogliste; keine Nummernsuche in den Katalogansichten | gebaut 26.10.2026 (kein Schemaschritt), wartet auf Prüfung und Freigabe |
-| Lebenslauf frisch, Melder und Mangelbeschreibung | Jeder Abruf eines Lebenslaufs (und der übrigen Dateien auf Abruf) mit eigener Adresse und Uhrzeit im Namen – gegen die alte Datei auf Android-Telefonen; „Mangel gemeldet“ im Lebenslauf mit Name und Beschreibung für Prüfer, Materialwart und den Melder selbst | gebaut 26.10.2026, wartet auf Prüfung und Freigabe |
+| Phase 2 · 2 – Erinnerungen | Täglicher Erinnerungslauf ab 6 Uhr (eingebaut, abschaltbar, dazu `flask material remind`): Sammelmail an die Verwalter zu Fälligkeit (30/7 Tage, überfällig), Lebensende (90 Tage) und ablaufenden Freigaben (30 Tage); Erinnerungslog mit Kontoverweis; „Erinnerungsmails aus“ je Ordner; Laufstand und Probelauf auf der Übersicht | geliefert 19.10.2026, freigegeben, auf dev |
+| Phase 2 · 3 – Bestandsimport und Prüfanleitung | Bestandslisten aus Excel oder CSV in einen Ordner: Probelauf, Übernehmen in einer Transaktion (Artikel auf „neu“, Fälligkeit aus der Liste, STR-Nummern für Zeilen ohne Seriennummer, eine Liste ganz ohne Seriennummernspalte nur mit Häkchen) und Nacharbeit je Zielordner (Produkte zuordnen, melden oder im Katalog anlegen, erneut prüfen, CSV-Rundweg, Frist ein Monat); Prüfanleitung aus dem Wiki am Prüfformular, Abschnitt „Prüfung“ eingeblendet in offenen Prüfungen | geliefert 19.10.2026, vier Punkte am 20.10.2026 entschieden (einer geändert und eingearbeitet), freigegeben, auf dev |
+| Phase 3 · 1 – Meine PSA und Mangelmeldung | „Meine PSA“ (zugeordnete Ausrüstung, auch ohne Stufe im Modul), Mangelmeldung mit Foto, die den Artikel sofort sperrt, Abschnitt „Deine PSA“ in der Sammelmail (Schritt 13) | geliefert 20.10.2026, freigegeben, auf dev |
+| Artikellänge (Schritt 20) | Häkchen „Artikel haben eine Länge“ je Kategorie (vererbt), Feld „Länge (m)“ am Artikel (Steckbrief, Listen, Lebenslauf, Meine PSA, CSV, Bestandsimport), Prüfpunkt-Typ „Länge“ – vorbelegt, ein abweichender Wert geht beim Festschreiben in den Artikel (Journal, Protokoll „alt → neu“) | gebaut 22.10.2026, freigegeben, auf dev |
+| Phase 4 · 1 – Auswertung und Betriebsreife | Jahresbericht je Zweig (Seite, PDF, CSV der Prüfungen), Mailfehler-Protokoll mit Kasten „Mailversand“ auf der Übersicht (Schritt 19), dazu C1 (Strömipedia und Leitstelle am Finger) und C2 (Datumsfelder) | geliefert 22.10.2026, offene Punkte am 23.10.2026 „wie gebaut“, freigegeben, auf dev |
+| Phase 4 · 2 – Sets mit Komponenten | Hersteller-Sets: Stückliste im Katalog (auch in der Katalogdatei), Set-Artikel mit Teil-Artikeln, Set-Status, -Fälligkeit und -Lebensende, Listen mit der Set-Zeile, Verschieben und Zuordnen mit allen Teilen, Meine PSA; Sperr-Kaskade, Set prüfen mit Set-Protokoll, Austausch, Aussondern mit Wahl je Teil, Oberfläche | geliefert 23.10.2026 (c5e1b06), freigegeben 23.10.2026; durch den Rückbau der Set-Funktion (Schritt 26) ersetzt |
+| Phase 4 · 2b – Sets, Teil 2 | Vorhandenen Artikel als Teil einsetzen (mit Auswahl, auch über die bisherige Inventarnummer), Set auflösen, „Bestandteil ersetzt“, Prüfumfang eines nie geprüften Sets; dazu (KERN Z) Zahlen, CSV-Spalten, gebündelte Mails | geliefert 23.10.2026 (Schema bleibt 21), freigegeben; durch den Rückbau der Set-Funktion (Schritt 26) ersetzt |
+| Feintuning nach dem Kommentar-Dokument | Produkt am Artikel ändern bis zur ersten Prüfung (Dialog „Bearbeiten“, Weg aus „aus dem Bestand wählen“), Jahresbericht: ausgesondertes Set als eine Zeile, weitergeführte Teile mit eigener Sperre | gebaut 23.10.2026 (Schema bleibt 21), freigegeben, auf dev |
+| Materialablage auf dev zurücksetzen | `flask material dev-zuruecksetzen` – leert nur auf dev Katalog, Bestand, Nachweise und Medien des Moduls nach einer Sicherung; Konten und übrige Module bleiben | gebaut 23.10.2026, freigegeben, auf dev |
+| Katalogimport im Hintergrund | Probelauf und Übernehmen laufen als Auftrag im Hintergrund (202, Stand per Abfrage, Bericht wie bisher), „Übernehmen“ ohne neuen Upload, höchstens ein Import gleichzeitig, Abbruch bei Neustart erkannt, Hinweis auf der Katalogseite; Nachbesserung nach der Sicherheitsprüfung (Kontoverweis statt Kontokennung und Name, Plattenplatz, Übernehmen nach Abbruch wiederholbar, dev-zuruecksetzen wartet) | gebaut 24.10.2026 (kein Schemaschritt, Schema bleibt 21), freigegeben, auf dev |
+| Sets anlegen und Stückliste übertragen (Schritt 22) | Knopf „Set anlegen“ (Produkt und Stückliste in einem Zug, mindestens ein einzeln geführtes Teil), Umstellen Produkt ↔ Set nur per Katalogdatei, „Stückliste übertragen“ auf angelegte Sets mit Vorschau, Fehlendes Produkt oder Set melden, Begriff „Set“, Ordnerart „Set-Ordner“ | gebaut 24.10.2026, freigegeben; **überholt** durch den Rückbau der Set-Funktion (Schritt 26, Zeile unten) – „Set anlegen“ und „Stückliste übertragen“ gibt es nicht mehr |
+| Änderungsanträge an alle Stammdaten (Schritt 23) | Freigabepflichtig nach der ersten Prüfung: Produkt, Seriennummer, Herstellung, Kauf, Erstgebrauch, Lebensende, Prüfintervall – als ein Sammelantrag; entscheiden die Materialwarte des Ordners (auch den eigenen Antrag, die Material-Verwaltung nur mit eigener Verwalterfreigabe); Liste „Änderungsanträge“ im Bestand, Katalog → Meldungen nur Produkt- und Set-Meldungen; Prüfer bearbeiten Bemerkung, Länge, nächste Prüfung; Produktänderungen im Lebenslauf; Nachtrag 25.10.2026 (Schritt 24): Lebensende per Antrag auch wieder nach hinten bis zur Rechnung | gebaut 24.10.2026, Nachtrag 25.10.2026, freigegeben, auf dev |
+| Wünsche vom 25.10.2026 (W1–W4) | Norm in eigener Zeile auf der Artikelseite; Nacharbeit: „Übernehmen …“ und nach dem Zuordnen direkt übernehmen, „Fehlendes Produkt melden“ vorbelegt; Bestand: Spalte „Kategorie“, Filtermenü in der Seitenleiste mit „Filter (n)“; Wiki: Seiten aus ZIP importieren | gebaut 25.10.2026 (kein Schemaschritt), freigegeben, auf dev |
+| Bestandteil-Liste an normalen Produkten (Schritt 25) | Herstellersets als flache Produkte mit Liste „Bestandteile“ (Bezeichnung und Anzahl): Produktdialog, Produkt- und Artikelseite, Meine PSA, Lebenslauf; jede Prüfung fragt je Position „vorhanden“ ab („fehlt“ = Mangel); Katalogdatei; Set-Meldung → „Produkt anlegen“; dazu Seriennummern der Bestandteile je Stück am Artikel (direkt bis zur ersten Prüfung, dann in der Prüfung oder per Antrag, suchbar) | gebaut 25.10.2026, freigegeben, auf dev |
+| Rückbau der Set-Funktion (Schritt 26) | Sets wieder als Ordner der Art „Set“; Set-Produkte, Set-Artikel, Stücklisten und Set-Prüfläufe stillgelegt (Tabellen bleiben, Trigger sperren Neues) | gebaut 25.10.2026, freigegeben, auf dev |
+| Set-Protokolle im Prüfdurchgang (Schritt 27) | Beim regulären Abschluss eines Durchgangs je Set-Ordner mit Geprüftem ein festgeschriebenes Protokoll T-<Jahr>-<Nr> | gebaut 25.10.2026, freigegeben, auf dev |
+| Aussondern nur durch den Materialwart (Schritt 28) | Prüfer empfehlen („aussondern empfohlen“, sperrt), der Materialwart sondert aus (nach Verlust direkt) | gebaut 25.10.2026, freigegeben, auf dev |
+| A4/N5 (Schritt 29) | „Aussonderung empfohlen“ als Statusfilter und Übersichtszahl; Mail an die Material-Verwaltung, wenn ein Ordner mit offenem Antrag keinen Materialwart mehr hat; W2 | gebaut 25.10.2026, freigegeben, auf dev |
+| Beispielbestand (nur dev) | `scripts/material_beispielbestand.py`: große DEMO-Gliederung mit gut zwei Jahren Geschichte aus dem echten Katalog; ersetzt das DEMO-Skript | gebaut 25.10.2026, freigegeben, auf dev |
+| Nachbesserung L2c nach den Prüfungen | Bestandteile: Kennung nie an eine andere Position, Bezeichnung mitverglichen; Berichtigung gegen den wirksamen Wert; Protokoll ohne „neu“, wo nichts übernommen wurde; Wettlauf Prüfung ↔ Antrag 409; Steuerzeichen; Rückweg 25; Ordnerliste ohne Überlauf (Kategorie über dem Hersteller), Prüfung „fehlt“, doppelte Nummer als Hinweis, Schublade, Produktseite „Mehr“ | gebaut 25.10.2026, freigegeben, auf dev |
+| Nachbesserung Sets und Anträge nach den Prüfungen | Sets: Kennungen der Kopie, „Anzahl verringert“, Texte; Anträge: Produktgeschichte nach Wechsel, Intervall-Obergrenze nur bei Änderung, Fälligkeit ohne Namen, 409 statt 500, Texte, Zähl-Aufruf | gebaut 25.10.2026, freigegeben, auf dev |
+| Neue Modulnamen | Strömipedia, Ankerplätze, Riegenkarten, Materialablage, Leitstelle samt Adressen; alte Adressen leiten dauerhaft weiter (301, Abfrage bleibt, Umlaut-Schreibweisen), neue Protokolle mit `/materialablage/pruefen` | gebaut 26.10.2026, freigegeben, auf dev |
+| Feinschliff aus den Wiki-Fragen | „Deine PSA“ auch in Ordnern mit „Erinnerungsmails aus“ (E2 B), Verlauf des Kontos im Nutzerdialog der Leitstelle (E3 A), geerbtes generisches Formular in der Kategorie (K9), Texte (K19, K21, T, E1, E6), README | gebaut 26.10.2026, freigegeben, auf dev |
+| Katalog am Telefon (26.10.2026) | „☰ Kategorien“ links in der mitlaufenden Suchzeile der Katalogliste; keine Nummernsuche in den Katalogansichten | gebaut 26.10.2026 (kein Schemaschritt), bestätigt wie gebaut (Nutzer 26.10.2026), im Zweig vor-merge |
+| Nachbesserung vor dem Merge (Schritt 30) | R1 Rückruf nach Änderungsantrag, Rückruf ohne Mailserver, DEMO-Konten nicht als Material-Verwaltung, „Bald fällig“ 0–365, Unveränderlichkeit gegen SQL von Hand (Schritt 30), Jahresbericht ohne Bildlauf, Fokus nach Esc, Tippflächen, Toast unter Touch, README/CHANGELOG für den Merge | gebaut 26.10.2026 (Zweig vm-material), zur Freigabe vor dem Merge |
+| Lebenslauf frisch, Melder und Mangelbeschreibung | Jeder Abruf eines Lebenslaufs (und der übrigen Dateien auf Abruf) mit eigener Adresse und Uhrzeit im Namen – gegen die alte Datei auf Android-Telefonen; „Mangel gemeldet“ im Lebenslauf mit Name und Beschreibung für Prüfer, Materialwart und den Melder selbst | gebaut 26.10.2026, bestätigt wie gebaut (Nutzer 26.10.2026), im Zweig vor-merge |
 
 ## Abgleich mit dem Bestand (vor Lieferung 1)
 
@@ -2167,7 +2178,7 @@ Erinnerungslauf aus dem Konzept: eine Sammelmail am Morgen an die Materialwarte 
 ablaufenden Freigaben, abschaltbar je Ordner, mit Laufstand und Probelauf für die Material-Verwaltung. Gebaut nach dem
 Bauentwurf vom 19.10.2026 (überarbeitet nach zwei Kritiken, „Betrieb“ und „Fach“) in zwei Paketen: KERN (Schema,
 Dienst, Tageslauf, Kommandozeile, Tests) und OBERFLÄCHE (Ordnerdialog, Ordnerkopf, Übersicht, Verlauf, Doku).
-Schemaversion 11, keine neuen Abhängigkeiten. Der Versand ist in der Vorgabe **aus**. Stand: wartet auf Freigabe.
+Schemaversion 11, keine neuen Abhängigkeiten. Der Versand ist in der Vorgabe **aus**. Stand: freigegeben.
 
 ### Neu
 
@@ -2635,7 +2646,7 @@ in einen Ordner übernehmen, mit Probelauf und einer Nacharbeit für alles, was 
 Gebaut nach dem Bauentwurf vom 19.10.2026 (zweite Fassung nach zwei Kritiken, „Fach“ und „Sicherheit“, mit den
 Entscheidungen des Betreibers vom selben Tag) in zwei Paketen: KERN (Schema, Dienste, Routen, Tests) und OBERFLÄCHE
 (Importseite mit Nacharbeit, Formularzeile, Einblendung in der Prüfung, Doku). Schemaversion 12, keine neuen
-Abhängigkeiten. Stand: wartet auf Freigabe.
+Abhängigkeiten. Stand: freigegeben.
 
 ### Neu
 
@@ -3100,7 +3111,7 @@ die Ausrüstung, die ihr zugeordnet ist, auch ohne Stufe im Modul Material –, 
 sofort sperrt, und den Abschnitt **„Deine PSA“** in der täglichen Sammelmail. Gebaut nach dem Bauentwurf vom
 20.10.2026 (zweite Fassung nach zwei Kritiken, „Fach“ und „Sicherheit“, mit den Entscheidungen des Betreibers vom
 selben Tag) in zwei Paketen: KERN (Schema, Dienste, Routen, Vorlagen, Tests) und OBERFLÄCHE (`material.js`, CSS,
-Nebenskripte, Browser, Doku). Schemaversion 13, keine neuen Abhängigkeiten. Stand: wartet auf Freigabe.
+Nebenskripte, Browser, Doku). Schemaversion 13, keine neuen Abhängigkeiten. Stand: freigegeben.
 
 ### Neu
 
@@ -3675,7 +3686,7 @@ Nach der Prüfung vor Auslieferung entschieden bzw. bestätigt:
 Wunsch des Nutzers vom 22.10.2026: „Beim Anlegen von Seilen/Meterwaren soll im Artikel die tatsächliche Länge hinterlegt
 werden können. Diese Länge soll beim Prüfen dann als Prüfpunkt abgefragt werden und ggf. korrigiert werden können.“
 Gebaut nach seinen drei Entscheidungen (unten), Schemaversion 20, keine neuen Abhängigkeiten. Stand: nach der
-unabhängigen Prüfung nachgebessert (siehe „Prüfung vor Auslieferung“), wartet auf Freigabe.
+unabhängigen Prüfung nachgebessert (siehe „Prüfung vor Auslieferung“), freigegeben.
 
 ### Neu
 
@@ -3822,8 +3833,7 @@ des Nutzers vom 22.10.2026, Abschnitt F), das **Mailfehler-Protokoll** mit dem K
 und zwei Nachbesserungen außerhalb des Entwurfskerns: **C1** Wiki und Nutzerverwaltung am Finger, **C2** Datumsfelder
 als deutsche Textfelder. Gebaut in drei Paketen – KERN K1 (Bericht), KERN K2 (Schema 19, Versand-Wrapper, Routen) und
 OBERFLÄCHE (`material.js`, CSS, C1, C2, Doku). Schemaversion 19, keine neuen Abhängigkeiten. Stand: nach drei
-unabhängigen Prüfungen (Sicherheit, Ablauf, Browser) nachgebessert – siehe „Prüfung vor Auslieferung“; wartet auf die
-Freigabe.
+unabhängigen Prüfungen (Sicherheit, Ablauf, Browser) nachgebessert – siehe „Prüfung vor Auslieferung“; freigegeben.
 
 ### Neu
 
@@ -4163,6 +4173,119 @@ Danach liefen die ganze Suite (`st-test`) grün, `st-py`, `st-js` und `st-css` o
 14. **Kasten „Mailversand“ am Telefon**: Eine Karte hat vier Inhaltszeilen (Mail mit Betreff, Empfänger, Fehler mit
     Antwort), bei 360 px umbrochen etwa 170 px hoch; die Antwort des Mailservers ließe sich noch hinter „Technische
     Antwort“ einklappen – bitte am Gerät ansehen.
+
+## Nachbesserung vor dem Merge – Materialablage, Sicherheit, Doku, Betrieb (26.10.2026)
+
+Auftrag `planung/material-phase4/auftrag_nachbesserung_vor_merge.md`, Teil A, nach der Durchsicht dev → main
+(sechs Prüfberichte `bericht_pruefung_vor_merge_*.md`). Entscheidung des Nutzers: „Pflicht + kleine Fehler“ – R1, Doku
+und die kleinen reproduzierten Fehler vor dem Merge; Tippflächen und Designsprache der älteren Module danach.
+**Schemaschritt 30.** Zweig `vm-material`, je ein KERN- und ein OBERFLÄCHE-Commit, dazu Doku.
+
+### Ablauf und Rechte (KERN)
+- **R1 Rückruf nach Änderungsantrag** (`services/rueckruf.py` `zustand`, `GEPRUEFT_UM_SQL`, `BETROFFEN_AB_SQL`): Kommt ein
+  Artikel erst per bestätigtem Antrag, der Produkt oder Seriennummer änderte, in einen laufenden Rückruf, zählt als
+  „nach dem Rückruf geprüft“ nur eine Prüfung nach dem späteren von Rückruf-Anlage und `applied_at` dieses Antrags
+  (gleiche Sekunde zählt als vorher). Vorher galt der Rückruf für einen dazwischen geprüften Artikel sofort als
+  erledigt – kein Banner, keine Marke, nicht „offen“ auf der Übersicht. Dieselbe Regel für Banner, Marke in den Listen,
+  Zahlen der Übersicht und der Produktseite, Meine PSA (`psa.liste`), Lebenslauf und Jahresbericht. Ein abgelehnter
+  Antrag verschiebt nichts. Lebenslauf: „läuft – für diesen Artikel offen (seit er betroffen ist weder geprüft noch
+  gesperrt)“; Banner: „– noch nicht gesperrt und nicht mit dem Rückruf geprüft“.
+- **Rückruf ohne Mailserver** (`rueckruf.anlegen`, `rueckruf_json`, material.js `rrMailText`, `rueckrufErgebnis`): Die
+  Antwort trägt `still` (`mailprotokoll.still()`: „kein Mailserver“, „Umgebungssperre“ oder `null`). Rückmeldung und
+  Produktseite sagen dann „Es ging keine Mail hinaus – kein Mailserver eingerichtet.“ bzw. „… – in dieser Umgebung sind
+  Mails gesperrt.“; die Material-Verwaltung sieht „Mail an n Empfänger am …: keine ging hinaus – …“ statt
+  „verschickt … n davon gingen nicht hinaus“. Die Zählung (`mail_failed`) bleibt, wie entschieden.
+- **DEMO-Konten nicht als Material-Verwaltung** (`rechte.material_verwaltung_konten`): DEMO-Adressen (`….invalid`)
+  fallen schon bei der Auswahl weg – auch im Rückfall auf die Plattform-Verwaltung. Vorher verschluckte das DEMO-Konto
+  der Material-Verwaltung auf dev die Fachmails (Produktmeldung, Anträge ohne Materialwart, Rückrufe ohne Verwalter),
+  der Rückfall griff nicht. Nur dev betroffen.
+- **„Bald fällig ab … Tagen“** (`einstellungen.py`, Befund 2 der Prüfung „übrige Module“): Speichern lehnt Werte
+  außerhalb 0–365 mit 400 „… braucht eine Zahl zwischen 0 und 365.“ ab (`Feld.bereich`), gespeichert wird die Zahl
+  („ 045 “ → „45“). Ein unbrauchbarer gespeicherter Wert (aus der Zeit davor) gilt nicht: `anwenden` setzt dann den
+  Grundstand (.env bzw. Vorgabe) – in jedem Arbeitsprozess gleich, statt den zuletzt im Prozess geltenden Wert stehen zu
+  lassen –, und die Leitstelle zeigt ihn mit Quelle „Vorgabe“/„.env“. Das Feld bekommt `min`/`max` (admin.js). Gelesen
+  wird die Einstellung wie bisher zu Beginn jeder Anfrage aus der Datenbank (kein Zwischenspeicher).
+- **Schritt 30: Unveränderlichkeit auch gegen SQL von Hand** (Sicherheitsprüfung vor dem Merge, Befund 1; `models.py`
+  `SCHRITT_30`): Ein Trigger mit Spaltenliste („OF id“) sieht `UPDATE … SET rowid = …` nicht. Neu, ohne Spaltenliste,
+  mit `NEW.rowid IS NOT OLD.rowid`: `mat_audit_zeile`, `mat_defect_zeile`, `mat_item_change_zeile`,
+  `mat_mail_fehler_zeile`, `mat_item_zeile`, `mat_product_zeile`, `mat_set_lauf_zeile` (immer) und
+  `mat_inspection_zeile`, `mat_result_zeile`, `mat_attachment_zeile`, `mat_round_zeile`, `mat_round_item_zeile` (sobald
+  abgeschlossen). Kontoverweise nur noch auf NULL: `mat_audit_konto` (Journal), `mat_round_konto` (eröffnet/abgeschlossen
+  von), `mat_round_item_konto` (ausgenommen von), `mat_attachment_konto` (hochgeladen von); der Prüfpunkt einer
+  Befundzeile ebenso (`mat_result_pruefpunkt`, ON DELETE SET NULL bleibt möglich). `mat_audit_ersetzen`: kein
+  `INSERT OR REPLACE` auf eine vorhandene Kennung (ohne `recursive_triggers` griff der Lösch-Trigger dabei nicht). Rein
+  additiv – keine Zeile, kein alter Trigger ändert sich –, wiederholbar. Über die Anwendung war keine der Lücken
+  erreichbar; es geht um Reparaturen von Hand und künftigen Code. README („Daten und Sicherung“): von Hand nur mit
+  `PRAGMA foreign_keys = ON; PRAGMA recursive_triggers = ON;`.
+
+### Oberfläche
+- **B1 Jahresbericht ohne Bildlauf** (material.css, material.js): Die beiden breiten Tabellen („Je Unterordner“ mit
+  Bestand und sieben Zuständen, „Prüfdurchgänge“ mit vier Zahlen; Klasse `mat-bericht-breit`) sind bis 760 px
+  Inhaltsbreite schon Karten. Vorher liefen sie bei 645–723 px (und die Durchgangstabelle bei 656–659 px) seitlich über.
+- **B2 Fokus nach Esc oder „Abbrechen“** (material.js `dialog`, `confirm`): Die Materialablage merkt sich den zuletzt
+  angeklickten Knopf außerhalb von Dialogen und gibt ihm den Fokus beim Schließen zurück – aus einem Untermenü dem
+  Menüknopf. Das gilt jetzt auch für Dialoge, die erst nach einem Laden öffnen (Ordner verschieben, Löschen mit Rückfrage,
+  Katalog exportieren, Als Variante kopieren) und für Folgedialoge im selben Fenster (Rückruf anlegen → „Rückruf
+  angelegt“); hat die Ansicht nach dem Speichern neu gezeichnet, bekommt der neue Knopf gleichen Texts den Fokus. Der
+  bisherige Einzelfall im Klick-Handler (B5 P4-L2) entfällt. Zurückgegeben wird nur, wenn der Fokus sonst verloren wäre.
+- **B3 Tippflächen** (nur unter `@media (pointer: coarse)`): „Notiz“ im Freigaben-Dialog (freigaben.css, hinter der
+  Grundregel), „Leeren“/„Abbrechen“/„Übernehmen“ im Unterschrift-Dialog (app.css, auch im Profil), „Prüfen“ auf der
+  Prüfseite (material.css) – je 44 px hoch.
+- **B4 Toast unter Touch oben** (app.css): Die Touch-Regel nennt `#toast[popover]` mit – vorher gewann
+  `#toast[popover] { bottom: 24px }` und die Meldung lag am Telefon über „Festschreiben“ bzw. hinter der Tastatur. Mit
+  offenem Dialog gilt weiter die Fahne am Dialog; am Rechner unverändert unten. Gilt für alle Module (gemeinsamer Toast).
+- **Nachtrag des Nutzers: kein doppelter Sperr-Banner** (material.js, Artikelseite; wörtlich „Die grau meldung ist
+  redundant, sie kann weg.“): Sperrt eine offene Mangelmeldung den Artikel (Sperrgrund „Mangel gemeldet am …“) und steht
+  ihr roter Banner „MANGEL GEMELDET …“ (auch für Leser, dort ohne Text), entfällt der Banner „GESPERRT – Mangel gemeldet
+  am … Nicht verwenden, bis eine Freiprüfung ihn freigibt.“. Bei jedem anderen Sperrgrund (Prüfung „instandsetzen“,
+  Aussonderung empfohlen, Rückruf, Verlust) bleibt er; die Marke „gesperrt“ im Kopf bleibt immer; „Meine PSA“
+  unverändert.
+- **Nachtrag 2: Sperr-Banner rot** (material.css `.mat-banner.s-gesperrt`; wörtlich „Sperrungsbanner sollte dann aber
+  auch rot sein“): `--rot` wie der Mangel-Banner (Weiß auf Rot 4,9 : 1) – auf der Artikelseite, in der Prüfung
+  (Freiprüfung, gesperrter Artikel) und auf den Karten von „Meine PSA“ (gleiche Klasse). Marke, Kachel und Zahl
+  „gesperrt“ behalten `--mat-gesperrt`.
+
+### Doku und Betrieb
+- README: Stand der Materialablage ohne „wartet auf Freigabe“, „Leitstelle → Nutzer“, „Materialablage → Bestand“,
+  Schemaversion des Zurücksetzens (heute 30), Sicherung nach dev-zurücksetzen „spätestens nach einer Woche“, R1 und
+  Rückruf ohne Mailserver beim Rückruf; Katalogaustausch: in die Produktion die Import-ZIPs der Lieferungen, nicht der
+  Export von dev; neuer Abschnitt **„Inbetriebnahme in der Produktion (erster Merge dev → main)“** (Vorab, Sicherung,
+  Merge, Kontrolle, Gliederungen und Stufen, Katalog-ZIPs, Prüfformulare als offener Punkt, Erinnerungsmails zuletzt);
+  „Daten und Sicherung“: Cron-Zeile ohne `katalog-import/`, Zurückspielen ohne Fehler 23, wenn `pdf/` fehlt, „Von Hand
+  in der Datenbank“, **Übergang beim ersten Merge** (eigene Kopie `~/data.vor-merge-<Datum>`, `docker tag stroemis:latest
+  stroemis:vor-merge-5c7e848`, alten Cron-Eintrag `# stroemis-sicherung` entfernen) und **Rückweg** (nur mit den Daten
+  von vorher, Weiterleitungen einen Tag im Browser-Zwischenspeicher); Konfiguration: `MATERIAL_BALD_FAELLIG_TAGE` 0–365.
+- CHANGELOG: Titel, Übersicht (Stände, überholte Zeile „Sets anlegen“, fehlende Zeilen), Abschnitts-Stände.
+
+### Bestätigt wie gebaut (Nutzer 26.10.2026)
+Die bis dahin offenen „Bitte bestätigen“ der Durchsicht vor dem Merge gelten wie gebaut: Katalogimport im Hintergrund
+Nr. 1–8 (Übernehmen nur durch den Starter des Probelaufs; Probelauf-Datei eine Stunde; Hinweis 24 h, Berichte 7 Tage;
+unlesbare Datei = fehlgeschlagener Auftrag; Abbruch nach 30 s erkannt; Datei eines gelöschten Kontos bleibt bis zum
+Ablauf; Platzgrenze Datei + 64 MB; Übernehmen nach Abbruch wiederholbar), Umbenennung Nr. 9–12 („Seite der
+Strömipedia“; „wende dich an die Plattform-Verwaltung“; Zählung „ausgelassen“ bei E2 B; Abweichungen 1–5 des Baus,
+z. B. `GET /api/admin/users/<id>/journal`), dazu die beiden neuen Punkte: „☰“ in der Suchzeile auch am Rechner unter
+1024 px (Katalog am Telefon) und im Lebenslauf sehen Leser fremde Mangelmeldungen als „(Person)“ ohne Text. Ebenso alle
+31 app-weiten Änderungen (Liste: `bericht_pruefung_vor_merge_ablauf_module.md`, Abschnitt 1).
+
+### Offen (Bitte bestätigen)
+1. **Prüfformulare in die Produktion**: Die Katalog-ZIPs enthalten keine. Einen Export nur der Formulare gibt es nicht;
+   ein ganzer Katalog-Export von dev bringt die Formulare und alle dev-Korrekturen an Produkten mit (was sich ändern
+   würde, zeigt der Probelauf vorher). Bitte entscheiden: Export von dev nach dem Einspielen der ZIPs, ein eigener Formular-Export (Bau) oder
+   Neuanlage in der Produktion.
+2. **R1 auch bei einer späteren, gleichen Änderung**: Gezählt wird ab dem letzten bestätigten Antrag auf Produkt oder
+   Seriennummer, auch wenn erst ein früherer ihn in den Rückruf brachte (eine Prüfung dazwischen zählt dann nicht) –
+   die strengere, einfache Regel.
+3. **Konto- und Prüfpunktverweise** über den Befund hinaus (Schritt 30): Durchgang (eröffnet/abgeschlossen von),
+   ausgenommen von, hochgeladen von, Prüfpunkt einer Befundzeile – nur noch auf NULL (Probe p05 hatte sie gezeigt).
+
+**Tests.** `tests/test_material_vor_merge.py` (neu): R1 mit und ohne Zwischenprüfung, per Seriennummer und per
+Produktwechsel (Banner, Marke, Übersicht, Lebenslauf-PDF, Prüfung danach erledigt, Ablehnung ändert nichts); Rückruf
+ohne Mailserver, unter der Umgebungssperre und mit Mailserver (`still`), Zählung bleibt; DEMO-Konto der
+Material-Verwaltung und Rückfall; „Bald fällig“ (-5, 366, 1000, Text, Kommazahl → 400; 365, 0, „ 045 “; unbrauchbarer
+Altwert → Vorgabe angezeigt und wirksam); Schritt 30 als Matrix (Kennung über `id` und `rowid`, Kontoverweise,
+`INSERT OR REPLACE` ins Journal – je mit und ohne Fremdschlüssel und `recursive_triggers`; Erlaubtes geht weiter, Konto
+löschen setzt Verweise auf NULL), Migration frisch = 29 → 30 mit Altbestand, Schritt 30 ändert keine Zeile, zweiter
+Lauf ohne Änderung; Oberfläche statisch (B1–B4).
 
 ## Katalog am Telefon: „☰ Kategorien“ in der Suchzeile, keine Nummernsuche im Katalog (26.10.2026)
 
@@ -6013,6 +6136,8 @@ Datei für „Übernehmen“ 1 h, Zustände 7 Tage, Hinweis 24 h, abgebrochen na
 5. **Abbruch erkannt nach 30 s** ohne Sperre und Lebenszeichen; bis dahin bekommt ein neuer Start nach einem Neustart
    noch 409.
 
+**Bestätigt wie gebaut (Nutzer 26.10.2026)**: Nr. 1–5 (in der Durchsicht vor dem Merge Nr. 1–5).
+
 ## Nachbesserung Katalogimport im Hintergrund nach der Sicherheitsprüfung (24.10.2026)
 
 Grundlage: Prüfbericht des Sicherheitsprüfers zu 30cf668 (zwei Befunde, mehrere Verbesserungen), Auftrag
@@ -6114,6 +6239,8 @@ danach geleert bis auf die Sperrdatei); `stand()` lässt die leere Sperrdatei au
    landet). Ein neuer Import löscht die Datei eines älteren Probelaufs auch dann, wenn er selbst mit 507 abgelehnt wird.
 3. **Übernehmen nach Abbruch** wiederholbar, solange kein „gespeichert“ vermerkt ist (Begründung oben).
 
+**Bestätigt wie gebaut (Nutzer 26.10.2026)**: Nr. 1–3 (in der Durchsicht vor dem Merge Nr. 6–8).
+
 ## Modul Material auf dev zurücksetzen (Wunsch des Nutzers, 23.10.2026)
 
 Wunsch: „Bereinige den Katalog und die Testdaten auf dev, ich möchte vor Lieferung 3 alles ausgiebig von null an
@@ -6187,7 +6314,7 @@ selbst auf (README, „Modul Material auf dev zurücksetzen (nur dev)“).
   die alten), in `test_zuruecksetzen` Rechte 0700/0600, Löschaufforderung und ältere Sicherungen in Bericht und
   Probelauf.
 
-## Phase 4 · Lieferung 2b – Sets, Teil 2 (23.10.2026, Stand: geliefert, wartet auf Freigabe)
+## Phase 4 · Lieferung 2b – Sets, Teil 2 (23.10.2026, Stand: geliefert, freigegeben; durch Schritt 26 zurückgebaut)
 
 > **Zurückgebaut durch Schritt 26** (Wunsch des Nutzers, 25.10.2026) – siehe „Rückbau der Set-Funktion“. Der Abschnitt
 > bleibt als Geschichte stehen.
@@ -8493,6 +8620,8 @@ oder Plattform-Verwaltung).
 | `GET /api/material/produkte/<id>/rueckrufe` | Modulzugang | Rückrufe des Produkts: laufende mit den betroffenen Artikeln, die das Konto sieht, und ihren Zahlen (nicht gefundene Seriennummern nur für die Material-Verwaltung, Phase 2), beendete mit Vermerk |
 | `POST /api/material/produkte/<id>/rueckrufe` (`title`, `description`, `url`, `serials`, `mail`) | Katalog | Rückruf anlegen; Antwort mit betroffenen Artikeln, Empfängerzahl, nicht gefundenen Seriennummern (Phase 2: nur, wer alle Bestände sieht – die Material-Verwaltung; ein Konto mit Teilsicht bekäme `betroffen` und `offen` des eigenen Bereichs und `benachrichtigt`) |
 | `POST /api/material/rueckrufe/<id>/beenden` (`vermerk` Pflicht) | Katalog | Rückruf beenden |
+| `POST /api/material/produkte/<id>/rueckrufe`, `GET /api/material/produkte/<id>` (`produkt.rueckrufe`) | wie bisher | neu (Nachbesserung vor dem Merge): `still` – warum keine Mail hinausgeht (`kein Mailserver`, `Umgebungssperre`) oder `null`; nur wenn eine Mail angefordert war |
+| `PUT /api/admin/einstellungen` | Plattform-Verwaltung | neu: `MATERIAL_BALD_FAELLIG_TAGE` außerhalb 0–365 → 400; jedes Feld trägt `bereich` (`[min, max]` oder `null`) |
 | `GET /api/material/rueckrufe` | Modulzugang | alle laufenden Rückrufe mit Produkt und den Zahlen des eigenen Bereichs |
 | (Artikel, Produkt, Listen) | lesen | neu: `artikel.rueckrufe` (laufende samt Zustand), `produkt.rueckrufe`, je Listenzeile `rueckruf` (Titel eines offenen) |
 | `GET /api/material/ordner/<id>/freigaben` | Materialwart am Ordner | Reiter „Freigaben“ in „Ordner bearbeiten“: `ordner`, `anker_wahl` (der Ordner und die Oberordner, die man verwaltet, je mit dem eigenen Ende), `anker_vorgabe`, `direkt`, `geerbt` (ohne Notiz), `unten` (Zeilen je mit `aenderbar`, `entziehbar`, `grundrecht_dort` und `traegt_pruefen`), `kette`, `verlauf`, `laeuft_ab`, `grenzen` (heute, längste Prüffreigabe, Vorgabe für „bis“) (Phase 2) |

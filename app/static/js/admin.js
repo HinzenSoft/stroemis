@@ -616,7 +616,8 @@
       eingabe = `<textarea id="${id}" data-k="${f.schluessel}" rows="2" placeholder="${S.esc(f.platzhalter)}">${S.esc(f.wert)}</textarea>`;
     } else {
       const typ = f.art === "passwort" ? "password" : f.art === "zahl" ? "number" : "text";
-      eingabe = `<input type="${typ}" id="${id}" data-k="${f.schluessel}" autocomplete="off"`
+      const bereich = f.bereich ? ` min="${Number(f.bereich[0])}" max="${Number(f.bereich[1])}" step="1"` : "";
+      eingabe = `<input type="${typ}" id="${id}" data-k="${f.schluessel}" autocomplete="off"${bereich}`
         + ` value="${S.esc(f.wert)}" placeholder="${S.esc(f.platzhalter)}">`;
     }
     const hilfe = f.geheim && f.gesetzt ? (f.hilfe + " Zurzeit ist eines hinterlegt.") : f.hilfe;

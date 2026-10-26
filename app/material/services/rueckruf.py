@@ -20,7 +20,9 @@ Gesperrt wird nichts automatisch – sperren dürfen ohne Prüfung nur Prüfer (
 Sperrgrund „Rückruf“. Je Artikel wird der Zustand abgeleitet, nie gespeichert:
 
   erledigt   der Artikel ist gesperrt, verloren oder ausgesondert – oder nach dem Anlegen des Rückrufs wurde
-             eine Prüfung an ihm abgeschlossen (eine Berichtigung zählt nicht: sie ändert eine alte Prüfung)
+             eine Prüfung an ihm abgeschlossen (eine Berichtigung zählt nicht: sie ändert eine alte Prüfung). Kam der
+             Artikel erst per bestätigtem Änderungsantrag (Produkt oder Seriennummer) in den Rückruf, zählt nur eine
+             Prüfung nach diesem Antrag – eine frühere kannte den Rückruf für ihn nicht (Befund R1 vor dem Merge)
   offen      sonst
 
 Ausgesonderte Artikel sind außer Dienst und zählen nicht als betroffen. Beendet wird ein Rückruf mit einem
@@ -49,6 +51,14 @@ UNBESTAETIGT_MINUTEN = 10   # so lange gilt ein Versand ohne Ergebnis als „lä
 HINTERGRUND = _im_hintergrund
 
 _LINK = re.compile(r"https?://[^\s/?#]+\S*", re.IGNORECASE)
+
+# Letzte Prüfung (ohne Berichtigung) und seit wann der Artikel so ist, wie ein Rückruf ihn trifft: Zeitpunkt des letzten
+# bestätigten Antrags, der Produkt oder Seriennummer änderte (applied_at, Zeitformat wie db.now()). Für zustand – {a}
+# ist der Tabellenalias des Artikels; Lesen hier, in psa.liste und im Jahresbericht.
+GEPRUEFT_UM_SQL = ("(SELECT MAX(x.completed_at) FROM mat_inspection x WHERE x.item_id = {a}.id "
+                   "AND x.completed_at IS NOT NULL AND x.corrects_inspection_id IS NULL)")
+BETROFFEN_AB_SQL = ("(SELECT MAX(c.applied_at) FROM mat_item_change c WHERE c.item_id = {a}.id "
+                    "AND c.field IN ('product_id', 'serial_no') AND c.applied_at IS NOT NULL)")
 
 
 # --- Eingaben -------------------------------------------------------------------------------------------
@@ -133,8 +143,8 @@ def _artikel_im_bestand(pid, iid=None, sichtbar=True):
     Konto der Anfrage sieht (über die Heimat, rechte.artikel_filter); False für die Mails, für die Auskunft an die
     Verwaltung und für einen einzelnen Artikel, dessen Recht der Aufrufer schon geprüft hat."""
     sql = ("SELECT i.id, i.inventory_no, i.serial_no, i.serial_generated, i.lock_state, i.lock_reason, i.folder_id, "
-           "i.origin_folder_id, (SELECT MAX(x.completed_at) FROM mat_inspection x WHERE x.item_id = i.id "
-           "AND x.completed_at IS NOT NULL AND x.corrects_inspection_id IS NULL) AS geprueft_um "
+           f"i.origin_folder_id, {GEPRUEFT_UM_SQL.format(a='i')} AS geprueft_um, "
+           f"{BETROFFEN_AB_SQL.format(a='i')} AS betroffen_ab "
            "FROM mat_item i WHERE i.product_id = ? AND i.lock_state <> 'ausgesondert'")
     if sichtbar:
         sql += f" AND {rechte.artikel_filter('i')}"
@@ -147,10 +157,13 @@ def _artikel_im_bestand(pid, iid=None, sichtbar=True):
 
 def zustand(r, artikel):
     """(Zustand, Grund) eines betroffenen Artikels – abgeleitet aus Sperre und Prüfungen, nie gespeichert.
-    Gleiche Sekunde zählt als vorher: Ob die Prüfung den Rückruf schon kannte, ist dann nicht zu sagen."""
+    Als Prüfung zum Rückruf zählt nur eine nach dem späteren von Rückruf-Anlage und dem Antrag, der den Artikel in den
+    Rückruf brachte (betroffen_ab, BETROFFEN_AB_SQL; fehlt die Spalte, nur die Anlage). Gleiche Sekunde zählt als
+    vorher: Ob die Prüfung den Rückruf schon kannte, ist dann nicht zu sagen."""
     if artikel["lock_state"] in ("gesperrt", "verloren", "ausgesondert"):
         return "erledigt", "gesperrt" if artikel["lock_state"] != "ausgesondert" else "ausgesondert"
-    if artikel["geprueft_um"] and artikel["geprueft_um"] > r["created_at"]:
+    grenze = max(r["created_at"], artikel.get("betroffen_ab") or "")
+    if artikel["geprueft_um"] and artikel["geprueft_um"] > grenze:
         return "erledigt", "geprueft"
     return "offen", None
 
@@ -190,6 +203,9 @@ def rueckruf_json(r, mit_artikel=False):
                              "closed_at", "closed_by_name", "close_note")}
     # Angefordert heißt: _benachrichtigen lief – mit Empfängern steht ihre Zahl da, ohne ist mailed_at gleich gesetzt.
     out["mail"] = bool(r["mailed_at"] or r["mail_count"])
+    # Warum heute keine Mail hinausginge (kein Mailserver, Umgebungssperre) – damit „verschickt“ nicht lügt; die
+    # Zählung (mail_failed) bleibt wie sie ist (Nachbesserung vor dem Merge, Verbesserung 1).
+    out["still"] = mailprotokoll.still() if out["mail"] else None
     if verwaltung:
         out.update({f: r[f] for f in ("mailed_at", "mail_count", "mail_failed")})
     out["serien"] = serien(r)
@@ -364,10 +380,12 @@ def anlegen(pid, d, nutzer=None):
     alle = _artikel_im_bestand(pid, sichtbar=False)
     liste = betroffene(r, alle)
     an, erreicht = _benachrichtigen(r, liste) if mail else (0, set())
+    still = mailprotokoll.still() if mail else None           # „wird verschickt“ nur, wenn auch etwas hinausgeht
     if rechte.sicht(nutzer).alles:
-        return ruid, dict(_zahlen(liste), nicht_gefunden=nicht_gefunden(r, alle), empfaenger=an, mail=mail)
+        return ruid, dict(_zahlen(liste), nicht_gefunden=nicht_gefunden(r, alle), empfaenger=an, mail=mail, still=still)
     eigene = [a for a in liste if rechte.darf_artikel("lesen", a, nutzer)]
-    return ruid, dict(_zahlen(eigene), mail=mail, benachrichtigt=any(a["id"] in erreicht for a in eigene))
+    return ruid, dict(_zahlen(eigene), mail=mail, still=still,
+                      benachrichtigt=any(a["id"] in erreicht for a in eigene))
 
 
 def beenden(ruid, d):

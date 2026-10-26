@@ -419,8 +419,8 @@ def _rueckrufe(params):
     out = []
     for r in rows:
         alle = db.query(
-            "SELECT i.id, i.inventory_no, i.serial_no, i.lock_state, (SELECT MAX(x.completed_at) FROM mat_inspection x "
-            "WHERE x.item_id = i.id AND x.completed_at IS NOT NULL AND x.corrects_inspection_id IS NULL) AS geprueft_um, "
+            "SELECT i.id, i.inventory_no, i.serial_no, i.lock_state, "
+            f"{rueckruf.GEPRUEFT_UM_SQL.format(a='i')} AS geprueft_um, {rueckruf.BETROFFEN_AB_SQL.format(a='i')} AS betroffen_ab, "
             f"{bestand.demo_sql('i', 'p')} AS demo FROM mat_item i JOIN mat_product p ON p.id = i.product_id "
             f"WHERE i.product_id = :pid AND i.lock_state <> 'ausgesondert' AND {MENGE} ORDER BY i.inventory_no",
             {"pid": r["product_id"], "zweig": params["zweig"]})

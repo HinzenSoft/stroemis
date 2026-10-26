@@ -66,6 +66,12 @@ def trigger_27():
     return {x.split("CREATE TRIGGER IF NOT EXISTS ", 1)[1].split()[0] for x in models.TRIGGER_27}
 
 
+def trigger_30():
+    """Die Trigger aus Schritt 30 (Kennungen und Kontoverweise gegen SQL von Hand, Nachbesserung vor dem Merge)."""
+    from app.material import models
+    return {x.split("CREATE TRIGGER IF NOT EXISTS ", 1)[1].split()[0] for x in models.SCHRITT_30}
+
+
 def trigger_25(nur_antrag=False):
     """Die Trigger aus Schritt 25 (Bestandteil-Liste, Seriennummern der Bestandteile) – zwei ersetzen gleichnamige aus
     Schritt 21. nur_antrag: nur die, die mat_item_change lesen (wer die Tabelle entfernt, entfernt sie mit)."""
@@ -1451,9 +1457,10 @@ def test_migration_17():
         v17, t17, _ = _schema(pfad)
         # Schritt 18: keine Trigger; 19: die zwei des Mailfehler-Protokolls; 21: die der Sets; 23: die Gruppe; 25: die der
         # Seriennummern der Bestandteile.
-        # 26: die Wächter des Rückbaus statt der entfallenen Set-Trigger.
+        # 26: die Wächter des Rückbaus statt der entfallenen Set-Trigger; 30: Kennungen und Kontoverweise.
         neu_26, weg_26 = trigger_26()
-        erwartet = (set(t16) | TRIGGER_17 | TRIGGER_19 | trigger_21() | TRIGGER_23 | trigger_25() | neu_26 | trigger_27()) - weg_26
+        erwartet = (set(t16) | TRIGGER_17 | TRIGGER_19 | trigger_21() | TRIGGER_23 | trigger_25() | neu_26 | trigger_27()
+                    | trigger_30()) - weg_26
         assert v17 == endversion() and set(t17) == erwartet, set(t17) ^ erwartet
         assert t17["mat_item_stammdaten_fest"] != t16["mat_item_stammdaten_fest"]
         assert t17["mat_item_antrag_angewendet"] != t16["mat_item_antrag_angewendet"]          # seit Schritt 23 alle Felder

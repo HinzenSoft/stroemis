@@ -745,12 +745,16 @@ def material_verwaltung_konten():
     """Wer Mails zu neuen Produktmeldungen und zu Rückrufen an Artikeln ohne Verwalter bekommt: die Material-Verwaltung –
     aktive Konten mit Namen und Stufe Verwaltung in der Materialablage, ohne die Plattform-Verwaltung (sie bekommt keine
     Fachmails, solange es eine Material-Verwaltung gibt). Gibt es keine, die Plattform-Verwaltung (aktive Konten).
+    DEMO-Konten (…@….invalid) zählen nicht: An sie geht nie eine Mail – sonst verschluckte ein DEMO-Konto der
+    Material-Verwaltung den Rückfall auf die Plattform-Verwaltung (nur dev; Nachbesserung vor dem Merge).
     Zeilen mit id und email, nach Kennung."""
-    rows = db.query("SELECT id, email FROM users WHERE active = 1 AND status = 'active' AND trim(name) <> '' "
-                    "AND recht_material >= 2 AND recht_verwaltung < 2 ORDER BY id")
+    from .erinnerung import demo_adresse
+    rows = [u for u in db.query("SELECT id, email FROM users WHERE active = 1 AND status = 'active' AND trim(name) <> '' "
+                                "AND recht_material >= 2 AND recht_verwaltung < 2 ORDER BY id")
+            if not demo_adresse(u["email"])]
     if not rows:
-        rows = db.query("SELECT id, email FROM users WHERE active = 1 AND status = 'active' AND recht_verwaltung >= 2 "
-                        "ORDER BY id")
+        rows = [u for u in db.query("SELECT id, email FROM users WHERE active = 1 AND status = 'active' "
+                                    "AND recht_verwaltung >= 2 ORDER BY id") if not demo_adresse(u["email"])]
     return rows
 
 

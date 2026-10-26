@@ -8,7 +8,60 @@
    pruefen, verwalten); data-darf sagt nur, was das Konto irgendwo darf – für Reiter und die Knöpfe der Übersicht.
    Ausgeblendet wird nur, was ohnehin scheitern würde – der Server prüft jede Aktion selbst. */
 (function () {
-  const { esc, api, toast, dialog, confirm } = S;
+  const { esc, api, toast } = S;
+
+  /* --- Fokus zurück nach Esc oder „Abbrechen“ (Browserprüfung vor dem Merge, B2) ----------------------------------
+     Wer einen Dialog öffnet, landet nach dem Schließen wieder dort, wo er war: auf dem Knopf, der ihn öffnete – aus
+     einem Untermenü (details.mat-menue) auf dessen Menüknopf. Gemerkt wird der zuletzt angeklickte Knopf außerhalb
+     von Dialogen; so gilt es auch für Dialoge, die erst nach einem Laden öffnen (Ordner verschieben, Löschen,
+     Katalog exportieren, Als Variante kopieren). Zurückgegeben wird der Fokus nur, wenn er sonst verloren wäre (auf
+     der Seite oder im geschlossenen Dialog) und kein anderer Dialog offen ist. Folgedialoge im selben #dlg (Ergebnis
+     nach dem Anlegen) erben das Ziel des ersten; hat die Ansicht neu gezeichnet, nimmt er den neuen Knopf gleichen
+     Texts. */
+  let letzterKlick = null;
+  document.addEventListener("click", (e) => {
+    const el = e.target.closest && e.target.closest("button, a[href], summary, [data-act]");
+    if (el && !el.closest("dialog")) letzterKlick = { el, zeit: Date.now() };
+  }, true);
+  function fokusZiel() {
+    const k = letzterKlick && Date.now() - letzterKlick.zeit < 30000 && letzterKlick.el.isConnected ? letzterKlick.el : null;
+    const aktiv = document.activeElement;
+    const el = k || (aktiv && aktiv !== document.body ? aktiv : null);
+    if (!el || el.closest("dialog")) return null;
+    const menue = el.closest("details.mat-menue");
+    return menue ? menue.querySelector("summary") : el;
+  }
+  function fokusZurueckgeben(ziel) {
+    const jetzt = document.activeElement;
+    if (!ziel || document.querySelector("dialog[open]")) return;
+    if (jetzt && jetzt !== document.body && !jetzt.closest("dialog")) return;
+    // Hat die Ansicht inzwischen neu gezeichnet (nach dem Speichern), steht dort ein neuer Knopf mit demselben Text.
+    const text = ziel.textContent.trim();
+    const el = ziel.isConnected ? ziel : [...document.querySelectorAll(ziel.tagName)]
+      .find((x) => x.textContent.trim() === text && x.getClientRects().length && !x.closest("dialog"));
+    if (el) el.focus();
+  }
+  let dlgZiel = null;
+  const dlgEl = document.getElementById("dlg");
+  if (dlgEl) {
+    dlgEl.addEventListener("close", () => {
+      if (dlgEl.open) return;                    // gleich wieder offen (Folgedialog): Ziel bleibt für dessen Ende
+      const ziel = dlgZiel;
+      dlgZiel = null;
+      fokusZurueckgeben(ziel);
+    });
+  }
+  function dialog(html, onOpen) {
+    if (dlgEl && !dlgEl.open && !dlgZiel) dlgZiel = fokusZiel();
+    return S.dialog(html, onOpen);
+  }
+  function confirm(text, okLabel, neinLabel) {
+    const ziel = document.querySelector("dialog[open]") ? null : fokusZiel();
+    return S.confirm(text, okLabel, neinLabel).then((ja) => {
+      setTimeout(() => fokusZurueckgeben(ziel), 0);
+      return ja;
+    });
+  }
 
   /* --- Produktname mit Beschreibung (Nachbesserungen vom 18.10.2026) ---------------------------------------------
      Die Beschreibung eines Produkts ist ein kurzer Zusatz hinter dem Namen, etwa die Verschlussart eines Karabiners.
@@ -585,15 +638,9 @@
     if (!b || !inhalt.contains(b) || !aktionen[b.dataset.act]) return;
     if (b.closest(".mat-anleitung")) return;
     if (b.tagName === "A" || b.tagName === "BUTTON") e.preventDefault();
+    // Den Fokus nach Esc oder „Abbrechen“ gibt dialog() oben zurück (auf den Menüknopf, wenn der Eintrag in einem
+    // details.mat-menue stand) – auch wenn der Dialog erst nach einem Laden öffnet (B5 P4-L2, B2 vor dem Merge).
     aktionen[b.dataset.act](b, e);
-    // Öffnet ein Eintrag eines Untermenüs (details.mat-menue) einen Dialog, geht der Fokus nach Esc oder „Abbrechen“
-    // zurück auf den Menüknopf – sonst fiele er an den Seitenanfang (Browser-Prüfung P4-L2, B5).
-    const menue = b.closest("details.mat-menue");
-    const dlg = document.getElementById("dlg");
-    if (menue && dlg && dlg.open) {
-      const knopf = $("summary", menue);
-      dlg.addEventListener("close", () => { if (knopf.isConnected) knopf.focus(); }, { once: true });
-    }
   });
   // „Sortieren nach“ über den Karten (kartenKopf): dieselbe Aktion wie ein Klick auf den Spaltenkopf.
   inhalt.addEventListener("change", (e) => {
@@ -2470,7 +2517,7 @@
           [bst.verloren, "davon verloren gemeldet"], [bst.bestand, "<strong>Bestand gesamt</strong> (ohne ausgesonderte)"]]),
         `<h3>Je Kategorie (oberste Ebene)</h3>${bst.kategorien.length ? zahlen(bst.kategorien.map((x) => [x.bestand, `${esc(x.name)} <span class="muted">– fällig ${x.faellig}, gesperrt ${x.gesperrt}</span>`])) : leer("Keine Artikel.")}`)}
         ${bst.unterordner.length ? `<h3>Je Unterordner (nach Heimat)</h3>${liste([["Ordner"], ["Bestand", "mat-be-zahl"], ["einsatzbereit", "mat-be-zahl"], ["bald fällig", "mat-be-zahl"], ["überfällig", "mat-be-zahl"], ["neu", "mat-be-zahl"], ["gesperrt", "mat-be-zahl"], ["Lebensdauer", "mat-be-zahl"], ["ausgesondert", "mat-be-zahl"]],
-          bst.unterordner.map((u) => `<tr>${td("Ordner", `${esc(u.name)}${u.kennzeichen ? ` <span class="mat-art">${esc(u.kennzeichen)}</span>` : ""}${demoMarke(u.demo)}`, "mat-k-titel")}${td("Bestand", String(u.bestand), "mat-be-zahl")}${["einsatzbereit", "bald_faellig", "ueberfaellig", "neu", "gesperrt", "lebensdauer", "ausgesondert"].map((st) => td(STATUS[st] || st, String(u.zaehlung[st] || 0), `mat-be-zahl${u.zaehlung[st] ? "" : " mat-be-null"}`)).join("")}</tr>`), "mat-bericht-ordner")}` : ""}
+          bst.unterordner.map((u) => `<tr>${td("Ordner", `${esc(u.name)}${u.kennzeichen ? ` <span class="mat-art">${esc(u.kennzeichen)}</span>` : ""}${demoMarke(u.demo)}`, "mat-k-titel")}${td("Bestand", String(u.bestand), "mat-be-zahl")}${["einsatzbereit", "bald_faellig", "ueberfaellig", "neu", "gesperrt", "lebensdauer", "ausgesondert"].map((st) => td(STATUS[st] || st, String(u.zaehlung[st] || 0), `mat-be-zahl${u.zaehlung[st] ? "" : " mat-be-null"}`)).join("")}</tr>`), "mat-bericht-ordner mat-bericht-breit")}` : ""}
         </section>`;
       const bewegungen = `<section class="section" id="be-bewegungen"><h2>Bewegungen im Jahr ${esc(String(k.jahr))}</h2>
         ${zahlen([[b.bewegungen.zugaenge, "Zugänge (angelegt oder importiert)"], [b.bewegungen.aussonderungen, "Aussonderungen"], [b.bewegungen.geloescht, "gelöscht (falsch angelegt, ohne Prüfung)"]])}</section>`;
@@ -2487,7 +2534,7 @@
           b.durchgaenge.map((r) => `<tr>${td("Durchgang", `<strong>${esc(r.titel)}</strong>${demoMarke(r.demo)}${r.ausnahmen.length ? `<div class="small muted">Ausnahmen: ${r.ausnahmen.map((a) => `${mono(a.inventarnummer)} (${esc(a.grund)})`).join("; ")}</div>` : ""}`)}
             ${td("Zeitraum", esc(r.zeitraum))}${td("Stand", `${esc(r.stand)}${r.protokoll_id ? ` · ${mono(r.protokoll_id)}` : ""}`)}
             ${td("Artikel", String(r.gesamt), "mat-be-zahl")}${td("erledigt", String(r.erledigt), "mat-be-zahl")}${td("ausgenommen", String(r.ausgenommen), "mat-be-zahl")}
-            ${td("nicht geprüft", r.stand === "offen" ? `${r.offen} offen` : String(r.nicht_geprueft), "mat-be-zahl")}</tr>`)) : leer("Im Jahr kein Prüfdurchgang im Zweig.")}</section>`;
+            ${td("nicht geprüft", r.stand === "offen" ? `${r.offen} offen` : String(r.nicht_geprueft), "mat-be-zahl")}</tr>`), "mat-bericht-breit") : leer("Im Jahr kein Prüfdurchgang im Zweig.")}</section>`;
       const pruefer = b.pruefer ? `<section class="section" id="be-pruefer"><h2>Prüfer im Jahr ${esc(String(k.jahr))}</h2>
         ${b.pruefer.pruefer.length ? liste([["Prüfer"], ["Urkundennummer"], ["Prüfungen", "mat-be-zahl"]],
           b.pruefer.pruefer.map((x) => `<tr>${td("Prüfer", esc(x.name))}${td("Urkundennummer", mono(x.urkunde || ""))}${td("Prüfungen", String(x.n), "mat-be-zahl")}</tr>`)) : leer("Keine Prüfungen.")}
@@ -2640,13 +2687,18 @@
     // Hat die Empfehlung selbst gesperrt, steht ihr Grund nur im Hinweis darunter – der Banner sagt nur „Aussonderung
     // empfohlen“ (Browserprüfung vom 25.10.2026: dreimal derselbe Grund).
     const sperrText = empf && /aussondern empfohlen/.test(a.lock_reason || "") ? "Aussonderung empfohlen" : a.lock_reason;
+    // Kommt die Sperre von einer offenen Mangelmeldung (Sperrgrund „Mangel gemeldet am …“, mangel.melden) und steht deren
+    // roter Banner, sagt der graue GESPERRT-Banner dasselbe noch einmal – er entfällt (Nutzer, 26.10.2026). Bei jedem
+    // anderen Sperrgrund bleibt er; die Marke „gesperrt“ im Kopf bleibt immer.
+    const offeneMaengel = maengel.filter((m) => m.offen);
+    const sperreDurchMangel = /^Mangel gemeldet am /.test(a.lock_reason || "") && offeneMaengel.length > 0;
     const zuordnung = darf.grund ? zeile("Zugeordnet an", `${zu ? `${esc(zu.name)}${zu.gliederung ? ` <span class="muted">· ${esc(zu.gliederung)}</span>` : ""}${zu.aktiv ? "" : ' <span class="muted">(deaktiviert)</span>'}`
       : '<span class="muted">–</span>'}${zuKnoepfe}`) : "";
     inhalt.innerHTML = `${quittungHtml()}${a.demo ? `<p class="mat-demo-banner">${DEMO_ARTIKEL}</p>` : ""}
       ${a.status === "ausgesondert" ? `<p class="mat-banner s-ausgesondert">AUSGESONDERT – dieser Artikel ist außer Dienst und darf nicht mehr verwendet werden.</p>` : ""}
-      ${a.status === "gesperrt" ? `<p class="mat-banner s-gesperrt">GESPERRT${sperrText ? ` – ${esc(sperrText)}` : ""}. Nicht verwenden, bis eine Freiprüfung ihn freigibt.</p>` : ""}
+      ${a.status === "gesperrt" && !sperreDurchMangel ? `<p class="mat-banner s-gesperrt">GESPERRT${sperrText ? ` – ${esc(sperrText)}` : ""}. Nicht verwenden, bis eine Freiprüfung ihn freigibt.</p>` : ""}
       ${empf ? `<p class="notice mat-empfehlung"><strong>Aussonderung empfohlen</strong> – ${esc(empf.pruefer || "Prüfer")} am ${esc(fmtTag(empf.datum))} (<a href="/materialablage/pruefung/${Number(empf.pruefung)}">${empf.protokoll_id ? `Protokoll ${esc(empf.protokoll_id)}` : "Prüfung ansehen"}</a>)${empf.grund ? `: ${esc(empf.grund)}` : ""}. Aussondern kann der Materialwart.</p>` : ""}
-      ${maengel.filter((m) => m.offen).map(mangelBanner).join("")}
+      ${offeneMaengel.map(mangelBanner).join("")}
       ${a.status === "lebensdauer" ? `<p class="mat-banner s-lebensdauer">LEBENSDAUER ERREICHT – nicht mehr verwenden, prüfen lassen und aussondern.</p>` : ""}
       ${a.status === "neu" ? '<p class="mat-banner s-neu">NEU – die Eingangsprüfung steht aus. Bis dahin nicht einsetzen.</p>' : ""}
       ${rueckrufBanner(a)}
@@ -6535,23 +6587,32 @@
         <p class="mat-rr-titel">RÜCKRUF: ${esc(r.title)}</p>
         ${r.description ? `<p class="mat-text mat-rr-text">${esc(r.description)}</p>` : ""}
         <p class="mat-rr-zeile">${r.url ? `${rrLink(r.url, "Meldung des Herstellers")} · ` : ""}seit ${esc(S.fmtDate(r.created_at))} · ${r.alle ? "alle Artikel des Produkts" : "betrifft diese Seriennummer"}
-          · für diesen Artikel ${rrZustand(r.zustand, r.grund)}${offen ? " – noch nicht gesperrt und seit dem Rückruf nicht geprüft" : ""}</p>
+          · für diesen Artikel ${rrZustand(r.zustand, r.grund)}${offen ? " – noch nicht gesperrt und nicht mit dem Rückruf geprüft" : ""}</p>
         ${sperren ? `<div class="btn-row"><button class="btn small" type="button" data-act="rr-sperren" data-id="${r.id}">Sperren (Rückruf)</button></div>` : ""}
         ${offen && !pruefen ? '<p class="mat-rr-zeile">Sperren dürfen Prüfer mit Prüffreigabe (Grund „Rückruf“); eine Prüfung nach dem Rückruf erledigt ihn ebenso.</p>' : ""}
       </div>`;
     }).join("");
   }
 
+  // Warum keine Mail hinausgeht (mailprotokoll.still): ehrlich sagen statt „wird verschickt“ (Nachbesserung vor dem Merge).
+  const RR_STILL = { "kein Mailserver": "kein Mailserver eingerichtet", Umgebungssperre: "in dieser Umgebung sind Mails gesperrt" };
+  const rrStill = (grund) => esc(RR_STILL[grund] || grund);
+
   // Wie es um die Mail steht: verschickt (mit Fehlschlägen), läuft noch, nicht bestätigt oder keine. Wie viele Mails
   // hinausgingen, sieht nur die Material-Verwaltung (Phase 2) – sonst steht nur da, ob eine angefordert war („mail“).
   function rrMailText(r) {
-    if (!("mail_count" in r)) return r.mail ? "Mail an die Verwalter und Prüfer der betroffenen Artikel." : "Keine Mail verschickt.";
+    if (!("mail_count" in r)) {
+      return !r.mail ? "Keine Mail verschickt." : r.still ? `Es ging keine Mail hinaus – ${rrStill(r.still)}.`
+        : "Mail an die Verwalter und Prüfer der betroffenen Artikel.";
+    }
     if (r.mailed_at) {
       const n = r.mail_count + r.mail_failed;
       if (!n) return "Mail: keine Empfänger gefunden.";
+      if (r.still && r.mail_failed === n) return `Mail an ${plural(n, "Empfänger", "Empfänger")} am ${esc(fmtZeit(r.mailed_at))}: keine ging hinaus – ${rrStill(r.still)}.`;
       return `Mail an ${plural(n, "Empfänger", "Empfänger")} verschickt am ${esc(fmtZeit(r.mailed_at))}${r.mail_failed ? ` – ${r.mail_failed} davon ${r.mail_failed === 1 ? "ging" : "gingen"} nicht hinaus` : ""}.`;
     }
     if (!r.mail_count) return "Keine Mail verschickt.";
+    if (r.still) return `Mail an ${plural(r.mail_count, "Empfänger", "Empfänger")}: keine geht hinaus – ${rrStill(r.still)}.`;
     const alt = Date.now() - Date.parse(r.created_at) > (r.unbestaetigt_minuten || 10) * 60000;
     return alt ? `Mail an ${plural(r.mail_count, "Empfänger", "Empfänger")}: Versand nicht bestätigt.`
       : `Mail an ${plural(r.mail_count, "Empfänger", "Empfänger")} wird verschickt …`;
@@ -6635,6 +6696,7 @@
     const zahl = !verwaltung && OHNE_BESTAND() ? RR_OHNE_BESTAND
       : `<strong>${plural(r.betroffen, "Artikel", "Artikel")}</strong> ${verwaltung ? "im Bestand" : "in deinem Bereich"} betroffen${r.betroffen && r.offen < r.betroffen ? `, davon ${r.offen} offen` : ""}.`;
     const mail = !r.mail ? "Keine Mail verschickt."
+      : r.still ? `Es ging keine Mail hinaus – ${rrStill(r.still)}.`
       : verwaltung ? (r.empfaenger ? `Mail an ${plural(r.empfaenger, "Empfänger", "Empfänger")} wird verschickt.` : "Für die Mail gab es keine Empfänger.")
         : r.benachrichtigt ? "Die Verwalter und Prüfer deiner betroffenen Artikel bekommen eine Mail."
           : "Die Mail geht an die Verwalter und Prüfer der betroffenen Artikel – jeder bekommt nur seine.";
@@ -7461,7 +7523,7 @@
     });
   }
 
-  // Banner am Artikel: je offener Meldung ein roter Kasten unter dem GESPERRT-Banner. Text, Fotos und Melder schickt der
+  // Banner am Artikel: je offener Meldung ein roter Kasten (unter dem GESPERRT-Banner, wenn ein anderer Grund sperrt). Text, Fotos und Melder schickt der
   // Server nur Prüfern und Materialwarten des Artikels und dem Melder selbst (inhalt; Entscheidung vom 21.10.2026) – wer
   // nur liest, sieht den Zeitpunkt und den Satz MANGEL_VERBORGEN.
   const MANGEL_VERBORGEN = "Was gemeldet wurde, sehen nur Prüfer und Materialwart.";
