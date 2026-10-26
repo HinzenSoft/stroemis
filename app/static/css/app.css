@@ -2157,6 +2157,10 @@ dialog.us-dlg { width: min(640px, 96vw); }
     font-size: 20px; }
   .leaflet-touch .leaflet-control-layers-toggle { width: 44px; height: 44px; }
   .map-tools .btn, .map-tools .chip { min-height: 44px; }
+  /* Offenes Album-Panel: Die Zoom-Knöpfe weichen, sonst wächst die rechte Knopfgruppe mit 44-px-Flächen über die
+     Chips-Reihe (bei 360 px traf ein Tipp auf „Alben“ das „◎“). Am Telefon zoomt man mit zwei Fingern; ohne Panel
+     sind sie wieder da (Browser-Nachprüfung 259720c). */
+  .map-shell:has(.panel.open) .leaflet-control-zoom { display: none; }
   .profil-seite input:not([type=checkbox]):not([type=radio]):not([type=file]), .profil-seite .btn { min-height: 44px; }
   /* Häkchen mit Etikett (z. B. „Erinnerungen zu meiner PSA per Mail“): Tippfläche über das ganze Etikett. */
   .profil-seite label.inline { min-height: 44px; }
