@@ -3,9 +3,12 @@
 R1: Ein Artikel kommt per bestätigtem Änderungsantrag (Seriennummer oder Produkt) in einen laufenden Rückruf – als
 Prüfung zum Rückruf zählt nur eine nach dem Antrag (Banner, Marke, Übersicht, Lebenslauf). Rückruf ohne Mailserver sagt
 ehrlich, dass keine Mail hinausging (still). DEMO-Konten zählen nicht als Material-Verwaltung. „Bald fällig ab … Tagen“
-nur 0–365; gespeichert = angezeigt = wirksam. Alles Platzhalter."""
+nur 0–365; gespeichert = angezeigt = wirksam. Schritt 30: Kennungen und Kontoverweise festgeschriebener Nachweise auch
+gegen SQL von Hand („SET rowid“, INSERT OR REPLACE ins Journal, mit und ohne recursive_triggers/Fremdschlüssel); frisch,
+29 → 30 mit Altbestand, zweiter Lauf. Alles Platzhalter."""
 import os
 import re
+import sqlite3
 import sys
 import tempfile
 import time
@@ -190,9 +193,161 @@ def test_bald_faellig_bereich():
     print("„Bald fällig“ 0–365 bestanden.")
 
 
+def _versuch(pfad, sql, args=(), fk=True, rekursiv=True):
+    """Eine Anweisung an einer eigenen Verbindung, immer zurückgerollt: None, wenn sie durchging (und etwas änderte),
+    sonst die Meldung der Datenbank."""
+    c = sqlite3.connect(pfad, isolation_level=None)
+    c.execute(f"PRAGMA foreign_keys = {'ON' if fk else 'OFF'}")
+    c.execute(f"PRAGMA recursive_triggers = {'ON' if rekursiv else 'OFF'}")
+    c.execute("BEGIN")
+    try:
+        c.execute(sql, args)
+        return None if c.execute("SELECT changes()").fetchone()[0] else "nichts geändert"
+    except sqlite3.Error as exc:
+        return str(exc)
+    finally:
+        c.execute("ROLLBACK")
+        c.close()
+
+
+def test_schritt_30_trigger():
+    """Befund 1 der Sicherheitsprüfung vor dem Merge: jede Änderung der Kennung festgeschriebener Nachweise (auch über
+    rowid), Kontoverweise nur auf NULL, kein INSERT OR REPLACE im Journal – mit der Verbindung der App und mit der
+    Vorgabe des sqlite3-Werkzeugs. Was die App selbst tut (Konto löschen setzt Verweise auf NULL), geht weiter."""
+    from test_material_mailprotokoll import einfuegen
+    from test_material_setprotokolle import _haupt
+    from test_material import H, festschreiben, jpeg, starten
+    with tempfile.TemporaryDirectory() as tmp:
+        t = _haupt(tmp)                                      # abgeschlossener Durchgang mit Prüfungen und Set-Protokollen
+        pr = starten(t.p, t.d1["id"]).json["pruefung"]
+        r = t.p.post(f"{API}/pruefungen/{pr['id']}/anhaenge", headers=H, content_type="multipart/form-data",
+                     data={"file": [(jpeg(), "scan.jpg")], "art": "foto", "titel": "Platzhalter-Scan"})
+        assert r.status_code in (200, 201), r.get_json()
+        assert festschreiben(t.p, pr["id"], ergebnis="einsatzbereit").status_code == 200
+        r = t.w.post(f"{API}/artikel/{t.a1['id']}/mangel", headers=H, json={"beschreibung": "Platzhalter-Mangel"})
+        assert r.status_code in (200, 201), r.get_json()
+        einfuegen(t.app, "k-platzhalter")
+        r = t.p.post(f"{API}/artikel/{t.a2['id']}/antrag", json={"serial_no": "SP-NEU", "begruendung": "Platzhalter"})
+        assert r.status_code == 201, r.get_json()
+        pfad = os.path.join(tmp, "stroemis.db")
+        c = sqlite3.connect(pfad)
+        eins = lambda sql: c.execute(sql).fetchone()[0]                                        # noqa: E731
+        fest = eins("SELECT id FROM mat_inspection WHERE locked_at IS NOT NULL AND id IN "
+                    "(SELECT inspection_id FROM mat_inspection_attachment) ORDER BY id LIMIT 1")
+        letzte = eins("SELECT MAX(id) FROM mat_inspection WHERE completed_at IS NOT NULL")
+        geprueft = eins("SELECT item_id FROM mat_inspection WHERE completed_at IS NOT NULL ORDER BY id LIMIT 1")
+        anderes = eins("SELECT MAX(id) FROM users")
+        assert eins(f"SELECT COUNT(*) FROM mat_round WHERE id = {t.rid} AND closed_on IS NOT NULL") == 1
+        assert eins("SELECT COUNT(*) FROM mat_round_setprotokoll") > 0 and eins("SELECT COUNT(*) FROM mat_defect_report")
+        assert eins(f"SELECT COUNT(*) FROM mat_round_item WHERE round_id = {t.rid} AND excluded_by IS NOT NULL")
+        c.close()
+        neu = "rowid + 900000"
+        kennung = [
+            f"UPDATE mat_inspection SET id = 900000 WHERE id = {letzte}",
+            f"UPDATE mat_inspection SET rowid = {neu} WHERE id = {fest}",
+            "UPDATE mat_audit SET id = 900000 WHERE id = (SELECT MIN(id) FROM mat_audit)",
+            f"UPDATE mat_audit SET rowid = {neu} WHERE id = (SELECT MIN(id) FROM mat_audit)",
+            f"UPDATE mat_inspection_attachment SET rowid = {neu} WHERE inspection_id = {fest}",
+            f"UPDATE mat_inspection_attachment SET id = 900000 WHERE inspection_id = {fest}",
+            f"UPDATE mat_inspection_result SET rowid = {neu} WHERE inspection_id = {fest}",
+            f"UPDATE mat_defect_report SET rowid = {neu}",
+            f"UPDATE mat_round SET rowid = {neu} WHERE id = {t.rid}",
+            f"UPDATE mat_round_item SET rowid = {neu} WHERE round_id = {t.rid}",
+            f"UPDATE mat_round_setprotokoll SET rowid = {neu}",
+            f"UPDATE mat_item_change SET rowid = {neu}",
+            f"UPDATE mat_mail_fehler SET rowid = {neu}",
+            f"UPDATE mat_item SET rowid = {neu} WHERE id = {geprueft}",
+            f"UPDATE mat_product SET rowid = {neu} WHERE id = {t.ids['hms']}",
+            # Kontoverweise und Prüfpunkt: nur auf NULL
+            f"UPDATE mat_audit SET user_id = {anderes} WHERE id = (SELECT MIN(id) FROM mat_audit WHERE user_id IS NOT NULL "
+            f"AND user_id <> {anderes})",
+            f"UPDATE mat_round SET opened_by = {anderes} WHERE id = {t.rid}",
+            f"UPDATE mat_round SET closed_by = {anderes} WHERE id = {t.rid}",
+            f"UPDATE mat_inspection_attachment SET uploaded_by = {anderes} WHERE inspection_id = {fest}",
+            f"UPDATE mat_inspection_result SET checklist_item_id = (SELECT MAX(id) FROM mat_checklist_item) "
+            f"WHERE inspection_id = {fest} AND checklist_item_id IS NOT (SELECT MAX(id) FROM mat_checklist_item)",
+            # Journal ersetzen (ohne recursive_triggers griffe der Lösch-Trigger nicht)
+            "INSERT OR REPLACE INTO mat_audit (id, entity, entity_id, user_id, user_name, action, before_json, after_json, "
+            "created_at) SELECT id, entity, entity_id, user_id, 'Ersetzt', 'ersetzt', NULL, NULL, created_at FROM mat_audit "
+            "WHERE id = (SELECT MIN(id) FROM mat_audit)",
+        ]
+        kennung.append(f"UPDATE mat_round_item SET excluded_by = {anderes} WHERE round_id = {t.rid} "
+                       "AND excluded_by IS NOT NULL")
+        for fk, rek in ((True, True), (False, False), (True, False), (False, True)):
+            for sql in kennung:
+                fehler = _versuch(pfad, sql, fk=fk, rekursiv=rek)
+                assert fehler and fehler != "nichts geändert", (fk, rek, sql, fehler)
+        # Was erlaubt bleibt: Kontoverweise auf NULL (Konto gelöscht), eine Zeile ohne Änderung der Kennung.
+        for sql in ("UPDATE mat_audit SET user_id = NULL WHERE user_id IS NOT NULL",
+                    f"UPDATE mat_round SET opened_by = NULL, closed_by = NULL WHERE id = {t.rid}",
+                    f"UPDATE mat_inspection_attachment SET uploaded_by = NULL WHERE inspection_id = {fest}",
+                    f"UPDATE mat_inspection_result SET checklist_item_id = NULL WHERE inspection_id = {fest}",
+                    f"UPDATE mat_round_item SET excluded_by = NULL WHERE round_id = {t.rid} AND excluded_by IS NOT NULL",
+                    "UPDATE mat_mail_fehler SET erledigt_at = '2026-10-26T12:00:00+00:00', erledigt_von_name = 'Test'",
+                    f"UPDATE mat_item SET notes = 'Platzhalter' WHERE id = {geprueft}"):
+            assert _versuch(pfad, sql) is None, sql
+        # Die App löscht ein Konto mit Journal, Anhang, Durchgang und Prüfungen (Verweise werden NULL).
+        pid = t.k["pruefer_id"]
+        r = t.adm.delete(f"/api/admin/users/{pid}", headers=H)
+        assert r.status_code == 200, r.get_json()
+        c = sqlite3.connect(pfad)
+        assert c.execute("SELECT COUNT(*) FROM mat_audit WHERE user_id = ?", (pid,)).fetchone()[0] == 0
+        assert c.execute("SELECT COUNT(*) FROM mat_inspection_attachment WHERE uploaded_by = ?", (pid,)).fetchone()[0] == 0
+        c.close()
+    print("Schritt 30 (Trigger) bestanden.")
+
+
+def _zeilen_je_tabelle(pfad):
+    c = sqlite3.connect(pfad)
+    out = {}
+    for (t,) in c.execute("SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE 'mat_%' AND name NOT LIKE "
+                          "'%fts%' AND name <> 'mat_meta' ORDER BY name"):
+        out[t] = c.execute(f"SELECT * FROM {t} ORDER BY rowid").fetchall()
+    c.close()
+    return out
+
+
+def test_schritt_30_migration():
+    """Frisch und 29 → 30 (mit Altbestand: abgeschlossener Durchgang, Set-Protokolle, Journal) ergeben dasselbe Schema;
+    Schritt 30 ändert keine Zeile; ein zweiter Lauf ändert nichts."""
+    from test_material_set_rueckbau import _schema, _unterschied
+    from test_material_setprotokolle import _haupt
+    from test_material_trennung import bis_schritt, endversion, zeilen
+    from app.material import models
+    with tempfile.TemporaryDirectory() as frisch:
+        make_app(frisch)
+        schema_frisch = _schema(os.path.join(frisch, "stroemis.db"))
+    assert ("trigger", "mat_audit_zeile") in schema_frisch and ("trigger", "mat_round_konto") in schema_frisch
+    with tempfile.TemporaryDirectory() as tmp:
+        bis_schritt(29)(_haupt, tmp)
+        pfad = os.path.join(tmp, "stroemis.db")
+        conn = sqlite3.connect(pfad)
+        assert conn.execute("SELECT wert FROM mat_meta WHERE schluessel = 'schema_version'").fetchone()[0] == "29"
+        assert not conn.execute("SELECT 1 FROM sqlite_master WHERE name = 'mat_audit_zeile'").fetchone()
+        conn.close()
+        vorher = _zeilen_je_tabelle(pfad)
+        assert vorher["mat_round_setprotokoll"] and vorher["mat_audit"] and vorher["mat_inspection"]
+        app = make_app(tmp)
+        assert zeilen(app, "SELECT wert FROM mat_meta WHERE schluessel = 'schema_version'")[0]["wert"] == endversion() == "30"
+        schema = _schema(pfad)
+        assert schema == schema_frisch, _unterschied(schema, schema_frisch)
+        assert _zeilen_je_tabelle(pfad) == vorher
+        conn = sqlite3.connect(pfad)
+        n = conn.total_changes
+        for sql in models.SCHRITT_30:
+            conn.execute(sql)
+        assert conn.total_changes == n
+        conn.close()
+        make_app(tmp)                                        # zweiter Start: nichts ändert sich
+        assert _schema(pfad) == schema_frisch and _zeilen_je_tabelle(pfad) == vorher
+    print("Schritt 30 (Migration) bestanden.")
+
+
 if __name__ == "__main__":
     test_r1_rueckruf_nach_antrag()
     test_rueckruf_ohne_mailserver()
     test_demo_konto_keine_material_verwaltung()
     test_bald_faellig_bereich()
+    test_schritt_30_trigger()
+    test_schritt_30_migration()
     print("Alle Tests der Nachbesserung vor dem Merge bestanden.")
