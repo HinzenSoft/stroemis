@@ -4186,14 +4186,16 @@ Produktwert, nur nach vorne“. **Schemaschritt 29.**
   Plattform-Verwaltung). Inhalt: Ordnerpfad, Gliederung, Zahl der offenen Anträge, Links auf die Freigaben des Ordners
   und die Anträge-Seite – keine Antragsinhalte, keine Namen.
 - **Auslöser:** Freigabe entziehen, ändern oder herabsetzen (sofort, nach dem Commit), Konto deaktivieren, Stufe senken
-  oder Namen leeren (Nutzerverwaltung), Konto löschen, Ablauf befristeter Freigaben (Pflege im täglichen Lauf,
-  `pflege.ohne_verwalter`). Antworten tragen ehrlich `mail` (ob eine Mail an den Versand ging; DEMO, dev-Sperre und
+  oder Namen leeren (Nutzerverwaltung), Konto löschen, Ordner verschieben (geerbte Verwalter wandern mit – seit der
+  Ablaufprüfung vom 26.10.2026, N5-1), Ablauf befristeter Freigaben (Pflege im täglichen Lauf, `pflege.ohne_verwalter`). Antworten tragen ehrlich `mail` (ob eine Mail an den Versand ging; DEMO, dev-Sperre und
   ohne Mailserver nur ins Log, Fehlschläge ins Mailfehler-Protokoll).
 - **Einmaligkeit** (`antrag.ohne_verwalter_melden`, Tabelle `mat_antrag_ohne_verwalter`): je Ordner und Wegfall eine Mail;
   hat der Ordner wieder einen Materialwart (oder keinen offenen Antrag mehr), verschwindet die Zeile, ein späterer
   Wegfall meldet neu. Ein Antrag, für den es schon beim Stellen keinen Zuständigen gab, zählt mit seiner Mail an die
-  Material-Verwaltung als Meldung. Nicht ausgelöst: Verschieben eines Ordners in eine andere Gliederung (verliert er
-  dabei seine geerbten Verwalter, meldet ihn der nächste Auslöser oder der tägliche Lauf).
+  Material-Verwaltung als Meldung. Auch das Verschieben eines Ordners gleicht ab: Bekommt ein gemeldeter Ordner dort
+  wieder einen Materialwart, verschwindet seine Meldung (der nächste Wegfall meldet neu); verliert er beim Verschieben
+  den letzten, meldet das Verschieben selbst (`mail` in der Antwort von `POST …/ordner/<fid>/verschieben`). Mails
+  bleiben je Ordner (nicht gebündelt). Test `test_n5_verschieben` (Fall 2b der Ablaufprüfung und der umgekehrte Fall).
 - „Bitte bestätigen“ N5 der Freigabeliste: **entschieden** (Mail gewünscht, gebaut).
 - Nachbesserung nach der Sicherheitsprüfung (26.10.2026, Befund 1): Welche Ordner ohne Verwalter sind, wird erst unter
   der Schreibsperre gerechnet – zwei gleichzeitige Entzüge konnten sonst den Vermerk des anderen löschen, und der
@@ -8320,4 +8322,4 @@ oder Plattform-Verwaltung).
 | `POST /api/material/mailfehler/alle-erledigt` | Modulzugang mit Sicht (sonst 403) | alle offenen Zeilen der eigenen Sicht abhaken → `anzahl` (Phase 4 · 1) |
 | `POST /api/material/artikel/<id>/aussondern` | wie bisher | neu: `datum` vor der letzten abgeschlossenen Prüfung, vor dem Herstelldatum (Monat → erster Tag) oder vor dem Tag der Sperre (jüngster Journaleintrag frei → gesperrt/verloren, Ortszeit) → 409 mit Klartext; Zukunft und vor der Erfassung weiter 400 (C2, Phase 4 · 1 mit Nachbesserung) |
 | `POST /api/material/artikel/<id>/aussondern`, `POST …/pruefungen/<id>/festschreiben`, `GET …/artikel/<id>` | wie bisher | seit Schritt 28: Ergebnis `aussondern` → 400, neu `aussondern_empfohlen` (sperrt); Aussondern nur nach einer letzten Prüfung `instandsetzen`/`aussondern_empfohlen` oder bei `verloren`, sonst 409 mit Grund; Artikel trägt `aussonderung_empfohlen` ({pruefung, protokoll_id, datum, pruefer, grund} bzw. in Listen true/false) und für Materialwarte `aussondern` {ok, grund} |
-| `GET /api/material/ordner/<fid>?status=aussonderung_empfohlen`, `GET /api/material/start`; `POST/PUT/DELETE …/freigaben…`, `PUT/DELETE /api/admin/users/<id>` | wie bisher | A4: Filter und `empfohlen` (Zahl) am Ordner, `aussonderung_empfohlen` [{ordner_id, gliederung, anzahl}] auf der Übersicht; N5: Antworten tragen `mail` (Mail an die Material-Verwaltung zu Anträgen ohne Materialwart) |
+| `GET /api/material/ordner/<fid>?status=aussonderung_empfohlen`, `GET /api/material/start`; `POST/PUT/DELETE …/freigaben…`, `POST …/ordner/<fid>/verschieben`, `PUT/DELETE /api/admin/users/<id>` | wie bisher | A4: Filter und `empfohlen` (Zahl) am Ordner, `aussonderung_empfohlen` [{ordner_id, gliederung, anzahl}] auf der Übersicht; N5: Antworten tragen `mail` (Mail an die Material-Verwaltung zu Anträgen ohne Materialwart) |

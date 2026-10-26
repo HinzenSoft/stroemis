@@ -885,7 +885,9 @@ def ordner_verschieben(fid):
     if ziel != alt:
         _gliederungswechsel(alt, ziel)
     bestand.ordner_verschieben(fid, ziel)
-    return jsonify(ordner=bestand.ordner_json(bestand.ordner(fid)))
+    # Mit dem Ordner wandern geerbte Verwalter (N5, Ablaufprüfung vom 26.10.2026): Verliert er dabei den letzten, meldet
+    # das die Material-Verwaltung; bekommt er wieder einen, verschwindet seine alte Meldung. „mail“: ob eine Mail ging.
+    return jsonify(ordner=bestand.ordner_json(bestand.ordner(fid)), mail=antrag.ohne_verwalter_nach_vorgang())
 
 
 @api.delete("/ordner/<int:fid>")

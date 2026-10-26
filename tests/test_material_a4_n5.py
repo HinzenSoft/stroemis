@@ -242,6 +242,47 @@ def test_n5_wettlauf():
     print("Wettlauf bestanden.")
 
 
+def test_n5_verschieben():
+    """Ablaufprüfung vom 26.10.2026, N5-1 (Probe n5_grenzfaelle Fall 2b): Ein gemeldeter Ordner bekommt durch Verschieben
+    wieder einen Materialwart – die Meldung verschwindet, der nächste Wegfall meldet neu. Umgekehrt: Verliert ein Ordner
+    beim Verschieben seinen letzten (geerbten) Materialwart, meldet das Verschieben selbst."""
+    from app.material.services import antrag
+    post = []
+    alt = mails_abfangen(antrag, lambda an, betreff, text: post.append(an) or True)
+    try:
+        with tempfile.TemporaryDirectory() as tmp:
+            t = aufbau(tmp)
+
+            def fach_mit_antrag(name, serie):
+                fid = t.w.post(f"{API}/ordner", json={"name": name, "kind": "standort", "parent_id": t.ga}).json["ordner"]["id"]
+                iid = neuer_artikel(t.w, t.ids["hms"], fid, serial_no=serie)["id"]
+                _geprueft(t, iid)
+                _antrag(t, iid)
+                return fid
+            f1 = fach_mit_antrag("Lager Eins", "VS-1")
+            f2 = fach_mit_antrag("Lager Zwei", "VS-2")
+            # Umgekehrt: Gliederung B ohne Verwalter; Lager Zwei verliert beim Verschieben den geerbten Materialwart.
+            assert t.adm.delete(f"{API}/freigaben/{_grant(t, t.gb, t.wart_b_id)}", headers=H).json["mail"] is False
+            post.clear()
+            r = t.adm.post(f"{API}/ordner/{f2}/verschieben", json={"parent_id": t.gb})
+            assert r.status_code == 200 and r.json["mail"] is True and post == ["katalog@example.org"], (r.get_json(), post)
+            assert [z["folder_id"] for z in zeilen(t.app, "SELECT folder_id FROM mat_antrag_ohne_verwalter")] == [f2]
+            # Fall 2b: Lager Eins ohne Verwalter (gemeldet), dann in eine Gliederung mit Materialwart verschoben.
+            freigeben(t.adm, t.gb, t.wart_b_id, "verwalten")
+            post.clear()
+            r = t.adm.delete(f"{API}/freigaben/{_grant(t, t.ga, t.k['wart_id'])}", headers=H)
+            assert r.json["mail"] is True and post == ["katalog@example.org"], (r.get_json(), post)   # nur Lager Eins
+            post.clear()
+            r = t.adm.post(f"{API}/ordner/{f1}/verschieben", json={"parent_id": t.gb})
+            assert r.status_code == 200 and r.json["mail"] is False and post == [], (r.get_json(), post)
+            assert not zeilen(t.app, "SELECT folder_id FROM mat_antrag_ohne_verwalter")      # beide haben wart_b
+            r = t.adm.delete(f"{API}/freigaben/{_grant(t, t.gb, t.wart_b_id)}", headers=H)
+            assert r.json["mail"] is True and len(post) == 2, (r.get_json(), post)          # je Ordner eine Mail
+    finally:
+        mails_zurueck(alt)
+    print("Verschieben bestanden.")
+
+
 def test_n5_antrag_ohne_zustaendige_einmal():
     """Ein Antrag, für den es schon beim Stellen keinen Materialwart gibt, geht mit seiner Mail an die
     Material-Verwaltung – das zählt als Meldung: Ein späterer Vorgang meldet den Ordner nicht ein zweites Mal."""
@@ -306,6 +347,7 @@ if __name__ == "__main__":
     test_n5_ausloeser_und_einmaligkeit()
     test_n5_antrag_ohne_zustaendige_einmal()
     test_n5_wettlauf()
+    test_n5_verschieben()
     test_schritt_29()
     test_oberflaeche_statisch()
     print("Alle Tests zu A4 und N5 bestanden.")
