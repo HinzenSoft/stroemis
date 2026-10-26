@@ -8,7 +8,54 @@
    pruefen, verwalten); data-darf sagt nur, was das Konto irgendwo darf – für Reiter und die Knöpfe der Übersicht.
    Ausgeblendet wird nur, was ohnehin scheitern würde – der Server prüft jede Aktion selbst. */
 (function () {
-  const { esc, api, toast, dialog, confirm } = S;
+  const { esc, api, toast } = S;
+
+  /* --- Fokus zurück nach Esc oder „Abbrechen“ (Browserprüfung vor dem Merge, B2) ----------------------------------
+     Wer einen Dialog öffnet, landet nach dem Schließen wieder dort, wo er war: auf dem Knopf, der ihn öffnete – aus
+     einem Untermenü (details.mat-menue) auf dessen Menüknopf. Gemerkt wird der zuletzt angeklickte Knopf außerhalb
+     von Dialogen; so gilt es auch für Dialoge, die erst nach einem Laden öffnen (Ordner verschieben, Löschen,
+     Katalog exportieren, Als Variante kopieren). Zurückgegeben wird der Fokus nur, wenn er sonst verloren wäre (auf
+     der Seite oder im geschlossenen Dialog) und kein anderer Dialog offen ist. Folgedialoge im selben #dlg (Ergebnis
+     nach dem Anlegen) erben das Ziel des ersten. */
+  let letzterKlick = null;
+  document.addEventListener("click", (e) => {
+    const el = e.target.closest && e.target.closest("button, a[href], summary, [data-act]");
+    if (el && !el.closest("dialog")) letzterKlick = { el, zeit: Date.now() };
+  }, true);
+  function fokusZiel() {
+    const k = letzterKlick && Date.now() - letzterKlick.zeit < 30000 && letzterKlick.el.isConnected ? letzterKlick.el : null;
+    const aktiv = document.activeElement;
+    const el = k || (aktiv && aktiv !== document.body ? aktiv : null);
+    if (!el || el.closest("dialog")) return null;
+    const menue = el.closest("details.mat-menue");
+    return menue ? menue.querySelector("summary") : el;
+  }
+  function fokusZurueckgeben(ziel) {
+    const jetzt = document.activeElement;
+    if (!ziel || !ziel.isConnected || document.querySelector("dialog[open]")) return;
+    if (!jetzt || jetzt === document.body || jetzt.closest("dialog")) ziel.focus();
+  }
+  let dlgZiel = null;
+  const dlgEl = document.getElementById("dlg");
+  if (dlgEl) {
+    dlgEl.addEventListener("close", () => {
+      if (dlgEl.open) return;                    // gleich wieder offen (Folgedialog): Ziel bleibt für dessen Ende
+      const ziel = dlgZiel;
+      dlgZiel = null;
+      fokusZurueckgeben(ziel);
+    });
+  }
+  function dialog(html, onOpen) {
+    if (dlgEl && !dlgEl.open && !dlgZiel) dlgZiel = fokusZiel();
+    return S.dialog(html, onOpen);
+  }
+  function confirm(text, okLabel, neinLabel) {
+    const ziel = document.querySelector("dialog[open]") ? null : fokusZiel();
+    return S.confirm(text, okLabel, neinLabel).then((ja) => {
+      setTimeout(() => fokusZurueckgeben(ziel), 0);
+      return ja;
+    });
+  }
 
   /* --- Produktname mit Beschreibung (Nachbesserungen vom 18.10.2026) ---------------------------------------------
      Die Beschreibung eines Produkts ist ein kurzer Zusatz hinter dem Namen, etwa die Verschlussart eines Karabiners.
@@ -585,15 +632,9 @@
     if (!b || !inhalt.contains(b) || !aktionen[b.dataset.act]) return;
     if (b.closest(".mat-anleitung")) return;
     if (b.tagName === "A" || b.tagName === "BUTTON") e.preventDefault();
+    // Den Fokus nach Esc oder „Abbrechen“ gibt dialog() oben zurück (auf den Menüknopf, wenn der Eintrag in einem
+    // details.mat-menue stand) – auch wenn der Dialog erst nach einem Laden öffnet (B5 P4-L2, B2 vor dem Merge).
     aktionen[b.dataset.act](b, e);
-    // Öffnet ein Eintrag eines Untermenüs (details.mat-menue) einen Dialog, geht der Fokus nach Esc oder „Abbrechen“
-    // zurück auf den Menüknopf – sonst fiele er an den Seitenanfang (Browser-Prüfung P4-L2, B5).
-    const menue = b.closest("details.mat-menue");
-    const dlg = document.getElementById("dlg");
-    if (menue && dlg && dlg.open) {
-      const knopf = $("summary", menue);
-      dlg.addEventListener("close", () => { if (knopf.isConnected) knopf.focus(); }, { once: true });
-    }
   });
   // „Sortieren nach“ über den Karten (kartenKopf): dieselbe Aktion wie ein Klick auf den Spaltenkopf.
   inhalt.addEventListener("change", (e) => {
@@ -2470,7 +2511,7 @@
           [bst.verloren, "davon verloren gemeldet"], [bst.bestand, "<strong>Bestand gesamt</strong> (ohne ausgesonderte)"]]),
         `<h3>Je Kategorie (oberste Ebene)</h3>${bst.kategorien.length ? zahlen(bst.kategorien.map((x) => [x.bestand, `${esc(x.name)} <span class="muted">– fällig ${x.faellig}, gesperrt ${x.gesperrt}</span>`])) : leer("Keine Artikel.")}`)}
         ${bst.unterordner.length ? `<h3>Je Unterordner (nach Heimat)</h3>${liste([["Ordner"], ["Bestand", "mat-be-zahl"], ["einsatzbereit", "mat-be-zahl"], ["bald fällig", "mat-be-zahl"], ["überfällig", "mat-be-zahl"], ["neu", "mat-be-zahl"], ["gesperrt", "mat-be-zahl"], ["Lebensdauer", "mat-be-zahl"], ["ausgesondert", "mat-be-zahl"]],
-          bst.unterordner.map((u) => `<tr>${td("Ordner", `${esc(u.name)}${u.kennzeichen ? ` <span class="mat-art">${esc(u.kennzeichen)}</span>` : ""}${demoMarke(u.demo)}`, "mat-k-titel")}${td("Bestand", String(u.bestand), "mat-be-zahl")}${["einsatzbereit", "bald_faellig", "ueberfaellig", "neu", "gesperrt", "lebensdauer", "ausgesondert"].map((st) => td(STATUS[st] || st, String(u.zaehlung[st] || 0), `mat-be-zahl${u.zaehlung[st] ? "" : " mat-be-null"}`)).join("")}</tr>`), "mat-bericht-ordner")}` : ""}
+          bst.unterordner.map((u) => `<tr>${td("Ordner", `${esc(u.name)}${u.kennzeichen ? ` <span class="mat-art">${esc(u.kennzeichen)}</span>` : ""}${demoMarke(u.demo)}`, "mat-k-titel")}${td("Bestand", String(u.bestand), "mat-be-zahl")}${["einsatzbereit", "bald_faellig", "ueberfaellig", "neu", "gesperrt", "lebensdauer", "ausgesondert"].map((st) => td(STATUS[st] || st, String(u.zaehlung[st] || 0), `mat-be-zahl${u.zaehlung[st] ? "" : " mat-be-null"}`)).join("")}</tr>`), "mat-bericht-ordner mat-bericht-breit")}` : ""}
         </section>`;
       const bewegungen = `<section class="section" id="be-bewegungen"><h2>Bewegungen im Jahr ${esc(String(k.jahr))}</h2>
         ${zahlen([[b.bewegungen.zugaenge, "Zugänge (angelegt oder importiert)"], [b.bewegungen.aussonderungen, "Aussonderungen"], [b.bewegungen.geloescht, "gelöscht (falsch angelegt, ohne Prüfung)"]])}</section>`;
@@ -2487,7 +2528,7 @@
           b.durchgaenge.map((r) => `<tr>${td("Durchgang", `<strong>${esc(r.titel)}</strong>${demoMarke(r.demo)}${r.ausnahmen.length ? `<div class="small muted">Ausnahmen: ${r.ausnahmen.map((a) => `${mono(a.inventarnummer)} (${esc(a.grund)})`).join("; ")}</div>` : ""}`)}
             ${td("Zeitraum", esc(r.zeitraum))}${td("Stand", `${esc(r.stand)}${r.protokoll_id ? ` · ${mono(r.protokoll_id)}` : ""}`)}
             ${td("Artikel", String(r.gesamt), "mat-be-zahl")}${td("erledigt", String(r.erledigt), "mat-be-zahl")}${td("ausgenommen", String(r.ausgenommen), "mat-be-zahl")}
-            ${td("nicht geprüft", r.stand === "offen" ? `${r.offen} offen` : String(r.nicht_geprueft), "mat-be-zahl")}</tr>`)) : leer("Im Jahr kein Prüfdurchgang im Zweig.")}</section>`;
+            ${td("nicht geprüft", r.stand === "offen" ? `${r.offen} offen` : String(r.nicht_geprueft), "mat-be-zahl")}</tr>`), "mat-bericht-breit") : leer("Im Jahr kein Prüfdurchgang im Zweig.")}</section>`;
       const pruefer = b.pruefer ? `<section class="section" id="be-pruefer"><h2>Prüfer im Jahr ${esc(String(k.jahr))}</h2>
         ${b.pruefer.pruefer.length ? liste([["Prüfer"], ["Urkundennummer"], ["Prüfungen", "mat-be-zahl"]],
           b.pruefer.pruefer.map((x) => `<tr>${td("Prüfer", esc(x.name))}${td("Urkundennummer", mono(x.urkunde || ""))}${td("Prüfungen", String(x.n), "mat-be-zahl")}</tr>`)) : leer("Keine Prüfungen.")}

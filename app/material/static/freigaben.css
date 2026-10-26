@@ -51,6 +51,7 @@
 .mf-enden label.inline[hidden] { display: none; }
 .mf-notiz { margin-top: 10px; }
 .mf-notiz > summary { cursor: pointer; font-weight: 600; padding: 4px 0; }
+@media (pointer: coarse) { .mf-notiz > summary { padding: 11px 0; } }   /* 44 px (Browserprüfung vor dem Merge, B3) */
 .mf-erteilen-reihe { margin-top: 14px; }
 
 /* Listen: Tabelle mit Spalten nach dem Inhalt. Die Kartenregel aus app.css (Fenster bis 860 px, jede table.list) gilt

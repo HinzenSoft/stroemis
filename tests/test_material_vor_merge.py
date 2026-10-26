@@ -343,6 +343,48 @@ def test_schritt_30_migration():
     print("Schritt 30 (Migration) bestanden.")
 
 
+def _lies(rel):
+    return open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), rel), encoding="utf-8").read()
+
+
+def _coarse_bloecke(css):
+    """Inhalt aller @media (pointer: coarse)-Blöcke (Klammern gezählt)."""
+    out = []
+    for m in re.finditer(r"@media \(pointer: coarse\)\s*\{", css):
+        i, tiefe = m.end(), 1
+        while tiefe:
+            tiefe += {"{": 1, "}": -1}.get(css[i], 0)
+            i += 1
+        out.append(css[m.end():i - 1])
+    return "\n".join(out)
+
+
+def test_oberflaeche_statisch():
+    """B1 Jahresbericht als Karte bis 760 px, B2 Fokus zentral in dialog()/confirm(), B3 Tippflächen und B4 Toast nur
+    unter pointer: coarse (Messungen im Browser: Bericht der Nachbesserung)."""
+    js = _lies("app/material/static/material.js")
+    css = _lies("app/material/static/material.css")
+    app_css = _lies("app/static/css/app.css")
+    fg_css = _lies("app/material/static/freigaben.css")
+    # B1: beide breiten Tabellen tragen die Klasse, die Containerabfrage macht sie bis 760 px zur Karte.
+    assert '"mat-bericht-ordner mat-bericht-breit")' in js and '"mat-bericht-breit") : leer("Im Jahr kein Prüfdurchgang' in js
+    assert "@container mat-seite (max-width: 760px) {\n  #mat-inhalt table.list.mat-bericht-breit," in css
+    # B2: dialog/confirm sind eigene Hüllen, die den Auslöser merken; der alte Einzelfall ist weg.
+    assert "const { esc, api, toast } = S;" in js and "function dialog(html, onOpen) {" in js
+    assert "if (dlgEl && !dlgEl.open && !dlgZiel) dlgZiel = fokusZiel();" in js
+    assert "return S.confirm(text, okLabel, neinLabel).then((ja) => {" in js
+    assert 'dlg.addEventListener("close", () => { if (knopf.isConnected) knopf.focus(); }, { once: true });' not in js
+    # B3/B4: nur unter pointer: coarse; die Notiz-Regel steht hinter der Grundregel (gleiche Spezifität).
+    assert ".mf-notiz > summary { padding: 11px 0; }" in _coarse_bloecke(fg_css)
+    assert fg_css.index("@media (pointer: coarse) { .mf-notiz > summary") > fg_css.index(".mf-notiz > summary { cursor")
+    assert ".mat-pruefen-form .btn { min-height: 44px; }" in _coarse_bloecke(css)
+    touch = _coarse_bloecke(app_css)
+    assert ".us-aktionen .btn { min-height: 44px; }" in touch
+    assert "#toast, #toast[popover] { bottom: auto; top: calc(var(--topbar) + 12px" in touch
+    assert "#toast[popover].bei-dialog { left: var(--toast-x, 50%); bottom: auto;" in app_css     # Dialog geht vor
+    print("Oberfläche (statisch) bestanden.")
+
+
 if __name__ == "__main__":
     test_r1_rueckruf_nach_antrag()
     test_rueckruf_ohne_mailserver()
@@ -350,4 +392,5 @@ if __name__ == "__main__":
     test_bald_faellig_bereich()
     test_schritt_30_trigger()
     test_schritt_30_migration()
+    test_oberflaeche_statisch()
     print("Alle Tests der Nachbesserung vor dem Merge bestanden.")
