@@ -153,9 +153,11 @@
     panelTitle.textContent = title;
     panelBody.innerHTML = html;
     panel.classList.add("open");
+    S.titel(title, "karte");          // Reiter des Browsers: „Album … – Ankerplätze – strömis.de“ (V2)
   }
   function closePanel() {
     panel.classList.remove("open");
+    S.titel([], "karte");
     state.album = null;
     if (location.hash.startsWith("#album=")) history.replaceState(null, "", location.pathname);
   }
@@ -238,7 +240,7 @@
   function albumDialog(a) {
     a = a || { category: "seil" };
     const isNew = !a.id;
-    dialog(`<h2>${isNew ? "Neues Album" : "Album bearbeiten"}</h2>
+    dialog(`<h2>${isNew ? "Album anlegen" : "Album bearbeiten"}</h2>
       <p class="help">Ein Album ist ein Übungsobjekt oder ein Übungsgewässer. Alle angemeldeten Nutzer können es sehen.</p>
       <label>Titel</label><input type="text" id="al-title" value="${esc(a.title)}" placeholder="z. B. Wehr Musterstadt, Brücke B12" required>
       <label>Art</label>

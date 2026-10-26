@@ -7,13 +7,15 @@
 {% endblock %}
 {% block body %}
 <main class="map-shell">
+  {# Die Karte füllt die Seite; die Überschrift ist nur für Vorlesehilfen da (Browserprüfung vor dem Merge, V6). #}
+  <h1 class="nur-vorlesen">{{ modul.name.karte }}</h1>
   <div id="map"></div>
   <div class="map-tools">
     <button class="chip active" data-cat="">Alle</button>
     <button class="chip seil" data-cat="seil">Seiltechnik</button>
     <button class="chip wasser" data-cat="wasser">Gewässer</button>
     <button class="btn secondary" id="btn-albums">Alben</button>
-    <button class="btn" id="btn-new-album">Neues Album</button>
+    <button class="btn" id="btn-new-album"><span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Album<span class="k-anlegen"> anlegen</span></span></button>
   </div>
   <div class="locate-banner hidden" id="locate-banner"></div>
   <aside class="panel" id="panel" aria-live="polite">

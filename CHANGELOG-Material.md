@@ -44,6 +44,7 @@ Geschichte stehen. Schemaversion nach der Nachbesserung vor dem Merge: 30.
 | Nachbesserung vor dem Merge – übrige Module | Leitstelle: Rechte-Felder im Nutzerdialog (F1), Fokus in langen Dialogen; Strömipedia: ein Verlaufseintrag je Link (N1), Emoji-Raster mit einem Tab-Stopp (N4), Rollennamen in Meldungen (N5), Schrägstrich am Adressende und Kleinigkeiten (N6), Export → Import gleichnamiger Geschwister | gebaut 26.10.2026 (kein Schemaschritt), auf dev (vor dem Merge geprüft) |
 | Lebenslauf frisch, Melder und Mangelbeschreibung | Jeder Abruf eines Lebenslaufs (und der übrigen Dateien auf Abruf) mit eigener Adresse und Uhrzeit im Namen – gegen die alte Datei auf Android-Telefonen; „Mangel gemeldet“ im Lebenslauf mit Name und Beschreibung für Prüfer, Materialwart und den Melder selbst | gebaut 26.10.2026, bestätigt wie gebaut (Nutzer 26.10.2026), auf dev (vor dem Merge geprüft) |
 | Nachbesserung vor dem Merge, Runde 2 | Rückruf: nur eine Prüfung, deren Entwurf nach Rückruf bzw. Antrag begann, erledigt ihn (N-A1); „Bald fällig“ aus der `.env` nur 0–365, sonst Warnung und Vorgabe 30; README zur Inbetriebnahme (Prüfformulare neu anlegen, Kontrollen) | gebaut 26.10.2026 (kein Schemaschritt), zur Freigabe |
+| Nachbesserung vor dem Merge, Runde 3 | Tippflächen Brotkrumen und „Deine Meldungen“ (B-1, B-2); Katalog am Telefon kompakt, Liste nach der Kategoriewahl oben, Zurück an dieselbe Stelle (V1, V3); Seitentitel je Ansicht in allen Modulen (V2); Leitstelle: Hilfe zugeklappt, Zeilenmenü, E-Mail-Umbruch, Reiter als Linie (V5); Ankerplätze „+ Album“ (V6); „☰“ nicht vorgelesen (V8); eine Linie unter den Reitern (V9); Dialog-Reiter quer (V11); Kontrast in den Riegenkarten (V13) | gebaut 26.10.2026 (kein Schemaschritt), zur Freigabe |
 
 ## Abgleich mit dem Bestand (vor Lieferung 1)
 
@@ -4176,6 +4177,71 @@ Danach liefen die ganze Suite (`st-test`) grün, `st-py`, `st-js` und `st-css` o
 14. **Kasten „Mailversand“ am Telefon**: Eine Karte hat vier Inhaltszeilen (Mail mit Betreff, Empfänger, Fehler mit
     Antwort), bei 360 px umbrochen etwa 170 px hoch; die Antwort des Mailservers ließe sich noch hinter „Technische
     Antwort“ einklappen – bitte am Gerät ansehen.
+
+## Nachbesserung vor dem Merge, Runde 3 (26.10.2026)
+
+Auftrag `planung/material-phase4/auftrag_nachbesserung_vor_merge_3.md` nach der Browserprüfung des Stands vor-merge
+2122b62 (`bericht_pruefung_vm_browser.md`, Abschnitt 1 B-1/B-2 und Abschnitt 3). Wunsch des Nutzers: „Jetzt schon
+angehen“. Nur Oberfläche, kein Schemaschritt (Schema bleibt 30), keine Änderung der Schnittstelle. Zweig `vm-3`.
+Nicht umgesetzt: V10 (volle Breite der Hilfetexte ist Entscheidung des Nutzers vom 25.10.2026), V12 (Katalogdaten),
+V14 (nur Hinweis); V4 und V7 warten auf Entscheidungen des Nutzers.
+
+- **B-1 Brotkrumen:** Unter Touch ist jedes Glied mindestens 44 × 44 px (vorher „Gurte“ 37 × 44 px). Der Schrägstrich
+  hängt am folgenden Glied (`pfadHtml` in `material.js`, `.mat-pfad-glied`) und bleibt beim Umbruch nicht mehr allein am
+  Zeilenende stehen – überall, wo `.mat-pfad` steht (Ordner, Artikel, Prüfung, Prüfdurchgang, Jahresbericht, Import,
+  Katalog, Produkt, Formular, Prüfseite). Die Brotkrumen der Strömipedia (ab Tablet sichtbar) unter Touch ebenso
+  44 × 44 px.
+- **B-2 „Deine Meldungen (n)“** (Meine PSA, Übersicht) und „n erledigte Meldungen“ (Artikelseite) unter Touch mindestens 44 px hoch (vorher 42).
+- **V1 Katalog am Telefon:** Im Kategoriekopf ein Menü „Bearbeiten“ (Kategorie bearbeiten …, Löschen …) wie im
+  Ordnerkopf, daneben „Generisches Formular“; „Löschen“ ist kein eigener Knopf mehr. „Dokumente für alle Produkte dieser
+  Kategorie (n)“ klappt auf und zu – zugeklappt, solange die Kategorienleiste eine Schublade ist (unter 1024 px), sonst
+  offen. Nach der Wahl einer Kategorie aus der Schublade rollt die Seite, bis die Suchzeile unter der Kopfleiste und die
+  Liste darunter steht (vorher sah man nur den Kopf der Kategorie, rund 800 px).
+- **V2 Seitentitel:** Jede Seite nennt vorn, was sie zeigt – „M-000123 – Materialablage – strömis.de“, „Gurte – Katalog –
+  Materialablage – strömis.de“ (wechselt mit der Kategorie ohne Neuladen), Produktname, Ordnername, Prüfformular,
+  Prüfdurchgang, Prüfung, Suche, Jahresbericht; vom Server schon ein festes Wort je Ansicht („Übersicht – Materialablage –
+  strömis.de“). Ohne Modulzugang bleibt es „Meine PSA – strömis.de“. Strömipedia: „Seite nicht gefunden – Strömipedia –
+  strömis.de“ und „Neue Seite – …“; Leitstelle: „Nutzerverwaltung“ bzw. „Einstellungen – Leitstelle – strömis.de“;
+  Riegenkarten: Lehrgang, Katalog, Kataloge, Mängelübersicht; Ankerplätze: das offene Album bzw. „Alben“. Dafür
+  `S.titel(teile, modul)` in `common.js`.
+- **V3 Zurück in den Katalog:** Beim Verlassen merkt sich der Katalog Suche, Sortierung, wie viele Produkte nachgeladen
+  waren und die Scrollhöhe im Eintrag des Verlaufs (`history.state`); zurück (und beim Neuladen) lädt er so weit nach
+  (höchstens 20 Seiten) und rollt an die alte Stelle (vorher Scrollhöhe 1 500 → 7 px, Liste wieder bei 50). Ein neuer
+  Aufruf über Link oder Lesezeichen beginnt oben. Die Schublade (Kategorien wie Ordner) schließt beim Verlassen der Seite
+  (`pagehide`) – zurück aus dem Verlauf (bfcache) stand sie sonst samt Abdunklung offen.
+- **V5 Leitstelle:** Die Erklärung der Rechte steht zugeklappt unter „Hilfe: Rechte je Modul“, darunter nur der Satz zu
+  Änderungen und Löschen. E-Mail-Adressen brechen am „@“ und vor den Punkten der Domain um (vorher mitten im Wort); Name und
+  Gliederung trennen, wo der Browser deutsche Silbentrennung hat. Zeilenaktionen: „Bearbeiten“ als grauer Knopf, „Reset-Mail
+  senden“ und „Löschen …“ im Zeilenmenü „Mehr“ (vorher drei rote Textlinks `btn ghost`); „Zurücksetzen“ in den
+  Einstellungen grau statt `btn ghost`. Die Reiter „Nutzer“ / „Einstellungen“ als Linie (gewählt rot unterstrichen wie
+  die Reiter der Materialablage) statt rot hinterlegt – rot gefüllt ist allein „Nutzer anlegen“.
+- **V6 Ankerplätze:** „Neues Album“ heißt nach dem Muster „Album anlegen“ (am Telefon „+ Album“, Dialogtitel ebenso).
+  Die Werkzeuge über der Karte brechen am Telefon um, statt seitlich zu rollen (vorher war vom Knopf nur „N“ zu sehen).
+  Die Seite hat eine Überschrift „Ankerplätze“ für Vorlesehilfen (`.nur-vorlesen` in `app.css`).
+- **V8:** Das Zeichen „☰“ in „☰ Ordner“/„☰ Kategorien“ und „☰ Seiten“ (Strömipedia) ist `aria-hidden` – vorgelesen wird nur
+  der Name. Der ✕-Knopf der Schublade heißt im Katalog „Kategorien schließen“.
+- **V9:** Die Regel für die klebenden Reiter im Dialog („Ordner bearbeiten“, „Produkt“) galt auch den Reitern der
+  Modulnavigation – deren Schattenlinie stand unter der Linie der Navigation (zwei graue Linien auf Katalog und
+  Artikelseiten, dazu 34 px mehr Höhe am Rechner). Sie gilt jetzt nur `.c-tabs.mat-reiter`.
+- **V11:** Telefon quer (Höhe ≤ 500 px): Die Reiter im Dialog kleben nicht; im Dialog „Freigaben“ bleiben bei 844 × 390
+  gut 300 statt rund 190 px Inhalt sichtbar. Die Knopfzeile unten klebt weiter.
+- **V13 Riegenkarten:** Nebentext (Gliederung, Geburtsdatum) auf dem roten Grund offener Zeilen und Karten in Anthrazit
+  statt Grau (vorher 4,48 : 1).
+- **README:** Absatz „Katalog“ ergänzt (Liste oben nach der Wahl, Dokumente zugeklappt, „Löschen“ unter „Bearbeiten“,
+  zurück an dieselbe Stelle).
+- Tests: `tests/test_vor_merge_3.py` (neu) – Seitentitel vom Server je Ansicht, Vorlagen (Ankerplätze, Leitstelle, ☰),
+  statische Prüfungen der Stellen in JS und CSS; `test_umbenennung.py` und `test_material_mangel.py` auf den neuen Titel
+  angepasst.
+
+### Bitte bestätigen
+
+1. **Leitstelle, Zeilenmenü:** „Reset-Mail senden“ und „Löschen …“ stehen hinter „Mehr“ (ein Tipp mehr), „Bearbeiten“
+   bleibt sichtbar. Alternative: drei graue Knöpfe je Zeile.
+2. **Reiter der Leitstelle als Linie** (wie die Modulnavigation der Materialablage). Die Reiter in den Dialogen der
+   Materialablage („Ordner“/„Freigaben“, „Produkt“/„Bestandteile“) bleiben wie bisher rot hinterlegt.
+3. **Katalog:** Dokumente der Kategorie unter 1024 px zugeklappt, am Rechner offen; die Zahl steht im Aufklapper.
+4. **Ankerplätze am Telefon:** Die Werkzeuge stehen in zwei Zeilen („+ Album“ in der zweiten) statt in einer rollenden.
+5. **Zurück in den Katalog** stellt auch nach dem Neuladen der Seite die Stelle wieder her (wie der Browser sonst auch).
 
 ## Nachbesserung vor dem Merge, Runde 2 (26.10.2026)
 

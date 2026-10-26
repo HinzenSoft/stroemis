@@ -310,6 +310,9 @@ table.list .btn-row { gap: 6px 8px; }
    bricht sie notfalls im Wort – sonst stünde sie über den Zellenrand hinaus. Name und
    Gliederung haben Leerzeichen und brechen von selbst an der richtigen Stelle. */
 table.list td.mail { overflow-wrap: anywhere; }
+/* Nutzerverwaltung: Die E-Mail bricht am „@“ und vor den Punkten der Domain (<wbr> aus admin.js) – erst wenn ein Teil
+   allein nicht passt, im Wort (Browserprüfung vor dem Merge, V5: „demo-wart-“ / „a@example.inva“ / „lid“). */
+#users td.mail { overflow-wrap: break-word; }
 /* Eine Marke darf ihre Spalte nicht verlassen. „table-layout: fixed“ schneidet nichts ab, und
    die Marke selbst bricht nie um – „Redakteur“ lief deshalb quer über die Spalte „Inhalte“.
    Jetzt bleibt sie in ihrer Zelle und bricht im Notfall lieber im Wort. */
@@ -323,7 +326,7 @@ table.list .recht-wahl { font-size: .78rem; padding: 4px 2px 4px 4px; }
 .recht-wahl:disabled { color: var(--grau); background: var(--grau-hell); cursor: default; }
 /* Name und Gliederung sind schmaler als zuvor: Ein langer Nachname oder „Ortsgruppe“ bricht
    notfalls im Wort, wie die E-Mail – statt in die Nachbarzelle zu laufen. */
-#users td[data-l=Name], #users td[data-l=Gliederung] { overflow-wrap: anywhere; }
+#users td[data-l=Name], #users td[data-l=Gliederung] { overflow-wrap: break-word; -webkit-hyphens: auto; hyphens: auto; }
 /* Dieselben vier Felder im Dialog „Nutzer anlegen/bearbeiten“, in einer Reihe mit Überschrift
    je Modul – schmaler als die normale Beschriftung, weil vier davon nebeneinander stehen. */
 /* Die fünf Rechte-Felder im Nutzerdialog: Fünf nebeneinander ließen je rund 95 px – „Verwaltung“ war in Firefox und
@@ -1313,6 +1316,31 @@ details.accordion .accordion-body > :first-child { margin-top: 0; } details.acco
   border-radius: var(--radius); font: inherit; font-size: var(--fs-klein); color: var(--grau); cursor: pointer;
 }
 .c-tabs button.sel { background: var(--rot-hell); border-color: var(--rot); color: var(--rot-auf-flaeche); font-weight: 700; }
+/* Reiter als Linie (Leitstelle): der gewählte rot unterstrichen wie die Reiter der Materialablage, nicht rot hinterlegt –
+   rot gefüllt ist dort allein die Hauptaktion „Nutzer anlegen“ (Browserprüfung vor dem Merge, V5). */
+.c-tabs.reiter-linie { border-bottom: 1px solid var(--linie); margin-bottom: 14px; }
+.c-tabs.reiter-linie button { flex: none; padding: 6px 12px; border: 0; border-bottom: 3px solid transparent; border-radius: 0;
+  margin-bottom: -1px; font-size: inherit; font-weight: 600; color: var(--anthrazit); background: none; }
+.c-tabs.reiter-linie button:hover { color: var(--rot); }
+.c-tabs.reiter-linie button.sel { background: none; border-bottom-color: var(--rot); color: var(--rot); }
+
+/* Zeilenmenü der Nutzerverwaltung (admin.js): „Mehr“ öffnet „Reset-Mail senden“ und „Löschen“ – seltene Aktionen nicht
+   als eigene Knöpfe je Zeile (Knopfregel, V5). Aussehen wie das Untermenü der Materialablage (details.mat-menue). */
+.zeilenmenue { position: relative; display: inline-block; }
+.zeilenmenue > summary { list-style: none; cursor: pointer; }
+.zeilenmenue > summary::-webkit-details-marker { display: none; }
+.zeilenmenue > summary::after { content: ""; display: inline-block; width: 6px; height: 6px; margin-left: 8px;
+  border: solid currentColor; border-width: 0 2px 2px 0; transform: translateY(-2px) rotate(45deg); }
+.zeilenmenue[open] > summary::after { transform: translateY(1px) rotate(-135deg); }
+.zeilenmenue-liste { position: absolute; right: 0; top: calc(100% + 4px); z-index: 60; width: max-content; min-width: 180px;
+  padding: 4px 0; background: var(--weiss); border: 1px solid var(--linie); border-radius: var(--radius);
+  box-shadow: var(--schatten-menue); text-align: left; }
+.zeilenmenue-liste button { display: block; width: 100%; padding: 10px 14px; border: 0; background: none; font: inherit;
+  color: var(--anthrazit); text-align: left; cursor: pointer; }
+.zeilenmenue-liste button + button { border-top: 1px solid var(--linie); }
+.zeilenmenue-liste button:hover { background: var(--grau-hell); }
+/* Als Karte (schmal) steht „Mehr“ links – die Liste öffnet nach rechts. */
+@media (max-width: 860px) { .zeilenmenue-liste { right: auto; left: 0; } }
 
 /* --- Einstellungen in der Verwaltung ---------------------------------------------------
    Ein Feld trägt drei Angaben: wofür es gut ist, woher der geltende Wert kommt und wie die
@@ -2186,9 +2214,9 @@ dialog.us-dlg { width: min(640px, 96vw); }
   .share-link { flex-wrap: wrap; }
   .share-link input { flex: 1 1 100%; }
   .wiki-head #ed-status { flex: 0 1 auto; min-width: 0; max-width: 38vw; overflow: hidden; text-overflow: ellipsis; }
-  /* Kartenwerkzeuge in einer Zeile, seitlich rollbar, statt in zwei Zeilen über den Markern. */
-  .map-tools { flex-wrap: nowrap; overflow-x: auto; max-width: none; right: 12px; padding: 2px 2px 6px; scrollbar-width: none; }
-  .map-tools::-webkit-scrollbar { display: none; }
+  /* Kartenwerkzeuge: Sie rollten in einer Zeile seitlich – „Neues Album“ stand dann rechts abgeschnitten, nur „N“ war zu
+     sehen (Browserprüfung vor dem Merge, V6). Jetzt brechen sie um; „Album anlegen“ heißt am Telefon „+ Album“. */
+  .map-tools { right: 12px; max-width: none; }
   .map-tools .btn, .map-tools .chip { flex: none; }
   /* Positionieren: Banner über die volle Breite; die Zoomknöpfe weichen ihm. */
   .locate-banner { left: 8px; right: 8px; transform: none; bottom: 8px; max-width: none; }
@@ -2290,6 +2318,9 @@ dialog.us-dlg { width: min(640px, 96vw); }
    <span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Artikel<span class="k-anlegen"> anlegen</span></span>
    (der äußere Behälter hält den Text zusammen, sonst setzen Knöpfe mit display: flex ihren Abstand dazwischen). */
 .k-plus { display: none; }
+/* Nur für Vorlesehilfen (etwa die Überschrift der Ankerplätze, deren Seite ganz Karte ist). */
+.nur-vorlesen { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden;
+  clip-path: inset(50%); white-space: nowrap; border: 0; }
 @media (max-width: 600px) {
   .k-plus { display: inline; }
   .k-anlegen { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden;
@@ -2323,7 +2354,10 @@ dialog.us-dlg { width: min(640px, 96vw); }
     margin: -12px 0 -12px .1em; vertical-align: middle; }
   .tree a { padding-top: 14px; padding-bottom: 14px; }
   .c-tabs button { min-height: 44px; }
-  #kopf-knoepfe .btn, #pending .btn, #users .btn, #users .recht-wahl { min-height: 44px; }
+  /* Brotkrumen der Strömipedia (ab Tablet sichtbar) wie die der Materialablage: jedes Glied mindestens 44 × 44 px
+     (Browserprüfung vor dem Merge, B-1). */
+  .krumen a.krume { min-height: 44px; min-width: 44px; }
+  #kopf-knoepfe .btn, #pending .btn, #users .btn, #users .recht-wahl, .zeilenmenue-liste button { min-height: 44px; }
   /* Lesemodus: „Zur Übersicht“ unter „Seite nicht gefunden“ (Geräte-Matrix P4-L1, 36 px). */
   .empty .btn-row .btn { min-height: 44px; display: inline-flex; align-items: center; }
   #users .recht-wahl { padding-top: 6px; padding-bottom: 6px; }

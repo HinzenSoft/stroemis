@@ -522,6 +522,7 @@
      Lehrgangsliste
      ========================================================================================== */
   function renderListe() {
+    S.titel([], "pruefungen");
     root.innerHTML = `
       <div class="page-head"><h1>Riegenkarten</h1>
         <div class="btn-row"><button class="btn secondary" data-act="lg-import">Import</button>
@@ -592,6 +593,7 @@
   }
 
   async function renderKataloge() {
+    S.titel("Prüfungsleistungskataloge", "pruefungen");
     root.innerHTML = `<a class="zurueck" href="/riegenkarten">← Alle Lehrgänge</a>
       <div class="page-head"><h1>Prüfungsleistungskataloge</h1>
         ${istAdmin() ? '<div class="btn-row"><button class="btn" data-act="kat-neu"><span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Katalog<span class="k-anlegen"> anlegen</span></span></button></div>' : ""}</div>
@@ -675,6 +677,7 @@
     if (!k) return;
     const admin = istAdmin();
     const ls = k.leistungen || [];
+    S.titel(k.titel, "pruefungen");
     root.innerHTML = `<a class="zurueck" href="/riegenkarten/kataloge">← Alle Kataloge</a>
       <div class="page-head"><h1>${esc(k.titel)}</h1>
         ${admin ? `<div class="btn-row"><button class="btn secondary small" data-act="kat-edit" data-id="${k.id}">Bearbeiten</button>
@@ -849,6 +852,7 @@
     // Matrix nach jedem Speichern auf dem Tablet zurück in die erste Spalte.
     const rollstaende = $$(".table-scroll", root).map((el) => el.scrollLeft);
     const aufgeklappt = $$("details", root).map((d) => d.open);
+    S.titel(lg.titel, "pruefungen");                  // Reiter des Browsers (Browserprüfung vor dem Merge, V2)
     root.innerHTML = `
       <a class="zurueck" href="/riegenkarten">← Alle Lehrgänge</a>
       <div class="page-head"><h1>${esc(lg.titel)}</h1>
@@ -2270,6 +2274,7 @@
     const tn = mf.teilnehmer ? (d.teilnehmer || []).find((t) => String(t.id) === mf.teilnehmer) : null;
     const l = mf.leistung ? (d.leistungen || []).find((x) => String(x.id) === mf.leistung) : null;
     const filter = [tn ? `Teilnehmende:r: ${tnName(tn)}` : "alle Teilnehmenden", l ? `Leistung: ${l.bezeichnung}` : "alle Leistungen", mf.nur_offen ? "nur offene Mängel" : "alle mangelhaften Bewertungen"];
+    S.titel(`Mängelübersicht ${lg.titel}`, "pruefungen");
     root.innerHTML = `<div class="druck-kopf"><h1>Mängelübersicht – ${esc(lg.titel)}</h1>
         <button class="btn no-print" id="druck-los" type="button">🖨 Drucken</button>
         <div class="druck-filter">${esc([spanne(lg.datum_von, lg.datum_bis), lg.ort, lg.nummer ? `Nr. ${lg.nummer}` : ""].filter(Boolean).join(" · "))}<br>${esc(filter.join(" · "))} · Stand ${esc(fmtDate(new Date().toISOString(), true))}</div></div>
@@ -2293,6 +2298,7 @@
     }
     const tn = tnVoll(d.teilnehmer), versuche = d.versuche || [];
     const soll = (lid) => { const l = (lg.leistungen || []).find((x) => x.id === lid); return l ? l.zeitansatz_sekunden : null; };
+    S.titel(`Prüfungsleistungen ${tnName(tn)}`, "pruefungen");
     root.innerHTML = `<div class="druck-kopf"><h1>Prüfungsleistungen – ${esc(tnName(tn))}</h1>
         <button class="btn no-print" id="druck-los" type="button">🖨 Drucken</button>
         <div class="druck-filter">${esc([lg.titel, spanne(lg.datum_von, lg.datum_bis), lg.ort].filter(Boolean).join(" · "))}<br>
