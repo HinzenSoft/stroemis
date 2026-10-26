@@ -138,6 +138,11 @@
   const DARF = JSON.parse(root.dataset.darf || "{}");
   const inhalt = document.getElementById("mat-inhalt");
   const API = "/api/material";
+  /* Seitentitel je Ansicht (Browserprüfung vor dem Merge, V2): vorn das Gezeigte – Artikelnummer, Ordner, Produkt,
+     Kategorie –, dann „Materialablage“ (S.titel); seite.html setzt bis dahin ein festes Wort je Ansicht. Ohne
+     Modulzugang (nur „Meine PSA“, ohne Modulnavigation) ohne den Modulnamen – das Konto kennt das Modul nicht. */
+  const OHNE_MODUL = !document.querySelector(".mat-nav");
+  const seitenTitel = (...teile) => S.titel(teile, OHNE_MODUL ? "" : "material");
   const $ = (sel, el) => (el || document).querySelector(sel);
   const $$ = (sel, el) => Array.from((el || document).querySelectorAll(sel));
 
@@ -528,6 +533,10 @@
   const pfadKnoten = (name) => `<span class="mat-pfadknoten" title="${esc(OHNE_FREIGABE)}">${esc(name)}</span>`;
   // Ein Glied eines Pfads ({id, name}): verlinkt – oder grau, wenn es nur ein Pfad-Knoten ist.
   const pfadGlied = (o) => (offenbar(o.id) ? `<a href="/materialablage/ordner/${o.id}">${esc(o.name)}</a>` : pfadKnoten(o.name));
+  /* Brotkrumen (.mat-pfad) aus fertigen Gliedern (HTML): Der Schrägstrich hängt am folgenden Glied – am Telefon blieb er
+     sonst allein am Ende der Zeile stehen, und das letzte Glied („Gurte“) stand mit seiner Wortbreite allein darunter
+     (Browserprüfung vor dem Merge, B-1; material.css). */
+  const pfadHtml = (glieder) => glieder.filter(Boolean).map((g, i) => (i ? `<span class="mat-pfad-glied">/ ${g}</span>` : g)).join(" ");
   // Die nächste Gliederung über einem Ordner (oder er selbst) – wie bestand.gliederung_von auf dem Server.
   function gliederungVon(id) {
     const gesehen = new Set();
@@ -730,6 +739,7 @@
       kopf.textContent = "Kategorien";
       kopf.href = "/materialablage/katalog";
       leiste.setAttribute("aria-label", "Kategorien");
+      $("#mat-side-zu").setAttribute("aria-label", "Kategorien schließen");
       if (leisteAuf) $(".mat-side-auf-text", leisteAuf).textContent = " Kategorien";
     }
     try { leisteDaten = LEISTE_KATALOG ? await kategorienLaden() : await ordnerBaum(); }
@@ -830,7 +840,7 @@
       const kat = e.target.closest("a[data-kat]");
       if (kat && katalogWahl && !e.ctrlKey && !e.metaKey && !e.shiftKey && e.button === 0) {
         e.preventDefault();
-        katalogWahl(kat.dataset.kat ? +kat.dataset.kat : null);
+        katalogWahl(kat.dataset.kat ? +kat.dataset.kat : null, alsSchublade());
         leisteZu(knopfInSuchzeile());
         return;
       }
@@ -863,6 +873,9 @@
     // Wechselt die Darstellung (Tablet gedreht, Fold auf- oder zugeklappt), schließt eine offene Schublade – sonst
     // stand sie beim Zurückwechseln samt Abdunklung wieder offen da.
     const umschalten = () => { leisteZu(); leisteInert(); leisteKnopfSetzen(); };
+    // Beim Verlassen der Seite zu: Zurück aus dem Verlauf (bfcache) stand sie sonst samt Abdunklung offen da – im Katalog
+    // wie im Bestand (Browserprüfung vor dem Merge, V3).
+    window.addEventListener("pagehide", () => leisteZu());
     schublade.addEventListener("change", umschalten);
     zweiHaelften.addEventListener("change", umschalten);
     leisteWischen();
@@ -1134,6 +1147,7 @@
       : `<p class="help">Im <a href="/materialablage/katalog">Katalog</a> stehen alle Produkte mit Prüfformularen und Herstellerdokumenten.
           Die Nummernsuche oben findet eine Herstellerseriennummer auf Wunsch auch außerhalb deines Bereichs – das wird mit deinem Namen protokolliert.</p>`;
     // Ohne Knöpfe im Kopf (Wunsch vom 20.10.2026): Bestand und „Artikel anlegen“ erreicht man über den Reiter „Bestand“.
+    seitenTitel("Übersicht");
     inhalt.innerHTML = `<div class="page-head"><h1>Materialablage</h1></div>
       ${mangelKasten(d.maengel, d.maengel_gesamt)}
       ${rueckrufKasten(d.rueckrufe)}
@@ -1654,6 +1668,7 @@
         </tbody></table></section>` : "";
     }
     async function zeichnen() {
+      seitenTitel("Prüfungen");
       inhalt.innerHTML = `<div class="page-head"><h1>Prüfungen</h1>
           <div class="btn-row"><a class="btn secondary" href="/materialablage/pruefen" title="Ist ein PDF-Protokoll unverändert?">Protokoll prüfen</a>
             ${DARF.verwalten || DARF.pruefen ? '<button class="btn secondary" data-act="runde"><span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Prüfdurchgang<span class="k-anlegen"> anlegen</span></span></button>' : ""}</div></div>
@@ -1720,6 +1735,7 @@
   /* --- Bestand ------------------------------------------------------------------------------------ */
   async function bestand() {
     const liste = await ordnerBaum();
+    seitenTitel("Bestand");
     inhalt.innerHTML = `<div class="page-head"><h1>Bestand</h1>
         <div class="btn-row">${DARF.gliederung_anlegen ? '<button class="btn secondary" data-act="gliederung"><span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Gliederung<span class="k-anlegen"> anlegen</span></span></button>' : ""}
           ${DARF.verwalten || DARF.pruefen ? '<a class="btn secondary mat-mit-zahl" href="/materialablage/bestand/antraege">Änderungsanträge<span class="mat-meldezahl" id="bst-antraege" hidden></span></a>' : ""}</div></div>
@@ -2096,7 +2112,7 @@
       // Verschieben und Löschen: wer den Ordner darüber verwaltet – eine Gliederung auf oberster Ebene nur die Verwaltung.
       const darfOben = darfPflegen && verwaltet(d.parent_id ? baumIndex[d.parent_id] : null);
       const z = d.zaehlung || {};
-      const bc = d.pfad.map((p, i) => (i === d.pfad.length - 1 ? `<span>${esc(p.name)}</span>` : pfadGlied(p))).join(" / ");
+      const bc = d.pfad.map((p, i) => (i === d.pfad.length - 1 ? `<span>${esc(p.name)}</span>` : pfadGlied(p)));
       const pruefbar = d.system_kind !== "ausgesondert" && d.artikel.some((a) => a.darf && a.darf.pruefen);
       // Filter „Zugeordnet an …“ (Bauentwurf 6.4) – nur mit Grundrecht und nur, wenn im Zweig jemandem etwas zugeordnet ist.
       // Seit dem 25.10.2026 im Filtermenü der Seitenleiste.
@@ -2159,7 +2175,8 @@
       const systemText = d.system_kind === "gesperrt"
         ? "Hierher verschiebt eine Sperre die Artikel der Gliederung. Zurück in ihren Herkunftsordner bringt sie nur eine Freiprüfung."
         : "Ausgesonderte Artikel bleiben hier mit ihrem vollen Lebenslauf sichtbar, zählen aber nirgends mehr als Bestand und lassen sich nicht zurückholen.";
-      inhalt.innerHTML = `<div class="mat-pfad"><a href="/materialablage/bestand">Bestand</a> / ${bc}</div>
+      seitenTitel(d.name);
+      inhalt.innerHTML = `<div class="mat-pfad">${pfadHtml(['<a href="/materialablage/bestand">Bestand</a>', ...bc])}</div>
         <div class="page-head"><h1>${schloss(d)}${esc(d.name)} ${system ? "" : `<span class="mat-art">${esc(ORDNERART[d.kind])}</span>`}${demoMarke(d.demo)}</h1>
           <div class="btn-row">${darfPflegen ? `<button class="btn secondary small" data-act="unterordner"><span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Unterordner<span class="k-anlegen"> anlegen</span></span></button>
             <a class="btn secondary small" href="/materialablage/artikel/neu?ordner=${d.id}"><span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Artikel<span class="k-anlegen"> anlegen</span></span></a>
@@ -2389,6 +2406,16 @@
         <a href="/materialablage/katalog" role="button" data-act="kat-import"><strong>Katalog importieren …</strong>
           <span>Eine Katalogdatei (ZIP oder JSON) übernehmen: erst ein Probelauf, dann übernehmen. Gelöscht wird dabei nichts.</span></a>
       </div></details>`;
+  // „Bearbeiten“ im Kategoriekopf des Katalogs: wie im Ordnerkopf steht „Löschen“ im Untermenü statt als eigener Knopf
+  // (Browserprüfung vor dem Merge, V1 – am Telefon schob die Knopfreihe samt Dokumenten die Produktliste weit hinunter).
+  const kategorieMenue = `<details class="mat-menue">
+      <summary class="btn secondary small" aria-haspopup="true">Bearbeiten</summary>
+      <div class="mat-menue-liste">
+        <a href="#" role="button" data-act="kat-bearbeiten"><strong>Kategorie bearbeiten …</strong>
+          <span>Name, Oberkategorie, Norm und die Vorgaben für Materialart, Prüfintervall, Lebensdauer und Länge.</span></a>
+        <a href="#" role="button" data-act="kat-loeschen"><strong>Löschen …</strong>
+          <span>Geht nur ohne Unterkategorien und Produkte; vorher wird nachgefragt.</span></a>
+      </div></details>`;
   // „Bearbeiten“ im Ordnerkopf: Verschieben und Löschen stehen im Untermenü statt als eigene Knöpfe (Wunsch vom
   // 20.10.2026). Wer den Ordner nur bearbeiten, aber nicht verschieben oder löschen darf, behält den einfachen Knopf.
   const bearbeitenMenue = `<details class="mat-menue">
@@ -2494,7 +2521,7 @@
                      ["be-aussonderungen", "Aussonderungen"], ["be-maengel", "Mängel"], ["be-rueckrufe", "Rückrufe"],
                      ["be-ausblick", "Ausblick"]];
     const NICHT_GEPRUEFT_OFFEN = 25;          // so viele „nicht geprüft“ stehen aufgeklappt, mehr zugeklappt
-    const titelSetzen = (k) => { document.title = `Jahresbericht ${k.ordner} ${k.jahr} – strömis.de`; };
+    const titelSetzen = (k) => seitenTitel(`Jahresbericht ${k.ordner} ${k.jahr}`);
 
     function inhaltHtml(b) {
       const k = b.kopf;
@@ -2579,7 +2606,7 @@
     function geruest(b) {
       const k = b.kopf;
       const jahre = k.jahre.includes(k.jahr) ? k.jahre : [...k.jahre, k.jahr].sort();
-      inhalt.innerHTML = `<div class="mat-pfad"><a href="/materialablage/bestand">Bestand</a> / <a href="/materialablage/ordner/${fid}">${esc(k.pfad)}</a></div>
+      inhalt.innerHTML = `<div class="mat-pfad">${pfadHtml(['<a href="/materialablage/bestand">Bestand</a>', `<a href="/materialablage/ordner/${fid}">${esc(k.pfad)}</a>`])}</div>
         <div class="page-head"><h1>Jahresbericht ${esc(k.ordner)} <span id="be-titel-jahr">${esc(String(k.jahr))}</span>${demoMarke(k.demo)}</h1>
           <div class="btn-row" id="be-dateien">${dateien(b)}</div></div>
         <div class="mat-bericht-wahl">
@@ -2598,13 +2625,13 @@
       const dieses = new Date().getFullYear();
       const jahre = Array.from({ length: 15 }, (_, i) => dieses - i);
       const gewaehlt = jahre.includes(jahr) ? jahr : dieses;
-      inhalt.innerHTML = `<div class="mat-pfad"><a href="/materialablage">Materialablage</a> / <a href="/materialablage/bestand">Bestand</a></div>
+      inhalt.innerHTML = `<div class="mat-pfad">${pfadHtml(['<a href="/materialablage">Materialablage</a>', '<a href="/materialablage/bestand">Bestand</a>'])}</div>
         <div class="page-head"><h1>Jahresbericht</h1></div>
         <div class="mat-bericht-wahl">
           <label for="be-jahr">Kalenderjahr <select id="be-jahr">${jahre.map((j) => `<option value="${j}"${j === gewaehlt ? " selected" : ""}>${j}</option>`).join("")}</select></label></div>
         <div id="be-inhalt"><p class="notice" role="alert">${esc(e.message)}</p></div>`;
       $("#be-jahr").addEventListener("change", (ev) => { jahr = +ev.target.value; laden(false); });
-      document.title = "Jahresbericht – strömis.de";
+      seitenTitel("Jahresbericht");
     }
 
     // Daten holen; nachladen: nur der Inhalt wird ersetzt, Auswahl und Knöpfe bleiben (mit neuer Jahreszahl).
@@ -2663,7 +2690,7 @@
       ldText = `Herstellerangabe ${ld.jahre} Jahre${ld.quelle ? ` (${esc(ld.quelle)})` : ""} <span class="muted">– bei „${esc(MATERIALART[p.material_kind])}“ kein festgeschriebenes Lebensende</span>`;
     }
     const ivText = iv.monate ? `${iv.monate} Monate <span class="muted">(${esc(iv.quelle || "")}${iv.organisation && iv.organisation[0] && iv.hersteller && iv.hersteller[0] && iv.organisation[0] > iv.hersteller[0] ? ` – ${esc(iv.organisation[1])} wollte ${iv.organisation[0]}, die Herstellervorgabe ist kürzer` : ""})</span>` : '<span class="mat-warn">kein Intervall</span>';
-    const bc = a.pfad.map(pfadGlied).join(" / ");
+    const bc = pfadHtml(a.pfad.map(pfadGlied));
     const zeile = (t, w) => `<dt>${esc(t)}</dt><dd>${w}</dd>`;
     // Personenzuordnung (Bauentwurf 6.4): sehen nur mit Grundrecht, zuordnen, ändern und lösen, wer den Artikel verwaltet.
     // Einem ausgesonderten Artikel ordnet niemand mehr jemanden zu; eine alte Zuordnung lässt sich noch lösen.
@@ -2694,6 +2721,7 @@
     const sperreDurchMangel = /^Mangel gemeldet am /.test(a.lock_reason || "") && offeneMaengel.length > 0;
     const zuordnung = darf.grund ? zeile("Zugeordnet an", `${zu ? `${esc(zu.name)}${zu.gliederung ? ` <span class="muted">· ${esc(zu.gliederung)}</span>` : ""}${zu.aktiv ? "" : ' <span class="muted">(deaktiviert)</span>'}`
       : '<span class="muted">–</span>'}${zuKnoepfe}`) : "";
+    seitenTitel(a.inventory_no);
     inhalt.innerHTML = `${quittungHtml()}${a.demo ? `<p class="mat-demo-banner">${DEMO_ARTIKEL}</p>` : ""}
       ${a.status === "ausgesondert" ? `<p class="mat-banner s-ausgesondert">AUSGESONDERT – dieser Artikel ist außer Dienst und darf nicht mehr verwendet werden.</p>` : ""}
       ${a.status === "gesperrt" && !sperreDurchMangel ? `<p class="mat-banner s-gesperrt">GESPERRT${sperrText ? ` – ${esc(sperrText)}` : ""}. Nicht verwenden, bis eine Freiprüfung ihn freigibt.</p>` : ""}
@@ -3332,6 +3360,7 @@
     if (!DARF.verwalten) { inhalt.innerHTML = '<p class="error">Artikel legen nur Materialwarte an.</p>'; return; }
     // Wählbar sind nur Ordner, die das Konto verwaltet; der Weg dorthin steht grau dabei.
     const wahl = ordnerOptionen(await ordnerBaum(), verwaltet, DATEN.ordner);
+    seitenTitel("Artikel anlegen");
     if (!wahl.anzahl) { inhalt.innerHTML = `<h1>Artikel anlegen</h1>${leer("Du verwaltest noch keinen Ordner – Artikel legt an, wer den Ordner verwaltet.")}`; return; }
     leisteMarkieren(DATEN.ordner);
     let produkt = null;
@@ -3518,13 +3547,29 @@
     let lauf = 0;
     let beobachter = null;
     let nachladen = null;
+    /* Zurück von einer Produktseite (Browserprüfung vor dem Merge, V3): Die Seite kam neu und stand oben, die Endlosliste
+       wieder bei 50. Suche, Sortierung, wie viel nachgeladen war und die Scrollhöhe stehen deshalb im Eintrag des
+       Verlaufs (history.state, gemerkt beim Verlassen) – nur für dieselbe Kategorie; ein neuer Aufruf hat keinen. Das
+       Wiederherstellen übernimmt liste(), der Browser rollt nicht selbst dazwischen. */
+    let geladenJetzt = 0;
+    const gemerkt = history.state && history.state.katalog;
+    let wiederher = gemerkt && (gemerkt.kategorie || null) === kategorie ? gemerkt : null;
+    if (wiederher) { q = wiederher.q || ""; sort = wiederher.sort || sort; }
+    if ("scrollRestoration" in history) history.scrollRestoration = "manual";
+    const merken = () => {
+      try {
+        history.replaceState(Object.assign({}, history.state, { katalog: { kategorie, q, sort, geladen: geladenJetzt, y: Math.round(window.scrollY) } }), "");
+      } catch (e) { /* ohne Verlauf eben ohne Rückweg an die Stelle */ }
+    };
+    window.addEventListener("pagehide", merken);
+    inhalt.addEventListener("click", (e) => { if (e.target.closest && e.target.closest("a[href]")) merken(); }, true);
     // Enge Tabelle und Karte (Lieferung 5): der Hersteller klein über dem Produkt, die kurzen Angaben zu zweit.
     const produktZeile = (x) => `<tr><td data-l="Hersteller" class="mat-schmal-weg">${esc(x.manufacturer || "")}</td>
           <td data-l="Produkt" class="mat-k-titel">${x.manufacturer ? `<div class="mat-schmal-zusatz small muted">${esc(x.manufacturer)}</div>` : ""}${x.vorschau ? `<img class="mat-mini" src="${esc(x.vorschau)}" alt="" loading="lazy">` : ""}<a href="/materialablage/katalog/produkt/${x.id}"><strong>${nameHtml(x, true)}</strong></a>${zusatzHtml(x)}${artNrKurz(x.article_no)}${demoMarke(x.demo)}</td>
           <td data-l="Kategorie">${esc(x.category_name || "")}</td><td data-l="Materialart" class="mat-k-halb">${esc(MATERIALART[x.material_kind])}</td>
           <td data-l="Intervall" class="mat-k-halb">${x.intervall.monate ? `${x.intervall.monate} Mon.` : "–"}</td>
           <td data-l="Lebensdauer" class="mat-k-halb">${x.lifetime_years ? `${x.lifetime_years} J.` : "–"}</td><td data-l="Bestand" class="mat-k-halb">${x.bestand}</td></tr>`;
-    async function liste() {
+    async function liste(springen) {
       const meinLauf = ++lauf;
       if (beobachter) { beobachter.disconnect(); beobachter = null; }
       const holen = (seite) => {
@@ -3539,18 +3584,45 @@
       ziel.innerHTML = d.produkte.length ? `${kartenKopf(KATALOG_SORT, s)}<table class="list mat-tabelle mat-karten mat-katalogliste"><thead><tr>${sortKopf("Hersteller", "hersteller", s, { klasse: "mat-schmal-weg" })}${sortKopf("Produkt", "produkt", s, { vor: kopfZusatz("Hersteller", "hersteller", s, "schmal") })}${sortKopf("Kategorie", "kategorie", s)}${sortKopf("Materialart", "materialart", s)}${sortKopf("Intervall", "intervall", s)}${sortKopf("Lebensdauer", "lebensdauer", s)}${sortKopf("Bestand", "bestand", s)}</tr></thead>
         <tbody>${d.produkte.map(produktZeile).join("")}</tbody></table><p class="help mat-endlos" id="kat-mehr"></p>`
         : leer(q || kategorie ? "Kein Produkt in dieser Auswahl." : "Der Katalog ist noch leer.");
-      // War die Liste schon unter der Suchzeile weggescrollt, beginnt die neue Auswahl direkt unter ihr.
       const such = $(".mat-suchzeile");
-      if (such && ziel.getBoundingClientRect().top < such.getBoundingClientRect().bottom) {
+      const zurueck = wiederher;
+      wiederher = null;
+      if (springen && such) {
+        // Kategorie aus der Schublade gewählt (Telefon, Tablet hochkant): Die Suchzeile kommt unter die Kopfleiste, die
+        // Liste direkt darunter – vorher sah man nur den Kopf der Kategorie (Browserprüfung vor dem Merge, V1).
+        const oben = parseFloat(getComputedStyle(such).top) || 0;
+        window.scrollTo(0, ziel.getBoundingClientRect().top + window.scrollY - such.offsetHeight - oben);
+      } else if (!zurueck && such && ziel.getBoundingClientRect().top < such.getBoundingClientRect().bottom) {
+        // War die Liste schon unter der Suchzeile weggescrollt, beginnt die neue Auswahl direkt unter ihr.
         window.scrollBy(0, ziel.getBoundingClientRect().top - such.getBoundingClientRect().bottom);
       }
-      if (!d.produkte.length) return;
+      geladenJetzt = d.produkte.length;
+      if (!d.produkte.length) { if (zurueck) window.scrollTo(0, zurueck.y || 0); return; }
       const mehr = $("#kat-mehr");
       let seite = 1;
       let geladen = d.produkte.length;
       let gesamt = d.gesamt;
       let laedt = false;
       const stand = () => { mehr.textContent = geladen < gesamt ? `${geladen} von ${gesamt} – weitere kommen beim Scrollen` : plural(gesamt, "Produkt", "Produkte"); };
+      const anhaengen = (n) => {
+        seite += 1;
+        $("tbody", ziel).insertAdjacentHTML("beforeend", n.produkte.map(produktZeile).join(""));
+        geladen += n.produkte.length;
+        gesamt = n.produkte.length ? n.gesamt : geladen;       // leer: inzwischen sind es weniger geworden
+        geladenJetzt = geladen;
+      };
+      // Zurück von einer Produktseite: so weit nachladen wie vorher (höchstens 20 Seiten), dann an die alte Stelle.
+      if (zurueck) {
+        try {
+          while (geladen < Math.min(zurueck.geladen || 0, gesamt, PRO_SEITE * 20)) {
+            const n = await holen(seite + 1);
+            if (meinLauf !== lauf) return;
+            anhaengen(n);
+            if (!n.produkte.length) break;
+          }
+        } catch (e) { /* dann eben nur bis hierher – weiter unten lädt das Scrollen nach */ }
+        window.scrollTo(0, zurueck.y || 0);
+      }
       stand();
       if (geladen >= gesamt) return;
       beobachter = new IntersectionObserver(async (eintraege) => {
@@ -3567,10 +3639,7 @@
         }
         laedt = false;
         if (meinLauf !== lauf || !beobachter) return;
-        seite += 1;
-        $("tbody", ziel).insertAdjacentHTML("beforeend", n.produkte.map(produktZeile).join(""));
-        geladen += n.produkte.length;
-        gesamt = n.produkte.length ? n.gesamt : geladen;       // leer: inzwischen sind es weniger geworden
+        anhaengen(n);
         stand();
         if (geladen >= gesamt) { beobachter.disconnect(); beobachter = null; return; }
         // Steht das Ende nach dem Anhängen noch im Bild (großer Bildschirm), gleich die nächste Seite.
@@ -3580,11 +3649,12 @@
       beobachter.observe(mehr);
       nachladen = () => { if (beobachter) { stand(); beobachter.observe(mehr); } };
     }
-    function zeichnen() {
+    function zeichnen(springen) {
       const k = kats.find((x) => x.id === kategorie);
       const pfad = [];
       for (let x = k; x; x = kats.find((y) => y.id === x.parent_id)) pfad.unshift(x);
       leisteMarkieren(kategorie);
+      seitenTitel(k ? k.name : "", "Katalog");     // auch beim Wechsel der Kategorie ohne Neuladen
       // Produkte samt Unterkategorien – dieselbe Zahl wie in der Leiste und wie die Liste darunter.
       const summe = (id) => (kats.find((x) => x.id === id).produkte || 0) + kats.filter((x) => x.parent_id === id).reduce((n, c) => n + summe(c.id), 0);
       const angaben = k ? [k.norm ? esc(k.norm) : "", k.default_material_kind ? `Materialart ${esc(MATERIALART[k.default_material_kind])}` : "",
@@ -3605,15 +3675,16 @@
             ${DARF.lesen || DARF.katalog ? `<a class="btn secondary mat-mit-zahl" href="/materialablage/katalog/meldungen">Meldungen<span class="mat-meldezahl" id="kat-meldungen" hidden></span></a>` : ""}
             ${DARF.katalog ? katalogMenue : ""}</div></div>
         ${k ? `<div class="mat-katkopf">
-            <div class="mat-pfad"><a href="/materialablage/katalog" data-act="kategorie" data-id="">alle Kategorien</a>${pfad.slice(0, -1).map((x) => ` / <a href="/materialablage/katalog?kategorie=${x.id}" data-act="kategorie" data-id="${x.id}">${esc(x.name)}</a>`).join("")}</div>
+            <div class="mat-pfad">${pfadHtml(['<a href="/materialablage/katalog" data-act="kategorie" data-id="">alle Kategorien</a>',
+              ...pfad.slice(0, -1).map((x) => `<a href="/materialablage/katalog?kategorie=${x.id}" data-act="kategorie" data-id="${x.id}">${esc(x.name)}</a>`)])}</div>
             <h2>${esc(k.name)} ${demoMarke(k.demo)}</h2>
             <p class="small">${angaben}${formularZeile}</p>
-            ${DARF.katalog ? `<div class="btn-row"><button class="btn secondary small" data-act="kat-bearbeiten">Kategorie bearbeiten</button>
-              <button class="btn secondary small" data-act="kat-formular">Generisches Formular</button><button class="btn secondary small" data-act="kat-loeschen">Löschen</button></div>` : ""}
-            <div class="mat-katdoks"><h3 class="mat-unter">Dokumente für alle Produkte dieser Kategorie</h3>
+            ${DARF.katalog ? `<div class="btn-row">${kategorieMenue}
+              <button class="btn secondary small" data-act="kat-formular">Generisches Formular</button></div>` : ""}
+            <details class="mat-katdoks mat-auf"${alsSchublade() ? "" : " open"}><summary>Dokumente für alle Produkte dieser Kategorie<span id="kat-doks-zahl"></span></summary>
               <p class="help">Pflegehinweise, allgemeine Anleitungen … – sie gelten für jedes Produkt hier und in den Unterkategorien und stehen dort bei den Herstellerdokumenten.</p>
               <div id="kat-doks"><p class="help">Wird geladen …</p></div>
-              ${DARF.katalog ? '<button class="btn secondary small" data-act="dok-neu"><span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Dokument<span class="k-anlegen"> anlegen</span></span></button>' : ""}</div></div>`
+              ${DARF.katalog ? '<button class="btn secondary small" data-act="dok-neu"><span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Dokument<span class="k-anlegen"> anlegen</span></span></button>' : ""}</details></div>`
           : (kats.length ? "" : leer(DARF.katalog ? "Noch keine Kategorien – mit „Kategorie anlegen“." : "Noch keine Kategorien."))}
         ${DARF.katalog ? '<div id="kat-import-hinweis"></div>' : ""}
         <div class="mat-suchzeile"><input type="search" id="kat-q" placeholder="${katPlatzhalter()}"
@@ -3622,7 +3693,7 @@
       leisteKnopfSetzen();             // „☰ Kategorien“ in die neue Suchzeile (Telefon, Tablet hochkant)
       let los = null;
       $("#kat-q").addEventListener("input", (e) => { clearTimeout(los); los = setTimeout(() => { q = e.target.value.trim(); zeigen(liste); }, 250); });
-      zeigen(liste);
+      zeigen(() => liste(springen));
       if (k) zeigenIn(katDoks, "#kat-doks");
       if (DARF.katalog) { meldungenZaehlen($("#kat-meldungen")); importHinweis(); }
     }
@@ -3631,6 +3702,8 @@
       katDocs = (await api(`${API}/kategorien/${kategorie}/dokumente`)).dokumente;
       const ziel = $("#kat-doks");
       if (ziel) ziel.innerHTML = katDocs.length ? dokTabelle(katDocs, DARF.katalog) : leer("Noch keine Dokumente an dieser Kategorie.");
+      const zahl = $("#kat-doks-zahl");
+      if (zahl) zahl.textContent = ` (${katDocs.length})`;          // auch zugeklappt sieht man, ob es welche gibt
     }
     aktionen = {
       kategorie: (b) => katalogWahl(b.dataset.id ? +b.dataset.id : null),
@@ -3655,10 +3728,11 @@
       },
       ...dokAktionen(() => katDocs, () => `${API}/kategorien/${kategorie}/dokumente`, () => zeigenIn(katDoks, "#kat-doks")),
     };
-    katalogWahl = (id) => {
+    // springen: aus der Schublade gewählt – danach steht die Liste oben (liste).
+    katalogWahl = (id, springen) => {
       kategorie = id;
       history.replaceState(null, "", kategorie ? `?kategorie=${kategorie}` : location.pathname);
-      zeichnen();
+      zeichnen(springen);
     };
     zeichnen();
   }
@@ -4421,8 +4495,9 @@
           <a href="#" role="button" data-act="rr-neu"><strong>Rückruf anlegen …</strong>
             <span>Eine Rückrufaktion des Herstellers für alle Artikel dieses Produkts oder bestimmte Seriennummern.</span></a>
         </div></details>`;
+    seitenTitel(produktName(p));
     inhalt.innerHTML = `${p.demo ? '<p class="mat-demo-banner">DEMO – nicht für echte Prüfungen.</p>' : ""}
-      <div class="mat-pfad"><a href="/materialablage/katalog">Katalog</a> / ${p.kategorie_pfad.map((x) => `<a href="/materialablage/katalog?kategorie=${x.id}">${esc(x.name)}</a>`).join(" / ")}</div>
+      <div class="mat-pfad">${pfadHtml(['<a href="/materialablage/katalog">Katalog</a>', ...p.kategorie_pfad.map((x) => `<a href="/materialablage/katalog?kategorie=${x.id}">${esc(x.name)}</a>`)])}</div>
       <div class="mat-artikelkopf">
         ${p.bild ? bildLink(p.bild, p.original, `Produktbild ${produktName(p)}`, null, `<img class="mat-produktbild" src="${esc(p.bild)}" alt="">`) : '<div class="mat-produktbild leer" aria-hidden="true">kein Produktbild</div>'}
         <div class="mat-artikeltitel"><h1>${nameHtml(p)}${zusatzHtml(p)} ${demoMarke(p.demo)}</h1>
@@ -4675,8 +4750,9 @@
         ${f.wiki_aendern ? "" : '<p class="help">Verknüpfen kann, wer in der Strömipedia mindestens Mitglied ist.</p>'}</div>`;
     }
     function zeichnen() {
+      seitenTitel(f.titel || "Prüfformular");
       inhalt.innerHTML = `${f.demo ? '<p class="mat-demo-banner">DEMO – nicht für echte Prüfungen.</p>' : ""}
-        <div class="mat-pfad"><a href="/materialablage/katalog">Katalog</a> / <a href="${zielLink}">${esc(zielText)}</a></div>
+        <div class="mat-pfad">${pfadHtml(['<a href="/materialablage/katalog">Katalog</a>', `<a href="${zielLink}">${esc(zielText)}</a>`])}</div>
         <div class="page-head"><h1>${esc(f.titel || "Prüfformular")} <span class="badge grey">Version ${f.version}</span> ${f.aktiv ? '<span class="mat-status s-einsatzbereit">aktiv</span>' : '<span class="badge grey">inaktiv</span>'} ${demoMarke(f.demo)}</h1>
           <div class="btn-row">${DARF.katalog ? `${f.aktiv ? '<button class="btn secondary small" data-act="deaktivieren">Deaktivieren</button>' : '<button class="btn secondary small" data-act="aktivieren">Aktivieren</button>'}
             <button class="btn secondary small" data-act="neue-version">Neue Version</button>${!f.aktiv && !f.benutzt ? '<button class="btn secondary small" data-act="loeschen">Löschen</button>' : ""}` : ""}</div></div>
@@ -4817,9 +4893,11 @@
     let fremde = null;            // Ergebnis der globalen Suche zu q – Blättern und Sortieren suchen nicht noch einmal
     async function zeichnen() {
       const q = DATEN.q || "";
+      seitenTitel("Suche");
       if (!q) { inhalt.innerHTML = `<h1>Suche</h1>${leer("Serien-, Inventar- oder Herstellernummer oben eingeben – auch Teile davon.")}`; return; }
       const p = sortParameter(new URLSearchParams({ q, seite, pro_seite: 50 }), sort);
       const d = await api(`${API}/suche?${p}`);
+      seitenTitel(`Suche „${q}“`);
       inhalt.innerHTML = `<div class="page-head"><h1>Suche „${esc(q)}“</h1></div>
         ${d.treffer.length ? artikelTabelle(d.treffer, { pfad: true, sort }) : leer("Kein Artikel in deinem Bereich gefunden.")}${seitenleiste(d.gesamt, seite, 50)}
         ${d.global_angebot ? '<div id="mat-global-angebot"></div>' : ""}`;
@@ -4840,8 +4918,7 @@
 
   /* --- Prüfung starten ---------------------------------------------------------------------------- */
   function artikelPfad(a) {
-    return `<div class="mat-pfad">${(a.pfad || []).map(pfadGlied).join(" / ")}
-      / <a href="/materialablage/artikel/${a.id}">${esc(a.inventory_no)}</a></div>`;
+    return `<div class="mat-pfad">${pfadHtml([...(a.pfad || []).map(pfadGlied), `<a href="/materialablage/artikel/${a.id}">${esc(a.inventory_no)}</a>`])}</div>`;
   }
   function lebensdauerHinweis(ld) {
     if (!ld) return "";
@@ -4863,6 +4940,7 @@
     else if (a.entwurf) hinweis = esc(`In Prüfung bei ${a.entwurf.pruefer} seit ${fmtZeit(a.entwurf.seit)}.${darf.verwalten ? " Eine liegen gebliebene Reservierung hebst du in der Artikelansicht auf." : " Eine liegen gebliebene Reservierung hebt der Materialwart auf."}`);
     else if (!a.formular) hinweis = "Für dieses Produkt gibt es kein aktives Prüfformular – weder am Produkt noch in seiner Kategorie. Die Material-Verwaltung legt es im Katalog an.";
     const ld = a.lebensdauer && a.lebensdauer.festgeschrieben ? { ende: a.lebensdauer.ende, rest_tage: a.lebensdauer.rest_tage, erreicht: a.lebensdauer.rest_tage <= 0 } : null;
+    seitenTitel(`Prüfung ${a.inventory_no}`);
     inhalt.innerHTML = `${a.demo ? `<p class="mat-demo-banner">${DEMO_ARTIKEL}</p>` : ""}
       ${artikelPfad(a)}
       <div class="page-head"><h1>Prüfung ${esc(a.inventory_no)} ${statusMarke(a.status, true)}</h1></div>
@@ -5340,7 +5418,7 @@
           : `<button class="btn secondary small" type="button" disabled title="${esc(pr.berichtigbar.grund)}">Berichtigen</button>`);
       }
       return `${pr.artikel.demo ? `<p class="mat-demo-banner">${DEMO_ARTIKEL}</p>` : ""}
-        <div class="mat-pfad">${a.pfad.map(pfadGlied).join(" / ")} / <a href="/materialablage/artikel/${a.id}">${esc(a.inventory_no)}</a></div>
+        <div class="mat-pfad">${pfadHtml([...a.pfad.map(pfadGlied), `<a href="/materialablage/artikel/${a.id}">${esc(a.inventory_no)}</a>`])}</div>
         <div class="page-head"><h1>${esc(PRUEFART[pr.art] || pr.art)} <span class="mat-h1-zusatz">${esc(a.inventory_no)}</span> ${pr.entwurf ? '<span class="badge">Entwurf</span>' : ergebnisMarke(pr.ergebnis)}</h1>
           ${knoepfe.length ? `<div class="btn-row">${knoepfe.join("")}</div>` : ""}</div>
         ${berichtigungHinweis()}
@@ -5648,6 +5726,7 @@
       leisteMarkieren(pr.artikel.folder_id);
       // Der eigene Entwurf, aber prüfen geht gerade nicht (Urkundennummer fehlt, Prüffreigabe abgelaufen): warum.
       const ohneNummer = pr.entwurf && pr.eigen && !darfHier("pruefen") && (DARF.pruefer_haekchen || DARF.qualifiziert) ? `<p class="notice">${pruefHinweis(pr)}</p>` : "";
+      seitenTitel(`${PRUEFART[pr.art] || pr.art} ${pr.artikel.inventory_no}`);
       inhalt.innerHTML = `<div class="mat-pruefung${bearbeitbar() ? " mat-mit-leiste" : ""}">${kopf()}${ohneNummer}${bearbeitbar() ? bearbeitenHtml() : leseHtml()}</div>`;
       anleitungEinsetzen();
       doppelteZeigen(inhalt);
@@ -6130,7 +6209,8 @@
       // dazu „nicht geprüft“.
       const zustaende = d.offen ? [["", "alle"], ["offen", "offen"], ["in_pruefung", "in Prüfung"], ["erledigt", "erledigt"], ["ausgenommen", "ausgenommen"]]
         : [["", "alle"], ["erledigt", "erledigt"], ["ausgenommen", "ausgenommen"]].concat(z.nicht_geprueft ? [["nicht_geprueft", "nicht geprüft"]] : []);
-      inhalt.innerHTML = `<div class="mat-pfad"><a href="/materialablage/pruefungen">Prüfungen</a> / Prüfdurchgang</div>
+      seitenTitel(d.titel);
+      inhalt.innerHTML = `<div class="mat-pfad">${pfadHtml(['<a href="/materialablage/pruefungen">Prüfungen</a>', "<span>Prüfdurchgang</span>"])}</div>
         <div class="page-head"><h1>${esc(d.titel)} ${d.offen ? '<span class="badge">offen</span>' : `<span class="badge grey">${d.abgebrochen ? "abgebrochen" : "abgeschlossen"}</span>`}</h1>
           <div class="btn-row">${d.offen && darf ? `<button class="btn secondary" data-act="abbrechen">Durchgang abbrechen</button>
             <button class="btn" data-act="schliessen" ${d.abschliessbar ? "" : "disabled"}>Durchgang abschließen</button>` : ""}
@@ -6281,6 +6361,7 @@
       const hilfe = d.bearbeiten ? "Materialwarte melden hier Produkte, die ihnen beim Anlegen von Artikeln im Katalog fehlen. „Produkt anlegen“ übernimmt ihre Angaben in den Produktdialog. Der Melder bekommt eine Mail, sobald das Produkt im Katalog ist – oder deine Begründung, wenn du ablehnst."
         : d.alle ? "Materialwarte melden hier Produkte, die ihnen beim Anlegen von Artikeln im Katalog fehlen; die Material-Verwaltung nimmt sie auf oder lehnt sie mit Begründung ab."
           : "Produkte, die du beim Anlegen von Artikeln als fehlend gemeldet hast. Du bekommst eine Mail, sobald die Material-Verwaltung sie bearbeitet hat.";
+      seitenTitel(d.alle ? "Produktmeldungen" : "Deine Produktmeldungen");
       inhalt.innerHTML = `<div class="page-head"><h1>${d.alle ? "Produktmeldungen" : "Deine Produktmeldungen"}</h1>
           <div class="btn-row"><a class="btn secondary" href="/materialablage/katalog">Katalog</a>${DARF.verwalten ? '<a class="btn secondary" href="/materialablage/artikel/neu"><span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Artikel<span class="k-anlegen"> anlegen</span></span></a>' : ""}</div></div>
         <p class="help">${hilfe}${DARF.verwalten && !DARF.katalog ? ` <button type="button" class="lnk" data-act="eigene">${d.alle ? "Nur deine zeigen" : "Alle Meldungen zeigen"}</button>` : ""}</p>
@@ -6334,6 +6415,7 @@
       filter = d.filter;
       const liste = d.antraege;
       const antrag = (b) => liste.find((x) => x.id === +b.dataset.id);
+      seitenTitel("Änderungsanträge");
       inhalt.innerHTML = `<div class="page-head"><h1>Änderungsanträge</h1>
           <div class="btn-row"><a class="btn secondary" href="/materialablage/bestand">Bestand</a></div></div>
         <p class="help">Seit der ersten Prüfung stehen die Stammdaten eines Artikels fest – Materialwarte und Prüfer beantragen hier Änderungen mit Begründung, die Materialwarte des Ordners bestätigen oder lehnen ab.</p>
@@ -6854,7 +6936,7 @@
     let uebernimmt = false;
     let berichtFuer = "";        // die Zuordnung, zu der bericht gehört – weicht sie ab, gilt „Übernehmen“ nicht
     let ohneSerie = false;       // Häkchen „Diese Liste hat keine Seriennummern“ – gilt nur für den Bericht, unter dem es steht
-    inhalt.innerHTML = `<div class="mat-pfad"><a href="/materialablage/bestand">Bestand</a> / ${o.pfad.map(pfadGlied).join(" / ")} / <span>Import</span></div>
+    inhalt.innerHTML = `<div class="mat-pfad">${pfadHtml(['<a href="/materialablage/bestand">Bestand</a>', ...o.pfad.map(pfadGlied), "<span>Import</span>"])}</div>
       <div class="page-head"><h1>Bestandsliste importieren ${demoMarke(o.demo)}</h1></div>
       <p class="help">Zielordner: <strong>${esc(o.pfad.map((x) => x.name).join(" / "))}</strong> – mit der Spalte „Ordner“ auch seine Unterordner.</p>
       <section class="section mat-import" id="bi-neu" aria-labelledby="bi-neu-titel"><h2 id="bi-neu-titel">Neue Liste</h2>

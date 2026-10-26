@@ -8,7 +8,7 @@
    Prüfsummen und zeigt nur „unverändert“ oder „verändert“ samt Protokoll-ID – keine Personendaten. Die Datei wird
    nicht gespeichert. #}
 <main class="page narrow mat-pruefen" id="pruefen" data-angemeldet="{{ 'ja' if angemeldet else 'nein' }}">
-  {% if angemeldet %}<div class="mat-pfad"><a href="/materialablage">Materialablage</a> / <a href="/materialablage/pruefungen">Prüfungen</a></div>{% endif %}
+  {% if angemeldet %}<div class="mat-pfad"><a href="/materialablage">Materialablage</a> <span class="mat-pfad-glied">/ <a href="/materialablage/pruefungen">Prüfungen</a></span></div>{% endif %}
   <h1>Protokoll prüfen</h1>
   <p>Jedes festgeschriebene Protokoll von strömis.de – Prüf-, Aussonderungs-, Sammel- und Set-Protokoll – trägt im Fuß
     jeder Seite eine Prüfsumme: „SHA-256 (erste N Bytes): …“. Lade die PDF-Datei hier hoch; die Seite vergleicht sie

@@ -277,5 +277,13 @@ window.S = (function () {
     setzen();
   })();
 
-  return { esc, api, toast, dialog, confirm, fmtDate, fmtCoord, CAT };
+  /* Seitentitel im Reiter des Browsers und im Verlauf: das Gezeigte vorn, dann das Modul, dann die Seite –
+     „M-000123 – Materialablage – strömis.de“ (Browserprüfung vor dem Merge, V2). teile: Texte (leere fallen weg),
+     modul: Schlüssel aus app/module.py („material“ …) oder leer. Kein HTML: document.title zeigt Text, wie er ist. */
+  function titel(teile, modul) {
+    const name = modul ? ((window.STROEMIS && STROEMIS.module && STROEMIS.module.name) || {})[modul] : "";
+    document.title = [...[].concat(teile || []), name, "strömis.de"].map((t) => String(t || "").trim()).filter(Boolean).join(" – ");
+  }
+
+  return { esc, api, toast, dialog, confirm, fmtDate, fmtCoord, CAT, titel };
 })();
