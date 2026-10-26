@@ -93,7 +93,7 @@ def liste(user):
     rows = db.query(
         "SELECT i.*, p.manufacturer, p.model, p.description AS product_description, p.article_no, p.material_kind, "
         f"p.image AS product_image, {bestand.demo_sql('i', 'p')} AS artikel_demo, "
-        f"{rueckruf.GEPRUEFT_UM_SQL.format(a='i')} AS geprueft_um, {rueckruf.BETROFFEN_AB_SQL.format(a='i')} AS betroffen_ab "
+        f"{rueckruf.PRUEFUNG_BEGONNEN_SQL.format(a='i')} AS pruefung_begonnen, {rueckruf.BETROFFEN_AB_SQL.format(a='i')} AS betroffen_ab "
         "FROM mat_item i JOIN mat_product p ON p.id = i.product_id "
         "WHERE i.assigned_user_id = :uid AND i.lock_state <> 'ausgesondert' "
         f"ORDER BY {_REIHE.format(s=st.status_sql('i'))}, i.inventory_no LIMIT :lim",

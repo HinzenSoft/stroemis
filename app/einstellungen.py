@@ -263,6 +263,15 @@ def _gueltige(werte):
     return {k: v for k, v in werte.items() if k not in NACH_SCHLUESSEL or NACH_SCHLUESSEL[k].wert(v) is not None}
 
 
+def _aus_umgebung(f):
+    """Der Wert aus der .env, wenn er gilt – sonst None. Einen unbrauchbaren (Feld.wert liefert None, etwa „abc“ oder
+    1000 für „bald fällig“) ersetzt create_app beim Start durch die Vorgabe; die Oberfläche zeigt dann auch sie."""
+    roh = os.environ.get(f.schluessel)
+    if roh is None or f.wert(roh) is None:
+        return None
+    return roh
+
+
 def _quelle(schluessel, werte):
     """Woher der Wert kommt, der gerade gilt – das gehört in die Oberfläche.
 
@@ -271,7 +280,7 @@ def _quelle(schluessel, werte):
     an der falschen Stelle."""
     if schluessel in _gueltige(werte):
         return "gespeichert"
-    if os.environ.get(schluessel) is not None:
+    if _aus_umgebung(NACH_SCHLUESSEL[schluessel]) is not None:
         return "umgebung"
     return "vorgabe"
 
@@ -282,7 +291,7 @@ def _anzeigewert(f, werte):
         return ""
     if f.schluessel in _gueltige(werte):
         return werte[f.schluessel]
-    roh = os.environ.get(f.schluessel)
+    roh = _aus_umgebung(f)
     if roh is not None:
         return roh
     grund = _grundstand.get(f.schluessel)

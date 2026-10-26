@@ -19,10 +19,12 @@ eine Zeile, mit der Rolle des Empfängers (Verwalter, Prüfer oder Verwaltung im
 Gesperrt wird nichts automatisch – sperren dürfen ohne Prüfung nur Prüfer (pruefung.sperren), dafür gibt es den
 Sperrgrund „Rückruf“. Je Artikel wird der Zustand abgeleitet, nie gespeichert:
 
-  erledigt   der Artikel ist gesperrt, verloren oder ausgesondert – oder nach dem Anlegen des Rückrufs wurde
-             eine Prüfung an ihm abgeschlossen (eine Berichtigung zählt nicht: sie ändert eine alte Prüfung). Kam der
-             Artikel erst per bestätigtem Änderungsantrag (Produkt oder Seriennummer) in den Rückruf, zählt nur eine
-             Prüfung nach diesem Antrag – eine frühere kannte den Rückruf für ihn nicht (Befund R1 vor dem Merge)
+  erledigt   der Artikel ist gesperrt, verloren oder ausgesondert – oder an ihm wurde eine Prüfung abgeschlossen,
+             die nach dem Anlegen des Rückrufs begonnen wurde (eine Berichtigung zählt nicht: sie ändert eine alte
+             Prüfung). Kam der Artikel erst per bestätigtem Änderungsantrag (Produkt oder Seriennummer) in den Rückruf,
+             zählt nur eine Prüfung, die nach diesem Antrag begann – eine frühere kannte den Rückruf für ihn nicht
+             (Befund R1 vor dem Merge). Maßgeblich ist der Beginn des Entwurfs, nicht der Abschluss: Ein Entwurf, der
+             schon offen war, als der Rückruf bzw. der Antrag kam, zeigte dem Prüfer keinen Hinweis (Befund N-A1)
   offen      sonst
 
 Ausgesonderte Artikel sind außer Dienst und zählen nicht als betroffen. Beendet wird ein Rückruf mit einem
@@ -52,11 +54,12 @@ HINTERGRUND = _im_hintergrund
 
 _LINK = re.compile(r"https?://[^\s/?#]+\S*", re.IGNORECASE)
 
-# Letzte Prüfung (ohne Berichtigung) und seit wann der Artikel so ist, wie ein Rückruf ihn trifft: Zeitpunkt des letzten
-# bestätigten Antrags, der Produkt oder Seriennummer änderte (applied_at, Zeitformat wie db.now()). Für zustand – {a}
-# ist der Tabellenalias des Artikels; Lesen hier, in psa.liste und im Jahresbericht.
-GEPRUEFT_UM_SQL = ("(SELECT MAX(x.completed_at) FROM mat_inspection x WHERE x.item_id = {a}.id "
-                   "AND x.completed_at IS NOT NULL AND x.corrects_inspection_id IS NULL)")
+# Beginn der zuletzt begonnenen abgeschlossenen Prüfung (ohne Berichtigung; created_at ist das Anlegen des Entwurfs) und
+# seit wann der Artikel so ist, wie ein Rückruf ihn trifft: Zeitpunkt des letzten bestätigten Antrags, der Produkt oder
+# Seriennummer änderte (applied_at, Zeitformat wie db.now()). Für zustand – {a} ist der Tabellenalias des Artikels;
+# Lesen hier, in psa.liste und im Jahresbericht.
+PRUEFUNG_BEGONNEN_SQL = ("(SELECT MAX(x.created_at) FROM mat_inspection x WHERE x.item_id = {a}.id "
+                         "AND x.completed_at IS NOT NULL AND x.corrects_inspection_id IS NULL)")
 BETROFFEN_AB_SQL = ("(SELECT MAX(c.applied_at) FROM mat_item_change c WHERE c.item_id = {a}.id "
                     "AND c.field IN ('product_id', 'serial_no') AND c.applied_at IS NOT NULL)")
 
@@ -138,12 +141,12 @@ def _passt(serien_norm, artikel):
 
 
 def _artikel_im_bestand(pid, iid=None, sichtbar=True):
-    """Artikel des Produkts im Bestand (nicht ausgesondert) mit dem Zeitpunkt ihrer letzten abgeschlossenen
+    """Artikel des Produkts im Bestand (nicht ausgesondert) mit dem Beginn ihrer zuletzt begonnenen abgeschlossenen
     Prüfung. Berichtigungen zählen nicht – sie ändern eine alte Prüfung, sie sind keine neue. sichtbar: nur die, die das
     Konto der Anfrage sieht (über die Heimat, rechte.artikel_filter); False für die Mails, für die Auskunft an die
     Verwaltung und für einen einzelnen Artikel, dessen Recht der Aufrufer schon geprüft hat."""
     sql = ("SELECT i.id, i.inventory_no, i.serial_no, i.serial_generated, i.lock_state, i.lock_reason, i.folder_id, "
-           f"i.origin_folder_id, {GEPRUEFT_UM_SQL.format(a='i')} AS geprueft_um, "
+           f"i.origin_folder_id, {PRUEFUNG_BEGONNEN_SQL.format(a='i')} AS pruefung_begonnen, "
            f"{BETROFFEN_AB_SQL.format(a='i')} AS betroffen_ab "
            "FROM mat_item i WHERE i.product_id = ? AND i.lock_state <> 'ausgesondert'")
     if sichtbar:
@@ -157,13 +160,14 @@ def _artikel_im_bestand(pid, iid=None, sichtbar=True):
 
 def zustand(r, artikel):
     """(Zustand, Grund) eines betroffenen Artikels – abgeleitet aus Sperre und Prüfungen, nie gespeichert.
-    Als Prüfung zum Rückruf zählt nur eine nach dem späteren von Rückruf-Anlage und dem Antrag, der den Artikel in den
-    Rückruf brachte (betroffen_ab, BETROFFEN_AB_SQL; fehlt die Spalte, nur die Anlage). Gleiche Sekunde zählt als
-    vorher: Ob die Prüfung den Rückruf schon kannte, ist dann nicht zu sagen."""
+    Als Prüfung zum Rückruf zählt nur eine abgeschlossene, deren Entwurf nach dem späteren von Rückruf-Anlage und dem
+    Antrag begann, der den Artikel in den Rückruf brachte (pruefung_begonnen, PRUEFUNG_BEGONNEN_SQL; betroffen_ab,
+    BETROFFEN_AB_SQL; fehlt die Spalte, nur die Anlage) – wer den Entwurf vorher öffnete, sah den Rückruf nicht
+    (Befund N-A1). Gleiche Sekunde zählt als vorher: Ob die Prüfung den Rückruf schon kannte, ist dann nicht zu sagen."""
     if artikel["lock_state"] in ("gesperrt", "verloren", "ausgesondert"):
         return "erledigt", "gesperrt" if artikel["lock_state"] != "ausgesondert" else "ausgesondert"
     grenze = max(r["created_at"], artikel.get("betroffen_ab") or "")
-    if artikel["geprueft_um"] and artikel["geprueft_um"] > grenze:
+    if artikel["pruefung_begonnen"] and artikel["pruefung_begonnen"] > grenze:
         return "erledigt", "geprueft"
     return "offen", None
 

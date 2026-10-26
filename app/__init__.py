@@ -27,6 +27,25 @@ def _env_bool(name, default=False):
     return v.strip().lower() in ("1", "true", "yes", "on")
 
 
+def _env_ganzzahl(name, vorgabe, kleinster, groesster):
+    """Eine ganze Zahl aus der Umgebung im Bereich kleinster … groesster. Fehlt sie oder ist sie leer, gilt die Vorgabe;
+    ist sie keine ganze Zahl oder liegt sie außerhalb, auch – mit einer Warnung im Log. Die App startet trotzdem: Ein
+    Tippfehler in der .env soll nicht die ganze Seite lahmlegen (wie die Prüfung beim Speichern unter Leitstelle →
+    Einstellungen, einstellungen.Feld.wert)."""
+    roh = (os.environ.get(name) or "").strip()
+    if not roh:
+        return vorgabe
+    try:
+        zahl = int(roh)
+    except ValueError:
+        zahl = None
+    if zahl is None or not kleinster <= zahl <= groesster:
+        logging.getLogger(__name__).warning("%s=%r in der Umgebung ist keine ganze Zahl von %s bis %s – es gilt die "
+                                            "Vorgabe %s.", name, roh, kleinster, groesster, vorgabe)
+        return vorgabe
+    return zahl
+
+
 def _idna(host):
     """Hostnamen mit Umlaut in die Punycode-Form bringen, wie sie im Host-Header ankommt."""
     host = (host or "").strip().lower().split(":")[0]
@@ -413,6 +432,8 @@ def _kachel_quellen(cfg):
 
 
 def create_app():
+    # Vor dem Lesen der Umgebung: Warnungen dabei (_env_ganzzahl) stehen so im selben Format im Log.
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     data_dir = os.environ.get("DATA_DIR", "/data")
     media_dir = os.path.join(data_dir, "media")
     os.makedirs(media_dir, exist_ok=True)
@@ -440,8 +461,9 @@ def create_app():
         ADMIN_NOTIFY_EMAIL=os.environ.get("ADMIN_NOTIFY_EMAIL", ""),
         LOGIN_SLIDESHOW=_env_bool("LOGIN_SLIDESHOW", True),
         SPRACHEINGABE=_env_bool("SPRACHEINGABE", True),     # Diktat an den Kommentarfeldern der Prüfungen
-        # Modul Material: Ab wie vielen Tagen vor der Fälligkeit ein Artikel „bald fällig“ heißt.
-        MATERIAL_BALD_FAELLIG_TAGE=int(os.environ.get("MATERIAL_BALD_FAELLIG_TAGE", "30")),
+        # Materialablage: Ab wie vielen Tagen vor der Fälligkeit ein Artikel „bald fällig“ heißt – 0 bis 365 wie unter
+        # Leitstelle → Einstellungen; sonst Warnung und Vorgabe.
+        MATERIAL_BALD_FAELLIG_TAGE=_env_ganzzahl("MATERIAL_BALD_FAELLIG_TAGE", material.MATERIAL_BALD_FAELLIG_TAGE, 0, 365),
         # Modul Material: Erinnerungsmails an die Materialwarte (täglich ab 6 Uhr). Vorgabe aus – eingeschaltet wird in
         # der Produktion unter Leitstelle → Einstellungen; MATERIAL_ERINNERUNGEN_SPERRE (nur Umgebung) sperrt hart.
         MATERIAL_ERINNERUNGEN=_env_bool("MATERIAL_ERINNERUNGEN", False),
@@ -496,8 +518,6 @@ def create_app():
     )
     app.json.ensure_ascii = False
     app.wsgi_app = PublicHostMiddleware(ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1), app)
-
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
     db.init_app(app)
     # Die Materialablage bringt Schema, Blueprints und Kommandozeile selbst mit; es meldet seine
