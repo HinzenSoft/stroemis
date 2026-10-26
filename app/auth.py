@@ -19,7 +19,7 @@ EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 MIN_PW = 8
 
 # Antwort auf eine Kontoanfrage – wortgleich, egal ob es die Adresse schon gibt (keine Nutzer-Enumeration).
-PENDING_MSG = ("Danke! Deine Anfrage wurde an die Administratoren geschickt. "
+PENDING_MSG = ("Danke! Deine Anfrage wurde an die Plattform-Verwaltung geschickt. "
                "Du bekommst eine E-Mail, sobald dein Konto freigegeben ist. "
                "Sieh dann bitte auch im Spam-Ordner nach – automatisch verschickte Mails landen "
                "dort häufiger.")
@@ -347,7 +347,7 @@ def ensure_admin():
         if not db.query("SELECT 1 FROM users LIMIT 1", one=True):
             current_app.logger.warning(
                 "Noch kein Nutzer vorhanden und ADMIN_EMAIL/ADMIN_PASSWORD nicht gesetzt – "
-                "der erste registrierte Nutzer wird Administrator.")
+                "der erste registrierte Nutzer bekommt die Plattform-Verwaltung.")
         return
     u = db.query("SELECT * FROM users WHERE email = ?", (email,), one=True)
     if not u:
@@ -399,7 +399,7 @@ def register():
     """Konto anfragen: das Konto wird angelegt, bleibt aber bis zur Freigabe durch einen Admin gesperrt.
     Ausnahme: der allererste Nutzer wird sofort Administrator."""
     if not current_app.config["ALLOW_REGISTRATION"]:
-        return jsonify(error="Kontoanfragen sind deaktiviert. Bitte an den Administrator wenden."), 403
+        return jsonify(error="Kontoanfragen sind deaktiviert. Bitte wende dich an die Plattform-Verwaltung."), 403
     d = json_body()
     email = sfield(d, "email").strip().lower()
     # Eigene Bereiche, damit die Anmeldebremse und diese hier sich nicht gegenseitig auslösen.
@@ -494,7 +494,7 @@ def login():
                 note_attempt(scope)
         return jsonify(error="E-Mail-Adresse oder Passwort ist falsch."), 401
     if u.get("status") == "pending":
-        return jsonify(error="Deine Kontoanfrage wartet noch auf die Freigabe durch einen Administrator."), 403
+        return jsonify(error="Deine Kontoanfrage wartet noch auf die Freigabe durch die Plattform-Verwaltung."), 403
     if not u["active"]:
         return jsonify(error="Dieses Konto ist deaktiviert."), 403
     # Nur den Zähler des Kontos zurücksetzen: sonst könnte ein Angreifer mit einem einzigen
@@ -553,7 +553,7 @@ def reset():
         return jsonify(error="Der Link wurde bereits verwendet."), 400
     if not can_reset(u):
         if (u.get("status") or "active") == "pending":
-            return jsonify(error="Deine Kontoanfrage wartet noch auf die Freigabe durch einen Administrator."), 403
+            return jsonify(error="Deine Kontoanfrage wartet noch auf die Freigabe durch die Plattform-Verwaltung."), 403
         return jsonify(error="Dieses Konto ist deaktiviert."), 403
     neu = generate_password_hash(pw)
     with db.transaction():

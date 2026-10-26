@@ -52,6 +52,15 @@ WEITER = [
     ("/str%C3%B6mipedia/platzhalter-seite", "/stroemipedia/platzhalter-seite"),
     ("/ankerpl%C3%A4tze", "/ankerplaetze"),
     ("/" + quote(unicodedata.normalize("NFD", "ankerplätze")), "/ankerplaetze"),
+    # Schrägstrich am Ende der Startseite (Nachbesserung vor dem Merge, N6) – auch bei den alten Adressen in einem Schritt.
+    ("/stroemipedia/", "/stroemipedia"),
+    ("/ankerplaetze/", "/ankerplaetze"),
+    ("/riegenkarten/", "/riegenkarten"),
+    ("/materialablage/?ordner=4", "/materialablage?ordner=4"),
+    ("/leitstelle/", "/leitstelle"),
+    ("/wiki/", "/stroemipedia"),
+    ("/material/?x=1", "/materialablage?x=1"),
+    ("/str%C3%B6mipedia/", "/stroemipedia"),
 ]
 
 # Bleibt, wie es ist: kein 301.
@@ -59,7 +68,8 @@ UNBERUEHRT = ["/", "/materialx", "/materialablage", "/wikis", "/wiki-seite", "/a
               "/pruefungenx", "/api/material/start", "/api/wiki/tree", "/api/admin/users", "/api/pruefungen/lehrgaenge",
               "/media/material/web/x.jpg", "/media/wiki/x.jpg", "/media/pruefung/web/x.jpg",
               "/static/material/material.js", "/m/abcdef", "/oeffentlich/", "/login?next=/material",
-              "/stroemipedia", "/leitstelle", "/riegenkarten", "/ankerplaetze"]
+              "/stroemipedia", "/leitstelle", "/riegenkarten", "/ankerplaetze", "/stroemipedia/x/",
+              "/riegenkarten/kataloge/", "/stroemipedia//"]
 
 
 def _app(tmp):
@@ -96,6 +106,11 @@ def test_weiterleitungen():
             teile = urlsplit(ziel)
             assert not teile.scheme and not teile.netloc, ziel                 # eigener Host, kein Schema
             assert "\\" not in ziel and "\r" not in ziel and "\n" not in ziel and not ziel.startswith("//"), ziel
+        # Der Schrägstrich-Fall kennt nur die fünf festen Startseiten: kein Sprung auf „//…“ oder fremde Pfade.
+        from app import module
+        for pfad in ("//stroemipedia/", "//evil.example/", "/stroemipedia//", "/leitstelle/x/", "/"):
+            assert module.weiterleitung(pfad) is None, pfad
+        assert module.weiterleitung("/wiki//") == "/stroemipedia//"           # bleibt ein eigener Pfad (404 dort)
         # Die Wiki-Subdomain schreibt vorher auf /oeffentlich/… um – dort greift keine Weiterleitung (wie bisher).
         host = app.config["PUBLIC_HOST"]
         r = anon.get("/wiki/platzhalter", headers={"Host": host})

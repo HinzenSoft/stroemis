@@ -88,7 +88,7 @@ FELDER = [
          wandeln=_idna,
          hilfe="Anfragen an diesen Namen landen im öffentlichen Bereich."),
     Feld("ALLOW_REGISTRATION", "Seite", "Kontoanfragen erlauben", art="schalter",
-         hilfe="Aus heißt: Konten legt nur ein Administrator an."),
+         hilfe="Aus heißt: Konten legt nur die Plattform-Verwaltung an."),
     Feld("LOGIN_SLIDESHOW", "Seite", "Bilder auf der Anmeldeseite", art="schalter",
          hilfe="Zeigt zufällige Bilder aus den Ankerplätzen hinter dem Anmeldeformular."),
 
@@ -130,7 +130,7 @@ FELDER = [
          hilfe="Gegen diese Adresse prüft der Empfänger SPF, und an sie gehen Rückläufer. Leer "
                "heißt: dieselbe wie oben – so verlangt es DMARC."),
     Feld("ADMIN_NOTIFY_EMAIL", "E-Mail", "Benachrichtigungen an",
-         hilfe="Zusätzliche Adresse für Kontoanfragen. Leer heißt: nur an die Administratoren."),
+         hilfe="Zusätzliche Adresse für Kontoanfragen. Leer heißt: nur an die Plattform-Verwaltung."),
 
     # --- Karte ------------------------------------------------------------------------------
     Feld("MAP_CENTER", "Karte", "Mittelpunkt beim Öffnen",

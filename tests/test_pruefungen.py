@@ -2012,7 +2012,7 @@ def test_kataloge():
         assert pr.get("/api/pruefungen/kataloge").status_code == 200
         assert nix.get("/api/pruefungen/kataloge").status_code == 403          # kein Prüferrecht
         r = pr.post("/api/pruefungen/kataloge", json={"titel": "Versuch"})
-        assert r.status_code == 403 and "Administration" in r.json["error"], r.get_json()
+        assert r.status_code == 403 and r.json["error"] == "Kataloge pflegt nur die Verwaltung der Riegenkarten.", r.get_json()
         assert nix.post("/api/pruefungen/kataloge", json={"titel": "Versuch"}).status_code == 403
 
         # --- Anlegen, lesen, ändern, Feldgrenzen ------------------------------------------------------

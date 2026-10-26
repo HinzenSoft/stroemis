@@ -603,7 +603,7 @@
     if (!ziel) return;
     if (!kataloge.length) {
       ziel.innerHTML = `<div class="leer"><strong>Noch keine Kataloge</strong>${istAdmin()
-        ? "Lege einen an, um Prüfungsleistungen als Vorlage bereitzustellen." : "Die Administration legt sie an."}</div>`;
+        ? "Lege einen an, um Prüfungsleistungen als Vorlage bereitzustellen." : "Die Verwaltung der Riegenkarten legt sie an."}</div>`;
       return;
     }
     ziel.innerHTML = `<table class="list">
@@ -706,7 +706,7 @@
         <button class="btn" id="kl-save" type="button">${neu ? "Anlegen" : "Speichern"}</button></div>`,
       (dlg, body) => {
         const holen = mdEditorEinrichten(dlg, body, "#kl-editor", l.beschreibung_md, "kl-md");
-        if (neu) fokus($("#kl-bez", body));
+        fokus($("#kl-bez", body));
         // Neu: die Kriterien sind nur ein lokaler Entwurf, bis die Leistung selbst existiert.
         // Bestehend: jede Änderung persistiert sofort über die eigenen Kriterien-Endpunkte.
         const kritEntwurf = neu ? kriterienEntwurfEinrichten(body) : null;
@@ -1368,6 +1368,9 @@
         initialValue: wert || "", language: "de-DE", usageStatistics: false,
         placeholder: "Wie läuft die Prüfung ab, was wird bewertet?",
         toolbarItems: [],
+        // Toast UI nimmt sich sonst beim Anlegen den Fokus: Er gehört aber aufs erste Feld (am Rechner „Bezeichnung“,
+        // am Touchgerät der Titel – common.js), und die Bildschirmtastatur soll nicht von selbst aufgehen.
+        autofocus: false,
         // Dieselbe Reinigung wie in der Leseansicht und im Wiki-Editor; Toast UI nutzt sie nur für
         // Vorschau und eigene HTML-Renderer, die Anzeige reinigt gespeicherten Text ohnehin erneut.
         sanitizer: MD.reinigen,
@@ -1375,6 +1378,11 @@
       try { ed = new toastui.Editor(opts); }
       catch (e) { delete opts.language; try { ed = new toastui.Editor(opts); } catch (e2) { ed = null; } }
       if (ed) { const b = mdBubbleEinrichten(ed, el, dlg); bubble = b.bubble; onSelection = b.onSelection; }
+      // ProseMirror verschluckt Esc (preventDefault für jede Esc-Taste) – der Dialog blieb offen, solange der Fokus in
+      // der Beschreibung stand. Hier also selbst schließen, wie es Esc in jedem anderen Feld tut.
+      el.addEventListener("keydown", (e) => {
+        if (e.key === "Escape" && e.defaultPrevented && dlg.open && !e.isComposing) dlg.close();
+      });
     }
     if (!ed) {
       el.innerHTML = `<textarea class="pl-fallback" id="${fallbackId}" placeholder="Beschreibung (Markdown)">${esc(wert)}</textarea>`;
@@ -1478,7 +1486,7 @@
         <button class="btn" id="pl-save" type="button">${neu ? "Anlegen" : "Speichern"}</button></div>`,
       (dlg, body) => {
         const holen = mdEditorEinrichten(dlg, body, "#pl-editor", l.beschreibung_md, "pl-md");
-        if (neu) fokus($("#pl-bez", body));
+        fokus($("#pl-bez", body));
         // Neu: die Kriterien sind nur ein lokaler Entwurf, bis die Leistung selbst existiert.
         // Bestehend: jede Änderung persistiert sofort über die eigenen Kriterien-Endpunkte.
         const kritEntwurf = neu ? kriterienEntwurfEinrichten(body) : null;

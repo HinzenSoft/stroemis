@@ -592,7 +592,9 @@
       state.current = null;
       if (state.spy) { try { state.spy(); } catch (e) { /* egal */ } state.spy = null; }
       seitenInfoSchliessen();
-      content.innerHTML = `<div class="empty"><strong>Seite nicht gefunden</strong>${esc(e.message)}<div class="btn-row" style="justify-content:center;margin-top:12px"><a class="btn secondary small" href="/stroemipedia" id="home-link">Zur Übersicht</a></div></div>`;
+      // Bei 404 sagt die Schnittstelle selbst nur „Seite nicht gefunden“ – das stand dann zweimal untereinander.
+      const text = e.status === 404 ? "Diese Seite gibt es nicht (mehr) – vielleicht wurde sie gelöscht oder umbenannt." : e.message;
+      content.innerHTML = `<div class="empty"><strong>Seite nicht gefunden</strong>${esc(text)}<div class="btn-row" style="justify-content:center;margin-top:12px"><a class="btn secondary small" href="/stroemipedia" id="home-link">Zur Übersicht</a></div></div>`;
       $("#home-link").onclick = (ev) => { ev.preventDefault(); navigate(""); };
       renderTree(); renderRail([]);
       return;
@@ -687,7 +689,7 @@
           <span class="muted small">${r.children ? `· ${r.children} Unterseite${r.children > 1 ? "n" : ""} ` : ""}· gelöscht ${fmtDate(r.deleted_at, true)}${r.created_by_name ? " · " + esc(r.created_by_name) : ""}</span></div>
         <div class="btn-row">${r.can_restore
           ? '<button class="btn secondary small" data-a="restore">Wiederherstellen</button><button class="btn danger small" data-a="purge">Endgültig löschen</button>'
-          : '<span class="muted small">nur Ersteller oder Admin</span>'}</div>
+          : '<span class="muted small">nur Ersteller oder Wiki-Verwaltung</span>'}</div>
       </li>`).join("")}</ul>`
       : '<p class="muted">Der Papierkorb ist leer.</p>'}
       <div class="dlg-actions"><button class="btn secondary" data-close type="button">Schließen</button></div>`,
@@ -719,8 +721,14 @@
      deuten, zählt sie als fremd. */
   const istFremd = (href) => { try { return new URL(href, location.href).origin !== location.origin; } catch (e) { return true; } };
 
+  /* Jeder Link bekommt seinen Handler nur einmal: Die Seitenansicht verdrahtet erst den Artikel und danach den ganzen
+     Inhalt samt Artikel – ein Klick auf einen Link im Text legte so zwei Verlaufseinträge an, und „Zurück“ blieb beim
+     ersten Druck auf derselben Seite. Gemerkt in einer WeakSet, nicht am Element (der Editor liest sein DOM als Text). */
+  const verdrahtet = new WeakSet();
   function wireLinks(root) {
     root.querySelectorAll("a[href]").forEach((a) => {
+      if (verdrahtet.has(a)) return;
+      verdrahtet.add(a);
       const href = a.getAttribute("href") || "";
       if (/^https?:\/\//i.test(href) && istFremd(href)) { a.target = "_blank"; a.rel = "noopener"; }
       // Interne Links: /stroemipedia/<slug> und – in Seiten von vor der Umbenennung (26.10.2026) – /wiki/<slug>.
@@ -1472,7 +1480,7 @@
         <label class="inline"><input type="checkbox" value="${u.id}" ${editorIds.has(u.id) ? "checked" : ""}> ${esc(u.name || "Unbenannt")} <span class="muted small">${esc(u.gliederung || "")}</span></label>`).join("") || '<div class="muted small">Keine weiteren Nutzer.</div>'}</div>` : ""}
       ${p.can_share ? `<h3 style="margin-top:18px">Lesen einschränken</h3>
       <p class="help">Normalerweise darf jeder Angemeldete jede Seite lesen. Eingeschränkt sehen die Seite
-      und ihre Unterseiten nur noch du, die Administration und die oben freigegebenen Nutzer.</p>
+      und ihre Unterseiten nur noch du, die Wiki-Verwaltung und die oben freigegebenen Nutzer.</p>
       <label class="inline"><input type="checkbox" id="sh-restrict" ${p.read_restricted ? "checked" : ""}
         ${p.effective_public ? "disabled" : ""}> Nur für freigegebene Nutzer lesbar</label>
       ${p.effective_public ? '<div class="help">Nicht möglich, solange die Seite öffentlich freigegeben ist.</div>' : ""}` : ""}
@@ -4241,13 +4249,37 @@
     const input = body.querySelector("#em-input");
     input.value = initial;
     const list = MD.allEmojis();
-    grid.innerHTML = list.map((e) => `<button type="button" class="em" data-e="${MD.esc(e)}">${e}</button>`).join("");
+    /* Das Raster ist EIN Tab-Stopp (Roving Tabindex): Tab führt hinein und wieder hinaus zu „Einfügen“/„Abbrechen“,
+       statt über hundert Emojis einzeln anzuspringen; darin wandern die Pfeiltasten, Pos1/Ende springen an die Enden. */
+    grid.setAttribute("role", "group");
+    grid.setAttribute("aria-label", "Emoji wählen");
+    grid.innerHTML = list.map((e, i) => `<button type="button" class="em" data-e="${MD.esc(e)}" tabindex="${i ? -1 : 0}">${e}</button>`).join("");
+    const knoepfe = grid.children;
+    const stopp = (b) => {
+      grid.querySelectorAll('.em[tabindex="0"]').forEach((x) => { x.tabIndex = -1; });
+      b.tabIndex = 0;
+    };
+    // Spalten je Zeile: so viele Knöpfe, wie auf der Höhe des ersten stehen (das Raster bricht frei um).
+    const spalten = () => { let n = 0; while (n < knoepfe.length && knoepfe[n].offsetTop === knoepfe[0].offsetTop) n++; return n || 1; };
+    grid.addEventListener("keydown", (e) => {
+      const b = e.target.closest(".em");
+      if (!b) return;
+      const i = Array.prototype.indexOf.call(knoepfe, b);
+      const schritt = { ArrowRight: 1, ArrowLeft: -1, ArrowDown: spalten(), ArrowUp: -spalten() }[e.key];
+      const ziel = e.key === "Home" ? 0 : e.key === "End" ? knoepfe.length - 1 : schritt !== undefined ? i + schritt : null;
+      if (ziel === null) return;
+      e.preventDefault();
+      const neu = knoepfe[Math.max(0, Math.min(knoepfe.length - 1, ziel))];
+      stopp(neu);
+      neu.focus();
+    });
     grid.addEventListener("click", (e) => {
       const b = e.target.closest(".em");
       if (!b) return;
       input.value = b.dataset.e;
       grid.querySelectorAll(".em.sel").forEach((x) => x.classList.remove("sel"));
       b.classList.add("sel");
+      stopp(b);
     });
     return () => Array.from(input.value.trim()).slice(0, 4).join("") || initial;
   };

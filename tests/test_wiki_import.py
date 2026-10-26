@@ -165,6 +165,44 @@ def test_rundweg():
     print("Rundweg bestanden.")
 
 
+def test_rundweg_gleichnamige_geschwister():
+    """Zwei Geschwister mit demselben Titel, jedes mit eigener Unterseite (Nachbesserung vor dem Merge, ablauf_module
+    Befund 1): Der Export legt den Pfad je Seite einmal fest – das zweite „Übung“ heißt „Übung-<slug>“, und seine
+    Unterseite liegt in genau diesem Ordner. Der Import baut den Baum gleich wieder auf."""
+    with tempfile.TemporaryDirectory() as tmp:
+        t = aufbau(tmp)
+        oben = seite(t.adm, "Platzhalter Rundlauf", "# Platzhalter Rundlauf\n")
+        u1 = seite(t.adm, "Übung", "# Übung\n\nERSTE\n", oben["id"])
+        u2 = seite(t.adm, "Übung", "# Übung\n\nZWEITE\n", oben["id"])
+        seite(t.adm, "Kind der ersten", "# Kind der ersten\n", u1["id"])
+        e2 = seite(t.adm, "Kind der zweiten", "# Kind der zweiten\n", u2["id"])
+        seite(t.adm, "Enkel der zweiten", "# Enkel der zweiten\n", e2["id"])
+        r = t.adm.get(f"/api/wiki/pages/{oben['id']}/export?children=1")
+        assert r.status_code == 200
+        namen = zipfile.ZipFile(io.BytesIO(r.data)).namelist()
+        zweite = f"Platzhalter Rundlauf/Übung-{u2['slug']}"
+        assert "Platzhalter Rundlauf/Übung/Kind der ersten.md" in namen, namen
+        assert f"{zweite}.md" in namen and f"{zweite}/Kind der zweiten.md" in namen, namen
+        assert f"{zweite}/Kind der zweiten/Enkel der zweiten.md" in namen, namen
+        assert len(namen) == len(set(n.lower() for n in namen)) == 6, namen
+        d = importieren(t.adm, r.data).json
+        nach_id = {x["id"]: x for x in d["seiten"]}
+
+        def text(x):
+            return t.adm.get(f"/api/wiki/pages/{x['slug']}").json["page"]["content"]
+
+        for kind, erwartet in (("Kind der ersten", "ERSTE"), ("Kind der zweiten", "ZWEITE")):
+            k = [x for x in d["seiten"] if x["title"] == kind]
+            assert len(k) == 1, d
+            eltern = nach_id[k[0]["parent_id"]]
+            assert eltern["title"] == "Übung" and erwartet in text(eltern), (kind, eltern)
+        enkel = [x for x in d["seiten"] if x["title"] == "Enkel der zweiten"][0]
+        assert nach_id[enkel["parent_id"]]["title"] == "Kind der zweiten"
+        uebungen = [x for x in d["seiten"] if x["title"] == "Übung"]
+        assert len(uebungen) == 2 and {nach_id[x["parent_id"]]["title"] for x in uebungen} == {"Platzhalter Rundlauf"}
+    print("Rundweg mit gleichnamigen Geschwistern bestanden.")
+
+
 # --- 2. Regeln ---------------------------------------------------------------------------------------------------------
 
 def test_regeln():
@@ -328,8 +366,7 @@ def test_rechte():
         for c, code in ((t.mitglied, 403), (t.leser, 403), (t.app.test_client(), 401)):
             r = importieren(c, archiv)
             assert r.status_code == code, (code, r.json)
-        assert importieren(t.mitglied, archiv).json["error"] == ("Seiten importieren dürfen nur Redakteure und "
-                                                                 "Administratoren.")
+        assert importieren(t.mitglied, archiv).json["error"] == "Seiten importieren darf nur die Wiki-Verwaltung."
         assert not zeilen(t.app, "SELECT id FROM wiki_pages WHERE title = 'A'")
         assert importieren(t.redaktion, archiv).status_code == 201
         r = importieren(t.adm, archiv, 999999)
@@ -385,6 +422,7 @@ def test_oberflaeche_statisch():
 
 if __name__ == "__main__":
     test_rundweg()
+    test_rundweg_gleichnamige_geschwister()
     test_regeln()
     test_abbruch()
     test_rechte()

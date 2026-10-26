@@ -104,6 +104,12 @@ window.S = (function () {
     // Erst öffnen, dann onOpen: Ein geschlossener Dialog ist display:none – focus() und
     // scrollIntoView() darin liefen ins Leere, und der Fokus landete auf dem ersten Element.
     if (!dlg.open) dlg.showModal();
+    // Rollt der Inhalt (lange Dialoge wie „Nutzer bearbeiten“), zählt Chromium den rollenden Körper selbst als erstes
+    // Bedienelement und setzt den Fokus dorthin statt aufs erste Feld – dann eben von Hand aufs erste Feld.
+    if (document.activeElement === body) {
+      const erstes = body.querySelector("input:not([type=hidden]):not([disabled]), select:not([disabled]), textarea:not([disabled]), button:not([disabled]), a[href], summary");
+      if (erstes) erstes.focus();
+    }
     if (onOpen) onOpen(dlg, body);
     return dlg;
   }

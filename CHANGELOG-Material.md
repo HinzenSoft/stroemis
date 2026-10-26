@@ -8690,3 +8690,50 @@ oder Plattform-Verwaltung).
 | `POST /api/material/artikel/<id>/aussondern`, `POST …/pruefungen/<id>/festschreiben`, `GET …/artikel/<id>` | wie bisher | seit Schritt 28: Ergebnis `aussondern` → 400, neu `aussondern_empfohlen` (sperrt); Aussondern nur nach einer letzten Prüfung `instandsetzen`/`aussondern_empfohlen` oder bei `verloren`, sonst 409 mit Grund; Artikel trägt `aussonderung_empfohlen` ({pruefung, protokoll_id, datum, pruefer, grund} bzw. in Listen true/false) und für Materialwarte `aussondern` {ok, grund} |
 | `GET /api/material/ordner/<fid>?status=aussonderung_empfohlen`, `GET /api/material/start`; `POST/PUT/DELETE …/freigaben…`, `POST …/ordner/<fid>/verschieben`, `PUT/DELETE /api/admin/users/<id>` | wie bisher | A4: Filter und `empfohlen` (Zahl) am Ordner, `aussonderung_empfohlen` [{ordner_id, gliederung, anzahl}] auf der Übersicht; N5: Antworten tragen `mail` (Mail an die Material-Verwaltung zu Anträgen ohne Materialwart) |
 | `GET /materialablage/artikel/<id>/lebenslauf.pdf`, `…/export/<fid>.csv`, `…/export/<fid>-protokolle.zip`, `…/ordner/<fid>/bericht-<jahr>[-mit-pruefern].pdf`, `…/export/<fid>-pruefungen-<jahr>[-mit-pruefern].csv`, `…/ordner/<fid>/nacharbeit.csv`, `GET /api/material/katalog/export` | wie bisher | seit dem 26.10.2026: Dateiname mit Datum und Uhrzeit (`…_<JJJJ-MM-TT>_<HHMM>.<endung>`, deutsche Zeit); ein Abfrageparameter `stand` (vom Knopf beim Antippen) wird übergangen. Lebenslauf: bei „Mangel gemeldet“ Name des Melders und „Mangelbeschreibung“ für Prüfer, Materialwart und die eigene Meldung, sonst „(Person)“ |
+
+## Nachbesserung vor dem Merge – übrige Module (26.10.2026)
+
+Teil B der Nachbesserung vor dem Merge dev → main (Entscheidung des Nutzers „Pflicht + kleine Fehler“), Befunde aus
+bericht_pruefung_vor_merge_browser_module.md (F1, N1, N3–N6) und bericht_pruefung_vor_merge_ablauf_module.md (Befund 1).
+Riegenkarten: CHANGELOG-Pruefungen.md, Nachtrag vom 26.10.2026. Zweig `vm-module`.
+
+- **F1 Leitstelle – Rechte-Felder im Nutzerdialog:** „Verwaltung“ war abgeschnitten („Verwaltur“, fünf Felder à rund
+  95 px). Das Raster nimmt jetzt so viele Spalten, wie mit mindestens 8,5em je Feld passen (`repeat(auto-fill,
+  minmax(min(100%, 8.5em), 1fr))`): im Dialog am Rechner drei plus zwei, am Telefon zwei je Zeile. Gemessen in Chromium,
+  Firefox und WebKit (Telefon 360/390, Fold 344, Tablet hoch/quer, 1280, 1920): Feld 137–165 px, frei für Text ≥ 97 px,
+  längster Text 74–79 px – nirgends gekürzt, kein seitlicher Bildlauf. Die Tabelle der Leitstelle ist unberührt.
+- **Fokus in langen Dialogen** (`S.dialog`, common.js): Rollt der Inhalt („Nutzer anlegen/bearbeiten“, „Lehrgang
+  bearbeiten“), setzte Chromium den Fokus auf den rollenden Dialogkörper. Jetzt aufs erste Feld (Name bzw. Titel). Am
+  Touchgerät bleibt der Titel fokussiert (unverändert). Die Materialablage hat eigene Dialoge und ist nicht betroffen.
+- **N1 Strömipedia – ein Link im Text, ein Verlaufseintrag:** `wireLinks` hängte den Klick-Handler an Links im Artikel
+  zweimal an (erst der Artikel, dann der ganze Inhalt) – „Zurück“ blieb beim ersten Druck auf derselben Seite (schon in
+  main). Jeder Link wird jetzt einmal verdrahtet (WeakSet, kein Attribut am Element). Probe Chromium: `/stroemipedia/…`-
+  und gespeicherte `/wiki/…`-Links je +1 im Verlauf, Zurück und Vor je ein Schritt.
+- **N4 Emoji-Raster** (Dialoge „Callout einfügen/bearbeiten“, „Symbol der Seite“, „Emoji einfügen“): ein Tab-Stopp statt je Emoji
+  einer (Roving Tabindex) – Tab führt hinein und weiter zu „Abbrechen“/„Übernehmen“; Pfeiltasten wandern (oben/unten um
+  eine Zeile), Pos1/Ende an die Enden, Enter/Leertaste wählt. Gruppe mit `aria-label` „Emoji wählen“.
+- **N5 Rollennamen in Meldungen:** Statt „Redakteur“, „Administrator“, „Administration“ nennen die Meldungen der
+  Strömipedia die **Wiki-Verwaltung** (Veröffentlichen, Importieren, HTML-Bausteine, Ersteller ändern, Löschen,
+  Wiederherstellen, Bearbeiter freigeben, Lesebeschränkung, Kommentare löschen, öffentliche Abschnitte; Teilen-Dialog
+  „nur noch du, die Wiki-Verwaltung und die oben freigegebenen Nutzer“, Papierkorb „nur Ersteller oder
+  Wiki-Verwaltung“), die Anmeldung und die Einstellungen die **Plattform-Verwaltung** (Kontoanfrage gesendet, wartet auf
+  Freigabe, Kontoanfragen deaktiviert, „Kontoanfragen erlauben“, Benachrichtigung bei Kontoanfragen). `.env.example`:
+  zweimal „Leitstelle → Einstellungen“ statt „Verwaltung → Einstellungen“, Rollennamen in den Kommentaren. README:
+  Kommentare, Ersteller, Riegenkarten, Konfiguration (Mailkennwort, `ADMIN_NOTIFY_EMAIL`).
+- **N6 Kleinigkeiten:**
+  - Schrägstrich am Adressende: `/stroemipedia/`, `/ankerplaetze/`, `/riegenkarten/`, `/materialablage/`, `/leitstelle/`
+    (auch die alten `/wiki/`, `/material/` … und `/strömipedia/`) → 301 auf die Adresse ohne Schrägstrich, in einem
+    Schritt, Abfrage bleibt; im vorhandenen Weiterleitungs-Haken (`module.weiterleitung`), nur diese fünf festen Pfade
+    (`//…` und Unterseiten mit Schrägstrich bleiben unberührt).
+  - Seitentitel der Anmeldeseiten: „Konto anfragen“, „Passwort vergessen“, „Neues Passwort setzen“ statt „Anmelden“.
+  - Unbekannte Strömipedia-Seite: „Seite nicht gefunden“ steht einmal, darunter „Diese Seite gibt es nicht (mehr) –
+    vielleicht wurde sie gelöscht oder umbenannt.“
+  - Kommentar-Aktionen in der rechten Spalte brechen um, statt 18 px aus dem Kasten zu ragen (1280 px).
+- **Export → Import gleichnamiger Geschwister** (ablauf_module Befund 1): Der ZIP-Export legt den Pfad je Seite einmal
+  fest und hängt Unterseiten unter genau diesen Pfad – das zweite „Übung“ heißt `Übung-<slug>.md`, seine Unterseiten
+  liegen in `Übung-<slug>/`. Bisher landeten sie im Ordner des ersten, und der Import hängte beide Unterseiten dort ein.
+- Tests: `tests/test_module_vor_merge.py` (neu), `tests/test_umbenennung.py` (Schrägstrich-Fälle, kein offener Sprung),
+  `tests/test_wiki_import.py` (Rundweg mit gleichnamigen Geschwistern, Wortlaut der Import-Meldung).
+- Bitte bestätigen: (1) Rechte-Felder im Dialog drei plus zwei statt fünf in einer Reihe; (2) „Wiki-Verwaltung“ bzw.
+  „Plattform-Verwaltung“ in den Meldungen, „Verwaltung der Riegenkarten“ in den Riegenkarten; (3) der Fokus aufs erste
+  Feld gilt für alle Dialoge über `S.dialog`, nicht nur für den Nutzerdialog.
