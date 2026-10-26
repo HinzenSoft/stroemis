@@ -2152,10 +2152,14 @@ dialog.us-dlg { width: min(640px, 96vw); }
   /* Tippflächen der Ankerplätze und des Profils mindestens 44 px (Browserprüfung der Umbenennung, Verbesserung 7):
      Zoom und „◎“ auch ohne .leaflet-touch (Leaflet erkennt Touch nicht in jedem Browser), Filter-Chips, „Alben“,
      „Neues Album“; im Profil Eingabefelder und Knöpfe. */
-  .leaflet-bar a, .leaflet-touch .leaflet-bar a { width: 44px; height: 44px; line-height: 44px; font-size: 20px; }
+  /* .map-shell davor: leaflet.css wird nach app.css geladen und setzt .leaflet-touch .leaflet-bar a selbst (30 px). */
+  .map-shell .leaflet-bar a, .map-shell .leaflet-touch .leaflet-bar a { width: 44px; height: 44px; line-height: 44px;
+    font-size: 20px; }
   .leaflet-touch .leaflet-control-layers-toggle { width: 44px; height: 44px; }
   .map-tools .btn, .map-tools .chip { min-height: 44px; }
   .profil-seite input:not([type=checkbox]):not([type=radio]):not([type=file]), .profil-seite .btn { min-height: 44px; }
+  /* Häkchen mit Etikett (z. B. „Erinnerungen zu meiner PSA per Mail“): Tippfläche über das ganze Etikett. */
+  .profil-seite label.inline { min-height: 44px; }
   .comment-fab { padding: 11px 16px; font-size: 1rem; }
   .panel-body, .lb-side, .wiki-side { overscroll-behavior: contain; }
   /* Der Toast lag unten – auf dem Telefon hinter der Tastatur. Oben, unter der Bauchbinde. */
