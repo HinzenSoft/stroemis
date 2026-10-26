@@ -139,6 +139,43 @@ def test_shell_geruest():
             assert "nav-mehr" not in html
     print("Seitengerüst (shell) bestanden.")
 
+def test_katalog_ohne_nummernsuche_knopf_in_suchzeile():
+    """Wünsche vom 26.10.2026: Im Katalog (Katalog, Produkt, Formular, Meldungen) liefert die Modulnavigation keine
+    Nummernsuche und keine Lupe aus – die Übersicht und der Bestand schon. Am Telefon wandert „☰ Kategorien“ in die
+    Suchzeile über der Produktliste (material.js, leisteKnopfSetzen; im Browser geprüft)."""
+    import re
+    with tempfile.TemporaryDirectory() as tmp:
+        app, k = umgebung(tmp)
+        ids = katalog_grund(k["adm"])
+        for konto in ("adm", "wart", "pruefer"):
+            for seite, mit in (("/materialablage/katalog", False), (f"/materialablage/katalog/produkt/{ids['gurt']}", False),
+                               ("/materialablage/katalog/meldungen", False), ("/materialablage", True),
+                               ("/materialablage/bestand", True)):
+                r = k[konto].get(seite)
+                assert r.status_code == 200, (konto, seite, r.status_code)
+                html = r.get_data(as_text=True)
+                mnav = re.search(r'<nav class="mat-nav" aria-label="Materialablage">(.*?)</nav>', html, re.S)
+                assert mnav, (konto, seite)
+                mnav = mnav.group(1)
+                assert ('name="q"' in mnav) is mit and ('id="mat-lupe"' in mnav) is mit, (konto, seite)
+                assert ('<form class="mat-suche"' in html) is mit, (konto, seite)
+                # „☰“ und die Reiter bleiben überall.
+                assert 'id="mat-side-auf"' in mnav and mnav.count('data-nav="') == 4, (konto, seite)
+    wurzel = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    js = open(os.path.join(wurzel, "app/material/static/material.js"), encoding="utf-8").read()
+    css = open(os.path.join(wurzel, "app/material/static/material.css"), encoding="utf-8").read()
+    # Derselbe Knopf wandert (kein zweiter), nur in der Ansicht „katalog“ und nur als Schublade; zurück beim Umschalten.
+    assert js.count('id="mat-side-auf"') == 0 and 'ANSICHT === "katalog" && alsSchublade() ? $(".mat-suchzeile", inhalt)' in js
+    assert "const umschalten = () => { leisteZu(); leisteInert(); leisteKnopfSetzen(); };" in js
+    assert js.index('<div id="kat-liste"></div>`;') < js.index("leisteKnopfSetzen();             //")
+    assert "leisteZu(knopfInSuchzeile())" in js
+    # Der Name „Kategorien“ bleibt (visuell versteckt, nicht display: none); 44 px nur unter Touch.
+    assert ".mat-nav.enger .mat-side-auf-text, .mat-suchzeile .mat-side-auf-text { position: absolute;" in css
+    touch = css[css.index("  .mat-nav .btn, .mat-nav .mat-suche input, .mat-nav.eng .mat-side-auf"):]
+    assert touch.split("\n")[1].startswith("  .mat-suchzeile > .mat-side-auf { min-height: 44px; }")
+    print("Katalog ohne Nummernsuche, „☰ Kategorien“ in der Suchzeile bestanden.")
+
+
 def test_pruefform_tippen_speichern():
     """Das Prüfformular speichert Wert und Bemerkung schon beim Tippen (material.js, entprellt, mit keepalive) – oft
     mehrmals je Feld und auch kurz vor dem Neuladen noch einmal. Darauf verlässt es sich: Ein PUT nur mit „notiz“ bzw.
@@ -441,6 +478,7 @@ if __name__ == "__main__":
     test_urkunde_korrekturen()
     test_css_klammern()
     test_shell_geruest()
+    test_katalog_ohne_nummernsuche_knopf_in_suchzeile()
     test_pruefform_tippen_speichern()
     test_formulare_ordnerfoto_und_suchfeld()
     test_oberflaeche_rechte_je_ordner()
