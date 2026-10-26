@@ -32,7 +32,7 @@ from flask import current_app
 
 from ... import db
 from ..models import ERGEBNISSE, MATERIALARTEN
-from . import ZONE, Abgelehnt, bestand, heute, katalog, laenge_text, protokoll
+from . import ZONE, Abgelehnt, bestand, heute, katalog, laenge_text, protokoll, zeitstempel
 from . import status as st
 from .faelligkeit import im_unterbaum
 from .interval import wirksam
@@ -193,7 +193,7 @@ def artikel_csv(fid):
             laenge_text(r["length_m"], einheit=False), r["notes"], r["entwurf_pruefer"],
             ((r["zugeordnet_name"] or "").strip() or "(ohne Namen)") if r["assigned_user_id"] else "",
             "ja" if r["artikel_demo"] else "nein"])
-    return csv_bytes(ARTIKEL_SPALTEN, zeilen), f"Artikel_{dateiname(o['name'])}_{stichtag.isoformat()}.csv"
+    return csv_bytes(ARTIKEL_SPALTEN, zeilen), f"Artikel_{dateiname(o['name'])}_{zeitstempel()}.csv"
 
 
 # --- ZIP aller Protokolle -----------------------------------------------------------------------------------------
@@ -334,4 +334,4 @@ def protokolle_zip(fid):
         # Welche Dateien, steht schon im Protokoll der App (protokoll.datei); hier die Zusammenfassung des Exports.
         current_app.logger.warning("Protokoll-Export Ordner %s: %d Protokolldateien fehlen, %d sind verändert – im "
                                    "Verzeichnis vermerkt", fid, zaehler["fehlt"], zaehler["verändert"])
-    return _zip_schreiben(zeilen, dateien), f"Protokolle_{dateiname(o['name'])}_{heute().isoformat()}.zip", zaehler
+    return _zip_schreiben(zeilen, dateien), f"Protokolle_{dateiname(o['name'])}_{zeitstempel()}.zip", zaehler

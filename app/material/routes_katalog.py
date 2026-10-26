@@ -14,7 +14,7 @@ import tempfile
 from flask import current_app, jsonify, request, send_file
 
 from .routes import api
-from .services import Abgelehnt, akteur, heute, importauftrag, katalog_export, wahr
+from .services import Abgelehnt, akteur, importauftrag, katalog_export, wahr, zeitstempel
 from .services.rechte import katalog_required
 
 
@@ -31,7 +31,7 @@ def katalog_exportieren():
         raise
     zwischen.seek(0)
     resp = send_file(zwischen, mimetype="application/zip", as_attachment=True,
-                     download_name=f"Katalog_{heute().isoformat()}.zip", max_age=0)
+                     download_name=f"Katalog_{zeitstempel()}.zip", max_age=0)
     resp.cache_control.no_store = True
     resp.cache_control.private = True
     return resp

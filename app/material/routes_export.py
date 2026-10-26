@@ -12,7 +12,7 @@ from flask import redirect, render_template, request, send_file, url_for
 
 from ..auth import current_user
 from .routes import seiten
-from .services import Abgelehnt, antwort_privat, export, heute, lebenslauf
+from .services import Abgelehnt, antwort_privat, export, lebenslauf, zeitstempel
 from .services.rechte import NUR_GRUNDRECHT, _bezug, darf, zugang, zugang_meldung
 
 
@@ -109,8 +109,10 @@ def lebenslauf_pdf(iid):
         daten, inventarnummer = lebenslauf.rendern(iid)
     except Abgelehnt as exc:
         return _fehler(exc)
+    # Name mit Uhrzeit, die Adresse trägt vom Knopf einen Zeitstempel (?stand=…, hier übergangen): Chrome auf Android
+    # legt das PDF als Download ab und öffnete beim nächsten Tippen die alte Datei (Meldung vom 26.10.2026).
     resp = send_file(io.BytesIO(daten), mimetype="application/pdf",
-                     download_name=f"Lebenslauf_{export.dateiname(inventarnummer)}_{heute().isoformat()}.pdf")
+                     download_name=f"Lebenslauf_{export.dateiname(inventarnummer)}_{zeitstempel()}.pdf")
     # Wie bei _protokoll_senden ohne „sandbox“ – sonst zeigt der PDF-Betrachter von Chrome die Datei nicht an.
     resp.headers["Content-Security-Policy"] = "default-src 'none'; object-src 'self'; img-src 'self' data:"
     return _privat(resp)

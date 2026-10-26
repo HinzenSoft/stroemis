@@ -2302,9 +2302,9 @@
   const exportMenue = (d, importieren) => `<details class="mat-menue">
       <summary class="btn secondary small" aria-haspopup="true">${importieren ? "Export / Import" : "Export"}</summary>
       <div class="mat-menue-liste">
-        <a href="/materialablage/export/${d.id}.csv" data-export="Die Artikelliste wird heruntergeladen …"><strong>Artikelliste exportieren (CSV)</strong>
+        <a href="/materialablage/export/${d.id}.csv" data-frisch data-export="Die Artikelliste wird heruntergeladen …"><strong>Artikelliste exportieren (CSV)</strong>
           <span>Alle Artikel hier und darunter, auch die von hier gesperrten und ausgesonderten, mit Status, Fälligkeiten und Stammdaten – für Excel.</span></a>
-        <a href="/materialablage/export/${d.id}-protokolle.zip" data-export="Die Protokolle werden zusammengestellt – bei vielen dauert das einen Moment …"><strong>Protokolle exportieren (ZIP)</strong>
+        <a href="/materialablage/export/${d.id}-protokolle.zip" data-frisch data-export="Die Protokolle werden zusammengestellt – bei vielen dauert das einen Moment …"><strong>Protokolle exportieren (ZIP)</strong>
           <span>Die Protokolle dieser Artikel, die Sammelprotokolle der Durchgänge und die Set-Protokolle der Sets hier, mit Verzeichnis und Prüfsummen.</span></a>
         ${d.system_kind ? "" : `<a href="/materialablage/ordner/${d.id}/bericht"><strong>Jahresbericht exportieren</strong>
           <span>Bestand, Prüfungen, Sperren, Aussonderungen, Mängel und Rückrufe dieses Zweigs für ein Kalenderjahr – als Seite, PDF und Prüfungsliste (CSV).</span></a>`}
@@ -2337,8 +2337,21 @@
           <span>Geht nur bei einem leeren Ordner – ohne Unterordner und Artikel, ohne Prüfdurchgänge und Set-Protokolle, ohne offene Nacharbeit eines Bestandsimports und ohne gesperrte Artikel, die hierher zurückkehren; vorher wird nachgefragt.</span></a>
       </div></details>`;
   const LEBENSLAUF_TEXT = "Stammdaten, alle Prüfungen in zeitlicher Reihenfolge, Prüfdurchgänge und Ereignisse als PDF – zum Weitergeben oder als Aussonderungsnachweis. Stand jetzt, nicht festgeschrieben.";
-  const lebenslaufKnopf = (a) => `<a class="btn secondary small" href="/materialablage/artikel/${a.id}/lebenslauf.pdf" target="_blank" rel="noopener"
+  const lebenslaufKnopf = (a) => `<a class="btn secondary small" href="/materialablage/artikel/${a.id}/lebenslauf.pdf" target="_blank" rel="noopener" data-frisch
     title="${LEBENSLAUF_TEXT}">Lebenslauf (PDF)</a>`;
+  // Auf Abruf gesetzte Dateien (Lebenslauf, Jahresbericht, Exporte, Nacharbeit, Katalog – data-frisch): Beim Antippen
+  // bekommt die Adresse einen Zeitstempel (?stand=…, der Server übergeht ihn). Chrome auf Android legt PDFs als Download
+  // ab und öffnete beim nächsten Tippen auf dieselbe Adresse die schon vorhandene Datei mit altem Stand (Meldung vom
+  // 26.10.2026). Gesetzt beim Klick, nicht beim Zeichnen – die Seite kann seit Stunden offen sein; auch beim Klick mit
+  // der mittleren Taste und vor dem Kontextmenü („Link in neuem Tab öffnen“, „Link herunterladen“).
+  const frischeAdresse = (e) => {
+    const l = e.target.closest && e.target.closest("a[data-frisch]");
+    if (!l) return;
+    const u = new URL(l.getAttribute("href"), location.href);
+    u.searchParams.set("stand", String(Date.now()));
+    l.setAttribute("href", u.pathname + u.search + u.hash);
+  };
+  for (const art of ["click", "auxclick", "contextmenu"]) document.addEventListener(art, frischeAdresse, true);
   document.addEventListener("click", (e) => {
     const l = e.target.closest("a[data-export]");
     if (!l || e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
@@ -2492,9 +2505,9 @@
     function dateien(b) {
       const k = b.kopf;
       const mit = k.pruefer_nennen ? "-mit-pruefern" : "";
-      return `<a class="btn secondary small" href="/materialablage/ordner/${fid}/bericht-${Number(k.jahr)}${mit}.pdf" target="_blank" rel="noopener"
+      return `<a class="btn secondary small" href="/materialablage/ordner/${fid}/bericht-${Number(k.jahr)}${mit}.pdf" target="_blank" rel="noopener" data-frisch
           data-export="Das PDF wird erzeugt – bei vielen Artikeln dauert das einige Sekunden …" title="Dieser Bericht als PDF/A – Listen gekürzt (${BERICHT_KAPPUNG} Zeilen je Liste, 1 500 insgesamt, 50 Artikel je Rückruf). Stand jetzt, nicht festgeschrieben.">PDF</a>
-        <a class="btn secondary small" href="/materialablage/export/${fid}-pruefungen-${Number(k.jahr)}${mit}.csv" data-export="Die Prüfungsliste wird heruntergeladen …"
+        <a class="btn secondary small" href="/materialablage/export/${fid}-pruefungen-${Number(k.jahr)}${mit}.csv" data-frisch data-export="Die Prüfungsliste wird heruntergeladen …"
           title="Alle Prüfungen und Aussonderungen des Jahres im Zweig als CSV für Excel${k.pruefer_nennen ? " – mit Prüfer und Urkundennummer" : " – ohne Prüfernamen"}.">Prüfungen (CSV)</a>`;
     }
 
@@ -3609,7 +3622,7 @@
       ${v.groesse ? `<p class="help">Dateien zusammen etwa ${esc(groesse(v.groesse))}.${e.bilder ? " Die Produktbilder gehen als Original mit – samt ihren Metadaten." : ""}</p>` : ""}
       ${v.groesse > v.grenze ? `<p class="error">Der Export wäre größer als ${esc(groesse(v.grenze))} – so groß wird er nicht gebaut.</p>` : ""}
       <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button>
-        ${v.groesse > v.grenze ? "" : `<a class="btn" id="ke-los" href="${API}/katalog/export" download>Herunterladen</a>`}</div>`,
+        ${v.groesse > v.grenze ? "" : `<a class="btn" id="ke-los" href="${API}/katalog/export" download data-frisch>Herunterladen</a>`}</div>`,
     (dlg, body) => {
       // Der Download läuft am Dialog vorbei; geschlossen wird, sobald der Browser die Anfrage abgeschickt hat.
       const los = $("#ke-los", body);
@@ -7083,7 +7096,7 @@
       const z = na.zahlen;
       const kopf = `<div class="mat-nacharbeit-kopf"><h2>Nacharbeit – ${z.offen} offen</h2>
         ${z.offen ? `<details class="mat-menue"><summary class="btn secondary small" aria-haspopup="true">Mehr</summary><div class="mat-menue-liste">
-          <a href="/materialablage/ordner/${esc(fid)}/nacharbeit.csv" data-export="Die Nacharbeit wird heruntergeladen …"><strong>Als CSV herunterladen</strong><span>${esc(IMPORT_CSV_SATZ)}</span></a></div></details>` : ""}</div>`;
+          <a href="/materialablage/ordner/${esc(fid)}/nacharbeit.csv" data-frisch data-export="Die Nacharbeit wird heruntergeladen …"><strong>Als CSV herunterladen</strong><span>${esc(IMPORT_CSV_SATZ)}</span></a></div></details>` : ""}</div>`;
       if (!z.offen) {
         naBox.innerHTML = `${kopf}${leer("Nichts offen – was ein Import nicht übernehmen konnte, steht hier.")}${naErledigtHtml()}`;
         return;

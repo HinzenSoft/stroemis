@@ -36,6 +36,15 @@ def heute():
     return jetzt().date()
 
 
+def zeitstempel():
+    """Datum und Uhrzeit für den Namen einer auf Abruf gesetzten Datei („2026-10-26_1546“, deutsche Ortszeit wie
+    „Stand“ im Lebenslauf): Lebenslauf, Jahresbericht, Exporte, Nacharbeit, Katalog. Chrome auf Android legt PDFs als
+    Download ab und bot beim nächsten Abruf mit demselben Namen die alte Datei an (Meldung vom 26.10.2026) – mit der
+    Uhrzeit heißt jeder Abruf einer neuen Minute anders. Festgeschriebene Protokolle behalten ihren Namen; sie ändern
+    sich nicht."""
+    return jetzt().strftime("%Y-%m-%d_%H%M")
+
+
 # --- Eingaben lesen ------------------------------------------------------------------------------
 
 def eingabe():

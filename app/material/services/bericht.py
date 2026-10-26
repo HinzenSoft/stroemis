@@ -33,7 +33,7 @@ from datetime import date, datetime, timezone
 
 from ... import db
 from ..models import AUSSONDERUNGSGRUENDE, ERGEBNISSE, PRUEFARTEN
-from . import ZONE, akteur, bestand, export, heute, katalog, mangel, protokoll, qr, rechte, rueckruf, ueberblick
+from . import ZONE, akteur, bestand, export, heute, katalog, mangel, protokoll, qr, rechte, rueckruf, ueberblick, zeitstempel
 from . import status as st
 from .durchgang import AUS_DEM_BEREICH
 from .protokoll import PRUEFART_TEXT, datum_text, zeit_text
@@ -514,7 +514,7 @@ def daten(fid, jahr, sicht=None, pruefer_nennen=False):
 
 def _name(o, jahr, demo, pruefer_nennen, vorsatz, endung):
     return (("DEMO-" if demo else "") + f"{vorsatz}_{export.dateiname(o['name'])}_{jahr}"
-            + ("-mit-pruefern" if pruefer_nennen else "") + endung)
+            + ("-mit-pruefern" if pruefer_nennen else "") + f"_{zeitstempel()}" + endung)
 
 
 def _kappen(d):
