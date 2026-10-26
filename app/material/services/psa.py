@@ -29,9 +29,6 @@ PSA_NAME_FEHLT = "Für „Meine PSA“ braucht dein Konto einen Namen – trag i
 DRINGEND = ("gesperrt", "ueberfaellig", "lebensdauer", "neu")
 _REIHE = ("CASE {s} WHEN 'gesperrt' THEN 0 WHEN 'ueberfaellig' THEN 1 WHEN 'lebensdauer' THEN 2 WHEN 'neu' THEN 3 "
           "WHEN 'bald_faellig' THEN 4 ELSE 5 END")
-# Seit wann der Artikel zuletzt (ohne Berichtigung) geprüft wurde – für den Zustand eines Rückrufs (rueckruf.zustand).
-_GEPRUEFT_UM = ("(SELECT MAX(x.completed_at) FROM mat_inspection x WHERE x.item_id = i.id AND x.completed_at IS NOT NULL "
-                "AND x.corrects_inspection_id IS NULL)")
 
 
 def konto(user=None):
@@ -95,7 +92,8 @@ def liste(user):
     from . import mangel, rueckruf
     rows = db.query(
         "SELECT i.*, p.manufacturer, p.model, p.description AS product_description, p.article_no, p.material_kind, "
-        f"p.image AS product_image, {bestand.demo_sql('i', 'p')} AS artikel_demo, {_GEPRUEFT_UM} AS geprueft_um "
+        f"p.image AS product_image, {bestand.demo_sql('i', 'p')} AS artikel_demo, "
+        f"{rueckruf.GEPRUEFT_UM_SQL.format(a='i')} AS geprueft_um, {rueckruf.BETROFFEN_AB_SQL.format(a='i')} AS betroffen_ab "
         "FROM mat_item i JOIN mat_product p ON p.id = i.product_id "
         "WHERE i.assigned_user_id = :uid AND i.lock_state <> 'ausgesondert' "
         f"ORDER BY {_REIHE.format(s=st.status_sql('i'))}, i.inventory_no LIMIT :lim",

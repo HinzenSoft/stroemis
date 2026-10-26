@@ -29,7 +29,7 @@ class Feld:
     """
 
     def __init__(self, schluessel, gruppe, titel, art="text", hilfe="", config=None,
-                 wandeln=None, geheim=False, platzhalter=""):
+                 wandeln=None, geheim=False, platzhalter="", bereich=None):
         self.schluessel = schluessel
         self.gruppe = gruppe
         self.titel = titel
@@ -39,6 +39,7 @@ class Feld:
         self._wandeln = wandeln
         self.geheim = geheim           # wird nie an den Browser zurückgegeben
         self.platzhalter = platzhalter
+        self.bereich = bereich         # bei Zahlen: (kleinster, größter) erlaubter Wert, sonst None
 
     def wert(self, roh):
         """Den gespeicherten Text in das umrechnen, was die Konfiguration erwartet."""
@@ -48,9 +49,12 @@ class Feld:
             return str(roh).strip().lower() in ("1", "true", "yes", "on")
         if self.art == "zahl":
             try:
-                return int(str(roh).strip())
+                zahl = int(str(roh).strip())
             except ValueError:
                 return None
+            if self.bereich and not self.bereich[0] <= zahl <= self.bereich[1]:
+                return None            # außerhalb gilt nichts davon – speichern lässt es gar nicht erst zu
+            return zahl
         return roh
 
 
@@ -96,9 +100,9 @@ FELDER = [
 
     # --- Materialablage (Modul material) ----------------------------------------------------
     Feld("MATERIAL_BALD_FAELLIG_TAGE", "Materialablage", "„Bald fällig“ ab … Tagen vor der Prüfung", art="zahl",
-         wandeln=lambda roh: max(0, min(365, int(str(roh).strip()))) if str(roh).strip().isdigit() else None,
+         bereich=(0, 365),
          hilfe="So viele Tage vor der nächsten Prüfung steht ein Artikel im Dashboard und in den Listen als "
-               "„bald fällig“. Vorgabe 30.", platzhalter="30"),
+               "„bald fällig“. 0 bis 365, Vorgabe 30.", platzhalter="30"),
     Feld("MATERIAL_ERINNERUNGEN", "Materialablage", "Erinnerungsmails verschicken", art="schalter",
          hilfe="Jeden Morgen ab 6 Uhr bekommen die Materialwarte eine Sammelmail zu Fälligkeiten, Lebensende und "
                "ablaufenden Freigaben; wessen Freigabe abläuft, bekommt sie auch selbst. Aus: keine Mails – Journal "
@@ -213,6 +217,10 @@ def anwenden():
         wert = f.wert(roh)
         if wert is not None:
             current_app.config[f.config] = wert
+        elif schluessel in _grundstand:
+            # Ein unbrauchbarer gespeicherter Wert (aus der Zeit vor der Prüfung in speichern) gilt nicht – und zwar in
+            # jedem Arbeitsprozess gleich: Grundstand statt des Werts, den dieser Prozess zuletzt hatte.
+            current_app.config[f.config] = _grundstand[schluessel]
         _angewendet.add(schluessel)
     # Was dieser Prozess einmal aus der Datenbank übernommen hat und was dort nicht mehr steht,
     # geht zurück auf den Grundstand. Ohne das erführe der andere Arbeitsprozess vom Zurücksetzen
@@ -249,13 +257,19 @@ def beim_start_anwenden(app):
                 app.config[f.config] = wert
 
 
+def _gueltige(werte):
+    """Die gespeicherten Werte, die auch gelten – ein unbrauchbarer (Feld.wert liefert None) wird weder als
+    „gespeichert“ angezeigt noch angewendet; es gilt, was ohne ihn gälte."""
+    return {k: v for k, v in werte.items() if k not in NACH_SCHLUESSEL or NACH_SCHLUESSEL[k].wert(v) is not None}
+
+
 def _quelle(schluessel, werte):
     """Woher der Wert kommt, der gerade gilt – das gehört in die Oberfläche.
 
     Ohne diese Auskunft sieht man einem Feld nicht an, ob es hier gesetzt wurde, aus der .env
     stammt oder die eingebaute Vorgabe ist. Wer dann etwas ändert und nichts geschieht, sucht
     an der falschen Stelle."""
-    if schluessel in werte:
+    if schluessel in _gueltige(werte):
         return "gespeichert"
     if os.environ.get(schluessel) is not None:
         return "umgebung"
@@ -266,7 +280,7 @@ def _anzeigewert(f, werte):
     """Der Wert, den die Oberfläche zeigt. Geheimes nie."""
     if f.geheim:
         return ""
-    if f.schluessel in werte:
+    if f.schluessel in _gueltige(werte):
         return werte[f.schluessel]
     roh = os.environ.get(f.schluessel)
     if roh is not None:
@@ -292,6 +306,7 @@ def als_json():
             "hilfe": f.hilfe,
             "platzhalter": f.platzhalter,
             "geheim": f.geheim,
+            "bereich": list(f.bereich) if f.bereich else None,
             "quelle": _quelle(f.schluessel, werte),
             "wert": _anzeigewert(f, werte),
             # Nur beim Kennwort: ob überhaupt eines hinterlegt ist. Der Wert selbst nie.
@@ -321,9 +336,12 @@ def speichern(eingaben, uid):
                 continue
             if f.art == "zahl" and text:
                 try:
-                    int(text)
+                    zahl = int(text)
                 except ValueError:
                     raise ValueError(f"„{f.titel}“ braucht eine Zahl.")
+                if f.bereich and not f.bereich[0] <= zahl <= f.bereich[1]:
+                    raise ValueError(f"„{f.titel}“ braucht eine Zahl zwischen {f.bereich[0]} und {f.bereich[1]}.")
+                text = str(zahl)       # gespeichert wie angezeigt wie wirksam: „007“ wird „7“
             db.execute(
                 "INSERT INTO einstellungen (schluessel, wert, geaendert_am, geaendert_von) "
                 "VALUES (?,?,?,?) ON CONFLICT(schluessel) DO UPDATE SET "

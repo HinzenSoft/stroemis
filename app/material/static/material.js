@@ -6535,23 +6535,32 @@
         <p class="mat-rr-titel">RÜCKRUF: ${esc(r.title)}</p>
         ${r.description ? `<p class="mat-text mat-rr-text">${esc(r.description)}</p>` : ""}
         <p class="mat-rr-zeile">${r.url ? `${rrLink(r.url, "Meldung des Herstellers")} · ` : ""}seit ${esc(S.fmtDate(r.created_at))} · ${r.alle ? "alle Artikel des Produkts" : "betrifft diese Seriennummer"}
-          · für diesen Artikel ${rrZustand(r.zustand, r.grund)}${offen ? " – noch nicht gesperrt und seit dem Rückruf nicht geprüft" : ""}</p>
+          · für diesen Artikel ${rrZustand(r.zustand, r.grund)}${offen ? " – noch nicht gesperrt und nicht mit dem Rückruf geprüft" : ""}</p>
         ${sperren ? `<div class="btn-row"><button class="btn small" type="button" data-act="rr-sperren" data-id="${r.id}">Sperren (Rückruf)</button></div>` : ""}
         ${offen && !pruefen ? '<p class="mat-rr-zeile">Sperren dürfen Prüfer mit Prüffreigabe (Grund „Rückruf“); eine Prüfung nach dem Rückruf erledigt ihn ebenso.</p>' : ""}
       </div>`;
     }).join("");
   }
 
+  // Warum keine Mail hinausgeht (mailprotokoll.still): ehrlich sagen statt „wird verschickt“ (Nachbesserung vor dem Merge).
+  const RR_STILL = { "kein Mailserver": "kein Mailserver eingerichtet", Umgebungssperre: "in dieser Umgebung sind Mails gesperrt" };
+  const rrStill = (grund) => esc(RR_STILL[grund] || grund);
+
   // Wie es um die Mail steht: verschickt (mit Fehlschlägen), läuft noch, nicht bestätigt oder keine. Wie viele Mails
   // hinausgingen, sieht nur die Material-Verwaltung (Phase 2) – sonst steht nur da, ob eine angefordert war („mail“).
   function rrMailText(r) {
-    if (!("mail_count" in r)) return r.mail ? "Mail an die Verwalter und Prüfer der betroffenen Artikel." : "Keine Mail verschickt.";
+    if (!("mail_count" in r)) {
+      return !r.mail ? "Keine Mail verschickt." : r.still ? `Es ging keine Mail hinaus – ${rrStill(r.still)}.`
+        : "Mail an die Verwalter und Prüfer der betroffenen Artikel.";
+    }
     if (r.mailed_at) {
       const n = r.mail_count + r.mail_failed;
       if (!n) return "Mail: keine Empfänger gefunden.";
+      if (r.still && r.mail_failed === n) return `Mail an ${plural(n, "Empfänger", "Empfänger")} am ${esc(fmtZeit(r.mailed_at))}: keine ging hinaus – ${rrStill(r.still)}.`;
       return `Mail an ${plural(n, "Empfänger", "Empfänger")} verschickt am ${esc(fmtZeit(r.mailed_at))}${r.mail_failed ? ` – ${r.mail_failed} davon ${r.mail_failed === 1 ? "ging" : "gingen"} nicht hinaus` : ""}.`;
     }
     if (!r.mail_count) return "Keine Mail verschickt.";
+    if (r.still) return `Mail an ${plural(r.mail_count, "Empfänger", "Empfänger")}: keine geht hinaus – ${rrStill(r.still)}.`;
     const alt = Date.now() - Date.parse(r.created_at) > (r.unbestaetigt_minuten || 10) * 60000;
     return alt ? `Mail an ${plural(r.mail_count, "Empfänger", "Empfänger")}: Versand nicht bestätigt.`
       : `Mail an ${plural(r.mail_count, "Empfänger", "Empfänger")} wird verschickt …`;
@@ -6635,6 +6644,7 @@
     const zahl = !verwaltung && OHNE_BESTAND() ? RR_OHNE_BESTAND
       : `<strong>${plural(r.betroffen, "Artikel", "Artikel")}</strong> ${verwaltung ? "im Bestand" : "in deinem Bereich"} betroffen${r.betroffen && r.offen < r.betroffen ? `, davon ${r.offen} offen` : ""}.`;
     const mail = !r.mail ? "Keine Mail verschickt."
+      : r.still ? `Es ging keine Mail hinaus – ${rrStill(r.still)}.`
       : verwaltung ? (r.empfaenger ? `Mail an ${plural(r.empfaenger, "Empfänger", "Empfänger")} wird verschickt.` : "Für die Mail gab es keine Empfänger.")
         : r.benachrichtigt ? "Die Verwalter und Prüfer deiner betroffenen Artikel bekommen eine Mail."
           : "Die Mail geht an die Verwalter und Prüfer der betroffenen Artikel – jeder bekommt nur seine.";

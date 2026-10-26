@@ -194,7 +194,7 @@ def _rueckrufe(item):
         elif r["closed_at"]:
             stand = f"beendet am {zeit_text(r['closed_at'])}" + (f" von {r['closed_by_name']}" if r["closed_by_name"] else "")
         elif r["zustand"] == "offen":
-            stand = "läuft – für diesen Artikel offen (seit dem Rückruf weder geprüft noch gesperrt)"
+            stand = "läuft – für diesen Artikel offen (seit er betroffen ist weder geprüft noch gesperrt)"
         else:
             stand = "läuft – für diesen Artikel " + zustaende.get(r["grund"], "erledigt")
         out.append({"titel": r["title"], "angelegt": zeit_text(r["created_at"]), "von": r["created_by_name"] or "–",
