@@ -1450,6 +1450,18 @@ def _export_name(title):
     return name[:120]
 
 
+def _export_inhalt(p):
+    """Inhalt einer Seite für den Export. Fehlt die Titelzeile „# …“ (nie im Editor gespeicherte Seite, etwa per API
+    angelegt), steht sie davor: Der Import nimmt den Titel aus der ersten Zeile, sonst aus dem Dateinamen – und der
+    trägt bei gleichnamigen Geschwistern „-<slug>“ (nach_merge_liste Punkt 20)."""
+    from .wiki_import import titel_aus
+
+    inhalt = p["content"] or ""
+    if titel_aus(inhalt.lstrip("\n")):
+        return inhalt
+    return f"# {p['title']}\n\n{inhalt}" if inhalt.strip() else f"# {p['title']}\n"
+
+
 def _descendants(pid):
     out, stack = [], [pid]
     seen = {pid}
@@ -1482,7 +1494,7 @@ def export_page(pid):
     if not with_children:
         # send_file schreibt den Namen RFC-5987-kodiert – eine rohe Kopfzeile mit „α“ oder
         # kyrillischen Buchstaben ließ gunicorn (latin-1) die Antwort abbrechen.
-        body = (p["content"] or "").encode("utf-8")
+        body = _export_inhalt(p).encode("utf-8")
         return send_file(io.BytesIO(body), mimetype="text/markdown; charset=utf-8", as_attachment=True,
                          download_name=f"{_export_name(p['title'])}.md")
 
@@ -1513,14 +1525,19 @@ def export_page(pid):
                 oben = pfade.get(seite["parent_id"]) if seite["parent_id"] in by_id else None
                 rel = (oben + "/" if oben else "") + _export_name(seite["title"])
                 if rel.lower() in vergeben:
-                    rel = f"{rel}-{seite['slug']}"
+                    # „-<slug>“ kann selbst schon vergeben sein (ein drittes Geschwister heißt „Foo-foo-6“) –
+                    # dann weiter zählen, bis der Pfad frei ist (nach_merge_liste Punkt 16, Probe q06).
+                    basis = rel = f"{rel}-{seite['slug']}"
+                    n = 2
+                    while rel.lower() in vergeben:
+                        rel, n = f"{basis}-{n}", n + 1
                 vergeben.add(rel.lower())
                 pfade[seite["id"]] = rel
             return pfade[q["id"]]
 
         for q in pages:
             rel = pfad(q)
-            z.writestr(rel + ".md", q["content"] or "")
+            z.writestr(rel + ".md", _export_inhalt(q))
             for ref in file_refs(q["content"]):
                 if ref in gepackt:
                     continue                 # dieselbe Datei auf mehreren Seiten: einmal genügt

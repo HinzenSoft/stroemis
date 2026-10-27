@@ -613,7 +613,7 @@ def _ist_ausbilder_rolle(rolle, nr, warnungen):
         return False
     if any(w in t for w in AUSBILDER_WOERTER):
         return True
-    warnungen.append(f"Zeile {nr}: Rolle „{rolle}“ ist unbekannt – als Teilnehmende:r übernommen.")
+    warnungen.append(f"Zeile {nr}: Rolle „{rolle}“ ist unbekannt – als Teilnehmende übernommen.")
     return False
 
 

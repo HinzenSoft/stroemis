@@ -200,7 +200,7 @@
     return `<div class="fortschritt"><span>${ab}/${ges} Leistungen abgenommen</span>
       <div class="balken"><span class="${ges && ab === ges ? "voll" : ""}" style="width:${pct}%"></span></div>
       ${offen ? `<span class="maengel">${plural(offen, "offener Mangel", "offene Mängel")}</span>` : '<span class="muted">keine offenen Mängel</span>'}
-      ${lg.voraussetzungen_offen ? `<span class="maengel"> · ${lg.voraussetzungen_offen} TN mit offenen Voraussetzungen</span>` : ""}</div>`;
+      ${lg.voraussetzungen_offen ? `<span class="maengel"> · ${lg.voraussetzungen_offen} Teilnehmende mit offenen Voraussetzungen</span>` : ""}</div>`;
   }
 
   /* Medienkacheln. Die Liste wird unter einem Schlüssel gemerkt, damit der Leuchtkasten beim
@@ -564,13 +564,13 @@
     }
     ziel.innerHTML = `<table class="list" id="lg-tabelle">
       <colgroup><col style="width:30%"><col style="width:16%"><col style="width:10%"><col style="width:6%"><col style="width:18%"><col style="width:20%"></colgroup>
-      <thead><tr><th>Lehrgang</th><th>Datum</th><th>Status</th><th>TN</th><th>Fortschritt</th><th></th></tr></thead>
+      <thead><tr><th>Lehrgang</th><th>Datum</th><th>Status</th><th>Teilnehmende</th><th>Fortschritt</th><th></th></tr></thead>
       <tbody>${state.liste.map((lg) => `<tr data-id="${lg.id}">
         <td data-l="Lehrgang"><a class="titel" href="/riegenkarten/${lg.id}">${esc(lg.titel)}</a>
           ${lg.nummer ? `<div class="nummer">Nr. ${esc(lg.nummer)}</div>` : ""}${lg.ort ? `<div class="small muted">${esc(lg.ort)}</div>` : ""}</td>
         <td data-l="Datum">${esc(spanne(lg.datum_von, lg.datum_bis)) || '<span class="muted">–</span>'}</td>
         <td data-l="Status">${statusMarke(lg.status)}</td>
-        <td data-l="TN">${lg.tn_anzahl}</td>
+        <td data-l="Teilnehmende">${lg.tn_anzahl}</td>
         <td data-l="Fortschritt">${fortschrittHtml(lg)}</td>
         <td class="tabelle-aktionen"><div class="btn-row">
           <a class="btn small" href="/riegenkarten/${lg.id}">Öffnen</a>
@@ -862,7 +862,7 @@
         </div>` : ""}</div>
       <div class="kopf-meta">${statusMarke(lg.status)}${lg.nummer ? `<span>Nr. ${esc(lg.nummer)}</span>` : ""}
         ${lg.datum_von || lg.datum_bis ? `<span>${esc(spanne(lg.datum_von, lg.datum_bis))}</span>` : ""}${lg.ort ? `<span>${esc(lg.ort)}</span>` : ""}
-        <span>${plural(lg.tn_anzahl, "Teilnehmende:r", "Teilnehmende")}</span>
+        <span>${lg.tn_anzahl} Teilnehmende</span>
         ${best || nicht ? `<span class="erg-zaehler" title="Vermerkte Lehrgangsergebnisse"><b class="ja">${best} bestanden</b> · <b class="nein">${nicht} nicht bestanden</b></span>` : ""}</div>
       ${ausb ? `<p class="ausbilder-zeile">${ausb}</p>` : ""}
       ${lg.beschreibung ? `<details class="beschreibung-kopf"><summary>Beschreibung</summary><div class="md">${esc(lg.beschreibung).replace(/\n/g, "<br>")}</div></details>` : ""}
@@ -905,7 +905,7 @@
     const leitung = darfLeiten();
     const kopf = `<div class="reiter-kopf"><h2>Teilnehmende</h2>
       ${leitung ? `<div class="btn-row"><button class="btn secondary small" data-act="vor-verwalten">Voraussetzungen verwalten</button>
-        <button class="btn small" data-act="tn-neu"><span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Teilnehmende:n<span class="k-anlegen"> anlegen</span></span></button></div>` : ""}</div>`;
+        <button class="btn small" data-act="tn-neu"><span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Teilnehmende<span class="k-anlegen"> anlegen</span></span></button></div>` : ""}</div>`;
     if (!tns.length) {
       return kopf + `<div class="leer"><strong>Noch keine Teilnehmenden</strong>${leitung ? "Lege sie an oder importiere die Excel-Teilnehmerliste – daraus kommen auch die Voraussetzungen." : "Die Lehrgangsleitung legt sie an oder importiert die Excel-Teilnehmerliste."}</div>`;
     }
@@ -1020,7 +1020,7 @@
     tn = tn || {};
     const neu = !tn.id;
     const extra = Object.entries(tn.extra || {});
-    dialogOeffnen(`<h2>${neu ? "Teilnehmende:n anlegen" : esc(tnName(tn))}</h2>
+    dialogOeffnen(`<h2>${neu ? "Teilnehmende anlegen" : esc(tnName(tn))}</h2>
       <div class="tn-bild-zeile">
         ${tnBildHtml(tn, "gross")}
         <div class="pb-text">
@@ -1098,7 +1098,7 @@
             if (neu) await api(`${API}/lehrgaenge/${LEHRGANG_ID}/teilnehmer`, { method: "POST", body: d });
             else await api(`${API}/teilnehmer/${tn.id}`, { method: "PUT", body: d });
             dlg.close();
-            toast(neu ? "Teilnehmende:r angelegt" : "Gespeichert");
+            toast(neu ? "Teilnehmende angelegt" : "Gespeichert");
             await loadDetail(); renderLehrgangSeite();
           } catch (e) { toast(e.message, true); }
           finally { knopf.disabled = false; }
@@ -1109,7 +1109,7 @@
           try {
             await api(`${API}/teilnehmer/${tn.id}`, { method: "DELETE" });
             dlg.close();
-            toast("Teilnehmende:r gelöscht");
+            toast("Teilnehmende gelöscht");
             await loadDetail(); renderLehrgangSeite();
           } catch (e) { toast(e.message, true); }
         };
@@ -1654,10 +1654,10 @@
       <div class="c-tabs" role="tablist">
         <button type="button" role="tab" data-act="bew-ansicht" data-a="matrix" class="${a === "matrix" ? "sel" : ""}">Matrix</button>
         <button type="button" role="tab" data-act="bew-ansicht" data-a="leistung" class="${a === "leistung" ? "sel" : ""}">je Leistung</button>
-        <button type="button" role="tab" data-act="bew-ansicht" data-a="tn" class="${a === "tn" ? "sel" : ""}">je TN</button>
+        <button type="button" role="tab" data-act="bew-ansicht" data-a="tn" class="${a === "tn" ? "sel" : ""}">je Teilnehmende</button>
       </div>
       ${a === "leistung" ? `<select id="bew-sel-leistung" aria-label="Prüfungsleistung">${ls.map((l) => `<option value="${l.id}" ${l.id === state.bewLeistung ? "selected" : ""}>${esc(l.bezeichnung)}${l.zeitansatz_sekunden != null ? ` (⏱ ${fmtZeit(l.zeitansatz_sekunden)})` : ""}</option>`).join("")}</select>` : ""}
-      ${a === "tn" ? `<select id="bew-sel-tn" aria-label="Teilnehmende:r">${tns.map((t) => `<option value="${t.id}" ${t.id === state.bewTn ? "selected" : ""}>${esc(tnName(t))}${t.gliederung ? ` (${esc(t.gliederung)})` : ""}</option>`).join("")}</select>
+      ${a === "tn" ? `<select id="bew-sel-tn" aria-label="Teilnehmende">${tns.map((t) => `<option value="${t.id}" ${t.id === state.bewTn ? "selected" : ""}>${esc(tnName(t))}${t.gliederung ? ` (${esc(t.gliederung)})` : ""}</option>`).join("")}</select>
         <button type="button" class="btn secondary small" data-act="bew-tn-druck" title="Alle Leistungen dieser Person mit Kommentaren und Bildern drucken oder als PDF speichern">🖨 Druckansicht</button>` : ""}
     </div>`;
     let inhalt;
@@ -1666,9 +1666,9 @@
       // „je TN“ – in der Matrix machten die beiden Spalten die Tabelle am Gewässer nur breiter.
       // Das Schloss und die Dämpfung eingefrorener Personen bleiben.
       inhalt = `<div class="table-scroll"><table class="bew-matrix">
-        <thead><tr><th class="tn-kopf">Teilnehmende:r</th>${ls.map((l) => `<th title="${esc(l.bezeichnung)}">${esc(l.bezeichnung)}${l.zeitansatz_sekunden != null ? `<br><span class="muted">⏱ ${fmtZeit(l.zeitansatz_sekunden)}</span>` : ""}</th>`).join("")}</tr></thead>
+        <thead><tr><th class="tn-kopf">Teilnehmende</th>${ls.map((l) => `<th title="${esc(l.bezeichnung)}">${esc(l.bezeichnung)}${l.zeitansatz_sekunden != null ? `<br><span class="muted">⏱ ${fmtZeit(l.zeitansatz_sekunden)}</span>` : ""}</th>`).join("")}</tr></thead>
         <tbody>${tns.map((tn) => `<tr class="${tn.eingefroren ? "gesperrt" : ""}">
-          <td>${tnKopfHtml(tn, `<button type="button" class="linkbtn" data-act="bew-zu-tn" data-tid="${tn.id}" title="Ansicht „je TN“ für ${esc(tnName(tn))} öffnen">${esc(tnName(tn))}</button>`)}<span class="tn-sub">${esc(tn.gliederung || "")}</span>
+          <td>${tnKopfHtml(tn, `<button type="button" class="linkbtn" data-act="bew-zu-tn" data-tid="${tn.id}" title="Ansicht „je Teilnehmende“ für ${esc(tnName(tn))} öffnen">${esc(tnName(tn))}</button>`)}<span class="tn-sub">${esc(tn.gliederung || "")}</span>
             ${tn.voraussetzungen_offen ? `<span class="badge rot" title="Voraussetzungen nicht vollständig">${tn.voraussetzungen_offen} Vorauss. offen</span>` : ""}</td>
           ${ls.map((l) => `<td>${zelleHtml(tn, l)}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`;
     } else if (a === "leistung") {
@@ -2160,7 +2160,7 @@
     const tns = lg.teilnehmer || [], ls = lg.leistungen || [];
     return `<div class="reiter-kopf"><h2>Mängel / Feedback</h2></div>
       <div class="maengel-filter">
-        <div><label for="mf-tn">Teilnehmende:r</label><select id="mf-tn"><option value="">Alle</option>${tns.map((t) => `<option value="${t.id}" ${String(t.id) === String(state.mf.teilnehmer) ? "selected" : ""}>${esc(tnName(t))}</option>`).join("")}</select></div>
+        <div><label for="mf-tn">Teilnehmende</label><select id="mf-tn"><option value="">Alle</option>${tns.map((t) => `<option value="${t.id}" ${String(t.id) === String(state.mf.teilnehmer) ? "selected" : ""}>${esc(tnName(t))}</option>`).join("")}</select></div>
         <div><label for="mf-l">Prüfungsleistung</label><select id="mf-l"><option value="">Alle</option>${ls.map((l) => `<option value="${l.id}" ${String(l.id) === String(state.mf.leistung) ? "selected" : ""}>${esc(l.bezeichnung)}</option>`).join("")}</select></div>
         <label class="inline"><input type="checkbox" id="mf-offen" ${state.mf.nur_offen ? "checked" : ""}> nur offene Mängel</label>
         <div class="btn-row knoepfe"><button class="btn secondary small" data-act="m-druck">Druckansicht</button>
@@ -2273,7 +2273,7 @@
     } catch (e) { root.innerHTML = `<p class="notice">${esc(e.message)}</p>`; return; }
     const tn = mf.teilnehmer ? (d.teilnehmer || []).find((t) => String(t.id) === mf.teilnehmer) : null;
     const l = mf.leistung ? (d.leistungen || []).find((x) => String(x.id) === mf.leistung) : null;
-    const filter = [tn ? `Teilnehmende:r: ${tnName(tn)}` : "alle Teilnehmenden", l ? `Leistung: ${l.bezeichnung}` : "alle Leistungen", mf.nur_offen ? "nur offene Mängel" : "alle mangelhaften Bewertungen"];
+    const filter = [tn ? `Teilnehmende: ${tnName(tn)}` : "alle Teilnehmenden", l ? `Leistung: ${l.bezeichnung}` : "alle Leistungen", mf.nur_offen ? "nur offene Mängel" : "alle mangelhaften Bewertungen"];
     S.titel(`Mängelübersicht ${lg.titel}`, "pruefungen");
     root.innerHTML = `<div class="druck-kopf"><h1>Mängelübersicht – ${esc(lg.titel)}</h1>
         <button class="btn no-print" id="druck-los" type="button">🖨 Drucken</button>
@@ -2298,7 +2298,9 @@
     }
     const tn = tnVoll(d.teilnehmer), versuche = d.versuche || [];
     const soll = (lid) => { const l = (lg.leistungen || []).find((x) => x.id === lid); return l ? l.zeitansatz_sekunden : null; };
-    S.titel(`Prüfungsleistungen ${tnName(tn)}`, "pruefungen");
+    // Kein Name im Reiter: Der Titel landet im Browserverlauf, auch auf gemeinsam genutzten Geräten (nach_merge_liste
+    // Punkt 17) – er nennt Ansicht und Lehrgang, die Person steht nur auf der Seite.
+    S.titel(["Prüfungsleistungen", lg.titel], "pruefungen");
     root.innerHTML = `<div class="druck-kopf"><h1>Prüfungsleistungen – ${esc(tnName(tn))}</h1>
         <button class="btn no-print" id="druck-los" type="button">🖨 Drucken</button>
         <div class="druck-filter">${esc([lg.titel, spanne(lg.datum_von, lg.datum_bis), lg.ort].filter(Boolean).join(" · "))}<br>
