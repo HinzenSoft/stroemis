@@ -1999,8 +1999,9 @@ dialog .mat-knopfgrund { margin: 10px 0 0; }
     border-top-width: 3px; }
   .mat-rundenzahlen .mat-kachel strong { font-size: 1.15rem; }
 }
-/* Sprunglink „Zum Abschluss“ über den Prüfpunkten (B11): unsichtbar, bis er den Tastaturfokus hat. */
-.mat-sprung:not(:focus) { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+/* Sprunglink „Zum Abschluss“ über den Prüfpunkten (B11): über dem Fensterrand geparkt wie „Zum Inhalt“ (app.css,
+   .sprunglink), bis er den Tastaturfokus hat – dann steht er an seinem Platz über den Prüfpunkten. */
+.mat-sprung:not(:focus) { position: fixed; top: -100px; left: 8px; }
 .mat-sprung:focus { display: inline-block; margin: 0 0 8px; padding: 8px 12px; border: 2px solid var(--anthrazit); background: var(--weiss);
   color: var(--anthrazit); font-weight: 700; text-decoration: none; }
 /* Hinweiszeile der Prüfung beim Klick auf das ausgegraute „Festschreiben“ (B1): hervorgehoben wie ein Grundsatz. */

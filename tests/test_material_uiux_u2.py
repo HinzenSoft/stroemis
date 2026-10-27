@@ -172,7 +172,7 @@ def test_b11_radiogruppe():
     for t in ("ArrowRight", "ArrowLeft", "Home", "End", "neu.click()"):
         assert t in tasten
     assert '<a class="mat-sprung" href="#pr-abschluss" data-act="zum-abschluss">Zum Abschluss</a>' in js
-    assert ".mat-sprung:not(:focus) { position: absolute;" in lies(CSS)
+    assert ".mat-sprung:not(:focus) { position: fixed; top: -100px; left: 8px; }" in lies(CSS)
     print("B11 bestanden.")
 
 
