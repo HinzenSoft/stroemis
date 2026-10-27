@@ -864,9 +864,9 @@ def _schema_in(conn):
 # --- 9. Oberfläche (statisch) ----------------------------------------------------------------------------------------
 
 def test_oberflaeche_statisch():
-    """material.js: Dialog „Bearbeiten“ mit schreibgeschütztem Block und grauem „Änderung beantragen …“, offener Antrag als
+    """material.js: Dialog „Bearbeiten“ mit schreibgeschütztem Block und grauem „Änderung beantragen“, offener Antrag als
     Hinweis; Antragsdialog mit Begründung und EINEM roten Knopf „Antrag senden“; Artikelseite: „Bearbeiten“ auch für
-    Prüfer, „Änderung beantragen …“ ohne Hilfetext darunter; Liste „Änderungsanträge“ mit Karten nur mit grauen
+    Prüfer, „Änderung beantragen“ ohne Hilfetext darunter; Liste „Änderungsanträge“ mit Karten nur mit grauen
     Knöpfen, Rückfrage „Bestätigen“ als roter Hauptknopf, „Ablehnen“ endgültig (rot umrandet); Blase am Knopf im
     Bestand. Keine btn ghost. admin.js nennt die Anträge beim Löschen; CSS für Marke und Liste."""
     wurzel = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -875,7 +875,7 @@ def test_oberflaeche_statisch():
     admin = open(os.path.join(wurzel, "app/static/js/admin.js"), encoding="utf-8").read()
     dlg = js[js.index("function artikelDialog(a)"):js.index("/* --- Änderungsanträge")]
     assert "const gesperrt = fest || nurDirekt;" in dlg and "const nurDirekt = !(a.darf || {}).verwalten;" in dlg
-    assert ('<button class="btn secondary small" type="button" id="ad-antrag">Änderung beantragen …</button>' in dlg
+    assert ('<button class="btn secondary small" type="button" id="ad-antrag">Änderung beantragen</button>' in dlg
             and "antragMoeglich(a)" in dlg and "offen.map(antragOffenHtml)" in dlg)
     assert dlg.count('class="btn"') == 1 and '<button class="btn" id="ad-ok" type="button">Speichern</button>' in dlg
     block = js[js.index("/* --- Änderungsanträge"):js.index("/* --- Artikel anlegen")]
@@ -885,7 +885,9 @@ def test_oberflaeche_statisch():
     assert "wartet auf einen Materialwart des Ordners" in block and "Material-Verwaltung bestätigt" not in block
     seite = js[js.index("async function artikel()"):js.index("function artikelDialog(a)")]
     assert "const darfDirekt = Boolean(darf.verwalten || darf.pruefen)" in seite
-    assert "${antragMoeglich(a) ? '<div class=\"btn-row\"><button class=\"btn secondary small\" type=\"button\" data-act=\"antrag\">Änderung beantragen …</button></div>' : \"\"}</section>" in seite
+    # Seit dem 27.10.2026 rechts neben der Überschrift „Stammdaten“ (Nachtrag 5), nicht mehr am Ende des Blocks.
+    assert ("<div class=\"mat-kastenkopf\"><h2>Stammdaten</h2>${antragMoeglich(a) ? '<button class=\"btn secondary small\" "
+            "type=\"button\" data-act=\"antrag\">Änderung beantragen</button>' : \"\"}</div>") in seite
     karte = js[js.index("function antragKarte(x)"):js.index("function antragBestaetigenDialog")]
     assert 'class="btn secondary small" data-act="bestaetigen"' in karte and 'data-act="antrag-ablehnen"' in karte
     assert 'class="btn"' not in karte and "btn danger" not in karte and "x.entscheiden && geht" in karte
@@ -1561,8 +1563,8 @@ def _tabelle_sql(pfad):
 
 def test_oberflaeche_17():
     """Oberfläche zu den Entscheidungen vom 21.10.2026 zur Prüfung: Antragsdialog ohne „Herstelldatum entfernen“; offener
-    eigener Antrag mit grauem „Antrag zurückziehen …“ (Artikelseite und Dialog „Bearbeiten“) und Rückfrage; in der Liste
-    „Zurückziehen …“ grau auf der eigenen offenen Karte, „zurückgezogen“ als Marke und Ergebnis; ein alter Antrag aufs
+    eigener Antrag mit grauem „Antrag zurückziehen“ (Artikelseite und Dialog „Bearbeiten“) und Rückfrage; in der Liste
+    „Zurückziehen“ grau auf der eigenen offenen Karte, „zurückgezogen“ als Marke und Ergebnis; ein alter Antrag aufs
     Entfernen nur noch ablehnen. Knopfregel unverändert; Journal-Beschriftung; CSS für die Marke."""
     wurzel = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     js = open(os.path.join(wurzel, "app/material/static/material.js"), encoding="utf-8").read()
@@ -1573,15 +1575,15 @@ def test_oberflaeche_17():
     assert antrag_dlg.count('class="btn"') == 1
     hinweis = block[block.index("const antragOffenHtml"):block.index("function antragDialog(a)")]
     assert ('${x.eigen ? `<button class="btn secondary small" type="button" data-act="antrag-zurueck" '
-            'data-id="${x.id}">Antrag zurückziehen …</button>` : ""}' in hinweis)
+            'data-id="${x.id}">Antrag zurückziehen</button>` : ""}' in hinweis)
     assert "await confirm(" in hinweis and '"Zurückziehen"' in hinweis and "/zurueckziehen`" in hinweis
     seite = js[js.index("async function artikel()"):js.index("function artikelDialog(a)")]
     assert '"antrag-zurueck": (b) => antragZurueckziehen(' in seite
     # Die offenen Anträge stehen als eigener Abschnitt am Anfang der rechten Spalte (Kasten .mat-spalte), vor „QR-Code und
-    # NFC“, nicht unter den Stammdaten; der Knopf „Änderung beantragen …“ bleibt links bei den Stammdaten (22.10.2026).
+    # NFC“, nicht unter den Stammdaten; der Knopf „Änderung beantragen“ bleibt links bei den Stammdaten (22.10.2026).
     spalten = seite[seite.index('<div class="mat-spalten">'):seite.index('<section class="section"><h2>Prüfungen</h2>')]
     links, rechts = spalten.split('<div class="mat-spalte">')
-    assert "antragOffenHtml" not in links and 'data-act="antrag">Änderung beantragen …' in links
+    assert "antragOffenHtml" not in links and 'data-act="antrag">Änderung beantragen<' in links
     abschnitt = ('`<section class="section mat-antraege-offen"><h2>Offene Änderungsanträge</h2>'
                  '${a.antraege.map(antragOffenHtml).join("")}</section>`')
     assert "(a.antraege || []).length ? " + abschnitt in rechts

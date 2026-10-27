@@ -410,7 +410,7 @@ def test_erben():
 def test_oberflaeche_statisch():
     js = open(os.path.join(WURZEL, "app/static/js/wiki.js"), encoding="utf-8").read()
     menue = js[js.index("function pageMenu(anchor, p)"):js.index("async function loadBacklinks")]
-    assert '${p.can_publish ? \'<button type="button" data-a="import">Seiten aus ZIP importieren …</button>\' : ""}' in menue
+    assert '${p.can_publish ? \'<button type="button" data-a="import">Seiten aus ZIP importieren</button>\' : ""}' in menue
     assert menue.index('data-a="exportzip"') < menue.index('data-a="import"')
     dlg = js[js.index("function importDialog(p)"):js.index("/* --- Ende Import")]
     assert "<h2>Seiten importieren</h2>" in dlg and 'accept=".zip' in dlg and "Einsortieren unter" in dlg

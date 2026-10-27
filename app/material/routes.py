@@ -230,6 +230,13 @@ def durchgang_seite(rid):
     return _seite("durchgang", bezug=("durchgang", rid), id=rid)
 
 
+@seiten.get("/materialablage/durchgaenge")
+def durchgaenge_seite():
+    """Abgeschlossene Prüfdurchgänge (Wunsch vom 27.10.2026; Menü „Prüfdurchgänge“ auf „Prüfungen“): je Jahr des
+    Abschlusses, filterbar nach Ordner und Titel – Liste und Sicht liefert GET /durchgaenge?abgeschlossen=1."""
+    return _seite("durchgaenge")
+
+
 def _protokoll_senden(row, quelle, kennung_wert, inventarnummer=None, auch=()):
     """Ein festgeschriebenes Protokoll ausliefern – nur an Angemeldete, die den Artikel (über seine Heimat) bzw. den
     Durchgang sehen dürfen (oder einen der Ordner in auch lesen – das Set-Protokoll, F4 a), und nur, wenn die Datei noch
@@ -1178,8 +1185,25 @@ def _protokoll_link(pid):
 @api.get("/durchgaenge")
 @requires_zugang
 def durchgaenge():
-    """Die Durchgänge, deren Ordner das Konto sieht."""
-    return jsonify(durchgaenge=durchgang.liste(nur_offen=request.args.get("offen") == "1"))
+    """Die Durchgänge, deren Ordner das Konto sieht. ?abgeschlossen=1 (Ansicht „Abgeschlossene Prüfdurchgänge“): nur
+    beendete, je Jahr des Abschlusses seitenweise, dazu die Jahre mit Anzahl – Filter ?jahr= (1990…2100, ohne: das
+    neueste), ?ordner= (der Zweig; nur ein sichtbarer Ordner, sonst 404 wie für Unbekanntes), ?q= (Wörter im Titel),
+    ?seite=, ?pro_seite= (höchstens 100)."""
+    if request.args.get("abgeschlossen") != "1":
+        return jsonify(durchgaenge=durchgang.liste(nur_offen=request.args.get("offen") == "1"))
+    jahr = request.args.get("jahr") or None
+    if jahr is not None:
+        if not (jahr.isascii() and jahr.isdigit() and 1990 <= int(jahr) <= 2100):
+            raise Abgelehnt("Das Jahr muss zwischen 1990 und 2100 liegen.")
+        jahr = int(jahr)
+    ordner_id = None
+    if request.args.get("ordner"):
+        ordner_id = kennung(request.args.get("ordner"), "Ordner")
+        bestand.ordner(ordner_id)
+        if not sicht().sichtbar(ordner_id):
+            raise Abgelehnt(ORDNER_FEHLT, 404)
+    seite, pro_seite = _seite_args()
+    return jsonify(**durchgang.abgeschlossene(jahr, ordner_id, request.args.get("q") or "", seite, pro_seite))
 
 
 @api.post("/durchgaenge")

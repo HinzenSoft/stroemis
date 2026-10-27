@@ -1644,7 +1644,7 @@ def test_oberflaeche_statisch():
     Untermenü „Export / Import“ im Ordnerkopf, Hinweise im Ordnerkopf und auf der Übersicht; ein roter Knopf
     „Übernehmen: …“ mit Zahlen, Probelauf abbrechbar (AbortController), 413/429 im Klartext; Nacharbeit mit Filter nach
     Grund, „alle n offenen“ (→ "alle"), Frist und offen_bis; Melden über die Nacharbeit (angabe, ohne folder_id),
-    „Im Katalog anlegen …“ ohne Seitenwechsel; Knopfregel (kein btn ghost, danger nur über die Rückfrage)."""
+    „Im Katalog anlegen“ ohne Seitenwechsel; Knopfregel (kein btn ghost, danger nur über die Rückfrage)."""
     wurzel = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     js = open(os.path.join(wurzel, "app/material/static/material.js"), encoding="utf-8").read()
     css = open(os.path.join(wurzel, "app/material/static/material.css"), encoding="utf-8").read()
@@ -1673,7 +1673,7 @@ def test_oberflaeche_statisch():
     assert "if (v.url) felder.angabe = v.angabe" in js and "await api(v.url || `${API}/meldungen`" in js
     assert "if (opt.danach) await opt.danach(r.produkt);" in js
     assert "/nacharbeit/produkt`, { method: \"POST\", body: { angabe: g.angabe, product_id: p.id } }" in block
-    assert "if (!g.produkt && DARF.katalog) knoepfe.push(" in block and "Im Katalog anlegen …" in block
+    assert "if (!g.produkt && DARF.katalog) knoepfe.push(" in block and "Im Katalog anlegen" in block
     # Knopfregel: rot nur „Übernehmen: …“ (Seite), „Zuordnen“ und „n Artikel übernehmen“ (je ein Dialog)
     assert block.count('class="btn"') == 2 and 'class="btn" data-act="bi-uebernehmen"' in block, block.count('class="btn"')
     assert block.count('class="btn mat-knopf-umbruch"') == 1 and "btn danger" not in block

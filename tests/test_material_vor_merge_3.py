@@ -100,10 +100,10 @@ def test_materialablage_statisch():
     assert '<span class="mat-pfad-glied">/ <a href="/materialablage/pruefungen">Prüfungen</a></span>' in pruefen
     # B-2
     assert ".mat-psa-meldungen > summary, .mat-mangel-alt > summary { padding: 10px 0; min-height: 44px; box-sizing: border-box; }" in css
-    # V1: Bearbeiten-Menü mit „Löschen …“, kein eigener Löschen-Knopf; Dokumente einklappbar, als Schublade zu.
+    # V1: Bearbeiten-Menü mit „Löschen“, kein eigener Löschen-Knopf; Dokumente einklappbar, als Schublade zu.
     assert 'data-act="kat-loeschen">Löschen</button>' not in js
     menue = js[js.index("const kategorieMenue = "):js.index("</details>`;", js.index("const kategorieMenue = "))]
-    assert 'data-act="kat-bearbeiten"' in menue and 'data-act="kat-loeschen"><strong>Löschen …</strong>' in menue
+    assert 'data-act="kat-bearbeiten"' in menue and 'data-act="kat-loeschen"><strong>Löschen</strong>' in menue
     assert '<details class="mat-katdoks mat-auf"${alsSchublade() ? "" : " open"}><summary>Dokumente für alle Produkte dieser Kategorie<span id="kat-doks-zahl"></span></summary>' in js
     assert "katalogWahl(kat.dataset.kat ? +kat.dataset.kat : null, alsSchublade());" in js
     assert "window.scrollTo(0, ziel.getBoundingClientRect().top + window.scrollY - such.offsetHeight - oben);" in js
@@ -152,7 +152,7 @@ def test_uebrige_module_statisch():
     assert 'S.titel(name === "nutzer" ? "Nutzerverwaltung" : "Einstellungen", "verwaltung");' in admin
     assert "ghost" not in admin.replace("(btn ghost)", "")
     assert '<details class="zeilenmenue"><summary class="btn secondary small" aria-haspopup="true">Mehr</summary>' in admin
-    assert '<button type="button" data-act="reset">Reset-Mail senden …</button>' in admin   # Rückfrage seit nach_merge_liste 14
+    assert '<button type="button" data-act="reset">Reset-Mail senden</button>' in admin   # Rückfrage seit nach_merge_liste 14
     assert 'const mailUmbruch = (mail) => S.esc(mail).replace(/@/, "<wbr>@").replace(/\\.(?=[^@]*$)/g, "<wbr>.");' in admin
     assert '<td class="mail" data-l="E-Mail">${mailUmbruch(u.email)}</td>' in admin
     app_css = lies("app/static/css/app.css")

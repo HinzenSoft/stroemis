@@ -219,7 +219,7 @@
         </button>`).join("")}</div>`
         : `<div class="empty"><strong>Noch keine Bilder</strong>${a.can_edit ? "Lade Bilder hoch – Geotags werden automatisch ausgelesen." : ""}</div>`}
       <div class="meta" style="margin-top:16px">Angelegt von ${esc(a.owner_name || "")}${a.owner_gliederung ? " (" + esc(a.owner_gliederung) + ")" : ""}, zuletzt geändert ${fmtDate(a.updated_at, true)}</div>
-      ${a.can_edit ? '<div class="btn-row" style="margin-top:14px"><button class="btn secondary small" id="a-delete">Album löschen …</button></div>' : ""}
+      ${a.can_edit ? '<div class="btn-row" style="margin-top:14px"><button class="btn secondary small" id="a-delete">Album löschen</button></div>' : ""}
     `);
     panelBody.querySelectorAll(".photo-grid button").forEach((b) => b.addEventListener("click", () => openLightbox(+b.dataset.i)));
     const hi = panelBody.querySelector(".photo-grid .hi");
@@ -649,7 +649,7 @@
           ${canEdit && a.can_edit ? `<button class="btn secondary small" id="lb-cover"${a.cover_photo_id === p.id ? " disabled" : ""}>${
             a.cover_photo_id === p.id ? "Ist das Deckblatt" : "Als Deckblatt"}</button>` : ""}
         </div>
-        ${canEdit ? '<div class="btn-row lb-aktionen-weg"><button class="btn secondary small" id="lb-del">Löschen …</button></div>' : ""}
+        ${canEdit ? '<div class="btn-row lb-aktionen-weg"><button class="btn secondary small" id="lb-del">Löschen</button></div>' : ""}
       </div>`;
 
     const form = `

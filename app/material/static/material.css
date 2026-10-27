@@ -331,7 +331,7 @@ table.list.mat-artikel th.mat-wahlspalte, table.list.mat-artikel td.mat-wahlspal
 .mat-antrag-produkt { font-weight: 400; font-size: var(--fs-mittel); }
 .mat-antrag-aenderung { margin: 4px 0 8px; overflow-wrap: anywhere; }
 .mat-antrag-offen { margin: 8px 0 4px; overflow-wrap: anywhere; }
-/* Der eigene offene Antrag trägt im Hinweis den grauen Knopf „Antrag zurückziehen …“ (Entscheidung vom 21.10.2026). */
+/* Der eigene offene Antrag trägt im Hinweis den grauen Knopf „Antrag zurückziehen“ (Entscheidung vom 21.10.2026). */
 .mat-antrag-offen > p { margin: 0; }
 .mat-antrag-offen .btn-row { margin-top: 6px; }
 .mat-meldung.m-zurueckgezogen { border-left-color: var(--co-note-ka); }
@@ -1261,10 +1261,10 @@ table.list.mat-artikel tr:has(.mat-wahl-art:checked) { background: var(--co-info
 
 /* Lieferung 5 – Geräte: formulare */
 /* Überschrift eines Feldes wie ein <label>, aber ohne eigenes Ziel: Über einem Knopf mit verstecktem Dateifeld trüge
-   das Feld sonst zwei Namen („Foto“ und „Foto wählen …“). */
+   das Feld sonst zwei Namen („Foto“ und „Foto wählen“). */
 .mat-feldkopf { display: block; font-weight: 600; font-size: var(--fs-mittel); margin: 12px 0 4px; }
 /* Foto im Dialog (Ordnerfoto, Produktbild): links die Vorschau – bisheriges, neu gewähltes oder ein leerer Rahmen –,
-   rechts „Foto wählen …“ und „entfernen“ (beide mindestens 44 px hoch), Dateiname und Hinweis. Reicht die Breite
+   rechts „Foto wählen“ und „entfernen“ (beide mindestens 44 px hoch), Dateiname und Hinweis. Reicht die Breite
    nicht für den breitesten Knopf, rutschen die Knöpfe unter die Vorschau. Beim Ziehen einer Datei färbt sich das Feld. */
 .mat-bildwahl { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 10px 14px; margin: 0 -8px; padding: 6px 8px;
   border: 2px dashed transparent; border-radius: var(--radius); }
@@ -1546,7 +1546,7 @@ table.list.mat-na-zeilen tr:has(.mat-na-wahl:checked) { background: var(--co-inf
 .mat-psa-kasten.dringend { background: var(--co-warning-fl); border-left-color: var(--gelb-dunkel); }
 /* Nach dem Melden: was geschah (Sperre, Mail) – bleibt stehen, bis neu gezeichnet wird. */
 .mat-mangel-quittung { font-weight: 600; }
-/* Artikelseite: warum „Mangel melden …“ bzw. „Aussondern“ ausgegraut ist – seit dem 25.10.2026 als Satz über der
+/* Artikelseite: warum „Mangel melden“ bzw. „Aussondern“ ausgegraut ist – seit dem 25.10.2026 als Satz über der
    Knopfzeile (Designsprache: keine Erklärzeilen unter Knöpfen). */
 .mat-artikeltitel :is(.mat-aussondern-hilfe, .mat-schon-gemeldet) { margin: 6px 0; }
 .mat-mangel-alt > summary { cursor: pointer; color: var(--grau); margin: 4px 0 10px; }
@@ -1737,7 +1737,7 @@ table.list.mat-na-zeilen tr:has(.mat-na-wahl:checked) { background: var(--co-inf
 .mat-ue th.mat-ue-zahl { white-space: normal; }
 /* Stammdaten: Lange Werte ohne Leerzeichen („von pruefer3@example.org“) brechen notfalls im Wort um. */
 #mat-inhalt .mat-daten dd { overflow-wrap: anywhere; }
-/* Rot auf grauem Grund (Formular-Editor: „Ändern …“ in der Wiki-Zeile, Knopf-Links in Hinweisen) im dunklen Rot wie
+/* Rot auf grauem Grund (Formular-Editor: „Ändern“ in der Wiki-Zeile, Knopf-Links in Hinweisen) im dunklen Rot wie
    die Links in Hinweisen – das Hausrot kam dort nur auf 4,4:1. */
 #mat-inhalt :is(.notice, .mat-wikizeile) :is(a:not(.btn), .lnk) { color: var(--rot-auf-flaeche); }
 
@@ -1825,7 +1825,12 @@ table.list.mat-na-zeilen tr:has(.mat-na-wahl:checked) { background: var(--co-inf
 .mat-mail-kasten { margin-top: 10px; }
 .mat-kastenkopf { display: flex; align-items: baseline; justify-content: space-between; gap: 8px 16px; flex-wrap: wrap; }
 .mat-kastenkopf h2 { flex: 1 1 auto; }
-.mat-kastenkopf .mat-menue { align-self: center; }
+.mat-kastenkopf .mat-menue, .mat-kastenkopf > .btn { align-self: center; }
+/* Ein Abschnitt mit genau einer Aktion (Artikelseite „Stammdaten“ → „Änderung beantragen“, Produktseite „Bestandteile“
+   → „Bestandteile bearbeiten“; Nutzer 27.10.2026): der Knopf rechts neben der Überschrift statt am Ende des Blocks – passt
+   er nicht daneben, steht er direkt darunter. Die Linie der Überschrift läuft dann unter dem Knopf durch. */
+.mat-kastenkopf:has(> .btn) { border-bottom: 1px solid var(--linie); margin-bottom: 8px; padding-bottom: 4px; }
+.mat-kastenkopf:has(> .btn) > h2 { border-bottom: 0; padding-bottom: 0; margin-bottom: 0; }
 #mat-inhalt table.list.mat-mail td { vertical-align: top; }
 #mat-inhalt table.list.mat-mail td.mat-mail-an { width: 11em; }
 #mat-inhalt table.list.mat-mail td.mat-mail-fehler { width: 19rem; }
@@ -1939,5 +1944,56 @@ table.list.mat-na-zeilen tr:has(.mat-na-wahl:checked) { background: var(--co-inf
 @media (pointer: coarse) {
   .mat-psa-doks .mat-doks > li > a, .mat-psa-titel h2 > a, .mat-psa-knoepfe > a, .mat-psa-mails a, .mat-psa-zurueck a {
     display: inline-flex; align-items: center; min-height: 44px; }
-  .mat-runden-alt > summary { min-height: 44px; box-sizing: border-box; }
+}
+
+/* --- Abgeschlossene Prüfdurchgänge (Wunsch vom 27.10.2026) ---------------------------------------------------------
+   Eigene Seite statt der zugeklappten Liste unter „Prüfungen“. Die Filter (Ordner, Wörter im Titel) in einer Zeile wie
+   die Jahr-Auswahl des Jahresberichts, am Telefon untereinander über die ganze Breite. Je Jahr ein Abschnitt zum
+   Aufklappen: Die Überschrift (h2 im summary, mit dem Dreieck davor) trägt die Linie wie eine Abschnittsüberschrift,
+   daneben grau die Anzahl. Die Liste ist eine Modulliste – am Telefon Karten (Titel oben, eröffnet und abgeschlossen
+   nebeneinander, unten „PDF“). */
+.mat-dg-filter { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 18px; margin: -8px 0 16px; }
+.mat-dg-filter > label { margin: 0; font-weight: 600; display: inline-flex; align-items: center; gap: 8px; max-width: 100%; }
+.mat-dg-filter select { width: auto; max-width: 360px; min-width: 0; }
+.mat-dg-filter input { width: 16em; max-width: 100%; min-width: 0; }
+.mat-dg-klapp > summary { cursor: pointer; padding: 4px 0; border-bottom: 1px solid var(--linie); }
+.mat-dg-klapp > summary h2 { display: inline; margin: 0; padding: 0; border: 0; }
+.mat-dg-anzahl { font-size: var(--fs-mittel); font-weight: 400; color: var(--grau); }
+.mat-dg-klapp[open] > summary { margin-bottom: 4px; }
+.mat-dg-stand { white-space: nowrap; }
+.mat-dg-mehr { margin: 10px 0 0; }
+@container mat-seite (max-width: 600px) {
+  .mat-dg-filter { margin-top: 0; }
+  .mat-dg-filter > label { flex: 1 1 100%; display: grid; grid-template-columns: 4.6em minmax(0, 1fr); }
+  .mat-dg-filter select, .mat-dg-filter input { width: 100%; max-width: none; }
+}
+@media (pointer: coarse) {
+  .mat-dg-klapp > summary { min-height: 44px; box-sizing: border-box; padding-top: 7px; }
+}
+
+/* --- Info zu einem Begriff und Namen als Einheit (Nachträge vom 27.10.2026) -----------------------------------------
+   Gekringeltes „i“ hinter einem Begriff (material.js, infoKnopf): im DLRG-Blau, ohne Rahmen; die Info als schwebende
+   Fläche unter dem „i“ (rückt ins Bild), mit Links. Ein unsichtbarer Steg über der Fläche hält sie offen, während die
+   Maus vom „i“ hinüberwandert. Am Finger ist das „i“ 44 × 44 px groß – negative Ränder halten die Zeile dabei so hoch
+   wie vorher. */
+.mat-info { position: relative; display: inline-block; vertical-align: middle; line-height: 1; }
+.mat-info-knopf { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; margin: -2px 0 0 4px;
+  padding: 0; border: 0; border-radius: 50%; background: none; color: var(--wasser); cursor: help; }
+.mat-info-knopf:hover, .mat-info-knopf[aria-expanded="true"] { color: var(--anthrazit); }
+.mat-info-knopf:focus-visible { outline: 2px solid var(--wasser); outline-offset: 1px; }
+.mat-info-text { position: absolute; top: calc(100% + 6px); left: 0; z-index: 70; width: max-content; max-width: min(320px, calc(100vw - 32px));
+  padding: 8px 12px; background: var(--weiss); color: var(--anthrazit); border: 1px solid var(--linie); border-radius: var(--radius-gross);
+  box-shadow: var(--schatten-menue); font-size: var(--fs-klein); font-weight: 400; line-height: 1.45; white-space: normal; text-align: left; }
+.mat-info-text::before { content: ""; position: absolute; left: 0; right: 0; top: -8px; height: 8px; }
+.mat-info-text[hidden] { display: none; }
+@media (pointer: coarse) {
+  .mat-info-knopf { width: 44px; height: 44px; margin: -11px -8px -11px -6px; }
+  .mat-info-text a { padding: 15px 0; }          /* 44 px Trefferfläche, ohne die Zeile zu sprengen (inline) */
+}
+/* Namen und Anmeldungen (material.js, person): als Einheit – ganz in die nächste Zeile statt nach „demo-“ oder „@“; nur
+   wenn ein Name allein länger ist als die Zeile, bricht er in sich. */
+.mat-name { display: inline-block; max-width: 100%; overflow-wrap: anywhere; }
+/* Abgeschlossene Prüfdurchgänge am Finger: der Titel als Zeile von 44 px (Karte und Tabelle). */
+@media (pointer: coarse) {
+  #mat-inhalt .mat-dg-tabelle td.mat-k-titel > a { display: inline-flex; align-items: center; min-height: 44px; }
 }

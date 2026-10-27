@@ -249,7 +249,7 @@
           hochgeladen von ${esc(m.hochgeladen_von_name || "")} am ${esc(fmtDate(m.hochgeladen_am, true))}
           ${m.width ? `<br>${m.width} × ${m.height} px` : ""}</div>
         <div class="btn-row"><a class="btn secondary small" href="${esc(m.orig)}" target="_blank" rel="noopener">Original öffnen</a>
-          ${onDelete ? '<button class="btn secondary small" id="lb-del" type="button">Löschen …</button>' : ""}</div>
+          ${onDelete ? '<button class="btn secondary small" id="lb-del" type="button">Löschen</button>' : ""}</div>
       </div>`;
     lb.tabIndex = -1;
     lb.focus();
@@ -583,8 +583,8 @@
         <td class="tabelle-aktionen"><div class="btn-row">
           <a class="btn secondary small" href="/riegenkarten/${lg.id}">Öffnen</a>
           ${lg.darf_leiten ? zeilenMenue(`<button type="button" data-act="lg-edit" data-id="${lg.id}">Bearbeiten</button>
-            <button type="button" data-act="lg-kopie" data-id="${lg.id}">Kopieren …</button>
-            <button type="button" data-act="lg-del" data-id="${lg.id}">Löschen …</button>`) : ""}
+            <button type="button" data-act="lg-kopie" data-id="${lg.id}">Kopieren</button>
+            <button type="button" data-act="lg-del" data-id="${lg.id}">Löschen</button>`) : ""}
         </div></td></tr>`).join("")}</tbody></table>`;
   }
 
@@ -626,7 +626,7 @@
         <td class="tabelle-aktionen"><div class="btn-row">
           <a class="btn secondary small" href="/riegenkarten/kataloge/${k.id}">Öffnen</a>
           ${istAdmin() ? zeilenMenue(`<button type="button" data-act="kat-edit" data-id="${k.id}">Bearbeiten</button>
-            <button type="button" data-act="kat-del" data-id="${k.id}">Löschen …</button>`) : ""}
+            <button type="button" data-act="kat-del" data-id="${k.id}">Löschen</button>`) : ""}
         </div></td></tr>`).join("")}</tbody></table>`;
   }
 
@@ -689,7 +689,7 @@
     root.innerHTML = `<a class="zurueck" href="/riegenkarten/kataloge">← Alle Kataloge</a>
       <div class="page-head"><h1>${esc(k.titel)}</h1>
         ${admin ? `<div class="btn-row"><button class="btn secondary small" data-act="kat-edit" data-id="${k.id}">Bearbeiten</button>
-        <button class="btn secondary small" data-act="kat-del" data-id="${k.id}">Löschen …</button></div>` : ""}</div>
+        <button class="btn secondary small" data-act="kat-del" data-id="${k.id}">Löschen</button></div>` : ""}</div>
       ${k.beschreibung ? `<details class="beschreibung-kopf"><summary>Beschreibung</summary><div class="md">${esc(k.beschreibung).replace(/\n/g, "<br>")}</div></details>` : ""}
       <div class="reiter-kopf"><h2>Prüfungsleistungen</h2>
         ${admin ? '<div class="btn-row"><button class="btn small" data-act="kl-neu"><span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Prüfungsleistung<span class="k-anlegen"> anlegen</span></span></button></div>' : ""}</div>
@@ -1033,7 +1033,7 @@
         ${tnBildHtml(tn, "gross")}
         <div class="pb-text">
           <p class="help">${neu ? "Ein Profilbild lässt sich hinzufügen, sobald die Person angelegt ist." : "Quadratisch zugeschnitten, 256 Pixel. Es erscheint vor dem Namen in Listen und Matrix."}</p>
-          <div class="btn-row"><button type="button" class="btn secondary small" id="tn-pb-waehlen" ${neu ? "disabled" : ""}>Bild wählen …</button>
+          <div class="btn-row"><button type="button" class="btn secondary small" id="tn-pb-waehlen" ${neu ? "disabled" : ""}>Bild wählen</button>
             <button type="button" class="btn secondary small${bildAdresse(tn) ? "" : " hidden"}" id="tn-pb-weg">Entfernen</button></div>
           <input type="file" id="tn-pb-datei" class="hidden" accept="image/*,.heic,.heif">
         </div>
@@ -1047,7 +1047,7 @@
       <label for="tn-email">E-Mail</label><input type="email" id="tn-email" value="${esc(tn.email)}" autocomplete="off">
       <div class="feld-kopf"><label for="tn-bem">Bemerkung</label>${diktatKnopf("tn-bem")}</div><textarea id="tn-bem" style="min-height:60px">${esc(tn.bemerkung)}</textarea>
       ${extra.length ? `<label>Weitere Angaben aus dem Import</label><dl class="kv">${extra.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join("")}</dl>` : ""}
-      <div class="dlg-actions">${neu ? "" : '<button class="btn secondary" id="tn-del" type="button" style="margin-right:auto">Löschen …</button>'}
+      <div class="dlg-actions">${neu ? "" : '<button class="btn secondary" id="tn-del" type="button" style="margin-right:auto">Löschen</button>'}
         <button class="btn secondary" data-close type="button">Abbrechen</button>
         <button class="btn" id="tn-save" type="button">${neu ? "Anlegen" : "Speichern"}</button></div>`,
       (dlg, body) => {
@@ -1217,7 +1217,7 @@
         <button class="btn secondary small" data-act="${praefix}-edit" data-lid="${l.id}">Bearbeiten</button>
         ${zeilenMenue(`${i > 0 ? `<button type="button" data-act="${praefix}-hoch" data-lid="${l.id}">Nach oben</button>` : ""}
           ${i < gesamt - 1 ? `<button type="button" data-act="${praefix}-runter" data-lid="${l.id}">Nach unten</button>` : ""}
-          <button type="button" data-act="${praefix}-del" data-lid="${l.id}">Löschen …</button>`)}</div>` : '<div class="btn-row"></div>'}
+          <button type="button" data-act="${praefix}-del" data-lid="${l.id}">Löschen</button>`)}</div>` : '<div class="btn-row"></div>'}
       ${l.beschreibung_md ? `<div class="md-vorschau">${md(l.beschreibung_md)}</div>` : '<div class="md-vorschau muted">Keine Beschreibung.</div>'}
     </div>`;
   }
@@ -1814,7 +1814,7 @@
       ${opts.knoepfe ? `<div class="btn-row">
         <button type="button" class="btn secondary small" data-v-edit="${v.id}">Bearbeiten</button>
         ${istLetzter ? `<button type="button" class="btn secondary small" data-v-medien="${v.id}">Medien hinzufügen</button>
-          ${darfLeiten() ? `<button type="button" class="btn secondary small" data-v-del="${v.id}">Versuch löschen …</button>` : ""}` : ""}
+          ${darfLeiten() ? `<button type="button" class="btn secondary small" data-v-del="${v.id}">Versuch löschen</button>` : ""}` : ""}
         <input type="file" class="hidden" data-v-datei="${v.id}" accept="image/*,video/*,.heic,.heif,.mp4,.mov,.m4v,.webm" multiple>
       </div><div class="up-stand hidden"><span class="up-text small muted"></span><progress max="100" value="0"></progress></div>` : ""}
     </div>`;

@@ -2,8 +2,8 @@
 python tests/test_material_wuensche_2510.py
 
   W1 Artikelseite: die Norm in einer eigenen Zeile der Stammdaten (nicht mehr hinter Name und Bemerkung).
-  W2 Nacharbeit des Bestandsimports: Prüfen und Übernehmen je Produktangabe (Karte, „Übernehmen …“ und direkt nach dem
-     Zuordnen), „Fehlendes Produkt melden …“ für Konten ohne Katalogrecht, Bemerkung der Meldung vorbelegt.
+  W2 Nacharbeit des Bestandsimports: Prüfen und Übernehmen je Produktangabe (Karte, „Übernehmen“ und direkt nach dem
+     Zuordnen), „Fehlendes Produkt melden“ für Konten ohne Katalogrecht, Bemerkung der Meldung vorbelegt.
   W3 Bestand: Spalte „Kategorie“ in der Artikelliste des Ordners, Filter nach Kategorie (mit Status und Person
      kombiniert), Zahlen je Gruppe, Sortierung; Filtermenü in der Seitenleiste, „Filter (n)“ über der Liste.
 Der Wiki-Import (W4) steht in tests/test_wiki_import.py. Alle Namen, Nummern und Texte sind Platzhalter."""
@@ -39,7 +39,7 @@ def test_norm_eigene_zeile():
 # --- W2 ---------------------------------------------------------------------------------------------------------------
 
 def test_nacharbeit_uebernehmen_je_angabe():
-    """„Übernehmen …“ an der Karte: prüfen und übernehmen alle offenen Zeilen genau dieser Angabe in diesem Ordner;
+    """„Übernehmen“ an der Karte: prüfen und übernehmen alle offenen Zeilen genau dieser Angabe in diesem Ordner;
     angabe und zeilen zugleich 400, unbekannte Angabe 404, ohne verwalten 403; Journal am Ordner und am Artikel wie
     beim „Erneut prüfen“."""
     with tempfile.TemporaryDirectory() as tmp:
@@ -110,15 +110,15 @@ def test_nacharbeit_oberflaeche():
     js = _js()
     anfang = js.index("  async function bestandsimport() {")
     block = js[anfang:js.index("\n  }\n", anfang)]
-    # Konten ohne Katalogrecht: „Fehlendes Produkt melden …“; Material-Verwaltung behält „Im Katalog anlegen …“.
-    assert "if (!g.produkt && DARF.katalog) knoepfe.push(" in block and "Im Katalog anlegen …" in block
-    assert 'data-act="na-melden" data-i="${i}">Fehlendes Produkt melden …</button>' in block
-    assert ">Produkt melden …<" not in block
-    # „Übernehmen …“ an der zugeordneten Karte (grau), öffnet die Prüfung je Angabe.
+    # Konten ohne Katalogrecht: „Fehlendes Produkt melden“; Material-Verwaltung behält „Im Katalog anlegen“.
+    assert "if (!g.produkt && DARF.katalog) knoepfe.push(" in block and "Im Katalog anlegen" in block
+    assert 'data-act="na-melden" data-i="${i}">Fehlendes Produkt melden</button>' in block
+    assert ">Produkt melden<" not in block
+    # „Übernehmen“ an der zugeordneten Karte (grau), öffnet die Prüfung je Angabe.
     assert ('if (g.produkt || g.zugeordnet || (m && m.status === "eingepflegt")) knoepfe.push(`<button type="button" '
             'class="btn secondary small" data-act="na-uebernehmen"') in block
     assert '"na-uebernehmen": (b) => nachpruefen({ angabe: na.gruppen[+b.dataset.i].angabe })' in block
-    # Nach dem Zuordnen und nach „Im Katalog anlegen …“ direkt die Prüfung (F1), Titel „Zugeordnet – übernehmen?“.
+    # Nach dem Zuordnen und nach „Im Katalog anlegen“ direkt die Prüfung (F1), Titel „Zugeordnet – übernehmen?“.
     assert "if (pid) nachpruefen(ziel, r.gesetzt);" in block and "nachpruefen({ angabe: g.angabe }, r.gesetzt);" in block
     assert '"Zugeordnet – übernehmen?"' in block and "„Erneut prüfen“ übernimmt" not in block
     # Meldung vorbelegt mit der Bemerkung der Karte; der Dialog nimmt note, norm, category_id.

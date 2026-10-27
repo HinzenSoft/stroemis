@@ -48,6 +48,7 @@ Geschichte stehen. Schemaversion nach der Nachbesserung vor dem Merge: 30; mit d
 | Prüfsumme für den Lebenslauf (Schritt 31) | Jeder Abruf eines Lebenslaufs mit Kennung L-<Jahr>-<Nr> und Prüfsummen-Stempel, verzeichnet ohne Konto; die Prüfseite erkennt ihn; kein „nicht festgeschrieben“ mehr im Lebenslauf | gebaut 27.10.2026 (Schema 31), zur Freigabe |
 | Liste nach dem Merge – Teil A (Schritt 32) | Lebenslauf: Kennung nach dem Zurückspielen nie doppelt, HEAD ohne Eintrag, Abrufbremse; Prüfseite „Protokoll oder Lebenslauf prüfen“; REPLACE ohne recursive_triggers verdrängt nichts Geschütztes; Rückruf nach Antrag wieder offen (gesagt), Rückruf-Text nach dem Stand beim Versand; Journal am Telefon als Karten, Mangeltext und Reiter; Verbesserungen der Browserberichte (Artikelseite „Mehr“, Prüfungen, Katalogimport, Meine PSA …) | gebaut 27.10.2026 (Schema 32), zur Freigabe |
 | Reste vor dem finalen Test | Langer Mangeltext im Banner mit „Weiterlesen“; Brotkrumen am Telefon in einer Zeile (lange Glieder mit „…“, ab vier Gliedern „…“ für den Mittelteil); Knopf „Produktmeldungen“; Ergebnisseite ohne „Ergebnis / Ergebnis“; Fokus im Unterschrift-Dialog auf Zeichenfläche bzw. Titel | gebaut 27.10.2026 (kein Schemaschritt, Schema bleibt 32), zur Freigabe |
+| Abgeschlossene Prüfdurchgänge nur bei Bedarf | Menü „Prüfdurchgänge“ auf „Prüfungen“ (anlegen, abgeschlossene); eigene Seite je Jahr mit Ordner- und Titelfilter; dazu „i“ hinter „Prüfsumme“, Namen als Einheit, kein „…“ in Knopftexten (alle Module), „Änderung beantragen“ neben „Stammdaten“, Export-Text | gebaut 27.10.2026 (kein Schemaschritt, Schema bleibt 32), zur Freigabe |
 
 ## Abgleich mit dem Bestand (vor Lieferung 1)
 
@@ -4181,6 +4182,131 @@ Danach liefen die ganze Suite (`st-test`) grün, `st-py`, `st-js` und `st-css` o
     Antwort), bei 360 px umbrochen etwa 170 px hoch; die Antwort des Mailservers ließe sich noch hinter „Technische
     Antwort“ einklappen – bitte am Gerät ansehen.
 
+## Abgeschlossene Prüfdurchgänge nur bei Bedarf – Menü „Prüfdurchgänge“ (Wunsch des Nutzers, 27.10.2026)
+
+Auftrag `planung/material-phase4/auftrag_durchgaenge_archiv.md` mit fünf Nachträgen. Wunsch (wörtlich): „Es braucht eine
+elegantere Lösung für die abgeschlossenen Prüfdurchgänge. Die offenen können dort stehen bleiben, die abgeschlossenen
+sollten nur bei Bedarf einsehbar sein.“ Zweig `dg-archiv` ab b5f4d9e (vor-merge, Schema 32). Kein Schemaschritt.
+
+**Prüfungen**
+- Oben nur noch „Laufende Prüfdurchgänge“ (ohne laufenden: „Gerade läuft kein Prüfdurchgang.“); die zugeklappte Liste
+  „Abgeschlossene Prüfdurchgänge (n)“ unten entfällt.
+- Der Knopf „Prüfdurchgang anlegen“ wird zum Untermenü **„Prüfdurchgänge“** (`details.mat-menue`, grau umrandet) mit
+  „Prüfdurchgang anlegen“ (wer irgendwo verwaltet oder prüft – wie bisher der Knopf; derselbe Dialog) und
+  „Abgeschlossene Prüfdurchgänge“. Ohne Recht zum Anlegen (Leser, Prüfer ohne Prüffreigabe) steht nur der zweite Eintrag
+  darin. Kommt man aus der Übersicht mit `?ordner=`, nimmt der Eintrag den Ordner als Filter mit. „Protokoll oder
+  Lebenslauf prüfen“ bleibt daneben.
+
+**Seite „Abgeschlossene Prüfdurchgänge“** (`/materialablage/durchgaenge`, Ansicht `durchgaenge`, Seitentitel
+„Abgeschlossene Prüfdurchgänge – Materialablage – strömis.de“, Reiter „Prüfungen“ markiert, Ordnerleiste wie auf
+„Prüfungen“)
+- Beendete und abgebrochene Durchgänge je **Jahr des Abschlusses**, neueste zuerst; je Jahr ein Abschnitt zum Aufklappen,
+  die Überschrift nennt die Anzahl („2025 · 8 Prüfdurchgänge“). Offen steht nur das neueste Jahr; ein älteres kommt erst
+  beim Aufklappen vom Server, je 50 Zeilen, darunter „Weitere anzeigen (n)“ (der Fokus geht auf die erste neue Zeile).
+- Filter: **Ordner** (die sichtbaren Ordner ohne Systemordner, eingerückt wie im Baum; gemeint ist der Zweig – der
+  Ordner und alles darunter) und **Wörter im Titel** (jedes Wort muss vorkommen; Eingabe wartet 350 ms, Enter sofort).
+  Beide stehen in der Adresse (`?ordner=&q=`, ohne neuen Verlaufseintrag). Aufgeklappte Jahre, Nachgeladenes und die
+  Scrollhöhe stehen im Verlauf (`history.state`) – zurück von einem Durchgang steht die Seite wieder so da (wie im
+  Katalog).
+- Je Zeile wie bisher: Titel (Link; abgebrochene mit grauer Marke „abgebrochen“), Ordnerpfad, eröffnet, abgeschlossen,
+  Stand (Balken und n/m), Sammelprotokoll „PDF“. Bis 600 px Inhaltsbreite als Karte (Titel oben, eröffnet und
+  abgeschlossen nebeneinander, „PDF“ unten), am Finger Jahresköpfe, Titel und „PDF“ mindestens 44 px.
+- Leere Zustände: „Noch keine abgeschlossenen Prüfdurchgänge.“, „In diesem Ordner (mit Unterordnern) keine
+  abgeschlossenen Prüfdurchgänge.“, „Keine abgeschlossenen Prüfdurchgänge mit diesen Wörtern im Titel.“, beides
+  zusammen, ein leer gewordenes Jahr „In diesem Jahr keine abgeschlossenen Prüfdurchgänge (mehr).“; ein fremder oder
+  unbekannter Ordner in der Adresse: „Ordner nicht gefunden.“
+- Die Brotkrume eines beendeten Durchgangs lautet „Prüfungen / Abgeschlossene Prüfdurchgänge / Prüfdurchgang“.
+
+**Schnittstelle:** `GET /api/material/durchgaenge?abgeschlossen=1` – `jahre` [{jahr, anzahl}] (neueste zuerst, unter
+denselben Filtern), `jahr` (ohne `?jahr=` das neueste, ohne Treffer `null`), `gesamt` (des Jahres), `seite`,
+`pro_seite` (Vorgabe 50, höchstens 100), `durchgaenge` (wie bisher je Durchgang, neueste Abschlüsse zuerst). Filter
+`jahr` (1990…2100, sonst 400), `ordner` (Zweig; nur ein sichtbarer Ordner – fremd und unbekannt antworten gleich mit 404
+„Ordner nicht gefunden.“, Unsinn 400), `q` (Wörter im Titel, `%` und `_` wörtlich, Groß/klein nur für ASCII egal).
+Ohne `abgeschlossen=1` unverändert (`?offen=1` bzw. alle, höchstens 50). Gezeigt wird nur, was das Konto sieht (Ordner
+des Durchgangs lesbar) – wie die bisherige Liste.
+
+**Nachtrag 1 – „i“ hinter „Prüfsumme“:** Der Absatz „Die Prüfsumme steht im Fuß jeder Seite des PDFs. Ob eine Datei
+unverändert ist, zeigt die Prüfseite.“ unter dem Protokoll einer Prüfung entfällt; stattdessen steht hinter „Prüfsumme“
+ein gekringeltes „i“ (Inline-SVG im DLRG-Blau) – ein Knopf mit `aria-label="Info zu Prüfsumme"`, `aria-expanded`,
+`aria-controls`/`aria-describedby` auf die Info (`role="tooltip"`). Sie erscheint beim Darüberfahren mit der Maus, bei
+Tastaturfokus und beim Antippen; Esc (Fokus zurück aufs „i“), ein Tipp daneben oder der Fokus woanders schließt; der
+Link „Prüfseite“ darin bleibt bedienbar (Tab vom „i“ führt hinein). Wiederverwendbar als `infoKnopf(thema, html)`
+(material.js) und `.mat-info` (material.css). Ebenso an der Sammelprotokoll-Zeile des Durchgangs („· Prüfsumme ⓘ
+SHA-256 …“, mit Set-Protokollen nennt die Info sie mit) – dort entfällt dafür „auf der Prüfseite prüfen“. Nicht an
+Herstellerdokumenten und Anhängen: Dort steht heute kein Erklärsatz (nur ein gekürzter Wert), ein „i“ je Zeile wäre
+Rauschen. Am Finger ist das „i“ 44 × 44 px (negative Ränder halten die Zeile gleich hoch), der Link in der Info hat
+eine 44 px hohe Trefferfläche.
+
+**Nachtrag 2 – Namen als Einheit:** Namen und Anmeldungen hinter „von“/„bei“ und in Personenfeldern stehen in
+`person(name)` → `<span class="mat-name">` (`display: inline-block; max-width: 100%; overflow-wrap: anywhere`): Sie
+rutschen als Ganzes in die nächste Zeile („Festgeschrieben 27.10.2026, 06:53 von / demo-pruefer@example.invalid“ statt
+„von demo- / pruefer@…“); nur ein Name, der allein länger ist als die Zeile, bricht in sich. Eingesetzt an 32 Stellen:
+Protokoll (Festgeschrieben, Prüfer, Ausgeführt von), Journal/Verlauf, Durchgang (eröffnet/abgeschlossen von, Prüfer,
+„in Prüfung bei“), offene Prüfungen, Prüfungsliste am Artikel, Aussonderungsempfehlung, Anträge, Produktmeldungen,
+Mangelmeldungen, Rückrufe, Katalogimport („gestartet von“), Personenspalte. Nie in Attributen (`data-wer`, `alt`).
+Dazu „Urkundennummer …“ als Einheit (`.mat-ganz`).
+
+**Nachtrag 3 – Texte:** Katalog-Export (Menüeintrag und Dialog) ohne „etwa von dev in die Produktion“ – jetzt „zum
+Sichern oder für eine andere Installation“ (Entscheidung vom 26.10.2026: Die Produktion bekommt die Import-ZIPs der
+Lieferungen). README „Beispielbestand (nur dev)“ entsprechend („damit kommt der Katalog nach dem Zurücksetzen von dev
+wieder hinein“). Im Abschnitt „Liste nach dem Merge – Teil A“ dieses CHANGELOGs ist der Prüfhinweis an den Code
+angeglichen (nur das Prüfer-Häkchen zählt).
+
+**Nachtrag 4 – kein „…“ in Knöpfen (alle Module):** Nachgestelltes „…“ entfällt in Knopf- und Menütexten:
+Materialablage (u. a. „Mangel melden“, „Zuordnen“, „Änderung beantragen“, „Entscheiden“, „Antrag zurückziehen“,
+„Bestätigen“, „Ablehnen“, „Zurückziehen“, „Löschen“, „Verschieben“, „Ordner/Kategorie bearbeiten“, „Katalog
+exportieren/importieren“, „Als Variante kopieren“, „Rückruf anlegen“, „Produkt zuordnen“, „Im Katalog anlegen“,
+„Fehlendes Produkt melden“, „Übernehmen“, „Ändern“, „Datei/Fotos/Foto wählen“, „Foto hinzufügen“, „weitere“,
+„Verlängern“, Vorlage „Einzeln“), Strömipedia („Symbol ändern“, „Endgültig löschen“, „Ersteller ändern“, „Teilen“,
+„Verlauf“, „Seiten aus ZIP importieren“, „ZIP-Datei wählen“, „Suchen und ersetzen“), Riegenkarten („Löschen“,
+„Kopieren“, „Bild wählen“, „Versuch löschen“), Ankerplätze („Album löschen“, „Löschen“), Leitstelle („Ablehnen“,
+„Reset-Mail senden“, „Löschen“), Profil („Bild wählen“). Drei Knöpfe hießen „… nach …“/„… bis …“ und brauchen ohne
+Auslassung ein Ende: „Verschieben nach …“ → „Verschieben“, „Zuordnen an …“ → „Zuordnen“ (Mehrfachauswahl im Ordner),
+„Alle Prüffreigaben verlängern bis …“ → „Alle Prüffreigaben verlängern“. Ausgenommen: reine „…“/„⋯“-Knöpfe,
+Dialogtitel („Ordner verschieben nach …“), Platzhalter (auch „Umwandeln in …“ als leere Auswahl), Lade- und
+Fortschrittsanzeigen, gekürzte Werte und Fließtext. Zitate dieser Knöpfe in Hinweisen, Meldungen (Produkt fest:
+„Änderung beantragen“), Kommentaren und README angeglichen; ältere CHANGELOG-Abschnitte bleiben als Geschichte.
+Entfernte „…“ (Knopftexte samt ihren Zitaten in Hinweisen und Kommentaren): material.js 51, freigaben.js 8, wiki.js 9,
+pruefungen.js 9, material.css 5 (Kommentare), admin.js 3, map.js 2, profil.html 1, bestand.py 1, bestandsimport.py 1
+(Kommentar); danach 0 außer den Ausnahmen (Test `test_knopftexte_ohne_auslassung`).
+
+**Nachtrag 5 – Knopf neben der Überschrift:** Auf der Artikelseite steht „Änderung beantragen“ rechts neben „Stammdaten“
+(`.mat-kastenkopf`, wie der Kasten „Mailversand“), nicht mehr am Ende des Blocks; passt er nicht daneben, steht er
+direkt darunter – die Linie der Überschrift läuft unter beiden durch. Ebenso auf der Produktseite „Bestandteile
+bearbeiten“ neben „Bestandteile“ (die einzige weitere Stelle mit genau einer Aktion am Blockende unter einer
+Überschrift). Nach Esc im Dialog liegt der Fokus wieder auf „Änderung beantragen“.
+
+**Gemessen** (Chromium über cdp.py, DEMO-Beispielbestand mit 200 Artikeln und 20 beendeten Durchgängen 2024–2026, Rollen
+Material-Verwaltung, Materialwart, Prüfer ohne Prüffreigabe, Leser): kein waagerechter Bildlauf bei 1280/390/344 px,
+keine Konsolenfehler. Menü am Finger: „Prüfdurchgänge“ 168 × 44, Einträge 338 × 79–80 (390 px) bzw. 310 × 80–97
+(344 px), Tipp auf die Mitte trifft jeweils. Archiv: Jahresköpfe 350 × 44 (390) / 304 × 44 (344), Titel 46 px hoch,
+„PDF“ 52 × 44, Filterfelder 44 px. Filter Ordner „DEMO-Fahrzeuge“ → 4/5/1 je Jahr, Titel „Wasserrettung 1“ → 1;
+2024 aufgeklappt, Durchgang geöffnet, Zurück: 2026 und 2024 offen, Scrollhöhe 225 → 225; Vor und die Brotkrume führen
+richtig. „i“: 22 × 22 am Rechner, 44 × 44 am Finger, Info im Bild (390: 62–382 px, 344: 24–336 px), Link „Prüfseite“
+trifft in der Mitte; Hover öffnet und schließt, Tab öffnet, Tab in den Link hält offen, Esc schließt mit Fokus aufs
+„i“. Namen: `.mat-name` je eine Zeile (bei 344 px ist „demo-pruefer@example.invalid“ breiter als die Wertspalte und
+bricht dort in sich). „Änderung beantragen“: 1280 und 390 px in der Zeile der Überschrift (158 × 28 bzw. 162 × 44),
+344 px direkt darunter. Fotos vorher/nachher unter `planung/material-phase4/proben_dg_archiv/`.
+
+**Tests:** `tests/test_material_dg_archiv.py` (neu). Angepasst: `test_material_nach_merge.py`, `test_material_antrag.py`,
+`test_material_antrag_zustaendig.py`, `test_material_mangel.py`, `test_material_wiki.py`, `test_wiki_import.py`,
+`test_material_vor_merge_3.py`, `test_material_bestandteile.py`, `test_material_import.py`,
+`test_material_wuensche_2510.py` (Knopftexte ohne „…“, Stammdaten-Knopf, Melder über `person`).
+
+**Für die Strömipedia** (Wiki-relevante Texte): Menü „Prüfdurchgänge“ statt „Prüfdurchgang anlegen“, Seite
+„Abgeschlossene Prüfdurchgänge“ (Jahre, Filter), „i“ an der Prüfsumme statt des Satzes, Knopftexte ohne „…“ (alle
+Artikel, die Knöpfe zitieren), „Änderung beantragen“ neben „Stammdaten“, Katalog-Export-Text.
+
+### Bitte bestätigen
+
+1. **Menü mit nur einem Eintrag** für Konten ohne Anlegerecht (wie im Auftrag) – sonst gilt im Modul „bleibt nur eine
+   Funktion, steht sie als Knopf da“; Alternative: dann ein Knopf „Abgeschlossene Prüfdurchgänge“.
+2. **Jahre zum Aufklappen** (neuestes offen) statt einer Jahreswahl; Ordnerfilter über den **Zweig** (ein Durchgang über
+   die ganze Gliederung erscheint beim Filter auf ein Fahrzeug nicht).
+3. **Umbenennungen ohne „…“:** „Verschieben“, „Zuordnen“ (Mehrfachauswahl) und „Alle Prüffreigaben verlängern“.
+4. **„i“ nur an Protokoll und Sammelprotokoll**, nicht an Herstellerdokumenten/Anhängen; an der Sammelprotokoll-Zeile
+   ersetzt es den Link „auf der Prüfseite prüfen“.
+
 ## Reste vor dem finalen Test (27.10.2026)
 
 Auftrag `planung/material-phase4/auftrag_reste.md`: die fünf offenen Punkte aus `nach_merge_liste.md` („Noch offen“, aus
@@ -4307,8 +4433,8 @@ bericht_pruefung_vor_merge_*. Zweig `nm-a` ab 126d7a1. Teil B (übrige Module) b
 - erledigt: **Artikelseite** – neben „Bearbeiten“ ein Menü „Mehr“ mit „Verschieben …“, „Lebenslauf (PDF)“ und „Löschen …“
   (je mit dem Satz, was sie tun; bleibt nur eine Funktion, steht sie als Knopf da); der Erklärabsatz zum Lebenslauf
   unter Touch zwischen den Knopfreihen entfällt (der Satz steht im Menü), ebenso der Dauerhinweis „Prüfen dürfen Prüfer
-  mit Urkundennummer …“ für alle, die nicht prüfen (für Konten mit Prüfer-Häkchen oder Urkundennummer bleibt der gezielte
-  Hinweis). **Produktseite:** „Löschen …“ im Menü „Mehr“ statt als Knopf neben „Bearbeiten“. **Prüfungen:** oben
+  mit Urkundennummer …“ für alle, die nicht prüfen (für Konten mit Prüfer-Häkchen bleibt der gezielte Hinweis
+  – Stand des Codes: nur das Häkchen zählt, Korrektur vom 27.10.2026). **Produktseite:** „Löschen …“ im Menü „Mehr“ statt als Knopf neben „Bearbeiten“. **Prüfungen:** oben
   „Laufende Prüfdurchgänge“, die abgeschlossenen und abgebrochenen zugeklappt ganz unten („Abgeschlossene
   Prüfdurchgänge (n)“). **Ausgegrautes „Durchgang abschließen“:** `aria-describedby` auf den Satz über der Liste, der vorn
   die Zahl nennt („Noch 7 Artikel offen oder in Prüfung.“); „Festschreiben“ hatte es schon. **Meine PSA am Finger:**
@@ -9012,7 +9138,7 @@ oder Plattform-Verwaltung).
 | `GET /api/material/entwuerfe` | Modulzugang | offene Prüfungen aller Prüfer im eigenen Bereich |
 | `POST /api/material/artikel/<id>/sperren` (`grund`: sturz, beschaedigung, verlust, rueckruf; `text`) | Prüfer | Sperre ohne Prüfung |
 | `POST /api/material/artikel/<id>/aussondern` (`grund`: lebensdauer, verlust, irreparabel; `datum`, `bemerkung`) | Materialwart (mit Unterschrift) | Aussonderung gesperrter Artikel mit Aussonderungsprotokoll; liefert `aussonderung` (Kennung) |
-| `GET/POST /api/material/durchgaenge`, `GET/DELETE …/<id>` | lesen / Materialwart oder Prüfer | Prüfdurchgänge (`?offen=1`); eröffnen (`folder_id`, `titel`); löschen, solange nichts geprüft ist |
+| `GET/POST /api/material/durchgaenge`, `GET/DELETE …/<id>` | lesen / Materialwart oder Prüfer | Prüfdurchgänge (`?offen=1`; `?abgeschlossen=1` mit `jahr`, `ordner`, `q`, `seite`, `pro_seite` → `{jahre, jahr, gesamt, seite, pro_seite, durchgaenge}`, 27.10.2026); eröffnen (`folder_id`, `titel`); löschen, solange nichts geprüft ist |
 | `POST /api/material/durchgaenge/<id>/ausnehmen`, `…/einbeziehen` (`item_id`, `grund`), `…/abschliessen` | Materialwart oder Prüfer | Artikel ausnehmen, wieder einbeziehen, Durchgang abschließen (mit Sammel- und Set-Protokollen; 409 „Während des Festschreibens wurde am Durchgang weitergearbeitet …“, wenn sich dreimal zwischen Rendern und Festschreiben etwas geändert hat, 503 bei gesperrter Datenbank) |
 | `POST /api/material/durchgaenge/<id>/abbrechen` | Materialwart oder Prüfer | vorzeitig beenden; `durchgang` ist `null`, wenn er mangels Geprüftem entfernt wurde |
 | `GET /materialablage/export/<ordner>.csv` | Grundrecht am Ordner (Phase 2) | Artikel, deren Heimat im Ordner oder darunter liegt (auch von hier gesperrte und ausgesonderte), als CSV für Excel; Spalte „Zugeordnet an“ (Phase 2), hinter „Modell“ „Bemerkung (Produkt)“ (Nachbesserung vom 18.10.2026), hinter „Lebensende“ die Spalte „Länge (m)“ als „57,5“ (Schritt 20) |

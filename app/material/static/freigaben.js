@@ -1,6 +1,6 @@
 /* Freigaben je Ordner (Phase 2 · Lieferung 1, Abschnitt 4.2): der Reiter „Freigaben“ im Dialog „Ordner bearbeiten“ mit
    Vorlagen (Führungskraft, Materialwart, Prüfer, Externer Prüfer …), den Listen „Hier vergeben“, „Geerbt von oben“,
-   „In Unterordnern“ und „Verlauf“, dem Knopf „Alle Prüffreigaben verlängern bis …“ – dazu der Hinweis „Meine
+   „In Unterordnern“ und „Verlauf“, dem Knopf „Alle Prüffreigaben verlängern“ – dazu der Hinweis „Meine
    Freigaben“ auf der Übersicht. Stellt window.MatFreigaben bereit:
      inhalt(element, ordner, optionen?)  füllt element (den Reiter) mit Hinweis, „Freigabe anlegen“ und den Listen; Dialog,
                                 Reiter und Knopfzeile („Schließen“) gehören material.js. ordner: das Objekt der
@@ -15,7 +15,7 @@
                                              ?freigaben (öffnet dort „Ordner bearbeiten“ auf diesem Reiter)
      hinweis(element)           „Meine Freigaben“ auf der Übersicht – eigene Freigaben, gelb, was bald abläuft
      kopfhinweis(element, ordner, verlaengern?)  „n Freigaben laufen in den nächsten 30 Tagen ab“ im Ordnerkopf (nur
-                                für Verwalter); der Knopf „Verlängern …“ ruft verlaengern() – ohne gibt es ihn nicht
+                                für Verwalter); der Knopf „Verlängern“ ruft verlaengern() – ohne gibt es ihn nicht
    material.js ruft sie auf. Der Server prüft jede Regel selbst (services/freigaben.py); ausgeblendet wird hier nur,
    was ohnehin scheitern würde. */
 (function () {
@@ -27,7 +27,7 @@
   const RECHT = { lesen: "lesen", verwalten: "verwalten", pruefen: "prüfen" };
   // Die Vorlagen des Reiters: ein Grundrecht (dauerhaft, wenn man selbst dauerhaft verwaltet) und/oder eine
   // Prüffreigabe. Befristet ist nur noch der externe Prüfer; wer lesen oder verwalten mitbekommt, prüft dauerhaft
-  // (pruefDauer: „dauerhaft“ vorgewählt – angeboten nur, wer selbst dauerhaft verwaltet). „Einzeln …“ lässt alles frei.
+  // (pruefDauer: „dauerhaft“ vorgewählt – angeboten nur, wer selbst dauerhaft verwaltet). „Einzeln“ lässt alles frei.
   const VORLAGEN = [
     { k: "fuehrungskraft", t: "Führungskraft", grund: "lesen", pruefen: false,
       text: "lesen – Bestand, Protokolle, Export, Lebensläufe und Journal ansehen, Mängel melden (sperrt)" },
@@ -38,7 +38,7 @@
       text: "verwalten und prüfen" },
     { k: "extern", t: "Externer Prüfer", grund: null, pruefen: true,
       text: "nur prüfen bis … – die Prüfsicht: Artikel und Prüfungen, kein Export, kein Journal; höchstens 24 Monate" },
-    { k: "einzeln", t: "Einzeln …", grund: null, pruefen: false, text: "Grundrecht und Prüffreigabe frei wählen" },
+    { k: "einzeln", t: "Einzeln", grund: null, pruefen: false, text: "Grundrecht und Prüffreigabe frei wählen" },
   ];
   const OHNE_QUALIFIKATION = "Prüfen erst mit Häkchen durch die Verwaltung und Urkundennummer im Profil.";
   const OHNE_GRUNDRECHT = "Dauerhaft prüft nur, wer hier auch lesen oder verwalten hat – sonst wirkt die Prüffreigabe nicht.";
@@ -173,7 +173,7 @@
     const pruefzeilen = d.direkt.concat(d.unten).filter((f) => f.recht === "pruefen" && f.bis && f.aenderbar);
     return `${d.laeuft_ab ? `<p class="notice mf-ablauf">${plural(d.laeuft_ab, "Freigabe läuft", "Freigaben laufen")} in den nächsten 30 Tagen ab.</p>` : ""}
       <details class="mf-teil" open><summary>Hier vergeben <span class="mf-zahl">${d.direkt.length}</span></summary>
-        ${pruefzeilen.length ? '<div class="btn-row mf-verl-reihe"><button class="btn secondary small" type="button" data-act="verlaengern" id="mf-verlaengern">Alle Prüffreigaben verlängern bis …</button></div>' : ""}
+        ${pruefzeilen.length ? '<div class="btn-row mf-verl-reihe"><button class="btn secondary small" type="button" data-act="verlaengern" id="mf-verlaengern">Alle Prüffreigaben verlängern</button></div>' : ""}
         ${tabelleHtml(d.direkt, "direkt", "An diesem Ordner selbst ist nichts vergeben.")}</details>
       <details class="mf-teil"><summary>Geerbt von oben <span class="mf-zahl">${d.geerbt.length}</span></summary>
         <p class="help">Freigaben an Oberordnern gelten auch hier. Ändern lassen sie sich nur dort, wo sie vergeben sind.</p>
@@ -560,7 +560,7 @@
     else if (opt.fokus) fokus($("#mf-person", el));
   }
 
-  /* „Verlängern …“ aus dem Ablaufhinweis im Ordnerkopf. Er zählt alles, was hier und in Unterordnern in 30 Tagen
+  /* „Verlängern“ aus dem Ablaufhinweis im Ordnerkopf. Er zählt alles, was hier und in Unterordnern in 30 Tagen
      abläuft – auch Grundrechte, die „Alle Prüffreigaben verlängern“ nicht betrifft. Läuft eine befristete
      Prüffreigabe ab, die man ändern darf, geht es zu diesem Knopf; sonst zur ersten ablaufenden Zeile (ihr Abschnitt
      geht auf, der Fokus auf ihr „Ändern“). Läuft inzwischen nichts mehr ab, zum Knopf, sonst wie ohne Vorlage. */
@@ -615,13 +615,13 @@
   }
 
   /* Im Ordnerkopf (nur für Verwalter): wie viele Freigaben im Zweig bald ablaufen – ein Hinweis, kein Menü. Sein Knopf
-     „Verlängern …“ öffnet über material.js „Ordner bearbeiten“ im Reiter „Freigaben“ beim Verlängern-Knopf. */
+     „Verlängern“ öffnet über material.js „Ordner bearbeiten“ im Reiter „Freigaben“ beim Verlängern-Knopf. */
   async function kopfhinweis(el, ordner, verlaengern) {
     if (!el || !ordner) return;
     let d;
     try { d = await api(`${API}/ordner/${ordner.id || ordner}/freigaben`); } catch (e) { el.innerHTML = ""; return; }
     el.innerHTML = d.laeuft_ab ? `<p class="notice mf-kopf">${plural(d.laeuft_ab, "Freigabe läuft", "Freigaben laufen")} in den nächsten 30 Tagen ab.
-      ${verlaengern ? '<button class="btn secondary small" type="button">Verlängern …</button>' : ""}</p>` : "";
+      ${verlaengern ? '<button class="btn secondary small" type="button">Verlängern</button>' : ""}</p>` : "";
     const b = $("button", el);
     if (b) b.addEventListener("click", () => verlaengern());
   }

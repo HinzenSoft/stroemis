@@ -282,7 +282,7 @@ def test_oberflaeche_statisch():
     """material.js (Paket OBERFLÄCHE, Bauentwurf 3.5.2 und 4.4): eigene strenge Reinigung der Einblendung, Abschnitt
     „Prüfung“ im <template> ausgeschnitten, geschlossener Shadow-Root, kein MD.enhance; die Klick-Delegation übergeht
     .mat-anleitung, Festschreiben liest Grund, Datum und Bemerkung nur aus den eigenen Behältern; Formularzeile mit
-    „Ändern …“ nur bei wiki_aendern. Die Wirkung (DOM-Clobbering-Probe) prüft die Durchsicht im Browser."""
+    „Ändern“ nur bei wiki_aendern. Die Wirkung (DOM-Clobbering-Probe) prüft die Durchsicht im Browser."""
     import re
     wurzel = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     js = open(os.path.join(wurzel, "app/material/static/material.js"), encoding="utf-8").read()
@@ -314,7 +314,7 @@ def test_oberflaeche_statisch():
     assert 'due = datumWert(imAbschluss("#pr-due"), "Nächste Prüfung") || null;' in pr and 'imAbschluss("#pr-due").value || null' not in pr
     assert "anleitungEinsetzen();" in pr and '${pr.anleitung ? \'<div class="mat-anleitung-platz"></div>\' : ""}' in pr
     # Formularzeile und Seitenwahl
-    assert 'f.wiki_aendern ? \'<button type="button" class="lnk" data-act="wiki-waehlen">Ändern …</button>\'' in js
+    assert 'f.wiki_aendern ? \'<button type="button" class="lnk" data-act="wiki-waehlen">Ändern</button>\'' in js
     assert "Verknüpfen kann, wer in der Strömipedia mindestens Mitglied ist." in js and "Seite Nr. ${esc(w.seite)} – du darfst sie nicht lesen" in js
     ww = js[js.index("  function wikiWahl(formular, danach) {"):js.index("/* --- Suche ---")]
     assert ww.count('class="btn"') == 1 and "Verknüpfung entfernen" in ww and "setTimeout(suchen, 300)" in ww

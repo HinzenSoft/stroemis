@@ -1679,7 +1679,7 @@ def nachpruefen(fid, zeilen=None, uebernehmen=False, angabe=None):
     """Erneut prüfen (Bericht wie der Probelauf; schreibt nichts außer der einen Protokollzeile) – mit uebernehmen in
     EINER Transaktion: übernehmbare Zeilen werden Artikel, gefundene „schon im Bestand“, weiter offene bekommen ihre
     neuen Gründe. Geprüft wird auf den gespeicherten Werten; doppelt nur unter den gewählten Zeilen und gegen den
-    Bestand. Die Zeilen: gewählte (zeilen) oder alle offenen einer Produktangabe (angabe, die Karte – „Übernehmen …“,
+    Bestand. Die Zeilen: gewählte (zeilen) oder alle offenen einer Produktangabe (angabe, die Karte – „Übernehmen“,
     Wunsch vom 25.10.2026), genau eins von beiden."""
     if (angabe is None) == (zeilen is None):
         raise Abgelehnt("Bitte eine Produktangabe oder Zeilen wählen.")

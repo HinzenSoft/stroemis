@@ -42,6 +42,7 @@ from flask import current_app, g
 from ... import db
 from . import Abgelehnt, heute, text
 from . import bestand, journal, protokoll, rechte
+from .search import _like, seiten, woerter
 
 # Bedingung für Abfragen über mat_inspection: ohne Prüfungen, deren Berichtigung im selben Durchgang abgeschlossen ist.
 OHNE_BERICHTIGTE = ("AND NOT EXISTS (SELECT 1 FROM mat_inspection b WHERE b.corrects_inspection_id = mat_inspection.id "
@@ -312,6 +313,41 @@ def liste(nur_offen=False, grenze=50):
     sql = f"SELECT r.* FROM mat_round r WHERE {rechte.ordner_filter('r.folder_id')}" + (
         " AND r.closed_on IS NULL" if nur_offen else "") + " ORDER BY r.closed_on IS NOT NULL, r.id DESC LIMIT ?"
     return [durchgang_json(r) for r in db.query(sql, (grenze,))]
+
+
+# Abgeschlossene Durchgänge (Ansicht „Abgeschlossene Prüfdurchgänge“, Wunsch vom 27.10.2026): je Abruf höchstens so viele.
+ARCHIV_PRO_SEITE = 50
+
+
+def abgeschlossene(jahr=None, ordner_id=None, q="", seite=1, pro_seite=ARCHIV_PRO_SEITE):
+    """Abgeschlossene und abgebrochene Durchgänge, die das Konto sieht (Ordner des Durchgangs lesbar), nach dem Jahr des
+    Abschlusses. Filter: ordner_id – der Ordner des Durchgangs liegt in diesem Zweig (der Ordner selbst oder darunter;
+    die Sicht auf ordner_id prüft die Route); q – jedes Wort steht im Titel. Liefert die Jahre mit Anzahl (neueste zuerst,
+    unter denselben Filtern) und die Durchgänge EINES Jahres seitenweise, neueste Abschlüsse zuerst – ohne jahr die des
+    neuesten Jahres. So lädt die Seite nie alle auf einmal, und keiner fällt wie in liste() hinter eine feste Grenze."""
+    seite, pro_seite = seiten(seite, pro_seite)
+    vorab, bedingungen, args = "", [rechte.ordner_filter("r.folder_id"), "r.closed_on IS NOT NULL"], []
+    if ordner_id:
+        vorab = ("WITH RECURSIVE zweig(id) AS (SELECT ? UNION SELECT f.id FROM mat_folder f JOIN zweig z "
+                 "ON f.parent_id = z.id) ")
+        args.append(ordner_id)
+        bedingungen.append("r.folder_id IN (SELECT id FROM zweig)")
+    for w in woerter(q):
+        bedingungen.append("r.title LIKE ? ESCAPE '\\'")
+        args.append(_like(w))
+    wo = " AND ".join(bedingungen)
+    jahre = [{"jahr": int(z["jahr"]), "anzahl": z["anzahl"]} for z in db.query(
+        f"{vorab}SELECT substr(r.closed_on, 1, 4) AS jahr, COUNT(*) AS anzahl FROM mat_round r WHERE {wo} "
+        "GROUP BY jahr ORDER BY jahr DESC", tuple(args))]
+    if jahr is None and jahre:
+        jahr = jahre[0]["jahr"]
+    gesamt = next((j["anzahl"] for j in jahre if j["jahr"] == jahr), 0)
+    zeilen = db.query(
+        f"{vorab}SELECT r.* FROM mat_round r WHERE {wo} AND substr(r.closed_on, 1, 4) = ? "
+        "ORDER BY r.closed_on DESC, r.id DESC LIMIT ? OFFSET ?",
+        (*args, f"{jahr:04d}", pro_seite, (seite - 1) * pro_seite)) if gesamt else []
+    return {"jahre": jahre, "jahr": jahr, "gesamt": gesamt, "seite": seite, "pro_seite": pro_seite,
+            "durchgaenge": [durchgang_json(r) for r in zeilen]}
 
 
 def _runde_offen(rid):
