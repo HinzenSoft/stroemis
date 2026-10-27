@@ -322,7 +322,7 @@ def _darstellung(export, gesetzt):
         assert '<div class="produkt">Testwerk Gurt Alpha <span class="zusatz">Platzhalter</span></div>' in html
         # Die Änderung selbst nennt das Journal des Produkts im Lebenslauf (Entscheidung E8 vom 24.10.2026) – mit dem
         # Modellnamen, wie er im Katalog steht; Kopf und Stammdaten davor nennen ihn ohne Strich.
-        kopf = html.split('<table class="liste ereignisse"')[0]
+        kopf = html.split('<table class="liste ereignisse')[0]          # dazu ggf. „kurz“ (Seitenumbruch)
         assert '<div class="lbl">Modell</div><div class="wert">Gurt Alpha</div>' in html and "Alpha |" not in kopf
         assert "Produkt geändert" in html and "Gurt Alpha | Platzhalter" in html
         with open(pfad, "wb") as fh:

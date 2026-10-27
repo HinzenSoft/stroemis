@@ -3153,7 +3153,7 @@ def _befundtabelle(html):
     """Aus dem HTML eines Prüfprotokolls: Spaltenköpfe, Spalten (colgroup), Gruppenzeilen und je Befundzeile die
     Zellen als (Klassen, Inhalt), nach dem Text des Prüfpunkts."""
     import re
-    tabelle = re.search(r'<table class="liste befunde">(.*?)</table>', html, re.S).group(1)
+    tabelle = re.search(r'<table class="liste befunde[^"]*">(.*?)</table>', html, re.S).group(1)   # dazu ggf. „kurz“
     koepfe = re.findall(r"<th(?:\s[^>]*)?>(.*?)</th>", tabelle)
     spalten = re.findall(r"<col[ >]", tabelle)
     gruppen = re.findall(r'<tr class="gruppe"><td colspan="(\d+)">(.*?)</td></tr>', tabelle)
@@ -3197,7 +3197,7 @@ def test_kritisch_eigene_spalte():
             finally:
                 pdf._setzen = original
             assert r.status_code == 200, r.get_json()
-            html = [h for h in gesetzt if 'class="liste befunde"' in h]
+            html = [h for h in gesetzt if 'class="liste befunde' in h]      # dazu ggf. „kurz“ (Seitenumbruch)
             assert len(html) == 1, len(html)
             pfad = os.path.join(tmp, protokoll_zeile(app, pid)["pdf_path"])
             return html[0], pfad
