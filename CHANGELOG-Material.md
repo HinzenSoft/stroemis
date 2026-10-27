@@ -4263,7 +4263,8 @@ bericht_pruefung_vor_merge_*. Zweig `nm-a` ab 126d7a1. Teil B (übrige Module) b
   (Name): …“), gleiche Fehler an drei und mehr Stellen als eine Zeile mit den Fundstellen darunter; die Herkunft der
   Datei wird am Wortende mit „…“ gekürzt statt mitten im Wort. Der Bericht der Schnittstelle bleibt, wie er ist.
   **Inventarnummer** in Überschriften (Artikel, Prüfung, Meine PSA) bricht nicht mehr am Bindestrich. **Kontrast:**
-  Nebentext (`.muted`, `.help`) auf Rot-hell-Flächen in Anthrazit (vorher 4,48 : 1). **Tokens:** freie Schriftgrößen
+  Nebentext (`.muted`, `.help`) auf Rot-hell-Flächen in Anthrazit (vorher 4,48 : 1), Links und
+  Textknöpfe dort in `--rot-auf-flaeche` (vorher 4,22 : 1, „Bericht ansehen“ im Hinweis zum Katalogimport). **Tokens:** freie Schriftgrößen
   .72/.8/.85/.9 rem und zwei eigene Schatten in `material.css` durch `--fs-*` bzw. `--schatten-menue` ersetzt.
   **Begriffe:** Dialog „Prüfdurchgang anlegen“ mit Knopf „Prüfdurchgang anlegen“ (vorher „eröffnen“/„Eröffnen“),
   Dialog „Unterordner anlegen“ (vorher „Ordner anlegen“). **„n erledigte Meldungen“** unter Touch gemessen: 350 × 44 px.

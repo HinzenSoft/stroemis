@@ -1901,6 +1901,9 @@ table.list.mat-na-zeilen tr:has(.mat-na-wahl:checked) { background: var(--co-inf
    Merge, Verbesserung 14; wie V13 in den Riegenkarten). */
 :is(.mat-mangelzeile, .mat-punkt.mangel, .mat-fs-warnung, .mat-pruefergebnis.bad, .mat-austausch-liste.fehler,
     .mat-importhinweis.bad, .mat-mangel-warnung, .mat-fs-maengel) :is(.muted, .help) { color: var(--anthrazit); }
+/* Links dort im dunkleren Rot (--rot auf --rot-hell: 4,22 : 1, „Bericht ansehen“ im Hinweis zum Katalogimport). */
+:is(.mat-mangelzeile, .mat-punkt.mangel, .mat-fs-warnung, .mat-pruefergebnis.bad, .mat-austausch-liste.fehler,
+    .mat-importhinweis.bad, .mat-mangel-warnung, .mat-fs-maengel) :is(a:not(.btn), .lnk) { color: var(--rot-auf-flaeche); }
 /* Gleiche Fehler des Katalogimports in einer Zeile, die Fundstellen darunter (austauschListe). */
 .mat-austausch-liste ul ul { margin: 2px 0 4px; padding-left: 18px; }
 /* Meine PSA am Finger: Dokumente, Inventarnummer, „Zum Artikel“ und „im Profil ändern“ als Zeilen von 44 px (vorher

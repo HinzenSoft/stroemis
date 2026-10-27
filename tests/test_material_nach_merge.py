@@ -411,6 +411,7 @@ def test_oberflaeche_statisch():
     assert ".mat-psa-doks .mat-doks > li > a, .mat-psa-titel h2 > a, .mat-psa-knoepfe > a" in touch
     assert "display: inline-flex; align-items: center; min-height: 44px; }" in touch
     assert ":is(.muted, .help) { color: var(--anthrazit); }" in touch
+    assert ":is(a:not(.btn), .lnk) { color: var(--rot-auf-flaeche); }" in touch
     assert "rgba(0, 0, 0, .16)" not in css and "rgba(0, 0, 0, .18)" not in css and "font-size: .85rem" not in css
     print("Oberfläche (statisch) bestanden.")
 
