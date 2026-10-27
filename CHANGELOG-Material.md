@@ -48,6 +48,7 @@ Geschichte stehen. Schemaversion nach der Nachbesserung vor dem Merge: 30; mit d
 | Prüfsumme für den Lebenslauf (Schritt 31) | Jeder Abruf eines Lebenslaufs mit Kennung L-<Jahr>-<Nr> und Prüfsummen-Stempel, verzeichnet ohne Konto; die Prüfseite erkennt ihn; kein „nicht festgeschrieben“ mehr im Lebenslauf | gebaut 27.10.2026 (Schema 31), zur Freigabe |
 | Liste nach dem Merge – Teil A (Schritt 32) | Lebenslauf: Kennung nach dem Zurückspielen nie doppelt, HEAD ohne Eintrag, Abrufbremse; Prüfseite „Protokoll oder Lebenslauf prüfen“; REPLACE ohne recursive_triggers verdrängt nichts Geschütztes; Rückruf nach Antrag wieder offen (gesagt), Rückruf-Text nach dem Stand beim Versand; Journal am Telefon als Karten, Mangeltext und Reiter; Verbesserungen der Browserberichte (Artikelseite „Mehr“, Prüfungen, Katalogimport, Meine PSA …) | gebaut 27.10.2026 (Schema 32), zur Freigabe |
 | Reste vor dem finalen Test | Langer Mangeltext im Banner mit „Weiterlesen“; Brotkrumen am Telefon in einer Zeile (lange Glieder mit „…“, ab vier Gliedern „…“ für den Mittelteil); Knopf „Produktmeldungen“; Ergebnisseite ohne „Ergebnis / Ergebnis“; Fokus im Unterschrift-Dialog auf Zeichenfläche bzw. Titel | gebaut 27.10.2026 (kein Schemaschritt, Schema bleibt 32), zur Freigabe |
+| Seitenumbrüche in den PDF-Protokollen | Keine Waisen am Seitenende: Überschrift, Tabellenkopf und die ersten vier Zeilen zusammen, die letzten drei zusammen, kurze Listen ungeteilt; Prüfprotokoll: Abschluss (Ergebnis bis Unterschrift) immer ab neuer Seite, Fotos als Anlage danach, Herstellerdokumente ohne zerhackte Spalten; Aussonderungsprotokoll: Abschluss zusammen | gebaut 27.10.2026 (kein Schemaschritt, nur neue PDFs), zur Freigabe |
 
 ## Abgleich mit dem Bestand (vor Lieferung 1)
 
@@ -4180,6 +4181,74 @@ Danach liefen die ganze Suite (`st-test`) grün, `st-py`, `st-js` und `st-css` o
 14. **Kasten „Mailversand“ am Telefon**: Eine Karte hat vier Inhaltszeilen (Mail mit Betreff, Empfänger, Fehler mit
     Antwort), bei 360 px umbrochen etwa 170 px hoch; die Antwort des Mailservers ließe sich noch hinter „Technische
     Antwort“ einklappen – bitte am Gerät ansehen.
+
+## Seitenumbrüche in den PDF-Protokollen (27.10.2026)
+
+Auftrag `planung/material-phase4/auftrag_pdf_umbrueche.md` mit Nachtrag. Wunsch des Nutzers zum Sammelprotokoll
+S-2026-000019 (Seite 3 endete mit „Verzeichnis der Einzelprotokolle“, Satz, Tabellenkopf und zwei Zeilen): „Versuche so
+Umbrüche in Protokollen zu vermeiden“; Nachtrag zum Prüfprotokoll P-2025-000830: „Versuche, dass bei Protokollen die
+Ergebnisse immer mit einer neuen Seite anfangen. Insgesamt schau, dass Seitenumbrüche in den Protokollen genutzt werden
+wo sinnvoll“. Zweig `pdf-umbruch` ab b5f4d9e. Nur Vorlagen unter `templates/material/pdf/` – kein Schemaschritt, keine
+Änderung an Inhalt, Prüfsummen-Verfahren oder Stempel; festgeschriebene Protokolle bleiben, wie sie sind, es gilt für
+neu gesetzte PDFs. PDF/A-3b bleibt gültig (veraPDF auf Prüf-, Aussonderungs-, Sammel-, Set-Protokoll, Lebenslauf und
+Jahresbericht).
+
+- **Wie WeasyPrint 70 Umbrüche umsetzt (am Quelltext und an PDFs geprüft):** `break-before: avoid` an Tabellenzeilen und
+  `break-after: avoid` an Überschriften und Absätzen wirken; `break-inside: avoid` an einer ganzen Tabelle wirkt. Dagegen
+  wirkt `break-inside: avoid` am **ersten** `tbody` nach einem Tabellenkopf nicht (WeasyPrint setzt ihn, als wäre die
+  Seite leer) – deshalb hielten die Vorgänge im Lebenslauf bisher am Tabellenanfang nicht zusammen. `orphans`/`widows`
+  gelten nur für Textzeilen, nicht für Tabellenzeilen.
+- **Listen (alle `table.liste`, Regeln in `basis.html`):** Ketten aus `break-before: avoid` – die Zeilen 2–4 hängen an
+  ihrer Vorgängerin (Überschrift, Satz davor `p.vor-tabelle`, Kopf und vier Zeilen stehen zusammen), ebenso die letzten
+  zwei (nie eine oder zwei Zeilen allein auf der neuen Seite). Listen mit einem `tbody` je Eintrag (Lebenslauf: Prüfungen,
+  Durchgänge; Bericht: Durchgänge, Rückrufe) entsprechend mit Einträgen; jeder Eintrag bleibt ganz (statt des
+  wirkungslosen `break-inside: avoid` am ersten tbody). Zwischenzeilen der Sets (Sammel-/Set-Protokoll) und Gruppenzeilen
+  der Befunde bleiben mit den ersten zwei Zeilen darunter zusammen. Der Tabellenkopf wiederholt sich wie bisher; Zeilen
+  werden nie geteilt, lange Befundzeilen (über 1 200 Zeichen) wie bisher doch.
+- **Kurze Listen** (Makro `kurz`): Schätzt die Vorlage eine Liste auf höchstens 120 mm (etwa eine halbe Seite – je
+  Liste aus Anzahl × Zeilenhöhe, bei Befunden und Ereignissen aus der Textlänge), wird sie nicht geteilt, sondern rückt
+  samt Überschrift auf die nächste Seite (`break-inside: avoid` an der Tabelle). Zahlentabellen und Felder werden nie
+  geteilt, eine Beschriftung steht nie allein am Seitenende, ebenso die Legende unter einer Liste und die Hinweise am
+  Ende des Berichts.
+- **Zeilen mit viel Text** (Makro `hoch`; Befunde ab 200 Zeichen, sonst ab 800 oder 13 Zeilenwechseln) bleiben aus den
+  Ketten heraus: Eine Kette höher als eine Seite setzte WeasyPrint ohne Tabellenkopf und ließe die Überschrift allein
+  (im Versuch nachgewiesen). Ein Prüfpunkt mit rund fünf Zeilen ist für sich kein Rest am Seitenende.
+- **Prüfprotokoll (Nachtrag):** Der Abschluss – Ergebnis, Bemerkung, Herstellerdokumente am Prüftag, Anhänge, Unterschrift
+  – beginnt immer auf einer neuen Seite (`.neue-seite`, `break-before: page`) und steht zusammen, soweit er auf eine Seite
+  passt. Die **Fotos zu den Prüfpunkten** stehen jetzt als Anlage hinter der Unterschrift (vorher zwischen Ergebnis und
+  Herstellerdokumenten): Vor dem Abschluss ließen ein, zwei Fotos eine fast leere Seite stehen (Probe P-2024-000017:
+  4 → 5 Seiten, Seite 4 nur ein Foto; dahinter wieder 4). Herstellerdokumente: Spalten „Dokument“, „Art · Version“
+  (50 mm, Version grau unter der Art, Umbruch nur zwischen Wörtern) und „gültig ab“ (21 mm, nie umbrochen) statt vier
+  Spalten mit 30/16/19 mm („ausge-stellt“, „17.02.20 26“). Ein Datum in einer Liste bricht nirgends mehr um
+  (`td.datum`).
+- **Aussonderungsprotokoll:** Aussonderung, letzte Prüfung und Unterschrift bleiben zusammen (`break-inside: avoid`);
+  passen sie nicht mehr auf die erste Seite, beginnen sie gemeinsam auf der nächsten. Kein fester Umbruch: Das Ergebnis
+  (Grund) steht schon im Kasten oben, und das Protokoll passt meist auf eine Seite – Bitte bestätigen 2.
+- **Weitere feste Umbrüche geprüft und verworfen:** Verzeichnis der Einzelprotokolle ab neuer Seite (Set-Protokoll
+  T-2026-900001 der Probe: 3 → 4 Seiten, Seite 3 mit drei Zeilen), Journal im Lebenslauf ab neuer Seite, je Set eine
+  Seite – die Ketten halten Überschrift und Anfang ohnehin zusammen, feste Umbrüche ließen dort fast leere Seiten.
+  Sammel- und Set-Protokoll haben keinen Ergebnis-Abschnitt am Ende: Ergebnisübersicht und Prüfer stehen auf Seite 1.
+- **Proben** (Beispielbestand mit 200 Artikeln, DEMO; Fotos unter `planung/material-phase4/proben_pdf_umbruch/`): 48
+  echte Protokolle aus dem Bestand und 184 gezielt erzeugte Fälle (Sammel-/Set-Protokoll mit 4–43 Artikeln,
+  Prüfprotokoll mit 4–60 Befunden, Lebenslauf mit 3–90 Ereignissen, Bericht mit 0–90 ungeprüften Artikeln), je mit den
+  alten und den neuen Vorlagen gesetzt und am Seitenaufbau ausgewertet (Überschrift allein, Anfang unter vier Zeilen und
+  25 mm, Ende unter drei Zeilen und 25 mm, Liste bis 110 mm geteilt): **vorher in 62 von 232 Fällen ein Befund (27 am
+  Anfang, 39 am Ende, 51 kurze Listen geteilt), nachher in keinem.** Seitenzahl der 48 echten Protokolle: 47 gleich, eins +1 (das Sammelprotokoll unten), zusammen 140 → 141; über alle 232 Fälle 920 → 942 Seiten (+2,4 %).
+  Das Sammelprotokoll aus dem Wunsch (Probe S-2026-000002, 43 Artikel): vorher 4 Seiten mit einer Verzeichniszeile unten
+  auf Seite 3, nachher 5 Seiten – das Verzeichnis beginnt auf Seite 4 und endet mit drei Zeilen auf Seite 5.
+- **Grenzen:** Die Höhe für „kurz“ ist geschätzt (Zeichen je Zeile); eine Liste knapp über der Grenze wird geteilt,
+  aber nach den Regeln für Anfang und Ende. Die Ketten können eine Seite vorzeitig beenden (bis zu vier Zeilen Platz
+  bleiben frei) und kosten gelegentlich eine Seite. Ergebnisübersicht und Prüferliste des Sammelprotokolls stehen in
+  einer Tabelle nebeneinander und bleiben, wie sie waren (auf Seite 1).
+- **Tests:** `tests/test_material_pdf_umbruch.py` (neu): Sammelprotokoll mit 6–38 Artikeln (Verzeichnis und Artikelliste:
+  Anfang, Ende, kurz), Prüfprotokoll mit 3 und 30 Befunden (Abschluss auf neuer Seite, Herstellerdokumente ohne zerhackte
+  Wörter und Daten), Befunde mit sehr langen Bemerkungen (Tabellenkopf auf jeder Seite). Gegenprobe mit den alten
+  Vorlagen: die ersten beiden schlagen an.
+
+**Bitte bestätigen:**
+1. Fotos zu den Prüfpunkten als Anlage hinter der Unterschrift (statt vor dem Abschluss).
+2. Aussonderungsprotokoll ohne festen Umbruch, nur „Abschluss zusammen“.
+3. Ein Sammelprotokoll kann durch die Regeln eine Seite länger werden (Probe S-2026-000002: 4 → 5 Seiten).
 
 ## Reste vor dem finalen Test (27.10.2026)
 
