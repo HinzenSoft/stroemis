@@ -480,6 +480,24 @@
     catch (err) { f.classList.add("ungueltig"); }
   }, true);
   const plural = (n, eins, viele) => `${n} ${n === 1 ? eins : viele}`;
+  /* Ein Name oder eine Anmeldung (E-Mail) hinter „von“, „bei“ oder in einem Personenfeld als Einheit (Nachtrag 2 vom
+     27.10.2026): rutscht als Ganzes in die nächste Zeile statt nach „demo-“ oder „@“ zu brechen – nur ein Name, der
+     länger ist als die ganze Zeile, bricht in sich (material.css, .mat-name). Der Text bleibt unverändert kopierbar. */
+  const person = (n) => `<span class="mat-name">${esc(n)}</span>`;
+  /* Info zu einem Begriff (Nachtrag vom 27.10.2026, designsprache „Zusatzinfos“): ein gekringeltes „i“ hinter dem Begriff
+     statt eines Erklärsatzes darunter. Ein Knopf (aria-label „Info zu …“, aria-expanded, aria-describedby auf die Info);
+     die Info (role="tooltip", darf Links enthalten – html ist fertiges HTML ohne Eingaben) erscheint beim Darüberfahren
+     mit der Maus, bei Tastaturfokus und beim Antippen; Esc, ein Tipp daneben oder der Fokus woanders schließt
+     (Verhalten unten bei den Untermenüs, Aussehen in material.css, .mat-info). */
+  let infoZahl = 0;
+  function infoKnopf(thema, html) {
+    const id = `mat-info-${++infoZahl}`;
+    return `<span class="mat-info"><button type="button" class="mat-info-knopf" aria-label="Info zu ${esc(thema)}" aria-expanded="false"
+      aria-controls="${id}" aria-describedby="${id}"><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true" focusable="false"><circle cx="10" cy="10" r="8.6"
+      fill="none" stroke="currentColor" stroke-width="1.7"/><circle cx="10" cy="6.1" r="1.25" fill="currentColor"/><path d="M10 9v5.6" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round"/></svg></button><span class="mat-info-text" role="tooltip" id="${id}" hidden>${html}</span></span>`;
+  }
+  const PRUEFSUMME_INFO = 'Die Prüfsumme steht im Fuß jeder Seite des PDFs. Ob eine Datei unverändert ist, zeigt die <a href="/materialablage/pruefen">Prüfseite</a>.';
   const statusMarke = (s, gross) => `<span class="mat-status s-${esc(s)}${gross ? " gross" : ""}">${esc(STATUS[s] || s)}</span>`;
   const demoMarke = (x) => (x ? '<span class="mat-demo" title="DEMO – nicht für echte Prüfungen">DEMO</span>' : "");
   // Das Schloss vor „Gesperrt“ und „Ausgesondert“: grau wie die Klapp-Dreiecke daneben und ohne Leerzeichen, das im
@@ -568,7 +586,7 @@
   /* --- Gerüst -------------------------------------------------------------------------------- */
   const NAV = { dashboard: "dashboard", pruefungen: "pruefungen", bestand: "bestand", ordner: "bestand", artikel: "bestand",
                 artikel_neu: "bestand", katalog: "katalog", produkt: "katalog", formular: "katalog", meldungen: "katalog", suche: "",
-                pruefung: "pruefungen", pruefung_neu: "pruefungen", durchgang: "pruefungen",
+                pruefung: "pruefungen", pruefung_neu: "pruefungen", durchgang: "pruefungen", durchgaenge: "pruefungen",
                 bestandsimport: "bestand", bericht: "bestand", antraege: "bestand" };
   $$(".mat-nav a").forEach((a) => a.classList.toggle("aktiv", a.dataset.nav === NAV[ANSICHT]));
   if (ANSICHT === "suche" && DATEN.q) $(".mat-suche input").value = DATEN.q;
@@ -694,7 +712,7 @@
      der Seite „Bestand“: dort ist der Ordnerbaum selbst der Inhalt. Auf- und Zuklappen merkt sich der Browser, je Baum getrennt. */
   const KATALOG_ANSICHTEN = new Set(["katalog", "produkt", "formular", "meldungen"]);
   const MIT_LEISTE = new Set(["dashboard", "pruefungen", "ordner", "artikel", "artikel_neu", "suche", "pruefung",
-                              "pruefung_neu", "durchgang", "katalog", "produkt", "formular", "meldungen", "bestandsimport", "bericht",
+                              "pruefung_neu", "durchgang", "durchgaenge", "katalog", "produkt", "formular", "meldungen", "bestandsimport", "bericht",
                               "antraege"]);
   const LEISTE_KATALOG = KATALOG_ANSICHTEN.has(ANSICHT);
   const leiste = document.getElementById("mat-side");
@@ -969,7 +987,7 @@
       const zeilen = felder.map((f) => `<tr><th>${esc(feldName(f, j))}</th><td class="mat-j-vorher${j.vorher && f in j.vorher ? "" : " leer"}" data-l="vorher">${seite(j.vorher, f)}</td><td data-l="nachher"${f === "mangelbeschreibung" ? ' class="mat-j-text"' : ""}>${seite(j.nachher, f)}</td></tr>`).join("");
       return `<li><div class="mat-j-kopf"><span class="mat-j-zeit">${esc(fmtZeit(j.created_at))}</span>
         <strong>${mitEntitaet ? esc(ENTITAET[j.entity] || j.entity) + " " : ""}${esc(AKTION[j.action] || j.action)}</strong>
-        <span class="muted">von ${esc(j.user_name || "–")}</span></div>
+        <span class="muted">von ${person(j.user_name || "–")}</span></div>
         ${zeilen ? `<table class="mat-diff${ohneVorher ? " ohne-vorher" : ""}"><thead><tr><th>Feld</th><th>vorher</th><th>nachher</th></tr></thead><tbody>${zeilen}</tbody></table>` : ""}</li>`;
     }).join("")}</ol>`;
   }
@@ -1188,7 +1206,7 @@
                  "mail-mehr": () => mailMehrLaden() };
     if (DARF.lesen) {
       ordnerUebersichtKlappen($("#mat-ue"));
-      rundenKasten($("#mat-runden"), true);
+      rundenKasten($("#mat-runden"));
     }
     // „Meine Freigaben“ (freigaben.js): eigene Freigaben, gelb, was bald abläuft – ohne Freigabe, wer sie vergibt.
     const f = await baustein("MatFreigaben");
@@ -1529,31 +1547,23 @@
       <a class="mat-pdf" href="${esc(x.protokoll.url)}" target="_blank" rel="noopener" aria-label="${protokollArt(x)} ${esc(x.protokoll.id)} (PDF)" title="${protokollArt(x)} ${esc(x.protokoll.id)} öffnen">PDF</a></li>`).join("")}</ul>`;
   }
 
-  /* Laufende Prüfdurchgänge als Kasten (Übersicht) bzw. Liste mit abgeschlossenen (Prüfungen). */
-  /* Prüfdurchgänge: nurOffen (Übersicht) nur die laufenden. Auf der Seite „Prüfungen“ (alte: Ziel der abgeschlossenen)
-     oben die laufenden, die abgeschlossenen und abgebrochenen zugeklappt ganz unten – die Liste wächst jedes Jahr und
-     stand vor „Offene Prüfungen“ und „Zu prüfen“ (Browserprüfung vor dem Merge, Verbesserung 3). */
-  async function rundenKasten(ziel, nurOffen, alte) {
+  /* Laufende Prüfdurchgänge: auf der Übersicht nur, wenn einer läuft; auf „Prüfungen“ immer (mitLeer) – dort ohne die
+     abgeschlossenen und abgebrochenen. Die standen bis zum Wunsch vom 27.10.2026 zugeklappt darunter und wuchsen jedes
+     Jahr; jetzt haben sie eine eigene Seite (Menü „Prüfdurchgänge“ → „Abgeschlossene Prüfdurchgänge“, durchgaengeArchiv). */
+  const rundenZeilen = (l) => `<ul class="mat-runden">${l.map((r) => `<li><a href="/materialablage/durchgang/${r.id}"><strong>${esc(r.titel)}</strong></a>
+          <span class="muted">${esc(r.ordner)} · eröffnet ${esc(fmtTag(r.eroeffnet_am))}</span>
+          ${fortschritt(r.zaehlung)}</li>`).join("")}</ul>`;
+  async function rundenKasten(ziel, mitLeer) {
     if (!ziel) return;
-    const zeilen = (l) => `<ul class="mat-runden">${l.map((r) => `<li><a href="/materialablage/durchgang/${r.id}"><strong>${esc(r.titel)}</strong></a>
-          <span class="muted">${esc(r.ordner)} · eröffnet ${esc(fmtTag(r.eroeffnet_am))}${r.offen ? "" : ` · ${r.abgebrochen ? "abgebrochen" : "abgeschlossen"} ${esc(fmtTag(r.geschlossen_am))}`}</span>
-          ${fortschritt(r.zaehlung)}${r.protokoll ? ` <a class="mat-pdf" href="${esc(r.protokoll.url)}" target="_blank" rel="noopener" aria-label="Sammelprotokoll ${esc(r.protokoll.id)} (PDF)" title="Sammelprotokoll ${esc(r.protokoll.id)} öffnen">PDF</a>` : ""}</li>`).join("")}</ul>`;
     try {
-      const liste = (await api(`${API}/durchgaenge${nurOffen ? "?offen=1" : ""}`)).durchgaenge;
-      if (nurOffen && !liste.length) { ziel.innerHTML = ""; return; }
-      if (nurOffen || !alte) {
-        ziel.innerHTML = `<section class="section"><h2>${nurOffen ? "Laufende Prüfdurchgänge" : "Prüfdurchgänge"}</h2>
-          ${liste.length ? zeilen(liste) : leer("Noch kein Prüfdurchgang.")}</section>`;
-        return;
-      }
-      const laufend = liste.filter((r) => r.offen);
-      const fertig = liste.filter((r) => !r.offen);
+      const liste = (await api(`${API}/durchgaenge?offen=1`)).durchgaenge;
+      if (!liste.length && !mitLeer) { ziel.innerHTML = ""; return; }
       ziel.innerHTML = `<section class="section"><h2>Laufende Prüfdurchgänge</h2>
-        ${laufend.length ? zeilen(laufend) : leer(fertig.length ? "Gerade läuft kein Prüfdurchgang." : "Noch kein Prüfdurchgang.")}</section>`;
-      alte.innerHTML = fertig.length ? `<section class="section"><details class="mat-auf mat-runden-alt"><summary>Abgeschlossene Prüfdurchgänge (${fertig.length})</summary>
-        ${zeilen(fertig)}</details></section>` : "";
+        ${liste.length ? rundenZeilen(liste) : leer("Gerade läuft kein Prüfdurchgang.")}</section>`;
     } catch (e) { ziel.innerHTML = ""; }
   }
+  /* Sammelprotokoll eines beendeten Durchgangs als „PDF“ (Prüfungen, abgeschlossene Prüfdurchgänge). */
+  const sammelPdf = (r) => (r.protokoll ? `<a class="mat-pdf" href="${esc(r.protokoll.url)}" target="_blank" rel="noopener" aria-label="Sammelprotokoll ${esc(r.protokoll.id)} (PDF)" title="Sammelprotokoll ${esc(r.protokoll.id)} öffnen">PDF</a>` : "");
   function fortschritt(z) {
     const fertig = z.erledigt + z.ausgenommen;
     const proz = z.gesamt ? Math.round((100 * fertig) / z.gesamt) : 0;
@@ -1633,7 +1643,7 @@
         <td data-l="Hersteller" class="mat-schmal-weg">${kat && a.kategorie ? `<div class="mat-kat-zusatz small muted">${esc(a.kategorie.name)}</div>` : ""}${esc(a.manufacturer || "")}</td>
         <td data-l="Produkt" class="mat-k-ohne">${kat && a.kategorie ? `<div class="mat-schmal-zusatz small muted">${esc(a.kategorie.name)}</div>` : ""}${a.manufacturer ? `<div class="mat-schmal-zusatz small muted">${esc(a.manufacturer)}</div>` : ""}${produktZelle(a)}${opts.person && a.zugeordnet_name ? `<div class="mat-eng-zusatz small muted">${esc(a.zugeordnet_name)}</div>` : ""}</td>
         <td data-l="Seriennummer" class="mat-schmal-weg">${esc(a.serial_no)}${a.serial_generated ? ' <span class="muted" title="vom System vergeben">(System)</span>' : ""}</td>
-        ${opts.person ? `<td data-l="Person" class="mat-eng-weg mat-k-halb">${esc(a.zugeordnet_name || "")}</td>` : ""}
+        ${opts.person ? `<td data-l="Person" class="mat-eng-weg mat-k-halb">${a.zugeordnet_name ? person(a.zugeordnet_name) : ""}</td>` : ""}
         ${opts.pfad ? `<td data-l="Ablage">${esc(a.pfad || "")}</td>` : ""}
         <td data-l="Nächste Prüfung" class="mat-schmal-weg">${naechste(a) && a.status !== "neu" ? esc(naechste(a)) : `<span class="muted">${esc(naechste(a) || "–")}</span>`}</td>
         <td data-l="Status" class="mat-k-marke">${statusMarke(a.status)}${empfohlenMarke(a.aussonderung_empfohlen)}${a.rueckruf ? ` <span class="mat-rr-marke" title="Rückruf: ${esc(a.rueckruf)}">Rückruf</span>` : ""}${mangelMarke(a.mangel)}${a.entwurf ? `<div class="small muted">in Prüfung bei ${esc(a.entwurf.pruefer || "?")}</div>` : ""}${naechste(a) ? `<div class="mat-schmal-zusatz small${a.status === "neu" ? " muted" : ""}">${a.status === "neu" ? "" : "fällig "}${esc(naechste(a))}</div>` : ""}</td>
@@ -1695,22 +1705,32 @@
         <p class="help">Eine offene Prüfung reserviert ihren Artikel: Nur ihr Prüfer arbeitet daran weiter. Bleibt eine Prüfung liegen, hebt der Materialwart die Reservierung auf.</p>
         <table class="list mat-tabelle mat-karten"><thead><tr><th>Artikel</th><th>Prüfung</th><th>Prüfer</th><th>begonnen</th><th></th></tr></thead><tbody>
         ${liste.map((x) => `<tr><td data-l="Artikel" class="mat-k-titel"><a href="/materialablage/artikel/${x.item_id}"><strong>${esc(x.artikel.inventory_no)}</strong></a> ${nameHtml(x.artikel)}${zusatzHtml(x.artikel)} <div class="small muted">${esc(x.artikel.pfad)}</div></td>
-          <td data-l="Prüfung" class="mat-k-halb">${esc(PRUEFART_KURZ[x.art] || x.art)}</td><td data-l="Prüfer" class="mat-k-halb">${esc(x.pruefer)}${x.eigen ? ' <span class="badge">du</span>' : ""}</td>
+          <td data-l="Prüfung" class="mat-k-halb">${esc(PRUEFART_KURZ[x.art] || x.art)}</td><td data-l="Prüfer" class="mat-k-halb">${person(x.pruefer)}${x.eigen ? ' <span class="badge">du</span>' : ""}</td>
           <td data-l="begonnen">${esc(fmtZeit(x.begonnen_am))}</td>
           <td class="tabelle-aktionen">${x.eigen && x.artikel.darf && x.artikel.darf.pruefen ? `<a class="btn secondary small" href="/materialablage/pruefung/${x.id}">Weiter prüfen</a>` : `<a class="btn secondary small" href="/materialablage/pruefung/${x.id}">Ansehen</a>`}
             ${!x.eigen && x.artikel.darf && x.artikel.darf.verwalten ? `<button class="btn secondary small" data-act="freigeben" data-id="${x.id}" data-wer="${esc(x.pruefer)}">Reservierung aufheben</button>` : ""}</td></tr>`).join("")}
         </tbody></table></section>` : "";
     }
+    /* „Prüfdurchgänge“ (Wunsch vom 27.10.2026) statt des Knopfs „Prüfdurchgang anlegen“: ein Untermenü mit „Prüfdurchgang
+       anlegen“ (wer irgendwo verwaltet oder prüft – wie bisher der Knopf) und „Abgeschlossene Prüfdurchgänge“ (jeder
+       mit Sicht; aus der Übersicht mit dem Ordner der Liste als Filter). */
+    const rundenMenue = () => `<details class="mat-menue">
+        <summary class="btn secondary" aria-haspopup="true">Prüfdurchgänge</summary>
+        <div class="mat-menue-liste">
+          ${DARF.verwalten || DARF.pruefen ? `<a href="#" role="button" data-act="runde"><strong>Prüfdurchgang anlegen</strong>
+            <span>Alle Artikel eines Ordners auf eine gemeinsame Liste – mehrere Prüfer arbeiten sie gleichzeitig ab.</span></a>` : ""}
+          <a href="/materialablage/durchgaenge${DATEN.ordner ? `?ordner=${Number(DATEN.ordner)}` : ""}"><strong>Abgeschlossene Prüfdurchgänge</strong>
+            <span>Auch abgebrochene, nach Jahr des Abschlusses und Ordner – mit Sammelprotokoll.</span></a>
+        </div></details>`;
     async function zeichnen() {
       seitenTitel("Prüfungen");
       inhalt.innerHTML = `<div class="page-head"><h1>Prüfungen</h1>
           <div class="btn-row"><a class="btn secondary" href="/materialablage/pruefen" title="Ist ein Protokoll oder Lebenslauf (PDF) unverändert?">Protokoll oder Lebenslauf prüfen</a>
-            ${DARF.verwalten || DARF.pruefen ? '<button class="btn secondary" data-act="runde"><span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Prüfdurchgang<span class="k-anlegen"> anlegen</span></span></button>' : ""}</div></div>
+            ${rundenMenue()}</div></div>
         ${!DARF.pruefen ? `<p class="notice">${pruefHinweis()}</p>` : ""}
         <div id="pr-runden"></div><div id="pr-offen"></div>
-        <section class="section"><h2>Zu prüfen</h2><div id="pr-liste"><p class="help">Wird geladen …</p></div></section>
-        <div id="pr-runden-alt"></div>`;
-      await Promise.all([zeigenIn(liste, "#pr-liste"), zeigenIn(offene, "#pr-offen"), rundenKasten($("#pr-runden"), false, $("#pr-runden-alt"))]);
+        <section class="section"><h2>Zu prüfen</h2><div id="pr-liste"><p class="help">Wird geladen …</p></div></section>`;
+      await Promise.all([zeigenIn(liste, "#pr-liste"), zeigenIn(offene, "#pr-offen"), rundenKasten($("#pr-runden"), true)]);
     }
     // Die Adresse dieser Liste mit Ordner, Person und Filter – was in aendern null ist, fällt weg.
     function adresse(aendern) {
@@ -1768,6 +1788,187 @@
     });
   }
 
+  /* --- Abgeschlossene Prüfdurchgänge (Wunsch vom 27.10.2026) ------------------------------------------------------
+     Seite /materialablage/durchgaenge (Ansicht „durchgaenge“) aus dem Menü „Prüfdurchgänge“ auf „Prüfungen“: beendete
+     Durchgänge (auch abgebrochene) je Jahr des Abschlusses, neueste zuerst. Je Jahr ein Abschnitt zum Aufklappen mit der
+     Anzahl in der Überschrift; offen steht nur das neueste. Ein Jahr kommt erst beim Aufklappen vom Server
+     (GET /durchgaenge?abgeschlossen=1&jahr=…, je DG_PRO_SEITE, darunter „Weitere anzeigen“) – bei vielen Durchgängen wird
+     nie alles geladen. Filter: Ordner (sein Zweig; zur Wahl die sichtbaren Ordner ohne Systemordner, der Server prüft die
+     Sicht) und Wörter im Titel; sie stehen in der Adresse (?ordner=&q=). Aufgeklappte Jahre, Nachgeladenes und die
+     Scrollhöhe stehen im Eintrag des Verlaufs – zurück von einem Durchgang an dieselbe Stelle (wie im Katalog). Je
+     Durchgang eine Zeile wie bisher auf „Prüfungen“: Titel (Link), Ordner, eröffnet, abgeschlossen, Stand, PDF; am
+     Telefon als Karte (Container „mat-seite“). */
+  const DG_PRO_SEITE = 50;
+  async function durchgaengeArchiv() {
+    const adresse = new URLSearchParams(location.search);
+    let ordner = /^\d{1,12}$/.test(adresse.get("ordner") || "") ? +adresse.get("ordner") : null;
+    let q = (adresse.get("q") || "").trim().slice(0, 200);
+    const gemerkt = history.state && history.state.durchgaenge;
+    let wiederher = gemerkt && gemerkt.ordner === ordner && gemerkt.q === q ? gemerkt : null;
+    if ("scrollRestoration" in history) history.scrollRestoration = "manual";
+    let jahre = [];                      // [{jahr, anzahl}] unter den gewählten Filtern
+    let stand = {};                      // je Jahr: { zeilen, seite, offen, fehler }
+    let lauf = 0;
+    const merken = () => {
+      try {
+        const geladen = {};
+        Object.entries(stand).forEach(([j, x]) => { geladen[j] = x.zeilen.length; });
+        history.replaceState(Object.assign({}, history.state, { durchgaenge: { ordner, q, geladen, y: Math.round(window.scrollY),
+          offen: Object.keys(stand).filter((j) => stand[j].offen).map(Number) } }), "");
+      } catch (e) { /* ohne Verlauf eben ohne Rückweg an die Stelle */ }
+    };
+    window.addEventListener("pagehide", merken);
+    inhalt.addEventListener("click", (e) => { if (e.target.closest && e.target.closest("a[href]")) merken(); }, true);
+    const holen = (jahr, seite) => {
+      const p = new URLSearchParams({ abgeschlossen: "1", seite: String(seite), pro_seite: String(DG_PRO_SEITE) });
+      if (jahr) p.set("jahr", String(jahr));
+      if (ordner) p.set("ordner", String(ordner));
+      if (q) p.set("q", q);
+      return api(`${API}/durchgaenge?${p}`);
+    };
+    const zeile = (r) => `<tr><td data-l="Prüfdurchgang" class="mat-k-titel"><a href="/materialablage/durchgang/${r.id}"><strong>${esc(r.titel)}</strong></a>${r.abgebrochen ? ' <span class="badge grey">abgebrochen</span>' : ""}</td>
+        <td data-l="Ordner">${esc(r.ordner)}</td>
+        <td data-l="eröffnet" class="mat-k-halb">${esc(fmtTag(r.eroeffnet_am))}</td>
+        <td data-l="${r.abgebrochen ? "abgebrochen" : "abgeschlossen"}" class="mat-k-halb">${esc(fmtTag(r.geschlossen_am))}</td>
+        <td data-l="Stand" class="mat-dg-stand">${fortschritt(r.zaehlung)}</td>
+        <td class="tabelle-aktionen">${sammelPdf(r)}</td></tr>`;
+    function listeHtml(j) {
+      const x = stand[j.jahr];
+      if (!x) return '<p class="help">Wird geladen …</p>';
+      if (x.fehler) return `<p class="notice" role="alert">${esc(x.fehler)}</p>`;
+      if (!x.zeilen.length) return leer("In diesem Jahr keine abgeschlossenen Prüfdurchgänge (mehr).");
+      const rest = j.anzahl - x.zeilen.length;
+      return `<table class="list mat-tabelle mat-karten mat-dg-tabelle"><thead><tr><th>Prüfdurchgang</th><th>Ordner</th><th>eröffnet</th><th>abgeschlossen</th><th>Stand</th><th></th></tr></thead>
+        <tbody>${x.zeilen.map(zeile).join("")}</tbody></table>
+        ${rest > 0 ? `<p class="mat-dg-mehr"><button type="button" class="btn secondary small" data-act="dg-mehr" data-jahr="${j.jahr}">Weitere anzeigen (${rest})</button></p>` : ""}`;
+    }
+    // Die Überschrift ist zugleich der Klappknopf (summary) – die Zahl sagt, wie viele darin stehen, auch zugeklappt.
+    const jahrHtml = (j) => `<section class="section mat-dg-jahr"><details class="mat-dg-klapp" data-jahr="${j.jahr}"${stand[j.jahr] && stand[j.jahr].offen ? " open" : ""}>
+        <summary><h2>${j.jahr} <span class="mat-dg-anzahl">· ${plural(j.anzahl, "Prüfdurchgang", "Prüfdurchgänge")}</span></h2></summary>
+        <div class="mat-dg-liste" id="dg-liste-${j.jahr}">${listeHtml(j)}</div></details></section>`;
+    function leerText() {
+      const was = ordner && q ? "In diesem Ordner keine abgeschlossenen Prüfdurchgänge mit diesen Wörtern im Titel."
+        : ordner ? "In diesem Ordner (mit Unterordnern) keine abgeschlossenen Prüfdurchgänge."
+          : q ? "Keine abgeschlossenen Prüfdurchgänge mit diesen Wörtern im Titel." : "Noch keine abgeschlossenen Prüfdurchgänge.";
+      return leer(was);
+    }
+    function jahreZeichnen() {
+      $("#dg-jahre").innerHTML = jahre.length ? jahre.map(jahrHtml).join("") : leerText();
+    }
+    function jahrZeichnen(jahr) {
+      const j = jahre.find((x) => x.jahr === jahr);
+      const ziel = $(`#dg-liste-${jahr}`);
+      if (j && ziel) ziel.innerHTML = listeHtml(j);
+    }
+    // Ein Jahr (weiter) laden, bis mindestens bis Zeilen da sind (höchstens 20 Seiten) – beim Aufklappen eine Seite.
+    async function jahrLaden(jahr, bis) {
+      const x = stand[jahr] || (stand[jahr] = { zeilen: [], seite: 0, offen: true });
+      const meinLauf = lauf;
+      try {
+        do {
+          const d = await holen(jahr, x.seite + 1);
+          if (meinLauf !== lauf) return;
+          x.seite += 1;
+          x.zeilen = x.zeilen.concat(d.durchgaenge);
+          const j = jahre.find((y) => y.jahr === jahr);
+          if (j) j.anzahl = d.gesamt;
+          if (!d.durchgaenge.length) break;
+        } while (x.zeilen.length < Math.min(bis || 0, DG_PRO_SEITE * 20));
+        x.fehler = null;
+      } catch (e) { if (meinLauf === lauf) x.fehler = e.message; }
+    }
+    // Neu laden (Filter geändert oder erster Aufruf): Jahre und das neueste Jahr in einem Abruf.
+    async function laden() {
+      const meinLauf = ++lauf;
+      let d;
+      try { d = await holen(null, 1); }
+      catch (e) {
+        if (meinLauf === lauf) $("#dg-jahre").innerHTML = `<p class="notice" role="alert">${esc(e.message)}</p>`;
+        return;
+      }
+      if (meinLauf !== lauf) return;
+      jahre = d.jahre;
+      stand = {};
+      if (d.jahr && d.gesamt) stand[d.jahr] = { zeilen: d.durchgaenge, seite: 1, offen: true };
+      const zurueck = wiederher;
+      wiederher = null;
+      if (zurueck) {
+        // Zurück von einem Durchgang: dieselben Jahre auf (auch ein zugeklapptes neuestes), so viel wie vorher geladen.
+        const auf = new Set(zurueck.offen || []);
+        if (d.jahr && stand[d.jahr] && !auf.has(d.jahr)) stand[d.jahr].offen = false;
+        for (const j of jahre) {
+          if (!auf.has(j.jahr)) continue;
+          if (!stand[j.jahr]) stand[j.jahr] = { zeilen: [], seite: 0, offen: true };
+          const bis = (zurueck.geladen || {})[j.jahr] || 0;
+          if (stand[j.jahr].zeilen.length < Math.min(bis, j.anzahl) || !stand[j.jahr].seite) await jahrLaden(j.jahr, bis);
+          if (meinLauf !== lauf) return;
+        }
+      }
+      jahreZeichnen();
+      if (zurueck) window.scrollTo(0, zurueck.y || 0);
+    }
+    // Filter in die Adresse – ohne neuen Eintrag im Verlauf (wie die Filter auf „Prüfungen“).
+    function adresseSetzen() {
+      const p = new URLSearchParams();
+      if (ordner) p.set("ordner", String(ordner));
+      if (q) p.set("q", q);
+      try { history.replaceState(history.state, "", `/materialablage/durchgaenge${String(p) ? `?${p}` : ""}`); } catch (e) { /* nur die Adresszeile */ }
+    }
+
+    seitenTitel("Abgeschlossene Prüfdurchgänge");
+    const baum = await ordnerBaum().catch(() => []);
+    const wahl = ordnerOptionen(baum, () => true, ordner, false);
+    inhalt.innerHTML = `<div class="mat-pfad">${pfadHtml(['<a href="/materialablage/pruefungen">Prüfungen</a>', "<span>Abgeschlossene Prüfdurchgänge</span>"])}</div>
+      <div class="page-head"><h1>Abgeschlossene Prüfdurchgänge</h1></div>
+      <form class="mat-dg-filter" id="dg-filter" role="search" aria-label="Abgeschlossene Prüfdurchgänge filtern">
+        <label for="dg-ordner">Ordner <select id="dg-ordner"><option value="">alle Ordner</option>${wahl.html}</select></label>
+        <label for="dg-q">Im Titel <input type="search" id="dg-q" maxlength="200" value="${esc(q)}" autocomplete="off" enterkeyhint="search"></label>
+      </form>
+      <div id="dg-jahre"><p class="help">Wird geladen …</p></div>`;
+    const feldOrdner = $("#dg-ordner");
+    const feldQ = $("#dg-q");
+    let warten = null;
+    feldOrdner.addEventListener("change", () => { ordner = feldOrdner.value ? +feldOrdner.value : null; adresseSetzen(); laden(); });
+    const suchen = () => {
+      clearTimeout(warten);
+      const neu = feldQ.value.trim().slice(0, 200);
+      if (neu === q) return;
+      q = neu;
+      adresseSetzen();
+      laden();
+    };
+    feldQ.addEventListener("input", () => { clearTimeout(warten); warten = setTimeout(suchen, 350); });
+    $("#dg-filter").addEventListener("submit", (e) => { e.preventDefault(); suchen(); });
+    // Ein Jahr aufklappen lädt es (beim ersten Mal); zuklappen merkt sich nur den Zustand. „toggle“ steigt nicht auf.
+    inhalt.addEventListener("toggle", async (e) => {
+      const k = e.target;
+      if (!(k instanceof HTMLDetailsElement) || !k.classList.contains("mat-dg-klapp")) return;
+      const jahr = +k.dataset.jahr;
+      if (!k.open) { if (stand[jahr]) stand[jahr].offen = false; return; }
+      if (stand[jahr] && !stand[jahr].fehler) { stand[jahr].offen = true; return; }
+      delete stand[jahr];
+      jahrZeichnen(jahr);
+      await jahrLaden(jahr, 0);
+      jahrZeichnen(jahr);
+    }, true);
+    aktionen = {
+      "dg-mehr": async (b) => {
+        const jahr = +b.dataset.jahr;
+        const x = stand[jahr];
+        if (!x || b.disabled) return;
+        b.disabled = true;
+        const vorher = x.zeilen.length;
+        await jahrLaden(jahr, vorher + 1);
+        jahrZeichnen(jahr);
+        // Der Fokus geht auf die erste neue Zeile – der Knopf ist weg oder rückt nach unten.
+        const neu = $$(`#dg-liste-${jahr} tbody tr`)[vorher];
+        const link = neu && $("a", neu);
+        if (link) link.focus();
+      },
+    };
+    await laden();
+  }
+
   /* --- Bestand ------------------------------------------------------------------------------------ */
   async function bestand() {
     const liste = await ordnerBaum();
@@ -1785,7 +1986,7 @@
   }
 
   /* --- Foto im Dialog (Ordnerfoto, Produktbild – Lieferung 5) ------------------------------------------------
-     Statt des nackten Dateifelds („Datei auswählen / Keine ausgewählt“, 21 px hoch) ein Knopf „Foto wählen …“ –
+     Statt des nackten Dateifelds („Datei auswählen / Keine ausgewählt“, 21 px hoch) ein Knopf „Foto wählen“ –
      ohne capture: Am Telefon bietet das System Kamera ODER Galerie an, am Rechner öffnet er den Dateidialog, und das
      Foto lässt sich auch in den Dialog ziehen. Links die Vorschau: das bisherige Foto, das neu gewählte (schon vor dem
      Speichern) oder ein leerer Rahmen, daneben Dateiname und Größe. „entfernen“ ist ein Knopf und wirkt wie die
@@ -1797,7 +1998,7 @@
       <div class="mat-bildwahl" id="${id}-feld" role="group" aria-labelledby="${id}-kopf" data-wort="${esc(wort)}" data-bisher="${esc(bisher || "")}">
         <div class="mat-bildwahl-bild"></div>
         <div class="mat-bildwahl-steuer">
-          <div class="btn-row"><label class="btn secondary mat-bildwahl-knopf">${esc(wort)} wählen …<input type="file" id="${id}"
+          <div class="btn-row"><label class="btn secondary mat-bildwahl-knopf">${esc(wort)} wählen<input type="file" id="${id}"
               accept="image/*" class="mat-datei" aria-describedby="${id}-name ${id}-hilfe"></label>
             <button type="button" class="btn secondary mat-bildwahl-weg" hidden></button></div>
           <div class="mat-bildwahl-name" id="${id}-name" aria-live="polite"></div>
@@ -2234,15 +2435,15 @@
           ${person ? `<p class="small"><a href="/materialablage/pruefungen?ordner=${d.id}&zugeordnet=${encodeURIComponent(person)}">Fällige Artikel dieser Person im ganzen Zweig →</a></p>` : ""}
           ${seitenleiste(d.artikel_gesamt, seite, d.pro_seite)}
           ${darfPflegen ? `<div class="mat-sammel" id="mat-sammel" hidden><span id="mat-sammel-n"></span><div class="btn-row">
-            <button class="btn secondary small" data-act="sammel-verschieben">Verschieben nach …</button>
-            <button class="btn secondary small" data-act="sammel-zuordnen">Zuordnen an …</button>
+            <button class="btn secondary small" data-act="sammel-verschieben">Verschieben</button>
+            <button class="btn secondary small" data-act="sammel-zuordnen">Zuordnen</button>
             <button class="btn secondary small" data-act="sammel-loesen" hidden>Zuordnung lösen</button></div></div>` : ""}
         </section>
         ${(d.sammelprotokolle || []).length ? `<section class="section"><h2>${sammelprotokolleTitel(d.sammelprotokolle)}</h2>${sammelprotokolleHtml(d.sammelprotokolle)}</section>` : ""}
         <p class="small mat-zweigbestand">${system ? plural(Object.values(z).reduce((a, b) => a + b, 0), "Artikel", "Artikel") : `Bestand im ganzen Zweig: <strong>${d.bestand}</strong> ${zahlen(z)}`}</p>
         ${darf.grund ? `<details class="section mat-auf"><summary>Journal des Ordners</summary>${journalHtml(d.journal)}</details>` : ""}`;
       if (darfPflegen) {
-        // Der Ablaufhinweis bleibt im Ordnerkopf – ein Hinweis, kein Menü; „Verlängern …“ führt in den Reiter.
+        // Der Ablaufhinweis bleibt im Ordnerkopf – ein Hinweis, kein Menü; „Verlängern“ führt in den Reiter.
         if (!kopfEl) {
           kopfEl = document.createElement("div");
           kopfEl.id = "mat-freigaben-kopf";
@@ -2438,9 +2639,9 @@
   const katalogMenue = `<details class="mat-menue">
       <summary class="btn secondary" aria-haspopup="true">Export / Import</summary>
       <div class="mat-menue-liste">
-        <a href="/materialablage/katalog" role="button" data-act="kat-export"><strong>Katalog exportieren …</strong>
-          <span>Kategorien, Produkte und Prüfformulare samt Bildern und Herstellerdokumenten als ZIP – etwa von dev in die Produktion. Bestand, Prüfungen und DEMO bleiben draußen.</span></a>
-        <a href="/materialablage/katalog" role="button" data-act="kat-import"><strong>Katalog importieren …</strong>
+        <a href="/materialablage/katalog" role="button" data-act="kat-export"><strong>Katalog exportieren</strong>
+          <span>Kategorien, Produkte und Prüfformulare samt Bildern und Herstellerdokumenten als ZIP – zum Sichern oder für eine andere Installation. Bestand, Prüfungen und DEMO bleiben draußen.</span></a>
+        <a href="/materialablage/katalog" role="button" data-act="kat-import"><strong>Katalog importieren</strong>
           <span>Eine Katalogdatei (ZIP oder JSON) übernehmen: erst ein Probelauf, dann übernehmen. Gelöscht wird dabei nichts.</span></a>
       </div></details>`;
   // „Bearbeiten“ im Kategoriekopf des Katalogs: wie im Ordnerkopf steht „Löschen“ im Untermenü statt als eigener Knopf
@@ -2448,9 +2649,9 @@
   const kategorieMenue = `<details class="mat-menue">
       <summary class="btn secondary small" aria-haspopup="true">Bearbeiten</summary>
       <div class="mat-menue-liste">
-        <a href="#" role="button" data-act="kat-bearbeiten"><strong>Kategorie bearbeiten …</strong>
+        <a href="#" role="button" data-act="kat-bearbeiten"><strong>Kategorie bearbeiten</strong>
           <span>Name, Oberkategorie, Norm und die Vorgaben für Materialart, Prüfintervall, Lebensdauer und Länge.</span></a>
-        <a href="#" role="button" data-act="kat-loeschen"><strong>Löschen …</strong>
+        <a href="#" role="button" data-act="kat-loeschen"><strong>Löschen</strong>
           <span>Geht nur ohne Unterkategorien und Produkte; vorher wird nachgefragt.</span></a>
       </div></details>`;
   // „Bearbeiten“ im Ordnerkopf: Verschieben und Löschen stehen im Untermenü statt als eigene Knöpfe (Wunsch vom
@@ -2458,11 +2659,11 @@
   const bearbeitenMenue = `<details class="mat-menue">
       <summary class="btn secondary small" aria-haspopup="true">Bearbeiten</summary>
       <div class="mat-menue-liste">
-        <a href="#" role="button" data-act="bearbeiten"><strong>Ordner bearbeiten …</strong>
+        <a href="#" role="button" data-act="bearbeiten"><strong>Ordner bearbeiten</strong>
           <span>Name, Art, Prüfintervall, Beschreibung, Foto, Erinnerungsmails und Freigaben.</span></a>
-        <a href="#" role="button" data-act="verschieben"><strong>Verschieben …</strong>
+        <a href="#" role="button" data-act="verschieben"><strong>Verschieben</strong>
           <span>Den Ordner samt Unterordnern und Artikeln an eine andere Stelle im Bestand hängen.</span></a>
-        <a href="#" role="button" data-act="loeschen"><strong>Löschen …</strong>
+        <a href="#" role="button" data-act="loeschen"><strong>Löschen</strong>
           <span>Geht nur bei einem leeren Ordner – ohne Unterordner und Artikel, ohne Prüfdurchgänge und Set-Protokolle, ohne offene Nacharbeit eines Bestandsimports und ohne gesperrte Artikel, die hierher zurückkehren; vorher wird nachgefragt.</span></a>
       </div></details>`;
   const LEBENSLAUF_TEXT = "Stammdaten, alle Prüfungen in zeitlicher Reihenfolge, Prüfdurchgänge und Ereignisse als PDF – zum Weitergeben oder als Aussonderungsnachweis. Stand jetzt, mit Kennung und Prüfsumme – prüfbar auf der Prüfseite.";
@@ -2473,14 +2674,14 @@
      zwischen den Knopfreihen; Browserprüfung vor dem Merge, Verbesserung 5). Bleibt nur eine Funktion, steht sie als
      Knopf da. */
   function artikelMehr(a, eintraege) {
-    const knopf = { verschieben: '<button class="btn secondary small" data-act="verschieben">Verschieben …</button>',
-                    lebenslauf: lebenslaufKnopf(a), loeschen: '<button class="btn secondary small" data-act="loeschen">Löschen …</button>' };
+    const knopf = { verschieben: '<button class="btn secondary small" data-act="verschieben">Verschieben</button>',
+                    lebenslauf: lebenslaufKnopf(a), loeschen: '<button class="btn secondary small" data-act="loeschen">Löschen</button>' };
     const zeile = {
-      verschieben: `<a href="#" role="button" data-act="verschieben"><strong>Verschieben …</strong>
+      verschieben: `<a href="#" role="button" data-act="verschieben"><strong>Verschieben</strong>
         <span>In einen anderen Ordner legen – auch in eine andere Gliederung, wenn du dort verwaltest.</span></a>`,
       lebenslauf: `<a href="/materialablage/artikel/${a.id}/lebenslauf.pdf" target="_blank" rel="noopener" data-frisch><strong>Lebenslauf (PDF)</strong>
         <span>${LEBENSLAUF_TEXT}</span></a>`,
-      loeschen: `<a href="#" role="button" data-act="loeschen"><strong>Löschen …</strong>
+      loeschen: `<a href="#" role="button" data-act="loeschen"><strong>Löschen</strong>
         <span>Nur für falsch angelegte Artikel ohne Prüfung; vorher wird nachgefragt.</span></a>`,
     };
     if (eintraege.length < 2) return eintraege.map((e) => knopf[e]).join("");
@@ -2542,6 +2743,68 @@
   // Ändert sich die Fensterbreite, während ein Menü offen ist (Fold auf- oder zugeklappt, Tablet gedreht), rückt es mit –
   // vorher behielt es die Lage vom Öffnen und ragte nach dem Zuklappen 31 px links aus dem Bild.
   window.addEventListener("resize", () => $$("details.mat-menue[open]").forEach(menueAusrichten));
+
+  /* Info-Symbole (infoKnopf): offen, solange die Maus über „i“ oder Info steht, der Fokus darin ist oder sie angetippt
+     wurde (fest – bis zum nächsten Tipp auf „i“, daneben oder Esc). Die Info steht unter dem „i“ und rückt wie die
+     Untermenüs ins Bild. */
+  function infoZeigen(w, an, fest) {
+    const k = $(".mat-info-knopf", w);
+    const t = $(".mat-info-text", w);
+    if (!k || !t) return;
+    w.classList.toggle("fest", Boolean(an && (fest || w.classList.contains("fest"))));
+    if (!an) w.classList.remove("fest");
+    k.setAttribute("aria-expanded", String(an));
+    t.hidden = !an;
+    if (!an) return;
+    t.style.left = "0px";
+    const r = t.getBoundingClientRect();
+    const ende = document.documentElement.clientWidth - 8;
+    const verschub = r.right > ende ? ende - r.right : 0;
+    t.style.left = `${Math.round(Math.max(verschub, 8 - (r.left)))}px`;
+  }
+  const infoAlleZu = (ausser) => $$(".mat-info").forEach((w) => { if (w !== ausser && !$(".mat-info-text", w).hidden) infoZeigen(w, false); });
+  document.addEventListener("click", (e) => {
+    const k = e.target.closest && e.target.closest(".mat-info-knopf");
+    const w = e.target.closest && e.target.closest(".mat-info");
+    infoAlleZu(w);
+    if (!k) return;
+    e.preventDefault();
+    const offen = !$(".mat-info-text", w).hidden;
+    // Mit der Maus ist die Info beim Klick schon offen (Darüberfahren): Der Klick hält sie fest, ein zweiter schließt.
+    infoZeigen(w, !(offen && w.classList.contains("fest")), true);
+  });
+  document.addEventListener("pointerover", (e) => {
+    if (e.pointerType !== "mouse") return;
+    const w = e.target.closest && e.target.closest(".mat-info");
+    if (w && $(".mat-info-text", w).hidden) { infoAlleZu(w); infoZeigen(w, true); }
+  });
+  document.addEventListener("pointerout", (e) => {
+    if (e.pointerType !== "mouse") return;
+    const w = e.target.closest && e.target.closest(".mat-info");
+    if (!w || w.contains(e.relatedTarget) || w.classList.contains("fest") || w.contains(document.activeElement)) return;
+    infoZeigen(w, false);
+  });
+  document.addEventListener("focusin", (e) => {
+    const w = e.target.closest && e.target.closest(".mat-info");
+    infoAlleZu(w);
+    // Nach Esc kommt der Fokus auf das „i“ zurück – ohne die Info gleich wieder zu öffnen.
+    if (w && w.dataset.esc) { delete w.dataset.esc; return; }
+    if (w && e.target.matches(".mat-info-knopf:focus-visible")) infoZeigen(w, true);
+  });
+  document.addEventListener("focusout", (e) => {
+    const w = e.target.closest && e.target.closest(".mat-info");
+    if (w && !w.contains(e.relatedTarget) && !w.classList.contains("fest") && !w.matches(":hover")) infoZeigen(w, false);
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key !== "Escape") return;
+    const w = $$(".mat-info").find((x) => !$(".mat-info-text", x).hidden);
+    if (!w) return;
+    infoZeigen(w, false);
+    if (w.contains(document.activeElement) && document.activeElement !== $(".mat-info-knopf", w)) {
+      w.dataset.esc = "1";
+      $(".mat-info-knopf", w).focus();
+    }
+  });
 
 
   /* --- Jahresbericht je Zweig (Phase 4 · Lieferung 1) --------------------------------------------------------------
@@ -2751,7 +3014,7 @@
     // Personenzuordnung (Bauentwurf 6.4): sehen nur mit Grundrecht, zuordnen, ändern und lösen, wer den Artikel verwaltet.
     // Einem ausgesonderten Artikel ordnet niemand mehr jemanden zu; eine alte Zuordnung lässt sich noch lösen.
     const zu = a.zugeordnet;
-    const zuKnoepfe = darf.verwalten && (!aus || zu) ? `<div class="btn-row mat-zuordnung">${aus ? "" : `<button class="btn secondary small" type="button" data-act="zuordnen">${zu ? "Ändern" : "Zuordnen …"}</button>`}${zu ? '<button class="btn secondary small" type="button" data-act="zuordnung-loesen">Lösen</button>' : ""}</div>` : "";
+    const zuKnoepfe = darf.verwalten && (!aus || zu) ? `<div class="btn-row mat-zuordnung">${aus ? "" : `<button class="btn secondary small" type="button" data-act="zuordnen">${zu ? "Ändern" : "Zuordnen"}</button>`}${zu ? '<button class="btn secondary small" type="button" data-act="zuordnung-loesen">Lösen</button>' : ""}</div>` : "";
     // Gemeldete Mängel (Phase 3 · L1): offene als Banner oben, erledigte eingeklappt unter „Prüfungen“. Melden darf jeder
     // mit Leserecht, außer am ausgesonderten Artikel. „Aussondern“ des Materialwarts ist ausgegraut, solange es der Server
     // nicht erlaubt (a.aussondern, Schritt 28: erst nach einer Prüfung mit „instandsetzen“ oder „aussondern empfohlen“,
@@ -2785,7 +3048,7 @@
     inhalt.innerHTML = `${quittungHtml()}${a.demo ? `<p class="mat-demo-banner">${DEMO_ARTIKEL}</p>` : ""}
       ${a.status === "ausgesondert" ? `<p class="mat-banner s-ausgesondert">AUSGESONDERT – dieser Artikel ist außer Dienst und darf nicht mehr verwendet werden.</p>` : ""}
       ${a.status === "gesperrt" && !sperreDurchMangel && !sperreImMangel ? `<p class="mat-banner s-gesperrt">GESPERRT${sperrText ? ` – ${esc(sperrText)}` : ""}. Nicht verwenden, bis eine Freiprüfung ihn freigibt.</p>` : ""}
-      ${empf ? `<p class="notice mat-empfehlung"><strong>Aussonderung empfohlen</strong> – ${esc(empf.pruefer || "Prüfer")} am ${esc(fmtTag(empf.datum))} (<a href="/materialablage/pruefung/${Number(empf.pruefung)}">${empf.protokoll_id ? `Protokoll ${esc(empf.protokoll_id)}` : "Prüfung ansehen"}</a>)${empf.grund ? `: ${esc(empf.grund)}` : ""}. Aussondern kann der Materialwart.</p>` : ""}
+      ${empf ? `<p class="notice mat-empfehlung"><strong>Aussonderung empfohlen</strong> – ${person(empf.pruefer || "Prüfer")} am ${esc(fmtTag(empf.datum))} (<a href="/materialablage/pruefung/${Number(empf.pruefung)}">${empf.protokoll_id ? `Protokoll ${esc(empf.protokoll_id)}` : "Prüfung ansehen"}</a>)${empf.grund ? `: ${esc(empf.grund)}` : ""}. Aussondern kann der Materialwart.</p>` : ""}
       ${offeneMaengel.map((m, i) => mangelBanner(m, sperreImMangel && i === 0 ? sperrText || "" : null)).join("")}
       ${a.status === "lebensdauer" ? `<p class="mat-banner s-lebensdauer">LEBENSDAUER ERREICHT – nicht mehr verwenden, prüfen lassen und aussondern.</p>` : ""}
       ${a.status === "neu" ? '<p class="mat-banner s-neu">NEU – die Eingangsprüfung steht aus. Bis dahin nicht einsetzen.</p>' : ""}
@@ -2802,9 +3065,9 @@
           ${aussondernNein ? `<p class="help mat-aussondern-hilfe" id="mat-aussondern-hilfe">${esc(aussondernNein)}</p>` : ""}
           <div class="btn-row mat-pruefknoepfe">${!aus && darf.pruefen && !fremderEntwurf ? `<button class="btn" data-act="pruefen">${eigenerEntwurf ? "Prüfung fortsetzen" : a.status === "neu" ? "Eingangsprüfung starten" : "Prüfung starten"}</button>` : ""}
             ${sperrKnopf ? '<button class="btn secondary small" data-act="sperren">Sperren</button>' : ""}
-            ${darfMelden ? `<button class="btn secondary small" type="button"${schonGemeldet ? ' disabled aria-describedby="mat-schon-gemeldet"' : ' data-act="mangel"'}>Mangel melden …</button>` : ""}
+            ${darfMelden ? `<button class="btn secondary small" type="button"${schonGemeldet ? ' disabled aria-describedby="mat-schon-gemeldet"' : ' data-act="mangel"'}>Mangel melden</button>` : ""}
             ${aussonderKnopf ? `<button class="btn secondary small" type="button"${aussondernNein ? ' disabled aria-describedby="mat-aussondern-hilfe"' : ' data-act="aussondern"'}>Aussondern</button>` : ""}</div>
-          ${a.entwurf ? `<p class="small">In Prüfung bei <strong>${esc(a.entwurf.pruefer)}</strong> seit ${esc(fmtZeit(a.entwurf.seit))}
+          ${a.entwurf ? `<p class="small">In Prüfung bei <strong>${person(a.entwurf.pruefer)}</strong> seit ${esc(fmtZeit(a.entwurf.seit))}
             ${fremderEntwurf ? ` <span class="mat-nowrap">· <a href="/materialablage/pruefung/${a.entwurf.id}">ansehen</a></span>` : ""}
             ${fremderEntwurf && darf.verwalten ? ' <span class="mat-nowrap">· <button class="lnk" type="button" data-act="freigeben">Reservierung aufheben</button></span>' : ""}</p>` : ""}
           ${a.durchgang ? `<p class="small">Steht im Prüfdurchgang ${a.durchgang.sichtbar ? `<a href="/materialablage/durchgang/${a.durchgang.id}">${esc(a.durchgang.titel)}</a>` : `„${esc(a.durchgang.titel)}“`}.</p>` : ""}
@@ -2814,7 +3077,8 @@
       </div>
       ${DATEN.suche ? '<div id="mat-global-angebot"></div>' : ""}
       <div class="mat-spalten">
-        <section class="section"><h2>Stammdaten</h2><dl class="mat-daten">
+        <section class="section"><div class="mat-kastenkopf"><h2>Stammdaten</h2>${antragMoeglich(a) ? '<button class="btn secondary small" type="button" data-act="antrag">Änderung beantragen</button>' : ""}</div>
+          <dl class="mat-daten">
           ${zeile("Produkt", `${nameHtml(p)}${zusatzHtml(p)}`)}
           ${zeile("Norm", p.norm ? esc(p.norm) : '<span class="muted">–</span>')}
           ${(a.bestandteile || []).length ? zeile("Bestandteile", bestandteilZeilen(a.bestandteile, true)) : ""}
@@ -2831,8 +3095,7 @@
           ${zeile("Prüfintervall", ivText)}
           ${zeile("Prüfformular", a.formular ? `${esc(a.formular.title || "ohne Titel")} · Version ${a.formular.version} <span class="muted">(${esc(a.formular.quelle)}, ${plural(a.formular.punkte, "Prüfpunkt", "Prüfpunkte")})</span>` : '<span class="mat-warn">kein aktives Prüfformular – im Katalog anlegen</span>')}
           ${a.notes ? zeile("Bemerkung", `<span class="mat-text">${esc(a.notes)}</span>`) : ""}
-        </dl>
-        ${antragMoeglich(a) ? '<div class="btn-row"><button class="btn secondary small" type="button" data-act="antrag">Änderung beantragen …</button></div>' : ""}</section>
+        </dl></section>
         <div class="mat-spalte">
         ${(a.antraege || []).length ? `<section class="section mat-antraege-offen"><h2>Offene Änderungsanträge</h2>${a.antraege.map(antragOffenHtml).join("")}</section>` : ""}
         <section class="section"><h2>QR-Code und NFC</h2>
@@ -2963,7 +3226,7 @@
         return `<tr class="${x.entwurf ? "mat-entwurf" : ersetzt ? "mat-alt" : ""}"><td data-l="Datum" class="mat-k-titel"><a href="/materialablage/pruefung/${x.id}">${x.entwurf ? "Entwurf" : esc(fmtTag(x.datum))}</a></td>
         <td data-l="Art" class="mat-k-halb">${esc(PRUEFART_KURZ[x.art] || x.art)}${x.berichtigt ? ' <span class="mat-marke-ber">Berichtigung</span>' : ""}${ersetzt ? ` <span class="badge grey" title="berichtigt durch ${esc(x.berichtigt_durch.protokoll_id || "eine spätere Prüfung")}">berichtigt</span>` : ""}</td>
         <td data-l="Ergebnis" class="mat-k-marke">${x.entwurf ? '<span class="muted">in Prüfung</span>' : ergebnisMarke(x.ergebnis)}${x.grund ? `<div class="small muted">${esc(x.grund)}</div>` : ""}</td>
-        <td data-l="Prüfer" class="mat-k-halb">${esc(x.pruefer || "")}${x.urkunde ? ` <span class="muted small">(${esc(x.urkunde)})</span>` : ""}</td>
+        <td data-l="Prüfer" class="mat-k-halb">${x.pruefer ? person(x.pruefer) : ""}${x.urkunde ? ` <span class="muted small">(${esc(x.urkunde)})</span>` : ""}</td>
         <td data-l="Nächste Prüfung">${x.naechste ? esc(fmtTag(x.naechste)) : '<span class="muted">–</span>'}</td>
         <td data-l="Protokoll" class="mat-k-ohne">${x.protokoll ? `<a class="mat-pdf" href="${esc(x.protokoll.url)}" target="_blank" rel="noopener" title="Protokoll ${esc(x.protokoll.id)} öffnen (PDF)">PDF</a> <span class="muted small mat-hash">${esc(x.protokoll.id)}</span>` : '<span class="muted">–</span>'}</td></tr>`;
       }).join("")}</tbody></table>`;
@@ -3006,7 +3269,7 @@
     const vorbelegt = a.lock_state === "verloren" ? "verlust" : a.retire_by && a.retire_by <= tag ? "lebensdauer" : "irreparabel";
     dialog(`<h2>${esc(a.inventory_no)} aussondern</h2>
       <p class="help">Die Aussonderung ist endgültig: Der Artikel wandert nach „Ausgesondert“, bleibt dort mit seinem Lebenslauf sichtbar und zählt nirgends mehr als Bestand.</p>
-      ${empf ? `<p class="notice mat-empfehlung"><strong>Aussonderung empfohlen</strong> von ${esc(empf.pruefer || "–")} am ${esc(fmtTag(empf.datum))}${empf.protokoll_id ? ` (Protokoll ${esc(empf.protokoll_id)})` : ""}${empf.grund ? `: ${esc(empf.grund)}` : ""}</p>` : ""}
+      ${empf ? `<p class="notice mat-empfehlung"><strong>Aussonderung empfohlen</strong> von ${person(empf.pruefer || "–")} am ${esc(fmtTag(empf.datum))}${empf.protokoll_id ? ` (Protokoll ${esc(empf.protokoll_id)})` : ""}${empf.grund ? `: ${esc(empf.grund)}` : ""}</p>` : ""}
       <div class="field-row"><div><label for="au-grund">Grund</label><select id="au-grund">${Object.entries(AUSSONDERUNGSGRUND).map(([k, v]) => `<option value="${k}"${k === vorbelegt ? " selected" : ""}>${esc(v)}</option>`).join("")}</select></div>
         <div><label for="au-datum">Datum</label>${datumFeld("au-datum", tag, "tag")}
           <div class="help">${fruehestens ? `Frühestens ${esc(fmtTag(fruehestens[0]))} (${esc(fruehestens[1])}), spätestens` : "Spätestens"} heute (${esc(fmtTag(tag))}).</div></div></div>
@@ -3082,7 +3345,7 @@
 
   // Seit der ersten Prüfung (stammdaten_fest) stehen die freigabepflichtigen Stammdaten fest (Wunsch vom 24.10.2026,
   // Entscheidung E1): Produkt, Seriennummer, Herstellung, Kauf, Erstgebrauch, Lebensende und Prüfintervall – oben
-  // schreibgeschützt als Block, geändert wird über „Änderung beantragen …“ (antragDialog). Direkt bleiben die nächste
+  // schreibgeschützt als Block, geändert wird über „Änderung beantragen“ (antragDialog). Direkt bleiben die nächste
   // Prüfung (vorziehen), die Länge und die Bemerkung – auch für Prüfer (E2), die sonst nichts bearbeiten (nurDirekt).
   /* Seriennummern der Bestandteile (Schritt 25): je Position der Bestandteil-Liste und Stück ein freiwilliges Feld –
      beim Anlegen, im Dialog „Bearbeiten“ (bis zur ersten Prüfung, Materialwart) und im Antrag. liste: [{id, bezeichnung,
@@ -3151,7 +3414,7 @@
       <div class="help">${fest ? "Seit der ersten Prüfung fest – Teil des Prüfnachweises." : "Diese Stammdaten ändert der Materialwart."}</div>
       ${(a.bestandteile || []).length ? `<div class="mat-fest-teile"><p class="mat-bt-label">Seriennummern der Bestandteile</p>${bestandteilZeilen(a.bestandteile, true, "keine Nummer eingetragen")}</div>` : ""}
       ${fest ? `${offen.map(antragOffenHtml).join("")}
-        ${antragMoeglich(a) ? '<div class="btn-row mat-antrag-knopf"><button class="btn secondary small" type="button" id="ad-antrag">Änderung beantragen …</button></div>' : ""}` : ""}` : "";
+        ${antragMoeglich(a) ? '<div class="btn-row mat-antrag-knopf"><button class="btn secondary small" type="button" id="ad-antrag">Änderung beantragen</button></div>' : ""}` : ""}` : "";
     const sn = `<label for="ad-sn">Seriennummer des Herstellers</label><input type="text" id="ad-sn" ${TASTATUR_NUMMER} value="${a.serial_generated ? "" : esc(a.serial_no)}" placeholder="${a.serial_generated ? esc(a.serial_no) + " (vom System)" : ""}" maxlength="80">`;
     const herst = `<label for="ad-herst">Herstellung (Monat${textil ? ", Pflicht" : ""})</label>${datumFeld("ad-herst", a.manufactured_on, "monat")}`;
     const mitProdukt = !gesperrt && !!a.produkt_aenderbar;
@@ -3293,11 +3556,11 @@
       + (rein.length ? `<p class="notice small">Nach der Änderung trifft ihn ${rein.length > 1 ? "die laufenden Rückrufe" : "der laufende Rückruf"} ${titel(rein)}.</p>` : "")
       + (wieder.length ? `<p class="notice small">${wieder.length > 1 ? "Die Rückrufe" : "Der Rückruf"} ${titel(wieder)} ${wieder.length > 1 ? "gelten" : "gilt"} danach wieder als offen – der Artikel muss erneut geprüft werden.</p>` : "");
   };
-  // Ein offener Antrag als Hinweis an Artikel und Dialog „Bearbeiten“: wer entscheiden darf, kommt mit „Entscheiden …“ in
-  // die Liste; der eigene trägt das graue „Antrag zurückziehen …“. Auf der Artikelseite stehen die Anträge als Abschnitt
+  // Ein offener Antrag als Hinweis an Artikel und Dialog „Bearbeiten“: wer entscheiden darf, kommt mit „Entscheiden“ in
+  // die Liste; der eigene trägt das graue „Antrag zurückziehen“. Auf der Artikelseite stehen die Anträge als Abschnitt
   // „Offene Änderungsanträge“ am Anfang der rechten Spalte (Wunsch vom 22.10.2026) – Lesefolge = DOM-Folge.
-  const antragOffenHtml = (x) => `<div class="notice small mat-antrag-offen"><p>Änderung beantragt am ${esc(S.fmtDate(x.created_at))}${x.antragsteller ? ` von ${esc(x.antragsteller)}` : ""} – wartet auf einen Materialwart des Ordners.</p>
-    ${antragAenderungen(x)}${x.entscheiden || x.eigen ? `<div class="btn-row">${x.entscheiden ? '<a class="btn secondary small" href="/materialablage/bestand/antraege">Entscheiden …</a>' : ""}${x.eigen ? `<button class="btn secondary small" type="button" data-act="antrag-zurueck" data-id="${x.id}">Antrag zurückziehen …</button>` : ""}</div>` : ""}</div>`;
+  const antragOffenHtml = (x) => `<div class="notice small mat-antrag-offen"><p>Änderung beantragt am ${esc(S.fmtDate(x.created_at))}${x.antragsteller ? ` von ${person(x.antragsteller)}` : ""} – wartet auf einen Materialwart des Ordners.</p>
+    ${antragAenderungen(x)}${x.entscheiden || x.eigen ? `<div class="btn-row">${x.entscheiden ? '<a class="btn secondary small" href="/materialablage/bestand/antraege">Entscheiden</a>' : ""}${x.eigen ? `<button class="btn secondary small" type="button" data-act="antrag-zurueck" data-id="${x.id}">Antrag zurückziehen</button>` : ""}</div>` : ""}</div>`;
   // Rückfrage, dann zurückziehen (nur der Antragsteller, nur offen – der Server prüft es). Keine Mail.
   async function antragZurueckziehen(x, danach) {
     if (!x) return;
@@ -3844,8 +4107,8 @@
     const e = v.enthalten, a = v.ausgelassen;
     const zeile = (t, n, raus) => `<tr><th scope="row">${t}</th><td>${n}</td><td>${raus === null ? "–" : raus}</td></tr>`;
     dialog(`<h2>Katalog exportieren</h2>
-      <p>Kategorien, Produkte mit Bild und Dokumenten und die Prüfformulare als ZIP – zum Import in einer anderen Instanz,
-        etwa von dev in die Produktion. Bestand, Artikel und Prüfungen kommen nie mit, DEMO-Einträge auch nicht.</p>
+      <p>Kategorien, Produkte mit Bild und Dokumenten und die Prüfformulare als ZIP – zum Sichern oder zum Import in
+        einer anderen Installation. Bestand, Artikel und Prüfungen kommen nie mit, DEMO-Einträge auch nicht.</p>
       <table class="mat-austausch"><thead><tr><th></th><th>im Export</th><th>ausgelassen (DEMO)</th></tr></thead><tbody>
         ${zeile("Kategorien", e.kategorien, a.kategorien)}${zeile("Produkte", e.produkte, a.produkte)}
         ${zeile("davon mit Bild", e.bilder, null)}${zeile("Formulare", e.formulare, a.formulare)}${zeile("Dokumente", e.dokumente, a.dokumente)}
@@ -3919,7 +4182,7 @@
       : '<progress class="mat-import-balken"></progress>';
   }
   function importHerkunft(a) {
-    const teile = [`gestartet ${esc(fmtZeit(a.gestartet))}${a.von ? ` von ${esc(a.von)}` : ""}`, esc(a.quelle || "")];
+    const teile = [`gestartet ${esc(fmtZeit(a.gestartet))}${a.von ? ` von ${person(a.von)}` : ""}`, esc(a.quelle || "")];
     if (a.beendet && !IMPORT_OFFEN.has(a.zustand)) teile.push(`beendet ${esc(fmtZeit(a.beendet))}`);
     if (a.uebernehmbar && a.datei_bis) teile.push(`Übernehmen bis ${esc(fmtZeit(a.datei_bis))}`);
     return `<p class="help mat-import-herkunft">${teile.filter(Boolean).join(" · ")}</p>`;
@@ -4224,7 +4487,7 @@
     if (feld.value.trim()) pruefen();
   }
 
-  /* opt.danach (Phase 2 · L3, „Im Katalog anlegen …“ aus der Nacharbeit): Nach dem Anlegen bleibt die Seite stehen und
+  /* opt.danach (Phase 2 · L3, „Im Katalog anlegen“ aus der Nacharbeit): Nach dem Anlegen bleibt die Seite stehen und
      danach(produkt) ordnet das neue Produkt zu – sonst geht es wie bisher zur Produktseite. */
   async function produktDialog(p, opt) {
     opt = opt || {};
@@ -4564,8 +4827,8 @@
   function bestandteilListeHtml(p, k) {
     const liste = p.bestandteile || [];
     if (!liste.length) return "";
-    return `<section class="section mat-bestandteil-liste"><h2>Bestandteile</h2>${bestandteilZeilen(liste)}
-      ${k ? '<div class="btn-row"><button class="btn secondary small" data-act="stueckliste">Bestandteile bearbeiten</button></div>' : ""}</section>`;
+    return `<section class="section mat-bestandteil-liste"><div class="mat-kastenkopf"><h2>Bestandteile</h2>${k ? '<button class="btn secondary small" data-act="stueckliste">Bestandteile bearbeiten</button>' : ""}</div>
+      ${bestandteilZeilen(liste)}</section>`;
   }
 
   async function produkt() {
@@ -4577,15 +4840,15 @@
     // Die Bemerkung steht als Zusatz in der Überschrift; nur eine ältere, dort gekürzte zusätzlich ganz hier.
     const zusatz = produktZusatz(p);
     // Seltene Funktionen im Untermenü statt als weitere Knöpfe neben „Bearbeiten“ (Knopfregel; Prüfung Browser,
-    // Verbesserung 4) – seit der Liste nach dem Merge auch „Löschen …“ (selten und endgültig).
+    // Verbesserung 4) – seit der Liste nach dem Merge auch „Löschen“ (selten und endgültig).
     const produktMenue = `<details class="mat-menue">
         <summary class="btn secondary small" aria-haspopup="true">Mehr</summary>
         <div class="mat-menue-liste">
-          <a href="#" role="button" data-act="variante"><strong>Als Variante kopieren …</strong>
+          <a href="#" role="button" data-act="variante"><strong>Als Variante kopieren</strong>
             <span>Ein neues Produkt mit diesen Stammdaten anlegen, etwa eine andere Länge – mit eigener Artikelnummer.</span></a>
-          <a href="#" role="button" data-act="rr-neu"><strong>Rückruf anlegen …</strong>
+          <a href="#" role="button" data-act="rr-neu"><strong>Rückruf anlegen</strong>
             <span>Eine Rückrufaktion des Herstellers für alle Artikel dieses Produkts oder bestimmte Seriennummern.</span></a>
-          ${p.loeschbar ? `<a href="#" role="button" data-act="loeschen"><strong>Löschen …</strong>
+          ${p.loeschbar ? `<a href="#" role="button" data-act="loeschen"><strong>Löschen</strong>
             <span>Geht nur, solange es keinen Artikel dieses Produkts gibt; vorher wird nachgefragt.</span></a>` : ""}
         </div></details>`;
     seitenTitel(produktName(p));
@@ -4760,7 +5023,7 @@
       <label for="dd-title">Titel</label><input type="text" id="dd-title" value="${esc(alt ? alt.title : "")}" maxlength="200" placeholder="leer = Dateiname">
       <div class="field-row"><div><label for="dd-ver">Versionsstand</label><input type="text" id="dd-ver" maxlength="40" placeholder="z. B. 03/2024" ${TASTATUR_NUMMER}></div>
         <div><label for="dd-ab">Gültig ab</label>${datumFeld("dd-ab", "", "tag")}</div></div>
-      <div class="mat-feldkopf">Datei (PDF oder Bild)</div>${dateiKnopf("dd-datei", "Datei wählen …", "application/pdf,image/jpeg,image/png,image/webp", false)}
+      <div class="mat-feldkopf">Datei (PDF oder Bild)</div>${dateiKnopf("dd-datei", "Datei wählen", "application/pdf,image/jpeg,image/png,image/webp", false)}
       <label for="dd-url">… oder Adresse beim Hersteller</label><input type="text" id="dd-url" maxlength="500" placeholder="https://…" ${TASTATUR_ADRESSE}>
       <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button><button class="btn" id="dd-ok" type="button">Speichern</button></div>`,
     (dlg, body) => {
@@ -4823,7 +5086,7 @@
       });
     }
     /* Prüfanleitung aus dem Wiki (Phase 2 · L3): nur die Material-Verwaltung sieht die Zeile (formular.wiki kommt sonst
-       null); „Ändern …“ nur mit Stufe Mitglied im Wiki (wiki_aendern, Entscheidung vom 19.10.2026). Auch an benutzten
+       null); „Ändern“ nur mit Stufe Mitglied im Wiki (wiki_aendern, Entscheidung vom 19.10.2026). Auch an benutzten
        Versionen – die Verknüpfung gehört nicht zum Prüfinhalt. */
     function wikiZeile() {
       if (!DARF.katalog) return "";
@@ -4836,7 +5099,7 @@
       else if (w) anzeige = `Seite Nr. ${esc(w.seite)} – du darfst sie nicht lesen`;
       const warnung = w && w.zustand === "ok" ? REICHWEITE_HINWEIS[w.reichweite] : "";
       return `<div class="mat-wikizeile" id="fp-wiki"><p><strong>Prüfanleitung in der Strömipedia:</strong> ${anzeige}
-          ${f.wiki_aendern ? '<button type="button" class="lnk" data-act="wiki-waehlen">Ändern …</button>' : ""}</p>
+          ${f.wiki_aendern ? '<button type="button" class="lnk" data-act="wiki-waehlen">Ändern</button>' : ""}</p>
         ${warnung ? `<p class="small mat-warn-leise">${esc(warnung)}</p>` : ""}
         ${f.benutzt && f.wiki_aendern ? '<p class="help">Die Verknüpfung gehört nicht zum Prüfinhalt und lässt sich auch an benutzten Versionen ändern.</p>' : ""}
         <p class="help">Hat die Seite eine Überschrift „Prüfung“, wird dieser Abschnitt in der Prüfung eingeblendet, sonst nur verlinkt. Neue Konten haben keine Stufe in der Strömipedia und sehen nur öffentliche Seiten.</p>
@@ -5516,7 +5779,7 @@
           ${knoepfe.length ? `<div class="btn-row">${knoepfe.join("")}</div>` : ""}</div>
         ${berichtigungHinweis()}
         <p class="mat-produktzeile"><strong>${nameHtml(pr.produkt)}</strong>${zusatzHtml(pr.produkt)}${artNrHtml(pr.produkt.article_no)} · ${nummerHtml("Seriennummer", a.serial_no)} ${statusMarke(a.status)}</p>
-        <p class="small muted">${pr.formular ? `Formular ${esc(pr.formular.titel || "ohne Titel")}, Version ${pr.formular.version} · ` : ""}${pr.art === "aussonderung" ? "Ausgeführt von" : "Prüfer"} ${esc(pr.pruefer || "–")}${pr.urkunde ? ` (Urkundennummer ${esc(pr.urkunde)})` : ""}
+        <p class="small muted">${pr.formular ? `Formular ${esc(pr.formular.titel || "ohne Titel")}, Version ${pr.formular.version} · ` : ""}${pr.art === "aussonderung" ? "Ausgeführt von" : "Prüfer"} ${person(pr.pruefer || "–")}${pr.urkunde ? ` (<span class="mat-ganz">Urkundennummer ${esc(pr.urkunde)}</span>)` : ""}
           · ${pr.entwurf && !pr.berichtigt ? `begonnen ${esc(fmtZeit(pr.begonnen_am))}` : `Prüftag ${esc(fmtTag(pr.datum))}`}
           ${pr.durchgang ? ` · Durchgang ${pr.durchgang.sichtbar ? `<a href="/materialablage/durchgang/${pr.durchgang.id}">${esc(pr.durchgang.titel)}</a>` : `„${esc(pr.durchgang.titel)}“`}` : ""}</p>
         ${pr.anleitung ? '<div class="mat-anleitung-platz"></div>' : ""}`;
@@ -5545,7 +5808,7 @@
       }
       const d = pr.berichtigt_durch;
       if (d && d.entwurf) {
-        html += `<div class="mat-ber"><strong>Berichtigung in Arbeit</strong> bei ${esc(d.pruefer || "–")} – <a href="/materialablage/pruefung/${d.id}">Entwurf ansehen</a>. Bis sie festgeschrieben ist, gilt diese Prüfung.</div>`;
+        html += `<div class="mat-ber"><strong>Berichtigung in Arbeit</strong> bei ${person(d.pruefer || "–")} – <a href="/materialablage/pruefung/${d.id}">Entwurf ansehen</a>. Bis sie festgeschrieben ist, gilt diese Prüfung.</div>`;
       } else if (d) {
         html += `<div class="mat-ber ersetzt"><strong>Berichtigt</strong> durch <a href="/materialablage/pruefung/${d.id}">${d.protokoll_id ? `Protokoll ${esc(d.protokoll_id)}` : "eine spätere Prüfung"}</a> – maßgeblich ist die Berichtigung. Diese Prüfung bleibt${pr.protokoll ? " mit ihrem Protokoll" : ""} unverändert erhalten.</div>`;
       }
@@ -5745,13 +6008,13 @@
           <td data-l="Bemerkung">${x.notiz ? `<span class="mat-text">${esc(x.notiz)}</span>` : ""}</td>
           <td data-l="Foto">${x.foto ? bildLink(x.foto.web, x.foto.original, `${x.text}${x.notiz ? ` – ${x.notiz}` : ""}`, "befunde", `<img class="mat-mini" src="${esc(x.foto.vorschau)}" alt="Foto">`) : ""}</td></tr>`).join("");
       // Die Marke steht direkt unter der Überschrift „Ergebnis“ – nicht noch einmal als Zeile „Ergebnis“ (Reste, 4).
-      const ergebnisBox = pr.entwurf ? `<p class="notice">Diese Prüfung ist noch offen – in Prüfung bei ${esc(pr.pruefer)} seit ${esc(fmtZeit(pr.begonnen_am))}. Was hier steht, ist der aktuelle Stand des Entwurfs.</p>`
+      const ergebnisBox = pr.entwurf ? `<p class="notice">Diese Prüfung ist noch offen – in Prüfung bei ${person(pr.pruefer)} seit ${esc(fmtZeit(pr.begonnen_am))}. Was hier steht, ist der aktuelle Stand des Entwurfs.</p>`
         : `<div class="mat-spalten"><section class="section"><h2>Ergebnis</h2><p class="mat-ergebnis-zeile">${ergebnisMarke(pr.ergebnis)}</p><dl class="mat-daten">
           <dt>Prüftag</dt><dd>${esc(fmtTag(pr.datum))}</dd>
           ${pr.naechste ? `<dt>Nächste Prüfung</dt><dd><strong>${esc(fmtTag(pr.naechste))}</strong></dd>` : ""}
           ${pr.grund ? `<dt>Grund</dt><dd>${esc(pr.grund)}</dd>` : ""}
           ${pr.bemerkung ? `<dt>Bemerkung</dt><dd class="mat-text">${esc(pr.bemerkung)}</dd>` : ""}
-          <dt>${pr.art === "aussonderung" ? "Ausgeführt von" : "Prüfer"}</dt><dd>${esc(pr.pruefer || "–")}${pr.urkunde ? ` · Urkundennummer ${esc(pr.urkunde)}` : ""}</dd>
+          <dt>${pr.art === "aussonderung" ? "Ausgeführt von" : "Prüfer"}</dt><dd>${person(pr.pruefer || "–")}${pr.urkunde ? ` · <span class="mat-ganz">Urkundennummer ${esc(pr.urkunde)}</span>` : ""}</dd>
           ${pr.basis_id ? `<dt>Grundlage</dt><dd><a href="/materialablage/pruefung/${pr.basis_id}">Prüfung vom Tag der Aussonderung</a></dd>` : ""}
           <dt>Abgeschlossen</dt><dd>${esc(fmtZeit(pr.abgeschlossen_am))}</dd></dl></section>${protokollHtml()}</div>`;
       return `${ergebnisBox}
@@ -5788,12 +6051,11 @@
         <div class="mat-protokoll-kopf"><span class="mat-protokoll-id mat-hash">${esc(p.id)}</span>
           <a class="btn secondary small" href="${esc(p.url)}" target="_blank" rel="noopener">Protokoll (PDF)</a></div>
         <dl class="mat-daten">
-          <dt>Festgeschrieben</dt><dd>${esc(fmtZeit(p.festgeschrieben))}${p.anmeldung ? ` von ${esc(p.anmeldung)}` : ""}</dd>
-          <dt>Prüfsumme</dt><dd><span class="small muted">SHA-256 (erste ${esc(p.bytes)} Bytes)</span><br>${summeKnopf(p.sha256)}</dd>
+          <dt>Festgeschrieben</dt><dd>${esc(fmtZeit(p.festgeschrieben))}${p.anmeldung ? ` von ${person(p.anmeldung)}` : ""}</dd>
+          <dt>Prüfsumme${infoKnopf("Prüfsumme", PRUEFSUMME_INFO)}</dt><dd><span class="small muted">SHA-256 (erste ${esc(p.bytes)} Bytes)</span><br>${summeKnopf(p.sha256)}</dd>
           ${pr.unterschrift ? `<dt>Unterschrift</dt><dd><img class="mat-us-bild" src="${esc(pr.unterschrift)}" alt="Unterschrift von ${esc(pr.pruefer || "")}"></dd>` : ""}
           ${aussonderungHtml()}
-        </dl>
-        <p class="help">Die Prüfsumme steht im Fuß jeder Seite des PDFs. Ob eine Datei unverändert ist, zeigt die <a href="/materialablage/pruefen">Prüfseite</a>.</p>${nein}</section>`;
+        </dl>${nein}</section>`;
     }
 
     function bearbeitenHtml() {
@@ -5992,7 +6254,7 @@
           <dt>Ergebnis</dt><dd>${ergebnisMarke(daten.ergebnis)}${maengel ? ` <span class="small">mit ${plural(maengel, "Mangel", "Mängeln")}</span>` : ""}</dd>
           ${daten.ergebnis === "einsatzbereit" ? `<dt>Nächste Prüfung</dt><dd><strong>${esc(fmtTag(daten.next_due_on || pr.vorschlag_naechste))}</strong></dd>` : ""}
           ${daten.grund ? `<dt>Grund</dt><dd>${esc(daten.grund)}</dd>` : ""}
-          <dt>Prüfer</dt><dd>${esc(pr.pruefer || "–")}${pr.urkunde ? ` · Urkundennummer ${esc(pr.urkunde)}` : ""}</dd>
+          <dt>Prüfer</dt><dd>${person(pr.pruefer || "–")}${pr.urkunde ? ` · <span class="mat-ganz">Urkundennummer ${esc(pr.urkunde)}</span>` : ""}</dd>
           <dt>Unterschrift</dt><dd id="fs-us">${usZeile(bild)}</dd>
         </dl>
         ${zuHaken.length ? `<fieldset class="mat-fs-maengel"><legend>Gemeldete Mängel</legend>
@@ -6264,7 +6526,7 @@
       let zustand;
       let knopf = "";
       if (a.zustand === "erledigt") {
-        const wann = `${esc(fmtTag(a.pruefung.datum))}, ${esc(a.pruefung.pruefer)}`;
+        const wann = `${esc(fmtTag(a.pruefung.datum))}, ${person(a.pruefung.pruefer)}`;
         zustand = `${ergebnisMarke(a.pruefung.ergebnis)} ${a.pruefung.id ? `<a class="small" href="/materialablage/pruefung/${a.pruefung.id}">${wann}</a>` : `<span class="small">${wann}</span>`}`;
       } else if (a.zustand === "ausgenommen") {
         zustand = `<span class="badge grey">ausgenommen</span> <span class="small">${esc(a.ausnahme.grund)}</span> <span class="muted small">(${esc(a.ausnahme.von || "")})</span>`;
@@ -6272,7 +6534,7 @@
       } else if (a.zustand === "nicht_geprueft") {
         zustand = '<span class="badge grey">nicht geprüft</span>';
       } else if (a.zustand === "in_pruefung") {
-        zustand = `<span class="badge">in Prüfung</span>${a.entwurf ? ` <span class="small">bei ${esc(a.entwurf.pruefer)} seit ${esc(fmtZeit(a.entwurf.seit))}</span>` : ""}`;
+        zustand = `<span class="badge">in Prüfung</span>${a.entwurf ? ` <span class="small">bei ${person(a.entwurf.pruefer)} seit ${esc(fmtZeit(a.entwurf.seit))}</span>` : ""}`;
         if (a.entwurf && a.entwurf.eigen && ad.pruefen) knopf = `<a class="btn secondary small" href="/materialablage/pruefung/${a.entwurf.id}">Weiter prüfen</a>`;
         else if (a.entwurf && ad.verwalten && d.offen) knopf = `<button type="button" class="btn secondary small" data-act="freigeben" data-id="${a.entwurf.id}" data-wer="${esc(a.entwurf.pruefer)}">Reservierung aufheben</button>`;
       } else {
@@ -6306,16 +6568,18 @@
       const zustaende = d.offen ? [["", "alle"], ["offen", "offen"], ["in_pruefung", "in Prüfung"], ["erledigt", "erledigt"], ["ausgenommen", "ausgenommen"]]
         : [["", "alle"], ["erledigt", "erledigt"], ["ausgenommen", "ausgenommen"]].concat(z.nicht_geprueft ? [["nicht_geprueft", "nicht geprüft"]] : []);
       seitenTitel(d.titel);
-      inhalt.innerHTML = `<div class="mat-pfad">${pfadHtml(['<a href="/materialablage/pruefungen">Prüfungen</a>', "<span>Prüfdurchgang</span>"])}</div>
+      // Ein beendeter Durchgang steht unter „Abgeschlossene Prüfdurchgänge“ – die Brotkrume führt dorthin zurück.
+      inhalt.innerHTML = `<div class="mat-pfad">${pfadHtml(['<a href="/materialablage/pruefungen">Prüfungen</a>', d.offen ? "" : '<a href="/materialablage/durchgaenge">Abgeschlossene Prüfdurchgänge</a>', "<span>Prüfdurchgang</span>"])}</div>
         <div class="page-head"><h1>${esc(d.titel)} ${d.offen ? '<span class="badge">offen</span>' : `<span class="badge grey">${d.abgebrochen ? "abgebrochen" : "abgeschlossen"}</span>`}</h1>
           <div class="btn-row">${d.offen && darf ? `<button class="btn secondary" data-act="abbrechen">Durchgang abbrechen</button>
             <button class="btn" data-act="schliessen" ${d.abschliessbar ? "" : 'disabled aria-describedby="dg-abschluss"'}>Durchgang abschließen</button>` : ""}
             ${!d.offen && d.protokoll ? `<a class="btn secondary" href="${esc(d.protokoll.url)}" target="_blank" rel="noopener">Sammelprotokoll (PDF)</a>` : ""}
             ${!d.offen && (d.set_protokolle || []).length ? `<a class="btn secondary" href="/materialablage/durchgang/${d.id}/protokolle.zip">Alle Protokolle (ZIP)</a>` : ""}</div></div>
-        <p>Ordner <a href="/materialablage/ordner/${d.folder_id}">${esc(d.ordner)}</a> · eröffnet ${esc(fmtTag(d.eroeffnet_am))} von ${esc(d.eroeffnet_von || "–")}
-          ${d.offen ? "" : ` · ${d.abgebrochen ? "abgebrochen" : "abgeschlossen"} ${esc(fmtTag(d.geschlossen_am))} von ${esc(d.geschlossen_von || "–")}`}</p>
+        <p>Ordner <a href="/materialablage/ordner/${d.folder_id}">${esc(d.ordner)}</a> · eröffnet ${esc(fmtTag(d.eroeffnet_am))} von ${person(d.eroeffnet_von || "–")}
+          ${d.offen ? "" : ` · ${d.abgebrochen ? "abgebrochen" : "abgeschlossen"} ${esc(fmtTag(d.geschlossen_am))} von ${person(d.geschlossen_von || "–")}`}</p>
         ${d.protokoll ? `<p class="mat-protokoll-zeile">Sammelprotokoll <strong class="mat-hash">${esc(d.protokoll.id)}</strong> · festgeschrieben ${esc(fmtZeit(d.protokoll.festgeschrieben))}
-          · SHA-256 (erste ${esc(d.protokoll.bytes)} Bytes) ${summeKnopf(d.protokoll.sha256)} · <a href="/materialablage/pruefen">auf der Prüfseite prüfen</a></p>`
+          · Prüfsumme${infoKnopf("Prüfsumme", (d.set_protokolle || []).length ? 'Die Prüfsumme steht im Fuß jeder Seite des PDFs, ebenso in jedem Set-Protokoll. Ob eine Datei unverändert ist, zeigt die <a href="/materialablage/pruefen">Prüfseite</a>.' : PRUEFSUMME_INFO)}
+          <span class="small muted">SHA-256 (erste ${esc(d.protokoll.bytes)} Bytes)</span> ${summeKnopf(d.protokoll.sha256)}</p>`
           : d.offen ? "" : '<p class="small muted">Vor Einführung des Festschreibens geschlossen – ohne Sammelprotokoll.</p>'}
         ${(d.set_protokolle || []).length ? `<section class="section"><h2>Set-Protokolle</h2>${setProtokolleHtml(d.set_protokolle)}</section>` : ""}
         <div class="mat-kachelrahmen"><div class="mat-kacheln mat-rundenzahlen">${zustaende.map(([k, t]) => `<div class="mat-kachel z-${k || "gesamt"}"><strong>${z[k || "gesamt"]}</strong><span>${k ? t : "Artikel"}</span></div>`).join("")}</div></div>
@@ -6323,7 +6587,7 @@
         ${d.offen ? `<p class="help" id="dg-abschluss">${d.abschliessbar || !rest ? "" : `<strong>Noch ${plural(rest, "Artikel", "Artikel")} offen oder in Prüfung.</strong> `}Jeder öffnet seinen Artikel mit „Prüfen“ und reserviert ihn damit – die anderen sehen „in Prüfung bei …“. Abschließen geht, sobald jeder Artikel geprüft oder mit Grund ausgenommen ist. Beim Abschließen entsteht das Sammelprotokoll mit allen Prüfern${d.set_ordner && d.set_ordner.anzahl ? ` – dazu für jedes Set mit geprüften Artikeln ein eigenes Set-Protokoll (hier bis zu ${d.set_ordner.anzahl}; Sets mit Geprüftem bisher: ${d.set_ordner.mit_pruefung})` : ""}.</p>` : ""}
         <div class="c-tabs mat-filter">${zustaende.map(([f, t]) => `<button type="button" data-act="filter" data-f="${f}" class="${f === filter ? "sel" : ""}">${esc(t)}${f ? ` (${z[f]})` : ""}</button>`).join("")}</div>
         ${liste.length ? `${kartenKopf(DURCHGANG_SORT, s)}<table class="list mat-tabelle mat-karten mat-runde"><thead><tr>${sortKopf("Inventar-Nr.", "inventar", s)}${sortKopf("Hersteller", "hersteller", s, { klasse: "mat-schmal-weg" })}${sortKopf("Produkt", "produkt", s, { vor: kopfZusatz("Hersteller", "hersteller", s, "schmal"), nach: kopfZusatz("Ablage", "ablage", s, "eng") })}${sortKopf("Ablage", "ablage", s, { klasse: "mat-eng-weg" })}${sortKopf("Stand", "stand", s)}${sortKopf("Status", "status", s)}<th></th></tr></thead><tbody>${liste.map(zeile).join("")}</tbody></table>` : leer("Keine Artikel in dieser Auswahl.")}
-        ${d.pruefer.length ? `<section class="section"><h2>Prüfer in diesem Durchgang</h2><ul>${d.pruefer.map((x) => `<li>${esc(x.name)}${x.urkunde ? ` · Urkundennummer ${esc(x.urkunde)}` : ""} – ${plural(x.anzahl, "Prüfung", "Prüfungen")}</li>`).join("")}</ul></section>` : ""}`;
+        ${d.pruefer.length ? `<section class="section"><h2>Prüfer in diesem Durchgang</h2><ul>${d.pruefer.map((x) => `<li>${person(x.name)}${x.urkunde ? ` · <span class="mat-ganz">Urkundennummer ${esc(x.urkunde)}</span>` : ""} – ${plural(x.anzahl, "Prüfung", "Prüfungen")}</li>`).join("")}</ul></section>` : ""}`;
     }
     async function neu() { await laden(); zeichnen(); }
     aktionen = {
@@ -6410,11 +6674,11 @@
   // Im Produktdialog: was der Melder wusste – zum Nachschlagen, während die Felder schon vorbelegt sind.
   // Für welchen Ordner gemeldet wurde: der Pfad, wenn das Konto den Ordner sieht – sonst nur die Gliederung (Phase 2).
   const meldeOrdner = (m) => (!m.ordner ? "" : m.ordner.pfad ? m.ordner.pfad : m.ordner.gliederung ? `Gliederung ${m.ordner.gliederung}` : "");
-  const meldeKasten = (m) => `<div class="mat-meldekasten"><p class="small">Gemeldet von ${esc(m.created_by_name || "–")} am ${esc(fmtTag(m.created_at))}${meldeOrdner(m) ? ` für ${esc(meldeOrdner(m))}` : ""}</p>${meldeDetails(m, "Bemerkung des Melders")}</div>`;
+  const meldeKasten = (m) => `<div class="mat-meldekasten"><p class="small">Gemeldet von ${person(m.created_by_name || "–")} am ${esc(fmtTag(m.created_at))}${meldeOrdner(m) ? ` für ${esc(meldeOrdner(m))}` : ""}</p>${meldeDetails(m, "Bemerkung des Melders")}</div>`;
 
   // bearbeiten: die Material-Verwaltung in der Liste aller Meldungen – nur sie bekommt die Knöpfe zum Abarbeiten.
   function meldeKarte(m, bearbeiten) {
-    const wer = (name) => (name ? ` von ${esc(name)}` : "");
+    const wer = (name) => (name ? ` von ${person(name)}` : "");
     const knoepfe = [];
     if (bearbeiten && m.status === "offen") {
       knoepfe.push(`<button type="button" class="btn secondary small" data-act="anlegen" data-id="${m.id}">Produkt anlegen</button>`,
@@ -6501,7 +6765,7 @@
   /* --- Änderungsanträge im Bestand (Wunsch vom 24.10.2026) ---------------------------------------------------------
      Die eigenen Anträge und die, die das Konto als Materialwart des Ordners entscheidet (eigene Freigabe „verwalten“
      dort oder darüber – die Material-Verwaltung nur mit so einer Freigabe). Je Sammelantrag eine Karte; graue Knöpfe
-     „Bestätigen …“ und „Ablehnen …“ nur, wenn das Konto entscheiden darf, „Zurückziehen …“ am eigenen offenen – der rote
+     „Bestätigen“ und „Ablehnen“ nur, wenn das Konto entscheiden darf, „Zurückziehen“ am eigenen offenen – der rote
      Hauptknopf steht erst in der Rückfrage (Knopfregel). */
   async function antraegeSeite() {
     let filter = DATEN.status || null;
@@ -6534,7 +6798,7 @@
   const antragMarke = (st) => `<span class="mat-mstatus m-${esc(st)}">${esc(ANTRAG_STATUS[st] || st)}</span>`;
   function antragKarte(x) {
     const art = x.artikel;
-    const wer = (name) => (name ? ` von ${esc(name)}` : "");
+    const wer = (name) => (name ? ` von ${person(name)}` : "");
     const offen = x.status === "offen";
     // Bestätigen geht nur, solange der Artikel alle alten Werte trägt, nicht ausgesondert ist und der Antrag nicht das
     // Herstelldatum leeren will (gibt es seit dem 21.10.2026 nicht mehr – ältere offene nur noch ablehnen).
@@ -6542,9 +6806,9 @@
     const nurAblehnen = art.lock_state === "ausgesondert" ? "Der Artikel ist inzwischen ausgesondert – der Antrag lässt sich nur noch ablehnen."
       : x.entfernen ? "Ein Herstelldatum lässt sich nicht mehr entfernen – der Antrag lässt sich nur noch ablehnen."
         : "Der Artikel trägt inzwischen nicht mehr alle alten Werte – der Antrag lässt sich nur noch ablehnen.";
-    const knoepfe = [x.entscheiden && geht ? `<button type="button" class="btn secondary small" data-act="bestaetigen" data-id="${x.id}">Bestätigen …</button>` : "",
-      x.entscheiden ? `<button type="button" class="btn secondary small" data-act="antrag-ablehnen" data-id="${x.id}">Ablehnen …</button>` : "",
-      x.eigen ? `<button type="button" class="btn secondary small" data-act="antrag-zurueck" data-id="${x.id}">Zurückziehen …</button>` : ""].join("");
+    const knoepfe = [x.entscheiden && geht ? `<button type="button" class="btn secondary small" data-act="bestaetigen" data-id="${x.id}">Bestätigen</button>` : "",
+      x.entscheiden ? `<button type="button" class="btn secondary small" data-act="antrag-ablehnen" data-id="${x.id}">Ablehnen</button>` : "",
+      x.eigen ? `<button type="button" class="btn secondary small" data-act="antrag-zurueck" data-id="${x.id}">Zurückziehen</button>` : ""].join("");
     return `<article class="mat-meldung mat-antrag m-${esc(x.status)}">
       <div class="mat-meldung-kopf"><h2><a href="/materialablage/artikel/${art.id}">${esc(art.inventory_no)}</a> <span class="mat-antrag-produkt">${nameHtml(art.produkt)}${zusatzHtml(art.produkt)}</span></h2>${antragMarke(x.status)}${art.demo ? ' <span class="badge grey">DEMO</span>' : ""}</div>
       <p class="muted small">Antrag Nr. ${x.id} · beantragt${wer(x.antragsteller)} am ${esc(S.fmtDate(x.created_at))}${art.pfad || art.gliederung ? ` · ${esc(art.pfad || art.gliederung)}` : ""}${x.eigen && x.entscheiden ? " · dein eigener Antrag" : ""}</p>
@@ -6566,7 +6830,7 @@
     dialog(`<h2>Änderung bestätigen</h2>
       <p>${esc(art.inventory_no)} – ${nameHtml(art.produkt)}${zusatzHtml(art.produkt)}</p>
       ${antragAenderungen(x)}
-      <p class="small">Beantragt von ${esc(x.antragsteller || "–")} am ${esc(S.fmtDate(x.created_at))}: <span class="mat-text">${esc(x.begruendung || "")}</span></p>
+      <p class="small">Beantragt von ${person(x.antragsteller || "–")} am ${esc(S.fmtDate(x.created_at))}: <span class="mat-text">${esc(x.begruendung || "")}</span></p>
       ${antragRueckruf(x)}
       <p class="help">Alle Änderungen stehen danach sofort am Artikel; Journal und Lebenslauf zeigen sie mit beiden Namen. Festgeschriebene Protokolle behalten die alten Werte.${folgen ? " Lebensende, Länge und nächste Prüfung ziehen nach." : ""}</p>
       <label for="ba-antwort">Anmerkung für den Antragsteller (optional, steht in seiner Mail)</label><textarea id="ba-antwort" rows="2" maxlength="1000"></textarea>
@@ -6586,7 +6850,7 @@
   function antragAblehnenDialog(x, danach) {
     const art = x.artikel;
     dialog(`<h2>Antrag ablehnen</h2>
-      <p>${esc(art.inventory_no)}, beantragt von ${esc(x.antragsteller || "–")}:</p>
+      <p>${esc(art.inventory_no)}, beantragt von ${person(x.antragsteller || "–")}:</p>
       ${antragAenderungen(x)}
       <label for="aa-antwort">Begründung (Pflicht, bekommt der Antragsteller per Mail)</label>
       <textarea id="aa-antwort" rows="3" maxlength="1000" placeholder="z. B. Nummer auf dem Etikett stimmt mit der gespeicherten überein"></textarea>
@@ -6642,7 +6906,7 @@
 
   function ablehnenDialog(m, danach) {
     dialog(`<h2>Meldung ablehnen</h2>
-      <p>„${esc(meldungName(m))}“, gemeldet von ${esc(m.created_by_name || "–")}</p>
+      <p>„${esc(meldungName(m))}“, gemeldet von ${person(m.created_by_name || "–")}</p>
       <label for="ab-antwort">Begründung (bekommt der Melder per Mail)</label>
       <textarea id="ab-antwort" rows="3" maxlength="1000" placeholder="z. B. gehört nicht ins Modul, steht unter anderem Namen im Katalog"></textarea>
       <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button><button class="btn danger" id="ab-ok" type="button">Ablehnen</button></div>`,
@@ -6697,7 +6961,7 @@
         <div><label for="me-norm">Norm</label><input type="text" id="me-norm" maxlength="200" placeholder="z. B. EN 362" value="${esc(v.norm || "")}" ${TASTATUR_NUMMER}></div></div>
       <label for="me-kat">Kategorie</label><select id="me-kat"><option value="">– weiß ich nicht –</option>${kategorieOptionen(kats, v.category_id || null)}</select>
       <label for="me-links">Links</label><textarea id="me-links" rows="3" ${TASTATUR_ADRESSE} placeholder="https://… – je Zeile eine Adresse: Herstellerseite, Gebrauchsanleitung, Händler"></textarea>
-      <div class="mat-feldkopf">Fotos (bis zu 3)</div>${dateiKnopf("me-fotos", 'Fotos wählen …', "image/*", true)}
+      <div class="mat-feldkopf">Fotos (bis zu 3)</div>${dateiKnopf("me-fotos", 'Fotos wählen', "image/*", true)}
       <div class="help">Etikett oder Typenschild – darauf stehen meist Hersteller, Modell, Norm und Herstelldatum.</div>
       <label for="me-note">Bemerkung</label><textarea id="me-note" rows="3" maxlength="2000" placeholder="Was hilft beim Einpflegen? z. B. Größe, Farbe, wo gekauft">${esc(v.note || "")}</textarea>
       <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button><button class="btn" id="me-ok" type="button">Melden</button></div>`,
@@ -6809,7 +7073,7 @@
     const artikel = r.artikel || [];
     return `<article class="mat-rr-karte${r.aktiv ? "" : " beendet"}">
       <div class="mat-rr-kopf"><span class="mat-rr-marke">${r.aktiv ? "Rückruf" : "beendet"}</span><h3>${esc(r.title)}</h3></div>
-      <p class="small muted">angelegt von ${esc(r.created_by_name || "–")} am ${esc(S.fmtDate(r.created_at))}${r.aktiv ? "" : ` · beendet von ${esc(r.closed_by_name || "–")} am ${esc(S.fmtDate(r.closed_at))}`}</p>
+      <p class="small muted">angelegt von ${person(r.created_by_name || "–")} am ${esc(S.fmtDate(r.created_at))}${r.aktiv ? "" : ` · beendet von ${person(r.closed_by_name || "–")} am ${esc(S.fmtDate(r.closed_at))}`}</p>
       ${r.description ? `<p class="mat-text">${esc(r.description)}</p>` : ""}
       ${r.url ? `<p>${rrLink(r.url, `Meldung des Herstellers: ${kurzLink(r.url)}`)}</p>` : ""}
       <p><strong>Betroffen:</strong> ${r.alle ? "alle Artikel dieses Produkts" : `${serien.length === 1 ? "Seriennummer" : "Seriennummern"} ${serienText}`}</p>
@@ -6924,7 +7188,7 @@
   const IMPORT_ZU_GROSS = "Die Datei ist größer als 5 MB – bitte nur die Liste speichern (ohne Bilder und weitere Blätter) oder als CSV.";
   const IMPORT_FEHLT = "Ordne mindestens Hersteller und Modell (oder Artikelnummer) zu.";        // bestandsimport.FEHLT_ZUORDNUNG
   const IMPORT_NICHTS = "Nichts zu übernehmen – alles steht schon im Bestand oder ist erledigt.";  // bestandsimport.NICHTS
-  const IMPORT_PERSONEN = "Personen werden nicht übernommen – Artikel ordnest du im Ordner über „Zuordnen an …“ zu.";
+  const IMPORT_PERSONEN = "Personen werden nicht übernommen – Artikel ordnest du im Ordner über „Zuordnen“ zu.";
   const IMPORT_NEUBESCHRIFTEN = "Alte Inventarnummern stehen in der Bemerkung und sind nicht suchbar – die Artikel bitte neu beschriften. Eine Liste dafür liefert „Export“ im Ordner.";
   const IMPORT_OHNE_SERIENSPALTE = "Keine Spalte ist als Seriennummer zugeordnet. Steht die Seriennummer doch in einer Spalte, ordne sie oben unter „Spalten“ zu – dann braucht es kein Häkchen.";
   const IMPORT_CSV_SATZ = "Korrigieren, speichern und hier als neue Liste hochladen – die Zeilen werden dabei erledigt. Die Spalte „Nacharbeit-Nr.“ bitte nicht ändern.";
@@ -7140,7 +7404,7 @@
       const liste = b.zeilen.filter((x) => x.status === reiter);
       if (!liste.length) return leer("Keine Zeilen.");
       const teil = liste.slice(0, bis);
-      const weitere = liste.length > bis ? `<p><button type="button" class="btn secondary small" data-act="bi-weitere">weitere ${Math.min(IMPORT_SEITE, liste.length - bis)} von ${liste.length - bis} …</button></p>` : "";
+      const weitere = liste.length > bis ? `<p><button type="button" class="btn secondary small" data-act="bi-weitere">weitere ${Math.min(IMPORT_SEITE, liste.length - bis)} von ${liste.length - bis}</button></p>` : "";
       if (reiter === "angelegt") return `${angelegtTabelle(teil)}${weitere}`;
       const produkt = (x) => (x.produkt ? produktKurz(x.produkt) : x.angabe_text ? `<span class="muted">${esc(x.angabe_text)}</span>` : '<span class="muted">ohne Produktangabe</span>');
       return `<table class="list mat-tabelle mat-karten mat-import-zeilen">
@@ -7309,16 +7573,16 @@
       return `<h3 class="mat-unter">Produkte zuordnen</h3><div class="mat-na-karten">${na.gruppen.map((g, i) => {
         const m = g.meldung;
         const meldung = !m ? "" : m.status === "offen" ? "Gemeldet – die Material-Verwaltung nimmt das Produkt auf."
-          : m.status === "eingepflegt" ? `Eingepflegt: ${m.produkt ? produktKurz(m.produkt) : "–"} – „Übernehmen …“ legt die Artikel an.`
+          : m.status === "eingepflegt" ? `Eingepflegt: ${m.produkt ? produktKurz(m.produkt) : "–"} – „Übernehmen“ legt die Artikel an.`
             : `Abgelehnt${m.antwort ? `: ${esc(m.antwort)}` : ""}`;
-        const knoepfe = [`<button type="button" class="btn secondary small" data-act="na-gruppe-zuordnen" data-i="${i}">Produkt zuordnen …</button>`];
+        const knoepfe = [`<button type="button" class="btn secondary small" data-act="na-gruppe-zuordnen" data-i="${i}">Produkt zuordnen</button>`];
         // Ist schon ein Produkt zugeordnet (auch gerade erst im Katalog angelegt), braucht es kein Anlegen und Melden mehr –
-        // „Produkt zuordnen …“ ändert die Wahl.
+        // „Produkt zuordnen“ ändert die Wahl.
         // Konten ohne Katalogrecht melden das fehlende Produkt (vorbelegt aus der Nacharbeit, Wunsch vom 25.10.2026).
-        if (!g.produkt && DARF.katalog) knoepfe.push(`<button type="button" class="btn secondary small" data-act="na-anlegen" data-i="${i}">Im Katalog anlegen …</button>`);
-        else if (!g.produkt && (!m || m.status === "abgelehnt")) knoepfe.push(`<button type="button" class="btn secondary small" data-act="na-melden" data-i="${i}">Fehlendes Produkt melden …</button>`);
+        if (!g.produkt && DARF.katalog) knoepfe.push(`<button type="button" class="btn secondary small" data-act="na-anlegen" data-i="${i}">Im Katalog anlegen</button>`);
+        else if (!g.produkt && (!m || m.status === "abgelehnt")) knoepfe.push(`<button type="button" class="btn secondary small" data-act="na-melden" data-i="${i}">Fehlendes Produkt melden</button>`);
         // Zugeordnet (ganz oder zeilenweise) oder die Meldung eingepflegt: direkt übernehmen, ohne Anhaken und ohne CSV.
-        if (g.produkt || g.zugeordnet || (m && m.status === "eingepflegt")) knoepfe.push(`<button type="button" class="btn secondary small" data-act="na-uebernehmen" data-i="${i}">Übernehmen …</button>`);
+        if (g.produkt || g.zugeordnet || (m && m.status === "eingepflegt")) knoepfe.push(`<button type="button" class="btn secondary small" data-act="na-uebernehmen" data-i="${i}">Übernehmen</button>`);
         const zeilenweise = !g.produkt && g.zugeordnet ? ` · zeilenweise zugeordnet: ${g.zugeordnet} von ${g.offen}` : "";
         return `<div class="mat-na-karte"><p class="mat-na-angabe"><strong>${esc(angabeAus(g) || "ohne Angabe")}</strong> <span class="mat-na-art">${esc(g.produkt ? "zugeordnet" : PRODUKT_ART[g.art] || g.art)}</span></p>
           <p class="small">${plural(g.offen, "Zeile", "Zeilen")}${g.produkt ? ` · zugeordnet: <strong>${produktKurz(g.produkt)}</strong>` : ""}${zeilenweise}</p>
@@ -7370,9 +7634,9 @@
           <table class="list mat-tabelle mat-karten mat-na-zeilen"><thead><tr><th class="mat-wahlspalte"><label class="mat-wahl-feld"><input type="checkbox" class="mat-na-alle" aria-label="alle auf dieser Seite auswählen"></label></th>
             <th>Nacharbeit-Nr.</th><th>Angaben</th><th>Gründe</th><th>Werte</th></tr></thead>
             <tbody>${naZeilen.map(naZeileHtml).join("")}</tbody></table>` : leer("Keine offenen Zeilen mit diesem Grund.")}
-          ${naSeite < na.seiten ? '<p><button type="button" class="btn secondary small" data-act="na-weitere">weitere …</button></p>' : ""}
+          ${naSeite < na.seiten ? '<p><button type="button" class="btn secondary small" data-act="na-weitere">weitere</button></p>' : ""}
           <div class="mat-sammel" id="na-sammel" hidden><span><span id="na-sammel-n"></span> <button type="button" class="lnk" data-act="na-alle-offen" hidden></button></span>
-            <div class="btn-row"><button type="button" class="btn secondary small" data-act="na-zeilen-zuordnen">Produkt zuordnen …</button>
+            <div class="btn-row"><button type="button" class="btn secondary small" data-act="na-zeilen-zuordnen">Produkt zuordnen</button>
               <button type="button" class="btn secondary small" data-act="na-pruefen">Erneut prüfen</button>
               <button type="button" class="btn secondary small" data-act="na-verwerfen">Verwerfen</button></div></div>
         </div>
@@ -7456,7 +7720,7 @@
       });
     }
     // Erneut prüfen: erst das Ergebnis (schreibt nichts), dann auf Wunsch übernehmen. ziel: {zeilen} (Vorgabe: die
-    // Auswahl) oder {angabe} (die Karte – „Übernehmen …“). zugeordnet: Zahl der eben zugeordneten Zeilen – dann kommt der
+    // Auswahl) oder {angabe} (die Karte – „Übernehmen“). zugeordnet: Zahl der eben zugeordneten Zeilen – dann kommt der
     // Dialog direkt aus „Zuordnen“ und sagt das im Titel.
     async function nachpruefen(ziel, zugeordnet) {
       if (!ziel) {
@@ -7628,7 +7892,7 @@
       <p class="error mat-feld-fehler" id="mg-text-fehler" hidden></p>
       <div class="mat-feldkopf" id="mg-fotos-kopf">Fotos (bis zu ${MANGEL_MAX_FOTOS})</div>
       <div class="mat-mangel-fotowahl" role="group" aria-labelledby="mg-fotos-kopf">
-        <div class="mat-dateiwahl"><label class="btn secondary mat-bildwahl-knopf">Foto hinzufügen …<input type="file"
+        <div class="mat-dateiwahl"><label class="btn secondary mat-bildwahl-knopf">Foto hinzufügen<input type="file"
             id="mg-fotos" accept="image/*" multiple class="mat-datei" aria-describedby="mg-fotos-stand"></label>
           <span class="mat-dateiwahl-name" id="mg-fotos-stand" aria-live="polite"></span>
           <button type="button" class="btn secondary mat-dateiwahl-weg" id="mg-fotos-weg" hidden>Auswahl entfernen</button></div>
@@ -7738,7 +8002,7 @@
   // sperre: Sperrgrund aus einem anderen Grund als dem Mangel (Text, auch leer) – dann steht er als Zeile darin; null: nichts.
   function mangelBanner(m, sperre) {
     return `<div class="mat-banner mat-mangel-banner" role="note">
-      <p class="mat-mangel-titel">MANGEL GEMELDET am ${esc(tagZeit(m.created_at))}${m.melder ? ` · von ${esc(m.melder)}` : ""}</p>
+      <p class="mat-mangel-titel">MANGEL GEMELDET am ${esc(tagZeit(m.created_at))}${m.melder ? ` · von ${person(m.melder)}` : ""}</p>
       ${sperre === null || sperre === undefined ? "" : `<p class="mat-mangel-sperre"><strong>Außerdem gesperrt</strong>${sperre ? `: ${esc(sperre)}` : ""}.</p>`}
       ${mangelTextKurz(m, "mat-text mat-mangel-text")}
       ${mangelFotos(m, `Mangel vom ${S.fmtDate(m.created_at)}`)}
@@ -7750,7 +8014,7 @@
   function mangelErledigt(liste) {
     if (!liste.length) return "";
     return `<section class="section"><h2>Gemeldete Mängel</h2><details class="mat-mangel-alt"><summary>${plural(liste.length, "erledigte Meldung", "erledigte Meldungen")}</summary>
-      <ul class="mat-mangel-liste">${liste.map((m) => `<li><p class="small"><strong>${esc(tagZeit(m.created_at))}</strong>${m.melder ? ` · ${esc(m.melder)}` : ""}
+      <ul class="mat-mangel-liste">${liste.map((m) => `<li><p class="small"><strong>${esc(tagZeit(m.created_at))}</strong>${m.melder ? ` · ${person(m.melder)}` : ""}
           · erledigt am ${esc(S.fmtDate(m.erledigt.am))} durch <a href="/materialablage/pruefung/${Number(m.erledigt.pruefung)}">${m.erledigt.art === "aussonderung" ? "Aussonderung" : "Freiprüfung"}</a></p>
         ${mangelText(m, "mat-text")}${mangelFotos(m, `Mangel vom ${S.fmtDate(m.created_at)}`)}</li>`).join("")}</ul></details></section>`;
   }
@@ -7758,7 +8022,7 @@
   // Hinweis in der Prüfung (Start und Entwurf): je offener Meldung, mit Text und Fotos.
   function mangelHinweis(liste, berichtigung) {
     return (liste || []).map((m) => `<div class="mat-banner mat-mangel-banner" role="note">
-      <p class="mat-mangel-titel">GEMELDETER MANGEL vom ${esc(tagZeit(m.created_at))}${m.melder ? ` (von ${esc(m.melder)})` : ""}</p>
+      <p class="mat-mangel-titel">GEMELDETER MANGEL vom ${esc(tagZeit(m.created_at))}${m.melder ? ` (von ${person(m.melder)})` : ""}</p>
       ${mangelText(m, "mat-text mat-mangel-text")}
       ${mangelFotos(m, `Mangel vom ${S.fmtDate(m.created_at)}`)}
       ${wiederOffen(m)}
@@ -7776,7 +8040,7 @@
         <span class="mat-mangel-marke">Mangel</span>
         <span class="mat-rr-was"><a href="/materialablage/artikel/${Number(m.item_id)}"><strong>${esc(m.inventory_no)}</strong></a> · ${nameHtml(m.produkt)}${zusatzHtml(m.produkt)}</span>
         ${m.inhalt ? `<span class="mat-mangel-kurz">${esc(m.kurz)}</span>` : ""}
-        <span class="small">gemeldet am ${esc(S.fmtDate(m.created_at))}${m.melder ? ` · ${esc(m.melder)}` : ""}${m.fotos ? ` · ${plural(m.fotos, "Foto", "Fotos")}` : ""}</span></li>`).join("")}</ul>
+        <span class="small">gemeldet am ${esc(S.fmtDate(m.created_at))}${m.melder ? ` · ${person(m.melder)}` : ""}${m.fotos ? ` · ${plural(m.fotos, "Foto", "Fotos")}` : ""}</span></li>`).join("")}</ul>
       ${gesamt > liste.length ? `<p class="small"><a href="/materialablage/pruefungen?status=gesperrt">… und ${gesamt - liste.length} weitere</a></p>` : ""}</section>`;
   }
 
@@ -7785,7 +8049,7 @@
     ? ` – davon ${k.dringend} nicht einsatzbereit` : ""}. <a href="/materialablage/meine-psa">Meine PSA ansehen →</a></p>` : "");
 
   /* Eine Karte in „Meine PSA“. Banner oben (Mangel, Sperre, überfällig, Lebensdauer, neu, DEMO) – mit dem, was die
-     Person tun soll; dann Bild, Nummern, Daten, Dokumente, Rückruf, die eigenen Meldungen und „Mangel melden …“. */
+     Person tun soll; dann Bild, Nummern, Daten, Dokumente, Rückruf, die eigenen Meldungen und „Mangel melden“. */
   // Das Banner einer Karte – höchstens eins, das dringendste.
   function psaBanner(k) {
     if (k.mangel) return ["mat-mangel-banner", `Mangel gemeldet am ${S.fmtDate(k.mangel.seit)} – nicht verwenden. Bring sie deinem Materialwart; ein Prüfer muss sie ansehen.`];
@@ -7839,7 +8103,7 @@
           <p class="mat-text">${esc(m.description)}</p>${mangelFotos(m, `Deine Meldung vom ${S.fmtDate(m.created_at)}`)}</li>`).join("")}</ul></details>` : ""}
       ${offen ? `<p class="help" id="psa-schon-${Number(k.id)}">Du hast schon gemeldet – ein Prüfer sieht es sich an. Ergänzungen bitte direkt an den Materialwart.</p>` : ""}
       <div class="btn-row mat-psa-knoepfe">
-        <button class="btn secondary" type="button" data-act="mangel" data-id="${Number(k.id)}"${offen ? ' disabled aria-describedby="psa-schon-' + Number(k.id) + '"' : ""}>Mangel melden …</button>
+        <button class="btn secondary" type="button" data-act="mangel" data-id="${Number(k.id)}"${offen ? ' disabled aria-describedby="psa-schon-' + Number(k.id) + '"' : ""}>Mangel melden</button>
         ${k.artikel_link ? `<a href="/materialablage/artikel/${Number(k.id)}">Zum Artikel</a>` : ""}</div>
     </article>`;
   }
@@ -7875,7 +8139,7 @@
   }
 
   const ANSICHTEN = { dashboard, pruefungen, bestand, ordner, artikel, artikel_neu: artikelNeu, katalog, produkt, formular, suche,
-                      meldungen, pruefung_neu: pruefungNeu, pruefung: pruefungAnsicht, durchgang: durchgangAnsicht, fremd,
+                      meldungen, pruefung_neu: pruefungNeu, pruefung: pruefungAnsicht, durchgang: durchgangAnsicht, durchgaenge: durchgaengeArchiv, fremd,
                       meine_psa: meinePsa, bestandsimport, bericht, antraege: antraegeSeite };
   leisteLaden();
   zeigen(ANSICHTEN[ANSICHT] || dashboard);

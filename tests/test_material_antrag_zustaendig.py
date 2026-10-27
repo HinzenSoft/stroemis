@@ -744,7 +744,7 @@ def test_seiten():
 def test_oberflaeche_statisch():
     """material.js: Knopf „Änderungsanträge“ mit Blase auf der Bestandsseite, eigene Seite mit Filter und Karten (graue
     Knöpfe, Rückfragen mit einem roten Knopf bzw. „Ablehnen“ endgültig), Katalog → Meldungen ohne Bereichswahl, Blase
-    dort nur Produktmeldungen; Dialog „Bearbeiten“ mit schreibgeschütztem Block und grauem „Änderung beantragen …“,
+    dort nur Produktmeldungen; Dialog „Bearbeiten“ mit schreibgeschütztem Block und grauem „Änderung beantragen“,
     Antragsdialog mit allen Feldern und EINEM roten „Antrag senden“; Prüfer bearbeiten die drei direkten Felder; kein
     Hilfetext unter Knöpfen; kein btn ghost."""
     js = open(os.path.join(WURZEL, "app/material/static/material.js"), encoding="utf-8").read()
@@ -766,7 +766,7 @@ def test_oberflaeche_statisch():
     zaehlen = js[js.index("async function meldungenZaehlen(el)"):js.index("async function meldungenZaehlen(el)") + 600]
     assert "antraege_offen" not in zaehlen
     dlg = js[js.index("function artikelDialog(a)"):js.index("/* --- Änderungsanträge")]
-    assert "Seit der ersten Prüfung fest – Teil des Prüfnachweises." in dlg and 'id="ad-antrag">Änderung beantragen …' in dlg
+    assert "Seit der ersten Prüfung fest – Teil des Prüfnachweises." in dlg and 'id="ad-antrag">Änderung beantragen<' in dlg
     assert "herstellung_nachtragbar" not in js and "nachtragen" not in dlg
     antrag_dlg = js[js.index("function antragDialog(a)"):js.index("/* --- Artikel anlegen")]
     assert antrag_dlg.count('class="btn"') == 1 and '<button class="btn" id="aa-ok" type="button">Antrag senden</button>' in antrag_dlg
@@ -779,7 +779,7 @@ def test_oberflaeche_statisch():
     artikel = js[js.index("async function artikel()"):js.index("function artikelDialog(a)")]
     assert "Seriennummer und Herstellung stehen seit der ersten Prüfung fest – eine Abweichung beantragst du" not in js
     assert "darf.pruefen" in artikel and 'data-act="entscheiden"' not in artikel
-    assert '/materialablage/bestand/antraege">Entscheiden …</a>' in js
+    assert '/materialablage/bestand/antraege">Entscheiden</a>' in js
     assert "btn ghost" not in js
     assert ".mat-bereiche" not in css
     assert "antraege: \"bestand\"" in js and "antraege: antraegeSeite" in js

@@ -54,7 +54,7 @@ STAMMDATEN_FEST = ("Seit der ersten Prüfung stehen die Stammdaten fest – sie 
 # Produkt am Artikel (Entscheidung zu L2b Nr. 29, 23.10.2026): direkt änderbar bis zur ersten abgeschlossenen Prüfung,
 # danach per Antrag (E4).
 PRODUKT_FEST = ("Das Produkt steht seit der ersten Prüfung fest – es steht im Prüfprotokoll. Einen Wechsel beantragst du "
-                "mit Begründung („Änderung beantragen …“).")
+                "mit Begründung („Änderung beantragen“).")
 # Freigabepflichtig nach der ersten Prüfung (E1) und direkt änderbar – auch durch Prüfer (E2). Zusammen ARTIKEL_FELDER.
 FREIGABEPFLICHTIG = ("product_id", "serial_no", "manufactured_on", "purchased_on", "first_use_on", "retire_by",
                      "interval_months")
@@ -1064,7 +1064,7 @@ def artikel_json(i, voll=False):
         # den Artikel sehen) und – für den Materialwart – ob er jetzt aussondern darf und sonst warum nicht.
         out["aussonderung_empfohlen"] = pruefung.aussonderung_empfohlen(i)
         out["aussondern"] = pruefung.aussondern_moeglich(i) if darf["verwalten"] else None
-        # Die eigene offene Meldung (Tag) – dann ist „Mangel melden …“ ausgegraut statt erst nach dem Absenden 409.
+        # Die eigene offene Meldung (Tag) – dann ist „Mangel melden“ ausgegraut statt erst nach dem Absenden 409.
         eigen = mangel.eigene_offene(i["id"])
         out["mangel_eigen_offen"] = eigen["created_at"] if eigen else None
         out["darf_loeschen"] = not out["pruefungen"] and not out["maengel"]

@@ -228,7 +228,7 @@
     box.innerHTML = `
       <button type="button" data-a="child">Unterseite anlegen</button>
       <button type="button" data-a="fav">${page.favorite ? "Von der Merkliste nehmen" : "Zur Merkliste"}</button>
-      <button type="button" data-a="icon">Symbol ändern …</button>
+      <button type="button" data-a="icon">Symbol ändern</button>
       <button type="button" data-a="dup">Duplizieren</button>
       <button type="button" data-a="export">Als Markdown herunterladen</button>
       <button type="button" data-a="del" class="danger">In den Papierkorb</button>`;
@@ -691,7 +691,7 @@
         <div><strong>${r.icon ? esc(r.icon) + " " : ""}${esc(r.title)}</strong>
           <span class="muted small">${r.children ? `· ${r.children} Unterseite${r.children > 1 ? "n" : ""} ` : ""}· gelöscht ${fmtDate(r.deleted_at, true)}${r.created_by_name ? " · " + esc(r.created_by_name) : ""}</span></div>
         <div class="btn-row">${r.can_restore
-          ? '<button class="btn secondary small" data-a="restore">Wiederherstellen</button><button class="btn secondary small" data-a="purge">Endgültig löschen …</button>'
+          ? '<button class="btn secondary small" data-a="restore">Wiederherstellen</button><button class="btn secondary small" data-a="purge">Endgültig löschen</button>'
           : '<span class="muted small">nur Ersteller oder Wiki-Verwaltung</span>'}</div>
       </li>`).join("")}</ul>`
       : '<p class="muted">Der Papierkorb ist leer.</p>'}
@@ -813,7 +813,7 @@
       // Umschreiben darf nur die Administration – am Ersteller hängen Rechte, nicht bloß ein Name.
       const darfWechseln = !!(STROEMIS.user && STROEMIS.user.rechte && STROEMIS.user.rechte.wiki === 2);
       box.innerHTML = (r.owner ? person(r.owner, "Ersteller") : "")
-        + (darfWechseln ? '<button class="lnk autor-wechsel" id="au-wechsel" type="button">Ersteller ändern …</button>' : "")
+        + (darfWechseln ? '<button class="lnk autor-wechsel" id="au-wechsel" type="button">Ersteller ändern</button>' : "")
         + (mit.length ? `<div class="autor-trenner"></div><div class="autor-titel">Mitwirkende</div>`
                         + mit.map((u) => person(u, "")).join("") : "");
       const w = box.querySelector("#au-wechsel");
@@ -987,13 +987,13 @@
     const box = document.createElement("div");
     box.className = "tree-menu";
     box.innerHTML = `
-      ${teilenImMenue ? '<button type="button" data-a="share">Teilen …</button>' : ""}
-      <button type="button" data-a="history">Verlauf …</button>
+      ${teilenImMenue ? '<button type="button" data-a="share">Teilen</button>' : ""}
+      <button type="button" data-a="history">Verlauf</button>
       <button type="button" data-a="fav">${p.favorite ? "Von der Merkliste nehmen" : "Zur Merkliste"}</button>
       <button type="button" data-a="watch">${p.watch ? "Nicht mehr beobachten" : "Bei Änderungen benachrichtigen"}</button>
       <button type="button" data-a="export">Als Markdown herunterladen</button>
       <button type="button" data-a="exportzip">Abschnitt als ZIP herunterladen</button>
-      ${p.can_publish ? '<button type="button" data-a="import">Seiten aus ZIP importieren …</button>' : ""}
+      ${p.can_publish ? '<button type="button" data-a="import">Seiten aus ZIP importieren</button>' : ""}
       <button type="button" data-a="print">Drucken / als PDF sichern</button>
       ${p.can_edit ? `<button type="button" data-a="template">${p.is_template ? "Nicht mehr als Vorlage" : "Als Vorlage anbieten"}</button>` : ""}
       <button type="button" data-a="dup">Duplizieren</button>
@@ -1061,7 +1061,7 @@
       <p class="help">Ein ZIP mit Markdown-Dateien, etwa aus „Abschnitt als ZIP herunterladen“. Unterordner werden Unterseiten,
         Bilder und Dokumente, auf die eine Seite verweist, kommen mit; Videos bitte einzeln hochladen. Vorhandene Seiten
         bleiben unverändert.</p>
-      <div class="dateiwahl"><label class="btn secondary">ZIP-Datei wählen …<input type="file" id="im-datei" class="dateiwahl-feld"
+      <div class="dateiwahl"><label class="btn secondary">ZIP-Datei wählen<input type="file" id="im-datei" class="dateiwahl-feld"
         accept=".zip,application/zip" aria-describedby="im-datei-name"></label>
         <span class="dateiwahl-name" id="im-datei-name" aria-live="polite">keine Datei gewählt</span></div>
       <label for="im-ziel">Einsortieren unter</label>
@@ -5025,10 +5025,10 @@
       const box = document.createElement("div");
       box.className = "tree-menu";
       box.innerHTML = `
-        <button type="button" data-a="suchen">Suchen und ersetzen … <span class="muted small">Strg+Umschalt+F</span></button>
+        <button type="button" data-a="suchen">Suchen und ersetzen <span class="muted small">Strg+Umschalt+F</span></button>
         <button type="button" data-a="klar">Formatierung entfernen <span class="muted small">Strg+\\</span></button>
         <button type="button" data-a="kopieren">Als Markdown kopieren <span class="muted small">Strg+Umschalt+C</span></button>
-        ${isNew ? "" : '<button type="button" data-a="verlauf">Verlauf …</button>'}`;
+        ${isNew ? "" : '<button type="button" data-a="verlauf">Verlauf</button>'}`;
       document.body.appendChild(box);
       const r = mehr.getBoundingClientRect();
       box.style.left = `${Math.max(8, Math.min(window.innerWidth - box.offsetWidth - 8, r.left))}px`;

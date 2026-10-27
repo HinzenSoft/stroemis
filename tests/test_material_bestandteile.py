@@ -777,7 +777,7 @@ def test_oberflaeche_statisch():
     assert "function doppeltePruefen(gruppe)" in js and "Diese Nummer steht schon an" in js
     assert js.index('class="mat-pnotiz-label"') < js.index("${nummern}</div>`;")
     assert '<fieldset class="mat-punkt-nummern">' in js
-    assert 'data-act="variante"><strong>Als Variante kopieren …</strong>' in js
+    assert 'data-act="variante"><strong>Als Variante kopieren</strong>' in js
     assert 'data-act="variante">Als Variante kopieren</button>' not in js
     assert "@container mat-seite (min-width: 900px) and (max-width: 979px)" in css and "mat-kat-zusatz" in js
     assert "btn ghost" not in js

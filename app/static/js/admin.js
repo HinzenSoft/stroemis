@@ -105,7 +105,7 @@
       <div class="request" data-id="${u.id}">
         <div><strong>${S.esc(u.name)}</strong> · ${S.esc(u.email)}<br><span class="small">${S.esc(u.gliederung)}${u.phone ? " · " + S.esc(u.phone) : ""} · angefragt ${S.fmtDate(u.created_at, true)}</span>
           ${u.reason ? `<div class="c-quote" style="margin-top:6px">${S.esc(u.reason)}</div>` : ""}</div>
-        <div class="btn-row"><button class="btn secondary small" data-act="approve">Freigeben</button><button class="btn secondary small" data-act="reject">Ablehnen …</button></div>
+        <div class="btn-row"><button class="btn secondary small" data-act="approve">Freigeben</button><button class="btn secondary small" data-act="reject">Ablehnen</button></div>
       </div>`).join("")}` : "";
     tbody.innerHTML = users.filter((u) => u.status !== "pending").map((u) => `
       <tr data-id="${u.id}" ${u.active ? "" : 'class="muted"'}>
@@ -119,8 +119,8 @@
           <button class="btn secondary small" data-act="edit">Bearbeiten</button>
           <details class="zeilenmenue"><summary class="btn secondary small" aria-haspopup="true">Mehr</summary>
             <div class="zeilenmenue-liste">
-              <button type="button" data-act="reset">Reset-Mail senden …</button>
-              ${u.id !== STROEMIS.user.id ? '<button type="button" data-act="delete">Löschen …</button>' : ""}
+              <button type="button" data-act="reset">Reset-Mail senden</button>
+              ${u.id !== STROEMIS.user.id ? '<button type="button" data-act="delete">Löschen</button>' : ""}
             </div></details>
         </div></td>
       </tr>`).join("");

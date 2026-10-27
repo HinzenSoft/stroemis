@@ -1246,7 +1246,7 @@ def test_berichtigte_freipruefung():
 
 
 def test_eigene_offene_am_artikel():
-    """B1: artikel.mangel_eigen_offen – der Tag der eigenen offenen Meldung (sonst null): „Mangel melden …“ ist dann
+    """B1: artikel.mangel_eigen_offen – der Tag der eigenen offenen Meldung (sonst null): „Mangel melden“ ist dann
     ausgegraut statt erst nach dem Absenden 409."""
     with post_mangel(), tempfile.TemporaryDirectory() as tmp:
         t = aufbau(tmp)
@@ -1294,7 +1294,9 @@ def test_oberflaeche_statisch():
     assert "Es ging keine Mail hinaus – sag deinem Materialwart Bescheid" in js and "r.mail ?" in js
     assert "btn ghost" not in js
     # Eingaben nur maskiert: Beschreibung, Melder, Kurztext.
-    for stelle in ("${esc(m.description)}", "${esc(m.melder)}", "${esc(m.kurz)}", "${esc(k.notes)}", "esc(k.lock_reason)", "esc(k.gliederung)"):
+    # Melder seit dem 27.10.2026 über person() (Name als Einheit) – person maskiert selbst mit esc.
+    assert 'const person = (n) => `<span class="mat-name">${esc(n)}</span>`;' in js
+    for stelle in ("${esc(m.description)}", "${person(m.melder)}", "${esc(m.kurz)}", "${esc(k.notes)}", "esc(k.lock_reason)", "esc(k.gliederung)"):
         assert stelle in js, stelle
     assert "${m.description}" not in js and "${m.melder}" not in js
     # Ohne Recht auf den Inhalt (nur lesen): statt Text ein Satz, im Kasten kein Kurztext (Entscheidung vom 21.10.2026).
@@ -1307,7 +1309,7 @@ def test_oberflaeche_statisch():
     assert "daten.maengel_gesehen = haken.filter((h) => h.checked)" in fs and "knopf.disabled = !alleAbgehakt();" in fs
     # Artikelseite: grauer Knopf, ausgegrautes Aussondern mit Erklärung. Die Erklärung zum Melden steht im Dialog, nicht
     # mehr unter den Knöpfen (Wunsch des Nutzers 23.10.2026).
-    assert "' data-act=\"mangel\"'}>Mangel melden …</button>" in js and "Sperren: ohne Meldung, mit Sperrgrund." not in js
+    assert "' data-act=\"mangel\"'}>Mangel melden</button>" in js and "Sperren: ohne Meldung, mit Sperrgrund." not in js
     assert "Mit Beschreibung und Fotos – Materialwarte und Prüfer bekommen eine Mail." in js[js.index("function mangelDialog("):]
     # Prüfung vor Auslieferung: eigene offene Meldung → ausgegraut mit Hilfezeile (B1), Zeile zu den Erinnerungen nur
     # mit Profilabschnitt (B2), Quittung fokussiert (B5), vorsichtige Mail-Quittung (L1), wieder offen (L2).

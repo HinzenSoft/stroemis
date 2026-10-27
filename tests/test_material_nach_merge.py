@@ -373,7 +373,7 @@ def test_rueckruf_still_beim_versand():
 
 def test_oberflaeche_statisch():
     """7 Journal am Telefon als Karten, 8 Mangeltext im Banner höchstens 100ch, 11 Reiter bei 344 px, 14 Verbesserungen
-    der Browserberichte (Artikelseite „Mehr“, „Löschen …“ der Produktseite im Menü, abgeschlossene Durchgänge zugeklappt,
+    der Browserberichte (Artikelseite „Mehr“, „Löschen“ der Produktseite im Menü, abgeschlossene Durchgänge zugeklappt,
     Grund am ausgegrauten „Durchgang abschließen“, Inventarnummer ohne Umbruch, Katalogimport lesbar, Meine PSA am
     Finger, Kontrast auf Rot-hell, Tokens, Begriffe)."""
     js, css = lies("app/material/static/material.js"), lies("app/material/static/material.css")
@@ -394,11 +394,11 @@ def test_oberflaeche_statisch():
     assert 'darfPflegen && frei ? "verschieben" : "", darf.grund ? "lebenslauf" : "", darfPflegen && a.darf_loeschen ? "loeschen" : ""' in js
     assert "Prüfen dürfen Prüfer mit Urkundennummer und Prüffreigabe (Häkchen" not in js
     produkt = js[js.index("const produktMenue = "):js.index("</details>`;", js.index("const produktMenue = "))]
-    assert 'data-act="loeschen"><strong>Löschen …</strong>' in produkt
+    assert 'data-act="loeschen"><strong>Löschen</strong>' in produkt
     assert """${p.loeschbar ? '<button class="btn secondary small" data-act="loeschen">Löschen</button>' : ""}${produktMenue}""" not in js
-    # Prüfungen: laufende oben, abgeschlossene zugeklappt unten; ausgegrautes „Durchgang abschließen“ mit Grund
-    assert '<details class="mat-auf mat-runden-alt"><summary>Abgeschlossene Prüfdurchgänge (${fertig.length})</summary>' in js
-    assert 'rundenKasten($("#pr-runden"), false, $("#pr-runden-alt"))' in js
+    # Prüfungen: laufende oben; die abgeschlossenen seit dem 27.10.2026 auf eigener Seite (Menü „Prüfdurchgänge“,
+    # test_material_dg_archiv); ausgegrautes „Durchgang abschließen“ mit Grund
+    assert 'rundenKasten($("#pr-runden"), true)' in js and "mat-runden-alt" not in js
     assert "'disabled aria-describedby=\"dg-abschluss\"'" in js and '<p class="help" id="dg-abschluss">' in js
     # Inventarnummer ohne Umbruch, Begriffe, Katalogimport lesbar
     assert '<h1><span class="mat-inv">${esc(a.inventory_no)}</span>' in js
