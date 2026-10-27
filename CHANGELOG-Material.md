@@ -50,6 +50,7 @@ Geschichte stehen. Schemaversion nach der Nachbesserung vor dem Merge: 30; mit d
 | Reste vor dem finalen Test | Langer Mangeltext im Banner mit „Weiterlesen“; Brotkrumen am Telefon in einer Zeile (lange Glieder mit „…“, ab vier Gliedern „…“ für den Mittelteil); Knopf „Produktmeldungen“; Ergebnisseite ohne „Ergebnis / Ergebnis“; Fokus im Unterschrift-Dialog auf Zeichenfläche bzw. Titel | gebaut 27.10.2026 (kein Schemaschritt, Schema bleibt 32), zur Freigabe |
 | Abgeschlossene Prüfdurchgänge nur bei Bedarf | Menü „Prüfdurchgänge“ auf „Prüfungen“ (anlegen, abgeschlossene); eigene Seite je Jahr mit Ordner- und Titelfilter; dazu „i“ hinter „Prüfsumme“, Namen als Einheit, kein „…“ in Knopftexten (alle Module), „Änderung beantragen“ neben „Stammdaten“, Export-Text | gebaut 27.10.2026 (kein Schemaschritt, Schema bleibt 32), zur Freigabe |
 | Seitenumbrüche in den PDF-Protokollen | Keine Waisen am Seitenende: Überschrift, Tabellenkopf und die ersten vier Zeilen zusammen, die letzten drei zusammen, kurze Listen ungeteilt; Prüfprotokoll: Abschluss (Ergebnis bis Unterschrift) immer ab neuer Seite, Fotos als Anlage danach, Herstellerdokumente ohne zerhackte Spalten; Aussonderungsprotokoll: Abschluss zusammen | gebaut 27.10.2026 (kein Schemaschritt, nur neue PDFs), zur Freigabe |
+| Info-„i“ app-weit | Erklärsätze unter Überschriften und Feldern hinter ein „i“ am Begriff (55 Stellen in allen Modulen), `S.info` und Jinja-Makro, ein „i“ je Liste für Marken; „Seiten aus ZIP importieren“ im Seitenbaum der Strömipedia | gebaut 27.10.2026 (kein Schemaschritt, Schema bleibt 32), zur Freigabe |
 
 ## Abgleich mit dem Bestand (vor Lieferung 1)
 
@@ -4182,6 +4183,135 @@ Danach liefen die ganze Suite (`st-test`) grün, `st-py`, `st-js` und `st-css` o
 14. **Kasten „Mailversand“ am Telefon**: Eine Karte hat vier Inhaltszeilen (Mail mit Betreff, Empfänger, Fehler mit
     Antwort), bei 360 px umbrochen etwa 170 px hoch; die Antwort des Mailservers ließe sich noch hinter „Technische
     Antwort“ einklappen – bitte am Gerät ansehen.
+
+## Info-„i“ app-weit (Wunsch des Nutzers, 27.10.2026)
+
+Auftrag `planung/info-i/auftrag_bau.md` nach der Bestandsaufnahme `planung/info-i/bestandsaufnahme.md`. Entscheidungen
+des Nutzers: „Alle 55 in einem Zug“, „Ja, app-weit“, „Ein „i“ je Liste“. Zweig `info-i` ab 6acdeb2 (vor-merge,
+Schema 32). Kein Schemaschritt. Regel (designsprache, Muster „Info-Symbol „i““): Ein „i“ steht hinter einem Begriff,
+einer Feldbeschriftung oder Überschrift, wenn die Erklärung hilft, aber nicht bei jedem Besuch nötig ist. Warnungen,
+Sperrgründe, Anleitungen zum Handeln, Rechtsfolgen, Datenschutzhinweise und die Folge der Hauptaktion bleiben sichtbar.
+
+**App-weit bereitgestellt**
+- `S.info(thema, html)` in `app/static/js/common.js` (vorher `infoKnopf` in material.js): ein Knopf mit dem gekringelten
+  „i“ (aria-label „Info zu …“, aria-expanded, aria-controls/-describedby) und die Info (role="tooltip", darf Links
+  enthalten). Das Verhalten hängt einmal je Seite am Dokument – Darüberfahren mit der Maus, Tastaturfokus, Antippen
+  (hält fest, ein zweiter Tipp schließt), Tipp daneben und Esc schließen, nach Esc steht der Fokus wieder auf dem „i“,
+  Links in der Info bleiben bedienbar, die Info rückt ins Bild. Neu: In einem Dialog bleibt die Info in dessen Inhalt
+  (sonst schnitt ihn das Rollen ab), Esc schließt dort nur die Info und nicht den Dialog, und beim Öffnen eines Dialogs
+  bekommt das erste Bedienelement den Fokus statt eines „i“ im Titel (`S.dialog`). Ein Tipp in die Info wirkt nicht auf
+  das, worin das „i“ steht (kein Haken kippt, kein `<summary>` klappt).
+- Aussehen in `app/static/css/app.css` mit neutralen Klassen `.info`, `.info-knopf`, `.info-text`, `.info-absatz`
+  (zweiter Absatz in einer Info); 44 × 44 px nur unter `@media (pointer: coarse)`. material.css hat keine eigenen
+  Regeln mehr, material.js nimmt `const infoKnopf = S.info;`.
+- Jinja-Makro `info(id, thema)` in `app/templates/_makros.html` mit demselben Markup (Text im Rumpf von
+  `{% call %}`), für Leitstelle und Profil.
+
+**Umgestellt je Modul** (Nummern der Bestandsaufnahme; der Text der Info ist der bisherige Satz)
+- Materialablage (31 Stellen, 30 „i“): Bestand (M1, mit der Zählerlegende M2 als zweitem Absatz), Fälligkeiten je
+  Ordner (M3), Zu prüfen (M4), Offene Prüfungen (M5), Prüfintervall am Ordner (M6), Jahresbericht: Rückrufe (M7),
+  Kalenderjahr (M8), Artikel: QR-Code und NFC (M9), Journal (M10), Artikel anlegen: Seriennummer des Herstellers (M11),
+  Seitentitel (M12, vorher ein Hinweiskasten), Katalog: Dokumente für alle Produkte dieser Kategorie (M13), Kategorie:
+  Lebensdauer (M14), Artikel haben eine Länge (M15), Bestandteile (M16, am Produkt und im Reiter des Produktdialogs an
+  „n von 30 Positionen“), Prüfformular (M17), Herstellerdokumente (M18), Prüfanleitung in der Strömipedia (M19), Prüfpunkte
+  im Prüfformular (M20, neue Zwischenüberschrift über der Tabelle), Seite suchen im Dialog „Prüfanleitung aus der
+  Strömipedia“ (M21), Eingangsprüfung (M22), Anhänge (M23), Änderungsanträge (M24), Rückruf: Betroffene Seriennummern
+  (M25), Mail an Materialwarte und Prüfer (M26), Bestandsliste importieren (M27), Spalten der Importvorschau (M28),
+  Katalogimport „geändert“ (M29), Freigaben: „Gilt für“ (M30), Geerbt von oben (M31).
+- Riegenkarten (9): Lehrgangsleitung und Referierende (R1; das title je Zeile entfällt), Prüfungsleistungen aus Katalog
+  (R2), Prüfungsleistungskataloge (R3), Zeitansatz (R4/R5, eine Konstante), Kriterienliste (R6/R7), Datei (.xlsx) (R8),
+  ISC (R9).
+- Strömipedia (6): Papierkorb (W1), Bearbeiten erlauben (W2), Lesen einschränken (W3), Textfarbe (W4), Abschnitt einbinden
+  (W5), Spalten einfügen (W6).
+- Ankerplätze (1): Album (A1); „Alle angemeldeten Nutzer können es sehen.“ bleibt sichtbar.
+- Leitstelle (6): Rechte (L1), Prüfer (L2), Freigaben in der Materialablage (L3), Verlauf (L4), Seitentitel
+  „Einstellungen“ (L5), Testmail: „SPF, DKIM, DMARC“ (L6; der erste Satz – was die Probemail tut – bleibt sichtbar).
+- Profil (2): Profilbild (P1), Erinnerungen zu meiner PSA per Mail (P2).
+
+**Marken in Listen** (ein „i“ je Liste, das title je Zeile bleibt für die Maus)
+- Riegenkarten: das Schloss „eingefroren“ – „i“ an „Teilnehmende“ und „Bewertung“, sobald jemand eingefroren ist.
+- Leitstelle: die Marken der Spalte „Materialablage“ („Prüfer“, „Urkundennummer fehlt“, „wirkt nicht – kein Zugang“,
+  „ohne Namen – kein Zugang“, „n Freigaben“) – „i“ am Seitentitel „Nutzerverwaltung“ (die Spaltenköpfe sind am
+  Telefon ausgeblendet; der Titel bleibt sichtbar). Auf dem Reiter „Einstellungen“ steht dort L5.
+- Prüfung: „kritisch“ – „i“ an „Befunde“ der abgeschlossenen Prüfung, wenn ein Punkt kritisch ist. Während der Prüfung
+  sagt es der sichtbare Satz über den Prüfpunkten („… ein kritischer schließt „einsatzbereit“ aus“) – dort kein zweites
+  „i“. „Artikellänge“ und „kritisch“ im Prüfformular erklärt das „i“ an „Prüfpunkte“ (M20). Die Zahlen im Ordnerbaum
+  erklärt die Legende in M1.
+
+**Nebenbefunde**
+- „Prüfung beginnen“: „Mit dem Beginn reservierst du den Artikel …“ steht jetzt ÜBER der Knopfzeile und beschreibt den
+  Knopf (aria-describedby) – vorher darunter.
+- „Artikel anlegen“: die Zeile „„Anlegen und nächsten“: …“ unter den Knöpfen (nur am Telefon) entfällt; das title am
+  Knopf bleibt. Dazu entfallen die verwaisten Regeln `.mat-nur-touch` und `.mat-bt-flach`.
+
+**Nachtrag des Nutzers: „Seiten aus ZIP importieren“ im Seitenbaum** (wörtlich: „Füge die wiki import funktion in das
+Burgermenü in der Übersicht links ein statt in das Burgermenü im Editor selbst“)
+- Der Eintrag steht im „⋯“-Menü jeder Seite im Seitenbaum, nach „Als Markdown herunterladen“ (nur mit Wiki-Verwaltung,
+  wie der Server prüft); der Dialog wählt diese Seite unter „Einsortieren unter“ vor, „– oberste Ebene –“ und jede
+  andere Seite bleiben wählbar. Am Telefon schließt sich die Schublade, bevor der Dialog aufgeht.
+- Im „⋯“ des Seitenkopfs entfällt der Eintrag.
+- Oberste Ebene ohne passende Seite: grauer Knopf „Importieren“ über dem Baum neben „Papierkorb“ (nur Wiki-Verwaltung);
+  der Dialog beginnt dann mit „– oberste Ebene –“. Gewählt, weil der Baum keinen eigenen Platz für „oberste Ebene“ hat
+  und „Papierkorb“ dort schon die seltene Seitenleisten-Aktion ist.
+
+**Für die Strömipedia** (Artikel zur Bedienung nachziehen): Erklärungen stehen jetzt hinter dem „i“ (antippen oder mit
+der Maus darüberfahren) – betroffen sind die Abschnitte zu Bestand, Prüfungen, Artikel, Katalog, Prüfformular, Freigaben,
+Jahresbericht, Rückruf und Bestandsimport der Materialablage, zu Lehrgang, Katalog und Import der Riegenkarten, zu
+Teilen und Editor (Textfarbe, Abschnitt einbinden, Spalten) der Strömipedia, zum Album, zur Leitstelle und zum Profil.
+Bildschirmfotos mit Erklärsätzen unter Überschriften sind veraltet. Der Wiki-Import steht im Seitenbaum
+(„⋯“ → „Seiten aus ZIP importieren“ bzw. „Importieren“), nicht mehr im „⋯“ des Seitenkopfs.
+
+**Schnittstelle**: keine neue Route; `S.info(thema, html)` (common.js; `html` ist fertiges HTML ohne Eingaben – Texte aus
+Eingaben mit `esc`) und das Makro `info(id, thema)` (`id` wird zu `info-<id>`; die Reinigung der Wiki-Inhalte lässt ids mit
+„info-“ ohnehin nicht zu).
+
+**Tests**: `tests/test_module_info_i.py` (neu: S.info und Makro, alle 55 Stellen, sichtbar Gebliebenes, Marken, Nebenbefunde,
+gerenderte Vorlagen); angepasst: test_material_dg_archiv (Umzug), test_material_aussondern, test_material_feinschliff,
+test_material_antrag, test_material_stammdaten, test_wiki_import (Menü im Seitenbaum).
+
+**Proben** (27.10.2026, lokaler Server mit DEMO-Daten: Katalogteil 1 der Gesamtserie, `material_beispielbestand.py
+--artikel 60`, Platzhalter-Seiten, -Album und -Lehrgang; Fotos vorher/nachher unter `planung/info-i/proben/`)
+- Chromium mit Maus bei 1280 px, mit Touch (pointer: coarse, mobil) bei 390 und 344 px, 39 Ansichten und Dialoge
+  mit 54 „i“ (dazu W5 und W6 im Editor bei 1280 px): jedes öffnet beim Darüberfahren bzw. Antippen, ein zweiter Tipp und Esc schließen, in Dialogen bleibt der Dialog
+  bei Esc offen und die Info in seinem Inhalt; mit der Maus hält ein Klick die Info fest; Tastaturfokus öffnet, Tab geht
+  in den Link der Info („Prüfseite“), Esc gibt den Fokus ans „i“ zurück. Gemessen unter Touch: jedes „i“ 44 × 44 px, ein
+  Tipp auf die Mitte trifft das „i“, der Link in der Info 45 px hoch, keine Info ragt aus dem Fenster bzw. Dialog, kein
+  waagerechter Bildlauf, keine Konsolenfehler. Ein Tipp in die Info kippt den Haken darunter nicht (Profil, „Erinnerungen
+  zu meiner PSA“), ein Tipp daneben schließt.
+- Seitenbaum der Strömipedia bei 390 und 344 px (Schublade): „Importieren“ 98 × 44 px, die Einträge des „⋯“-Menüs 44 px
+  (vorher 34 px – dafür neu `.tree-menu button { min-height: 44px }` unter pointer: coarse, gilt auch für das „⋯“ des
+  Seitenkopfs); der Dialog wählt die Seite vor, die Schublade ist zu.
+- st-geraete (Chromium, WebKit, Firefox; iPhone, Fold zugeklappt, Tablet hochkant, Laptop 1280, Full HD; 13 Seiten):
+  ohne Befund außer „U span.info“ am „Kalenderjahr“ des Jahresberichts an den drei Touch-Geräten – die 44-px-Fläche
+  des „i“ ragt dort mit Absicht über die Zeile (negative Ränder, wie an allen „i“); gemeldet wird es nur hier, weil das
+  Feld eine Flex-Zeile ist. Kein waagerechter Bildlauf, kein Konsolenfehler.
+- Nicht im Browser geprobt (nur die Stellen im Code, test_module_info_i): M16 (die Beispieldaten haben keine
+  Bestandteil-Liste), M28/M29 (brauchen eine hochgeladene Datei), W4 „Textfarbe“ (Blasenmenü im Editor); W5 und W6 sind
+  geprobt.
+
+**Abweichungen vom Auftrag, mit Begründung**
+- M8: Der Satz „Ohne Haken nennt keine Ausgabe einen Prüfer – weder die Seite noch PDF oder CSV.“ bleibt sichtbar (er
+  sagt, wo Namen stehen – Datenschutz); ins „i“ an „Kalenderjahr“ geht nur der Satz zu Stichtag und Kalenderjahr.
+- M30: Das „i“ steht an „Gilt für“ im Formular des Reiters „Freigaben“ – der Reiter selbst ist ein Knopf, in dem kein
+  zweiter Knopf stehen darf, und der Reiter hat keine Überschrift.
+- M16: Im Reiter „Bestandteile“ des Produktdialogs steht das „i“ an „n von 30 Positionen“ (aus demselben Grund);
+  am Produkt an der Überschrift „Bestandteile“.
+- M20: Neue Zwischenüberschrift „Prüfpunkte“ über der Tabelle – die Spaltenköpfe sind am Telefon ausgeblendet.
+- M28: „i“ an der Zusammenfassung „Spalten – n von m zugeordnet“ statt an „Bemerkung“ (die ist eine Option im
+  Auswahlfeld); der Satz „Personen werden nicht übernommen …“ bleibt sichtbar (Datenschutz).
+- R9: „Die Stammdaten der Teilnehmenden lassen sich aus dem ISC übernehmen.“ bleibt als Satz mit dem „i“ hinter
+  „ISC“ stehen; die Schritte im ISC stehen in der Info.
+- Marken: „kritisch“ bekommt das „i“ an „Befunde“ der abgeschlossenen Prüfung, nicht in der laufenden Prüfung (dort
+  steht es schon sichtbar über den Prüfpunkten). Die Leitstellen-Marken erklärt das „i“ am Seitentitel statt an der
+  Spalte (am Telefon keine Spaltenköpfe). Die Marken der Strömipedia (🔒, „öffentlich“) stehen je Seite einmal, nicht in
+  einer Liste – kein „i“.
+
+**Bitte bestätigen**
+1. Die Abweichungen oben (M8, M16, M20, M28, M30, R9, Marken).
+2. Grauer Knopf „Importieren“ neben „Papierkorb“ für die oberste Ebene (nur Wiki-Verwaltung); am Telefon bricht er in
+   eine zweite Zeile.
+3. Das bisherige runde „i“ der Strömipedia („Angaben zur Seite“, kursives i im Seitenkopf) bleibt, wie es ist – es öffnet
+   eine Seitenleiste, keine Erklärung. Es sieht dem neuen „i“ ähnlich; soll es ein anderes Zeichen bekommen?
 
 ## Abgeschlossene Prüfdurchgänge nur bei Bedarf – Menü „Prüfdurchgänge“ (Wunsch des Nutzers, 27.10.2026)
 

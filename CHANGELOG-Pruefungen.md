@@ -722,3 +722,13 @@ Aus der Durchsicht vor dem Merge dev → main (bericht_pruefung_vor_merge_browse
 - Unter Touch: Voraussetzungs-Haken und Stempel 44 px, Felder in Dialogen 44 px.
 - Lehrgangs- und Katalogliste auf breiten Bildschirmen höchstens 1280 px breit; „Alle Bewertungen“ ohne grauen Knopf.
 Siehe CHANGELOG-Material.md, „Lieferung nach dem Merge, Teil B“.
+
+## Nachtrag (27.10.2026): Info-„i“ statt Erklärsätzen
+
+- Erklärungen, die nicht jeder bei jedem Besuch braucht, stehen hinter einem gekringelten „i“ am Begriff (Hover, Fokus,
+  Antippen; Esc schließt): „Lehrgangsleitung und Referierende“ (das title „Lehrgangsleitung: darf …“ je Zeile entfällt),
+  „Prüfungsleistungen aus Katalog übernehmen“, Seitentitel „Prüfungsleistungskataloge“, „Zeitansatz“ und
+  „Kriterienliste“ (Katalog und Lehrgang), Excel-Import „Datei (.xlsx)“ und „ISC“ (die Schritte im ISC stehen in der Info).
+- Das Schloss eingefrorener Personen: title je Zeile bleibt, dazu ein „i“ an „Teilnehmende“ und „Bewertung“, sobald
+  jemand eingefroren ist.
+Siehe CHANGELOG-Material.md, „Info-„i“ app-weit“.
