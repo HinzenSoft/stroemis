@@ -4,7 +4,7 @@
    überall dieselben, in Marken, Kacheln und Zählern. */
 .mat { --mat-gesperrt: var(--schwarz); --mat-lebensdauer: var(--rot-dunkel);
   /* Lesbare Breite der Stammdatenwerte (dd): 38 Geviert sind rund 75 Zeichen. Hilfe- und Erklärtexte und
-     Hinweiskästen haben seit dem 25.10.2026 keine eigene Höchstbreite mehr (siehe unten). */
+     Hinweiskästen: höchstens rund 120 Zeichen je Zeile (seit dem 27.10.2026, siehe unten). */
   --mat-lesemass: 38em; }
 
 /* Unternavigation des Moduls mit der Suchmaske für Nummern */
@@ -819,7 +819,15 @@ button.mat-ue-klapp:focus-visible { outline: 3px solid var(--gelb); outline-offs
 .mat-nav.eng.suche-offen .mat-suche { display: flex; flex: 1 1 100%; max-width: none; margin: 4px 0 0; }
 .mat-nav.eng.suche-offen .mat-lupe { background: var(--anthrazit); border-color: var(--anthrazit); color: var(--weiss); }
 .mat-nav.enger .mat-side-auf-text, .mat-suchzeile .mat-side-auf-text { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
-.mat-nav.enger .mat-reiter > a { padding: 9px 8px 8px; font-size: var(--fs-mittel); }
+.mat-nav.enger .mat-reiter > a { padding: 9px 6px 8px; font-size: var(--fs-mittel); }
+/* Passen die Reiter auch dann nicht neben „☰“ und die Lupe (Telefon hochkant), bekommen sie eine eigene Zeile über die
+   ganze Breite: alle vier sichtbar, ohne seitliches Rollen, soweit die Breite reicht (Nachtrag V4 vor dem Merge – vorher
+   waren „Bestand“ und „Katalog“ bei 360 und 390 px angeschnitten). Darüber „☰“ links und die Lupe rechts, darunter die
+   geöffnete Nummernsuche. */
+.mat-nav.enger .mat-side-auf { order: 1; }
+.mat-nav.enger .mat-lupe { order: 2; margin-left: auto; }
+.mat-nav.enger .mat-reiter { order: 3; flex: 1 1 100%; }
+.mat-nav.enger .mat-suche { order: 4; }
 .mat-reiter.rollt-rechts { -webkit-mask-image: linear-gradient(to left, transparent, #000 28px); mask-image: linear-gradient(to left, transparent, #000 28px); }
 .mat-reiter.rollt-links { -webkit-mask-image: linear-gradient(to right, transparent, #000 28px); mask-image: linear-gradient(to right, transparent, #000 28px); }
 .mat-reiter.rollt-links.rollt-rechts {
@@ -1180,10 +1188,16 @@ table.list.mat-artikel tr:has(.mat-wahl-art:checked) { background: var(--co-info
   .mat-kachelrahmen > .mat-rundenzahlen > .mat-kachel:first-child { grid-column: auto; }
 }
 
-/* Hilfe- und Erklärtexte (.help, .muted, p.small, p.mat-text) und Hinweiskästen (.notice) laufen über die volle Breite
-   ihres Abschnitts – so breit wie Felder und Tabellen darunter (Wunsch des Nutzers vom 25.10.2026: „Die Texte gehen
-   nicht über die vorgesehene Breite“). Nur die Stammdatenwerte bleiben am breiten Bildschirm lesbar schmal. */
+/* Hilfe- und Erklärtexte (.help, p.small, p.muted), Hinweiskästen (.notice, die Zeile zur Prüfanleitung) und die
+   Fußsätze des Jahresberichts: höchstens rund 120 Zeichen je Zeile (Entscheidung des Nutzers vom 27.10.2026, Nachtrag
+   V10 vor dem Merge – löst „volle Inhaltsbreite“ vom 25.10.2026 ab; am Ultrawide standen bis 171 Zeichen in einer
+   Zeile). Der Kasten darf damit schmaler sein als Felder und Tabellen darunter; auf Telefon und Tablet ändert sich
+   nichts, dort ist die Spalte ohnehin schmaler. 100ch statt der im Auftrag genannten 120ch: ch ist die Breite der Ziffer
+   „0“, deutscher Text ist im Schnitt schmaler – 120ch ergaben gemessen rund 145 Zeichen je Zeile, 100ch rund 120. ch
+   zählt in der Schrift des Elements (.help ist kleiner – trotzdem rund 120 Zeichen). Die Stammdatenwerte bleiben am
+   breiten Bildschirm schmaler (--mat-lesemass). */
 #mat-inhalt .mat-daten dd { max-width: var(--mat-lesemass); }
+:where(#mat-inhalt, #mat-side) :is(.help, .notice, p.small, p.muted, .mat-wikizeile, .mat-bericht-fuss) { max-width: 100ch; }
 
 /* Ordnerwahl (Dialog „verschieben nach …“): Ein langer Name bricht um, die Art-Marke daneben bleibt ganz. */
 .mat-wahl label .mat-art { flex: none; }
@@ -1333,10 +1347,14 @@ table.list.mat-runde tr.mat-fremd td { color: var(--grau); }
 @media (min-width: 641px) { dialog:where(.mat-ordner-reiter) { width: min(920px, 96vw); } }
 /* Die Reiter (Aussehen wie .c-tabs) kleben oben, wenn der Inhalt rollt – wie die Knopfzeile unten am Telefon. top ist
    minus dem oberen Innenabstand des Dialogs (app.css): Sonst hielte Chromium sie um diesen Abstand vom Rand fern, und
-   darüber schiene der Inhalt durch. */
-.mat-reiter { position: sticky; top: -18px; z-index: 2; background: var(--weiss); margin: 10px 0 12px; padding: 6px 0;
+   darüber schiene der Inhalt durch. Nur die Reiter im Dialog (.c-tabs): Die Regel galt vorher auch den Reitern der
+   Modulnavigation – deren Schattenlinie stand dort unter der Linie der Navigation, zwei graue Linien (Browserprüfung vor
+   dem Merge, V9).
+   Telefon quer (Höhe ≤ 500 px): Die Reiter kleben nicht – mit ihnen und der klebenden Knopfzeile blieben im Dialog
+   „Freigaben“ nur rund 190 px Inhalt (V11). Sie stehen dann oben im Inhalt; die Knopfzeile unten bleibt. */
+.c-tabs.mat-reiter { position: sticky; top: -18px; z-index: 2; background: var(--weiss); margin: 10px 0 12px; padding: 6px 0;
   box-shadow: 0 1px 0 var(--linie); }
-@media (max-height: 500px) { .mat-reiter { top: -12px; } }
+@media (max-height: 500px) { .c-tabs.mat-reiter { position: static; } }
 .mat-reiter button { font-size: var(--fs-mittel); padding: 8px 10px; }
 @media (pointer: coarse) { .mat-reiter button { min-height: 44px; } }
 .mat-reiter-teil[hidden] { display: none; }
@@ -1482,6 +1500,8 @@ table.list.mat-na-zeilen tr:has(.mat-na-wahl:checked) { background: var(--co-inf
 .mat-mangel-banner .mat-mangel-titel { font-size: 1.05rem; letter-spacing: .02em; }
 .mat-mangel-banner .mat-mangel-text, .mat-mangel-banner .mat-mangel-zeile { font-weight: 400; }
 .mat-mangel-banner .mat-mangel-zeile { font-size: var(--fs-klein); }
+/* Sperrt der Artikel zusätzlich aus einem anderen Grund, steht der als Zeile im (ersten) Mangel-Banner (Nachtrag V7). */
+.mat-mangel-banner .mat-mangel-sperre { font-weight: 400; }
 /* Ohne Recht auf den Inhalt (nur lesen): statt des Texts ein Satz, kursiv – im Banner weiß (Grau auf Rot wäre zu
    schwach), unter den erledigten Meldungen grau. */
 .mat-mangel-verborgen { font-style: italic; }
@@ -1571,7 +1591,8 @@ table.list.mat-na-zeilen tr:has(.mat-na-wahl:checked) { background: var(--co-inf
 .mat-psa-knoepfe { margin-top: 10px; align-items: center; }
 .mat-psa-karte .help { margin: 6px 0 0; }
 @media (pointer: coarse) {
-  .mat-psa-meldungen > summary, .mat-mangel-alt > summary { padding: 10px 0; }
+  /* min-height: Mit dem Polster allein waren es 42 px (Browserprüfung vor dem Merge, B-2). */
+  .mat-psa-meldungen > summary, .mat-mangel-alt > summary { padding: 10px 0; min-height: 44px; box-sizing: border-box; }
   .mat-psa-knoepfe > a { display: inline-flex; align-items: center; min-height: 44px; }
 }
 @container mat-seite (max-width: 600px) {
@@ -1593,7 +1614,10 @@ table.list.mat-na-zeilen tr:has(.mat-na-wahl:checked) { background: var(--co-inf
   /* Brotkrumen: eine umbrechende Reihe; jeder Link ist 44 px hoch, ein langer bricht in sich mit normalem
      Zeilenabstand um (vorher line-height 44 px – das sah bei Umbruch wie ein Absatz aus). */
   .mat-pfad { display: flex; flex-wrap: wrap; align-items: center; gap: 0 6px; }
-  .mat-pfad a { display: inline-flex; align-items: center; min-height: 44px; padding: 0 2px; }
+  /* Kurze Glieder („Gurte“) sind mindestens 44 px breit; der Schrägstrich hängt am folgenden Glied (pfadHtml in
+     material.js) und bleibt nicht allein am Zeilenende stehen (Browserprüfung vor dem Merge, B-1). */
+  .mat-pfad a { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; min-width: 44px; padding: 0 2px; }
+  .mat-pfad-glied { display: inline-flex; align-items: center; gap: 0 6px; min-width: 0; }
   #kat-q { min-height: 44px; }
   .mat-side-kopf a { display: inline-flex; align-items: center; min-height: 44px; }
 }

@@ -594,10 +594,12 @@ def test_lebenslauf_und_pruefung():
                 assert wert in text, (wert, text[:2000])
             text = lebenslauf(art["rr-2"])
             assert "Etikett fehlerhaft" in text and "Schnapper klemmt" not in text, text[:2000]
-            # Die Prüfung zeigt den laufenden Rückruf; nach dem Abschluss ist er für den Artikel erledigt.
+            # Die Prüfung zeigt den laufenden Rückruf; nach dem Abschluss ist er für den Artikel erledigt. Gemessen wird seit
+            # Runde 2 vor dem Merge der Beginn des Entwurfs (N-A1) – die Pause gehört deshalb VOR das Starten: Begann der
+            # Entwurf in derselben Sekunde wie der Rückruf, zählt er als „vorher“ (gelegentlich rot, Runde 3).
+            time.sleep(1.1)                          # gleiche Sekunde zählt als „vorher“
             r = starten(p1, art["RR-1"])
             assert r.status_code in (200, 201) and r.json["pruefung"]["artikel"]["rueckruf"] == "Schnapper klemmt", r.get_json()
-            time.sleep(1.1)                          # gleiche Sekunde zählt als „vorher“
             assert abschluss(p1, r.json["pruefung"]["id"], ergebnis="einsatzbereit").status_code == 200
             assert "erledigt – nach dem Rückruf geprüft" in lebenslauf(art["RR-1"])
     finally:

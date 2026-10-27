@@ -181,7 +181,7 @@
   $("#wiki-menu").addEventListener("click", () => side.classList.toggle("open"));
   // Tippen daneben oder Escape schließt die Schublade – wie im angemeldeten Wiki.
   document.addEventListener("pointerdown", (e) => {
-    if (side.classList.contains("open") && !side.contains(e.target) && e.target.id !== "wiki-menu") side.classList.remove("open");
+    if (side.classList.contains("open") && !side.contains(e.target) && !e.target.closest("#wiki-menu")) side.classList.remove("open");
   }, true);
   document.addEventListener("keydown", (e) => { if (e.key === "Escape") side.classList.remove("open"); });
   show(shell.dataset.slug || slugAusPfad());

@@ -56,6 +56,7 @@ FELD = {
     "liste_naechste_pruefung": "nächste Prüfung laut Liste", "seite": "Seite der Strömipedia Nr.",
     # Phase 3 · Lieferung 1: Mangelmeldung
     "mangel": "Mangelmeldung Nr.",
+    "mangelbeschreibung": "Mangelbeschreibung",
     # Änderungsanträge an festen Stammdaten (Entscheidungen vom 21.10.2026)
     "antrag": "Änderungsantrag Nr.", "begruendung": "Begründung", "beantragt_von": "beantragt von",
     "anmerkung": "Anmerkung", "ablehnung": "Begründung der Ablehnung", "feld": "Feld",

@@ -384,8 +384,9 @@ def test_oberflaeche_statisch():
     assert "#toast[popover].bei-dialog { left: var(--toast-x, 50%); bottom: auto;" in app_css     # Dialog geht vor
     # Nachtrag 1: kein grauer GESPERRT-Banner, wenn eine offene Mangelmeldung sperrt und ihr roter Banner steht.
     assert 'const sperreDurchMangel = /^Mangel gemeldet am /.test(a.lock_reason || "") && offeneMaengel.length > 0;' in js
-    assert '${a.status === "gesperrt" && !sperreDurchMangel ? `<p class="mat-banner s-gesperrt">GESPERRT' in js
-    assert "${offeneMaengel.map(mangelBanner).join(\"\")}" in js
+    # Seit dem Nachtrag V7 (Runde 3) auch nicht, wenn der Sperrgrund als Zeile im Mangel-Banner steht (sperreImMangel).
+    assert '${a.status === "gesperrt" && !sperreDurchMangel && !sperreImMangel ? `<p class="mat-banner s-gesperrt">GESPERRT' in js
+    assert 'offeneMaengel.map((m, i) => mangelBanner(m, sperreImMangel && i === 0 ? sperrText || "" : null)).join("")' in js
     # Nachtrag 2: der Sperr-Banner ist rot wie der Mangel-Banner; Marke, Kachel und Zahl bleiben.
     assert ".mat-banner.s-gesperrt { background: var(--rot); }" in css
     assert ".s-gesperrt.mat-status { background: var(--mat-gesperrt); }" in css

@@ -90,6 +90,21 @@
     return feld + (marken.length ? `<div class="recht-marken">${marken.join(" ")}</div>` : "");
   }
 
+  /* Zeilenaktionen nach der Knopfregel (Browserprüfung vor dem Merge, V5): „Bearbeiten“ als grauer Knopf, die seltenen
+     „Reset-Mail senden“ und „Löschen“ im Zeilenmenü „Mehr“ – vorher drei rote Textlinks (btn ghost) je Zeile. Ein Klick
+     daneben oder Escape schließt das Menü, ein Eintrag auch. */
+  document.addEventListener("click", (e) => {
+    document.querySelectorAll("details.zeilenmenue[open]").forEach((m) => {
+      if (!m.contains(e.target) || e.target.closest(".zeilenmenue-liste button")) m.open = false;
+    });
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key !== "Escape") return;
+    document.querySelectorAll("details.zeilenmenue[open]").forEach((m) => { m.open = false; m.querySelector("summary").focus(); });
+  });
+  // Eine E-Mail bricht in ihrer schmalen Spalte am „@“ um (und vor Punkten der Domain), nicht mitten im Wort (V5).
+  const mailUmbruch = (mail) => S.esc(mail).replace(/@/, "<wbr>@").replace(/\.(?=[^@]*$)/g, "<wbr>.");
+
   async function load() {
     try { users = (await S.api("/api/admin/users")).users; }
     catch (e) { S.toast("Die Nutzerliste ließ sich nicht laden: " + e.message, true); return; }
@@ -104,15 +119,18 @@
     tbody.innerHTML = users.filter((u) => u.status !== "pending").map((u) => `
       <tr data-id="${u.id}" ${u.active ? "" : 'class="muted"'}>
         <td data-l="Name">${S.esc(u.name) || "<span class='muted'>–</span>"}${u.active ? "" : ' <span class="badge grey">deaktiviert</span>'}</td>
-        <td class="mail" data-l="E-Mail">${S.esc(u.email)}</td>
+        <td class="mail" data-l="E-Mail">${mailUmbruch(u.email)}</td>
         <td data-l="Gliederung">${S.esc(u.gliederung)}</td>
         ${MODULE.map((m) => `<td class="recht" data-l="${m.t}" data-modul="${m.k}">${rechtZelle(m, u)}</td>`).join("")}
         <td class="small" data-l="Zuletzt da">${letzterLogin(u)}</td>
         <td class="small" data-l="Inhalte">${u.page_count} Artikel, ${u.album_count} Alben, ${u.photo_count} Bilder</td>
         <td class="tabelle-aktionen"><div class="btn-row">
-          <button class="btn ghost small" data-act="edit">Bearbeiten</button>
-          <button class="btn ghost small" data-act="reset">Reset-Mail</button>
-          ${u.id !== STROEMIS.user.id ? '<button class="btn ghost small" data-act="delete">Löschen</button>' : ""}
+          <button class="btn secondary small" data-act="edit">Bearbeiten</button>
+          <details class="zeilenmenue"><summary class="btn secondary small" aria-haspopup="true">Mehr</summary>
+            <div class="zeilenmenue-liste">
+              <button type="button" data-act="reset">Reset-Mail senden</button>
+              ${u.id !== STROEMIS.user.id ? '<button type="button" data-act="delete">Löschen …</button>' : ""}
+            </div></details>
         </div></td>
       </tr>`).join("");
   }
@@ -570,6 +588,7 @@
     document.getElementById("bereich-nutzer").classList.toggle("hidden", name !== "nutzer");
     document.getElementById("bereich-einstellungen").classList.toggle("hidden", name === "nutzer");
     document.getElementById("seitentitel").textContent = name === "nutzer" ? "Nutzerverwaltung" : "Einstellungen";
+    S.titel(name === "nutzer" ? "Nutzerverwaltung" : "Einstellungen", "verwaltung");   // Reiter des Browsers (V2)
     // „Nutzer anlegen“ gehört zur Liste. Die Probemail bleibt auf beiden Reitern stehen: Sie ist
     // die Gegenprobe zu den Mail-Einstellungen und gerade dort am nötigsten.
     document.getElementById("btn-new-user").classList.toggle("hidden", name !== "nutzer");
@@ -607,7 +626,7 @@
     const [kurz, titel] = QUELLE[f.quelle] || QUELLE.vorgabe;
     const marke = `<span class="einst-quelle q-${f.quelle}" title="${S.esc(titel)}">${kurz}</span>`;
     const zurueck = f.quelle === "gespeichert"
-      ? `<button type="button" class="btn ghost small" data-zurueck="${f.schluessel}">Zurücksetzen</button>` : "";
+      ? `<button type="button" class="btn secondary small" data-zurueck="${f.schluessel}">Zurücksetzen</button>` : "";
     let eingabe;
     if (f.art === "schalter") {
       eingabe = `<label class="einst-schalter"><input type="checkbox" id="${id}" data-k="${f.schluessel}"`
@@ -685,4 +704,5 @@
   });
 
   if (location.hash === "#einstellungen") reiter("einstellungen");
+  else S.titel("Nutzerverwaltung", "verwaltung");
 })();

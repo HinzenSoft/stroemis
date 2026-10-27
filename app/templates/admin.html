@@ -5,14 +5,19 @@
 <main class="page breit">
   <div class="page-head"><h1 id="seitentitel">Nutzerverwaltung</h1>
     <div class="btn-row" id="kopf-knoepfe"><button class="btn secondary" id="btn-testmail">Testmail senden</button><button class="btn" id="btn-new-user"><span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Nutzer<span class="k-anlegen"> anlegen</span></span></button></div></div>
-  <div class="c-tabs" role="tablist">
+  {# Reiter als Linie: rot gefüllt ist allein „Nutzer anlegen“ (Browserprüfung vor dem Merge, V5). #}
+  <div class="c-tabs reiter-linie" role="tablist">
     <button type="button" data-reiter="nutzer" class="sel" role="tab">Nutzer</button>
     <button type="button" data-reiter="einstellungen" role="tab">Einstellungen</button>
   </div>
   <section id="bereich-nutzer">
   <section id="pending" class="section"></section>
-  {# In Absätzen statt in einem Block (Browserprüfung der Umbenennung, Verbesserung 6): je Stufe ein Punkt. #}
-  <div class="help leitstelle-hilfe">
+  {# In Absätzen statt in einem Block (Browserprüfung der Umbenennung, Verbesserung 6): je Stufe ein Punkt. Zugeklappt –
+     sieben Zeilen Erklärung schoben die Nutzerliste am Telefon um eine Bildschirmhöhe nach unten (Browserprüfung vor dem
+     Merge, V5). #}
+  <details class="accordion leitstelle-hilfe">
+    <summary>Hilfe: Rechte je Modul</summary>
+    <div class="accordion-body help">
     <p>Rechte gelten je Modul:</p>
     <ul>
       <li>„–“ heißt kein Zugriff (in der Strömipedia: nur die öffentlichen Seiten lesen).</li>
@@ -24,8 +29,9 @@
     <p>Neue Konten starten als Mitglied in der Materialablage, sonst ohne Zugriff. Prüfer ist ein Häkchen unter
       „Bearbeiten“: Es wirkt nur mit Materialablage „Mitglied“ oder „Verwaltung“, und Prüfen braucht zusätzlich eine
       Prüffreigabe am Ordner (befristet nur für externe Prüfer) – Prüfer ist niemand von selbst.</p>
-    <p>Änderungen in der Tabelle greifen sofort. Beim Löschen eines Nutzers gehen seine Inhalte auf dich über.</p>
-  </div>
+    </div>
+  </details>
+  <p class="help">Änderungen in der Tabelle greifen sofort. Beim Löschen eines Nutzers gehen seine Inhalte auf dich über.</p>
   <p class="help hidden" id="videopflege"></p>
   <table class="list" id="users">
     <!-- Feste Spaltenbreiten (table-layout: fixed in app.css): So passt die Tabelle in jeder

@@ -595,6 +595,9 @@
       // Bei 404 sagt die Schnittstelle selbst nur „Seite nicht gefunden“ – das stand dann zweimal untereinander.
       const text = e.status === 404 ? "Diese Seite gibt es nicht (mehr) – vielleicht wurde sie gelöscht oder umbenannt." : e.message;
       content.innerHTML = `<div class="empty"><strong>Seite nicht gefunden</strong>${esc(text)}<div class="btn-row" style="justify-content:center;margin-top:12px"><a class="btn secondary small" href="/stroemipedia" id="home-link">Zur Übersicht</a></div></div>`;
+      // Der Reiter trug sonst weiter „Strömipedia – strömis.de“ bzw. den Titel der vorigen Seite (Browserprüfung vor dem
+      // Merge, V2) – wie im Lesemodus (public.js).
+      document.title = "Seite nicht gefunden – Strömipedia – strömis.de";
       $("#home-link").onclick = (ev) => { ev.preventDefault(); navigate(""); };
       renderTree(); renderRail([]);
       return;
@@ -4471,6 +4474,7 @@
     // Kommentare bleiben beim Bearbeiten sichtbar – Anmerkungen liest man am besten,
     // während man den Text überarbeitet. Antworten geht weiterhin.
     if (!isNew && p.id) { state.current = state.current || p; loadComments(); }
+    if (isNew) document.title = "Neue Seite – Strömipedia – strömis.de";
     else commentsEl.innerHTML = "";
     const crumbs = isNew ? [] : ancestors(p);
     content.innerHTML = `
@@ -5234,7 +5238,7 @@
   })();
   $("#wiki-menu").addEventListener("click", () => side.classList.toggle("open"));
   document.addEventListener("pointerdown", (e) => {
-    if (side.classList.contains("open") && !side.contains(e.target) && e.target.id !== "wiki-menu"
+    if (side.classList.contains("open") && !side.contains(e.target) && !e.target.closest("#wiki-menu")
         && !e.target.closest("#pg-baum")) side.classList.remove("open");
   }, true);
 

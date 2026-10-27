@@ -1,6 +1,12 @@
 {% extends "base.html" %}
 {# Ohne Modulzugang sieht das Konto nirgends „Materialablage“ – der Reiter heißt wie die einzige Ansicht. #}
-{% block title %}{% if nur_psa %}Meine PSA{% else %}{{ modul.name.material }}{% endif %} – strömis.de{% endblock %}
+{# Je Ansicht ein festes Wort vorn (Browserprüfung vor dem Merge, V2) – „Übersicht – Materialablage – strömis.de“;
+   material.js setzt den Namen dazu, sobald die Daten da sind (Artikelnummer, Ordner, Produkt …). #}
+{% block title %}{% if nur_psa %}Meine PSA{% else %}{% with teil = {"dashboard": "Übersicht", "pruefungen": "Prüfungen",
+  "bestand": "Bestand", "antraege": "Änderungsanträge", "ordner": "Ordner", "artikel": "Artikel", "artikel_neu": "Artikel anlegen",
+  "pruefung_neu": "Prüfung", "pruefung": "Prüfung", "durchgang": "Prüfdurchgang", "katalog": "Katalog", "produkt": "Produkt",
+  "formular": "Prüfformular", "meldungen": "Meldungen", "suche": "Suche", "bestandsimport": "Bestandsliste importieren",
+  "bericht": "Jahresbericht", "meine_psa": "Meine PSA", "fremd": "Artikel aus einem anderen Bereich"}.get(ansicht) %}{% if teil %}{{ teil }} – {% endif %}{% endwith %}{{ modul.name.material }}{% endif %} – strömis.de{% endblock %}
 {% block head %}
 <link rel="stylesheet" href="{{ url_for('material.static', filename='material.css') }}">
 <link rel="stylesheet" href="{{ url_for('material.static', filename='freigaben.css') }}">
@@ -30,7 +36,7 @@
      seitlich in einer Zeile, die Nummernsuche wartet hinter der Lupe und öffnet als eigene Zeile darunter. #}
   {% if not nur_psa %}<nav class="mat-nav" aria-label="Materialablage">
     <button class="btn secondary small mat-side-auf" type="button" id="mat-side-auf" aria-controls="mat-side"
-            aria-expanded="false">☰<span class="mat-side-auf-text"> Ordner</span></button>
+            aria-expanded="false"><span aria-hidden="true">☰</span><span class="mat-side-auf-text"> Ordner</span></button>
     <div class="mat-reiter">
       <a href="/materialablage" data-nav="dashboard">Übersicht</a>
       <a href="/materialablage/pruefungen" data-nav="pruefungen">Prüfungen</a>
