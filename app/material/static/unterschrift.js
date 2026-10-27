@@ -136,6 +136,13 @@ window.MatUnterschrift = (function () {
         dlg.remove();
         resolve(ergebnis);
       });
+      /* Fokus beim Öffnen: showModal() nähme das erste Bedienelement – „Leeren“ ist ausgegraut, also „Abbrechen“ (Reste
+         vor dem finalen Test, 5). Am Rechner bekommt ihn die Zeichenfläche (tabindex -1: nicht in der Tab-Reihenfolge, die
+         Vorlesehilfe sagt, wozu sie da ist; Tab führt weiter zu den Knöpfen), am Touchgerät der Titel wie in jedem Dialog
+         (S.dialog in common.js) – so springt nichts an und nichts wird markiert, bevor der Finger zeichnet. */
+      const start = window.matchMedia("(pointer: coarse)").matches ? dlg.querySelector("h2") : canvas;
+      start.tabIndex = -1;
+      start.autofocus = true;
       dlg.showModal();
       anpassen();
       if (beobachter) beobachter.observe(canvas);

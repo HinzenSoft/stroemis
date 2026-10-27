@@ -404,6 +404,8 @@ table.list.mat-artikel th.mat-wahlspalte, table.list.mat-artikel td.mat-wahlspal
 .mat-ergebnis-marke.e-instandsetzen { background: var(--gelb); color: var(--anthrazit); }
 .mat-ergebnis-marke.e-aussondern, .mat-ergebnis-marke.e-aussondern_empfohlen, .mat-befund.b-mangel { background: var(--rot); color: var(--weiss); }
 .mat-befund.b-nicht_zutreffend { background: var(--grau-hell); color: var(--grau); }
+/* Ergebnisseite einer Prüfung: die Marke direkt unter der Überschrift „Ergebnis“ (statt einer Zeile „Ergebnis“). */
+.mat-ergebnis-zeile { margin: 0 0 10px; }
 .mat-pliste tr.mat-entwurf td, .mat-pruefliste tr.mat-entwurf td { background: var(--co-info-fl); }
 /* Links auf hellblauem Grund im dunklen Rot (Kontrast wie in Hinweisen, app.css --rot-auf-flaeche). */
 tr.mat-entwurf a:not(.btn) { color: var(--rot-auf-flaeche); }
@@ -1523,6 +1525,8 @@ table.list.mat-na-zeilen tr:has(.mat-na-wahl:checked) { background: var(--co-inf
 .mat-mangel-alt .mat-mangel-verborgen { color: var(--grau); }
 /* Link „Freiprüfung später berichtigt“ (wieder offen): weiß wie im Rückruf-Banner, sonst Rot auf Rot. */
 .mat-mangel-banner a { color: var(--weiss); text-decoration: underline; }
+/* „Weiterlesen“ unter einem langen Mangeltext (mangelTextKurz in material.js); Höhe unter Touch wie jeder Knopf in #mat-inhalt. */
+.mat-mangel-banner .mat-mangel-mehr { margin: 2px 0 10px; }
 .mat-mangel-fotos { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0; }
 .mat-mangel-fotos .mat-mini { width: 64px; height: 64px; margin: 0; background: var(--weiss); }
 /* Überfällig in der Karte: das Rot der Statusmarke (eine eigene Bannerfarbe gibt es dafür sonst nicht). */
@@ -1635,6 +1639,30 @@ table.list.mat-na-zeilen tr:has(.mat-na-wahl:checked) { background: var(--co-inf
   .mat-pfad-glied { display: inline-flex; align-items: center; gap: 0 6px; min-width: 0; }
   #kat-q { min-height: 44px; }
   .mat-side-kopf a { display: inline-flex; align-items: center; min-height: 44px; }
+}
+/* Brotkrumen am Telefon (Reste vor dem finalen Test, 2): Umgebrochen stand am 344-px-Fold jedes Glied in einer eigenen
+   44-px-Zeile (rund 190 px, Browserprüfung Runde 3, Verbesserung 8). Bis 600 px Inhaltsbreite bleiben sie eine Zeile:
+   Ab vier Gliedern stehen nur das erste und das letzte da, dazwischen „…“ (.mat-pfad-luecke, pfadHtml in material.js) –
+   der Knopf setzt .offen, dann bricht der ganze Pfad wie bisher um. Ein langes Glied endet mit „…“: zuerst ein mittleres,
+   dann das erste; das letzte (das nächste zur Seite) erst über der halben Breite, bei nur zwei Gliedern zuerst das
+   zweite („alle Kategorien / …“). Jedes Glied bleibt mindestens 44 × 44 px tippbar, der Linktext bleibt vollständig
+   (Vorlesehilfe). Am Rechner und ab 601 px bleibt alles wie bisher. */
+.mat-pfad-luecke { display: none; }
+@media (pointer: coarse) {
+  @container mat-seite (max-width: 600px) {
+    .mat-pfad:not(.offen) { flex-wrap: nowrap; }
+    .mat-pfad:not(.offen) > .mat-pfad-glied { flex: 0 1 auto; min-width: calc(44px + 1em); }
+    .mat-pfad:not(.offen) > .mat-pfad-glied:first-child { min-width: 44px; }
+    .mat-pfad:not(.offen) > .mat-pfad-glied:not(:first-child, :last-child) { flex-shrink: 1000; }
+    .mat-pfad:not(.offen) > .mat-pfad-glied:last-child:not(:nth-child(2)) { flex-shrink: 0; max-width: 50%; }
+    .mat-pfad:not(.offen) > .mat-pfad-glied:first-child:nth-last-child(2) { flex-shrink: 0; max-width: calc(100% - 44px - 2em); }
+    .mat-pfad:not(.offen) > .mat-pfad-glied > :is(a, span) { display: block; min-width: 44px; line-height: 44px; overflow: hidden;
+      white-space: nowrap; text-overflow: ellipsis; text-align: center; }
+    .mat-pfad:not(.offen) > .mat-pfad-luecke { display: inline-flex; }
+    .mat-pfad:not(.offen) > .mat-pfad-luecke ~ .mat-pfad-glied:not(:last-child) { display: none; }
+    .mat-pfad-mehr { min-width: 44px; min-height: 44px; padding: 0 2px; border: 0; background: none; color: var(--grau);
+      font: inherit; text-decoration: underline; cursor: pointer; }
+  }
 }
 /* Zweite Nachbesserung nach der Geräte-Prüfung vom 22.10.2026 (Prüfbericht zu f085f12): Trefferflächen per
    elementFromPoint nachgemessen, nicht nur Kastengrößen.

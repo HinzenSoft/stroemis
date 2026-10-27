@@ -536,8 +536,14 @@
   const pfadGlied = (o) => (offenbar(o.id) ? `<a href="/materialablage/ordner/${o.id}">${esc(o.name)}</a>` : pfadKnoten(o.name));
   /* Brotkrumen (.mat-pfad) aus fertigen Gliedern (HTML): Der Schrägstrich hängt am folgenden Glied – am Telefon blieb er
      sonst allein am Ende der Zeile stehen, und das letzte Glied („Gurte“) stand mit seiner Wortbreite allein darunter
-     (Browserprüfung vor dem Merge, B-1; material.css). */
-  const pfadHtml = (glieder) => glieder.filter(Boolean).map((g, i) => (i ? `<span class="mat-pfad-glied">/ ${g}</span>` : g)).join(" ");
+     (Browserprüfung vor dem Merge, B-1; material.css). Auch das erste Glied steht in einem .mat-pfad-glied: Am Telefon
+     bleiben die Brotkrumen eine Zeile, ein langes Glied endet mit „…“ (Reste vor dem finalen Test, 2). Ab vier Gliedern
+     stehen dort nur das erste und das letzte, dazwischen der Knopf „…“ (.mat-pfad-luecke) – er zeigt den ganzen Pfad. */
+  function pfadHtml(glieder) {
+    const html = glieder.filter(Boolean).map((g, i) => `<span class="mat-pfad-glied">${i ? "/ " : ""}${g}</span>`);
+    if (html.length > 3) html.splice(1, 0, '<span class="mat-pfad-glied mat-pfad-luecke">/ <button type="button" class="mat-pfad-mehr" aria-label="Ganzen Pfad zeigen">…</button></span>');
+    return html.join(" ");
+  }
   // Die nächste Gliederung über einem Ordner (oder er selbst) – wie bestand.gliederung_von auf dem Server.
   function gliederungVon(id) {
     const gesehen = new Set();
@@ -651,6 +657,15 @@
     // Den Fokus nach Esc oder „Abbrechen“ gibt dialog() oben zurück (auf den Menüknopf, wenn der Eintrag in einem
     // details.mat-menue stand) – auch wenn der Dialog erst nach einem Laden öffnet (B5 P4-L2, B2 vor dem Merge).
     aktionen[b.dataset.act](b, e);
+  });
+  // „…“ in gekürzten Brotkrumen (pfadHtml): den ganzen Pfad zeigen, der Fokus geht auf das erste Glied, das dazukam.
+  inhalt.addEventListener("click", (e) => {
+    const k = e.target.closest(".mat-pfad-mehr");
+    if (!k || !inhalt.contains(k)) return;
+    const pfad = k.closest(".mat-pfad");
+    pfad.classList.add("offen");
+    const ziel = pfad.querySelector(".mat-pfad-luecke ~ .mat-pfad-glied a");
+    if (ziel) ziel.focus();
   });
   // „Sortieren nach“ über den Karten (kartenKopf): dieselbe Aktion wie ein Klick auf den Spaltenkopf.
   inhalt.addEventListener("change", (e) => {
@@ -2844,6 +2859,7 @@
       pruefen: () => { location.href = eigenerEntwurf ? `/materialablage/pruefung/${a.entwurf.id}` : `/materialablage/artikel/${a.id}/pruefung/neu`; },
       sperren: () => sperrDialog(a),
       mangel: () => mangelDialog(a, (r, q) => { quittung = q; return zeigen(artikel); }),
+      "mangel-weiterlesen": (b) => mangelWeiterlesen(b),
       "rr-sperren": (b) => sperrDialog(a, { grund: "rueckruf", text: ((a.rueckrufe || []).find((r) => r.id === +b.dataset.id) || {}).title }),
       aussondern: () => aussonderDialog(a),
       freigeben: () => reservierungFreigeben(a.entwurf.id, a.entwurf.pruefer, () => zeigen(artikel)),
@@ -3719,7 +3735,7 @@
             : `<a href="/materialablage/katalog/formular/${geerbt.aktives_formular}">„${esc(geerbt.name)}“</a>`}`;
       inhalt.innerHTML = `<div class="page-head"><h1>Katalog</h1>
           <div class="btn-row">${DARF.katalog ? '<button class="btn secondary" data-act="kat-neu"><span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Kategorie<span class="k-anlegen"> anlegen</span></span></button><button class="btn secondary" data-act="produkt-neu"><span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Produkt<span class="k-anlegen"> anlegen</span></span></button>' : ""}
-            ${DARF.lesen || DARF.katalog ? `<a class="btn secondary mat-mit-zahl" href="/materialablage/katalog/meldungen">Meldungen<span class="mat-meldezahl" id="kat-meldungen" hidden></span></a>` : ""}
+            ${DARF.lesen || DARF.katalog ? `<a class="btn secondary mat-mit-zahl" href="/materialablage/katalog/meldungen">Produktmeldungen<span class="mat-meldezahl" id="kat-meldungen" hidden></span></a>` : ""}
             ${DARF.katalog ? katalogMenue : ""}</div></div>
         ${k ? `<div class="mat-katkopf">
             <div class="mat-pfad">${pfadHtml(['<a href="/materialablage/katalog" data-act="kategorie" data-id="">alle Kategorien</a>',
@@ -5728,9 +5744,9 @@
             : x.wert ? esc(x.wert) : '<span class="muted">–</span>'}${x.art === "yesno" && x.soll && !istBestandteil(x) ? ` <span class="muted small mat-soll">(Soll ${esc(x.soll)})</span>` : ""}${nummernLesen(x)}</td>
           <td data-l="Bemerkung">${x.notiz ? `<span class="mat-text">${esc(x.notiz)}</span>` : ""}</td>
           <td data-l="Foto">${x.foto ? bildLink(x.foto.web, x.foto.original, `${x.text}${x.notiz ? ` – ${x.notiz}` : ""}`, "befunde", `<img class="mat-mini" src="${esc(x.foto.vorschau)}" alt="Foto">`) : ""}</td></tr>`).join("");
+      // Die Marke steht direkt unter der Überschrift „Ergebnis“ – nicht noch einmal als Zeile „Ergebnis“ (Reste, 4).
       const ergebnisBox = pr.entwurf ? `<p class="notice">Diese Prüfung ist noch offen – in Prüfung bei ${esc(pr.pruefer)} seit ${esc(fmtZeit(pr.begonnen_am))}. Was hier steht, ist der aktuelle Stand des Entwurfs.</p>`
-        : `<div class="mat-spalten"><section class="section"><h2>Ergebnis</h2><dl class="mat-daten">
-          <dt>Ergebnis</dt><dd>${ergebnisMarke(pr.ergebnis)}</dd>
+        : `<div class="mat-spalten"><section class="section"><h2>Ergebnis</h2><p class="mat-ergebnis-zeile">${ergebnisMarke(pr.ergebnis)}</p><dl class="mat-daten">
           <dt>Prüftag</dt><dd>${esc(fmtTag(pr.datum))}</dd>
           ${pr.naechste ? `<dt>Nächste Prüfung</dt><dd><strong>${esc(fmtTag(pr.naechste))}</strong></dd>` : ""}
           ${pr.grund ? `<dt>Grund</dt><dd>${esc(pr.grund)}</dd>` : ""}
@@ -7693,12 +7709,38 @@
   // Die erledigende Freiprüfung wurde später berichtigt und gibt nicht mehr frei – die Meldung ist wieder offen.
   const wiederOffen = (m) => (m.wieder_offen ? `<p class="mat-mangel-zeile mat-mangel-wieder"><a href="/materialablage/pruefung/${Number(m.wieder_offen.berichtigung)}">Freiprüfung später berichtigt</a> (jetzt: ${esc(ERGEBNIS[m.wieder_offen.ergebnis] || m.wieder_offen.ergebnis)}) – die Meldung ist wieder offen, die nächste Freiprüfung hakt sie ab.</p>` : "");
 
+  /* Ein langer Mangeltext (ab MANGEL_LANG Zeichen) steht im Banner der Artikelseite eingeklappt: der Anfang bis zum
+     letzten Wortende vor MANGEL_ANFANG Zeichen, „ …“, darunter „Weiterlesen“ – der Knopf zeigt den Rest an Ort und Stelle
+     und klappt ihn mit „Weniger anzeigen“ wieder zu (Reste vor dem finalen Test, 1; Teil A, Bitte bestätigen 4: eine
+     Beschreibung mit 1 852 Zeichen schob am Telefon den Artikel um mehrere Bildschirme nach unten). Bis dahin ist der Rest
+     hidden, auch für Vorlesehilfen – der Knopf sagt mit aria-expanded, dass mehr kommt. Kürzere Texte wie bisher. */
+  const MANGEL_LANG = 600, MANGEL_ANFANG = 400;
+  function mangelTextKurz(m, klasse) {
+    const t = m.inhalt ? String(m.description || "") : "";
+    if (t.length < MANGEL_LANG) return mangelText(m, klasse);
+    const leer = Math.max(t.lastIndexOf(" ", MANGEL_ANFANG), t.lastIndexOf("\n", MANGEL_ANFANG));
+    let schnitt = leer > MANGEL_ANFANG / 2 ? leer : MANGEL_ANFANG;
+    if (/[\uD800-\uDBFF]/.test(t[schnitt - 1])) schnitt -= 1;       // kein halbes Zeichen (Emoji) am Schnitt
+    const id = `mangel-text-${Number(m.id)}`;
+    return `<p class="${klasse}" id="${id}">${esc(t.slice(0, schnitt))}<span class="mat-mangel-punkte" aria-hidden="true"> …</span><span class="mat-mangel-rest" hidden>${esc(t.slice(schnitt))}</span></p>
+      <p class="mat-mangel-mehr"><button type="button" class="btn secondary small" data-act="mangel-weiterlesen" aria-expanded="false" aria-controls="${id}">Weiterlesen</button></p>`;
+  }
+  function mangelWeiterlesen(b) {
+    const text = document.getElementById(b.getAttribute("aria-controls"));
+    if (!text) return;
+    const auf = b.getAttribute("aria-expanded") !== "true";
+    $(".mat-mangel-rest", text).hidden = !auf;
+    $(".mat-mangel-punkte", text).hidden = auf;
+    b.setAttribute("aria-expanded", String(auf));
+    b.textContent = auf ? "Weniger anzeigen" : "Weiterlesen";
+  }
+
   // sperre: Sperrgrund aus einem anderen Grund als dem Mangel (Text, auch leer) – dann steht er als Zeile darin; null: nichts.
   function mangelBanner(m, sperre) {
     return `<div class="mat-banner mat-mangel-banner" role="note">
       <p class="mat-mangel-titel">MANGEL GEMELDET am ${esc(tagZeit(m.created_at))}${m.melder ? ` · von ${esc(m.melder)}` : ""}</p>
       ${sperre === null || sperre === undefined ? "" : `<p class="mat-mangel-sperre"><strong>Außerdem gesperrt</strong>${sperre ? `: ${esc(sperre)}` : ""}.</p>`}
-      ${mangelText(m, "mat-text mat-mangel-text")}
+      ${mangelTextKurz(m, "mat-text mat-mangel-text")}
       ${mangelFotos(m, `Mangel vom ${S.fmtDate(m.created_at)}`)}
       ${wiederOffen(m)}
       <p class="mat-mangel-zeile">Nicht verwenden – beiseitelegen und beim Materialwart abgeben. Freigeben kann ihn nur ein Prüfer mit einer Prüfung („einsatzbereit“).</p></div>`;

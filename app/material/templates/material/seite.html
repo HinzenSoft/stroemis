@@ -5,7 +5,7 @@
 {% block title %}{% if nur_psa %}Meine PSA{% else %}{% with teil = {"dashboard": "Übersicht", "pruefungen": "Prüfungen",
   "bestand": "Bestand", "antraege": "Änderungsanträge", "ordner": "Ordner", "artikel": "Artikel", "artikel_neu": "Artikel anlegen",
   "pruefung_neu": "Prüfung", "pruefung": "Prüfung", "durchgang": "Prüfdurchgang", "katalog": "Katalog", "produkt": "Produkt",
-  "formular": "Prüfformular", "meldungen": "Meldungen", "suche": "Suche", "bestandsimport": "Bestandsliste importieren",
+  "formular": "Prüfformular", "meldungen": "Produktmeldungen", "suche": "Suche", "bestandsimport": "Bestandsliste importieren",
   "bericht": "Jahresbericht", "meine_psa": "Meine PSA", "fremd": "Artikel aus einem anderen Bereich"}.get(ansicht) %}{% if teil %}{{ teil }} – {% endif %}{% endwith %}{{ modul.name.material }}{% endif %} – strömis.de{% endblock %}
 {% block head %}
 <link rel="stylesheet" href="{{ url_for('material.static', filename='material.css') }}">
