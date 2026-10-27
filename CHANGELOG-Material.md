@@ -4269,7 +4269,7 @@ passen?“ (Dateiformat); verschiedene Inhalte, nicht zusammengelegt (bitte best
 `/api/wiki/files/drehung` und `/api/wiki/files/zuschnitt` (500er-Fälle, Status bleibt 400) und die Hinweise des
 ZIP-Imports enthalten die Art in Klammern.
 
-**Tests**: neu `tests/test_letzte_offene.py` (Datenschutz eine Zeile, Baumknöpfe, Symbol, Abschnittsaktion) und
+**Tests**: neu `tests/test_module_letzte_offene.py` (Datenschutz eine Zeile, Baumknöpfe, Symbol, Abschnittsaktion) und
 `tests/test_wiki_fehlerart.py` (jede Art einzeln; Import echt mit unlesbarem, abgeschnittenem, zu großem Bild und
 schreibgeschütztem Ablageordner, nachgestellt Speicher voll und Unbekanntes; Editor mit Hochladen, Drehen, Zuschneiden;
 kein Serverpfad in der Antwort, Traceback im Protokoll); angepasst test_module_info_i (M8, M28, Leitstellen-Marken in der

@@ -1,5 +1,5 @@
 """Letzte offene Punkte (27.10.2026, Auftrag planung/material-phase4/auftrag_letzte_offene.md):
-python tests/test_letzte_offene.py  oder  pytest tests/test_letzte_offene.py
+python tests/test_module_letzte_offene.py  oder  pytest tests/test_module_letzte_offene.py
 
   1. Datenschutz-Sonderfälle: Wo ein „i“ und ein sichtbarer Satz am selben Begriff stehen, bleibt der Datenschutz als
      eine Zeile sichtbar, der Rest steht im „i“ (Jahresbericht „Prüfer nennen“, Bestandsimport „Personen“, Prüfanleitung

@@ -164,7 +164,7 @@ def test_alle_stellen():
 def test_sichtbar_geblieben():
     """Was nach der Regel sichtbar bleibt: Datenschutz, Folge der Aktion, Rechtsfolge, Sperrgrund."""
     mat, adm, karte = lies(MAT), lies(ADM), lies(MAP)
-    # Datenschutz sichtbar, aber eine Zeile; die Einzelheiten im „i“ (Auftrag „letzte offene Punkte“, test_letzte_offene).
+    # Datenschutz sichtbar, aber eine Zeile; die Einzelheiten im „i“ (Auftrag „letzte offene Punkte“, test_module_letzte_offene).
     assert '<span class="help">Ohne Haken nennt keine Ausgabe einen Prüfer.</span>' in mat
     assert "Diese Version wurde schon für Prüfungen benutzt und bleibt unverändert" in mat
     assert "Verknüpfen kann, wer in der Strömipedia mindestens Mitglied ist." in mat
