@@ -885,8 +885,9 @@ def test_oberflaeche_statisch():
     assert "wartet auf einen Materialwart des Ordners" in block and "Material-Verwaltung bestätigt" not in block
     seite = js[js.index("async function artikel()"):js.index("function artikelDialog(a)")]
     assert "const darfDirekt = Boolean(darf.verwalten || darf.pruefen)" in seite
-    # Seit dem 27.10.2026 rechts neben der Überschrift „Stammdaten“ (Nachtrag 5), nicht mehr am Ende des Blocks.
-    assert ("<div class=\"mat-kastenkopf\"><h2>Stammdaten</h2>${antragMoeglich(a) ? '<button class=\"btn secondary small\" "
+    # Seit dem 27.10.2026 rechts neben der Überschrift „Stammdaten“ (Nachtrag 5), nicht mehr am Ende des Blocks; seit
+    # UI/UX D5 im gemeinsamen Abschnittskopf (.abschnittskopf statt .mat-kastenkopf).
+    assert ("<div class=\"abschnittskopf\"><h2>Stammdaten</h2>${antragMoeglich(a) ? '<button class=\"btn secondary small\" "
             "type=\"button\" data-act=\"antrag\">Änderung beantragen</button>' : \"\"}</div>") in seite
     karte = js[js.index("function antragKarte(x)"):js.index("function antragBestaetigenDialog")]
     assert 'class="btn secondary small" data-act="bestaetigen"' in karte and 'data-act="antrag-ablehnen"' in karte

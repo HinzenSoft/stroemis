@@ -800,6 +800,8 @@ python tests/test_module_info_i.py      # Info-„i“ app-weit: S.info und Jinj
 python tests/test_module_letzte_offene.py  # Letzte offene Punkte: Datenschutzsätze am „i“ eine Zeile, Baumknöpfe der Strömipedia,
                                         # Blatt-Symbol „Angaben zur Seite“, Abschnittsaktion neben der Überschrift
 python tests/test_wiki_fehlerart.py     # Fehlerart beim Ablegen von Dateien der Strömipedia (Import, Hochladen, Drehen, Zuschneiden)
+python tests/test_module_uiux_u1b.py    # UI/UX vor dem Merge, Teil Aussehen: Kontrast auf hellen Flächen, Tippflächen, Menü, Abschnittskopf,
+                                        # Leerzustand, Statusmarken, Reiter, Textknopf, Namen, Tokens, CSS-Hygiene (statisch)
 python tests/test_material.py           # Materialablage (Migration, Rollen, Katalog, Ordner, Artikel, Suche, Journal, Import, Prüfung, Durchgang, Produktmeldungen,
                                         # Festschreiben, Protokolle, Prüfsumme, Prüfseite, Berichtigung) – braucht WeasyPrint samt Pango;
                                         # den Stempel liest pdftotext (poppler-utils), ohne es pypdf

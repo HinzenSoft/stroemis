@@ -153,12 +153,15 @@ def test_uebrige_module_statisch():
     assert "ghost" not in admin.replace("(btn ghost)", "")
     assert '<details class="zeilenmenue"><summary class="btn secondary small" aria-haspopup="true">Mehr</summary>' in admin
     assert '<button type="button" data-act="reset">Reset-Mail senden</button>' in admin   # Rückfrage seit nach_merge_liste 14
-    assert 'const mailUmbruch = (mail) => S.esc(mail).replace(/@/, "<wbr>@").replace(/\\.(?=[^@]*$)/g, "<wbr>.");' in admin
+    # Seit UI/UX D10 als Einheit (name-einheit), Umbruch nur noch am „@“.
+    assert 'const mailUmbruch = (mail) => `<span class="name-einheit">${S.esc(mail).replace(/@/, "<wbr>@")}</span>`;' in admin
     assert '<td class="mail" data-l="E-Mail">${mailUmbruch(u.email)}</td>' in admin
     app_css = lies("app/static/css/app.css")
     assert "#users td.mail { overflow-wrap: break-word; }" in app_css
     assert ".c-tabs.reiter-linie button.sel { background: none; border-bottom-color: var(--rot); color: var(--rot); }" in app_css
-    assert "#users .recht-wahl, .zeilenmenue-liste button { min-height: 44px; }" in app_css
+    assert "#users .btn, #users .recht-wahl { min-height: 44px; }" in app_css
+    # Menüeinträge (auch das Zeilenmenü) seit UI/UX D4 im gemeinsamen Menübaustein, am Finger 44 px.
+    assert ".zeilenmenue-liste, .menue-schwebend, .tree-menu) > :is(a, button) { min-height: 44px; }" in app_css
     assert "  .krumen a.krume { min-height: 44px; min-width: 44px; }" in app_css
     # V6: Werkzeuge der Karte rollen nicht mehr seitlich, sie brechen um.
     assert ".map-tools { flex-wrap: nowrap; overflow-x: auto;" not in app_css

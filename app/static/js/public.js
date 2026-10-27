@@ -73,7 +73,8 @@
       /* Im Lesemodus sagt die Meldung, wo die Seite sonst sein könnte – für „gibt es nicht“ und „nicht öffentlich“
          wortgleich, wie die Schnittstelle selbst: Sonst ließe sich abfragen, welche internen Seiten es gibt. */
       const text = lesemodus && e.status === 404 ? "Diese Seite gibt es nicht, oder sie steht nur in der internen Strömipedia." : e.message;
-      content.innerHTML = `<div class="empty"><strong>Seite nicht gefunden</strong>${esc(text)}<div class="btn-row" style="justify-content:center;margin-top:12px"><a class="btn secondary small" href="${start}">Zur Übersicht</a></div></div>`;
+      content.innerHTML = `<div class="wiki-head"><h1>Seite nicht gefunden</h1></div><p class="leerzustand">${esc(text)}</p>
+        <div class="btn-row"><a class="btn secondary small" href="${start}">Zur Übersicht</a></div>`;
       wire(content);
       // Das Inhaltsverzeichnis gehörte der vorigen Seite – seine Sprungziele gibt es hier nicht. Ebenso ihr Titel im
       // Reiter (und im Verlauf) und ihre Markierung im Baum: Sonst stand dort weiter die Seite, die man verlassen hat.

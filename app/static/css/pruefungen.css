@@ -12,7 +12,7 @@
    breit. */
 .pruef[data-ansicht=liste], .pruef[data-ansicht=kataloge] { max-width: 1280px; }
 /* Hilfetexte höchstens rund 120 Zeichen je Zeile wie in Leitstelle und Materialablage (V10; st-geraete: 189 Zeichen). */
-.pruef p.help { max-width: 100ch; }
+.pruef :is(.help, .notice) { max-width: 100ch; }
 .pruef .page-head h1 { margin: 0; overflow-wrap: anywhere; }
 .pruef .page-head .btn-row { margin-left: auto; }
 .pruef .zurueck { display: inline-block; margin-bottom: 8px; font-size: var(--fs-mittel); text-decoration: none; }
@@ -24,10 +24,7 @@
 .pruef .beschreibung-kopf summary { cursor: pointer; color: var(--grau); }
 .pruef .beschreibung-kopf .md { margin-top: 6px; }
 
-/* Marken in den drei Prüfungsfarben – neben gelb (Hinweis) und grau (ruhend) aus app.css. */
-.badge.rot { background: var(--rot); color: var(--weiss); }
-.badge.gruen { background: var(--ok); color: var(--weiss); }
-.badge.blau { background: var(--wasser); color: var(--weiss); }
+/* Marken in den Prüfungsfarben (rot, grün, blau, grau): ein Farbsystem in app.css (UI/UX D7). */
 .badge.np { background: var(--anthrazit); color: var(--weiss); font-size: var(--fs-marke); padding: 0 5px; margin-left: 4px; }
 /* Büroklammer in der Zelle: Anhänge vorhanden (Bilder/Videos) – mit Zähler ab zwei. */
 .zelle .anhang { font-size: var(--fs-klein); font-weight: 600; margin-left: 5px; color: var(--anthrazit); white-space: nowrap; }
@@ -42,11 +39,12 @@
    Der Kreis vor dem Namen: Profilbild oder Initialen, 28 px, rund – dieselbe Form wie die
    Autorenkreise im Wiki, damit man Personen überall auf einen Blick wiedererkennt. */
 .tn-kopfzeile { display: inline-flex; align-items: center; gap: 6px; min-width: 0; max-width: 100%; vertical-align: middle; }
-.tn-kopfzeile .tn-name, .tn-kopfzeile .linkbtn { min-width: 0; overflow-wrap: anywhere; }
+/* Namen brechen an Leerzeichen und Bindestrichen, im Wort nur, wenn ein Teil allein nicht passt (UI/UX D10). */
+.tn-kopfzeile .tn-name, .tn-kopfzeile .linkbtn { min-width: 0; overflow-wrap: break-word; }
 .tn-bild {
   display: inline-flex; align-items: center; justify-content: center; flex: none;
   width: 28px; height: 28px; border-radius: 50%; overflow: hidden;
-  background: var(--rot-hell); color: var(--rot); font-size: var(--fs-marke); font-weight: 700; letter-spacing: .02em; line-height: 1;
+  background: var(--rot-hell); color: var(--rot-auf-flaeche); font-size: var(--fs-marke); font-weight: 700; letter-spacing: .02em; line-height: 1;
 }
 .tn-bild img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .tn-bild.mit { background: var(--grau-hell); }
@@ -116,7 +114,7 @@ p.dlg-tn { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .tn-block-kopf .tn-bild.gross { width: 104px; height: 104px; font-size: 2.3rem; }
 .tn-block-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .tn-name-zeile { display: inline-flex; align-items: center; gap: 6px; min-width: 0; }
-.tn-name-zeile .tn-name { overflow-wrap: anywhere; }
+.tn-name-zeile .tn-name { overflow-wrap: break-word; }
 .tn-block-kopf .tn-gliederung { font-weight: 400; font-size: var(--fs-mittel); color: var(--grau); }
 .tn-block .notice.small { margin: 0 0 8px; font-size: var(--fs-klein); }
 .tn-block-felder { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px 16px; align-items: start; }
@@ -137,16 +135,11 @@ p.dlg-tn { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .pruef table.list td .titel { font-weight: 700; font-size: 1rem; text-decoration: none; color: var(--anthrazit); overflow-wrap: anywhere; }
 .pruef table.list td .titel:hover { color: var(--rot); }
 .pruef table.list td .nummer { color: var(--grau); font-size: var(--fs-klein); }
-.pruef .leer { color: var(--grau); padding: 26px 0; text-align: center; }
-.pruef .leer strong { display: block; color: var(--anthrazit); margin-bottom: 4px; }
 
 /* --- Reiter des Lehrgangs --------------------------------------------------------------- */
-.pruef .c-tabs.reiter { margin: 14px 0 16px; }
-.pruef .c-tabs.reiter button { padding: 9px 6px; font-size: var(--fs-mittel); }
-.pruef .c-tabs.reiter button .z { font-weight: 400; opacity: .8; }
-.pruef .reiter-kopf { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; margin: 0 0 12px; }
-.pruef .reiter-kopf h2 { margin: 0; }
-.pruef .reiter-kopf .btn-row { margin-left: auto; }
+.pruef .c-tabs.reiter { margin: 14px 0 16px; }   /* Aussehen: Reiter als Linie (app.css, .reiter-linie) */
+.pruef .abschnittskopf { margin-bottom: 12px; }   /* Abschnittskopf: app.css (UI/UX D5) */
+.pruef .abschnittskopf .btn-row { margin-left: auto; }
 
 /* Rollbereich für Matrizen: Die Seite selbst rollt nie seitwärts, nur diese Kiste. */
 .pruef .table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; margin: 0; border: 1px solid var(--linie); border-radius: var(--radius); max-width: 100%; }
@@ -160,7 +153,7 @@ p.dlg-tn { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
   box-shadow: 2px 0 0 var(--linie);
 }
 .pruef .table-scroll tr.offen td { background: var(--rot-hell); }
-.pruef .table-scroll .tn-name { display: block; font-weight: 600; overflow-wrap: anywhere; }
+.pruef .table-scroll .tn-name { display: block; font-weight: 600; overflow-wrap: break-word; }
 .pruef .table-scroll .tn-sub { display: block; color: var(--grau); font-size: var(--fs-klein); }
 /* Auf dem roten Grund offener Zeilen und Karten reichte das Grau des Nebentexts (Gliederung, Geburtsdatum) nicht:
    4,48 : 1 statt 4,5 : 1 (Browserprüfung vor dem Merge, V13) – dort in Anthrazit. */
@@ -180,7 +173,8 @@ p.dlg-tn { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .tn-karte { border: 1px solid var(--linie); border-radius: var(--radius); margin: 0 0 10px; padding: 10px 12px; }
 .tn-karte.offen { border-left: 4px solid var(--rot); background: var(--rot-hell); }
 .tn-karte .tn-kopf { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 4px; }
-.tn-karte .tn-kopf .linkbtn { font-size: 1rem; flex: 1 1 auto; min-height: 44px; }
+.tn-karte .tn-kopf .linkbtn { font-size: 1rem; flex: 1 1 auto; }
+@media (pointer: coarse) { .tn-karte .tn-kopf .linkbtn { min-height: 44px; } }   /* Tippfläche nur am Finger (UI/UX A15) */
 /* Zugeklappt, damit die Liste nicht für jede Person voll ausgerollt scrollt – wer offen hat,
    steht schon in der Marke oben im Kartenkopf. Der Zustand übersteht ein Häkchen: renderLehrgangSeite
    merkt sich beim Neuzeichnen, welche <details> offen waren, und klappt sie wieder auf. */
@@ -245,7 +239,7 @@ p.dlg-tn { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .zelle.st-bestanden, .zelle.st-nachpruefung_bestanden { background: var(--co-success-fl); border-color: var(--ok); }
 .zelle.st-bestanden .txt, .zelle.st-nachpruefung_bestanden .txt { color: var(--ok); }
 .zelle.st-mangelhaft, .zelle.st-nachpruefung_mangelhaft { background: var(--rot-hell); border-color: var(--rot); }
-.zelle.st-mangelhaft .txt, .zelle.st-nachpruefung_mangelhaft .txt { color: var(--rot); }
+.zelle.st-mangelhaft .txt, .zelle.st-nachpruefung_mangelhaft .txt { color: var(--rot-auf-flaeche); }
 /* Listenform („je Leistung“ / „je TN“): Name links, Status rechts – eine Zeile je Eintrag. */
 .zellen-liste { list-style: none; margin: 0; padding: 0; }
 .zellen-liste li { border-bottom: 1px solid var(--linie); }
@@ -255,7 +249,7 @@ p.dlg-tn { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
   cursor: pointer; text-align: left;
 }
 .zelle-zeile:hover { background: var(--grau-hell); }
-.zelle-zeile .name { font-weight: 600; font-size: 1rem; overflow-wrap: anywhere; }
+.zelle-zeile .name { font-weight: 600; font-size: 1rem; overflow-wrap: break-word; }
 .zelle-zeile .name small { display: block; font-weight: 400; color: var(--grau); font-size: var(--fs-klein); }
 .zelle-zeile .zelle { min-height: 48px; }
 .zelle-zeile.offen-vor .name::after { content: " ⚠"; color: var(--rot); }
@@ -385,6 +379,7 @@ dialog.pruef-dlg { width: min(720px, 96vw); }
 .maengel-filter { display: grid; grid-template-columns: 1fr 1fr auto; gap: 8px 10px; align-items: end; margin: 0 0 14px; }
 .maengel-filter label { margin: 0 0 4px; }
 .maengel-filter label.inline { margin: 0; min-height: 40px; }
+@media (pointer: coarse) { .maengel-filter label.inline { min-height: 44px; } }   /* „nur offene Mängel“ – das Etikett ist die Tippfläche (A8) */
 .maengel-filter select { width: 100%; }
 .maengel-filter .knoepfe { grid-column: 1 / -1; }
 .tn-gruppe { margin: 0 0 18px; }
@@ -452,7 +447,7 @@ dialog.pruef-dlg { width: min(720px, 96vw); }
 .pruef.druck .medien-grid { grid-template-columns: repeat(auto-fill, 72px); }
 /* In der Druckansicht gibt es nur die Übersicht – alles, was Bedienung ist, bleibt draußen,
    auch die Bauchbinde (sie liegt außerhalb von <main>, daher über :has am body). */
-.pruef.druck .c-tabs, .pruef.druck .maengel-filter, .pruef.druck .su-banner, .pruef.druck .reiter-kopf .btn-row { display: none !important; }
+.pruef.druck .c-tabs, .pruef.druck .maengel-filter, .pruef.druck .su-banner, .pruef.druck .abschnittskopf .btn-row { display: none !important; }
 body:has(.pruef.druck) .bauchbinde { display: none; }
 body:has(.pruef.druck) #toast { top: 12px; }
 @media print {
@@ -472,8 +467,8 @@ body:has(.pruef.druck) #toast { top: 12px; }
   .pruef .page-head { gap: 8px; }
   .pruef .page-head .btn-row { margin-left: 0; width: 100%; }
   .pruef .page-head .btn-row .btn { flex: 1 1 auto; justify-content: center; }
-  .pruef .reiter-kopf .btn-row { margin-left: 0; width: 100%; }
-  .pruef .reiter-kopf .btn-row .btn { flex: 1 1 auto; justify-content: center; }
+  .pruef .abschnittskopf .btn-row { margin-left: 0; width: 100%; }
+  .pruef .abschnittskopf .btn-row .btn { flex: 1 1 auto; justify-content: center; }
   .tn-desktop { display: none; }
   .tn-mobil { display: block; }
   .leistung-karte { grid-template-columns: 1fr; }
@@ -499,7 +494,10 @@ body:has(.pruef.druck) #toast { top: 12px; }
   .bew-wahl button { font-size: .95rem; gap: 6px; }
   .bew-wahl button .sym { font-size: 1.4rem; }
   .su-banner { top: calc(var(--topbar) + 4px); }
-  .pruef .c-tabs.reiter button { font-size: var(--fs-klein); padding: 10px 2px; }
+  /* Vier Reiter in einer Zeile ab 375 px; schmaler bricht die Zeile um (A9). */
+  .pruef .c-tabs.reiter { gap: 0; }
+  .pruef .c-tabs.reiter button { padding: 10px 3px; font-size: var(--fs-klein); }
+  .pruef .c-tabs.reiter .reiter-zahl { margin-left: 2px; padding: 0 4px; }
   /* Matrix: Die klebende Namensspalte ließ neben sich keine ganze Zelle mehr frei (160 + 128 px
      bei 336 px). Schmaler, Zellen ohne die Nebenzeile – die steht in „je Leistung“ und „je TN“. */
   .pruef .bew-matrix th:first-child, .pruef .bew-matrix td:first-child { min-width: 108px; max-width: 132px; }

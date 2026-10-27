@@ -229,8 +229,8 @@ def test_vorlagen_gerendert():
         assert 'id="btn-baum-mehr"' in wiki and 'title="Papierkorb, Seiten aus ZIP importieren">⋯</button>' in wiki
         # Am Finger sind die Einträge des „⋯“-Menüs im Seitenbaum (mit dem Import) 44 px hoch.
         css = lies("app/static/css/app.css")
-        touch = css[css.index("/* Fingerbedienung (Punkt 12"):]
-        assert ".tree-menu button { min-height: 44px; }" in touch[:touch.index("\n}\n")]
+        # Seit UI/UX D4 im gemeinsamen Menübaustein (app.css).
+        assert ".menue-schwebend, .tree-menu) > :is(a, button) { min-height: 44px; }" in css
         # Ohne Wiki-Verwaltung kein Knopf „Importieren“ (der Server lehnt den Import ohnehin ab).
         r = c.post("/api/admin/users", json={"email": "mitglied-info@example.org", "name": "Mitglied Platzhalter",
                                              "password": "geheim123", "rechte": {"wiki": 1}})

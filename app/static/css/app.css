@@ -113,7 +113,7 @@ a { color: var(--rot); }
 a:hover { color: var(--rot-dunkel); }
 /* Überschriften in der Hausschrift – überall, nicht nur in der Bauchbinde. */
 h1, h2, h3, h4 { font-family: var(--font-marke); line-height: 1.2; margin: 0 0 .5em; letter-spacing: -.01em; }
-h1 { font-size: 1.7rem; font-weight: 700; color: var(--rot); }
+h1 { font-size: 1.7rem; font-weight: 700; color: var(--rot); overflow-wrap: anywhere; }   /* ein langes Wort bricht notfalls (große Systemschrift, A9) */
 h2 { font-size: 1.3rem; font-weight: 700; }
 h3 { font-size: 1.05rem; font-weight: 700; }
 p { margin: 0 0 .9em; }
@@ -123,6 +123,12 @@ img { max-width: 100%; }
 :focus-visible { outline: 2px solid var(--anthrazit); outline-offset: 2px; box-shadow: 0 0 0 5px var(--fokus-hof); }
 .bauchbinde :focus-visible { outline-color: var(--weiss); box-shadow: none; }
 .hidden { display: none !important; }
+/* Wiederkehrende Abstände statt Inline-Stil (UI/UX D12): ein Block, der sich vom vorigen absetzt (Knopfzeile unter einem
+   Formular, Zeile unter einer Liste), eine Zwischenüberschrift in einem Panel oder Dialog; Text mit seinen Zeilen. */
+.abgesetzt { margin-top: 14px; }
+h3.abgesetzt { margin-top: 18px; }
+.text-zeilen { white-space: pre-wrap; }
+.lb-details { font-size: var(--fs-mittel); }   /* „Weitere Infos“ eines Bildes in der Großansicht */
 .muted { color: var(--grau); }
 .small { font-size: var(--fs-klein); }
 
@@ -223,10 +229,11 @@ img { max-width: 100%; }
   box-shadow: var(--schatten-menue); }
 .nav-mehr-liste[hidden] { display: none; }
 .nav .nav-mehr-liste a, .nav .nav-mehr-liste button {
-  display: flex; align-items: center; width: 100%; min-height: 44px; padding: 10px 18px; margin: 0;
+  display: flex; align-items: center; width: 100%; padding: 10px 18px; margin: 0;
   background: none; border: 0; border-left: 4px solid transparent; color: var(--anthrazit); text-align: left;
   font: inherit; font-size: var(--fs-mittel); font-weight: 600; text-decoration: none; cursor: pointer; }
-.nav .nav-mehr-liste a:hover, .nav .nav-mehr-liste button:hover { background: var(--grau-hell); color: var(--rot); }
+@media (pointer: coarse) { .nav .nav-mehr-liste a, .nav .nav-mehr-liste button { min-height: 44px; } }   /* UI/UX A15 */
+.nav .nav-mehr-liste a:hover, .nav .nav-mehr-liste button:hover { background: var(--grau-hell); color: var(--rot-auf-flaeche); }
 .nav .nav-mehr-liste a.active { border-left-color: var(--rot); color: var(--rot); }
 .nav .nav-mehr-liste .user { display: none; }
 .bauchbinde .nav-mehr-liste :focus-visible { outline-color: var(--anthrazit); outline-offset: -3px; }
@@ -257,7 +264,7 @@ img { max-width: 100%; }
 .btn.secondary:hover { background: var(--grau-hell); }
 .btn.secondary:disabled, .btn.secondary:disabled:hover { background: var(--weiss); color: var(--anthrazit); border-color: var(--anthrazit); }
 .btn.danger { background: var(--weiss); color: var(--rot); border-color: var(--rot); }
-.btn.danger:hover { background: var(--rot-hell); }
+.btn.danger:hover { background: var(--rot-hell); color: var(--rot-auf-flaeche); }
 .btn.small { padding: 5px 10px; font-size: var(--fs-klein); }
 .btn.yellow { background: var(--gelb); color: var(--anthrazit); border-color: var(--gelb); }
 .btn.yellow:hover { background: var(--gelb-dunkel); border-color: var(--gelb-dunkel); color: var(--anthrazit); }
@@ -278,6 +285,9 @@ textarea { min-height: 90px; resize: vertical; }
 /* Datumsfelder sahen auf iOS wie kleine graue Pillen ohne Rahmen aus – gleiche Höhe wie Textfelder. */
 input[type=date] { -webkit-appearance: none; appearance: none; min-height: 40px; }
 input:focus, select:focus, textarea:focus { border-color: var(--anthrazit); outline: 2px solid var(--anthrazit); outline-offset: 0; box-shadow: 0 0 0 4px var(--fokus-hof); }
+/* Auswahlpunkte und Kästchen in Anthrazit statt Browser-Blau (UI/UX A14); die Häkchen der Riegenkarten-Voraussetzungen
+   bleiben grün (pruefungen.css). */
+input[type=radio], input[type=checkbox] { accent-color: var(--anthrazit); }
 .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 0 12px; }
 @media (max-width: 480px) { .field-row { grid-template-columns: 1fr; } }
 .help { color: var(--grau); font-size: var(--fs-klein); margin-top: 3px; }
@@ -290,6 +300,18 @@ input:focus, select:focus, textarea:focus { border-color: var(--anthrazit); outl
 .error { color: var(--rot); font-weight: 600; margin: 10px 0; }
 .notice { background: var(--grau-hell); border-left: 4px solid var(--gelb); padding: 10px 12px; margin: 12px 0; }
 .notice a { color: var(--rot-auf-flaeche); }
+/* Text auf hellen Flächen (UI/UX A5, vorher nur in der Materialablage): Rot kommt auf --rot-hell, --grau-hell und den
+   hellen Hinweisflächen nur auf 4,0–4,4 : 1, Grau auf 4,3–4,5 : 1 – unter WCAG AA (4,5 : 1). Links und Textknöpfe stehen
+   dort im dunklen Rot (--rot-auf-flaeche, über 6 : 1), Nebentext in Anthrazit; auch beim Überfahren einer Tabellenzeile.
+   Neue helle Flächen mit Links oder Nebentext gehören in diese Listen. */
+:is(.notice, .note-box, .mail-bericht, .inline-toc, .callout, .wiki-content blockquote, .c-quote, .diff,
+    .wiki-editor .toastui-editor-contents > :is([class^="co-"], [class*=" co-"], [class*="coz-"]), table.list tr:hover td,
+    .zelle.st-mangelhaft, .zelle.st-nachpruefung_mangelhaft, .tn-karte.offen, .pruef .table-scroll tr.offen td,
+    .mat-mangelzeile, .mat-punkt.mangel, .mat-fs-warnung, .mat-pruefergebnis.bad, .mat-austausch-liste.fehler,
+    .mat-importhinweis, .mat-mangel-warnung, .mat-fs-maengel, .mat-rr-kasten) :is(a:not(.btn), .lnk) { color: var(--rot-auf-flaeche); }
+:is(.callout, .zelle.st-mangelhaft, .zelle.st-nachpruefung_mangelhaft, .tn-karte.offen, .pruef .table-scroll tr.offen td,
+    .mat-mangelzeile, .mat-punkt.mangel, .mat-fs-warnung, .mat-pruefergebnis.bad, .mat-austausch-liste.fehler,
+    .mat-importhinweis.bad, .mat-mangel-warnung, .mat-fs-maengel) :is(.muted, .help, .sub, small) { color: var(--anthrazit); }
 
 /* Marken (Plaketten) tragen alle dieselbe Form – nur die Farbe unterscheidet sie: gelb für
    Hinweise, grau für Ruhendes, kräftig für die Kategorie eines Albums, Statusfarben im Text.
@@ -300,7 +322,16 @@ input:focus, select:focus, textarea:focus { border-color: var(--anthrazit); outl
   white-space: nowrap; text-transform: none; letter-spacing: 0;   /* nicht von einem Zwischentitel erben */
 }
 .badge { background: var(--gelb); color: var(--anthrazit); }
-.badge.grey { background: var(--grau-hell); color: var(--grau); }
+/* Statusmarken – ein Farbsystem für alle Module (UI/UX D7): kräftig gefüllt mit weißer Schrift für Zustände (grün = in
+   Ordnung/abgeschlossen, rot = Mangel/überfällig/veraltet), gelb für Hinweise und „bald/offen“, hellblau mit blauer Kante
+   für Neues und Laufendes, hellgrau mit grauer Kante für Ruhendes. Dieselben Paare tragen die Materialablage
+   (.mat-status.s-*, material.css), die Riegenkarten (.badge.gruen/.rot/.blau/.grey) und die Strömipedia ({status:…},
+   .status-*; vorher hellgrün/hellrot mit farbiger Schrift, Rot auf Hellrot nur 4,2 : 1). */
+.badge.gruen, .status-ok { background: var(--ok); color: var(--weiss); }
+.badge.rot, .status-danger { background: var(--rot); color: var(--weiss); }
+.badge.blau { background: var(--co-info-fl); color: var(--wasser); box-shadow: inset 0 0 0 1px var(--wasser); }
+.status-warn { background: var(--gelb); color: var(--anthrazit); }
+.badge.grey, .status-grau { background: var(--grau-hell); color: var(--grau); box-shadow: inset 0 0 0 1px var(--linie); }
 .cat { color: var(--weiss); background: var(--grau); }
 .cat.seil { background: var(--rot); }
 .cat.wasser { background: var(--wasser); }
@@ -327,6 +358,11 @@ table.list td.mail { overflow-wrap: anywhere; }
    die Marke selbst bricht nie um – „Redakteur“ lief deshalb quer über die Spalte „Inhalte“.
    Jetzt bleibt sie in ihrer Zelle und bricht im Notfall lieber im Wort. */
 table.list .badge { max-width: 100%; white-space: normal; overflow-wrap: anywhere; padding: 1px 6px; }
+/* Umbrechende Marken (schmale Spalten, Karten) – eine Regel für alle Module (UI/UX D7): Ecken --radius-gross statt einer
+   Pille, deren Rundung bei zwei Zeilen ein Oval ergäbe; enger Zeilenabstand. Die Materialablage setzt dieselben Werte in
+   ihren Karten (material.css). */
+table.list .badge, .recht-marken .badge.urkunde-fehlt, .recht-marken .badge.kein-zugang, #u-freigaben .badge {
+  border-radius: var(--radius-gross); line-height: 1.3; }
 /* Rechte-Matrix der Nutzerverwaltung: In jeder Zeile stehen vier Auswahlfelder nebeneinander,
    ihre Spalten sind gut elf Prozent breit. Das normale Feld (8/10 px Polster, Tabellenschrift)
    wäre darin zu breit für das Wort „Verwaltung“ – deshalb kleiner und ohne Rand zur Zelle.
@@ -349,8 +385,7 @@ table.list .recht-wahl { font-size: var(--fs-marke); padding: 4px 2px 4px 4px; }
 .recht-marken { margin-top: 3px; display: flex; flex-wrap: wrap; gap: 3px; align-items: center; }
 /* „Prüfer – Urkundennummer fehlt“ und „wirkt nicht – kein Zugang“ (gelb) brechen in der schmalen Spalte um: Trennung
    an der weichen Trennstelle statt mitten im Wort, Ecken wie ein Kästchen statt einer Pille. */
-.recht-marken .badge.urkunde-fehlt, .recht-marken .badge.kein-zugang { border-radius: var(--radius); line-height: 1.3;
-  padding: 2px 6px; }
+.recht-marken .badge.urkunde-fehlt, .recht-marken .badge.kein-zugang { padding: 2px 6px; }
 .recht-marken .recht-klein { font-size: var(--fs-klein); color: var(--grau); }
 /* Die Rollen des Moduls Material im Nutzerdialog – abgesetzt, weil sie quer zur Matrix stehen. */
 fieldset.mat-rollen { border: 1px solid var(--linie); padding: 4px 12px 10px; margin: 14px 0 4px; }
@@ -359,7 +394,7 @@ fieldset.mat-rollen legend { font-weight: 700; font-size: var(--fs-mittel); padd
 fieldset.mat-rollen .mat-urkunde { margin: 0 0 0 26px; font-size: var(--fs-klein); overflow-wrap: anywhere; }
 /* Zustand einer Freigabe im Dialog („wirkt nicht – kein Zugang zur Materialablage“) bricht in der schmalen Spalte um:
    Ecken wie ein Kästchen statt einer Pille. */
-#u-freigaben .badge { border-radius: var(--radius); line-height: 1.3; padding: 2px 6px; }
+#u-freigaben .badge { padding: 2px 6px; }
 /* Hinweis, wenn das Häkchen „Prüfer“ Material von „–“ auf „Mitglied“ gehoben hat – unter dem Häkchen eingerückt. */
 fieldset.mat-rollen .mat-stufe-auto { margin: 4px 0 0 26px; }
 /* Auf schmalen Geräten wird aus der Tabelle eine Liste: je Nutzer eine Karte, die Spaltennamen
@@ -479,6 +514,15 @@ html.tastatur dialog[open] .dlg-body { max-height: calc(var(--vv-h, 100dvh) - 22
 .page-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; border-bottom: 2px solid var(--anthrazit); padding-bottom: 8px; margin-bottom: 20px; }
 .section { margin: 26px 0; }
 .section h2 { border-bottom: 1px solid var(--linie); padding-bottom: 4px; }
+/* Abschnittskopf – ein Baustein für alle Module (UI/UX D5; vorher .mat-kastenkopf der Materialablage und .reiter-kopf der
+   Riegenkarten): die Überschrift links, die Aktion des Abschnitts rechts daneben – ein Knopf, eine Knopfzeile oder ein
+   Menü (designsprache „Abschnittsaktion“); passt sie nicht daneben (Telefon), steht sie direkt darunter. In einem
+   .section läuft die Linie der Überschrift dann unter der Aktion durch. */
+.abschnittskopf { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; margin: 0 0 10px; }
+.abschnittskopf > :is(h2, h3) { flex: 1 1 auto; margin: 0; }
+.abschnittskopf > .btn-row { margin: 0; }
+.section .abschnittskopf:has(> :not(h2, h3)) { border-bottom: 1px solid var(--linie); padding-bottom: 4px; margin-bottom: 8px; }
+.section .abschnittskopf:has(> :not(h2, h3)) > h2 { border-bottom: 0; padding-bottom: 0; }
 
 /* --- Anmeldung --------------------------------------------------------- */
 .login-shell { min-height: calc(100vh - var(--topbar)); display: grid; grid-template-columns: 1fr minmax(340px, 33%); }
@@ -654,8 +698,12 @@ html.tastatur dialog[open] .dlg-body { max-height: calc(var(--vv-h, 100dvh) - 22
 .album-list li:hover { background: var(--grau-hell); }
 .album-list img, .album-list .noimg { width: 56px; height: 56px; object-fit: cover; flex: none; background: var(--grau-hell); border-radius: var(--radius); }
 .album-list .t { font-weight: 600; }
-.empty { color: var(--grau); padding: 20px 0; text-align: center; }
-.empty strong { display: block; color: var(--anthrazit); margin-bottom: 4px; }
+/* Leerzustand – ein Baustein für alle Module (UI/UX D6; vorher .empty, .pruef .leer und .mat-leer): ein Satz in Grau,
+   davor bei Bedarf fett die Kernaussage („Noch keine Alben“), darunter bei Bedarf eine Knopfzeile; linksbündig wie der
+   Inhalt. Fehlt eine ganze Seite, trägt sie ein h1 („Seite nicht gefunden“) und darunter diesen Satz. */
+.leerzustand { color: var(--grau); padding: 14px 0; }
+.leerzustand strong { display: block; color: var(--anthrazit); margin-bottom: 4px; }
+.leerzustand + .btn-row, .leerzustand .btn-row { margin-top: 12px; }
 @media (max-width: 640px) {
   .panel {
     top: auto; left: 0; width: 100%; height: 70%;
@@ -704,6 +752,7 @@ progress { width: 100%; height: 10px; accent-color: var(--rot); }
 
 /* --- Wiki -------------------------------------------------------------- */
 .wiki-shell { --side-w: 340px; display: grid; grid-template-columns: var(--side-w) minmax(0, 1fr) 260px; min-height: calc(100vh - var(--topbar)); }
+.baum-knoepfe { margin-bottom: 10px; }   /* „Neue Seite“ und „⋯“ über dem Seitenbaum */
 .wiki-side { border-right: 1px solid var(--linie); background: var(--grau-hell); padding: 14px 12px 40px; position: sticky; top: var(--topbar); height: calc(100vh - var(--topbar)); overflow: auto; }
 .wiki-side input[type=search] { margin-bottom: 10px; }
 .tree, .tree ul { list-style: none; margin: 0; padding: 0; }
@@ -932,8 +981,17 @@ h5:hover > .h-anchor, .h-anchor:focus-visible { opacity: 1; }
 /* Vier Aktionen passen in der schmalen rechten Spalte nicht immer in eine Zeile – sie brechen um, statt aus dem Kasten
    zu ragen („Löschen“ stand bei 1280 px 18 px rechts daneben). */
 .c-actions { display: flex; flex-wrap: wrap; gap: 2px 10px; margin-top: 4px; }
-.lnk { background: none; border: 0; color: var(--rot); font: inherit; font-size: var(--fs-klein); padding: 0; cursor: pointer; }
+/* Namen und Anmeldungen als Einheit (UI/UX D10, vorher nur die Materialablage, .mat-name): ganz in die nächste Zeile
+   statt nach „DEMO-Plattform-“ oder „@“; nur wenn ein Name allein länger ist als die Zeile, bricht er in sich. */
+.name-einheit, .mat-name { display: inline-block; max-width: 100%; overflow-wrap: anywhere; }
+/* Textknopf (.lnk) – ein Stil für alle Module (UI/UX D9): Nebenfunktionen in einem Satz oder einer Zeile („entfernen“,
+   „Entwurf verwerfen“, „Bemerkung anlegen“, Kommentar-Aktionen), rot in --fs-klein, beim Überfahren unterstrichen. Am
+   Finger 44 px Trefferfläche: Innenabstand oben und unten mit gleich großem negativen Außenabstand – die Zeile wird davon
+   nicht höher (vorher 44 px Mindesthöhe: eine Hilfszeile mit „Entwurf verwerfen“ war am Telefon 63 px hoch). */
+.lnk { background: none; border: 0; color: var(--rot); font: inherit; font-size: var(--fs-klein); line-height: 1.25; padding: 0;
+  text-align: left; cursor: pointer; }
 .lnk:hover { text-decoration: underline; }
+@media (pointer: coarse) { .lnk { padding-top: 14px; padding-bottom: 14px; margin-top: -14px; margin-bottom: -14px; } }
 mark.cq { background: var(--markierung); padding: 0 1px; cursor: pointer; border-bottom: 2px solid var(--gelb); }
 .cbadge { cursor: pointer; font-size: .8em; margin-right: 2px; }
 .comment-fab { position: absolute; z-index: 1150; background: var(--anthrazit); color: var(--weiss); border: 0; border-radius: var(--radius); padding: 6px 12px; font: inherit; font-weight: 600; font-size: var(--fs-klein); cursor: pointer; box-shadow: var(--schatten-menue); }
@@ -1074,8 +1132,8 @@ details.accordion .accordion-body > :first-child { margin-top: 0; } details.acco
   border: 0; border-radius: var(--radius); background: none; cursor: pointer;
   font: inherit; color: var(--anthrazit); white-space: nowrap;
 }
-.ed-bubble button:hover, .ed-ctx button:hover { background: var(--grau-hell); color: var(--rot); }
-.ed-bubble button.on, .ed-ctx button.on { background: var(--rot-hell); color: var(--rot); }
+.ed-bubble button:hover, .ed-ctx button:hover { background: var(--grau-hell); color: var(--rot-auf-flaeche); }
+.ed-bubble button.on, .ed-ctx button.on { background: var(--rot-hell); color: var(--rot-auf-flaeche); }
 .ed-ctx button.danger { color: var(--rot); }
 .ed-bubble svg, .ed-ctx svg, .ed-grip svg {
   width: 16px; height: 16px; display: block; flex: none; pointer-events: none;
@@ -1184,7 +1242,9 @@ details.accordion .accordion-body > :first-child { margin-top: 0; } details.acco
 
 /* --- Seitenbaum: Symbole, Merkliste, Zeilenaktionen, Ziehen ------------------------ */
 .tree-icon { margin-right: 5px; }
-.tree .fav { color: var(--gelb-dunkel); }
+/* Merklisten-Stern: Gelb auf der hellgrauen Leiste käme nur auf 1,5 : 1 – die anthrazitfarbene Kontur hebt ihn ab
+   (7 : 1, Grafik ≥ 3 : 1; UI/UX A5), die Füllung bleibt gelb. */
+.tree .fav { color: var(--gelb); -webkit-text-stroke: 1px var(--anthrazit); paint-order: stroke fill; }
 .tree .row { position: relative; }
 .tree .row-add, .tree .row-menu {
   opacity: 0; flex: none; width: 20px; height: 20px; padding: 0; margin-left: 2px;
@@ -1198,18 +1258,13 @@ details.accordion .accordion-body > :first-child { margin-top: 0; } details.acco
 .tree .row.drop-into { outline: 2px solid var(--rot); outline-offset: -2px; border-radius: var(--radius); }
 .tree .row.drop-before { box-shadow: inset 0 2px 0 var(--rot); }
 .tree .row.drop-after { box-shadow: inset 0 -2px 0 var(--rot); }
-.tree-menu {
-  position: absolute; z-index: 1400; min-width: 210px; padding: 4px;
-  background: var(--weiss); border: 1px solid var(--linie); border-radius: var(--radius-gross);
-  box-shadow: var(--schatten-leiste);
-}
 /* Ein Eintrag in einem aufklappenden Menü – Seitenbaum, Einfügemenü, Seitenwahl im
    Link-Dialog. Vorher drei Varianten mit verschiedener Polsterung und Hover-Farbe. */
-.tree-menu button, .link-pages button, .ed-slash button {
+.link-pages button, .ed-slash button {
   display: block; width: 100%; text-align: left; padding: 6px 10px;
   background: none; border: 0; font: inherit; color: inherit; cursor: pointer; border-radius: var(--radius);
 }
-.tree-menu button:hover, .link-pages button:hover, .link-pages button.sel,
+.link-pages button:hover, .link-pages button.sel,
 .ed-slash button:hover, .ed-slash button.sel { background: var(--grau-hell); }
 /* Der Eintrag im Einfügemenü steht zweizeilig: der Name, darunter wozu er gut ist. Diese Regel
    muss NACH der gemeinsamen Menüregel stehen – die setzt display:block, und damit liefen Name
@@ -1230,7 +1285,6 @@ details.accordion .accordion-body > :first-child { margin-top: 0; } details.acco
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
 }
 .ed-slash button span { font-size: var(--fs-klein); color: var(--grau); max-width: 100%; }
-.tree-menu button.danger { color: var(--rot); }
 /* Antwort des Mailservers nach einer Probemail – zum Lesen und Weitergeben, deshalb als
    Kasten mit ganzem Text statt als Kurzhinweis, der nach drei Sekunden weg ist. */
 .mail-bericht { margin-top: 12px; padding: 10px 12px; border-radius: var(--radius); border-left: 5px solid var(--grau); background: var(--grau-hell); }
@@ -1269,10 +1323,7 @@ details.accordion .accordion-body > :first-child { margin-top: 0; } details.acco
 .trash-list li:last-child { border-bottom: 0; }
 
 /* --- Statusmarken, Bildunterschriften, Inhaltsblock, Vollbild --------------------- */
-.status-warn { background: var(--gelb); color: var(--anthrazit); }
-.status-ok { background: var(--ok-hell); color: var(--ok); }
-.status-danger { background: var(--rot-hell); color: var(--rot); }
-.status-grau { background: var(--grau-hell); color: var(--grau); }
+/* Farben der Statusmarken ({status:…}): oben bei .badge (ein Farbsystem, UI/UX D7). */
 
 .wiki-content figure { margin: 1em 0; }
 .wiki-content figure img { margin: 0; }
@@ -1321,13 +1372,19 @@ details.accordion .accordion-body > :first-child { margin-top: 0; } details.acco
   border-radius: var(--radius); font: inherit; font-size: var(--fs-klein); color: var(--grau); cursor: pointer;
 }
 .c-tabs button.sel { background: var(--rot-hell); border-color: var(--rot); color: var(--rot-auf-flaeche); font-weight: 700; }
-/* Reiter als Linie (Leitstelle): der gewählte rot unterstrichen wie die Reiter der Materialablage, nicht rot hinterlegt –
-   rot gefüllt ist dort allein die Hauptaktion „Nutzer anlegen“ (Browserprüfung vor dem Merge, V5). */
-.c-tabs.reiter-linie { border-bottom: 1px solid var(--linie); margin-bottom: 14px; }
+/* Seitenreiter als Linie – app-weit (Leitstelle, Riegenkarten-Lehrgang, Reiter in Dialogen der Materialablage; UI/UX D8):
+   der gewählte rot unterstrichen wie die Reiter der Materialablage, nicht rot hinterlegt – rot gefüllt ist allein die
+   Hauptaktion. Filter-Umschalter (Matrix/je Leistung, offen/erledigt) bleiben Kästen (.c-tabs ohne reiter-linie). Passt
+   die Zeile nicht (Telefon, große Systemschrift), bricht sie um; ein Reiter selbst bricht nie (A9). */
+.c-tabs.reiter-linie { flex-wrap: wrap; border-bottom: 1px solid var(--linie); margin-bottom: 14px; }
 .c-tabs.reiter-linie button { flex: none; padding: 6px 12px; border: 0; border-bottom: 3px solid transparent; border-radius: 0;
-  margin-bottom: -1px; font-size: inherit; font-weight: 600; color: var(--anthrazit); background: none; }
+  margin-bottom: -1px; font-size: inherit; font-weight: 600; color: var(--anthrazit); background: none; white-space: nowrap; }
 .c-tabs.reiter-linie button:hover { color: var(--rot); }
 .c-tabs.reiter-linie button.sel { background: none; border-bottom-color: var(--rot); color: var(--rot); }
+/* Zahl am Reiter („Teilnehmende 4“, „Mängel 2“): eine kleine Marke, grau; Offenes, das etwas verlangt, rot. */
+.reiter-zahl { display: inline-block; margin-left: 4px; padding: 0 6px; border-radius: var(--radius-pille); font-size: var(--fs-marke);
+  font-weight: 700; line-height: 1.5; vertical-align: 1px; background: var(--grau-hell); color: var(--grau); }
+.reiter-zahl.offen { background: var(--rot); color: var(--weiss); }
 
 /* Info zu einem Begriff (common.js, S.info; Jinja-Makro „info“ in templates/_makros.html; designsprache „Info-Symbol
    „i““, seit 27.10.2026 app-weit): gekringeltes „i“ hinter einem Begriff, im DLRG-Blau, ohne Rahmen; die Info als
@@ -1351,21 +1408,43 @@ details.accordion .accordion-body > :first-child { margin-top: 0; } details.acco
   .info-text a { padding: 15px 0; }          /* 44 px Trefferfläche, ohne die Zeile zu sprengen (inline) */
 }
 
-/* Zeilenmenü der Nutzerverwaltung (admin.js): „Mehr“ öffnet „Reset-Mail senden“ und „Löschen“ – seltene Aktionen nicht
-   als eigene Knöpfe je Zeile (Knopfregel, V5). Aussehen wie das Untermenü der Materialablage (details.mat-menue). */
-.zeilenmenue { position: relative; display: inline-block; }
-.zeilenmenue > summary { list-style: none; cursor: pointer; }
-.zeilenmenue > summary::-webkit-details-marker { display: none; }
-.zeilenmenue > summary::after { content: ""; display: inline-block; width: 6px; height: 6px; margin-left: 8px;
-  border: solid currentColor; border-width: 0 2px 2px 0; transform: translateY(-2px) rotate(45deg); }
-.zeilenmenue[open] > summary::after { transform: translateY(1px) rotate(-135deg); }
-.zeilenmenue-liste { position: absolute; right: 0; top: calc(100% + 4px); z-index: 60; width: max-content; min-width: 180px;
-  padding: 4px 0; background: var(--weiss); border: 1px solid var(--linie); border-radius: var(--radius);
-  box-shadow: var(--schatten-menue); text-align: left; }
-.zeilenmenue-liste button { display: block; width: 100%; padding: 10px 14px; border: 0; background: none; font: inherit;
-  color: var(--anthrazit); text-align: left; cursor: pointer; }
-.zeilenmenue-liste button + button { border-top: 1px solid var(--linie); }
-.zeilenmenue-liste button:hover { background: var(--grau-hell); }
+/* --- Menü – ein Baustein für alle Module (UI/UX D4; Logik S.menue in common.js) ----------------------------------------
+   details.menue: Der Knopf (summary.btn) sieht aus wie seine Nachbarn, die Liste .menue-liste liegt darüber,
+   rechtsbündig unter dem Knopf (common.js rückt sie ins Bild, öffnet sie nach oben oder lässt sie in sich rollen, wenn
+   unten der Platz fehlt). Schwebende Menüs am „⋯“ der Strömipedia (.menue-schwebend, früher .tree-menu) sehen aus wie
+   die Liste. Einträge: der Titel rot und fett, darunter bei Bedarf ein Satz grau (<a><strong>…</strong><span>…</span>)
+   oder nur der Titel (<button>); „Löschen“ sieht aus wie jeder Eintrag – die Rückfrage folgt. Die bisherigen Klassen
+   (details.mat-menue der Materialablage, details.zeilenmenue der Leitstelle und Riegenkarten) tragen dasselbe Aussehen. */
+details:is(.menue, .mat-menue, .zeilenmenue) { position: relative; display: inline-block; }
+details:is(.menue, .mat-menue, .zeilenmenue) > summary { list-style: none; cursor: pointer; }
+details:is(.menue, .mat-menue, .zeilenmenue) > summary::-webkit-details-marker { display: none; }
+details:is(.menue, .mat-menue, .zeilenmenue) > summary::after { content: ""; display: inline-block; width: 6px; height: 6px;
+  margin-left: 8px; border: solid currentColor; border-width: 0 2px 2px 0; transform: translateY(-2px) rotate(45deg); }
+details:is(.menue, .mat-menue, .zeilenmenue)[open] > summary::after { transform: translateY(1px) rotate(-135deg); }
+:is(.menue-liste, .mat-menue-liste, .zeilenmenue-liste) { position: absolute; right: 0; top: calc(100% + 6px); z-index: 60; }
+:is(.menue-liste, .mat-menue-liste, .zeilenmenue-liste, .menue-schwebend, .tree-menu) { width: max-content; min-width: 240px;
+  max-width: min(340px, calc(100vw - 32px)); padding: 6px 0; background: var(--weiss); border: 1px solid var(--linie);
+  border-radius: var(--radius); box-shadow: var(--schatten-menue); text-align: left; }
+:is(.menue-schwebend, .tree-menu) { position: absolute; z-index: 1400; }
+:is(.menue-liste, .mat-menue-liste, .zeilenmenue-liste, .menue-schwebend, .tree-menu) > :is(a, button) { display: block;
+  width: 100%; padding: 10px 14px; border: 0; border-radius: 0; background: none; font: inherit; font-weight: 700;
+  color: var(--rot); text-align: left; text-decoration: none; white-space: normal; cursor: pointer; }
+:is(.menue-liste, .mat-menue-liste, .zeilenmenue-liste, .menue-schwebend, .tree-menu) > :is(a, button) + :is(a, button) {
+  border-top: 1px solid var(--linie); }
+/* Überfahren und Tastaturfokus: graue Fläche, der Titel im dunklen Rot (Rot auf Grau-hell käme nur auf 4,4 : 1, A5);
+   der Rahmen des Tastaturfokus bleibt (vorher in der Materialablage „outline: none“ – nur ein Hof, auf Weiß unsichtbar),
+   nach innen gerückt, damit die rollende Liste ihn nicht abschneidet. */
+:is(.menue-liste, .mat-menue-liste, .zeilenmenue-liste, .menue-schwebend, .tree-menu) > :is(a, button):is(:hover, :focus-visible) {
+  background: var(--grau-hell); color: var(--rot-auf-flaeche); }
+:is(.menue-liste, .mat-menue-liste, .zeilenmenue-liste, .menue-schwebend, .tree-menu) > :is(a, button):focus-visible {
+  outline-offset: -3px; box-shadow: none; }
+:is(.menue-liste, .mat-menue-liste, .zeilenmenue-liste, .menue-schwebend, .tree-menu) strong { display: block; color: inherit; font-weight: inherit; }
+:is(.menue-liste, .mat-menue-liste, .zeilenmenue-liste, .menue-schwebend, .tree-menu) span { display: block; margin-top: 2px;
+  font-size: var(--fs-klein); font-weight: 400; color: var(--grau); line-height: 1.35; }
+:is(.menue-trenner, .mat-menue-trenner) { border: 0; border-top: 2px solid var(--linie); margin: 0; }
+@media (pointer: coarse) {
+  :is(.menue-liste, .mat-menue-liste, .zeilenmenue-liste, .menue-schwebend, .tree-menu) > :is(a, button) { min-height: 44px; }
+}
 /* Als Karte (schmal) steht „Mehr“ links – die Liste öffnet nach rechts. */
 @media (max-width: 860px) { .zeilenmenue-liste { right: auto; left: 0; } }
 
@@ -1384,7 +1463,7 @@ details.accordion .accordion-body > :first-child { margin-top: 0; } details.acco
 .einst-kopf label { font-weight: 600; margin: 0; }
 .einst-name { color: var(--grau); font-size: var(--fs-marke); }
 .einst-quelle { font-size: var(--fs-marke); padding: 1px 6px; border-radius: var(--radius-pille); border: 1px solid var(--linie); color: var(--grau); }
-.einst-quelle.q-gespeichert { border-color: var(--rot); color: var(--rot); background: var(--rot-hell); }
+.einst-quelle.q-gespeichert { border-color: var(--rot); color: var(--rot-auf-flaeche); background: var(--rot-hell); }
 .einst-schalter { display: flex; align-items: center; gap: 8px; font-weight: 600; }
 .einst-schalter input { width: auto; }
 /* Der Speichern-Knopf bleibt beim Rollen sichtbar – die Liste ist länger als ein Bildschirm. */
@@ -1443,7 +1522,7 @@ details.accordion .accordion-body > :first-child { margin-top: 0; } details.acco
 /* Versionsvergleich */
 .diff { white-space: pre-wrap; font-size: var(--fs-mittel); line-height: 1.5; }
 .diff ins { background: var(--ok-hell); color: var(--ok); text-decoration: none; }
-.diff del { background: var(--rot-hell); color: var(--rot); }
+.diff del { background: var(--rot-hell); color: var(--rot-auf-flaeche); }
 
 
 /* --- Sidebar in der Breite verstellbar ---------------------------------------------- */
@@ -1476,7 +1555,6 @@ details.accordion .accordion-body > :first-child { margin-top: 0; } details.acco
   .ed-slash { width: min(94vw, 320px); left: 3vw !important; }
   .ed-ctx { max-width: 94vw; left: 3vw !important; flex-wrap: wrap; }
   .ed-grip { display: none; }                 /* Ziehen per Finger kollidiert mit dem Scrollen */
-  .tree-menu { width: min(94vw, 260px); }
 }
 /* Markenblöcke im Editor: nur ein Hinweis, gefüllt wird erst in der Ansicht */
 .toastui-editor-contents .ed-marker { border: 1px dashed var(--linie); padding: 8px 12px; margin: 1em 0; }
@@ -1627,7 +1705,7 @@ h1.seitentitel .page-icon { margin-right: 6px; }
 .autorzeile .avatar {
   display: inline-flex; align-items: center; justify-content: center;
   width: 32px; height: 32px; border-radius: 50%; flex: none;
-  background: var(--rot-hell); color: var(--rot); font-size: var(--fs-klein); font-weight: 700; letter-spacing: .02em;
+  background: var(--rot-hell); color: var(--rot-auf-flaeche); font-size: var(--fs-klein); font-weight: 700; letter-spacing: .02em;
 }
 .autorzeile .autorname { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* Liegt ein Profilbild vor, füllt es den Kreis vollständig aus – zugeschnitten wurde beim
@@ -1648,7 +1726,7 @@ h1.seitentitel .page-icon { margin-right: 6px; }
 .profilbild .pb-vorschau {
   display: inline-flex; align-items: center; justify-content: center; flex: none;
   width: 76px; height: 76px; border-radius: 50%; overflow: hidden;
-  background: var(--rot-hell); color: var(--rot); font-size: 1.7rem; font-weight: 700;
+  background: var(--rot-hell); color: var(--rot-auf-flaeche); font-size: 1.7rem; font-weight: 700;
 }
 .profilbild .pb-vorschau img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .profilbild .pb-text { min-width: 0; }
@@ -1693,9 +1771,8 @@ dialog.us-dlg { width: min(640px, 96vw); }
 .ur-zeile { display: flex; gap: 8px; align-items: center; }
 .ur-zeile input { flex: 1 1 auto; min-width: 0; max-width: 320px; }
 .ur-zeile .btn { flex: none; }
-#unterschrift .us-titel { margin: 22px 0 0; }
+#unterschrift .abschnittskopf:has(.us-titel) { margin-top: 22px; }
 .us-profil { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 16px; margin: 10px 0 0; }
-.us-knoepfe { flex-direction: column; align-items: stretch; }
 .us-vorschau { flex: none; display: flex; align-items: center; justify-content: center; width: min(260px, 100%); height: 96px;
   padding: 6px 10px; border: 1px solid var(--linie); border-bottom: 2px solid var(--anthrazit); background: var(--weiss); }
 .us-vorschau.leer { background: var(--grau-hell); border-bottom-style: dashed; }
@@ -1715,7 +1792,7 @@ dialog.us-dlg { width: min(640px, 96vw); }
 .autor-tafel .avatar {
   display: inline-flex; align-items: center; justify-content: center;
   width: 40px; height: 40px; border-radius: 50%; flex: none;
-  background: var(--rot-hell); color: var(--rot); font-size: var(--fs-klein); font-weight: 700;
+  background: var(--rot-hell); color: var(--rot-auf-flaeche); font-size: var(--fs-klein); font-weight: 700;
 }
 .autor-tafel .avatar.mit { background: var(--grau-hell); color: var(--grau); }
 .autor-tafel .autor-text { display: flex; flex-direction: column; min-width: 0; line-height: 1.25; }
@@ -1733,7 +1810,7 @@ dialog.us-dlg { width: min(640px, 96vw); }
   color: var(--grau); cursor: pointer; line-height: 1;
 }
 .rundknopf:hover { border-color: var(--rot); color: var(--rot); }
-.rundknopf.on { border-color: var(--rot); background: var(--rot-hell); color: var(--rot); }
+.rundknopf.on { border-color: var(--rot); background: var(--rot-hell); color: var(--rot-auf-flaeche); }
 .rundknopf.still { cursor: default; font-style: normal; }
 /* Gezeichnetes Symbol im Rundknopf („Angaben zur Seite“) – dieselben Strichregeln wie im Seitenkopf. */
 .rundknopf svg {
@@ -2201,7 +2278,6 @@ dialog.us-dlg { width: min(640px, 96vw); }
 @media (pointer: coarse) {
   /* Kurze Punkte der Bauchbinde („Wiki“) mindestens 44 px breit – am Telefon waren es 40. */
   .nav > a, .nav > button { min-width: 44px; justify-content: center; }
-  .lnk { padding: 8px 4px; }
   .c-tabs button { padding: 9px 6px; }
   .em-grid .em { width: 42px; height: 42px; }
   .ed-farben { grid-template-columns: repeat(3, 40px); }
@@ -2239,7 +2315,10 @@ dialog.us-dlg { width: min(640px, 96vw); }
   /* max-width auch: Sonst begrenzte die Vorgabe des Browsers (100 % − 2em − 6px) den Dialog am Außendisplay eines
      Fold auf 308 statt 328 px. */
   dialog, dialog.wide { width: calc(100vw - 16px); max-width: calc(100% - 16px); max-height: calc(100dvh - 16px); }
-  dialog .dlg-body { max-height: calc(100dvh - 22px); overflow-wrap: anywhere; overscroll-behavior: contain; }
+  /* break-word statt anywhere (UI/UX A6): Lange Adressen, Prüfsummen und Teilen-Links brechen weiter, wo sie nicht
+     passen – aber Tabellenspalten behalten ihre Mindestbreite („ne/u“, „unverän/dert“ und Namen wie
+     „…rettungsgr/uppe“ in den Verschieben-Bäumen brachen sonst mitten im Wort). */
+  dialog .dlg-body { max-height: calc(100dvh - 22px); overflow-wrap: break-word; overscroll-behavior: contain; }
   .share-link { flex-wrap: wrap; }
   .share-link input { flex: 1 1 100%; }
   .wiki-head #ed-status { flex: 0 1 auto; min-width: 0; max-width: 38vw; overflow: hidden; text-overflow: ellipsis; }
@@ -2347,6 +2426,9 @@ dialog.us-dlg { width: min(640px, 96vw); }
    <span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Artikel<span class="k-anlegen"> anlegen</span></span>
    (der äußere Behälter hält den Text zusammen, sonst setzen Knöpfe mit display: flex ihren Abstand dazwischen). */
 .k-plus { display: none; }
+/* Bezugsrahmen für den nur vorgelesenen Rest „ anlegen“ (UI/UX A7): ohne ihn hing der 1-px-Text am festen Dialog statt am
+   rollenden Inhalt – unter dem sichtbaren Bereich ließ er den Dialog am Telefon 87 px überlaufen (Lehrgang anlegen). */
+.k-text { position: relative; }
 /* Nur für Vorlesehilfen (etwa die Überschrift der Ankerplätze, deren Seite ganz Karte ist). */
 .nur-vorlesen { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden;
   clip-path: inset(50%); white-space: nowrap; border: 0; }
@@ -2385,9 +2467,9 @@ dialog.us-dlg { width: min(640px, 96vw); }
   /* Brotkrumen der Strömipedia (ab Tablet sichtbar) wie die der Materialablage: jedes Glied mindestens 44 × 44 px
      (Browserprüfung vor dem Merge, B-1). */
   .krumen a.krume { min-height: 44px; min-width: 44px; }
-  #kopf-knoepfe .btn, #pending .btn, #users .btn, #users .recht-wahl, .zeilenmenue-liste button { min-height: 44px; }
+  #kopf-knoepfe .btn, #pending .btn, #users .btn, #users .recht-wahl { min-height: 44px; }
   /* Lesemodus: „Zur Übersicht“ unter „Seite nicht gefunden“ (Geräte-Matrix P4-L1, 36 px). */
-  .empty .btn-row .btn { min-height: 44px; display: inline-flex; align-items: center; }
+  :is(.leerzustand, .leerzustand + .btn-row) .btn { min-height: 44px; display: inline-flex; align-items: center; }
   #users .recht-wahl { padding-top: 6px; padding-bottom: 6px; }
   /* Nachgemessen mit der Geräte-Matrix: Klappdreiecke im Seitenbaum (28 × 32), Suchfeld des Wikis (36 px) und der
      Aufklapper „Globale Suchen“ in der Nutzerverwaltung (38 px). */
@@ -2436,6 +2518,28 @@ dialog.us-dlg { width: min(640px, 96vw); }
 .page.breit.leitstelle { max-width: 1280px; }
 /* Fingerbedienung (Punkt 12, gemessen bei pointer: coarse): Tippflächen mindestens 44 px. */
 @media (pointer: coarse) {
+  /* Felder und Knöpfe im Inhalt jeder Seite (UI/UX A8; vorher nur Dialoge, Anmeldung und einzelne Seiten – die
+     Einstellungen der Leitstelle hatten Felder von 37 und „Speichern“ von 36 px). :where() ohne Gewicht: die eigenen
+     Regeln einzelner Stellen gehen vor; die schwebenden Leisten des Editors behalten ihre Maße. */
+  :where(main) :where(input:not([type=checkbox], [type=radio], [type=file], [type=hidden], [type=range], [type=color]),
+    select, .btn):not(:where(.ed-bubble, .ed-ctx, .toastui-editor-defaultUI) *) { min-height: 44px; }
+  /* Ankerplätze, Ebenen der Karte: Zeilen von 44 px, und der Knopf bleibt sichtbar unter der offenen Liste – vorher
+     deckte sie ihn ab, und ein zweiter Tipp auf seine Mitte wählte „Gelände“. .map-shell davor: leaflet.css kommt
+     nach app.css. */
+  .map-shell .leaflet-control-layers-expanded { display: flex; flex-direction: column-reverse; align-items: flex-end; padding: 0; }
+  .map-shell .leaflet-control-layers-expanded .leaflet-control-layers-toggle { display: block; }
+  .map-shell .leaflet-control-layers-expanded .leaflet-control-layers-list { padding: 2px 10px; }
+  .map-shell .leaflet-control-layers label { display: flex; align-items: center; min-height: 44px; margin: 0; }
+  .map-shell .leaflet-control-layers label > span, .map-shell .leaflet-control-layers label > div { display: flex; align-items: center; }
+  .map-shell .leaflet-control-layers-selector { width: 20px; height: 20px; margin: 0 8px 0 0; }
+  /* Listenlinks am Finger (UI/UX A8), ohne die Listen höher zu machen: Lehrgangs- und Katalogtitel der Riegenkarten
+     bekommen eine unsichtbare Fläche von 45 px (die Zeilen stehen weit genug auseinander – Muster der Materialablage,
+     material.css); in den dichten Listen der Strömipedia-Übersicht ist die ganze Zeile der Link (volle Breite). */
+  .pruef table.list td a.titel { position: relative; }
+  .pruef table.list td a.titel::after { content: ""; position: absolute; inset: -14px -4px; }
+  .home-baum li > a { display: block; }
+  .home-cols li { position: relative; }
+  .home-cols li > a::after { content: ""; position: absolute; inset: 0; }
   /* Alle Dialoge (Ankerplätze „Album anlegen“, Riegenkarten, Kommentar der Strömipedia …): Felder und Knöpfe. */
   dialog input:not([type=checkbox]):not([type=radio]):not([type=file]):not([type=range]):not([type=color]),
   dialog select, dialog .btn { min-height: 44px; }
@@ -2445,13 +2549,11 @@ dialog.us-dlg { width: min(640px, 96vw); }
   .login-links a { display: inline-flex; align-items: center; min-height: 44px; }
   .login-links { gap: 0 20px; }
   /* Strömipedia: Kommentar-Aktionen, Sortierpfeile der Tabellenköpfe, „Kopieren“ am Codeblock. */
-  .c-actions .lnk { min-height: 44px; display: inline-flex; align-items: center; padding: 0 6px; }
+  .c-actions .lnk { padding-left: 6px; padding-right: 6px; }
   .c-actions { gap: 0 4px; }
   .wiki-content th:has(.th-sort) { height: 44px; }   /* Breite wie im Editor: Der Knopf liegt durchsichtig über dem Rand */
   .th-sort { right: 0; width: 44px; height: 44px; padding: 0; display: inline-flex; align-items: center; justify-content: center; }
   .code-copy { min-height: 44px; padding: 6px 12px; }
-  /* „⋯“-Menü einer Seite im Seitenbaum (seit 27.10.2026 mit „Seiten aus ZIP importieren“): vorher 34 px je Eintrag. */
-  .tree-menu button { min-height: 44px; }
   /* Ankerplätze: Knöpfe im Album-Panel und in der Großansicht, Telefon-/Mail-Links, Blättern, „herunterladen“. */
   .panel .btn { min-height: 44px; }
   .panel dl.contact a, .lb-side .kv a { display: inline-flex; align-items: center; min-height: 44px; }

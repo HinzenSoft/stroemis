@@ -496,7 +496,7 @@
   // Banner an Artikel und Prüfung: DEMO ist ein Artikel eines DEMO-Produkts oder mit Heimat in einem DEMO-Ordner
   // (bestand.demo_sql) – auch ein echtes Katalogprodukt im Beispielbestand.
   const DEMO_ARTIKEL = "DEMO – nicht für echte Prüfungen. Dieser Artikel gehört zu den Demodaten.";
-  const leer = (text) => `<p class="mat-leer">${esc(text)}</p>`;
+  const leer = (text) => `<p class="leerzustand">${esc(text)}</p>`;
   // Produktfoto in der Produktwahl (Artikel anlegen: gewähltes Produkt und Treffer der Produktsuche): die Vorschau,
   // antippbar – sie öffnet die Webfassung groß (bildZeigen), dort führt „Original“ zur hochgeladenen Datei. Die Lupe
   // unten rechts zeigt auch am Telefon, wo es keinen Mauszeiger gibt, dass es größer geht. Ohne Bild: nichts.
@@ -1363,7 +1363,7 @@
     const tabelle = m.zeilen.length ? `<table class="list mat-tabelle mat-mail" id="mat-mail-tabelle"><thead><tr><th>Mail</th>
         <th>Empfänger</th><th>Fehler</th><th></th></tr></thead><tbody>${m.zeilen.map(mailZeile).join("")}</tbody></table>
       ${mailMehr(m.offen, m.zeilen.length)}` : "";
-    return `<section class="section mat-mail-kasten" id="mat-mail" aria-labelledby="mat-mail-titel" data-offen="${Number(m.offen)}"><div class="mat-kastenkopf"><h2 id="mat-mail-titel" tabindex="-1">Mailversand</h2>
+    return `<section class="section mat-mail-kasten" id="mat-mail" aria-labelledby="mat-mail-titel" data-offen="${Number(m.offen)}"><div class="abschnittskopf"><h2 id="mat-mail-titel" tabindex="-1">Mailversand</h2>
         ${m.zeilen.length ? `<details class="mat-menue"><summary class="btn secondary small" aria-haspopup="true">Mehr</summary><div class="mat-menue-liste">
           <a href="#mat-mail" role="button" data-act="mail-alle"><strong>Alle erledigt</strong><span>Alle offenen Zeilen abhaken – auch die nicht angezeigten (mit Rückfrage).</span></a></div></details>` : ""}</div>
       ${m.kein_mailserver ? '<p class="notice">Kein Mailserver eingerichtet – keine Modul-Mail geht hinaus (Erinnerungen, Mängel, Anträge, Produktmeldungen, Rückrufe).</p>' : ""}
@@ -2154,7 +2154,7 @@
     // Neu unter einem Ordner heißt der Knopf „Unterordner anlegen“ – der Dialog ebenso (Verbesserung 8).
     const titel = neu ? (oben ? "Gliederung anlegen" : "Unterordner anlegen") : "Ordner bearbeiten";
     dialog(mitFreigaben ? `<h2 id="od-titel">${titel}</h2>
-      <div class="c-tabs mat-reiter" role="tablist" aria-labelledby="od-titel">
+      <div class="c-tabs reiter-linie mat-reiter" role="tablist" aria-labelledby="od-titel">
         <button type="button" role="tab" id="od-reiter-ordner" aria-controls="od-teil-ordner" data-reiter="ordner">Ordner</button>
         <button type="button" role="tab" id="od-reiter-freigaben" aria-controls="od-teil-freigaben" data-reiter="freigaben">Freigaben</button></div>
       <div class="mat-reiter-teil" role="tabpanel" id="od-teil-ordner" aria-labelledby="od-reiter-ordner">${formular}</div>
@@ -2355,7 +2355,7 @@
       const faelligZweig = (z.ueberfaellig || 0) + (z.neu || 0) + (z.bald_faellig || 0) + (z.lebensdauer || 0);
       const leerHtml = filter || kategorie || person ? leer("Keine Artikel mit diesen Filtern.")
           : !unten ? leer("Hier liegen keine Artikel.")
-            : `<p class="mat-leer">${unten === 1 ? "Hier liegen keine Artikel direkt – 1 liegt in einem Unterordner."
+            : `<p class="leerzustand">${unten === 1 ? "Hier liegen keine Artikel direkt – 1 liegt in einem Unterordner."
               : `Hier liegen keine Artikel direkt – ${unten} liegen in Unterordnern.`}${faelligZweig
               ? ` <a href="/materialablage/pruefungen?ordner=${d.id}">Fällige Artikel im ganzen Zweig →</a>` : ""}</p>`;
       /* Filtermenü in der Seitenleiste unter dem Baum (Wunsch vom 25.10.2026): Status, Kategorie und „Zugeordnet an“,
@@ -3004,7 +3004,7 @@
       </div>
       ${DATEN.suche ? '<div id="mat-global-angebot"></div>' : ""}
       <div class="mat-spalten">
-        <section class="section"><div class="mat-kastenkopf"><h2>Stammdaten</h2>${antragMoeglich(a) ? '<button class="btn secondary small" type="button" data-act="antrag">Änderung beantragen</button>' : ""}</div>
+        <section class="section"><div class="abschnittskopf"><h2>Stammdaten</h2>${antragMoeglich(a) ? '<button class="btn secondary small" type="button" data-act="antrag">Änderung beantragen</button>' : ""}</div>
           <dl class="mat-daten">
           ${zeile("Produkt", `${nameHtml(p)}${zusatzHtml(p)}`)}
           ${zeile("Norm", p.norm ? esc(p.norm) : '<span class="muted">–</span>')}
@@ -4076,7 +4076,7 @@
       ${austauschListe("Hinweis", b.hinweise, "")}
       ${b.aenderungen.length ? `<details class="mat-auf"${b.aenderungen.length <= 12 ? " open" : ""}><summary>Im Einzelnen (${b.aenderungen.length})</summary>
         <ul class="mat-austausch-aenderungen">${b.aenderungen.map((z) => `<li>${esc(z)}</li>`).join("")}</ul></details>` : ""}
-      ${nichts && !b.gespeichert ? '<p class="mat-leer">Nichts zu übernehmen – der Katalog hier entspricht schon der Datei.</p>' : ""}`;
+      ${nichts && !b.gespeichert ? '<p class="leerzustand">Nichts zu übernehmen – der Katalog hier entspricht schon der Datei.</p>' : ""}`;
   }
 
   /* Katalogimport im Hintergrund (Wunsch des Nutzers, 24.10.2026): Die große Lieferung (über 1 GB) lief länger, als der
@@ -4452,7 +4452,7 @@
     const titel = p.variante_von ? `Variante von „${esc(produktName(p.variante_von))}“`
       : p.meldung ? "Produkt aus Meldung anlegen" : neu ? "Produkt anlegen" : "Produkt bearbeiten";
     dialog(mitReiter ? `<h2 id="pd-titel">${titel}</h2>
-      <div class="c-tabs mat-reiter" role="tablist" aria-labelledby="pd-titel">
+      <div class="c-tabs reiter-linie mat-reiter" role="tablist" aria-labelledby="pd-titel">
         <button type="button" role="tab" id="pd-reiter-produkt" aria-controls="pd-teil-produkt" data-reiter="produkt">Produkt</button>
         <button type="button" role="tab" id="pd-reiter-bestandteile" aria-controls="pd-teil-bestandteile" data-reiter="bestandteile">Bestandteile</button></div>
       <div class="mat-reiter-teil" role="tabpanel" id="pd-teil-produkt" aria-labelledby="pd-reiter-produkt">${formular}</div>
@@ -4606,7 +4606,7 @@
           <div class="field-row mat-bt-felder nur-text"><div><label for="bt-${i}-bez">Bezeichnung</label><input type="text" id="bt-${i}-bez" class="bt-bez" maxlength="${g.bezeichnung}" value="${esc(x.bezeichnung || "")}" ${TASTATUR_NAME}></div>
             <div><label for="bt-${i}-anzahl">Anzahl</label><input type="number" id="bt-${i}-anzahl" class="bt-anzahl" min="1" max="${g.anzahl}" value="${esc(String(x.anzahl || 1))}"></div></div>
           <p class="error mat-bt-fehler" hidden></p></fieldset>`).join("")}</div>
-        ${pos.length ? "" : '<p class="mat-leer">Noch keine Bestandteile.</p>'}
+        ${pos.length ? "" : '<p class="leerzustand">Noch keine Bestandteile.</p>'}
         <div class="btn-row mat-bt-neu"><button class="btn secondary small" type="button" data-bt="neu" ${pos.length >= g.positionen ? "disabled" : ""}><span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Bestandteil<span class="k-anlegen"> anlegen</span></span></button>
           <span class="help mat-bt-zaehler"></span><span class="mat-bt-info"></span></div>`;
       zaehler();
@@ -4749,7 +4749,7 @@
   function bestandteilListeHtml(p, k) {
     const liste = p.bestandteile || [];
     if (!liste.length) return "";
-    return `<section class="section mat-bestandteil-liste"><div class="mat-kastenkopf"><h2>Bestandteile${infoKnopf("Bestandteile", BESTANDTEILE_INFO)}</h2>${k ? '<button class="btn secondary small" data-act="stueckliste">Bestandteile bearbeiten</button>' : ""}</div>
+    return `<section class="section mat-bestandteil-liste"><div class="abschnittskopf"><h2>Bestandteile${infoKnopf("Bestandteile", BESTANDTEILE_INFO)}</h2>${k ? '<button class="btn secondary small" data-act="stueckliste">Bestandteile bearbeiten</button>' : ""}</div>
       ${bestandteilZeilen(liste)}</section>`;
   }
 
@@ -4794,14 +4794,14 @@
           ${zusatz && zusatz.voll ? zeile("Bemerkung", `<span class="mat-text">${esc(p.description)}</span>
             <div class="help">Länger als ${BESCHREIBUNG_MAX} Zeichen, in der Überschrift gekürzt – gedacht ist ein kurzer Zusatz hinter dem Namen.${k ? " Bitte unter „Bearbeiten“ kürzen." : ""}</div>`) : ""}
         </dl></section>
-        <section class="section"><div class="mat-kastenkopf"><h2>Prüfformular${infoKnopf("Prüfformular", "Ein aktives spezifisches Formular ersetzt das generische der Kategorie.")}</h2>
+        <section class="section"><div class="abschnittskopf"><h2>Prüfformular${infoKnopf("Prüfformular", "Ein aktives spezifisches Formular ersetzt das generische der Kategorie.")}</h2>
           ${k ? '<button class="btn secondary small" data-act="formular">Spezifisches Formular bearbeiten</button>' : ""}</div>
           ${p.formular ? `<p>Geprüft wird nach <a href="/materialablage/katalog/formular/${p.formular.id}"><strong>${esc(p.formular.title || "Formular")}</strong> · Version ${p.formular.version}</a> <span class="muted">(${esc(p.formular.quelle)}, ${plural(p.formular.punkte, "Prüfpunkt", "Prüfpunkte")})</span>.</p>` : '<p class="mat-warn">Für dieses Produkt gilt kein aktives Prüfformular – weder ein spezifisches noch ein generisches der Kategorie.</p>'}
           ${formulare.length ? `<p class="small">Spezifische Versionen: ${formulare.map((f) => `<a href="/materialablage/katalog/formular/${f.id}">v${f.version}${f.aktiv ? " (aktiv)" : ""}</a>`).join(", ")}</p>` : ""}
         </section>
       </div>
       ${bestandteilListeHtml(p, k)}
-      <section class="section"><div class="mat-kastenkopf"><h2>Herstellerdokumente${infoKnopf("Herstellerdokumente", `Gelten für alle Artikel dieses Produkts. Ein Protokoll verweist auf die Version, die am Prüftag galt.${p.kategorie_dokumente.length ? " Kategoriedokumente hängen an der Kategorie und gelten für alle Produkte darin." : ""}`)}</h2>
+      <section class="section"><div class="abschnittskopf"><h2>Herstellerdokumente${infoKnopf("Herstellerdokumente", `Gelten für alle Artikel dieses Produkts. Ein Protokoll verweist auf die Version, die am Prüftag galt.${p.kategorie_dokumente.length ? " Kategoriedokumente hängen an der Kategorie und gelten für alle Produkte darin." : ""}`)}</h2>
           ${k ? '<button class="btn secondary small" data-act="dok-neu"><span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Dokument<span class="k-anlegen"> anlegen</span></span></button>' : ""}</div>
         ${p.dokumente.length ? dokTabelle(p.dokumente, k) : leer("Noch keine Dokumente am Produkt.")}
         ${katGruppen(p.kategorie_dokumente).map((g) => `${katKopf(g.name, g.id)}
@@ -5966,9 +5966,9 @@
       const nein = darfBerichtigen() && !pr.berichtigbar.ok && !pr.berichtigt_durch
         ? `<p class="small muted">Berichtigen geht nicht: ${esc(pr.berichtigbar.grund)}</p>` : "";
       if (!p) return `<section class="section mat-protokoll"><h2>Protokoll</h2><p class="muted">Vor Einführung des Festschreibens abgeschlossen – ohne Protokoll.</p>${nein}</section>`;
-      // Die eine Abschnittsaktion („Protokoll (PDF)“) steht rechts neben der Überschrift (.mat-kastenkopf wie „Stammdaten“
+      // Die eine Abschnittsaktion („Protokoll (PDF)“) steht rechts neben der Überschrift (.abschnittskopf wie „Stammdaten“
       // → „Änderung beantragen“; Nutzer 27.10.2026), die Kennung allein als erste Zeile darunter.
-      return `<section class="section mat-protokoll"><div class="mat-kastenkopf"><h2>Protokoll</h2>
+      return `<section class="section mat-protokoll"><div class="abschnittskopf"><h2>Protokoll</h2>
           <a class="btn secondary small" href="${esc(p.url)}" target="_blank" rel="noopener">Protokoll (PDF)</a></div>
         <div class="mat-protokoll-kopf"><span class="mat-protokoll-id mat-hash">${esc(p.id)}</span></div>
         <dl class="mat-daten">
@@ -6497,7 +6497,7 @@
             ${!d.offen && (d.set_protokolle || []).length ? `<a class="btn secondary" href="/materialablage/durchgang/${d.id}/protokolle.zip">Alle Protokolle (ZIP)</a>` : ""}</div></div>
         <p>Ordner <a href="/materialablage/ordner/${d.folder_id}">${esc(d.ordner)}</a> · eröffnet ${esc(fmtTag(d.eroeffnet_am))} von ${person(d.eroeffnet_von || "–")}
           ${d.offen ? "" : ` · ${d.abgebrochen ? "abgebrochen" : "abgeschlossen"} ${esc(fmtTag(d.geschlossen_am))} von ${person(d.geschlossen_von || "–")}`}</p>
-        ${d.protokoll ? `<section class="section mat-protokoll"><div class="mat-kastenkopf"><h2>Sammelprotokoll</h2>
+        ${d.protokoll ? `<section class="section mat-protokoll"><div class="abschnittskopf"><h2>Sammelprotokoll</h2>
           ${d.offen ? "" : `<a class="btn secondary small" href="${esc(d.protokoll.url)}" target="_blank" rel="noopener" title="Sammelprotokoll ${esc(d.protokoll.id)} öffnen">Protokoll (PDF)</a>`}</div>
           <p class="mat-protokoll-zeile"><strong class="mat-hash">${esc(d.protokoll.id)}</strong> · festgeschrieben ${esc(fmtZeit(d.protokoll.festgeschrieben))}
           · Prüfsumme${infoKnopf("Prüfsumme", (d.set_protokolle || []).length ? 'Die Prüfsumme steht im Fuß jeder Seite des PDFs, ebenso in jedem Set-Protokoll. Ob eine Datei unverändert ist, zeigt die <a href="/materialablage/pruefen">Prüfseite</a>.' : PRUEFSUMME_INFO)}
@@ -7366,7 +7366,7 @@
         ? '<div class="btn-row mat-import-knoepfe"><button type="button" class="btn secondary" data-act="bi-neu">Weitere Liste importieren</button></div>'
         : `<p class="small mat-import-wieder"><button type="button" class="lnk" data-act="bi-wiederholen">Probelauf wiederholen</button>${Object.keys(wahl).length ? ' · <button type="button" class="lnk" data-act="bi-automatisch">Zuordnung wie erkannt</button>' : ""}</p>
           ${sperre ? `<p class="notice">Diese Datei ist eben in diesen Ordner übernommen worden – noch einmal übernehmen geht erst ab ${esc(sperre)} Uhr (dann „Probelauf wiederholen“). Was offen blieb, steht unten in der Nacharbeit.</p>` : ""}
-          ${!fehlt && !sperre && !text && z.zeilen ? `<p class="mat-leer">${esc(IMPORT_NICHTS)}</p>` : ""}
+          ${!fehlt && !sperre && !text && z.zeilen ? `<p class="leerzustand">${esc(IMPORT_NICHTS)}</p>` : ""}
           ${text && b.ohne_seriennummern_bestaetigen ? `<div class="notice mat-import-ohne-serie"><label class="inline"><input type="checkbox" id="bi-ohne-serie" aria-describedby="bi-ohne-serie-hilfe" ${ohneSerie ? "checked" : ""}><span>${esc(ohneSerieSatz(z))}</span></label>
             <p class="help" id="bi-ohne-serie-hilfe">${esc(IMPORT_OHNE_SERIENSPALTE)}</p></div>` : ""}
           ${!fehlt && z.nacharbeit ? `<p class="help">${esc(b.frist)}</p>` : ""}
