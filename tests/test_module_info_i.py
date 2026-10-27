@@ -238,7 +238,9 @@ def test_vorlagen_gerendert():
         m = app.test_client()
         assert m.post("/api/auth/login", json={"email": "mitglied-info@example.org", "password": "geheim123"}).status_code == 200
         mw = m.get("/stroemipedia").get_data(as_text=True)
-        assert 'id="btn-baum-mehr"' in mw and 'title="Papierkorb">⋯</button>' in mw and "importieren" not in mw[mw.index('id="btn-baum-mehr"'):][:200]
+        # Ohne Wiki-Verwaltung nur der Papierkorb – als Knopf, kein Menü „⋯“ (Nutzer 27.10.2026).
+        assert 'id="btn-baum-mehr"' not in mw and 'id="btn-papierkorb" type="button">Papierkorb</button>' in mw
+        assert "Seiten aus ZIP importieren" not in mw
     print("Vorlagen gerendert bestanden.")
 
 

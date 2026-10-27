@@ -4311,6 +4311,11 @@ neben der Überschrift; Leitstelle: Marken in „Hilfe: Rechte je Modul“.
 3. Bestandsimport: „i“ am Titel und „Welche Listen passen?“ bleiben getrennt (siehe 7).
 4. Die Fehlerart „Dateityp nicht lesbar“ gilt auch für eine Datei mit Bild-Endung, deren Inhalt kein Bild ist.
 
+
+**Nachtrag (Nutzer, 27.10.2026, „Für Mitglieder als Knopf“):** Über dem Seitenbaum steht „⋯“ (Papierkorb, Seiten aus ZIP
+importieren) nur mit Wiki-Verwaltung; ohne sie bleibt nur der Papierkorb – er steht als grauer Knopf „Papierkorb“ neben
+„Neue Seite“ (Regel: bleibt nur eine Funktion, steht sie als Knopf da). wiki.html, wiki.js, Test in
+`test_module_letzte_offene.py`.
 ## Info-„i“ app-weit (Wunsch des Nutzers, 27.10.2026)
 
 Auftrag `planung/info-i/auftrag_bau.md` nach der Bestandsaufnahme `planung/info-i/bestandsaufnahme.md`. Entscheidungen

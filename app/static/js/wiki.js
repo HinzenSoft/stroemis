@@ -5237,7 +5237,12 @@
      Start
      ====================================================================== */
   $("#btn-new-page").addEventListener("click", () => { side.classList.remove("open"); if (leaveEditor()) openEditor({ parent_id: state.current ? state.current.id : null }); });
-  $("#btn-baum-mehr").addEventListener("click", (e) => baumMenu(e.currentTarget));
+  // Mit Wiki-Verwaltung „⋯“ (Papierkorb, Import); sonst bleibt nur der Papierkorb – eine Funktion steht als Knopf da
+  // (Nutzer, 27.10.2026).
+  const baumMehr = $("#btn-baum-mehr");
+  if (baumMehr) baumMehr.addEventListener("click", (e) => baumMenu(e.currentTarget));
+  const papierkorbKnopf = $("#btn-papierkorb");
+  if (papierkorbKnopf) papierkorbKnopf.addEventListener("click", () => trashDialog());
 
   /* Sidebar-Breite ziehen und merken */
   (function () {

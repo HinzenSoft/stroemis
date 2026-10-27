@@ -425,12 +425,14 @@ def test_oberflaeche_statisch():
     assert '${darfImportieren() ? \'<button type="button" data-a="import">Seiten aus ZIP importieren</button>\' : ""}' in menue
     assert 'if (b.dataset.a === "import") { side.classList.remove("open"); importDialog(null); }' in menue
     assert 'if (b.dataset.a === "trash") return trashDialog();' in menue and "wireMenuKeys(box, close);" in menue
-    assert '$("#btn-baum-mehr").addEventListener("click", (e) => baumMenu(e.currentTarget));' in js
+    assert 'if (baumMehr) baumMehr.addEventListener("click", (e) => baumMenu(e.currentTarget));' in js
     assert "#btn-import" not in js and "#btn-trash" not in js
     html = open(os.path.join(WURZEL, "app/templates/wiki.html"), encoding="utf-8").read()
     anfang = html.rindex("<div", 0, html.index('id="btn-new-page"'))
     zeile = html[anfang:html.index("</div>", anfang)]
-    assert zeile.count("<button") == 2 and 'class="btn small"' in zeile and 'class="btn secondary small" id="btn-baum-mehr"' in zeile
+    # Rot „Neue Seite“, daneben grau: mit Wiki-Verwaltung „⋯“, sonst der Knopf „Papierkorb“ (zwei Zweige der Vorlage).
+    assert zeile.count("<button") == 3 and 'class="btn small"' in zeile and 'class="btn secondary small" id="btn-baum-mehr"' in zeile
+    assert 'class="btn secondary small" id="btn-papierkorb"' in zeile
     assert 'aria-haspopup="menu" aria-label="Weitere Aktionen"' in zeile and ">⋯</button>" in zeile and "…" not in zeile
     dlg = js[js.index("function importDialog(p)"):js.index("/* --- Ende Import")]
     assert '${p && k.id === p.id ? " selected" : ""}' in dlg

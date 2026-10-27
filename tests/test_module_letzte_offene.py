@@ -58,8 +58,13 @@ def test_baumknoepfe_einzeilig():
     html, css = lies("app/templates/wiki.html"), lies("app/static/css/app.css")
     zeile = html[html.index('<div class="btn-row" style="margin-bottom:10px">'):]
     zeile = zeile[:zeile.index("</div>")]
-    # Zwei Knöpfe: die Hauptaktion rot, „⋯“ grau; am Finger je mindestens 44 px (bestehende Regel).
-    assert re.findall(r'<button class="([^"]+)"', zeile) == ["btn small", "btn secondary small"]
+    # Zwei Knöpfe: die Hauptaktion rot, daneben grau – mit Wiki-Verwaltung „⋯“ (Papierkorb, Import), sonst der Knopf
+    # „Papierkorb“ (eine Funktion steht als Knopf da, Nutzer 27.10.2026); am Finger je mindestens 44 px.
+    assert re.findall(r'<button class="([^"]+)"', zeile) == ["btn small", "btn secondary small", "btn secondary small"]
+    assert '{% if rechte.wiki == 2 %}<button class="btn secondary small" id="btn-baum-mehr"' in zeile
+    assert '{% else %}<button class="btn secondary small" id="btn-papierkorb" type="button">Papierkorb</button>{% endif %}' in zeile
+    js = lies("app/static/js/wiki.js")
+    assert 'if (baumMehr) baumMehr.addEventListener' in js and 'if (papierkorbKnopf) papierkorbKnopf.addEventListener' in js
     assert ".wiki-side .btn-row .btn.small, .wiki-menu-btn { min-height: 44px; min-width: 44px; padding: 9px 12px; }" in css
     print("Baumknöpfe einzeilig bestanden.")
 
