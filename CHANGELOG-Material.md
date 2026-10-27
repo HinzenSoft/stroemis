@@ -8992,7 +8992,7 @@ Teil B: Strömipedia, Ankerplätze, Riegenkarten, Leitstelle, Anmeldung. Kein Sc
   (39 px breit); Riegenkarten Voraussetzungs-Haken (40 px) und Stempel (24 px) ab Tablet. Ausnahme: Textlinks im Fließtext
   (WCAG 2.5.8) und die Quellenangabe der Karte (Leaflet).
 - **13 Knopfsprache der älteren Module** (designsprache.md):
-  - kein `btn ghost` mehr (Strömipedia 11, Riegenkarten 24, Ankerplätze 3 Stellen) – grau umrandet; die Regel `.btn.ghost`
+  - kein `btn ghost` mehr (Strömipedia, Riegenkarten, Ankerplätze) – grau umrandet; die Regel `.btn.ghost`
     ist entfernt. Die Symbolknöpfe im Kopf der Strömipedia (☰ Seiten, Kommentare, Teilen, ☰ Inhaltsverzeichnis, ⋯) sind
     grau umrandet; „💬“ ist ein gezeichnetes Symbol (Sprechblase wie die übrigen SVG-Symbole), der schwebende Knopf heißt
     „Kommentieren“ ohne Emoji.
@@ -9005,7 +9005,8 @@ Teil B: Strömipedia, Ankerplätze, Riegenkarten, Leitstelle, Anmeldung. Kein Sc
     Stoppuhr-Banner „Öffnen“ grau, Album-Panel „Bilder / Videos hochladen“ grau (rot bleibt „Album anlegen“), Großansicht
     „Bearbeiten“ grau, Kontoanfragen „Freigeben“ grau (rot bleibt „Nutzer anlegen“), Dialoge nur mit „Schließen“ grau.
   - `btn danger` nur zum Bestätigen: „Album löschen …“, „Löschen …“ (Großansicht, Leuchtkasten der Riegenkarten),
-    „Versuch löschen …“, „Löschen …“ im Teilnehmenden-Dialog und „Ablehnen …“ (Kontoanfrage) sind graue Auslöser; rot
+    „Versuch löschen …“, „Löschen …“ im Teilnehmenden-Dialog, „Endgültig löschen …“ im Papierkorb der Strömipedia und
+    „Ablehnen …“ (Kontoanfrage) sind graue Auslöser; rot
     umrandet ist allein der Knopf der Rückfrage (`S.confirm`).
   - seltene Zeilenaktionen im Zeilenmenü „Mehr“ (wie in der Leitstelle): Lehrgangsliste (Bearbeiten, Kopieren …, Löschen …),
     Katalogliste (Bearbeiten, Löschen …), Prüfungsleistungen in Lehrgang und Katalog („Bearbeiten“ als Knopf; Nach oben,

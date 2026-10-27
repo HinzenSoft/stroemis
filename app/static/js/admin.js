@@ -320,7 +320,7 @@
               ? `<p>Erzeugtes Passwort: <code>${S.esc(r.initial_password)}</code></p><p class="help">Bitte sicher weitergeben – es wird nicht erneut angezeigt.</p>`
               : "";
             const mail = d.send_invite ? (r.invite_sent ? "<p>Die Einladung wurde per E-Mail verschickt.</p>" : "<p class='notice'>Kein Mailserver eingerichtet – der Einladungslink steht im Protokoll des Servers.</p>") : "";
-            S.dialog(`<h2>Nutzer angelegt</h2><p>${S.esc(d.email)}</p>${info}${mail}<div class="dlg-actions"><button class="btn" data-close type="button">Schließen</button></div>`);
+            S.dialog(`<h2>Nutzer angelegt</h2><p>${S.esc(d.email)}</p>${info}${mail}<div class="dlg-actions"><button class="btn secondary" data-close type="button">Schließen</button></div>`);
           } catch (e) { S.toast(e.message, true); }
           finally { knopf.disabled = false; }
         };

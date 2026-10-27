@@ -691,7 +691,7 @@
         <div><strong>${r.icon ? esc(r.icon) + " " : ""}${esc(r.title)}</strong>
           <span class="muted small">${r.children ? `· ${r.children} Unterseite${r.children > 1 ? "n" : ""} ` : ""}· gelöscht ${fmtDate(r.deleted_at, true)}${r.created_by_name ? " · " + esc(r.created_by_name) : ""}</span></div>
         <div class="btn-row">${r.can_restore
-          ? '<button class="btn secondary small" data-a="restore">Wiederherstellen</button><button class="btn danger small" data-a="purge">Endgültig löschen</button>'
+          ? '<button class="btn secondary small" data-a="restore">Wiederherstellen</button><button class="btn secondary small" data-a="purge">Endgültig löschen …</button>'
           : '<span class="muted small">nur Ersteller oder Wiki-Verwaltung</span>'}</div>
       </li>`).join("")}</ul>`
       : '<p class="muted">Der Papierkorb ist leer.</p>'}

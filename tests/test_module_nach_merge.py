@@ -156,7 +156,7 @@ def test_knopfsprache_alte_module():
     assert ".btn.ghost" not in lies("app/static/css/app.css")
     pr = lies("app/static/js/pruefungen.js")
     # btn danger nur noch in der Rückfrage (common.js S.confirm), nicht als Auslöser.
-    for pfad in ("app/static/js/pruefungen.js", "app/static/js/map.js"):
+    for pfad in ("app/static/js/pruefungen.js", "app/static/js/map.js", "app/static/js/wiki.js"):
         assert "btn danger" not in lies(pfad), pfad
     assert 'class="btn danger small" data-act="reject"' not in lies("app/static/js/admin.js")
     assert '<button class="btn danger" id="c-ok" type="button">' in lies("app/static/js/common.js")
