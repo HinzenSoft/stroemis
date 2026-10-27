@@ -1288,8 +1288,10 @@ def test_oberflaeche_statisch():
     assert "capture" not in dlg and 'accept="image/*" multiple' in dlg and 'eingabe.value = "";' in dlg
     assert "fotos.push(f)" in dlg and 'fd.append("fotos", f)' in dlg and 'fd.append("beschreibung", text.value)' in dlg
     assert "btn danger" not in dlg and dlg.count('class="btn"') == 1
-    assert '<button class="btn" id="mg-ok" type="button">Melden und sperren</button>' in dlg
-    assert "${BEISEITE}" in dlg and 'const BEISEITE = "Leg ihn sofort beiseite (aus Fahrzeug oder Lager) und gib ihn deinem Materialwart.";' in js
+    # Am schon gesperrten Artikel heißt der Knopf „Melden“ (UI/UX vor dem Merge, B14).
+    assert '<button class="btn" id="mg-ok" type="button">${knopfText}</button>' in dlg
+    assert 'const knopfText = opt.gesperrt ? "Melden" : "Melden und sperren";' in dlg
+    assert "BEISEITE}" in dlg and 'const BEISEITE = "Leg ihn sofort beiseite (aus Fahrzeug oder Lager) und gib ihn deinem Materialwart.";' in js
     assert "Höchstens ${MANGEL_MAX_FOTOS} Fotos." in dlg
     assert "Es ging keine Mail hinaus – sag deinem Materialwart Bescheid" in js and "r.mail ?" in js
     assert "btn ghost" not in js
@@ -1306,7 +1308,9 @@ def test_oberflaeche_statisch():
     # Festschreiben: Häkchen je offener Meldung, nur abgehakte gehen hinaus, Knopf erst danach frei.
     fs = js[js.index("async function festschreibDialog("):]
     assert 'data-mangel="${Number(m.id)}"' in fs and "Gemeldeten Mangel vom" in fs
-    assert "daten.maengel_gesehen = haken.filter((h) => h.checked)" in fs and "knopf.disabled = !alleAbgehakt();" in fs
+    # Ausgegraut, aber fokussierbar (aria-disabled, UI/UX vor dem Merge B1).
+    assert "daten.maengel_gesehen = haken.filter((h) => h.checked)" in fs
+    assert 'if (alleAbgehakt()) knopf.removeAttribute("aria-disabled"); else knopf.setAttribute("aria-disabled", "true");' in fs
     # Artikelseite: grauer Knopf, ausgegrautes Aussondern mit Erklärung. Die Erklärung zum Melden steht im Dialog, nicht
     # mehr unter den Knöpfen (Wunsch des Nutzers 23.10.2026).
     assert "' data-act=\"mangel\"'}>Mangel melden</button>" in js and "Sperren: ohne Meldung, mit Sperrgrund." not in js

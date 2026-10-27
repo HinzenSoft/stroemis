@@ -14,6 +14,7 @@ import hashlib
 import io
 import json
 import os
+import re
 import sqlite3
 import sys
 import tempfile
@@ -349,6 +350,8 @@ def test_rechte_ordnerseite_und_zip():
         assert all(n.startswith("Set-Protokolle/") for n in namen if "/T-" in n)
         kopf = r.headers["Content-Disposition"]
         assert kopf.startswith('attachment; filename="Protokolle_Platzhalter-Durchgang_S-') and "filename*=UTF-8''" in kopf
+        # Mit Datum und Uhrzeit des Abrufs, ohne Leerzeichen (UI/UX vor dem Merge, B13).
+        assert re.search(r'filename="Protokolle_Platzhalter-Durchgang_S-\d{4}-\d{6}_\d{4}-\d{2}-\d{2}_\d{4}\.zip"', kopf), kopf
         # Ordner-Export von A: T(A) und T(B).
         r = t.w.get(f"/materialablage/export/{t.a}-protokolle.zip")
         z = zipfile.ZipFile(io.BytesIO(r.data))
@@ -372,7 +375,7 @@ def test_oberflaeche_statisch():
     Set-Protokollen, PDF-Links mit eigenem Namen, Prüfsummen-Linie am Text."""
     wurzel = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     js = open(os.path.join(wurzel, "app/material/static/material.js"), encoding="utf-8").read()
-    assert '<a class="btn secondary" href="/materialablage/durchgang/${d.id}/protokolle.zip">Alle Protokolle (ZIP)</a>' in js
+    assert '<a class="btn secondary" href="/materialablage/durchgang/${d.id}/protokolle.zip" data-frisch>Alle Protokolle (ZIP)</a>' in js
     assert "function setProtokolleHtml(liste)" in js and "function sammelprotokolleHtml(liste)" in js
     assert "<h2>Set-Protokolle</h2>" in js and "<h2>${sammelprotokolleTitel(d.sammelprotokolle)}</h2>" in js
     assert '"Set- und Sammelprotokolle" : arten.has("Set-Protokoll") ? "Set-Protokolle" : "Sammelprotokolle"' in js

@@ -1,36 +1,43 @@
 {% extends "base.html" %}
-{% block title %}Protokoll oder Lebenslauf prüfen – strömis.de{% endblock %}
+{% block title %}Echtheit prüfen – {{ modul.name.material }} – strömis.de{% endblock %}
 {% block head %}
 <link rel="stylesheet" href="{{ url_for('material.static', filename='material.css') }}">
 {% endblock %}
 {% block body %}
-{# Prüfseite (Lieferung 3): öffentlich, ohne Anmeldung. Sie vergleicht ein hochgeladenes PDF mit den gespeicherten
-   Prüfsummen und zeigt nur „unverändert“ oder „verändert“ samt Protokoll-ID – bzw. beim Lebenslauf (seit Schritt 31)
-   Kennung und Stand –, keine Personendaten. Die Datei wird nicht gespeichert. #}
+{# Seite „Echtheit prüfen“ (Lieferung 3, so benannt seit UI/UX vor dem Merge, B10; Adresse unverändert): öffentlich, ohne
+   Anmeldung. Sie vergleicht ein hochgeladenes PDF mit den gespeicherten Prüfsummen und zeigt nur „unverändert“ oder
+   „verändert“ samt Protokoll-ID – bzw. beim Lebenslauf (seit Schritt 31) Kennung und Stand –, keine Personendaten. Die
+   Datei wird nicht gespeichert. Ablagefläche und „Prüfen“ stehen oben (am iPhone SE im ersten Bild); die Erklärung und
+   das Nachrechnen von Hand sind zugeklappt – vorher standen zehn Zeilen Text vor der Ablagefläche. #}
 <main class="page narrow mat-pruefen" id="pruefen" data-angemeldet="{{ 'ja' if angemeldet else 'nein' }}">
   {% if angemeldet %}<div class="mat-pfad"><span class="mat-pfad-glied"><a href="/materialablage">Materialablage</a></span> <span class="mat-pfad-glied">/ <a href="/materialablage/pruefungen">Prüfungen</a></span></div>{% endif %}
-  <h1>Protokoll oder Lebenslauf prüfen</h1>
-  <p>Jedes festgeschriebene Protokoll von strömis.de – Prüf-, Aussonderungs-, Sammel- und Set-Protokoll – und jeder
-    Lebenslauf trägt im Fuß jeder Seite eine Prüfsumme: „SHA-256 (erste N Bytes): …“. Lade die PDF-Datei hier hoch; die
-    Seite vergleicht sie mit dem Wert, der beim Festschreiben bzw. beim Abruf des Lebenslaufs gespeichert wurde. Die Datei
-    wird dabei nicht gespeichert. Lebensläufe, die abgerufen wurden, bevor sie eine Kennung (L-…) bekamen, tragen keine
-    Prüfsumme – sie werden hier nicht erkannt.</p>
+  <h1>Echtheit prüfen</h1>
+  <p>Ist ein Protokoll oder Lebenslauf von strömis.de unverändert? Wähle die PDF-Datei – sie wird nur verglichen, nicht gespeichert.</p>
   <form id="pr-form" class="mat-pruefen-form">
     <label class="mat-ablage" id="pr-ablage" for="pr-datei">
       <span id="pr-name">PDF-Datei hierher ziehen oder <u>auswählen</u></span>
       <input type="file" id="pr-datei" name="datei" accept="application/pdf,.pdf" class="mat-datei">
     </label>
-    <div class="btn-row"><button class="btn" type="submit" id="pr-los" disabled>Prüfen</button></div>
+    <p class="mat-knopfgrund" id="pr-grund" aria-live="polite">Wähle zuerst eine PDF-Datei.</p>
+    <div class="btn-row"><button class="btn" type="submit" id="pr-los" aria-disabled="true" aria-describedby="pr-grund">Prüfen</button></div>
   </form>
   <div id="pr-ergebnis" class="mat-pruefergebnis" role="status" aria-live="polite" hidden></div>
-  <section class="section">
-    <h2>Selbst nachrechnen</h2>
+  <details class="section mat-auf">
+    <summary>Wie funktioniert das?</summary>
+    <p>Jedes festgeschriebene Protokoll von strömis.de – Prüf-, Aussonderungs-, Sammel- und Set-Protokoll – und jeder
+      Lebenslauf trägt im Fuß jeder Seite eine Prüfsumme: „<span class="mat-nowrap">SHA-256</span> (erste N Bytes): …“.
+      Diese Seite vergleicht deine Datei mit dem Wert, der beim Festschreiben bzw. beim Abruf des Lebenslaufs gespeichert
+      wurde. Lebensläufe, die abgerufen wurden, bevor sie eine Kennung (L-…) bekamen, tragen keine Prüfsumme – sie werden
+      hier nicht erkannt.</p>
+  </details>
+  <details class="section mat-auf">
+    <summary>Selbst nachrechnen</summary>
     <p>Die Prüfsumme deckt die ersten N Bytes der Datei ab – das ist das Protokoll samt angefügter Anhänge bzw. der
       Lebenslauf, ohne den Stempel selbst. Mit Linux oder macOS:</p>
     <pre class="mat-befehl">head -c N protokoll.pdf | sha256sum</pre>
     <p class="help">Für N die Zahl aus dem Stempel einsetzen. Stimmt das Ergebnis mit der aufgedruckten Summe überein, ist
       der Inhalt unverändert. Ob die Datei wirklich von strömis.de stammt, zeigt erst der Abgleich hier.</p>
-  </section>
+  </details>
 </main>
 {% endblock %}
 {% block scripts %}<script src="{{ url_for('material.static', filename='pruefen.js') }}"></script>{% endblock %}

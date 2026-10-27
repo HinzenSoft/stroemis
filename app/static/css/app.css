@@ -260,6 +260,10 @@ h3.abgesetzt { margin-top: 18px; }
 }
 .btn:hover { background: var(--rot-dunkel); border-color: var(--rot-dunkel); color: var(--weiss); }
 .btn:disabled, .btn:disabled:hover { opacity: .55; cursor: default; background: var(--rot); border-color: var(--rot); color: var(--weiss); }
+/* Ausgegraute Hauptknöpfe mit Grund (UI/UX B1): aria-disabled sieht aus wie disabled, bleibt aber fokussierbar – app-weit,
+   damit es auch auf Seiten ohne material.css wirkt (Profil, Unterschrift-Pad). */
+.btn[aria-disabled="true"], .btn[aria-disabled="true"]:hover { opacity: .55; cursor: default; background: var(--rot); border-color: var(--rot); color: var(--weiss); }
+.btn.secondary[aria-disabled="true"], .btn.secondary[aria-disabled="true"]:hover { background: var(--weiss); color: var(--anthrazit); border-color: var(--anthrazit); }
 .btn.secondary { background: var(--weiss); color: var(--anthrazit); border-color: var(--anthrazit); }
 .btn.secondary:hover { background: var(--grau-hell); }
 .btn.secondary:disabled, .btn.secondary:disabled:hover { background: var(--weiss); color: var(--anthrazit); border-color: var(--anthrazit); }

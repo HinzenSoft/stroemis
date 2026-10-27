@@ -288,10 +288,12 @@ def test_oberflaeche_statisch():
     wurzel = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     js = open(os.path.join(wurzel, "app/material/static/material.js"), encoding="utf-8").read()
     assert 'const WAEHLBAR = ["einsatzbereit", "instandsetzen", "aussondern_empfohlen"];' in js
-    assert "${WAEHLBAR.map((e) => `<button type=\"button\" data-act=\"ergebnis\"" in js
+    # Seit UI/UX vor dem Merge (B11) als Radiogruppe.
+    assert "${WAEHLBAR.map((e, i) => `<button type=\"button\" role=\"radio\" data-act=\"ergebnis\"" in js
     assert "„aussondern“ ist endgültig" not in js and 'daten.ergebnis === "aussondern" ? " danger"' not in js
     assert "const empfohlenMarke = (x) =>" in js and "${empfohlenMarke(a.aussonderung_empfohlen)}" in js
-    assert "${empfohlenMarke(empf)}" in js
+    # Am Artikel steht die Empfehlung seit UI/UX vor dem Merge (B7) im roten Banner, nicht mehr als Marke am Titel.
+    assert "${empfohlenMarke(empf)}" not in js and 'const empfZeile = empf ? `<p class="mat-banner-zeile">Empfohlen von ' in js
     assert "aussondernNein ? ' disabled aria-describedby=\"mat-aussondern-hilfe\"'" in js
     assert "const NUR_GEMELDET" not in js
     assert 'k === vorbelegt ? " selected" : ""' in js
@@ -305,7 +307,7 @@ def test_oberflaeche_statisch():
                           ('id="mat-schon-gemeldet"', '<div class="btn-row mat-pruefknoepfe">'),
                           ('id="psa-schon-${Number(k.id)}"', '<div class="btn-row mat-psa-knoepfe">'),
                           ('<p class="help">${esc(b.frist)}</p>', 'data-act="bi-neu">Neu wählen</button>'),
-                          ('id="pr-hinweis" aria-live="polite"', '<div class="mat-ergebnis" role="group"'),
+                          ('id="pr-hinweis" aria-live="polite"', '<div class="mat-ergebnis" role="radiogroup"'),
                           ("${pruefHinweis(a)}</p>`", 'id="mat-schon-gemeldet">Du hast am'),
                           ('id="mat-schon-gemeldet">Du hast am', 'id="mat-aussondern-hilfe">')):
         assert js.index(satz) < js.index(knoepfe), satz

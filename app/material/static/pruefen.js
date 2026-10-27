@@ -1,5 +1,7 @@
-/* Prüfseite (/materialablage/pruefen): ein PDF hochladen, die Antwort der Schnittstelle zeigen. Öffentlich – deshalb nicht
-   material.js, das ohne angemeldetes Konto nichts anzeigt. */
+/* Seite „Echtheit prüfen“ (/materialablage/pruefen): ein PDF hochladen, die Antwort der Schnittstelle zeigen. Öffentlich –
+   deshalb nicht material.js, das ohne angemeldetes Konto nichts anzeigt. „Prüfen“ ohne Datei ist ausgegraut, aber
+   fokussierbar (aria-disabled); der Grund steht als Satz darüber und wird beim Klick hervorgehoben (UI/UX vor dem Merge,
+   B1 – vorher war der Knopf gesperrt und sagte nichts). */
 (function () {
   "use strict";
   const root = document.getElementById("pruefen");
@@ -11,7 +13,13 @@
   const name = document.getElementById("pr-name");
   const los = document.getElementById("pr-los");
   const box = document.getElementById("pr-ergebnis");
+  const grund = document.getElementById("pr-grund");
   let datei = null;
+  function knopfSetzen() {
+    if (datei) los.removeAttribute("aria-disabled"); else los.setAttribute("aria-disabled", "true");
+    grund.hidden = Boolean(datei);
+    grund.classList.remove("betont");
+  }
 
   const TEXT = {
     unveraendert: ["ok", "Unverändert", "Die Datei ist genau das Protokoll, das strömis.de festgeschrieben hat."],
@@ -23,7 +31,7 @@
   function waehlen(f) {
     datei = f || null;
     name.innerHTML = datei ? `<strong>${esc(datei.name)}</strong><br><span class="small muted">Andere Datei hierher ziehen oder <u>auswählen</u></span>` : WAHL;
-    los.disabled = !datei;
+    knopfSetzen();
     box.hidden = true;
   }
 
@@ -34,7 +42,7 @@
 
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
-    if (!datei) return;
+    if (!datei) { grund.hidden = false; grund.classList.add("betont"); return; }
     los.disabled = true;
     los.textContent = "Wird geprüft …";
     const fd = new FormData();
@@ -58,7 +66,8 @@
       box.innerHTML = `<strong>Nicht geprüft</strong><p>${esc(err.message)}</p>`;
       box.hidden = false;
     } finally {
-      los.disabled = !datei;
+      los.disabled = false;
+      knopfSetzen();
       los.textContent = "Prüfen";
     }
   });

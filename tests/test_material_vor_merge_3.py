@@ -110,7 +110,7 @@ def test_materialablage_statisch():
     # V2: Titel je Ansicht.
     assert 'const seitenTitel = (...teile) => S.titel(teile, OHNE_MODUL ? "" : "material");' in js
     for aufruf in ('seitenTitel("Übersicht");', 'seitenTitel("Prüfungen");', 'seitenTitel("Bestand");', "seitenTitel(d.name);",
-                   "seitenTitel(a.inventory_no);", "seitenTitel(produktName(p));", 'seitenTitel(f.titel || "Prüfformular");',
+                   "seitenTitel(a.inventory_no);", "seitenTitel(produktName(p));", 'seitenTitel(`Prüfformular ${f.ziel.art === "kategorie"',
                    'seitenTitel(k ? k.name : "", "Katalog");', "seitenTitel(d.titel);", 'seitenTitel("Änderungsanträge");',
                    "seitenTitel(`Prüfung ${a.inventory_no}`);", "seitenTitel(`Jahresbericht ${k.ordner} ${k.jahr}`)"):
         assert aufruf in js, aufruf
@@ -139,8 +139,10 @@ def test_materialablage_statisch():
         assert regel in css, regel
     # Nachtrag V7: anderer Sperrgrund plus offene Mangelmeldung – eine Zeile im (ersten) Mangel-Banner, kein GESPERRT-Banner.
     assert "const sperreImMangel = a.status === \"gesperrt\" && !sperreDurchMangel && offeneMaengel.length > 0;" in js
-    assert '${a.status === "gesperrt" && !sperreDurchMangel && !sperreImMangel ? `<p class="mat-banner s-gesperrt">' in js
-    assert 'offeneMaengel.map((m, i) => mangelBanner(m, sperreImMangel && i === 0 ? sperrText || "" : null))' in js
+    # (seit UI/UX vor dem Merge, B7: gesperrtBanner, Banner als div mit der Empfehlungszeile)
+    assert 'const gesperrtBanner = a.status === "gesperrt" && !sperreDurchMangel && !sperreImMangel;' in js
+    assert '${gesperrtBanner ? `<div class="mat-banner s-gesperrt" role="note">' in js
+    assert 'offeneMaengel.map((m, i) => mangelBanner(m, sperreImMangel && i === 0 ? sperrText || "" : null, darf.verwalten,' in js
     assert '<p class="mat-mangel-sperre"><strong>Außerdem gesperrt</strong>${sperre ? `: ${esc(sperre)}` : ""}.</p>' in js
     print("Materialablage (statisch) bestanden.")
 

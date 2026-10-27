@@ -50,9 +50,10 @@ window.MatUnterschrift = (function () {
           <span class="us-linie" aria-hidden="true"></span>
           <span class="us-platzhalter" aria-hidden="true">Hier unterschreiben</span></div>
         ${opts.bestehend ? `<p class="us-bisher small muted">Bisher: <img src="${esc(opts.bestehend)}" alt="bisherige Unterschrift"></p>` : ""}
+        <p class="mat-knopfgrund" id="${tid}-grund" aria-live="polite">Unterschreibe zuerst im Feld.</p>
         <div class="dlg-actions us-aktionen"><button type="button" class="btn secondary dlg-neben" data-us="leeren" disabled>Leeren</button>
           <button type="button" class="btn secondary" data-us="ab">Abbrechen</button>
-          <button type="button" class="btn" data-us="ok" disabled>Übernehmen</button></div></div>`;
+          <button type="button" class="btn" data-us="ok" aria-disabled="true" aria-describedby="${tid}-grund">Übernehmen</button></div></div>`;
       document.body.appendChild(dlg);
       const canvas = dlg.querySelector("canvas");
       const linie = dlg.querySelector(".us-linie");
@@ -62,9 +63,15 @@ window.MatUnterschrift = (function () {
       let ergebnis = null;
       let laeuft = false;
 
+      /* „Übernehmen“ ohne Strich: ausgegraut, aber fokussierbar (aria-disabled), der Grund als Satz darüber (UI/UX vor
+         dem Merge, B1); ein Klick hebt ihn hervor. Während des Speicherns ist der Knopf wirklich gesperrt. */
+      const grund = dlg.querySelector(".mat-knopfgrund");
       const zustand = () => {
         const leer = pad.isEmpty();
-        knopf("ok").disabled = leer || laeuft;
+        knopf("ok").disabled = laeuft;
+        if (leer) knopf("ok").setAttribute("aria-disabled", "true"); else knopf("ok").removeAttribute("aria-disabled");
+        grund.hidden = !leer;
+        grund.classList.remove("betont");
         knopf("leeren").disabled = leer || laeuft;
         knopf("ab").disabled = laeuft;
         platz.hidden = !leer;
@@ -112,7 +119,8 @@ window.MatUnterschrift = (function () {
       knopf("leeren").addEventListener("click", () => { pad.clear(); bezug = null; zustand(); });
       knopf("ab").addEventListener("click", () => dlg.close());
       knopf("ok").addEventListener("click", async () => {
-        if (pad.isEmpty() || laeuft) return;
+        if (pad.isEmpty()) { grund.hidden = false; grund.classList.add("betont"); return; }
+        if (laeuft) return;
         const bild = pad.toDataURL("image/png");
         if (opts.speichern) {
           laeuft = true;

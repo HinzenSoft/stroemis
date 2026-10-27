@@ -50,6 +50,11 @@
 .mat-banner.s-gesperrt { background: var(--rot); }
 .mat-banner.s-lebensdauer { background: var(--mat-lebensdauer); }
 .mat-banner.s-neu { background: var(--wasser); }
+/* Banner mit zweiter Zeile („Empfohlen von … am …“, UI/UX vor dem Merge B7): die Zeile leiser, Links weiß. */
+div.mat-banner.s-gesperrt > p { margin: 0 0 6px; max-width: 100ch; overflow-wrap: break-word; }
+div.mat-banner.s-gesperrt > p:last-child { margin-bottom: 0; }
+.mat-banner .mat-banner-zeile { font-weight: 400; font-size: var(--fs-klein); }
+.mat-banner .mat-banner-zeile a { color: var(--weiss); text-decoration: underline; }
 .mat-demo { display: inline-block; font-size: var(--fs-marke); font-weight: 700; padding: 1px 6px; margin-left: 6px;
   background: repeating-linear-gradient(45deg, var(--gelb), var(--gelb) 6px, #fff8a6 6px, #fff8a6 12px);
   color: var(--anthrazit); border: 1px solid var(--gelb-dunkel); vertical-align: middle; }
@@ -75,8 +80,16 @@ a.mat-kachel:hover { background: var(--grau-hell); }
 .mat-baum, .mat-baum ul, .mat-unterordner { list-style: none; margin: 0; padding: 0; }
 .mat-baum ul { margin-left: 14px; padding-left: 12px; border-left: 1px solid var(--linie); }
 .mat-baum li, .mat-unterordner li { padding: 4px 0; }
-.mat-baum li > a, .mat-unterordner li > a { font-weight: 600; }
-.mat-baum li.system > a, .mat-unterordner li.system > a { font-weight: 400; color: var(--grau); }
+.mat-knoten-name > a { font-weight: 600; }
+li.system > .mat-knoten .mat-knoten-name > a { font-weight: 400; color: var(--grau); }
+/* Bestandsbaum und Unterordner am Telefon (B13): die Zähler rechts neben dem Namen – der Name bricht in seiner Spalte
+   um, statt die Zähler allein in eine eigene Zeile zu schieben. Breiter stehen sie wie bisher direkt hinter dem Namen. */
+@container mat-seite (max-width: 600px) {
+  .mat-knoten { display: flex; align-items: baseline; gap: 4px 8px; }
+  .mat-knoten-name { flex: 1 1 auto; min-width: 0; overflow-wrap: break-word; }
+  .mat-knoten-zahlen { flex: none; white-space: nowrap; }
+  .mat-knoten-zahlen > .mat-baum-zahl:first-child { margin-left: 0; }
+}
 .mat-unterordner li { border-bottom: 1px solid var(--linie); padding: 8px 0; }
 .mat-art { display: inline-block; font-size: var(--fs-marke); color: var(--grau); border: 1px solid var(--linie);
   border-radius: var(--radius-pille); padding: 0 7px; margin-left: 6px; vertical-align: middle; font-weight: 400;
@@ -217,6 +230,7 @@ table.list.mat-artikel th.mat-wahlspalte, table.list.mat-artikel td.mat-wahlspal
 /* Journal mit Vorher/Nachher je Feld */
 .mat-journal { list-style: none; padding: 0; margin: 0; }
 .mat-journal > li { border-left: 3px solid var(--linie); padding: 6px 0 8px 12px; margin-bottom: 4px; }
+.mat-journal-mehr { margin: 8px 0 0; }   /* „Alle n Einträge anzeigen“ unter den letzten fünf (Artikelseite, B8) */
 .mat-j-kopf { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; font-size: var(--fs-mittel); }
 .mat-j-zeit { color: var(--grau); font-size: var(--fs-klein); }
 .mat-diff { border-collapse: collapse; margin-top: 4px; font-size: var(--fs-klein); max-width: 100%; }
@@ -443,13 +457,16 @@ tr.mat-entwurf a:not(.btn) { color: var(--rot-auf-flaeche); }
 .mat-kritisch { display: inline-block; font-size: var(--fs-marke); font-weight: 700; color: var(--rot); border: 1px solid var(--rot);
   border-radius: var(--radius-pille); padding: 0 6px; }
 .mat-wahl3 { display: flex; gap: 0; margin: 6px 0; }
-.mat-wahl3 button { flex: 1 1 0; min-height: 46px; font: inherit; font-weight: 700; background: var(--weiss); color: var(--anthrazit);
+.mat-wahl3 button { flex: 1 1 0; min-height: 46px; font: inherit; font-weight: 400; background: var(--weiss); color: var(--anthrazit);
   border: 1px solid var(--linie); cursor: pointer; padding: 6px 8px; }
 .mat-wahl3 button + button { border-left: 0; }
 .mat-wahl3 button:hover { background: var(--grau-hell); }
-.mat-wahl3 button[aria-pressed="true"] { background: var(--anthrazit); border-color: var(--anthrazit); color: var(--weiss); }
-.mat-wahl3 button.soll[aria-pressed="true"] { background: var(--ok); border-color: var(--ok); }
-.mat-wahl3 button.abw[aria-pressed="true"] { background: var(--rot); border-color: var(--rot); }
+/* Gewählt (Radiogruppe, UI/UX vor dem Merge B2/B11): kräftiger Rand in der Farbe der Wahl und fett – die übrigen
+   Knöpfe stehen in normaler Schrift –, nicht gefüllt. Vorher stand ein rot gefüllter „Mangel“ neben dem roten
+   „Festschreiben“, und gewählt hieß nur Farbe. Der Rand als Schatten nach innen, damit nichts springt. */
+.mat-wahl3 button[aria-checked="true"] { background: var(--weiss); color: var(--schwarz); font-weight: 700; box-shadow: inset 0 0 0 3px var(--anthrazit); }
+.mat-wahl3 button.soll[aria-checked="true"] { color: var(--ok); box-shadow: inset 0 0 0 3px var(--ok); }
+.mat-wahl3 button.abw[aria-checked="true"] { color: var(--rot-auf-flaeche); box-shadow: inset 0 0 0 3px var(--rot-dunkel); }
 .mat-wahl3 button:focus-visible { outline: 3px solid var(--gelb); outline-offset: -3px; position: relative; }
 .mat-punkt .mat-pwert { width: 100%; margin: 4px 0; font-size: 16px; }
 .mat-punkt .mat-pnotiz { width: 100%; margin-top: 8px; font-size: 16px; }
@@ -519,16 +536,15 @@ html:has(.mat-mit-leiste) { scroll-padding-bottom: 210px; }
 .mat-abschluss { position: sticky; bottom: 0; z-index: 6; background: var(--weiss); border-top: 2px solid var(--anthrazit);
   box-shadow: var(--schatten-leiste); padding: 10px 12px calc(10px + env(safe-area-inset-bottom)); margin: 24px 0 0; }
 .mat-ergebnis { display: flex; gap: 6px; }
-.mat-ergebnis button { flex: 1 1 0; min-height: 46px; font: inherit; font-weight: 700; border: 2px solid var(--linie); background: var(--weiss);
+.mat-ergebnis button { flex: 1 1 0; min-height: 46px; font: inherit; font-weight: 400; border: 2px solid var(--linie); background: var(--weiss);
   color: var(--anthrazit); cursor: pointer; padding: 4px 6px; }
 .mat-ergebnis button:disabled { opacity: .4; cursor: not-allowed; text-decoration: line-through; }
-.mat-ergebnis button.e-einsatzbereit[aria-pressed="true"] { background: var(--ok); border-color: var(--ok); color: var(--weiss); }
-.mat-ergebnis button.e-instandsetzen[aria-pressed="true"] { background: var(--gelb); border-color: var(--gelb-dunkel); color: var(--anthrazit); }
-.mat-ergebnis button:is(.e-aussondern, .e-aussondern_empfohlen)[aria-pressed="true"] { background: var(--mat-lebensdauer); border-color: var(--mat-lebensdauer); color: var(--weiss); }
+.mat-ergebnis button[aria-checked="true"] { color: var(--schwarz); font-weight: 700; box-shadow: inset 0 0 0 1px var(--anthrazit); border-color: var(--anthrazit); }
+.mat-ergebnis button.e-einsatzbereit[aria-checked="true"] { background: var(--co-success-fl); border-color: var(--ok); box-shadow: inset 0 0 0 1px var(--ok); }
+.mat-ergebnis button.e-instandsetzen[aria-checked="true"] { background: var(--co-warning-fl); border-color: var(--gelb-dunkel); box-shadow: inset 0 0 0 1px var(--gelb-dunkel); }
+.mat-ergebnis button:is(.e-aussondern, .e-aussondern_empfohlen)[aria-checked="true"] { background: var(--rot-hell); border-color: var(--rot-dunkel);
+  box-shadow: inset 0 0 0 1px var(--rot-dunkel); color: var(--rot-auf-flaeche); }
 .mat-abschluss-zeile { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-top: 8px; }
-.mat-abschluss-zeile input[type=text] { flex: 1 1 220px; min-width: 0; }
-.mat-abschluss-zeile .mat-due { display: flex; align-items: center; gap: 8px; margin: 0; font-weight: 600; }
-.mat-abschluss-zeile .mat-due[hidden], .mat-abschluss-zeile input[hidden] { display: none; }
 .mat-abschluss-zeile .btn { margin-left: auto; min-height: 44px; padding-left: 22px; padding-right: 22px; }
 .mat-abschluss-hinweis { font-size: var(--fs-klein); color: var(--grau); margin-bottom: 6px; }   /* über den Knöpfen */
 .mat-abschluss-hinweis:empty { display: none; }
@@ -547,10 +563,11 @@ html:has(.mat-mit-leiste) { scroll-padding-bottom: 210px; }
   .mat-pruefung .page-head { margin-bottom: 12px; }
 }
 @media (max-width: 560px) {
-  .mat-ergebnis button { font-size: var(--fs-mittel); }
+  .mat-ergebnis button { font-size: var(--fs-mittel); line-height: 1.15; }
   .mat-abschluss-zeile .btn { flex: 1 1 100%; margin-left: 0; }
-  .mat-abschluss-zeile .mat-due { flex: 1 1 100%; justify-content: space-between; }
-  .mat-abschluss { margin-left: -12px; margin-right: -12px; }
+  .mat-abschluss { margin-left: -12px; margin-right: -12px; padding-top: 6px; padding-bottom: calc(6px + env(safe-area-inset-bottom)); }
+  .mat-abschluss-zeile { margin-top: 6px; }
+  .mat-abschluss-hinweis { margin-bottom: 4px; }
 }
 
 /* Festschreiben, Protokoll, Berichtigung. „Festschreiben“ ist in der Leiste und im Dialog der eine rote Knopf. */
@@ -913,11 +930,9 @@ table.list.mat-tabelle :is(td.mat-kategorie, .mat-kat-zusatz) { overflow-wrap: b
 /* Lange Ordner- und Kategorienamen brechen um, statt mit „…“ zu enden – den vollen Namen im title sieht man ohne Maus
    nie, und „DEMO-Gerätewagen Wasserret…“ war von seinem Nachbarn nicht zu unterscheiden. Getrennt wird an Wortgrenzen
    und nach Silben (hyphens, lang="de"), mitten im Wort nur, wenn ein Wort allein nicht in die Zeile passt – vorher
-   stand in der schmalen festen Leiste „DEMO-Seilrucksa|ck“. Mit der Maus am breiten Bildschirm bleibt der Baum ruhig
-   wie im Wiki. */
-@media (pointer: coarse), (max-width: 1023px) {
-  .mat-tree a { white-space: normal; overflow-wrap: break-word; -webkit-hyphens: auto; hyphens: auto; text-overflow: clip; }
-}
+   stand in der schmalen festen Leiste „DEMO-Seilrucksa|ck“. Seit UI/UX vor dem Merge (B3) auch mit der Maus am Rechner:
+   Dort endeten „DEMO-Strömungsrettungsgruppe 1/2/3“ alle gleich auf „DEMO-Strömungsrettung…“. */
+.mat-tree a { white-space: normal; overflow-wrap: break-word; -webkit-hyphens: auto; hyphens: auto; text-overflow: clip; }
 @media (pointer: coarse) {
   .mat-tree a { padding-top: 11px; padding-bottom: 11px; min-height: 44px; }
   .mat-tree .tg { width: 44px; height: auto; min-height: 44px; align-self: stretch; }
@@ -995,8 +1010,6 @@ html:has(.mat-pruefung.tippt) { scroll-padding-top: 8px; scroll-padding-bottom: 
   .mat-abschluss { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
   .mat-ergebnis { flex: 1 1 330px; }
   .mat-abschluss-zeile { flex: 1 1 auto; margin-top: 0; }
-  .mat-abschluss-zeile input[type=text] { flex-basis: 140px; width: 140px; }
-  .mat-abschluss-zeile .mat-due { white-space: nowrap; }
   .mat-abschluss-hinweis { flex: 1 1 100%; margin-bottom: 0; }
 }
 
@@ -1025,8 +1038,6 @@ html:has(.mat-pruefung.tippt) { scroll-padding-top: 8px; scroll-padding-bottom: 
   .mat-abschluss { padding-top: 6px; padding-bottom: calc(6px + env(safe-area-inset-bottom)); margin-top: 16px; }
   .mat-ergebnis button { min-height: 44px; }
   .mat-abschluss-zeile .btn { min-height: 44px; }
-  /* „Nächste Prüfung“ klein über dem Datum statt daneben – so passt die Fälligkeit mit in die Zeile. */
-  .mat-abschluss-zeile .mat-due { flex-direction: column; align-items: stretch; gap: 0; font-size: var(--fs-klein); line-height: 1.2; }
   .mat-abschluss-hinweis { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
   .mat-abschluss-hinweis.ganz { white-space: normal; }
 }
@@ -1229,9 +1240,9 @@ table.list.mat-artikel tr:has(.mat-wahl-art:checked) { background: var(--co-info
     min-width: 44px; min-height: 44px; margin: -8px -4px; }
   .mat-alle-feld, table.list.mat-karten .mat-wahl-feld { min-height: 44px; margin: 0; justify-content: flex-start; }
   #mat-inhalt table.list.mat-tabelle td > a:not(.btn, .mat-pdf),
-  #mat-inhalt .mat-unterordner li > a { position: relative; }
+  #mat-inhalt .mat-unterordner li .mat-knoten-name > a { position: relative; }
   #mat-inhalt table.list.mat-tabelle td > a:not(.btn, .mat-pdf, .mat-zahl)::after,
-  #mat-inhalt .mat-unterordner li > a::after { content: ""; position: absolute; inset: -14px -4px; }
+  #mat-inhalt .mat-unterordner li .mat-knoten-name > a::after { content: ""; position: absolute; inset: -14px -4px; }
   .mat-auf > summary { padding: 11px 0; }
   /* Modulnavigation: Reiter, „☰ Ordner“, Lupe, Nummernsuche und „Suchen“ 44 px hoch. Die Brotkrumen: Abschnitt
      „Nachbesserung nach der Geräte-Prüfung“ am Ende. */
@@ -1370,7 +1381,7 @@ table.list.mat-runde tr.mat-fremd td { color: var(--grau); }
 /* Erinnerungsmails (Übersicht, nur Material- und Plattform-Verwaltung): die Zeile mit dem Stand des letzten Laufs
    unten und der Probelauf (material.js, probelaufDialog). Der Mailtext steht wie verschickt – Zeilen umbrechen statt
    seitwärts zu rollen, lange Links brechen überall; ein langer Text rollt im Kasten. */
-.mat-erinnerungen { margin-top: 24px; overflow-wrap: anywhere; }
+.mat-erinnerungen { margin: 24px 0 20px; overflow-wrap: anywhere; }   /* Abstand zum Kasten „Mailversand“ darunter (B13) */
 @media (min-width: 641px) { dialog:where(.mat-probelauf) { width: min(820px, 96vw); } }
 .mat-probemail { border-top: 1px solid var(--linie); }
 .mat-probelauf-demo { margin: 0 0 10px; }
@@ -1713,6 +1724,14 @@ table.list.mat-na-zeilen tr:has(.mat-na-wahl:checked) { background: var(--co-inf
   .page.breit.mat:not([data-ansicht="pruefung"], [data-ansicht="pruefung_neu"], [data-ansicht="artikel_neu"], [data-ansicht="formular"]) {
     max-width: 1800px; }
 }
+/* Ultrawide (UI/UX vor dem Merge, A10): Ordnerleiste und Inhalt sind EINE Gruppe – höchstens 2100 px breit (Leiste 280 +
+   Listen 1800 + Ränder) und mittig im Fenster. Vorher klebte die Leiste am linken Rand und der Inhalt stand mittig im
+   Rest: bei 5120 px lagen 1513 px Leere dazwischen. Der Inhalt beginnt immer direkt neben der Leiste, nur seine Breite
+   hängt von der Seitenart ab (Listen 1800, Formularseiten 1180 px, siehe oben) – beim Seitenwechsel springt weder die
+   Leiste noch der linke Rand des Inhalts. Bleibt links neben der Leiste Fenster frei, bekommt sie dort eine Linie. */
+.mat-shell.mit-leiste { max-width: 2100px; margin: 0 auto; }
+.mat-shell.mit-leiste > .page { margin-left: 0; }
+@media (min-width: 2101px) { .mat-shell.mit-leiste > .mat-side { border-left: 1px solid var(--linie); } }
 @container mat-seite (min-width: 1500px) {
   .mat-nebeneinander { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); gap: 0 40px; align-items: start; }
   .mat-psa-liste:not(.einzeln) { grid-template-columns: repeat(3, minmax(0, 1fr)); }
@@ -1845,9 +1864,6 @@ table.list.mat-na-zeilen tr:has(.mat-na-wahl:checked) { background: var(--co-inf
 }
 /* Datumsfelder als Text (C2): „Nächste Prüfung“ in der Abschlussleiste mit Hilfetext (frühestens morgen, spätestens
    laut Intervall) – klein und leise hinter dem Feld, am Telefon darunter. */
-.mat-abschluss-zeile .mat-due { flex-wrap: wrap; }
-.mat-abschluss-zeile .mat-due .mat-datum { width: 8.5em; flex: none; }
-.mat-due-hilfe { font-weight: 400; font-size: var(--fs-klein); color: var(--grau); flex: 1 1 100%; }
 
 /* Bestandteil-Liste eines Produkts (Schritt 25) – Produkt-Dialog, Reiter „Bestandteile“: je Position ein Kasten – oben
    ↑ ↓ und „Entfernen“, darunter Bezeichnung und Anzahl in einer Zeile (Bezeichnung breit), schmal untereinander. Eine
@@ -1955,3 +1971,35 @@ table.list.mat-na-zeilen tr:has(.mat-na-wahl:checked) { background: var(--co-inf
 @media (pointer: coarse) {
   #mat-inhalt .mat-dg-tabelle td.mat-k-titel > a { display: inline-flex; align-items: center; min-height: 44px; }
 }
+
+/* --- UI/UX vor dem Merge, Teil U2 (Materialablage) ------------------------------------------------------------------ */
+/* Fehlerzustand (B12): kein Netz oder Serverfehler – ein Kasten unter der Überschrift mit dem Satz und „Neu laden“. */
+.mat-fehlerzustand p { margin: 0 0 8px; }
+/* Ausgegraute Hauptknöpfe (B1): Aussehen von .btn[aria-disabled] steht in app.css (auch Profil/Unterschrift-Pad). */
+.mat-knopfgrund { margin: 0 0 6px; font-size: var(--fs-klein); color: var(--anthrazit); max-width: 100ch; }
+.mat-knopfgrund.betont { font-weight: 700; color: var(--rot-auf-flaeche); }
+dialog .mat-knopfgrund { margin: 10px 0 0; }
+/* Kopf mit Grund über der Knopfzeile (Prüfdurchgang „Durchgang abschließen“, Prüfung „Berichtigen“): rechts im Kopf,
+   der Satz rechtsbündig über den Knöpfen; bricht der Kopf um (Telefon), steht beides links unter der Überschrift. */
+.mat-kopfaktion { display: flex; flex-direction: column; align-items: flex-end; gap: 0; max-width: 100%; }
+.mat-kopfaktion .mat-knopfgrund { text-align: right; }
+@container mat-seite (max-width: 600px) {
+  .mat-kopfaktion { align-items: flex-start; }
+  .mat-kopfaktion .mat-knopfgrund { text-align: left; }
+}
+/* Prüfdurchgang am Telefon (B13): die drei bis fünf Zahlen als kompakte Zeilen „14 offen“ in drei Spalten statt vier
+   Reihen großer Kacheln (vorher ≈ 260 px vor der Liste). */
+@container (max-width: 599px) {
+  .mat-kachelrahmen > .mat-rundenzahlen { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+  .mat-kachelrahmen > .mat-rundenzahlen > .mat-kachel:first-child { grid-column: auto; }
+  .mat-rundenzahlen .mat-kachel { flex-direction: row; flex-wrap: wrap; align-items: baseline; gap: 0 5px; padding: 6px 8px;
+    border-top-width: 3px; }
+  .mat-rundenzahlen .mat-kachel strong { font-size: 1.15rem; }
+}
+/* Sprunglink „Zum Abschluss“ über den Prüfpunkten (B11): über dem Fensterrand geparkt wie „Zum Inhalt“ (app.css,
+   .sprunglink), bis er den Tastaturfokus hat – dann steht er an seinem Platz über den Prüfpunkten. */
+.mat-sprung { display: inline-block; margin: 0 0 8px; padding: 10px 14px; border: 2px solid var(--anthrazit); background: var(--weiss);
+  color: var(--anthrazit); font-weight: 700; text-decoration: none; }
+.mat-sprung:not(:focus) { position: fixed; top: -100px; left: 8px; }
+/* Hinweiszeile der Prüfung beim Klick auf das ausgegraute „Festschreiben“ (B1): hervorgehoben wie ein Grundsatz. */
+.mat-abschluss-hinweis.betont { color: var(--rot-auf-flaeche); font-weight: 700; }

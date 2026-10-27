@@ -157,8 +157,9 @@ def gesperrt():
 def dev_umgebung():
     """Ist dies die Entwicklung? STROEMIS_NAME (Container und Abbild, gesetzt von scripts/dev-einrichten.sh) endet auf
     „-dev“. Dieselbe Regel sperrt die Erinnerungsmails (gesperrt) und gibt „flask material dev-zuruecksetzen“ frei
-    (services/zuruecksetzen.py)."""
-    return (os.environ.get("STROEMIS_NAME") or "").strip().endswith("-dev")
+    (services/zuruecksetzen.py). Die Regel steht einmal in app/module.py (auch Hinweis „Entwicklungsserver“)."""
+    from app.module import dev_umgebung as app_dev_umgebung
+    return app_dev_umgebung()
 
 
 def versand_an():
