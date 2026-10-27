@@ -275,7 +275,7 @@ table.list.mat-artikel th.mat-wahlspalte, table.list.mat-artikel td.mat-wahlspal
 .mat-produktfoto .mat-mini { margin-right: 0; }
 .mat-lupe-marke { position: absolute; right: -5px; bottom: -5px; width: 18px; height: 18px; display: flex; align-items: center;
   justify-content: center; border-radius: 50%; background: var(--weiss); color: var(--anthrazit); border: 1px solid var(--linie);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, .2); pointer-events: none; }
+  box-shadow: var(--schatten-karte); pointer-events: none; }
 .mat-lupe-marke svg { display: block; }
 .mat-gewaehlt > .mat-bildlink { flex: none; display: block; padding: 3px; margin-right: 6px; cursor: zoom-in; }
 .mat-knoepfe { margin-top: 18px; }
@@ -393,10 +393,10 @@ table.list.mat-artikel th.mat-wahlspalte, table.list.mat-artikel td.mat-wahlspal
   .mat-shell.mit-leiste { display: block; }
   .mat-shell.mit-leiste .mat-side-auf { display: inline-flex; margin-right: 4px; }
   .mat-side { position: fixed; left: 0; top: var(--topbar); bottom: 0; height: auto; width: min(320px, 88vw);
-    transform: translateX(-105%); transition: transform .2s; z-index: 1100; box-shadow: 2px 0 10px rgba(0, 0, 0, .25); }
+    transform: translateX(-105%); transition: transform .2s; z-index: 1100; box-shadow: var(--schatten-leiste); }
   .mat-side.open { transform: translateX(0); }
   .mat-side-zu { display: inline-block; }
-  body:has(.mat-side.open)::after { content: ""; position: fixed; inset: var(--topbar) 0 0 0; background: rgba(60, 60, 59, .35); z-index: 1090; }
+  body:has(.mat-side.open)::after { content: ""; position: fixed; inset: var(--topbar) 0 0 0; background: var(--abdunkeln-leicht); z-index: 1090; }
 }
 
 /* Prüfungen: Listen, Marken, Durchgänge */
@@ -546,7 +546,7 @@ html:has(.mat-mit-leiste) { scroll-padding-bottom: 210px; }
   .mat-pruefung .page-head { margin-bottom: 12px; }
 }
 @media (max-width: 560px) {
-  .mat-ergebnis button { font-size: .86rem; }
+  .mat-ergebnis button { font-size: var(--fs-mittel); }
   .mat-abschluss-zeile .btn { flex: 1 1 100%; margin-left: 0; }
   .mat-abschluss-zeile .mat-due { flex: 1 1 100%; justify-content: space-between; }
   .mat-abschluss { margin-left: -12px; margin-right: -12px; }
@@ -602,7 +602,7 @@ html:has(.mat-mit-leiste) { scroll-padding-bottom: 210px; }
 .mat-pruefergebnis { margin: 16px 0; padding: 12px 14px; border-radius: var(--radius-gross); border: 1px solid var(--linie); }
 .mat-pruefergebnis strong { font-size: 1.15rem; display: block; margin-bottom: 4px; }
 .mat-pruefergebnis p { margin: 4px 0; }
-.mat-pruefergebnis.ok { background: var(--co-success-fl, #e9f5ec); border-color: var(--ok); }
+.mat-pruefergebnis.ok { background: var(--co-success-fl); border-color: var(--ok); }
 .mat-pruefergebnis.ok strong { color: var(--ok); }
 .mat-pruefergebnis.bad { background: var(--rot-hell); border-color: var(--rot); }
 .mat-pruefergebnis.bad strong { color: var(--rot-dunkel); }
@@ -810,7 +810,7 @@ button.mat-ue-klapp:focus-visible { outline: 3px solid var(--gelb); outline-offs
 .mv-produkt { overflow: hidden; overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical;
   -webkit-line-clamp: 2; line-clamp: 2; }
 .mv-zeile { font-size: var(--fs-klein); color: var(--grau); }
-.mat-vorschlaege mark { background: var(--gelb); color: inherit; padding: 0 1px; border-radius: 2px; }
+.mat-vorschlaege mark { background: var(--gelb); color: inherit; padding: 0 1px; border-radius: var(--radius); }
 .mv-alle a { justify-content: center; min-height: 44px; font-weight: 700; color: var(--rot); }
 .mv-leer { padding: 12px; color: var(--grau); font-size: var(--fs-klein); }
 @media (max-width: 640px) { .mat-vorschlaege { left: 0; right: 0; width: auto; } }
@@ -1064,7 +1064,7 @@ html:has(.mat-pruefung.tippt) { scroll-padding-top: 8px; scroll-padding-bottom: 
    den Rollbalken und ließe statt seiner einen weißen Streifen stehen. Schließen (.md-lightbox-close in app.css: am
    Finger 44 px, mit der Maus 36 px wie im Wiki) und Pfeile (bei „Fotos groß zeigen“) halten Kerbe und Rundung frei. */
 dialog.mat-lightbox, html.tastatur dialog.mat-lightbox[open] { position: fixed; inset: 0; width: 100%; height: 100%; max-width: none;
-  max-height: none; margin: 0; padding: 24px; border: 0; border-radius: 0; box-shadow: none; background: rgba(60, 60, 59, .9);
+  max-height: none; margin: 0; padding: 24px; border: 0; border-radius: 0; box-shadow: none; background: var(--abdunkeln-stark);
   color: var(--weiss); cursor: zoom-out; overflow: hidden; overscroll-behavior: contain; touch-action: none; }
 dialog.mat-lightbox[open] { display: flex; align-items: center; justify-content: center; }
 dialog.mat-lightbox::backdrop { background: transparent; }
@@ -1094,7 +1094,7 @@ dialog.mat-lightbox::backdrop { background: transparent; }
    nicht (die Fläche oben ist gleich spezifisch und wird später geladen), deshalb eigens. Die andere Hälfte ist
    abgedunkelt wie bei jedem Dialog – sie ist inert, ein Tipp darauf schließt. */
 @media (horizontal-viewport-segments: 2), (vertical-viewport-segments: 2) {
-  dialog.mat-lightbox::backdrop { background: rgba(60, 60, 59, .55); }
+  dialog.mat-lightbox::backdrop { background: var(--abdunkeln); }
 }
 @media (horizontal-viewport-segments: 2) {
   dialog.mat-lightbox, html.tastatur dialog.mat-lightbox[open] { left: env(viewport-segment-left 1 0); right: auto;
@@ -1146,7 +1146,7 @@ table.list.mat-artikel tr:has(.mat-wahl-art:checked) { background: var(--co-info
   .mat-ue th.mat-ue-zahl { white-space: normal; }
   /* Marken dürfen hier umbrechen („Lebensdauer erreicht“): Mit dem kleineren Radius sieht eine einzeilige Marke weiter
      wie eine Pille aus, eine zweizeilige wie ein Kästchen. */
-  table.list.mat-tabelle :is(.mat-status, .mat-rr-marke, .mat-ergebnis-marke, .mat-empfohlen-marke) { white-space: normal; border-radius: 9px; }
+  table.list.mat-tabelle :is(.mat-status, .mat-rr-marke, .mat-ergebnis-marke, .mat-empfohlen-marke) { white-space: normal; border-radius: var(--radius-gross); }
 }
 
 @container mat-seite (max-width: 600px) {
@@ -1169,7 +1169,7 @@ table.list.mat-artikel tr:has(.mat-wahl-art:checked) { background: var(--co-info
   table.list.mat-karten td.mat-k-marke { flex: 0 1 auto; max-width: 65%; margin-left: auto; text-align: right; }
   /* Die lange Marke „Aussonderung empfohlen“ bricht in der Karte um, statt über den Rand zu ragen (344 px, Browserprüfung
      vom 25.10.2026). */
-  table.list.mat-karten td.mat-k-marke .mat-empfohlen-marke { white-space: normal; max-width: 100%; border-radius: 9px; }
+  table.list.mat-karten td.mat-k-marke .mat-empfohlen-marke { white-space: normal; max-width: 100%; border-radius: var(--radius-gross); }
   table.list.mat-karten td.mat-k-halb { flex: 0 0 calc(50% - 6px); }
   table.list.mat-karten td.mat-k-kurz { flex: 0 1 auto; }
   /* Unten: links das Häkchen mit „auswählen“, rechts „Prüfen“ – oder nur der Knopf. */

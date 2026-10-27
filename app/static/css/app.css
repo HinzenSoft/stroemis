@@ -83,6 +83,14 @@
   --co-flieder-fl: #efe6f7;   --co-flieder-ka: #9a76bd;
   --co-sand-fl: #f3ede3;      --co-sand-ka: #bfa780;
   --co-stein-fl: #f0f0f0;     --co-stein-ka: #a0a0a0;
+  /* Abdunkelung hinter schwebenden Flächen in drei Stufen (Anthrazit-Schwarz mit Deckkraft): leicht hinter einer
+     Schublade, mittel hinter Dialogen, stark hinter der Großansicht eines Bildes. */
+  --abdunkeln-leicht: rgba(60, 60, 59, .35);
+  --abdunkeln: rgba(60, 60, 59, .55);
+  --abdunkeln-stark: rgba(60, 60, 59, .9);
+  --fokus-hof: rgba(255, 237, 0, .6);   /* gelber Hof um den Tastaturfokus */
+  --markierung: #fff3a8;                /* markierte Stelle im Text (Kommentar, Hervorhebung) */
+  --ok-hell: #dff0e2;                   /* Fläche „hinzugekommen / in Ordnung“ (Versionsvergleich) */
 }
 
 * { box-sizing: border-box; }
@@ -112,7 +120,7 @@ p { margin: 0 0 .9em; }
 img { max-width: 100%; }
 /* Tastaturfokus: Gelb allein war auf Weiß unsichtbar (1,2:1). Ein anthrazitfarbener Ring
    mit gelbem Hof ist auf Weiß, Rot und Gelb zu sehen. */
-:focus-visible { outline: 2px solid var(--anthrazit); outline-offset: 2px; box-shadow: 0 0 0 5px rgba(255, 237, 0, .6); }
+:focus-visible { outline: 2px solid var(--anthrazit); outline-offset: 2px; box-shadow: 0 0 0 5px var(--fokus-hof); }
 .bauchbinde :focus-visible { outline-color: var(--weiss); box-shadow: none; }
 .hidden { display: none !important; }
 .muted { color: var(--grau); }
@@ -258,7 +266,7 @@ img { max-width: 100%; }
    wie die Tabellenzeile – Klick- und Hover-Fläche endeten dann sichtbar vor dem Zeilenende. */
 .btn-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 
-label { display: block; font-weight: 600; font-size: .9rem; margin: 12px 0 4px; }
+label { display: block; font-weight: 600; font-size: var(--fs-mittel); margin: 12px 0 4px; }
 label.inline { display: inline-flex; align-items: center; gap: 6px; font-weight: 400; margin: 6px 0; }
 input[type=text], input[type=email], input[type=password], input[type=number], input[type=search],
 input[type=tel], input[type=datetime-local], input[type=date], select, textarea {
@@ -269,7 +277,7 @@ input[type=tel], input[type=datetime-local], input[type=date], select, textarea 
 textarea { min-height: 90px; resize: vertical; }
 /* Datumsfelder sahen auf iOS wie kleine graue Pillen ohne Rahmen aus – gleiche Höhe wie Textfelder. */
 input[type=date] { -webkit-appearance: none; appearance: none; min-height: 40px; }
-input:focus, select:focus, textarea:focus { border-color: var(--anthrazit); outline: 2px solid var(--anthrazit); outline-offset: 0; box-shadow: 0 0 0 4px rgba(255, 237, 0, .5); }
+input:focus, select:focus, textarea:focus { border-color: var(--anthrazit); outline: 2px solid var(--anthrazit); outline-offset: 0; box-shadow: 0 0 0 4px var(--fokus-hof); }
 .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 0 12px; }
 @media (max-width: 480px) { .field-row { grid-template-columns: 1fr; } }
 .help { color: var(--grau); font-size: var(--fs-klein); margin-top: 3px; }
@@ -302,7 +310,8 @@ input:focus, select:focus, textarea:focus { border-color: var(--anthrazit); outl
    Spalte (alle Knöpfe nebeneinander) sie über den Rand, und die Nutzerverwaltung bekam einen
    waagerechten Rollbalken, hinter dem „Löschen“ verschwand. */
 table.list { width: 100%; table-layout: fixed; border-collapse: collapse; font-size: var(--fs-mittel); }
-table.list th, table.list td { text-align: left; padding: 8px 8px; border-bottom: 1px solid var(--linie); vertical-align: top; }
+table.list th, table.list td { text-align: left; padding: 8px 8px; vertical-align: top; }
+table.list td { border-bottom: 1px solid var(--linie); }
 table.list th { font-weight: 700; color: var(--grau); font-size: var(--fs-klein); border-bottom: 2px solid var(--anthrazit); }
 table.list tr:hover td { background: var(--grau-hell); }
 /* Die Knopfreihe bricht um, statt die Spalte aufzuspannen. */
@@ -323,7 +332,7 @@ table.list .badge { max-width: 100%; white-space: normal; overflow-wrap: anywher
    wäre darin zu breit für das Wort „Verwaltung“ – deshalb kleiner und ohne Rand zur Zelle.
    Abgeschaltet heißt hier nicht „kaputt“, sondern „ergibt sich aus Verwaltung“: grau, aber lesbar. */
 table.list td.recht, #users th { padding-left: 4px; padding-right: 4px; }
-table.list .recht-wahl { font-size: .78rem; padding: 4px 2px 4px 4px; }
+table.list .recht-wahl { font-size: var(--fs-marke); padding: 4px 2px 4px 4px; }
 .recht-wahl:disabled { color: var(--grau); background: var(--grau-hell); cursor: default; }
 /* Name und Gliederung sind schmaler als zuvor: Ein langer Nachname oder „Ortsgruppe“ bricht
    notfalls im Wort, wie die E-Mail – statt in die Nachbarzelle zu laufen. */
@@ -345,7 +354,7 @@ table.list .recht-wahl { font-size: .78rem; padding: 4px 2px 4px 4px; }
 .recht-marken .recht-klein { font-size: var(--fs-klein); color: var(--grau); }
 /* Die Rollen des Moduls Material im Nutzerdialog – abgesetzt, weil sie quer zur Matrix stehen. */
 fieldset.mat-rollen { border: 1px solid var(--linie); padding: 4px 12px 10px; margin: 14px 0 4px; }
-fieldset.mat-rollen legend { font-weight: 700; font-size: .9rem; padding: 0 4px; }
+fieldset.mat-rollen legend { font-weight: 700; font-size: var(--fs-mittel); padding: 0 4px; }
 /* Urkundennummer nur lesend unter dem Häkchen „Prüfer“ – eingetragen wird sie im Profil des Prüfers. */
 fieldset.mat-rollen .mat-urkunde { margin: 0 0 0 26px; font-size: var(--fs-klein); overflow-wrap: anywhere; }
 /* Zustand einer Freigabe im Dialog („wirkt nicht – kein Zugang zur Materialablage“) bricht in der schmalen Spalte um:
@@ -397,7 +406,7 @@ fieldset.mat-rollen .mat-stufe-auto { margin: 4px 0 0 26px; }
 #toast:popover-open { display: block; }
 /* Ein Fehler darf nicht im Vorbeigehen übersehen werden: dunklerer Schatten und ein Warnzeichen
    davor, statt nur der roten Fläche. */
-#toast.err { box-shadow: 0 6px 20px rgba(0, 0, 0, .35); }
+#toast.err { box-shadow: var(--schatten-dialog); }
 #toast.err::before { content: "⚠ "; }
 /* Ist ein Dialog offen, sitzt die Meldung bei ihm (Positionswerte kommen von toastPositionieren
    in common.js) statt am unteren Fensterrand – auf einem hohen Bildschirm liegt sonst viel Platz
@@ -417,7 +426,7 @@ dialog {
   width: min(560px, 94vw); color: var(--anthrazit);
   box-shadow: var(--schatten-dialog);
 }
-dialog::backdrop { background: rgba(60,60,59,.55); }
+dialog::backdrop { background: var(--abdunkeln); }
 dialog .dlg-body { padding: 18px 20px 20px; max-height: 80vh; max-height: 80dvh; overflow: auto; overscroll-behavior: contain; }
 /* Solange ein Dialog offen ist, wandert keine Wischgeste an die Seite dahinter: Auf Android
    löste das Weiterziehen am Dialogrand „zum Neuladen ziehen“ aus – Kommentar und Dateien weg. */
@@ -501,7 +510,7 @@ html.tastatur dialog[open] .dlg-body { max-height: calc(var(--vv-h, 100dvh) - 22
 
 /* --- Karte ------------------------------------------------------------- */
 .map-shell { position: relative; height: calc(100vh - var(--topbar)); height: calc(100dvh - var(--topbar)); overflow: hidden; }
-#map { position: absolute; inset: 0; background: #e6e2d8; }
+#map { position: absolute; inset: 0; background: var(--grau-hell); }
 .map-tools {
   position: absolute; top: 12px; left: 12px; z-index: 900;
   display: flex; gap: 6px; flex-wrap: wrap; max-width: calc(100% - 24px);
@@ -567,22 +576,22 @@ html.tastatur dialog[open] .dlg-body { max-height: calc(var(--vv-h, 100dvh) - 22
 /* Thumbnail-Marker */
 .thumb-marker { background: none !important; border: 0 !important; }
 .thumb-marker .tm {
-  width: 64px; height: 64px; border: 3px solid var(--weiss); border-radius: 3px;
+  width: 64px; height: 64px; border: 3px solid var(--weiss); border-radius: var(--radius);
   background-size: cover; background-position: center; background-color: var(--grau-hell);
-  box-shadow: 0 0 0 1px var(--anthrazit), 0 2px 6px rgba(0,0,0,.4);
+  box-shadow: 0 0 0 1px var(--anthrazit), var(--schatten-karte);
   transition: transform .12s;
 }
 .thumb-marker:hover .tm, .thumb-marker.hi .tm { transform: scale(1.12); z-index: 5; }
-.thumb-marker .tm.seil { border-color: var(--weiss); box-shadow: 0 0 0 2px var(--rot), 0 2px 6px rgba(0,0,0,.4); }
-.thumb-marker .tm.wasser { box-shadow: 0 0 0 2px var(--wasser), 0 2px 6px rgba(0,0,0,.4); }
-.thumb-marker .tm.temp { box-shadow: 0 0 0 3px var(--gelb), 0 2px 6px rgba(0,0,0,.4); }
+.thumb-marker .tm.seil { border-color: var(--weiss); box-shadow: 0 0 0 2px var(--rot), var(--schatten-karte); }
+.thumb-marker .tm.wasser { box-shadow: 0 0 0 2px var(--wasser), var(--schatten-karte); }
+.thumb-marker .tm.temp { box-shadow: 0 0 0 3px var(--gelb), var(--schatten-karte); }
 /* Cluster: gestapelte Bilder + gelbe Anzahl als Hinweis, dass zusammengefasst wurde */
 .cluster-marker { background: none !important; border: 0 !important; }
 .cluster-marker .cm { position: relative; width: 71px; height: 71px; }
 .cluster-marker .cm .stack {
   position: absolute; left: 0; top: 0; width: 64px; height: 64px;
-  border: 3px solid var(--weiss); border-radius: 3px; background: var(--grau-hell);
-  box-shadow: 0 0 0 1px var(--anthrazit), 0 2px 6px rgba(0,0,0,.4);
+  border: 3px solid var(--weiss); border-radius: var(--radius); background: var(--grau-hell);
+  box-shadow: 0 0 0 1px var(--anthrazit), var(--schatten-karte);
   background-size: cover; background-position: center;
 }
 .cluster-marker .cm .stack.s2 { transform: translate(5px, -5px) rotate(4deg); z-index: 0; }
@@ -591,22 +600,22 @@ html.tastatur dialog[open] .dlg-body { max-height: calc(var(--vv-h, 100dvh) - 22
 .cluster-marker .cm .count {
   position: absolute; right: -6px; bottom: -6px; z-index: 2;
   min-width: 26px; height: 26px; padding: 0 7px; border-radius: var(--radius-pille);
-  background: var(--gelb); color: var(--anthrazit); font-weight: 800; font-size: .85rem;
+  background: var(--gelb); color: var(--anthrazit); font-weight: 800; font-size: var(--fs-klein);
   display: flex; align-items: center; justify-content: center;
-  box-shadow: 0 0 0 2px var(--weiss), 0 1px 4px rgba(0,0,0,.4);
+  box-shadow: 0 0 0 2px var(--weiss), var(--schatten-karte);
 }
 .cluster-marker:hover .cm { transform: scale(1.06); }
 .leaflet-container { font-family: var(--font); }
-.leaflet-control-layers, .leaflet-bar { border: 1px solid var(--linie) !important; border-radius: var(--radius) !important; box-shadow: 0 1px 4px rgba(0,0,0,.2) !important; }
+.leaflet-control-layers, .leaflet-bar { border: 1px solid var(--linie) !important; border-radius: var(--radius) !important; box-shadow: var(--schatten-karte) !important; }
 .leaflet-bar a { color: var(--anthrazit); }
 .locate-me { font-weight: 700; font-size: 15px; }
 .leaflet-control-attribution { font-size: 10px; }
 
-/* Seitenleiste */
+/* Seitenleiste – deckt die Karte ganz ab (die Karte schien durch und machte Text unruhig). */
 .panel {
   position: absolute; top: 0; right: 0; bottom: 0; width: var(--panel-w); max-width: 100%;
-  background: rgba(255,255,255,.96); z-index: 1000; box-shadow: -2px 0 12px rgba(0,0,0,.25);
-  border-radius: 6px 0 0 6px;
+  background: var(--weiss); z-index: 1000; box-shadow: var(--schatten-leiste);
+  border-radius: var(--radius-gross) 0 0 var(--radius-gross);
   transform: translateX(105%); transition: transform .2s ease-out;
   display: flex; flex-direction: column;
 }
@@ -650,7 +659,7 @@ html.tastatur dialog[open] .dlg-body { max-height: calc(var(--vv-h, 100dvh) - 22
 @media (max-width: 640px) {
   .panel {
     top: auto; left: 0; width: 100%; height: 70%;
-    transform: translateY(105%); box-shadow: 0 -2px 12px rgba(0,0,0,.25);
+    transform: translateY(105%); box-shadow: var(--schatten-leiste);
     border-top: 4px solid var(--rot);
   }
   .panel.open { transform: translateY(0); }
@@ -659,7 +668,7 @@ html.tastatur dialog[open] .dlg-body { max-height: calc(var(--vv-h, 100dvh) - 22
 /* Bild-Detail (Lightbox) */
 dialog.lightbox { width: min(1200px, 97vw); border-top: 0; background: var(--anthrazit); color: var(--weiss); }
 .lb { display: grid; grid-template-columns: 1fr 340px; max-height: 92vh; }
-.lb-img { background: #222; display: flex; align-items: center; justify-content: center; min-height: 240px; position: relative; }
+.lb-img { background: var(--schwarz); display: flex; align-items: center; justify-content: center; min-height: 240px; position: relative; }
 .lb-img img { max-width: 100%; max-height: 92vh; object-fit: contain; }
 .lb-nav { position: absolute; top: 50%; transform: translateY(-50%); background: rgba(0,0,0,.5); color: var(--weiss); border: 0; font-size: 2rem; padding: 8px 12px; cursor: pointer; }
 .lb-nav.prev { left: 0; } .lb-nav.next { right: 0; }
@@ -680,11 +689,11 @@ dialog.lightbox { width: min(1200px, 97vw); border-top: 0; background: var(--ant
 }
 .lb-side .lb-aktionen > .btn-row:first-child .btn { width: 100%; justify-content: center; }
 .lb-side .lb-aktionen-weg { padding-top: 10px; border-top: 1px solid var(--linie); }
-.kv { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; font-size: .9rem; margin: 10px 0; }
+.kv { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; font-size: var(--fs-mittel); margin: 10px 0; }
 .kv dt { color: var(--grau); } .kv dd { margin: 0; white-space: pre-wrap; }
 .note-box { background: var(--grau-hell); border-left: 4px solid var(--gelb); padding: 8px 10px; white-space: pre-wrap; margin: 8px 0; }
 @media (max-width: 760px) {
-  .lb { grid-template-columns: 1fr; max-height: none; }
+  .lb { grid-template-columns: 1fr; }
   .lb-img img, .lb-img video { max-height: 55vh; }
 }
 
@@ -723,13 +732,13 @@ progress { width: 100%; height: 10px; accent-color: var(--rot); }
 .search-results a { font-weight: 600; text-decoration: none; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .search-results .snip { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .search-results .snip { color: var(--grau); font-size: var(--fs-klein); }
-.wiki-meta { font-size: .82rem; color: var(--grau); border-bottom: 2px solid var(--anthrazit); padding-bottom: 8px; margin-bottom: 20px; }
+.wiki-meta { font-size: var(--fs-klein); color: var(--grau); border-bottom: 2px solid var(--anthrazit); padding-bottom: 8px; margin-bottom: 20px; }
 .wiki-content h1 { font-size: 1.7rem; margin-top: 1.2em; }
 .wiki-content h2 { font-size: 1.35rem; margin-top: 1.4em; border-bottom: 1px solid var(--linie); padding-bottom: 3px; }
 .wiki-content h3 { font-size: 1.1rem; margin-top: 1.2em; }
 .wiki-content h4 { font-size: 1rem; margin-top: 1em; }
 .wiki-content hr { border: 0; border-top: 2px solid var(--linie); margin: 1.6em 0; }
-.wiki-content table { border-collapse: collapse; margin: 1em 0; font-size: .93rem; }
+.wiki-content table { border-collapse: collapse; margin: 1em 0; font-size: var(--fs-mittel); }
 /* text-align nur, wo die Tabelle keine eigene Spaltenausrichtung vorgibt:
    ein pauschales text-align:left hat das align-Attribut aus "| :---: |" überschrieben. */
 .wiki-content th, .wiki-content td { border: 1px solid var(--linie); padding: 6px 9px; vertical-align: top; }
@@ -762,7 +771,7 @@ progress { width: 100%; height: 10px; accent-color: var(--rot); }
 .code-block pre { margin: 0; }
 .code-copy {
   position: absolute; top: 6px; right: 6px; padding: 2px 8px;
-  font: inherit; font-size: .78rem; line-height: 1.6;
+  font: inherit; font-size: var(--fs-marke); line-height: 1.6;
   background: var(--weiss); color: var(--grau); border: 1px solid var(--linie);
   border-radius: var(--radius); cursor: pointer; opacity: 0; transition: opacity .15s;
 }
@@ -800,7 +809,7 @@ h5:hover > .h-anchor, .h-anchor:focus-visible { opacity: 1; }
 .wiki-content a.attachment:hover { border-color: var(--rot); color: var(--rot); }
 .wiki-content .att-icon { font-size: 1.15em; line-height: 1; }
 .wiki-content .att-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.wiki-content .att-ext { color: var(--grau); font-size: .74rem; letter-spacing: .04em; flex: none; }
+.wiki-content .att-ext { color: var(--grau); font-size: var(--fs-marke); letter-spacing: .04em; flex: none; }
 .wiki-content img { display: block; margin: .6em 0; max-height: 70vh; }
 .wiki-content img + em, .wiki-content p > em:only-child { color: var(--grau); font-size: .9em; }
 .wiki-content input[type=checkbox] { margin-right: 6px; }
@@ -809,7 +818,7 @@ h5:hover > .h-anchor, .h-anchor:focus-visible { opacity: 1; }
 /* Auszeichnungen ohne Markdown-Entsprechung: ++unterstrichen++ ==hervorgehoben== 10^3^ H~2~O.
    Im Editor stehen sie als Widget (contenteditable=false) und sehen dort genauso aus. */
 .wiki-content mark, .toastui-editor-contents mark {
-  background: #fff3a8; color: inherit; padding: 0 2px; border-radius: var(--radius);
+  background: var(--markierung); color: inherit; padding: 0 2px; border-radius: var(--radius);
 }
 .wiki-content u, .toastui-editor-contents u { text-underline-offset: 2px; }
 .wiki-content sub, .wiki-content sup, .toastui-editor-contents sub, .toastui-editor-contents sup { font-size: .75em; line-height: 0; }
@@ -818,18 +827,18 @@ h5:hover > .h-anchor, .h-anchor:focus-visible { opacity: 1; }
    Text – er IST dort der Inhalt. Der Einbau zeigt fremden Text und sagt das auch: abgesetzt,
    mit Herkunft darunter. */
 .baustein { display: block; }
-.einbau { margin: 1.1em 0; padding: 10px 14px; border-left: 3px dashed var(--wasser); background: #f7fafd; }
+.einbau { margin: 1.1em 0; padding: 10px 14px; border-left: 3px dashed var(--wasser); background: var(--co-info-fl); }
 .einbau > .einbau-inhalt > :first-child { margin-top: 0; }
 .einbau > .einbau-inhalt > :last-child { margin-bottom: 0; }
-.einbau-fuss { margin-top: 8px; color: var(--grau); font-size: .82rem; }
+.einbau-fuss { margin-top: 8px; color: var(--grau); font-size: var(--fs-klein); }
 /* Ein Einbau, der nicht aufgeht, ist ein Befund und kein Kleingedrucktes: Vorher stand dort
    grauer Kleintext, den man beim Lesen überflog – und die Seite wirkte bloß lückenhaft. */
-.einbau-fehlt { color: var(--co-warning-ka); font-size: .92rem; font-weight: 500; }
+.einbau-fehlt { color: var(--co-warning-ka); font-size: var(--fs-mittel); font-weight: 500; }
 /* In der Verlaufsansicht läuft keine Nachbearbeitung; der Einbau bliebe ein leerer
    gestrichelter Streifen. Der Text kommt aus dem Ziel selbst, ganz ohne Skript. */
-.einbau:empty::after { content: "Eingebundener Abschnitt: " attr(data-ziel); color: var(--grau); font-size: .9rem; }
+.einbau:empty::after { content: "Eingebundener Abschnitt: " attr(data-ziel); color: var(--grau); font-size: var(--fs-mittel); }
 /* Im Editor ist der Einbau kein Inhalt, sondern ein Schild: Geändert wird er anderswo. */
-.ed-einbau { margin: 1.1em 0; padding: 8px 12px; border-left: 3px dashed var(--wasser); background: #f7fafd; }
+.ed-einbau { margin: 1.1em 0; padding: 8px 12px; border-left: 3px dashed var(--wasser); background: var(--co-info-fl); }
 .callout { margin: 1.1em 0; padding: 10px 14px; border-left: 5px solid var(--grau); background: var(--grau-hell); }
 .callout > :first-child { margin-top: 0; } .callout > :last-child { margin-bottom: 0; }
 .callout h3, .callout h4 { margin-top: 0; }
@@ -841,7 +850,7 @@ h5:hover > .h-anchor, .h-anchor:focus-visible { opacity: 1; }
 .children-list { margin-top: 30px; border-top: 1px solid var(--linie); padding-top: 12px; }
 .children-list ul { columns: 2; list-style: none; padding: 0; margin: 6px 0; }
 .children-list li { padding: 2px 0; break-inside: avoid; }
-.wiki-editor textarea.plain { min-height: 480px; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: .9rem; }
+.wiki-editor textarea.plain { min-height: 480px; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: var(--fs-mittel); }
 .rev-list li { padding: 6px 0; border-bottom: 1px solid var(--linie); display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
 .wiki-menu-btn { display: none; }
 @media (max-width: 1180px) {
@@ -851,7 +860,7 @@ h5:hover > .h-anchor, .h-anchor:focus-visible { opacity: 1; }
   /* Die Spur steht hier unter dem Artikel (wiki.js versetzt sie in die Textspalte): Kommentare
      und Angaben zur Seite bleiben erreichbar. Das Inhaltsverzeichnis entfällt – am Fuß der
      Seite nützt es nichts, und sein Knopf in der Kopfzeile geht mit. */
-  .wiki-main > .wiki-rail { position: static; height: auto; overflow: visible; padding: 28px 0 0; font-size: .9rem; }
+  .wiki-main > .wiki-rail { position: static; height: auto; overflow: visible; padding: 28px 0 0; font-size: var(--fs-mittel); }
   .wiki-main > .wiki-rail #toc { display: none; }
   #pg-toc { display: none; }
 }
@@ -865,7 +874,7 @@ h5:hover > .h-anchor, .h-anchor:focus-visible { opacity: 1; }
   .wiki-shell, body.public .wiki-shell.public, body.editing .wiki-shell { grid-template-columns: minmax(0, 1fr); }
   /* Zugeklappt ist die Schublade auch unsichtbar (visibility, nach der Fahrt): Sie lag sonst 320 px links vom Fenster
      als „Element außerhalb“ im Dokument, Tab-Fokus landete in ihr (Geräte-Prüfung vom 22.10.2026, C1 in P4-L1). */
-  .wiki-side { position: fixed; left: 0; top: var(--topbar); bottom: 0; width: min(320px, 90vw); transform: translateX(-105%); transition: transform .2s, visibility 0s .2s; visibility: hidden; z-index: 1100; box-shadow: 2px 0 10px rgba(0,0,0,.25); height: auto; }
+  .wiki-side { position: fixed; left: 0; top: var(--topbar); bottom: 0; width: min(320px, 90vw); transform: translateX(-105%); transition: transform .2s, visibility 0s .2s; visibility: hidden; z-index: 1100; box-shadow: var(--schatten-leiste); height: auto; }
   .wiki-side.open { transform: translateX(0); visibility: visible; transition: transform .2s; }
   .wiki-menu-btn { display: inline-flex; }
   /* Sobald eine Seite offen ist, sitzt der Baum-Knopf in der Kopfzeile – die eigene Zeile
@@ -875,7 +884,7 @@ h5:hover > .h-anchor, .h-anchor:focus-visible { opacity: 1; }
   /* Hinter der offenen Schublade dunkelt die Seite ab – man sieht, dass sie darüber liegt, und
      ein Tippen daneben schließt sie (der Klick-Handler in wiki.js sieht „außerhalb“). */
   body:has(.wiki-side.open)::after {
-    content: ""; position: fixed; inset: var(--topbar) 0 0 0; background: rgba(60, 60, 59, .35); z-index: 1090;
+    content: ""; position: fixed; inset: var(--topbar) 0 0 0; background: var(--abdunkeln-leicht); z-index: 1090;
   }
 }
 @media (max-width: 640px) {
@@ -891,7 +900,7 @@ h5:hover > .h-anchor, .h-anchor:focus-visible { opacity: 1; }
 /* --- Wiki: Artikel mittig, rechte Leiste mit Inhalt und Kommentaren ------------ */
 /* Beim Bearbeiten bleibt die rechte Leiste stehen: dort stehen die Kommentare, die man beim
    Überarbeiten lesen will, und die Angaben zur Seite. Das Inhaltsverzeichnis ist dort leer. */
-.wiki-rail { padding: 32px 18px 40px 6px; position: sticky; top: var(--topbar); height: calc(100vh - var(--topbar)); overflow: auto; font-size: .86rem; }
+.wiki-rail { padding: 32px 18px 40px 6px; position: sticky; top: var(--topbar); height: calc(100vh - var(--topbar)); overflow: auto; font-size: var(--fs-mittel); }
 /* Zwischentitel in Leisten und Tafeln: „Inhalt“, „Kommentare“, „Beschreibung“, „Mitwirkende“,
    „Merkliste“. Vorher fünf Stile mit vier Schriftgrößen – jetzt einer. */
 .rail-title, .panel-body h3, .side-title, .autor-tafel .autor-titel, .lb-side h3 {
@@ -918,14 +927,14 @@ h5:hover > .h-anchor, .h-anchor:focus-visible { opacity: 1; }
 .comment.resolved .c-head strong { color: var(--grau); }
 .comment.flash, mark.cq.flash, .cbadge.flash { outline: 3px solid var(--gelb); }
 .c-head { margin-bottom: 2px; }
-.c-quote { margin: 4px 0; padding: 4px 8px; font-size: var(--fs-klein); color: var(--grau); border-left: 3px solid var(--gelb); background: #fffbd6; cursor: pointer; white-space: pre-wrap; max-height: 5.4em; overflow: hidden; }
+.c-quote { margin: 4px 0; padding: 4px 8px; font-size: var(--fs-klein); color: var(--grau); border-left: 3px solid var(--gelb); background: var(--co-warning-fl); cursor: pointer; white-space: pre-wrap; max-height: 5.4em; overflow: hidden; }
 .c-body { white-space: pre-wrap; }
 /* Vier Aktionen passen in der schmalen rechten Spalte nicht immer in eine Zeile – sie brechen um, statt aus dem Kasten
    zu ragen („Löschen“ stand bei 1280 px 18 px rechts daneben). */
 .c-actions { display: flex; flex-wrap: wrap; gap: 2px 10px; margin-top: 4px; }
-.lnk { background: none; border: 0; color: var(--rot); font: inherit; font-size: .8rem; padding: 0; cursor: pointer; }
+.lnk { background: none; border: 0; color: var(--rot); font: inherit; font-size: var(--fs-klein); padding: 0; cursor: pointer; }
 .lnk:hover { text-decoration: underline; }
-mark.cq { background: #fff3a8; padding: 0 1px; cursor: pointer; border-bottom: 2px solid var(--gelb); }
+mark.cq { background: var(--markierung); padding: 0 1px; cursor: pointer; border-bottom: 2px solid var(--gelb); }
 .cbadge { cursor: pointer; font-size: .8em; margin-right: 2px; }
 .comment-fab { position: absolute; z-index: 1150; background: var(--anthrazit); color: var(--weiss); border: 0; border-radius: var(--radius); padding: 6px 12px; font: inherit; font-weight: 600; font-size: var(--fs-klein); cursor: pointer; box-shadow: var(--schatten-menue); }
 .comment-fab:hover { background: var(--rot); }
@@ -951,8 +960,7 @@ mark.cq { background: #fff3a8; padding: 0 1px; cursor: pointer; border-bottom: 2
    Editor, und beide Ansichten zeigen dieselben Abstände. */
 .columns .col { display: grid; grid-template-columns: minmax(0, 1fr); row-gap: 0; align-content: start; }
 .columns .col > :first-child { margin-top: 0; }
-@media (max-width: 640px) { .columns, .columns.cols-3 { grid-template-columns: 1fr; } }
-.wiki-content video { display: block; max-width: 100%; max-height: 70vh; margin: .6em 0; background: #000; }
+.wiki-content video { display: block; max-width: 100%; max-height: 70vh; margin: .6em 0; background: var(--schwarz); }
 .wiki-content.boxed { border: 1px solid var(--linie); padding: 12px; max-height: 50vh; overflow: auto; }
 
 /* Editor (Toast UI) im Look der Seite */
@@ -995,7 +1003,7 @@ body.public .wiki-shell { grid-template-columns: 250px minmax(0, 1fr) 240px; }
 
 /* Karte: Video-Kennzeichnung */
 .thumb-marker .tm { position: relative; }
-.thumb-marker .play, .photo-grid .play { position: absolute; right: 3px; bottom: 3px; background: rgba(0,0,0,.6); color: var(--weiss); font-size: var(--fs-marke); line-height: 1; padding: 3px 4px; border-radius: 3px; }
+.thumb-marker .play, .photo-grid .play { position: absolute; right: 3px; bottom: 3px; background: rgba(0,0,0,.6); color: var(--weiss); font-size: var(--fs-marke); line-height: 1; padding: 3px 4px; border-radius: var(--radius); }
 .lb-img video { max-width: 100%; max-height: 92vh; }
 
 /* Einklappbare Boxen, Emoji-Auswahl */
@@ -1052,7 +1060,7 @@ details.accordion .accordion-body > :first-child { margin-top: 0; } details.acco
 .wiki-content table, .toastui-editor-contents table { width: 100% !important; table-layout: auto; }
 .wiki-content th, .wiki-content td, .toastui-editor-contents th, .toastui-editor-contents td { width: auto !important; }
 .ed-bubble { max-width: min(96vw, 560px); flex-wrap: wrap; }
-.ed-ctx { position: absolute; z-index: 1300; display: flex; align-items: center; gap: 2px; flex-wrap: wrap; max-width: min(96vw, 480px); padding: 4px; background: var(--weiss); border: 1px solid var(--linie); border-radius: var(--radius-gross); box-shadow: var(--schatten-menue); font-size: .85rem; }
+.ed-ctx { position: absolute; z-index: 1300; display: flex; align-items: center; gap: 2px; flex-wrap: wrap; max-width: min(96vw, 480px); padding: 4px; background: var(--weiss); border: 1px solid var(--linie); border-radius: var(--radius-gross); box-shadow: var(--schatten-menue); font-size: var(--fs-klein); }
 
 /* --- Eine Formensprache für alle schwebenden Leisten --------------------------------
    Die Symbole sind Inline-SVG in currentColor: die Hausschrift (Univers, ersatzweise
@@ -1076,8 +1084,8 @@ details.accordion .accordion-body > :first-child { margin-top: 0; } details.acco
 /* Wo eine Fläche gemeint ist – Farbbalken, Griffpunkte – gilt das Gegenteil. */
 .ed-bubble svg .voll, .ed-ctx svg .voll, .ed-grip svg .voll { fill: currentColor; stroke: none; }
 /* Die wenigen Knöpfe, die eine Zahl oder ein Kürzel tragen müssen. */
-.ed-ctx button.num { padding: 0 6px; font-size: .82rem; font-variant-numeric: tabular-nums; }
-.ed-ctx button.abbr { padding: 0 6px; font-size: .72rem; letter-spacing: .07em; }
+.ed-ctx button.num { padding: 0 6px; font-size: var(--fs-klein); font-variant-numeric: tabular-nums; }
+.ed-ctx button.abbr { padding: 0 6px; font-size: var(--fs-marke); letter-spacing: .07em; }
 /* Gruppenkopf: kein Wort, sondern ein blasses Symbol vor der Gruppe. */
 .ed-ctx .lbl { display: inline-flex; align-items: center; height: var(--ed-hoehe); padding: 0 4px; color: var(--grau); }
 .ed-ctx .lbl svg { width: 16px; height: 16px; opacity: .7; }
@@ -1090,19 +1098,15 @@ details.accordion .accordion-body > :first-child { margin-top: 0; } details.acco
   /* Fingerziele: Mit der Maus reichen 28 px, mit dem Daumen nicht. Gilt nur, wo der
      Hauptzeiger grob ist – ein Laptop mit Touchscreen bleibt wie er ist. */
   .btn.small { padding: 9px 12px; }
-  .wiki-head .kopfknopf { width: 38px; height: 38px; }
   .mode-toggle button { padding: 9px 12px; }
   .tree a { padding: 8px 6px; }
-  .tree .tg { width: 28px; height: 32px; }
   .chip { padding: 10px 12px; }
   .lb-nav { padding: 16px 14px; }
   .lb-side .close, .panel-head .close { padding: 6px 10px; min-width: 44px; min-height: 44px; }
   .toc-list a { padding: 7px 8px; }
-  .lnk { padding: 5px 0; }
   .album-list li { padding: 10px 0; }
   .search-results li { padding: 9px 6px; }
   .fav-list a { padding: 7px 6px; }
-  .rundknopf { width: 30px; height: 30px; }
 }
 @media (max-width: 640px) {
   /* iOS zoomt in jedes Feld unter 16 px hinein – und danach nicht mehr heraus. */
@@ -1127,7 +1131,7 @@ details.accordion .accordion-body > :first-child { margin-top: 0; } details.acco
 .ed-emoji .em-grid { max-height: min(46vh, 300px); }
 /* Die Ziehgriffe stehen neben dem roten Auswahlrahmen – deshalb Gelb, die zweite Kennfarbe
    der Anwendung, mit dunklem Rand, damit sie auch auf hellen Bildern stehen. */
-.ed-resize { position: absolute; z-index: 1299; width: 14px; height: 44px; border-radius: var(--radius-pille); background: var(--gelb); border: 2px solid var(--anthrazit); box-shadow: 0 1px 4px rgba(0,0,0,.4); cursor: ew-resize; touch-action: none; }
+.ed-resize { position: absolute; z-index: 1299; width: 14px; height: 44px; border-radius: var(--radius-pille); background: var(--gelb); border: 2px solid var(--anthrazit); box-shadow: var(--schatten-karte); cursor: ew-resize; touch-action: none; }
 /* Die beiden zusätzlichen Griffe des HTML-Bausteins: unten liegend für die Höhe, in der Ecke
    rund für beides. touch-action: none, damit der Finger beim Ziehen nicht die Seite rollt. */
 .ed-resize.unten { width: 44px; height: 14px; cursor: ns-resize; }
@@ -1137,7 +1141,7 @@ details.accordion .accordion-body > :first-child { margin-top: 0; } details.acco
 .ed-resize-frame {
   position: absolute; z-index: 1298; pointer-events: none; border-radius: var(--radius);
   outline: 2px solid var(--rot); outline-offset: 2px;
-  box-shadow: 0 0 0 2px var(--weiss), 0 0 0 6px rgba(227, 6, 19, .18);
+  box-shadow: 0 0 0 2px var(--weiss), 0 0 0 6px color-mix(in srgb, var(--rot) 18%, transparent);
 }
 
 /* Zuschneiden: Die Hülle liegt deckungsgleich über dem Bild, der Rahmen darin markiert den
@@ -1146,11 +1150,11 @@ details.accordion .accordion-body > :first-child { margin-top: 0; } details.acco
 .ed-crop { position: absolute; z-index: 1300; overflow: hidden; }
 .ed-crop-rahmen {
   position: absolute; cursor: move; touch-action: none;
-  outline: 1px solid var(--weiss); box-shadow: 0 0 0 9999px rgba(0, 0, 0, .5);
+  outline: 1px solid var(--weiss); box-shadow: 0 0 0 9999px var(--abdunkeln);
 }
 .ed-crop-ecke {
   position: absolute; width: 16px; height: 16px; background: var(--weiss);
-  border: 2px solid var(--rot); border-radius: 3px; touch-action: none;
+  border: 2px solid var(--rot); border-radius: var(--radius); touch-action: none;
 }
 /* Die Griffe sitzen innen: Steht der Rahmen am Bildrand – und das ist er zu Beginn –,
    schnitte die Hülle sie außen zur Hälfte ab und man bekäme sie kaum zu fassen. */
@@ -1163,11 +1167,11 @@ details.accordion .accordion-body > :first-child { margin-top: 0; } details.acco
   padding: 8px 10px; background: var(--weiss); border: 1px solid var(--linie);
   border-radius: var(--radius-gross); box-shadow: var(--schatten-menue);
 }
-.ed-crop-leiste .hinweis { color: var(--grau); font-size: .85rem; }
+.ed-crop-leiste .hinweis { color: var(--grau); font-size: var(--fs-klein); }
 .toastui-editor-contents img.ed-selected,
 .toastui-editor-contents video.ed-selected {
   outline: 2px solid var(--rot); outline-offset: 2px; border-radius: var(--radius);
-  box-shadow: 0 0 0 2px var(--weiss), 0 0 0 6px rgba(227, 6, 19, .18);
+  box-shadow: 0 0 0 2px var(--weiss), 0 0 0 6px color-mix(in srgb, var(--rot) 18%, transparent);
 }
 /* Ein angeklickter Link bleibt dezent – dort geht es nicht um eine Fläche. */
 .toastui-editor-contents a.ed-selected { outline: 2px solid var(--gelb); outline-offset: 1px; border-radius: var(--radius); }
@@ -1175,7 +1179,7 @@ details.accordion .accordion-body > :first-child { margin-top: 0; } details.acco
    Anwendung liest sich das wie ein Fremdkörper – auch hier Gelb. */
 .wiki-editor .ProseMirror-selectednode { outline-color: var(--gelb); }
 .wiki-editor .ProseMirror-selectednode::after { border-color: var(--gelb); }
-.block-edit textarea { min-height: 120px; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: .9rem; }
+.block-edit textarea { min-height: 120px; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: var(--fs-mittel); }
 .block-edit .cols { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); }
 
 /* --- Seitenbaum: Symbole, Merkliste, Zeilenaktionen, Ziehen ------------------------ */
@@ -1220,9 +1224,9 @@ details.accordion .accordion-body > :first-child { margin-top: 0; } details.acco
    stehen – die setzt display:block, und dann stand „regelblockaus Pruefquelle“ in einer Zeile. */
 .bausteinliste button { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; line-height: 1.35; padding: 8px 10px; }
 .bausteinliste button strong { font-weight: 600; }
-.bausteinliste .bl-quelle { color: var(--grau); font-size: .82rem; }
+.bausteinliste .bl-quelle { color: var(--grau); font-size: var(--fs-klein); }
 .bausteinliste .bl-auszug {
-  color: var(--grau); font-size: .85rem;
+  color: var(--grau); font-size: var(--fs-klein);
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
 }
 .ed-slash button span { font-size: var(--fs-klein); color: var(--grau); max-width: 100%; }
@@ -1266,13 +1270,13 @@ details.accordion .accordion-body > :first-child { margin-top: 0; } details.acco
 
 /* --- Statusmarken, Bildunterschriften, Inhaltsblock, Vollbild --------------------- */
 .status-warn { background: var(--gelb); color: var(--anthrazit); }
-.status-ok { background: #dff0e2; color: var(--ok); }
+.status-ok { background: var(--ok-hell); color: var(--ok); }
 .status-danger { background: var(--rot-hell); color: var(--rot); }
 .status-grau { background: var(--grau-hell); color: var(--grau); }
 
 .wiki-content figure { margin: 1em 0; }
 .wiki-content figure img { margin: 0; }
-.wiki-content figcaption { color: var(--grau); font-size: .88rem; margin-top: 4px; }
+.wiki-content figcaption { color: var(--grau); font-size: var(--fs-mittel); margin-top: 4px; }
 
 .inline-toc { border: 1px solid var(--linie); border-left: 4px solid var(--rot); padding: 10px 14px; margin: 1.2em 0; background: var(--grau-hell); }
 .inline-toc .toc-list { margin: 6px 0 0; }
@@ -1281,7 +1285,7 @@ details.accordion .accordion-body > :first-child { margin-top: 0; } details.acco
 .wiki-content img.zoomable { cursor: zoom-in; }
 .md-lightbox {
   position: fixed; inset: 0; z-index: 4000; display: flex; align-items: center; justify-content: center;
-  background: rgba(60,60,59,.9); padding: 24px; cursor: zoom-out;
+  background: var(--abdunkeln-stark); padding: 24px; cursor: zoom-out;
 }
 .md-lightbox img { max-width: 96vw; max-height: 92vh; object-fit: contain; cursor: default; }
 .md-lightbox-close {
@@ -1304,7 +1308,7 @@ details.accordion .accordion-body > :first-child { margin-top: 0; } details.acco
   .wiki-main { padding: 0; max-width: none; }
   .wiki-shell { display: block; }
   .wiki-content a { color: inherit; text-decoration: underline; }
-  .wiki-content a[href^="http"]::after { content: " (" attr(href) ")"; font-size: .85em; color: #555; }
+  .wiki-content a[href^="http"]::after { content: " (" attr(href) ")"; font-size: .85em; color: var(--grau); }
   .page-break { break-after: page; border: 0; margin: 0; }
   .callout, .accordion, table, figure, .columns { break-inside: avoid; }
   details.accordion > .accordion-body { display: block !important; }
@@ -1378,8 +1382,8 @@ details.accordion .accordion-body > :first-child { margin-top: 0; } details.acco
 .einst-feld .help { margin-top: 2px; }
 .einst-kopf { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; margin-bottom: 2px; }
 .einst-kopf label { font-weight: 600; margin: 0; }
-.einst-name { color: var(--grau); font-size: .78rem; }
-.einst-quelle { font-size: .72rem; padding: 1px 6px; border-radius: 999px; border: 1px solid var(--linie); color: var(--grau); }
+.einst-name { color: var(--grau); font-size: var(--fs-marke); }
+.einst-quelle { font-size: var(--fs-marke); padding: 1px 6px; border-radius: var(--radius-pille); border: 1px solid var(--linie); color: var(--grau); }
 .einst-quelle.q-gespeichert { border-color: var(--rot); color: var(--rot); background: var(--rot-hell); }
 .einst-schalter { display: flex; align-items: center; gap: 8px; font-weight: 600; }
 .einst-schalter input { width: auto; }
@@ -1418,7 +1422,7 @@ details.accordion .accordion-body > :first-child { margin-top: 0; } details.acco
 /* Angeklickt: derselbe Ring wie an einem gewählten Bild. */
 .ed-embed.ed-selected {
   outline: 2px solid var(--rot); outline-offset: 2px; border-radius: var(--radius-gross);
-  box-shadow: 0 0 0 2px var(--weiss), 0 0 0 6px rgba(227, 6, 19, .18);
+  box-shadow: 0 0 0 2px var(--weiss), 0 0 0 6px color-mix(in srgb, var(--rot) 18%, transparent);
 }
 /* Der Sortierpfeil steht im rechten Innenabstand der Kopfzelle, nicht im Textfluss: Als
    Inhalt machte er die Spalte um gut zwanzig Pixel breiter als dieselbe Tabelle im Editor,
@@ -1437,8 +1441,8 @@ details.accordion .accordion-body > :first-child { margin-top: 0; } details.acco
   .columns, .columns.cols-3, .columns.cols-4, .columns.cols-5 { grid-template-columns: minmax(0, 1fr); }
 }
 /* Versionsvergleich */
-.diff { white-space: pre-wrap; font-size: .93rem; line-height: 1.5; }
-.diff ins { background: #dff0e2; color: var(--ok); text-decoration: none; }
+.diff { white-space: pre-wrap; font-size: var(--fs-mittel); line-height: 1.5; }
+.diff ins { background: var(--ok-hell); color: var(--ok); text-decoration: none; }
 .diff del { background: var(--rot-hell); color: var(--rot); }
 
 
@@ -1513,7 +1517,7 @@ details.accordion .accordion-body > :first-child { margin-top: 0; } details.acco
 .wiki-editor .toastui-editor-custom-block .tool { display: none !important; }
 /* Auswahlfelder in der Auswahlleiste */
 .ed-bubble select.ed-style, .ed-bubble select.ed-align {
-  width: auto; padding: 3px 4px; font-size: .85rem; border-color: var(--linie);
+  width: auto; padding: 3px 4px; font-size: var(--fs-klein); border-color: var(--linie);
 }
 .ed-bubble select.ed-align { width: 3.2em; text-align: center; }
 /* Ein einzelner Spaltenblock (fehlender ||| -Trenner) darf nicht in die halbe Breite gequetscht werden. */
@@ -1552,7 +1556,7 @@ details.accordion .accordion-body > :first-child { margin-top: 0; } details.acco
 }
 .wiki-head .wiki-meta {
   margin: 0; padding: 0; border: 0; min-width: 0; flex: 1 1 auto;
-  font-size: .82rem; color: var(--grau);
+  font-size: var(--fs-klein); color: var(--grau);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 /* Der Pfad steht links, alles andere rechtsbündig am Rand der Textspalte – wie in Docmost.
@@ -1610,7 +1614,7 @@ h1.seitentitel,
 h1.seitentitel .page-icon { margin-right: 6px; }
 
 /* Brotkrumen oben links – Symbol und Titel je Ebene, getrennt durch einen Schrägstrich. */
-.krumen { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: .84rem; min-width: 0; }
+.krumen { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: var(--fs-klein); min-width: 0; }
 .krumen .krume { display: inline-flex; align-items: center; gap: 5px; color: var(--grau); text-decoration: none; max-width: 22ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .krumen a.krume:hover { color: var(--rot); text-decoration: underline; }
 .krumen .krume[aria-current] { color: var(--schwarz); font-weight: 700; }
@@ -1619,11 +1623,11 @@ h1.seitentitel .page-icon { margin-right: 6px; }
 
 /* Autorzeile unter der Überschrift – in der Ansicht und im Editor dieselbe. Das Bild ist mit
    32 px groß genug, um ein Gesicht zu erkennen; die Zeile wächst mit, in beiden Ansichten gleich. */
-.autorzeile { display: flex; align-items: center; gap: 8px; height: 32px; line-height: 1; margin: 0 0 1.2em; font-size: .86rem; color: var(--grau); }
+.autorzeile { display: flex; align-items: center; gap: 8px; height: 32px; line-height: 1; margin: 0 0 1.2em; font-size: var(--fs-mittel); color: var(--grau); }
 .autorzeile .avatar {
   display: inline-flex; align-items: center; justify-content: center;
   width: 32px; height: 32px; border-radius: 50%; flex: none;
-  background: var(--rot-hell); color: var(--rot); font-size: .8rem; font-weight: 700; letter-spacing: .02em;
+  background: var(--rot-hell); color: var(--rot); font-size: var(--fs-klein); font-weight: 700; letter-spacing: .02em;
 }
 .autorzeile .autorname { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* Liegt ein Profilbild vor, füllt es den Kreis vollständig aus – zugeschnitten wurde beim
@@ -1711,7 +1715,7 @@ dialog.us-dlg { width: min(640px, 96vw); }
 .autor-tafel .avatar {
   display: inline-flex; align-items: center; justify-content: center;
   width: 40px; height: 40px; border-radius: 50%; flex: none;
-  background: var(--rot-hell); color: var(--rot); font-size: .85rem; font-weight: 700;
+  background: var(--rot-hell); color: var(--rot); font-size: var(--fs-klein); font-weight: 700;
 }
 .autor-tafel .avatar.mit { background: var(--grau-hell); color: var(--grau); }
 .autor-tafel .autor-text { display: flex; flex-direction: column; min-width: 0; line-height: 1.25; }
@@ -1725,7 +1729,7 @@ dialog.us-dlg { width: min(640px, 96vw); }
   display: inline-flex; align-items: center; justify-content: center;
   width: 22px; height: 22px; flex: none; padding: 0;
   border: 1px solid var(--linie); border-radius: 50%; background: none;
-  font: inherit; font-size: .74rem; font-style: italic; font-weight: 700;
+  font: inherit; font-size: var(--fs-marke); font-style: italic; font-weight: 700;
   color: var(--grau); cursor: pointer; line-height: 1;
 }
 .rundknopf:hover { border-color: var(--rot); color: var(--rot); }
@@ -1739,10 +1743,10 @@ dialog.us-dlg { width: min(640px, 96vw); }
 
 /* Angaben zur Seite in der rechten Leiste. */
 .seiten-info { margin-bottom: 22px; }
-.info-liste { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; margin: 0 0 14px; font-size: .82rem; }
+.info-liste { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; margin: 0 0 14px; font-size: var(--fs-klein); }
 .info-liste dt { color: var(--grau); }
 .info-liste dd { margin: 0; color: var(--schwarz); text-align: right; }
-.info-links { margin: 0 0 12px; padding-left: 16px; font-size: .82rem; }
+.info-links { margin: 0 0 12px; padding-left: 16px; font-size: var(--fs-klein); }
 .info-links a { color: var(--anthrazit); }
 .info-links a:hover { color: var(--rot); }
 
@@ -1858,7 +1862,7 @@ dialog.us-dlg { width: min(640px, 96vw); }
 .ed-farben { position: absolute; z-index: 1310; display: grid; grid-template-columns: repeat(3, 30px); gap: 6px;
   padding: 8px; background: var(--weiss); border: 1px solid var(--linie); border-radius: var(--radius-gross); box-shadow: var(--schatten-menue); }
 .ed-farben .farbe { width: 30px; height: 30px; border: 1px solid var(--linie); border-radius: var(--radius); cursor: pointer; padding: 0;
-  font: inherit; font-size: .8rem; color: var(--grau); }
+  font: inherit; font-size: var(--fs-klein); color: var(--grau); }
 .ed-farben .farbe:hover { border-color: var(--rot); }
 .ed-farben .farbe.on { border: 2px solid var(--rot); }
 .ed-farben .farbe.leer { background: var(--weiss); }
@@ -1877,13 +1881,13 @@ dialog.us-dlg { width: min(640px, 96vw); }
   width: calc(var(--lesetext) * 1.56); text-align: center;
 }
 .wiki-editor .toastui-editor-ww-container .toastui-editor-contents p.coz-info,
-.wiki-editor .toastui-editor-ww-container .toastui-editor-contents p.coz-tip { --co-flaeche: #eaf2f9; --co-kante: var(--wasser); }
-.wiki-editor .toastui-editor-ww-container .toastui-editor-contents p.coz-warning { --co-flaeche: #fffbd6; --co-kante: var(--gelb); }
+.wiki-editor .toastui-editor-ww-container .toastui-editor-contents p.coz-tip { --co-flaeche: var(--co-info-fl); --co-kante: var(--co-info-ka); }
+.wiki-editor .toastui-editor-ww-container .toastui-editor-contents p.coz-warning { --co-flaeche: var(--co-warning-fl); --co-kante: var(--co-warning-ka); }
 .wiki-editor .toastui-editor-ww-container .toastui-editor-contents p.coz-danger { --co-flaeche: var(--rot-hell); --co-kante: var(--rot); }
-.wiki-editor .toastui-editor-ww-container .toastui-editor-contents p.coz-success { --co-flaeche: #e9f5ec; --co-kante: var(--ok); }
+.wiki-editor .toastui-editor-ww-container .toastui-editor-contents p.coz-success { --co-flaeche: var(--co-success-fl); --co-kante: var(--co-success-ka); }
 .wiki-editor .toastui-editor-ww-container .toastui-editor-contents p.coz-note { --co-flaeche: var(--grau-hell); --co-kante: var(--grau); }
-.wiki-editor .toastui-editor-ww-container .toastui-editor-contents > .co-marke:not(.co-schluss) { padding-top: 6px; margin-top: 1.1em; border-top-right-radius: 4px; }
-.wiki-editor .toastui-editor-ww-container .toastui-editor-contents > .co-schluss { padding-bottom: 6px; margin-bottom: 1.1em; border-bottom-right-radius: 4px; }
+.wiki-editor .toastui-editor-ww-container .toastui-editor-contents > .co-marke:not(.co-schluss) { padding-top: 6px; margin-top: 1.1em; border-top-right-radius: var(--radius); }
+.wiki-editor .toastui-editor-ww-container .toastui-editor-contents > .co-schluss { padding-bottom: 6px; margin-bottom: 1.1em; border-bottom-right-radius: var(--radius); }
 /* Die Marke ist nur noch ein schmaler Anfasser am oberen und unteren Rand der Kiste.
    Toast UI polstert die Hülle jedes Custom-Blocks; hier wäre das sichtbarer Leerraum und
    die Kiste stünde höher als in der Leseansicht. */
@@ -1957,11 +1961,11 @@ dialog.us-dlg { width: min(640px, 96vw); }
   border-right: 2px solid var(--grau); border-bottom: 2px solid var(--grau); transform: rotate(45deg);
 }
 .wiki-editor .toastui-editor-ww-container .toastui-editor-contents > .ak-auf {
-  border-top: 1px solid var(--linie); border-top-right-radius: 4px; padding-top: 4px; margin-top: 1em;
+  border-top: 1px solid var(--linie); border-top-right-radius: var(--radius); padding-top: 4px; margin-top: 1em;
 }
 .wiki-editor .toastui-editor-ww-container .toastui-editor-contents > .ak-mitte { padding-bottom: 6px; }
 .wiki-editor .toastui-editor-ww-container .toastui-editor-contents > .ak-schluss {
-  border-bottom: 1px solid var(--linie); border-bottom-right-radius: 4px; padding-bottom: 6px; margin-bottom: 1em;
+  border-bottom: 1px solid var(--linie); border-bottom-right-radius: var(--radius); padding-bottom: 6px; margin-bottom: 1em;
 }
 /* Zugeklappt: Pfeil nach rechts wie die geschlossene Box im Artikel, Koerper unsichtbar. Der
    Pfeil ist die Klickflaeche (die linken 30 px des Titels) – der Titeltext bleibt bearbeitbar. */
@@ -2017,7 +2021,7 @@ dialog.us-dlg { width: min(640px, 96vw); }
 }
 .wiki-editor .toastui-editor-ww-container .toastui-editor-contents > .sek-teil-auf .sek-marke > span {
   position: static; width: auto; height: auto; overflow: visible; clip-path: none;
-  font-size: .76rem; letter-spacing: .02em; text-transform: uppercase;
+  font-size: var(--fs-marke); letter-spacing: .02em; text-transform: uppercase;
 }
 .wiki-editor .toastui-editor-ww-container .toastui-editor-contents > .sek-still:hover .sek-marke,
 .wiki-editor .toastui-editor-ww-container .toastui-editor-contents > .sp-kopf:hover .sek-marke,
@@ -2046,7 +2050,7 @@ dialog.us-dlg { width: min(640px, 96vw); }
    jedes Bild auf display:block). Ohne diese Zeile lief es im Editor in der Textzeile mit. */
 .wiki-editor .toastui-editor-contents > .ed-bild-im-text img { display: block; margin: .6em 0; }
 .wiki-editor .toastui-editor-contents > .ed-unterschrift {
-  color: var(--grau); font-size: .88rem; margin-top: 4px;
+  color: var(--grau); font-size: var(--fs-mittel); margin-top: 4px;
 }
 /* Der Artikel übernimmt nur den Text der kursiven Zeile in die Bildunterschrift – dort steht
    sie also aufrecht und in .88rem. Im Editor blieb das Kursiv stehen und die Regel für einen
@@ -2056,7 +2060,7 @@ dialog.us-dlg { width: min(640px, 96vw); }
 }
 /* Tabellen: Toast UI setzt eigene Schriftgröße und Ränder. Im Artikel sind sie kleiner –
    eine Tabelle war im Editor gut dreißig Pixel höher, und das verschob alles Folgende. */
-.wiki-editor .toastui-editor-contents table { font-size: .93rem; margin: 1em 0; }
+.wiki-editor .toastui-editor-contents table { font-size: var(--fs-mittel); margin: 1em 0; }
 /* In der Zelle steht der Text im Editor in einem Absatz. Dessen unterer Rand – aus der Regel
    für gewöhnliche Absätze – machte jede Zeile dreizehn Pixel höher als im Artikel. */
 .wiki-editor .toastui-editor-ww-container .toastui-editor-contents th > p,
@@ -2112,12 +2116,12 @@ dialog.us-dlg { width: min(640px, 96vw); }
 .wiki-editor .toastui-editor-contents a[href*="/media/wiki/"][href$=".kml"]::after { content: "KML"; }
 .wiki-editor .toastui-editor-contents a[href*="/media/wiki/"][href$=".kmz"]::after { content: "KMZ"; }
 .wiki-editor .toastui-editor-contents a[href*="/media/wiki/"]::after {
-  color: var(--grau); font-size: .74rem; letter-spacing: .04em; flex: none;
+  color: var(--grau); font-size: var(--fs-marke); letter-spacing: .04em; flex: none;
 }
 
 .wiki-editor .toastui-editor-contents .att-icon { font-size: 1.15em; line-height: 1; }
 .wiki-editor .toastui-editor-contents .att-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.wiki-editor .toastui-editor-contents .att-ext { color: var(--grau); font-size: .74rem; letter-spacing: .04em; flex: none; }
+.wiki-editor .toastui-editor-contents .att-ext { color: var(--grau); font-size: var(--fs-marke); letter-spacing: .04em; flex: none; }
 .wiki-editor .toastui-editor-contents img { max-height: 70vh; }
 /* Farben, die Toast UI selbst setzt und die im Artikel anders aussehen: Durchgestrichenes
    war grau statt schwarz, ein Link blau statt rot, die fünfte Überschrift so groß wie
@@ -2139,7 +2143,7 @@ dialog.us-dlg { width: min(640px, 96vw); }
   display: block; width: 100%; margin: .8em 0;
 }
 .wiki-editor .toastui-editor-ww-container .toastui-editor-contents video {
-  display: block; max-width: 100%; max-height: 70vh; margin: .6em 0; background: #000;
+  display: block; max-width: 100%; max-height: 70vh; margin: .6em 0; background: var(--schwarz);
 }
 .wiki-editor .toastui-editor-contents video, .wiki-editor .toastui-editor-contents audio { max-width: 100%; }
 .wiki-editor .toastui-editor-contents p > em:only-child { color: var(--grau); font-size: .9em; }
@@ -2171,7 +2175,7 @@ dialog.us-dlg { width: min(640px, 96vw); }
 .mode-toggle { display: inline-flex; border: 1px solid var(--linie); border-radius: var(--radius); overflow: hidden; margin-left: 6px; }
 .mode-toggle button {
   border: 0; background: var(--weiss); color: var(--grau); cursor: pointer;
-  font: inherit; font-size: .82rem; padding: 5px 12px; line-height: 1.2;
+  font: inherit; font-size: var(--fs-klein); padding: 5px 12px; line-height: 1.2;
 }
 .mode-toggle button + button { border-left: 1px solid var(--linie); }
 .mode-toggle button:hover { background: var(--grau-hell); color: var(--schwarz); }
@@ -2197,15 +2201,13 @@ dialog.us-dlg { width: min(640px, 96vw); }
 @media (pointer: coarse) {
   /* Kurze Punkte der Bauchbinde („Wiki“) mindestens 44 px breit – am Telefon waren es 40. */
   .nav > a, .nav > button { min-width: 44px; justify-content: center; }
-  .rundknopf { width: 32px; height: 32px; }
   .lnk { padding: 8px 4px; }
   .c-tabs button { padding: 9px 6px; }
   .em-grid .em { width: 42px; height: 42px; }
   .ed-farben { grid-template-columns: repeat(3, 40px); }
   .ed-farben .farbe { width: 40px; height: 40px; }
   .page-icon { padding: 6px 8px 6px 0; }
-  .th-sort { padding: 6px; opacity: 1; }
-  .code-copy { padding: 6px 10px; }
+  .th-sort { opacity: 1; }
   .locate-banner .loc-treffer button { min-height: 44px; }
   /* Tippflächen der Ankerplätze und des Profils mindestens 44 px (Browserprüfung der Umbenennung, Verbesserung 7):
      Zoom und „◎“ auch ohne .leaflet-touch (Leaflet erkennt Touch nicht in jedem Browser), Filter-Chips, „Alben“,
@@ -2379,7 +2381,6 @@ dialog.us-dlg { width: min(640px, 96vw); }
   /* Der Anker „#“ an Überschriften als 44-px-Fläche – die negativen Ränder halten die Zeilenhöhe. */
   .h-anchor { display: inline-flex; align-items: center; justify-content: center; min-width: 44px; min-height: 44px;
     margin: -12px 0 -12px .1em; vertical-align: middle; }
-  .tree a { padding-top: 14px; padding-bottom: 14px; }
   .c-tabs button { min-height: 44px; }
   /* Brotkrumen der Strömipedia (ab Tablet sichtbar) wie die der Materialablage: jedes Glied mindestens 44 × 44 px
      (Browserprüfung vor dem Merge, B-1). */
@@ -2433,8 +2434,6 @@ dialog.us-dlg { width: min(640px, 96vw); }
    Rechner etwas breiter werden, damit Name und Gliederung nicht im Wort brechen (Punkt 10, Spalten in admin.html). */
 #mat-globalsuche .accordion-body > p.help { max-width: 100ch; }
 .page.breit.leitstelle { max-width: 1280px; }
-/* Ankerplätze: Die Seitenleiste deckt die Karte ganz ab – die Karte schien durch und machte Text unruhig. */
-.panel { background: var(--weiss); }
 /* Fingerbedienung (Punkt 12, gemessen bei pointer: coarse): Tippflächen mindestens 44 px. */
 @media (pointer: coarse) {
   /* Alle Dialoge (Ankerplätze „Album anlegen“, Riegenkarten, Kommentar der Strömipedia …): Felder und Knöpfe. */

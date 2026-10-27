@@ -28,11 +28,11 @@
 .badge.rot { background: var(--rot); color: var(--weiss); }
 .badge.gruen { background: var(--ok); color: var(--weiss); }
 .badge.blau { background: var(--wasser); color: var(--weiss); }
-.badge.np { background: var(--anthrazit); color: var(--weiss); font-size: .7rem; padding: 0 5px; margin-left: 4px; }
+.badge.np { background: var(--anthrazit); color: var(--weiss); font-size: var(--fs-marke); padding: 0 5px; margin-left: 4px; }
 /* Büroklammer in der Zelle: Anhänge vorhanden (Bilder/Videos) – mit Zähler ab zwei. */
-.zelle .anhang { font-size: .8rem; font-weight: 600; margin-left: 5px; color: var(--anthrazit); white-space: nowrap; }
+.zelle .anhang { font-size: var(--fs-klein); font-weight: 600; margin-left: 5px; color: var(--anthrazit); white-space: nowrap; }
 /* X/Y erfüllte Kriterien der Leistung, an dieser Zelle – schneller Indikator vor dem Öffnen. */
-.zelle .krit-stand { font-size: .8rem; font-weight: 600; margin-left: 5px; color: var(--anthrazit); white-space: nowrap; }
+.zelle .krit-stand { font-size: var(--fs-klein); font-weight: 600; margin-left: 5px; color: var(--anthrazit); white-space: nowrap; }
 
 /* Ein Knopf, der wie ein Verweis aussieht – für Namen, die eine Bearbeitung öffnen. */
 .linkbtn { background: none; border: 0; padding: 0; font: inherit; color: var(--anthrazit); font-weight: 600; cursor: pointer; text-align: left; }
@@ -46,7 +46,7 @@
 .tn-bild {
   display: inline-flex; align-items: center; justify-content: center; flex: none;
   width: 28px; height: 28px; border-radius: 50%; overflow: hidden;
-  background: var(--rot-hell); color: var(--rot); font-size: .7rem; font-weight: 700; letter-spacing: .02em; line-height: 1;
+  background: var(--rot-hell); color: var(--rot); font-size: var(--fs-marke); font-weight: 700; letter-spacing: .02em; line-height: 1;
 }
 .tn-bild img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .tn-bild.mit { background: var(--grau-hell); }
@@ -63,7 +63,7 @@
 .tn-bild-zeile .pb-text .help { margin: 0 0 8px; }
 .schloss { flex: none; font-size: .95rem; line-height: 1; cursor: help; }
 h2.dlg-tn .tn-kopfzeile { gap: 8px; }
-h2.dlg-tn .tn-bild { width: 32px; height: 32px; font-size: .8rem; }
+h2.dlg-tn .tn-bild { width: 32px; height: 32px; font-size: var(--fs-klein); }
 p.dlg-tn { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 /* Zähler im Kopf: „3 bestanden · 1 nicht bestanden“ */
 .erg-zaehler .ja { color: var(--ok); }
@@ -84,7 +84,7 @@ p.dlg-tn { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .erg-knopf.ja.sel { background: var(--ok); border-color: var(--ok); }
 .erg-knopf.nein.sel { background: var(--rot); border-color: var(--rot); }
 .erg-knopf:disabled { cursor: progress; }
-.erg-von, .erg-leer { font-size: .75rem; color: var(--grau); }
+.erg-von, .erg-leer { font-size: var(--fs-marke); color: var(--grau); }
 .erg-block .erg-marke { margin-left: 0; }
 /* Spalte „Kommentar“: die Zelle ist der Knopf zum Dialog; leer steht „+ Kommentar“. */
 .komm-zelle {
@@ -169,7 +169,7 @@ p.dlg-tn { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 /* --- Voraussetzungs-Häkchen: Kasten, darunter klein wer und wann -------------------------- */
 .vk { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-width: 110px; }
 .vk input[type=checkbox] { width: 28px; height: 28px; margin: 0; accent-color: var(--ok); cursor: pointer; flex: none; }
-.vk-stempel { background: none; border: 0; padding: 0; font: inherit; font-size: .72rem; line-height: 1.25; color: var(--grau); text-align: left; cursor: pointer; overflow-wrap: anywhere; }
+.vk-stempel { background: none; border: 0; padding: 0; font: inherit; font-size: var(--fs-marke); line-height: 1.25; color: var(--grau); text-align: left; cursor: pointer; overflow-wrap: anywhere; }
 .vk-stempel:hover { color: var(--rot); text-decoration: underline; }
 .vk-stempel.ja { color: var(--ok); }
 .vk-stempel.nein { color: var(--rot); }
@@ -190,7 +190,7 @@ p.dlg-tn { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .vk-zeile { display: grid; grid-template-columns: 44px 1fr auto; align-items: center; gap: 0 8px; padding: 4px 0; border-top: 1px solid var(--linie); min-height: 48px; }
 .vk-zeile input[type=checkbox] { width: 30px; height: 30px; margin: 0 auto; accent-color: var(--ok); }
 .vk-zeile .vk-text { font-size: var(--fs-mittel); cursor: pointer; padding: 8px 0; }
-.vk-zeile .vk-text small { display: block; font-size: .72rem; color: var(--grau); }
+.vk-zeile .vk-text small { display: block; font-size: var(--fs-marke); color: var(--grau); }
 .vk-zeile .vk-text small.ja { color: var(--ok); }
 .vk-zeile .vk-text small.nein { color: var(--rot); }
 .vk-zeile .vk-verlauf { min-height: 44px; }   /* Text statt „🕓“ (Knopfregel, nach_merge_liste Punkt 13) */
@@ -212,7 +212,7 @@ p.dlg-tn { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .leistung-karte .md-vorschau h1, .leistung-karte .md-vorschau h2, .leistung-karte .md-vorschau h3 { font-size: 1em; margin: 0 0 .2em; color: var(--grau); }
 .leistung-karte .btn-row { justify-content: flex-end; align-self: start; }
 #pl-editor { margin-top: 4px; }
-.pl-fallback { min-height: 220px; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: .9rem; }
+.pl-fallback { min-height: 220px; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: var(--fs-mittel); }
 /* Keine feste Toolbar mehr (toolbarItems: []) – die schwebende Formatleiste (.ed-bubble, siehe
    app.css) übernimmt, wie im Wiki. Der jetzt leere Balken darf keinen Platz mehr beanspruchen,
    sonst bliebe eine leere Zeile über dem Text stehen (dieselbe Regel wie .wiki-editor). */
@@ -239,7 +239,7 @@ p.dlg-tn { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .zelle:hover { border-color: var(--anthrazit); }
 .zelle .sym { font-size: 1.35rem; line-height: 1; }
 .zelle .txt { font-size: var(--fs-klein); font-weight: 700; }
-.zelle .sub { font-size: .75rem; color: var(--grau); overflow-wrap: anywhere; }
+.zelle .sub { font-size: var(--fs-marke); color: var(--grau); overflow-wrap: anywhere; }
 .zelle.st-offen { background: var(--grau-hell); color: var(--grau); }
 .zelle.st-offen .sym { color: var(--grau); font-weight: 700; }
 .zelle.st-bestanden, .zelle.st-nachpruefung_bestanden { background: var(--co-success-fl); border-color: var(--ok); }
