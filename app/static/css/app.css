@@ -1311,6 +1311,9 @@ details.accordion .accordion-body > :first-child { margin-top: 0; } details.acco
 .home-cols ul { list-style: none; padding: 0; margin: 0; }
 .home-cols li { padding: 4px 0; border-bottom: 1px solid var(--linie); }
 .home-cols li:last-child { border-bottom: 0; }
+/* Die ganze Zeile („Titel · Datum“) ist der Link; unterstrichen erst beim Überfahren wie in der Übersicht. */
+.home-cols li > a { text-decoration: none; }
+.home-cols li > a:hover { text-decoration: underline; }
 /* Seitensymbol im Kopf und Papierkorb-Liste */
 .page-icon {
   background: none; border: 0; padding: 0 6px 0 0; font: inherit; font-size: 1em;
@@ -2540,9 +2543,8 @@ dialog.us-dlg { width: min(640px, 96vw); }
   .home-baum li { padding: 0; }
   .home-baum li > a { display: flex; align-items: center; min-height: 44px; }
   .fav-list a { min-height: 44px; padding: 12px 6px; }   /* Block mit „…“ am Ende bleibt */
-  .home-cols li { position: relative; display: flex; flex-wrap: wrap; align-items: center; column-gap: 4px; min-height: 44px;
-    padding-top: 0; padding-bottom: 0; }
-  .home-cols li > a::after { content: ""; position: absolute; inset: 0; }
+  .home-cols li { padding: 0; }
+  .home-cols li > a { display: flex; flex-wrap: wrap; align-items: center; column-gap: .3em; min-height: 44px; }
   /* Alle Dialoge (Ankerplätze „Album anlegen“, Riegenkarten, Kommentar der Strömipedia …): Felder und Knöpfe. */
   dialog input:not([type=checkbox]):not([type=radio]):not([type=file]):not([type=range]):not([type=color]),
   dialog select, dialog .btn { min-height: 44px; }

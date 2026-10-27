@@ -702,8 +702,8 @@
     let d;
     try { d = await api("/api/wiki/recent"); } catch (e) { return; }
     const list = (rows, meta) => rows.length
-      ? `<ul>${rows.map((r) => `<li><a href="/stroemipedia/${esc(r.slug)}">${r.icon ? esc(r.icon) + " " : ""}${esc(r.title)}</a>`
-        + `<span class="muted small"> · ${fmtDate(meta(r), true)}</span></li>`).join("")}</ul>`
+      ? `<ul>${rows.map((r) => `<li><a href="/stroemipedia/${esc(r.slug)}">${r.icon ? esc(r.icon) + " " : ""}${esc(r.title)}`
+        + `<span class="muted small"> · ${fmtDate(meta(r), true)}</span></a></li>`).join("")}</ul>`
       : '<p class="leerzustand">Noch nichts.</p>';
     box.innerHTML = `
       <div><div class="side-title">Zuletzt besucht</div>${list(d.seen, (r) => r.seen_at)}</div>

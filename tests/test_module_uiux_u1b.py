@@ -131,7 +131,8 @@ def test_a8_tippflaechen():
     assert ".pruef table.list td a.titel::after { content: \"\"; position: absolute; inset: -14px -4px; }" in touch
     assert ".home-baum li > a { display: flex; align-items: center; min-height: 44px; }" in touch
     assert ".fav-list a { min-height: 44px; padding: 12px 6px; }" in touch
-    assert ".home-cols li > a::after" in touch
+    assert ".home-cols li > a { display: flex; flex-wrap: wrap; align-items: center; column-gap: .3em; min-height: 44px; }" in touch
+    assert '<span class="muted small"> · ${fmtDate(meta(r), true)}</span></a></li>' in lies("app/static/js/wiki.js")
     assert ".maengel-filter label.inline { min-height: 44px; }" in coarse_bloecke(rk)
     assert ".mat-na-werte > summary { display: flex; align-items: center; min-height: 44px;" in coarse_bloecke(mat)
     print("A8 bestanden.")

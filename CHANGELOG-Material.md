@@ -9700,8 +9700,8 @@ Messungen und Fotos: planung/material-phase4/bericht_uiux_bau_u1b.md.
   gehen vor; Leitstelle-Einstellungen 44 statt 37/36 px), „nur offene Mängel“ 44 px, Ebenen der Karte (Zeilen 44 px, der
   Ebenenknopf bleibt unter der offenen Liste an seiner Stelle), „alle Werte“ der Nacharbeit 44 px, Lehrgangs- und
   Katalogtitel der Riegenkarten mit unsichtbarer 46-px-Fläche (Zeilen nicht höher), Strömipedia-Übersicht, „Zuletzt …“
-  und Merkliste am Finger in Zeilen von 44 px wie der Seitenbaum (ganze Zeile ist der Link – in diesen dichten Listen ginge
-  eine Fläche nur auf Kosten der Nachbarzeile). Listenlinks der Materialablage hatten die Fläche schon (gemessen 44–46 px).
+  und Merkliste am Finger in Zeilen von 44 px wie der Seitenbaum (ganze Zeile ist der Link, bei „Zuletzt …“ samt Datum –
+  in diesen dichten Listen ginge eine Fläche nur auf Kosten der Nachbarzeile). Listenlinks der Materialablage hatten die Fläche schon (gemessen 44–46 px).
   Strömipedia-Editor „Verwerfen“/„Anlegen“, Entwurfsbalken und „Angaben zur Seite“ (Rollenläufe N1): 44 px durch die
   allgemeine Regel (gemessen bei 344, 390, 844×390, 1024×768).
 - **A9 große Systemschrift:** Seitenreiter brechen als Zeile um (ein Reiter selbst nie), Riegenkarten-Reiter ab 375 px in
