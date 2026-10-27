@@ -32,7 +32,7 @@
 /* Status als Marke – dieselbe Form wie .badge */
 .mat-status { display: inline-block; font-size: var(--fs-marke); font-weight: 700; padding: 1px 8px;
   border-radius: var(--radius-pille); white-space: nowrap; color: var(--weiss); background: var(--grau); }
-.mat-status.gross { font-size: .85rem; padding: 3px 12px; }
+.mat-status.gross { font-size: var(--fs-klein); padding: 3px 12px; }
 .s-einsatzbereit.mat-status { background: var(--ok); }
 .s-bald_faellig.mat-status { background: var(--gelb); color: var(--anthrazit); }
 .s-ueberfaellig.mat-status { background: var(--rot); }
@@ -200,7 +200,7 @@ table.list.mat-artikel th.mat-wahlspalte, table.list.mat-artikel td.mat-wahlspal
 .mat-daten dt { color: var(--grau); font-size: var(--fs-mittel); }
 .mat-daten dd { margin: 0; }
 .mat-qr { display: flex; gap: 6px; margin-bottom: 22px; }
-.mat-qr input { flex: 1; min-width: 0; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .85rem; }
+.mat-qr input { flex: 1; min-width: 0; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: var(--fs-klein); }
 .mat-doks { padding-left: 18px; }
 @media (max-width: 900px) { .mat-spalten { grid-template-columns: 1fr; } }
 @media (max-width: 560px) {
@@ -220,6 +220,19 @@ table.list.mat-artikel th.mat-wahlspalte, table.list.mat-artikel td.mat-wahlspal
 .mat-diff th, .mat-diff td { border: 1px solid var(--linie); padding: 3px 8px; text-align: left; vertical-align: top; overflow-wrap: anywhere; }
 .mat-diff thead th { background: var(--grau-hell); color: var(--grau); overflow-wrap: normal; white-space: nowrap; }   /* nie „vor/her“ */
 .mat-diff tbody th { color: var(--grau); font-weight: 600; overflow-wrap: break-word; }   /* „Seriennummern“ ganz, solange es passt */
+.mat-diff td.mat-j-text { white-space: pre-line; }          /* Mangelbeschreibung: Zeilenumbrüche wie gemeldet */
+/* Schmal (Telefon, Inhalt bis 600 px): je Feld eine Karte – Feld, darunter „vorher: …“ und „nachher: …“ über die volle
+   Breite, Wörter ganz (vorher 125 px breite Zellen, eine lange Mangelbeschreibung 2 272 px hoch; Liste nach dem Merge,
+   7). Ein Feld ohne „vorher“ zeigt nur „nachher: …“, ein Eintrag ganz ohne „vorher“ nur den Wert. */
+@container mat-seite (max-width: 600px) {
+  .mat-diff, .mat-diff tbody, .mat-diff tr, .mat-diff th, .mat-diff td { display: block; }
+  .mat-diff thead { display: none; }
+  .mat-diff tr { padding: 4px 0 6px; border-top: 1px solid var(--linie); }
+  .mat-diff th, .mat-diff td { border: 0; padding: 1px 0; overflow-wrap: break-word; }
+  .mat-diff td[data-l]::before { content: attr(data-l) ": "; color: var(--grau); }
+  .mat-diff td.mat-j-vorher.leer { display: none; }
+  .mat-diff.ohne-vorher td[data-l]::before { content: none; }
+}
 .mat-wertliste { margin: 0; padding-left: 16px; }
 .mat-auf > summary { cursor: pointer; font-weight: 700; padding: 6px 0; }
 
@@ -289,7 +302,7 @@ table.list.mat-artikel th.mat-wahlspalte, table.list.mat-artikel td.mat-wahlspal
 .mat-mit-zahl { position: relative; }
 .mat-meldezahl { position: absolute; top: -9px; right: -9px; min-width: 20px; height: 20px; padding: 0 6px; box-sizing: border-box;
   border-radius: var(--radius-pille); background: var(--rot); color: var(--weiss); box-shadow: 0 0 0 2px var(--weiss);
-  font-size: .72rem; font-weight: 700; line-height: 20px; text-align: center; pointer-events: none; }
+  font-size: var(--fs-marke); font-weight: 700; line-height: 20px; text-align: center; pointer-events: none; }
 .mat-meldezahl[hidden] { display: none; }
 .mat-filter { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 14px; }
 .mat-meldung { border: 1px solid var(--linie); border-left: 4px solid var(--wasser); padding: 10px 14px; margin: 0 0 12px; }
@@ -592,7 +605,7 @@ html:has(.mat-mit-leiste) { scroll-padding-bottom: 210px; }
 .mat-pruefergebnis.neutral { background: var(--grau-hell); }
 .mat-pruefergebnis.fehler { background: var(--grau-hell); border-left: 4px solid var(--gelb); }
 .mat-befehl { background: var(--grau-hell); padding: 8px 10px; border-radius: var(--radius); overflow-x: auto;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .9rem; }
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: var(--fs-mittel); }
 
 /* Nur für Vorlesehilfen: unsichtbar, aber vorgelesen (etwa der Kopf der Spalte „kritisch“). */
 .mat-vorlesen { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
@@ -729,7 +742,7 @@ button.mat-ue-klapp:focus-visible { outline: 3px solid var(--gelb); outline-offs
 .mat-menue[open] > summary::after { transform: translateY(1px) rotate(-135deg); }
 .mat-menue-liste { position: absolute; right: 0; top: calc(100% + 6px); z-index: 60; width: max-content;
   min-width: 240px; max-width: min(340px, calc(100vw - 32px)); padding: 6px 0; background: var(--weiss);
-  border: 1px solid var(--linie); border-radius: var(--radius); box-shadow: 0 8px 24px rgba(0, 0, 0, .16); text-align: left; }
+  border: 1px solid var(--linie); border-radius: var(--radius); box-shadow: var(--schatten-menue); text-align: left; }
 .mat-menue-liste a { display: block; padding: 10px 14px; color: var(--anthrazit); text-decoration: none; white-space: normal; }
 .mat-menue-liste a + a { border-top: 1px solid var(--linie); }
 .mat-menue-liste a:hover, .mat-menue-liste a:focus-visible { background: var(--grau-hell); outline: none; }
@@ -776,7 +789,7 @@ button.mat-ue-klapp:focus-visible { outline: 3px solid var(--gelb); outline-offs
 .mat-suche { position: relative; }
 .mat-vorschlaege { position: absolute; top: calc(100% + 4px); right: 0; z-index: 70; width: min(460px, calc(100vw - 32px));
   max-height: min(70vh, 540px); overflow-y: auto; margin: 0; padding: 4px 0; list-style: none; background: var(--weiss);
-  border: 1px solid var(--linie); border-radius: var(--radius); box-shadow: 0 10px 28px rgba(0, 0, 0, .18); }
+  border: 1px solid var(--linie); border-radius: var(--radius); box-shadow: var(--schatten-menue); }
 .mat-vorschlaege[hidden] { display: none; }
 .mat-vorschlaege li + li { border-top: 1px solid var(--linie); }
 .mat-vorschlaege a { display: flex; gap: 10px; align-items: center; min-height: 56px; padding: 8px 12px;
@@ -820,6 +833,8 @@ button.mat-ue-klapp:focus-visible { outline: 3px solid var(--gelb); outline-offs
 .mat-nav.eng.suche-offen .mat-lupe { background: var(--anthrazit); border-color: var(--anthrazit); color: var(--weiss); }
 .mat-nav.enger .mat-side-auf-text, .mat-suchzeile .mat-side-auf-text { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 .mat-nav.enger .mat-reiter > a { padding: 9px 6px 8px; font-size: var(--fs-mittel); }
+/* Fold zugeklappt (344 px): Die vier Reiter brauchten 4 px mehr, als da war, und rollten (Liste nach dem Merge, 11). */
+@media (max-width: 350px) { .mat-nav.enger .mat-reiter > a { padding-left: 4px; padding-right: 4px; } }
 /* Passen die Reiter auch dann nicht neben „☰“ und die Lupe (Telefon hochkant), bekommen sie eine eigene Zeile über die
    ganze Breite: alle vier sichtbar, ohne seitliches Rollen, soweit die Breite reicht (Nachtrag V4 vor dem Merge – vorher
    waren „Bestand“ und „Katalog“ bei 360 und 390 px angeschnitten). Darüber „☰“ links und die Lupe rechts, darunter die
@@ -1235,7 +1250,7 @@ table.list.mat-artikel tr:has(.mat-wahl-art:checked) { background: var(--co-info
   @container mat-seite (max-width: 600px) {
     table.list.mat-ue td:is(.mat-ue-zahl, .mat-ue-tag):not(.mat-ue-null) { position: relative; display: inline-flex; align-items: center;
       gap: 5px; min-height: 44px; padding: 0; }
-    table.list.mat-ue td.mat-ue-zahl .mat-zahl { min-width: 30px; line-height: 26px; font-size: .8rem; }
+    table.list.mat-ue td.mat-ue-zahl .mat-zahl { min-width: 30px; line-height: 26px; font-size: var(--fs-klein); }
     #mat-inhalt table.list.mat-ue td.mat-ue-zahl .mat-zahl, #mat-inhalt table.list.mat-ue td.mat-ue-tag a { position: static; }
     #mat-inhalt table.list.mat-ue td.mat-ue-zahl > a.mat-zahl::after, #mat-inhalt table.list.mat-ue td.mat-ue-tag a::after {
       content: ""; position: absolute; inset: 0; }
@@ -1245,7 +1260,7 @@ table.list.mat-artikel tr:has(.mat-wahl-art:checked) { background: var(--co-info
 /* Lieferung 5 – Geräte: formulare */
 /* Überschrift eines Feldes wie ein <label>, aber ohne eigenes Ziel: Über einem Knopf mit verstecktem Dateifeld trüge
    das Feld sonst zwei Namen („Foto“ und „Foto wählen …“). */
-.mat-feldkopf { display: block; font-weight: 600; font-size: .9rem; margin: 12px 0 4px; }
+.mat-feldkopf { display: block; font-weight: 600; font-size: var(--fs-mittel); margin: 12px 0 4px; }
 /* Foto im Dialog (Ordnerfoto, Produktbild): links die Vorschau – bisheriges, neu gewähltes oder ein leerer Rahmen –,
    rechts „Foto wählen …“ und „entfernen“ (beide mindestens 44 px hoch), Dateiname und Hinweis. Reicht die Breite
    nicht für den breitesten Knopf, rutschen die Knöpfe unter die Vorschau. Beim Ziehen einer Datei färbt sich das Feld. */
@@ -1495,7 +1510,7 @@ table.list.mat-na-zeilen tr:has(.mat-na-wahl:checked) { background: var(--co-inf
   letter-spacing: .03em; vertical-align: middle; white-space: nowrap; }
 /* Banner je offener Meldung (Artikel, Prüfung, Karte in Meine PSA): rot wie ein laufender Rückruf. */
 .mat-banner.mat-mangel-banner { background: var(--rot); }
-.mat-mangel-banner p { margin: 0 0 6px; overflow-wrap: anywhere; }
+.mat-mangel-banner p { margin: 0 0 6px; overflow-wrap: anywhere; max-width: 100ch; }   /* rund 120 Zeichen je Zeile wie V10 */
 .mat-mangel-banner p:last-child { margin-bottom: 0; }
 .mat-mangel-banner .mat-mangel-titel { font-size: 1.05rem; letter-spacing: .02em; }
 .mat-mangel-banner .mat-mangel-text, .mat-mangel-banner .mat-mangel-zeile { font-weight: 400; }
@@ -1534,7 +1549,7 @@ table.list.mat-na-zeilen tr:has(.mat-na-wahl:checked) { background: var(--co-inf
 .mat-mangel-liste { list-style: none; margin: 0; padding: 0; }
 .mat-mangel-liste > li { padding: 8px 0; border-bottom: 1px solid var(--linie); }
 .mat-mangel-liste > li:last-child { border-bottom: 0; }
-.mat-mangel-liste p { margin: 2px 0; overflow-wrap: anywhere; }
+.mat-mangel-liste p { margin: 2px 0; overflow-wrap: anywhere; max-width: 100ch; }
 
 /* Dialog „Mangel melden“: der Hinweis auf die Sperre rot hinterlegt, die gesammelten Fotos als Liste. */
 .mat-mangel-warnung { border-left: 4px solid var(--rot); background: var(--rot-hell); padding: 8px 12px; margin: 6px 0 10px; }
@@ -1880,3 +1895,18 @@ table.list.mat-na-zeilen tr:has(.mat-na-wahl:checked) { background: var(--co-inf
 .mat-ad-produkt .error { margin: 4px 0 0; }
 /* Lebensende und Länge folgen dem gewählten Produkt (field-row ist sonst flex und überginge hidden). */
 #ad-ende-zeile[hidden], #ad-laenge-zeile[hidden] { display: none; }
+
+/* --- Liste nach dem Merge, Teil A (27.10.2026) ---------------------------------------------------------------------
+   Nebentext (grau) auf Rot-hell-Flächen in Anthrazit: --grau auf --rot-hell ergab 4,48 : 1 (Browserprüfung vor dem
+   Merge, Verbesserung 14; wie V13 in den Riegenkarten). */
+:is(.mat-mangelzeile, .mat-punkt.mangel, .mat-fs-warnung, .mat-pruefergebnis.bad, .mat-austausch-liste.fehler,
+    .mat-importhinweis.bad, .mat-mangel-warnung, .mat-fs-maengel) :is(.muted, .help) { color: var(--anthrazit); }
+/* Gleiche Fehler des Katalogimports in einer Zeile, die Fundstellen darunter (austauschListe). */
+.mat-austausch-liste ul ul { margin: 2px 0 4px; padding-left: 18px; }
+/* Meine PSA am Finger: Dokumente, Inventarnummer, „Zum Artikel“ und „im Profil ändern“ als Zeilen von 44 px (vorher
+   17–24 px hohe Textlinks in einer Liste mit 3–17 px Abstand; Browserprüfung vor dem Merge, Verbesserung 6). */
+@media (pointer: coarse) {
+  .mat-psa-doks .mat-doks > li > a, .mat-psa-titel h2 > a, .mat-psa-knoepfe > a, .mat-psa-mails a, .mat-psa-zurueck a {
+    display: inline-flex; align-items: center; min-height: 44px; }
+  .mat-runden-alt > summary { min-height: 44px; box-sizing: border-box; }
+}

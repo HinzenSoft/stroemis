@@ -327,6 +327,7 @@
     antrag: "Änderungsantrag Nr.", begruendung: "Begründung", beantragt_von: "beantragt von", anmerkung: "Anmerkung",
     ablehnung: "Begründung der Ablehnung", feld: "Feld",
     rueckruf_nicht_mehr: "Rückruf trifft ihn nicht mehr", rueckruf_neu: "Rückruf trifft ihn jetzt",
+    rueckruf_wieder_offen: "Rückruf wieder offen (erneut prüfen)",
     // Artikellänge (Schritt 20)
     length_m: "Länge (m)", items_have_length: "Artikel haben eine Länge",
     // Änderungsanträge an alle Stammdaten (Schritt 23): das von Hand vorgezogene Lebensende
@@ -945,11 +946,16 @@
         ? [] : Object.keys(alle).filter((f) => !(f === "folder_id" && "ordner" in alle) && !(f === "origin_folder_id" && "herkunft" in alle)
                                        && !(f === "parent_id" && "pfad" in alle) && !(f === "product_id" && "produkt" in alle));
       const seite = (x, f) => wert((x || {})[f], f, Boolean(x) && f in x);
-      const zeilen = felder.map((f) => `<tr><th>${esc(feldName(f, j))}</th><td>${seite(j.vorher, f)}</td><td>${seite(j.nachher, f)}</td></tr>`).join("");
+      // Schmal (mat-seite bis 600 px) wird jede Zeile zur Karte: Feld, darunter „vorher: …“ und „nachher: …“ über die
+      // ganze Breite (data-l, material.css) – eine lange Mangelbeschreibung stand sonst in einer 125 px schmalen Zelle
+      // (Liste nach dem Merge, 7). Hat ein Feld kein „vorher“ (neu dazugekommen), entfällt die Zeile dort; hat der ganze
+      // Eintrag keins, auch die Beschriftung „nachher:“.
+      const ohneVorher = !j.vorher || !Object.keys(j.vorher).length;
+      const zeilen = felder.map((f) => `<tr><th>${esc(feldName(f, j))}</th><td class="mat-j-vorher${j.vorher && f in j.vorher ? "" : " leer"}" data-l="vorher">${seite(j.vorher, f)}</td><td data-l="nachher"${f === "mangelbeschreibung" ? ' class="mat-j-text"' : ""}>${seite(j.nachher, f)}</td></tr>`).join("");
       return `<li><div class="mat-j-kopf"><span class="mat-j-zeit">${esc(fmtZeit(j.created_at))}</span>
         <strong>${mitEntitaet ? esc(ENTITAET[j.entity] || j.entity) + " " : ""}${esc(AKTION[j.action] || j.action)}</strong>
         <span class="muted">von ${esc(j.user_name || "–")}</span></div>
-        ${zeilen ? `<table class="mat-diff"><thead><tr><th>Feld</th><th>vorher</th><th>nachher</th></tr></thead><tbody>${zeilen}</tbody></table>` : ""}</li>`;
+        ${zeilen ? `<table class="mat-diff${ohneVorher ? " ohne-vorher" : ""}"><thead><tr><th>Feld</th><th>vorher</th><th>nachher</th></tr></thead><tbody>${zeilen}</tbody></table>` : ""}</li>`;
     }).join("")}</ol>`;
   }
 
@@ -1509,15 +1515,28 @@
   }
 
   /* Laufende Prüfdurchgänge als Kasten (Übersicht) bzw. Liste mit abgeschlossenen (Prüfungen). */
-  async function rundenKasten(ziel, nurOffen) {
+  /* Prüfdurchgänge: nurOffen (Übersicht) nur die laufenden. Auf der Seite „Prüfungen“ (alte: Ziel der abgeschlossenen)
+     oben die laufenden, die abgeschlossenen und abgebrochenen zugeklappt ganz unten – die Liste wächst jedes Jahr und
+     stand vor „Offene Prüfungen“ und „Zu prüfen“ (Browserprüfung vor dem Merge, Verbesserung 3). */
+  async function rundenKasten(ziel, nurOffen, alte) {
     if (!ziel) return;
+    const zeilen = (l) => `<ul class="mat-runden">${l.map((r) => `<li><a href="/materialablage/durchgang/${r.id}"><strong>${esc(r.titel)}</strong></a>
+          <span class="muted">${esc(r.ordner)} · eröffnet ${esc(fmtTag(r.eroeffnet_am))}${r.offen ? "" : ` · ${r.abgebrochen ? "abgebrochen" : "abgeschlossen"} ${esc(fmtTag(r.geschlossen_am))}`}</span>
+          ${fortschritt(r.zaehlung)}${r.protokoll ? ` <a class="mat-pdf" href="${esc(r.protokoll.url)}" target="_blank" rel="noopener" aria-label="Sammelprotokoll ${esc(r.protokoll.id)} (PDF)" title="Sammelprotokoll ${esc(r.protokoll.id)} öffnen">PDF</a>` : ""}</li>`).join("")}</ul>`;
     try {
       const liste = (await api(`${API}/durchgaenge${nurOffen ? "?offen=1" : ""}`)).durchgaenge;
       if (nurOffen && !liste.length) { ziel.innerHTML = ""; return; }
-      ziel.innerHTML = `<section class="section"><h2>${nurOffen ? "Laufende Prüfdurchgänge" : "Prüfdurchgänge"}</h2>
-        ${liste.length ? `<ul class="mat-runden">${liste.map((r) => `<li><a href="/materialablage/durchgang/${r.id}"><strong>${esc(r.titel)}</strong></a>
-          <span class="muted">${esc(r.ordner)} · eröffnet ${esc(fmtTag(r.eroeffnet_am))}${r.offen ? "" : ` · ${r.abgebrochen ? "abgebrochen" : "abgeschlossen"} ${esc(fmtTag(r.geschlossen_am))}`}</span>
-          ${fortschritt(r.zaehlung)}${r.protokoll ? ` <a class="mat-pdf" href="${esc(r.protokoll.url)}" target="_blank" rel="noopener" aria-label="Sammelprotokoll ${esc(r.protokoll.id)} (PDF)" title="Sammelprotokoll ${esc(r.protokoll.id)} öffnen">PDF</a>` : ""}</li>`).join("")}</ul>` : leer("Noch kein Prüfdurchgang.")}</section>`;
+      if (nurOffen || !alte) {
+        ziel.innerHTML = `<section class="section"><h2>${nurOffen ? "Laufende Prüfdurchgänge" : "Prüfdurchgänge"}</h2>
+          ${liste.length ? zeilen(liste) : leer("Noch kein Prüfdurchgang.")}</section>`;
+        return;
+      }
+      const laufend = liste.filter((r) => r.offen);
+      const fertig = liste.filter((r) => !r.offen);
+      ziel.innerHTML = `<section class="section"><h2>Laufende Prüfdurchgänge</h2>
+        ${laufend.length ? zeilen(laufend) : leer(fertig.length ? "Gerade läuft kein Prüfdurchgang." : "Noch kein Prüfdurchgang.")}</section>`;
+      alte.innerHTML = fertig.length ? `<section class="section"><details class="mat-auf mat-runden-alt"><summary>Abgeschlossene Prüfdurchgänge (${fertig.length})</summary>
+        ${zeilen(fertig)}</details></section>` : "";
     } catch (e) { ziel.innerHTML = ""; }
   }
   function fortschritt(z) {
@@ -1670,12 +1689,13 @@
     async function zeichnen() {
       seitenTitel("Prüfungen");
       inhalt.innerHTML = `<div class="page-head"><h1>Prüfungen</h1>
-          <div class="btn-row"><a class="btn secondary" href="/materialablage/pruefen" title="Ist ein PDF-Protokoll unverändert?">Protokoll prüfen</a>
+          <div class="btn-row"><a class="btn secondary" href="/materialablage/pruefen" title="Ist ein Protokoll oder Lebenslauf (PDF) unverändert?">Protokoll oder Lebenslauf prüfen</a>
             ${DARF.verwalten || DARF.pruefen ? '<button class="btn secondary" data-act="runde"><span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Prüfdurchgang<span class="k-anlegen"> anlegen</span></span></button>' : ""}</div></div>
         ${!DARF.pruefen ? `<p class="notice">${pruefHinweis()}</p>` : ""}
         <div id="pr-runden"></div><div id="pr-offen"></div>
-        <section class="section"><h2>Zu prüfen</h2><div id="pr-liste"><p class="help">Wird geladen …</p></div></section>`;
-      await Promise.all([zeigenIn(liste, "#pr-liste"), zeigenIn(offene, "#pr-offen"), rundenKasten($("#pr-runden"), false)]);
+        <section class="section"><h2>Zu prüfen</h2><div id="pr-liste"><p class="help">Wird geladen …</p></div></section>
+        <div id="pr-runden-alt"></div>`;
+      await Promise.all([zeigenIn(liste, "#pr-liste"), zeigenIn(offene, "#pr-offen"), rundenKasten($("#pr-runden"), false, $("#pr-runden-alt"))]);
     }
     // Die Adresse dieser Liste mit Ordner, Person und Filter – was in aendern null ist, fällt weg.
     function adresse(aendern) {
@@ -1714,11 +1734,12 @@
         : "Zuerst unter „Bestand“ eine Gliederung anlegen.", true);
       return;
     }
-    dialog(`<h2>Prüfdurchgang eröffnen</h2>
+    // Knopf und Dialog sagen dasselbe: „Prüfdurchgang anlegen“ (Browserprüfung vor dem Merge, Verbesserung 8).
+    dialog(`<h2>Prüfdurchgang anlegen</h2>
       <p class="help">Alle Artikel im gewählten Ordner und darunter (ohne ausgesonderte) kommen auf eine gemeinsame Liste. Mehrere Prüfer arbeiten sie gleichzeitig ab; wer einen Artikel öffnet, reserviert ihn.</p>
       <label for="rd-titel">Titel</label><input type="text" id="rd-titel" maxlength="160" value="Jahresprüfung ${new Date().getFullYear()}">
       <label for="rd-ordner">Ordner</label><select id="rd-ordner">${wahl.html}</select>
-      <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button><button class="btn" id="rd-ok" type="button">Eröffnen</button></div>`,
+      <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button><button class="btn" id="rd-ok" type="button">Prüfdurchgang anlegen</button></div>`,
     (dlg, body) => {
       fokus($("#rd-titel", body));
       $("#rd-ok", body).onclick = async (ev) => {
@@ -1926,7 +1947,8 @@
       ${fotoFeld("od-foto", "Foto", "Foto", o.foto ? o.vorschau || o.foto : "", "JPEG, PNG, WebP oder HEIC vom Telefon; Web- und Vorschaufassung entstehen beim Hochladen.")}`;
     // Die Knopfzeile bleibt letztes Kind des Dialogs – so klebt sie am Telefon unten (app.css). Mit Reitern zeigt sie,
     // was zum gewählten gehört (data-fuer): „Abbrechen“ und „Speichern“ bzw. „Schließen“.
-    const titel = neu ? (oben ? "Gliederung anlegen" : "Ordner anlegen") : "Ordner bearbeiten";
+    // Neu unter einem Ordner heißt der Knopf „Unterordner anlegen“ – der Dialog ebenso (Verbesserung 8).
+    const titel = neu ? (oben ? "Gliederung anlegen" : "Unterordner anlegen") : "Ordner bearbeiten";
     dialog(mitFreigaben ? `<h2 id="od-titel">${titel}</h2>
       <div class="c-tabs mat-reiter" role="tablist" aria-labelledby="od-titel">
         <button type="button" role="tab" id="od-reiter-ordner" aria-controls="od-teil-ordner" data-reiter="ordner">Ordner</button>
@@ -2431,6 +2453,25 @@
   const LEBENSLAUF_TEXT = "Stammdaten, alle Prüfungen in zeitlicher Reihenfolge, Prüfdurchgänge und Ereignisse als PDF – zum Weitergeben oder als Aussonderungsnachweis. Stand jetzt, mit Kennung und Prüfsumme – prüfbar auf der Prüfseite.";
   const lebenslaufKnopf = (a) => `<a class="btn secondary small" href="/materialablage/artikel/${a.id}/lebenslauf.pdf" target="_blank" rel="noopener" data-frisch
     title="${LEBENSLAUF_TEXT}">Lebenslauf (PDF)</a>`;
+  /* Artikelseite: neben „Bearbeiten“ die selteneren Funktionen im Menü „Mehr“ – Verschieben, Lebenslauf, Löschen –, je mit
+     dem Satz, was sie tun (vorher bis zu vier gleichrangige Knöpfe und unter Touch ein Erklärabsatz zum Lebenslauf
+     zwischen den Knopfreihen; Browserprüfung vor dem Merge, Verbesserung 5). Bleibt nur eine Funktion, steht sie als
+     Knopf da. */
+  function artikelMehr(a, eintraege) {
+    const knopf = { verschieben: '<button class="btn secondary small" data-act="verschieben">Verschieben …</button>',
+                    lebenslauf: lebenslaufKnopf(a), loeschen: '<button class="btn secondary small" data-act="loeschen">Löschen …</button>' };
+    const zeile = {
+      verschieben: `<a href="#" role="button" data-act="verschieben"><strong>Verschieben …</strong>
+        <span>In einen anderen Ordner legen – auch in eine andere Gliederung, wenn du dort verwaltest.</span></a>`,
+      lebenslauf: `<a href="/materialablage/artikel/${a.id}/lebenslauf.pdf" target="_blank" rel="noopener" data-frisch><strong>Lebenslauf (PDF)</strong>
+        <span>${LEBENSLAUF_TEXT}</span></a>`,
+      loeschen: `<a href="#" role="button" data-act="loeschen"><strong>Löschen …</strong>
+        <span>Nur für falsch angelegte Artikel ohne Prüfung; vorher wird nachgefragt.</span></a>`,
+    };
+    if (eintraege.length < 2) return eintraege.map((e) => knopf[e]).join("");
+    return `<details class="mat-menue"><summary class="btn secondary small" aria-haspopup="true">Mehr</summary>
+      <div class="mat-menue-liste">${eintraege.map((e) => zeile[e]).join("")}</div></details>`;
+  }
   // Auf Abruf gesetzte Dateien (Lebenslauf, Jahresbericht, Exporte, Nacharbeit, Katalog – data-frisch): Beim Antippen
   // bekommt die Adresse einen Zeitstempel (?stand=…, der Server übergeht ihn). Chrome auf Android legt PDFs als Download
   // ab und öffnete beim nächsten Tippen auf dieselbe Adresse die schon vorhandene Datei mit altem Stand (Meldung vom
@@ -2738,11 +2779,10 @@
       <div class="mat-artikelkopf">
         ${p.bild ? bildLink(p.bild, p.original, `Produktbild ${produktName(p)}`, null, `<img class="mat-produktbild" src="${esc(p.bild)}" alt="Produktbild ${esc(produktName(p))}">`) : '<div class="mat-produktbild leer" aria-hidden="true">kein Produktbild</div>'}
         <div class="mat-artikeltitel">
-          <h1>${esc(a.inventory_no)} ${statusMarke(a.status, true)}${empfohlenMarke(empf)}</h1>
+          <h1><span class="mat-inv">${esc(a.inventory_no)}</span> ${statusMarke(a.status, true)}${empfohlenMarke(empf)}</h1>
           <p class="mat-produktzeile"><a href="/materialablage/katalog/produkt/${p.id}">${nameHtml(p)}</a>${zusatzHtml(p)}${artNrHtml(p.article_no)}</p>
           <p>Seriennummer <strong>${esc(a.serial_no)}</strong>${a.serial_generated ? ' <span class="badge grey">vom System vergeben</span><span class="help mat-sn-hinweis">Der Hersteller vergibt keine Seriennummer – diese Nummer bitte dauerhaft am Artikel anbringen.</span>' : ""}</p>
-          ${aus || darf.pruefen ? "" : DARF.qualifiziert || DARF.pruefer_haekchen ? `<p class="notice small">${pruefHinweis(a)}</p>`
-            : '<p class="small muted">Prüfen dürfen Prüfer mit Urkundennummer und Prüffreigabe (Häkchen „Prüfer“ in der Nutzerverwaltung, Urkundennummer im eigenen Profil, Prüffreigabe vom Materialwart).</p>'}
+          ${aus || darf.pruefen ? "" : DARF.qualifiziert || DARF.pruefer_haekchen ? `<p class="notice small">${pruefHinweis(a)}</p>` : ""}
           ${schonGemeldet ? `<p class="help mat-schon-gemeldet" id="mat-schon-gemeldet">Du hast am ${esc(S.fmtDate(a.mangel_eigen_offen))} schon gemeldet – ein Prüfer sieht es sich an.${darf.verwalten ? "" : " Ergänzungen bitte direkt an den Materialwart."}</p>` : ""}
           ${aussondernNein ? `<p class="help mat-aussondern-hilfe" id="mat-aussondern-hilfe">${esc(aussondernNein)}</p>` : ""}
           <div class="btn-row mat-pruefknoepfe">${!aus && darf.pruefen && !fremderEntwurf ? `<button class="btn" data-act="pruefen">${eigenerEntwurf ? "Prüfung fortsetzen" : a.status === "neu" ? "Eingangsprüfung starten" : "Prüfung starten"}</button>` : ""}
@@ -2753,8 +2793,8 @@
             ${fremderEntwurf ? ` <span class="mat-nowrap">· <a href="/materialablage/pruefung/${a.entwurf.id}">ansehen</a></span>` : ""}
             ${fremderEntwurf && darf.verwalten ? ' <span class="mat-nowrap">· <button class="lnk" type="button" data-act="freigeben">Reservierung aufheben</button></span>' : ""}</p>` : ""}
           ${a.durchgang ? `<p class="small">Steht im Prüfdurchgang ${a.durchgang.sichtbar ? `<a href="/materialablage/durchgang/${a.durchgang.id}">${esc(a.durchgang.titel)}</a>` : `„${esc(a.durchgang.titel)}“`}.</p>` : ""}
-          ${darf.grund ? `<p class="help mat-nur-touch">Lebenslauf (PDF): ${LEBENSLAUF_TEXT}</p>` : ""}
-          <div class="btn-row">${darfDirekt ? '<button class="btn secondary small" data-act="bearbeiten">Bearbeiten</button>' : ""}${darfPflegen ? `${frei ? '<button class="btn secondary small" data-act="verschieben">Verschieben</button>' : ""}${a.darf_loeschen ? '<button class="btn secondary small" data-act="loeschen">Löschen</button>' : ""}` : ""}${darf.grund ? lebenslaufKnopf(a) : ""}</div>
+          <div class="btn-row">${darfDirekt ? '<button class="btn secondary small" data-act="bearbeiten">Bearbeiten</button>' : ""}${artikelMehr(a, [
+            darfPflegen && frei ? "verschieben" : "", darf.grund ? "lebenslauf" : "", darfPflegen && a.darf_loeschen ? "loeschen" : ""].filter(Boolean))}</div>
         </div>
       </div>
       ${DATEN.suche ? '<div id="mat-global-angebot"></div>' : ""}
@@ -3225,14 +3265,17 @@
   const antragMoeglich = (a) => Boolean(a.darf_antrag);
   // Laufende Rückrufe, aus denen der Artikel nach der Änderung fiele oder in die er käme (x.rueckruf, nur bei offenen
   // Anträgen – neue Seriennummer oder anderes Produkt) – auf der Karte und in der Rückfrage „Bestätigen“; das Journal
-  // vermerkt es beim Bestätigen.
+  // vermerkt es beim Bestätigen. Dazu Rückrufe, die ihn weiter treffen und durch eine Prüfung erledigt waren: Nach dem
+  // Antrag zählt nur eine neue Prüfung (R1) – sie gelten wieder als offen (Liste nach dem Merge, 18).
   const antragRueckruf = (x) => {
     const f = x.rueckruf || {};
     const titel = (l) => l.map((r) => `„${esc(r.title)}“`).join(", ");
     const raus = f.nicht_mehr || [];
     const rein = f.neu || [];
+    const wieder = f.wieder_offen || [];
     return (raus.length ? `<p class="notice small">Artikel ist von ${raus.length > 1 ? "den Rückrufen" : "Rückruf"} ${titel(raus)} betroffen – nach der Änderung ${raus.length > 1 ? "treffen sie" : "trifft der Rückruf"} ihn nicht mehr.</p>` : "")
-      + (rein.length ? `<p class="notice small">Nach der Änderung trifft ihn ${rein.length > 1 ? "die laufenden Rückrufe" : "der laufende Rückruf"} ${titel(rein)}.</p>` : "");
+      + (rein.length ? `<p class="notice small">Nach der Änderung trifft ihn ${rein.length > 1 ? "die laufenden Rückrufe" : "der laufende Rückruf"} ${titel(rein)}.</p>` : "")
+      + (wieder.length ? `<p class="notice small">${wieder.length > 1 ? "Die Rückrufe" : "Der Rückruf"} ${titel(wieder)} ${wieder.length > 1 ? "gelten" : "gilt"} danach wieder als offen – der Artikel muss erneut geprüft werden.</p>` : "");
   };
   // Ein offener Antrag als Hinweis an Artikel und Dialog „Bearbeiten“: wer entscheiden darf, kommt mit „Entscheiden …“ in
   // die Liste; der eigene trägt das graue „Antrag zurückziehen …“. Auf der Artikelseite stehen die Anträge als Abschnitt
@@ -3748,8 +3791,36 @@
      Gelöscht wird beim Import nie etwas. */
   const AUSTAUSCH_ARTEN = [["kategorien", "Kategorien"], ["produkte", "Produkte"], ["formulare", "Formulare"],
                            ["bilder", "Bilder"], ["dokumente", "Dokumente"]];
-  const austauschListe = (titel, zeilen, art) => (zeilen && zeilen.length ? `<div class="mat-austausch-liste ${art || ""}">
-    <strong>${esc(titel)}</strong><ul>${zeilen.map((z) => `<li>${esc(z)}</li>`).join("")}</ul></div>` : "");
+  /* Fundstellen des Katalogimports lesbar (Browserprüfung vor dem Merge, Verbesserung 7): Der Server nennt sie wie in der
+     Datei („produkte[0] (Name): „Materialart“ fehlt.“, gezählt ab 0) – hier „Produkt 1 „Name“: „Materialart“ fehlt.“.
+     Der Bericht selbst bleibt, wie er ist (Werkzeuge der Katalogpflege lesen ihn). */
+  const FUNDSTELLE = { kategorien: "Kategorie", unterkategorien: "Unterkategorie", produkte: "Produkt", dokumente: "Dokument",
+                       formulare: "Formular" };
+  function fundstelleLesbar(z) {
+    const m = /^((?:kategorien|produkte|formulare)\[\d+\](?:\.(?:unterkategorien|dokumente)\[\d+\]|\.bild)*)(?: \((.*?)\))?: /.exec(z);
+    if (!m) return z;
+    const ort = m[1].split(".").map((t) => {
+      const teil = /^(\w+)\[(\d+)\]$/.exec(t);
+      return teil ? `${FUNDSTELLE[teil[1]]} ${Number(teil[2]) + 1}` : "Bild";
+    }).join(" › ");
+    return `${ort}${m[2] ? ` „${m[2]}“` : ""}: ${z.slice(m[0].length)}`;
+  }
+  /* Eine Liste des Importberichts. Fehler gleichen Wortlauts an vielen Stellen (etwa 18 Produkte ohne Materialart) stehen
+     als eine Zeile mit ihren Fundstellen darunter. */
+  const austauschListe = (titel, zeilen, art) => {
+    if (!zeilen || !zeilen.length) return "";
+    const gruppen = new Map();
+    zeilen.map(fundstelleLesbar).forEach((z) => {
+      const i = z.indexOf(": ");
+      const satz = i > 0 ? z.slice(i + 2) : z;
+      if (!gruppen.has(satz)) gruppen.set(satz, []);
+      gruppen.get(satz).push(i > 0 ? z.slice(0, i) : "");
+    });
+    const li = [...gruppen].map(([satz, orte]) => (orte.length >= 3 && orte.every(Boolean)
+      ? `<li>${esc(satz)} <span class="muted">(${orte.length}×)</span><ul>${orte.map((o) => `<li>${esc(o)}</li>`).join("")}</ul></li>`
+      : orte.map((o) => `<li>${esc(o ? `${o}: ${satz}` : satz)}</li>`).join("")));
+    return `<div class="mat-austausch-liste ${art || ""}"><strong>${esc(titel)}</strong><ul>${li.join("")}</ul></div>`;
+  };
 
   async function katalogExportDialog() {
     let v;
@@ -3796,7 +3867,7 @@
     const bl = b.bestandteillisten || {};
     const flach = bl.neu || bl.geaendert || bl.unveraendert ? `<tr><th scope="row">Bestandteil-Listen</th><td>${bl.neu || 0}</td><td>${bl.geaendert || 0}</td><td>${bl.unveraendert || 0}</td></tr>` : "";
     return `${stand}
-      ${h.quelle || h.erstellt ? `<p class="help">Export von ${esc(h.quelle || "?")}${h.erstellt ? `, erstellt ${esc(fmtZeit(h.erstellt))}` : ""}.</p>` : ""}
+      ${h.quelle || h.erstellt ? `<p class="help">Export von ${esc(h.quelle || "?")}${h.erstellt ? `, erstellt ${esc(fmtZeit(h.erstellt))}.` : /…$/.test(h.quelle || "") ? "" : "."}</p>` : ""}
       <table class="mat-austausch"><thead><tr><th></th><th>neu</th><th>geändert</th><th>unverändert</th></tr></thead>
         <tbody>${arten.map(zeile).join("")}${flach}</tbody></table>
       ${b.version === 2 ? '<p class="help">Eine geänderte Prüfliste wird eine neue Formularversion (zählt als neu); eine neue Dokumentversion zählt als geändert.</p>' : ""}
@@ -4490,7 +4561,7 @@
     // Die Bemerkung steht als Zusatz in der Überschrift; nur eine ältere, dort gekürzte zusätzlich ganz hier.
     const zusatz = produktZusatz(p);
     // Seltene Funktionen im Untermenü statt als weitere Knöpfe neben „Bearbeiten“ (Knopfregel; Prüfung Browser,
-    // Verbesserung 4).
+    // Verbesserung 4) – seit der Liste nach dem Merge auch „Löschen …“ (selten und endgültig).
     const produktMenue = `<details class="mat-menue">
         <summary class="btn secondary small" aria-haspopup="true">Mehr</summary>
         <div class="mat-menue-liste">
@@ -4498,6 +4569,8 @@
             <span>Ein neues Produkt mit diesen Stammdaten anlegen, etwa eine andere Länge – mit eigener Artikelnummer.</span></a>
           <a href="#" role="button" data-act="rr-neu"><strong>Rückruf anlegen …</strong>
             <span>Eine Rückrufaktion des Herstellers für alle Artikel dieses Produkts oder bestimmte Seriennummern.</span></a>
+          ${p.loeschbar ? `<a href="#" role="button" data-act="loeschen"><strong>Löschen …</strong>
+            <span>Geht nur, solange es keinen Artikel dieses Produkts gibt; vorher wird nachgefragt.</span></a>` : ""}
         </div></details>`;
     seitenTitel(produktName(p));
     inhalt.innerHTML = `${p.demo ? '<p class="mat-demo-banner">DEMO – nicht für echte Prüfungen.</p>' : ""}
@@ -4506,7 +4579,7 @@
         ${p.bild ? bildLink(p.bild, p.original, `Produktbild ${produktName(p)}`, null, `<img class="mat-produktbild" src="${esc(p.bild)}" alt="">`) : '<div class="mat-produktbild leer" aria-hidden="true">kein Produktbild</div>'}
         <div class="mat-artikeltitel"><h1>${nameHtml(p)}${zusatzHtml(p)} ${demoMarke(p.demo)}</h1>
           ${DARF.verwalten ? `<div class="btn-row"><a class="btn secondary small" href="/materialablage/artikel/neu?produkt=${p.id}"><span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Artikel dieses Produkts<span class="k-anlegen"> anlegen</span></span></a></div>` : ""}
-          ${k ? `<div class="btn-row"><button class="btn secondary small" data-act="bearbeiten">Bearbeiten</button>${p.loeschbar ? '<button class="btn secondary small" data-act="loeschen">Löschen</button>' : ""}${produktMenue}</div>` : ""}</div>
+          ${k ? `<div class="btn-row"><button class="btn secondary small" data-act="bearbeiten">Bearbeiten</button>${produktMenue}</div>` : ""}</div>
       </div>
       ${rueckrufAbschnitt(p)}
       <div class="mat-spalten">
@@ -4947,7 +5020,7 @@
     seitenTitel(`Prüfung ${a.inventory_no}`);
     inhalt.innerHTML = `${a.demo ? `<p class="mat-demo-banner">${DEMO_ARTIKEL}</p>` : ""}
       ${artikelPfad(a)}
-      <div class="page-head"><h1>Prüfung ${esc(a.inventory_no)} ${statusMarke(a.status, true)}</h1></div>
+      <div class="page-head"><h1>Prüfung <span class="mat-inv">${esc(a.inventory_no)}</span> ${statusMarke(a.status, true)}</h1></div>
       <div class="mat-formular">
         <p class="mat-produktzeile"><strong>${nameHtml(p)}</strong>${zusatzHtml(p)}${artNrHtml(p.article_no)} · ${nummerHtml("Seriennummer", a.serial_no)}</p>
         ${a.lock_state !== "frei" && a.lock_state !== "ausgesondert" ? `<p class="mat-banner s-gesperrt">GESPERRT${a.lock_reason ? ` – ${esc(a.lock_reason)}` : ""}. Mit „einsatzbereit“ ist diese Prüfung die Freiprüfung.</p>` : ""}
@@ -5423,7 +5496,7 @@
       }
       return `${pr.artikel.demo ? `<p class="mat-demo-banner">${DEMO_ARTIKEL}</p>` : ""}
         <div class="mat-pfad">${pfadHtml([...a.pfad.map(pfadGlied), `<a href="/materialablage/artikel/${a.id}">${esc(a.inventory_no)}</a>`])}</div>
-        <div class="page-head"><h1>${esc(PRUEFART[pr.art] || pr.art)} <span class="mat-h1-zusatz">${esc(a.inventory_no)}</span> ${pr.entwurf ? '<span class="badge">Entwurf</span>' : ergebnisMarke(pr.ergebnis)}</h1>
+        <div class="page-head"><h1>${esc(PRUEFART[pr.art] || pr.art)} <span class="mat-h1-zusatz mat-inv">${esc(a.inventory_no)}</span> ${pr.entwurf ? '<span class="badge">Entwurf</span>' : ergebnisMarke(pr.ergebnis)}</h1>
           ${knoepfe.length ? `<div class="btn-row">${knoepfe.join("")}</div>` : ""}</div>
         ${berichtigungHinweis()}
         <p class="mat-produktzeile"><strong>${nameHtml(pr.produkt)}</strong>${zusatzHtml(pr.produkt)}${artNrHtml(pr.produkt.article_no)} · ${nummerHtml("Seriennummer", a.serial_no)} ${statusMarke(a.status)}</p>
@@ -5704,7 +5777,7 @@
           ${pr.unterschrift ? `<dt>Unterschrift</dt><dd><img class="mat-us-bild" src="${esc(pr.unterschrift)}" alt="Unterschrift von ${esc(pr.pruefer || "")}"></dd>` : ""}
           ${aussonderungHtml()}
         </dl>
-        <p class="help">Die Prüfsumme steht im Fuß jeder Seite des PDFs. Ob eine Datei unverändert ist, zeigt <a href="/materialablage/pruefen">Protokoll prüfen</a>.</p>${nein}</section>`;
+        <p class="help">Die Prüfsumme steht im Fuß jeder Seite des PDFs. Ob eine Datei unverändert ist, zeigt die <a href="/materialablage/pruefen">Prüfseite</a>.</p>${nein}</section>`;
     }
 
     function bearbeitenHtml() {
@@ -6207,6 +6280,9 @@
       leisteMarkieren(d.folder_id);
       const z = d.zaehlung;
       const darf = Boolean(d.darf && (d.darf.verwalten || d.darf.pruefen));
+      // Ausgegrautes „Durchgang abschließen“: der Grund mit Zahl im Satz über der Liste, am Knopf per aria-describedby
+      // (Browserprüfung vor dem Merge, Verbesserung 4).
+      const rest = (z.offen || 0) + (z.in_pruefung || 0);
       const liste = sortiert(d.artikel.filter((a) => !filter || a.zustand === filter));
       const s = sort;
       // Laufend: offen, in Prüfung, erledigt, ausgenommen. Vorbei: erledigt, ausgenommen – nach einem Abbruch
@@ -6217,18 +6293,18 @@
       inhalt.innerHTML = `<div class="mat-pfad">${pfadHtml(['<a href="/materialablage/pruefungen">Prüfungen</a>', "<span>Prüfdurchgang</span>"])}</div>
         <div class="page-head"><h1>${esc(d.titel)} ${d.offen ? '<span class="badge">offen</span>' : `<span class="badge grey">${d.abgebrochen ? "abgebrochen" : "abgeschlossen"}</span>`}</h1>
           <div class="btn-row">${d.offen && darf ? `<button class="btn secondary" data-act="abbrechen">Durchgang abbrechen</button>
-            <button class="btn" data-act="schliessen" ${d.abschliessbar ? "" : "disabled"}>Durchgang abschließen</button>` : ""}
+            <button class="btn" data-act="schliessen" ${d.abschliessbar ? "" : 'disabled aria-describedby="dg-abschluss"'}>Durchgang abschließen</button>` : ""}
             ${!d.offen && d.protokoll ? `<a class="btn secondary" href="${esc(d.protokoll.url)}" target="_blank" rel="noopener">Sammelprotokoll (PDF)</a>` : ""}
             ${!d.offen && (d.set_protokolle || []).length ? `<a class="btn secondary" href="/materialablage/durchgang/${d.id}/protokolle.zip">Alle Protokolle (ZIP)</a>` : ""}</div></div>
         <p>Ordner <a href="/materialablage/ordner/${d.folder_id}">${esc(d.ordner)}</a> · eröffnet ${esc(fmtTag(d.eroeffnet_am))} von ${esc(d.eroeffnet_von || "–")}
           ${d.offen ? "" : ` · ${d.abgebrochen ? "abgebrochen" : "abgeschlossen"} ${esc(fmtTag(d.geschlossen_am))} von ${esc(d.geschlossen_von || "–")}`}</p>
         ${d.protokoll ? `<p class="mat-protokoll-zeile">Sammelprotokoll <strong class="mat-hash">${esc(d.protokoll.id)}</strong> · festgeschrieben ${esc(fmtZeit(d.protokoll.festgeschrieben))}
-          · SHA-256 (erste ${esc(d.protokoll.bytes)} Bytes) ${summeKnopf(d.protokoll.sha256)} · <a href="/materialablage/pruefen">Protokoll prüfen</a></p>`
+          · SHA-256 (erste ${esc(d.protokoll.bytes)} Bytes) ${summeKnopf(d.protokoll.sha256)} · <a href="/materialablage/pruefen">auf der Prüfseite prüfen</a></p>`
           : d.offen ? "" : '<p class="small muted">Vor Einführung des Festschreibens geschlossen – ohne Sammelprotokoll.</p>'}
         ${(d.set_protokolle || []).length ? `<section class="section"><h2>Set-Protokolle</h2>${setProtokolleHtml(d.set_protokolle)}</section>` : ""}
         <div class="mat-kachelrahmen"><div class="mat-kacheln mat-rundenzahlen">${zustaende.map(([k, t]) => `<div class="mat-kachel z-${k || "gesamt"}"><strong>${z[k || "gesamt"]}</strong><span>${k ? t : "Artikel"}</span></div>`).join("")}</div></div>
         <p>${fortschritt(z)}</p>
-        ${d.offen ? `<p class="help">Jeder öffnet seinen Artikel mit „Prüfen“ und reserviert ihn damit – die anderen sehen „in Prüfung bei …“. Abschließen geht, sobald jeder Artikel geprüft oder mit Grund ausgenommen ist. Beim Abschließen entsteht das Sammelprotokoll mit allen Prüfern${d.set_ordner && d.set_ordner.anzahl ? ` – dazu für jedes Set mit geprüften Artikeln ein eigenes Set-Protokoll (hier bis zu ${d.set_ordner.anzahl}; Sets mit Geprüftem bisher: ${d.set_ordner.mit_pruefung})` : ""}.</p>` : ""}
+        ${d.offen ? `<p class="help" id="dg-abschluss">${d.abschliessbar || !rest ? "" : `<strong>Noch ${plural(rest, "Artikel", "Artikel")} offen oder in Prüfung.</strong> `}Jeder öffnet seinen Artikel mit „Prüfen“ und reserviert ihn damit – die anderen sehen „in Prüfung bei …“. Abschließen geht, sobald jeder Artikel geprüft oder mit Grund ausgenommen ist. Beim Abschließen entsteht das Sammelprotokoll mit allen Prüfern${d.set_ordner && d.set_ordner.anzahl ? ` – dazu für jedes Set mit geprüften Artikeln ein eigenes Set-Protokoll (hier bis zu ${d.set_ordner.anzahl}; Sets mit Geprüftem bisher: ${d.set_ordner.mit_pruefung})` : ""}.</p>` : ""}
         <div class="c-tabs mat-filter">${zustaende.map(([f, t]) => `<button type="button" data-act="filter" data-f="${f}" class="${f === filter ? "sel" : ""}">${esc(t)}${f ? ` (${z[f]})` : ""}</button>`).join("")}</div>
         ${liste.length ? `${kartenKopf(DURCHGANG_SORT, s)}<table class="list mat-tabelle mat-karten mat-runde"><thead><tr>${sortKopf("Inventar-Nr.", "inventar", s)}${sortKopf("Hersteller", "hersteller", s, { klasse: "mat-schmal-weg" })}${sortKopf("Produkt", "produkt", s, { vor: kopfZusatz("Hersteller", "hersteller", s, "schmal"), nach: kopfZusatz("Ablage", "ablage", s, "eng") })}${sortKopf("Ablage", "ablage", s, { klasse: "mat-eng-weg" })}${sortKopf("Stand", "stand", s)}${sortKopf("Status", "status", s)}<th></th></tr></thead><tbody>${liste.map(zeile).join("")}</tbody></table>` : leer("Keine Artikel in dieser Auswahl.")}
         ${d.pruefer.length ? `<section class="section"><h2>Prüfer in diesem Durchgang</h2><ul>${d.pruefer.map((x) => `<li>${esc(x.name)}${x.urkunde ? ` · Urkundennummer ${esc(x.urkunde)}` : ""} – ${plural(x.anzahl, "Prüfung", "Prüfungen")}</li>`).join("")}</ul></section>` : ""}`;
@@ -7688,7 +7764,8 @@
     const zeile = (t, w) => `<dt>${esc(t)}</dt><dd>${w}</dd>`;
     const naechste = psaNaechste(k);
     const offen = k.eigene_maengel.some((m) => m.offen);
-    const inv = einzeln ? esc(k.inventory_no) : `<a href="/materialablage/meine-psa/${Number(k.id)}">${esc(k.inventory_no)}</a>`;
+    // Inventarnummer nie am Bindestrich umbrechen („M-⏎000005“; Browserprüfung vor dem Merge, Verbesserung 10).
+    const inv = einzeln ? `<span class="mat-inv">${esc(k.inventory_no)}</span>` : `<a class="mat-inv" href="/materialablage/meine-psa/${Number(k.id)}">${esc(k.inventory_no)}</a>`;
     return `<article class="mat-psa-karte s-${esc(k.status)}${k.mangel ? " mit-mangel" : ""}" aria-labelledby="psa-${Number(k.id)}">
       ${k.demo ? `<p class="mat-demo-banner">${DEMO_ARTIKEL}</p>` : ""}
       ${banner.map(([cls, t]) => `<p class="mat-banner ${cls}" role="note">${esc(t)}</p>`).join("")}

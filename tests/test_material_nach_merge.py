@@ -371,6 +371,61 @@ def test_rueckruf_still_beim_versand():
     print("Rückruf „still“ beim Versand bestanden.")
 
 
+def test_oberflaeche_statisch():
+    """7 Journal am Telefon als Karten, 8 Mangeltext im Banner höchstens 100ch, 11 Reiter bei 344 px, 14 Verbesserungen
+    der Browserberichte (Artikelseite „Mehr“, „Löschen …“ der Produktseite im Menü, abgeschlossene Durchgänge zugeklappt,
+    Grund am ausgegrauten „Durchgang abschließen“, Inventarnummer ohne Umbruch, Katalogimport lesbar, Meine PSA am
+    Finger, Kontrast auf Rot-hell, Tokens, Begriffe)."""
+    js, css = lies("app/material/static/material.js"), lies("app/material/static/material.css")
+    # 7
+    assert 'data-l="vorher">${seite(j.vorher, f)}</td><td data-l="nachher"' in js
+    karte = css[css.index("@container mat-seite (max-width: 600px) {\n  .mat-diff,"):]
+    karte = karte[:karte.index("\n}\n")]
+    for regel in (".mat-diff, .mat-diff tbody, .mat-diff tr, .mat-diff th, .mat-diff td { display: block; }",
+                  ".mat-diff thead { display: none; }", '.mat-diff td[data-l]::before { content: attr(data-l) ": ";',
+                  ".mat-diff td.mat-j-vorher.leer { display: none; }", "overflow-wrap: break-word;"):
+        assert regel in karte, regel
+    # 8 und 11
+    assert ".mat-mangel-banner p { margin: 0 0 6px; overflow-wrap: anywhere; max-width: 100ch; }" in css
+    assert ".mat-mangel-liste p { margin: 2px 0; overflow-wrap: anywhere; max-width: 100ch; }" in css
+    assert "@media (max-width: 350px) { .mat-nav.enger .mat-reiter > a { padding-left: 4px; padding-right: 4px; } }" in css
+    # 14: Artikelseite – Verschieben, Lebenslauf, Löschen im Menü „Mehr“, kein Erklärabsatz zwischen den Knopfreihen
+    assert "function artikelMehr(a, eintraege) {" in js and '<p class="help mat-nur-touch">Lebenslauf (PDF)' not in js
+    assert 'darfPflegen && frei ? "verschieben" : "", darf.grund ? "lebenslauf" : "", darfPflegen && a.darf_loeschen ? "loeschen" : ""' in js
+    assert "Prüfen dürfen Prüfer mit Urkundennummer und Prüffreigabe (Häkchen" not in js
+    produkt = js[js.index("const produktMenue = "):js.index("</details>`;", js.index("const produktMenue = "))]
+    assert 'data-act="loeschen"><strong>Löschen …</strong>' in produkt
+    assert """${p.loeschbar ? '<button class="btn secondary small" data-act="loeschen">Löschen</button>' : ""}${produktMenue}""" not in js
+    # Prüfungen: laufende oben, abgeschlossene zugeklappt unten; ausgegrautes „Durchgang abschließen“ mit Grund
+    assert '<details class="mat-auf mat-runden-alt"><summary>Abgeschlossene Prüfdurchgänge (${fertig.length})</summary>' in js
+    assert 'rundenKasten($("#pr-runden"), false, $("#pr-runden-alt"))' in js
+    assert "'disabled aria-describedby=\"dg-abschluss\"'" in js and '<p class="help" id="dg-abschluss">' in js
+    # Inventarnummer ohne Umbruch, Begriffe, Katalogimport lesbar
+    assert '<h1><span class="mat-inv">${esc(a.inventory_no)}</span>' in js
+    assert '<h1>Prüfung <span class="mat-inv">${esc(a.inventory_no)}</span>' in js
+    assert "<h2>Prüfdurchgang anlegen</h2>" in js and ">Eröffnen</button>" not in js
+    assert '(oben ? "Gliederung anlegen" : "Unterordner anlegen")' in js
+    assert "function fundstelleLesbar(z) {" in js and "orte.length >= 3 && orte.every(Boolean)" in js
+    # Meine PSA am Finger, Kontrast auf Rot-hell, Tokens statt freier Schatten
+    touch = css[css.index("/* --- Liste nach dem Merge, Teil A"):]
+    assert ".mat-psa-doks .mat-doks > li > a, .mat-psa-titel h2 > a, .mat-psa-knoepfe > a" in touch
+    assert "display: inline-flex; align-items: center; min-height: 44px; }" in touch
+    assert ":is(.muted, .help) { color: var(--anthrazit); }" in touch
+    assert "rgba(0, 0, 0, .16)" not in css and "rgba(0, 0, 0, .18)" not in css and "font-size: .85rem" not in css
+    print("Oberfläche (statisch) bestanden.")
+
+
+def test_importherkunft_gekuerzt():
+    """Die Herkunft einer Katalogdatei (quelle) höchstens 200 Zeichen – am Wortende mit „…“, nicht mitten im Wort."""
+    from app.material.services.importer import _gekuerzt
+    assert _gekuerzt("kurz", 200) == "kurz"
+    lang = "Karabiner, Selbstsicherungen, Verbindungsmittel " * 10
+    k = _gekuerzt(lang, 200)
+    assert len(k) <= 200 and k.endswith("\u00a0…") and k[:-2] == lang[:len(k) - 2] and lang[len(k) - 2] == " ", k
+    assert _gekuerzt("x" * 300, 200) == "x" * 198 + "\u00a0…"
+    print("Importherkunft bestanden.")
+
+
 if __name__ == "__main__":
     test_kennung_nach_zurueckspielen()
     test_head_und_bremse()
@@ -379,3 +434,5 @@ if __name__ == "__main__":
     test_schritt_32_migration()
     test_rueckruf_wieder_offen()
     test_rueckruf_still_beim_versand()
+    test_oberflaeche_statisch()
+    test_importherkunft_gekuerzt()

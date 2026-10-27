@@ -940,11 +940,11 @@ def _formulare(liste, lauf):
 
 
 def _gekuerzt(t, n):
-    """Höchstens n Zeichen: ein längerer Text endet am letzten Leerzeichen davor mit „…“."""
+    """Höchstens n Zeichen: ein längerer Text endet am letzten Leerzeichen davor mit „…“ (geschütztes Leerzeichen davor)."""
     if len(t) <= n:
         return t
-    kurz = t[:n - 1]
-    return (kurz.rsplit(" ", 1)[0] if " " in kurz else kurz).rstrip(" ,;") + " …"
+    kurz = t[:n - 2]
+    return (kurz.rsplit(" ", 1)[0] if " " in kurz else kurz).rstrip(" ,;") + "\u00a0…"          # „…“ bricht nicht allein um
 
 
 # --- Dateien im Archiv -----------------------------------------------------------------------------
