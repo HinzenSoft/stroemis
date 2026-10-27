@@ -1131,7 +1131,7 @@
     const zeichne = () => {
       const vor = state.lehrgang.voraussetzungen || [];
       dialogOeffnen(`<h2>Voraussetzungen</h2>
-        <p class="help">Jede:r Teilnehmende bekommt für jede Voraussetzung einen Kasten zum Abhaken. Umbenennen: Text ändern und das Feld verlassen.</p>
+        <p class="help">Alle Teilnehmenden bekommen für jede Voraussetzung einen Kasten zum Abhaken. Umbenennen: Text ändern und das Feld verlassen.</p>
         <div class="vor-wrap">${vor.length ? `<ul class="vor-liste">${vor.map((v, i) => `<li data-vid="${v.id}">
           <input type="text" value="${esc(v.bezeichnung)}" data-bez aria-label="Bezeichnung">
           ${sortierKnoepfe(i, vor.length, "data-hoch", "data-runter")}
@@ -1227,7 +1227,7 @@
     const leitung = darfLeiten();
     const kopf = `<div class="reiter-kopf"><h2>Prüfungsleistungen</h2>
       ${leitung ? '<div class="btn-row"><button class="btn small" data-act="pl-neu"><span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Prüfungsleistung<span class="k-anlegen"> anlegen</span></span></button></div>' : ""}</div>`;
-    if (!ls.length) return kopf + '<div class="leer"><strong>Noch keine Prüfungsleistungen</strong>Jede:r Teilnehmende bekommt für jede Leistung ein Bewertungsfeld in der Matrix.</div>';
+    if (!ls.length) return kopf + '<div class="leer"><strong>Noch keine Prüfungsleistungen</strong>Alle Teilnehmenden bekommen für jede Leistung ein Bewertungsfeld in der Matrix.</div>';
     return kopf + ls.map((l, i) => leistungKarteHtml(l, i, ls.length, leitung, "pl")).join("");
   }
 

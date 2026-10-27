@@ -711,3 +711,14 @@ Aus der Durchsicht vor dem Merge dev → main (bericht_pruefung_vor_merge_browse
 - Tests: `tests/test_module_vor_merge.py` (Meldungen über die Schnittstelle, Editor-Einstellungen statisch),
   `tests/test_pruefungen.py` (Wortlaut der Katalog-Meldung); Browserprobe Chromium 1280 und Touch 390: Esc aus
   „Bezeichnung“ und aus der Beschreibung schließt, Fokus zurück auf „+ Prüfungsleistung anlegen“ bzw. „Bearbeiten“.
+
+## Nachtrag (27.10.2026): Lieferung nach dem Merge – Knopfsprache, Tippflächen, Begriffe
+
+- Seitentitel der Druckansicht „Prüfungsleistungen“ ohne Namen der Person (Browserverlauf), stattdessen der Lehrgang.
+- „Teilnehmende“ statt „TN“/„Teilnehmende:r“ in allen sichtbaren Texten; Reiter „je Teilnehmende“.
+- Knöpfe nach der Designsprache: kein `btn ghost`, keine Emoji/Pfeile in Knöpfen („Hoch/Runter/Löschen“, „Start/Stopp“,
+  „Drucken“, „Verlauf“), je Ansicht eine rote Hauptaktion, Löschen-Auslöser grau mit Rückfrage, seltene Zeilenaktionen
+  der Lehrgangs-, Katalog- und Leistungslisten im Zeilenmenü „Mehr“.
+- Unter Touch: Voraussetzungs-Haken und Stempel 44 px, Felder in Dialogen 44 px.
+- Lehrgangs- und Katalogliste auf breiten Bildschirmen höchstens 1280 px breit; „Alle Bewertungen“ ohne grauen Knopf.
+Siehe CHANGELOG-Material.md, „Lieferung nach dem Merge, Teil B“.
