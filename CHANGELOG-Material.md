@@ -51,6 +51,7 @@ Geschichte stehen. Schemaversion nach der Nachbesserung vor dem Merge: 30; mit d
 | Abgeschlossene Prüfdurchgänge nur bei Bedarf | Menü „Prüfdurchgänge“ auf „Prüfungen“ (anlegen, abgeschlossene); eigene Seite je Jahr mit Ordner- und Titelfilter; dazu „i“ hinter „Prüfsumme“, Namen als Einheit, kein „…“ in Knopftexten (alle Module), „Änderung beantragen“ neben „Stammdaten“, Export-Text | gebaut 27.10.2026 (kein Schemaschritt, Schema bleibt 32), zur Freigabe |
 | Seitenumbrüche in den PDF-Protokollen | Keine Waisen am Seitenende: Überschrift, Tabellenkopf und die ersten vier Zeilen zusammen, die letzten drei zusammen, kurze Listen ungeteilt; Prüfprotokoll: Abschluss (Ergebnis bis Unterschrift) immer ab neuer Seite, Fotos als Anlage danach, Herstellerdokumente ohne zerhackte Spalten; Aussonderungsprotokoll: Abschluss zusammen | gebaut 27.10.2026 (kein Schemaschritt, nur neue PDFs), zur Freigabe |
 | Info-„i“ app-weit | Erklärsätze unter Überschriften und Feldern hinter ein „i“ am Begriff (55 Stellen in allen Modulen), `S.info` und Jinja-Makro, ein „i“ je Liste für Marken; „Seiten aus ZIP importieren“ im Seitenbaum der Strömipedia | gebaut 27.10.2026 (kein Schemaschritt, Schema bleibt 32), zur Freigabe |
+| Letzte offene Punkte | Datenschutzsätze an einem „i“ auf eine Zeile; Strömipedia: „Neue Seite“ und „⋯“ (Papierkorb, Import) über dem Baum, Blatt-Symbol statt kursivem „i“ für „Angaben zur Seite“, Fehlerart beim Ablegen von Dateien; eine Abschnittsaktion neben der Überschrift (Protokoll, Sammelprotokoll, Prüfformular, Herstellerdokumente); Leitstelle: Marken in der Hilfe-Box statt im „i“ | gebaut 27.10.2026 (kein Schemaschritt, Schema bleibt 32), zur Freigabe |
 
 ## Abgleich mit dem Bestand (vor Lieferung 1)
 
@@ -4183,6 +4184,132 @@ Danach liefen die ganze Suite (`st-test`) grün, `st-py`, `st-js` und `st-css` o
 14. **Kasten „Mailversand“ am Telefon**: Eine Karte hat vier Inhaltszeilen (Mail mit Betreff, Empfänger, Fehler mit
     Antwort), bei 360 px umbrochen etwa 170 px hoch; die Antwort des Mailservers ließe sich noch hinter „Technische
     Antwort“ einklappen – bitte am Gerät ansehen.
+
+## Letzte offene Punkte (Auftrag des Nutzers, 27.10.2026)
+
+Auftrag `planung/material-phase4/auftrag_letzte_offene.md` mit den Nachträgen 6 und 7. Wunsch (wörtlich): „Zwei kleinere
+Punkte bleiben offen (Datenschutz-Sonderfälle, Zeilenumbruch des Importieren-Knopfs am Telefon) und eine Entscheidung steht
+aus, ob das bestehende kursive „i“ in der Strömipedia ein anderes Zeichen bekommen soll, um Verwechslung mit dem neuen zu
+vermeiden. Bearbeite das und alles weitere offene“. Zweig `rest2` ab 1b58891 (vor-merge, Schema 32). Kein Schemaschritt.
+
+**1. Datenschutz-Sonderfälle** (Regel bleibt: Datenschutzhinweise sind sichtbar – stehen ein „i“ und ein sichtbarer Satz am
+selben Begriff, bleibt sichtbar nur das Nötigste in einer Zeile, der Rest steht im „i“)
+- Jahresbericht (M8): vorher sichtbar „Ohne Haken nennt keine Ausgabe einen Prüfer – weder die Seite noch PDF oder CSV.“;
+  jetzt „Ohne Haken nennt keine Ausgabe einen Prüfer.“ und ein „i“ an „Prüfer nennen“: „Mit Haken nennen die Seite, das
+  PDF und die CSV die Prüfer mit Urkundennummer und wer ausgesondert hat.“ (wie `bericht.daten`: ohne Haken kein
+  Personenname und keine Urkundennummer außer dem Ersteller). Ein Tipp auf das „i“ kippt den Haken nicht.
+- Bestandsimport (M28): vorher „Personen werden nicht übernommen – Artikel ordnest du im Ordner über „Zuordnen“ zu.“;
+  jetzt „Personen werden nicht übernommen.“, der zweite Teil als zweiter Absatz im „i“ an „Spalten – n von m zugeordnet“
+  („Artikel ordnest du nach dem Import im Ordner über „Zuordnen“ einer Person zu.“) – beides nur, wenn die Liste eine
+  Personenspalte hat.
+- Prüfanleitung (M19 am Formular, M21 im Dialog „Prüfanleitung aus der Strömipedia“): vorher „Prüfer ohne Zugang zur
+  Strömipedia – das sind alle neuen Konten – sehen nur, dass es eine Anleitung gibt.“; jetzt ohne den Einschub. Dass neue
+  Konten keine Stufe in der Strömipedia haben, stand schon im „i“ an „Prüfanleitung in der Strömipedia“ und steht jetzt
+  auch im „i“ an „Seite suchen“ (eine Konstante `NEUE_KONTEN`).
+- Unverändert, weil schon eine Zeile: Album (A1) „Alle angemeldeten Nutzer können es sehen.“, M19 „Verknüpfen kann, wer
+  in der Strömipedia mindestens Mitglied ist.“ (Recht), M21 „Du siehst nur öffentliche Seiten.“ Gleiches Muster ohne
+  Datenschutz, ebenfalls eine Zeile: L6 (Testmail), R9 (ISC), W3 („Nicht möglich, solange …“).
+- Nicht Teil dieser Regel (kein „i“ am Begriff, sichtbar wie bisher): Notiz einer Freigabe, Unterschrift und
+  Kontaktdaten im Profil, Hinweis zum Diktieren.
+
+**2. Strömipedia: Knopfzeile über dem Seitenbaum einzeilig** – „Neue Seite“ (rot, Hauptaktion) und daneben „⋯“ (grau,
+aria-label „Weitere Aktionen“, title nennt den Inhalt) mit dem Menü „Papierkorb“ und – nur mit Wiki-Verwaltung – „Seiten
+aus ZIP importieren“ (oberste Ebene; der Dialog beginnt mit „– oberste Ebene –“, am Telefon schließt sich die Schublade).
+Dasselbe Menü wie an den Baumzeilen (`tree-menu`, Pfeiltasten, Esc, Fokus zurück auf „⋯“, am Finger 44 px). Vorher drei
+Knöpfe; „Importieren“ brach bei 344, 360 und 390 px in eine zweite Zeile – und in der 260 px schmalen Seitenleiste des
+Tablets (801–1024 px) passen drei 44-px-Knöpfe mit keinem Polster nebeneinander. Die Testseiten `tests/*.html` mit
+Seitenbaum haben den neuen Knopf.
+
+**3. „Angaben zur Seite“ ohne „i“**: Der runde Knopf neben dem Ersteller zeigt jetzt ein gezeichnetes Blatt mit Eselsohr
+und Zeilen (`I.seite`, Inline-SVG im 16er-Raster wie die Kopfsymbole, `.rundknopf svg`), zugänglicher Name und title
+„Angaben zur Seite“ wie bisher. Das kursive „i“ glich dem Info-„i“, öffnet aber eine Leiste mit Angaben. Der
+Strömipedia-Kopf bleibt Symbolleiste.
+
+**4. Fehlerart beim Ablegen von Dateien der Strömipedia** (`images.fehlerart(exc)`): Die Meldung nennt die Art, aus der
+Ausnahme abgeleitet – nie deren Text (Pillow und das Dateisystem nennen Serverpfade); das Protokoll behält den Traceback.
+Arten: „keine Schreibrechte im Ablageordner“ (PermissionError, nur lesbares Dateisystem), „Speicher voll“ (ENOSPC,
+EDQUOT), „Dateityp nicht lesbar“ (Pillow erkennt kein Bild), „Bild beschädigt oder zu groß“ (abgeschnitten, zu viele
+Pixel, Dekompressionsbombe, ValueError/SyntaxError/zlib-Fehler aus Pillow, MemoryError), sonst „unbekannter Fehler –
+siehe Serverprotokoll“.
+- ZIP-Import: „„x.png“ ließ sich nicht verarbeiten (keine Schreibrechte im Ablageordner) – nicht übernommen.“
+- Editor: Hochladen „Die Datei konnte nicht verarbeitet werden (…).“, ebenso „Das Bild ließ sich nicht drehen (…).“
+  und „… nicht zuschneiden (…).“ (gleiche Meldungsart, daher mitgenommen). Was als ValueError schon einen Text für
+  Nutzer hatte (z. B. „Dieses Format lässt sich nicht drehen.“), bleibt.
+- Für den Bildfehler auf dev: Die Meldung sagt jetzt, ob es an den Rechten des Ablageordners, am Platz oder an der Datei
+  liegt.
+
+**5. Testliste** (Nachtrag zu 1b58891, „Info-„i“ app-weit“): angepasst wurden außerdem test_material_profil (Überschrift
+„Profilbild“ mit „i“), test_material_vor_merge_3 (Katalogdokumente mit „i“, `S` exportiert `info`) und
+test_module_vor_merge (Fokus im Dialog nicht aufs „i“).
+
+**6. Nachtrag: eine Abschnittsaktion neben der Überschrift** (Nutzer: „Ja“ zum Vorschlag; Muster `.mat-kastenkopf` wie
+„Änderung beantragen“ neben „Stammdaten“ – passt der Knopf nicht daneben, steht er direkt darunter, die Linie läuft unter
+beiden durch)
+- Prüfungsansicht, „Protokoll“: „Protokoll (PDF)“ rechts neben der Überschrift; die Kennung `P-…` steht allein als erste
+  Zeile unter der Linie.
+- Prüfdurchgang (abgeschlossen): neuer Abschnitt „Sammelprotokoll“ mit „Protokoll (PDF)“ (title „Sammelprotokoll … öffnen“)
+  neben der Überschrift, darunter die Zeile mit Kennung, Zeitpunkt und Prüfsumme; der Knopf „Sammelprotokoll (PDF)“ im
+  Seitenkopf entfällt, „Alle Protokolle (ZIP)“ bleibt dort (betrifft alle Protokolle des Durchgangs).
+- Produktseite: „Spezifisches Formular bearbeiten“ neben „Prüfformular“, „+ Dokument anlegen“ neben „Herstellerdokumente“
+  (vorher am Ende bzw. nach der Liste; „Bestandteile“ auf derselben Seite hatte das Muster schon).
+- Geprüft und gelassen: Artikel „QR-Code und NFC“ (Kopieren gehört zum Feld), Prüfung „Anhänge“ (Formular mit
+  mehreren Knöpfen), Set-Protokolle und Sammelprotokolle im Ordner (PDF je Zeile), Kategorie im Katalog (Menü und Knopf),
+  Freigaben „Hier vergeben“ (aufklappbarer Teil, keine Überschrift), Jahresbericht (zwei Dateien), Mailversand (Menü
+  „Mehr“).
+
+**7. Nachtrag: Leitstelle, Nutzerverwaltung** (Nutzer, wörtlich: „Das i und die Text box ist redundant, entferne hier das
+i und packe die Informationen mit in die Box“): Das „i“ am Seitentitel „Nutzerverwaltung“ entfällt; die Erklärung der
+Marken der Spalte „Materialablage“ („Prüfer“, „Prüfer – Urkundennummer fehlt“, „wirkt nicht – kein Zugang“, „ohne Namen –
+kein Zugang“, „n Freigaben“) steht als Liste in „Hilfe: Rechte je Modul“ nach dem Absatz zu Prüfern. Das title je Marke
+bleibt. Auf dem Reiter „Einstellungen“ bleibt sein „i“ (dort gibt es keine Hilfe-Box). Gleiche Fälle gesucht (ein „i“
+neben einer aufklappbaren Hilfe): Bestandsimport – „i“ am Titel (Status „neu“, Fälligkeit) neben „Welche Listen
+passen?“ (Dateiformat); verschiedene Inhalte, nicht zusammengelegt (bitte bestätigen).
+
+**Schnittstelle**: keine neue Route. `images.fehlerart(exc)` → Text der Art; die Fehlertexte von `POST /api/wiki/files`,
+`/api/wiki/files/drehung` und `/api/wiki/files/zuschnitt` (500er-Fälle, Status bleibt 400) und die Hinweise des
+ZIP-Imports enthalten die Art in Klammern.
+
+**Tests**: neu `tests/test_letzte_offene.py` (Datenschutz eine Zeile, Baumknöpfe, Symbol, Abschnittsaktion) und
+`tests/test_wiki_fehlerart.py` (jede Art einzeln; Import echt mit unlesbarem, abgeschnittenem, zu großem Bild und
+schreibgeschütztem Ablageordner, nachgestellt Speicher voll und Unbekanntes; Editor mit Hochladen, Drehen, Zuschneiden;
+kein Serverpfad in der Antwort, Traceback im Protokoll); angepasst test_module_info_i (M8, M28, Leitstellen-Marken in der
+Box, ein „i“ in der Leitstelle), test_wiki_import (Menü „⋯“ über dem Baum, Fehlerart im Hinweis).
+
+**Proben** (27.10.2026, lokaler Server mit DEMO-Daten: Katalogteil 1 der Gesamtserie, `material_beispielbestand.py
+--artikel 60`, Platzhalter-Seiten der Strömipedia, eine Platzhalter-CSV mit Personenspalte; Fotos vorher (1b58891) und
+nachher unter `planung/material-phase4/proben_rest2/`)
+- Chromium mit Maus bei 1280 px, mit Touch (pointer: coarse, mobil) bei 390, 360 und 344 px. Seitenbaum: vorher
+  „Importieren“ in der zweiten Zeile (y 172 statt 120) bei 344/360/390; jetzt „Neue Seite“ 93 × 44 und „⋯“ 44 × 44 in einer
+  Zeile, ebenso bei 820 und 1024 px mit Touch; mit Maus 89 × 28 und 33 × 28 (1280). Menü: zwei Einträge je 44 px hoch
+  (Maus 34), Tipp auf die Mitte trifft, erster Eintrag hat den Fokus, „Seiten aus ZIP importieren“ öffnet den Dialog mit
+  „– oberste Ebene –“ und schließt die Schublade, „Papierkorb“ öffnet den Papierkorb, Esc schließt und gibt den Fokus an
+  „⋯“ zurück (1280). „Angaben zur Seite“: 22 × 22 (Maus) bzw. 44 × 44 (Touch), Tipp öffnet die Leiste.
+- Jahresbericht: zwei „i“ (Kalenderjahr, Prüfer nennen) je 44 × 44 unter Touch, Tipp auf die Mitte trifft; die Info rückt
+  ins Bild (344 px: 24–336), ein zweiter Tipp schließt, der Haken kippt nicht. Bestandsimport mit Personenspalte: die Info
+  an „Spalten“ mit zweitem Absatz, 344 px: rechts 336.
+- Abschnittsaktion: Prüfung „Protokoll (PDF)“ neben „Protokoll“ bei 1280, 390 und 344 px (Touch 121 × 44), darunter die
+  Kennung; Durchgang „Protokoll (PDF)“ neben „Sammelprotokoll“ bei 1280 und 390 px, bei 344 px direkt darunter;
+  Produktseite: „Spezifisches Formular bearbeiten“ und „+ Dokument“ unter der Überschrift (schmale Spalte bzw. Telefon),
+  „+ Dokument anlegen“ neben „Herstellerdokumente“ bei 1280 px. Jeder Knopf: Tipp auf die Mitte trifft, kein waagerechter
+  Bildlauf, keine Konsolenfehler.
+- Leitstelle: kein „i“ mehr im Seitenkopf (Reiter „Nutzer“), die Marken stehen als Liste in der Hilfe-Box.
+- st-geraete (Chromium, Firefox, WebKit; Telefon 360, iPhone 390, Fold zugeklappt 344, Tablet 768 und 820 hochkant,
+  Laptop 1280, Full HD; 7 Seiten: Strömipedia, Jahresbericht, Prüfung, Durchgang, Produkt, Leitstelle, Bestandsimport):
+  ohne Befund außer „U span.info“ im Jahresbericht an den Touch-Geräten – wie schon beim „i“ an „Kalenderjahr“ ragt die
+  44-px-Fläche mit Absicht über die Flex-Zeile (negative Ränder), jetzt auch am neuen „i“ an „Prüfer nennen“. Keine
+  Tippfläche unter 44 px, kein waagerechter Bildlauf, keine Konsolenfehler.
+
+**Für die Strömipedia** (Artikel nachziehen): Import der obersten Ebene und Papierkorb über „⋯“ neben „Neue Seite“;
+„Angaben zur Seite“ hinter dem Blatt-Symbol neben dem Ersteller; Prüfungsansicht und Prüfdurchgang: „Protokoll (PDF)“
+neben der Überschrift; Leitstelle: Marken in „Hilfe: Rechte je Modul“.
+
+**Bitte bestätigen**
+1. „Papierkorb“ jetzt im Menü „⋯“ statt als Knopf – auch für Mitglieder ohne Import (dann ein Eintrag im Menü). Die
+   einfachere CSS-Lösung (engere Knöpfe) hätte bei 344–390 px gereicht, nicht aber in der Tablet-Seitenleiste (260 px).
+2. Im Prüfdurchgang heißt der Knopf neben „Sammelprotokoll“ „Protokoll (PDF)“ (mit „Sammelprotokoll (PDF)“ bräche er bei
+   390 px unter die Überschrift); bei 344 px steht er trotzdem direkt darunter.
+3. Bestandsimport: „i“ am Titel und „Welche Listen passen?“ bleiben getrennt (siehe 7).
+4. Die Fehlerart „Dateityp nicht lesbar“ gilt auch für eine Datei mit Bild-Endung, deren Inhalt kein Bild ist.
 
 ## Info-„i“ app-weit (Wunsch des Nutzers, 27.10.2026)
 
