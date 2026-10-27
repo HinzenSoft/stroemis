@@ -103,7 +103,9 @@ def test_head_und_bremse():
         r = w.head(f"/materialablage/artikel/{iid}/lebenslauf.pdf?stand=1")
         assert r.status_code == 200 and r.mimetype == "application/pdf" and r.data == b"", (r.status_code, r.data[:20])
         assert "no-store" in r.headers["Cache-Control"] and "Content-Disposition" not in r.headers, dict(r.headers)
-        assert "L-" not in str(r.headers) and _zeilen(app) == [] and _zaehlerdateien(app) == []
+        # Set-Cookie ausgenommen: das zufällige Sitzungscookie enthielt gelegentlich „L-“ (Suite bed771b, 27.10.2026).
+        assert not any("L-" in v for kopf, v in r.headers if kopf != "Set-Cookie"), dict(r.headers)
+        assert _zeilen(app) == [] and _zaehlerdateien(app) == []
         with app.app_context():
             from app import db
             assert not db.query("SELECT 1 FROM mat_meta WHERE schluessel LIKE 'lebenslauf_zaehler_%'")
