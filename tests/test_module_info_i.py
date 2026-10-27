@@ -62,7 +62,7 @@ STELLEN = [
     ("M25", MAT, 'Betroffene Seriennummern${infoKnopf("Betroffene Seriennummern", "Groß/klein', "Groß/klein und Leerzeichen"),
     ("M26", MAT, 'Mail an Materialwarte und Prüfer${infoKnopf("Mail an Materialwarte und Prüfer", "An die Verwalter', "An die Verwalter der betroffenen"),
     ("M27", MAT, '<h1>Bestandsliste importieren${infoKnopf("Bestandsliste importieren", "Importierte Artikel', "Importierte Artikel stehen auf"),
-    ("M28", MAT, 'zugeordnet${infoKnopf("Spalten", "Mehrere Spalten in der Bemerkung', "Mehrere Spalten in der Bemerkung"),
+    ("M28", MAT, 'zugeordnet${infoKnopf("Spalten", `Mehrere Spalten in der Bemerkung', "Mehrere Spalten in der Bemerkung"),
     ("M29", MAT, '<th>geändert${b.version === 2 ? infoKnopf("neu und geändert", "Eine geänderte Prüfliste', "Eine geänderte Prüfliste wird"),
     ("M30", FRG, '<label for="mf-anker">Gilt für${info("Gilt für", `Freigaben für', "!gelten dort und in allen Unterordnern, bis\n"),
     ("M31", FRG, '<summary>Geerbt von oben <span class="mf-zahl">${d.geerbt.length}</span>${info("Geerbt von oben", "Freigaben an Oberordnern',
@@ -164,7 +164,8 @@ def test_alle_stellen():
 def test_sichtbar_geblieben():
     """Was nach der Regel sichtbar bleibt: Datenschutz, Folge der Aktion, Rechtsfolge, Sperrgrund."""
     mat, adm, karte = lies(MAT), lies(ADM), lies(MAP)
-    assert '<span class="help">Ohne Haken nennt keine Ausgabe einen Prüfer – weder die Seite noch PDF oder CSV.</span>' in mat
+    # Datenschutz sichtbar, aber eine Zeile; die Einzelheiten im „i“ (Auftrag „letzte offene Punkte“, test_letzte_offene).
+    assert '<span class="help">Ohne Haken nennt keine Ausgabe einen Prüfer.</span>' in mat
     assert "Diese Version wurde schon für Prüfungen benutzt und bleibt unverändert" in mat
     assert "Verknüpfen kann, wer in der Strömipedia mindestens Mitglied ist." in mat
     assert '`<p class="help">${esc(IMPORT_PERSONEN)}</p>`' in mat
@@ -187,8 +188,10 @@ def test_marken_je_liste():
     assert ('<h2>Befunde${pr.punkte.some((x) => x.kritisch) ? infoKnopf("kritisch", "„kritisch“: Ein Mangel an diesem Prüfpunkt '
             'schließt „einsatzbereit“ aus.") : ""}</h2>') in mat
     assert 'title="Ein Mangel hier schließt „einsatzbereit“ aus">kritisch</span>' in mat
-    # Leitstelle: Marken der Nutzerliste am Seitentitel (Reiter „Nutzer“); das title je Marke bleibt.
-    assert '<span data-titel-info="nutzer">{% call info("nutzerliste", "Nutzerverwaltung") -%}' in html
+    # Leitstelle: Marken der Nutzerliste seit dem Auftrag „letzte offene Punkte“ (Nutzer: „i“ und Box redundant) in der
+    # Box „Hilfe: Rechte je Modul“ statt im „i“ am Seitentitel; das title je Marke bleibt.
+    assert 'data-titel-info="nutzer"' not in html and 'info("nutzerliste"' not in html
+    html = html[html.index("<summary>Hilfe: Rechte je Modul</summary>"):html.index("</details>", html.index("Hilfe: Rechte je Modul"))]
     for marke in ("„Prüfer – Urkundennummer fehlt“", "„wirkt nicht – kein Zugang“", "„ohne Namen – kein Zugang“", "„n Freigaben“"):
         assert marke in html, marke
     assert 'el.classList.toggle("hidden", el.dataset.titelInfo !== name)' in lies(ADM)
@@ -214,13 +217,16 @@ def test_vorlagen_gerendert():
         c = app.test_client()
         assert c.post("/api/auth/login", json={"email": "admin@example.org", "password": "geheim123"}).status_code == 200
         leit = c.get("/leitstelle").get_data(as_text=True)
-        assert 'aria-label="Info zu Nutzerverwaltung"' in leit and 'id="info-nutzerliste" hidden>' in leit
+        assert 'Info zu Nutzerverwaltung' not in leit and 'info-nutzerliste' not in leit
         assert '<span data-titel-info="einstellungen" class="hidden">' in leit and 'id="info-einstellungen" hidden>' in leit
-        assert leit.count('class="info-knopf"') == 2
+        assert leit.count('class="info-knopf"') == 1
+        hilfe = leit[leit.index("Hilfe: Rechte je Modul"):leit.index("</details>", leit.index("Hilfe: Rechte je Modul"))]
+        assert "Marken in der Spalte „Materialablage“:" in hilfe and "„Prüfer – Urkundennummer fehlt“" in hilfe
         profil = c.get("/profil").get_data(as_text=True)
         assert 'aria-label="Info zu Profilbild"' in profil and 'id="info-profilbild" hidden>Es steht neben deinem Namen' in profil
         wiki = c.get("/stroemipedia").get_data(as_text=True)
-        assert 'id="btn-import"' in wiki and ">Importieren</button>" in wiki
+        # Seit dem Auftrag „letzte offene Punkte“: Import der obersten Ebene im Menü „⋯“ über dem Baum (title nennt ihn).
+        assert 'id="btn-baum-mehr"' in wiki and 'title="Papierkorb, Seiten aus ZIP importieren">⋯</button>' in wiki
         # Am Finger sind die Einträge des „⋯“-Menüs im Seitenbaum (mit dem Import) 44 px hoch.
         css = lies("app/static/css/app.css")
         touch = css[css.index("/* Fingerbedienung (Punkt 12"):]
@@ -231,7 +237,8 @@ def test_vorlagen_gerendert():
         assert r.status_code in (200, 201), r.json
         m = app.test_client()
         assert m.post("/api/auth/login", json={"email": "mitglied-info@example.org", "password": "geheim123"}).status_code == 200
-        assert 'id="btn-import"' not in m.get("/stroemipedia").get_data(as_text=True)
+        mw = m.get("/stroemipedia").get_data(as_text=True)
+        assert 'id="btn-baum-mehr"' in mw and 'title="Papierkorb">⋯</button>' in mw and "importieren" not in mw[mw.index('id="btn-baum-mehr"'):][:200]
     print("Vorlagen gerendert bestanden.")
 
 

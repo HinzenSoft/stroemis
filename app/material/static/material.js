@@ -2747,6 +2747,8 @@
      Sprungmarken zu den Blöcken. 403, 404 und 400 (Jahr außerhalb 1990…2100) kommen als Meldung – auch beim ersten
      Laden mit Jahr-Auswahl (geruestFehler), damit man ein anderes Jahr wählen kann. Der Tab-Titel nennt Zweig und Jahr. */
   const BERICHT_KAPPUNG = 500;
+  // Datenschutz bleibt sichtbar („Ohne Haken nennt keine Ausgabe einen Prüfer.“), die Einzelheiten stehen im „i“.
+  const PRUEFER_NENNEN_INFO = "Mit Haken nennen die Seite, das PDF und die CSV die Prüfer mit Urkundennummer und wer ausgesondert hat.";
   async function bericht() {
     const fid = Number(DATEN.id);
     const adresse = new URLSearchParams(location.search);
@@ -2855,8 +2857,8 @@
           <div class="btn-row" id="be-dateien">${dateien(b)}</div></div>
         <div class="mat-bericht-wahl">
           <label for="be-jahr">Kalenderjahr${infoKnopf("Kalenderjahr", "Bestandszahlen gelten zum Stichtag heute, Ereignisse für das Kalenderjahr.")} <select id="be-jahr">${jahre.map((j) => `<option value="${Number(j)}"${j === k.jahr ? " selected" : ""}>${Number(j)}</option>`).join("")}</select></label>
-          <label class="inline" for="be-pruefer"><input type="checkbox" id="be-pruefer"${k.pruefer_nennen ? " checked" : ""}> Prüfer nennen</label>
-          <span class="help">Ohne Haken nennt keine Ausgabe einen Prüfer – weder die Seite noch PDF oder CSV.</span></div>
+          <label class="inline" for="be-pruefer"><input type="checkbox" id="be-pruefer"${k.pruefer_nennen ? " checked" : ""}> Prüfer nennen${infoKnopf("Prüfer nennen", PRUEFER_NENNEN_INFO)}</label>
+          <span class="help">Ohne Haken nennt keine Ausgabe einen Prüfer.</span></div>
         <div id="be-inhalt">${inhaltHtml(b)}</div>`;
       $("#be-jahr").addEventListener("change", (e) => { jahr = +e.target.value; laden(true); });
       $("#be-pruefer").addEventListener("change", (e) => { pruefer = e.target.checked; laden(true); });
@@ -4792,16 +4794,16 @@
           ${zusatz && zusatz.voll ? zeile("Bemerkung", `<span class="mat-text">${esc(p.description)}</span>
             <div class="help">Länger als ${BESCHREIBUNG_MAX} Zeichen, in der Überschrift gekürzt – gedacht ist ein kurzer Zusatz hinter dem Namen.${k ? " Bitte unter „Bearbeiten“ kürzen." : ""}</div>`) : ""}
         </dl></section>
-        <section class="section"><h2>Prüfformular${infoKnopf("Prüfformular", "Ein aktives spezifisches Formular ersetzt das generische der Kategorie.")}</h2>
+        <section class="section"><div class="mat-kastenkopf"><h2>Prüfformular${infoKnopf("Prüfformular", "Ein aktives spezifisches Formular ersetzt das generische der Kategorie.")}</h2>
+          ${k ? '<button class="btn secondary small" data-act="formular">Spezifisches Formular bearbeiten</button>' : ""}</div>
           ${p.formular ? `<p>Geprüft wird nach <a href="/materialablage/katalog/formular/${p.formular.id}"><strong>${esc(p.formular.title || "Formular")}</strong> · Version ${p.formular.version}</a> <span class="muted">(${esc(p.formular.quelle)}, ${plural(p.formular.punkte, "Prüfpunkt", "Prüfpunkte")})</span>.</p>` : '<p class="mat-warn">Für dieses Produkt gilt kein aktives Prüfformular – weder ein spezifisches noch ein generisches der Kategorie.</p>'}
           ${formulare.length ? `<p class="small">Spezifische Versionen: ${formulare.map((f) => `<a href="/materialablage/katalog/formular/${f.id}">v${f.version}${f.aktiv ? " (aktiv)" : ""}</a>`).join(", ")}</p>` : ""}
-          ${k ? '<button class="btn secondary small" data-act="formular">Spezifisches Formular bearbeiten</button>' : ""}
         </section>
       </div>
       ${bestandteilListeHtml(p, k)}
-      <section class="section"><h2>Herstellerdokumente${infoKnopf("Herstellerdokumente", `Gelten für alle Artikel dieses Produkts. Ein Protokoll verweist auf die Version, die am Prüftag galt.${p.kategorie_dokumente.length ? " Kategoriedokumente hängen an der Kategorie und gelten für alle Produkte darin." : ""}`)}</h2>
+      <section class="section"><div class="mat-kastenkopf"><h2>Herstellerdokumente${infoKnopf("Herstellerdokumente", `Gelten für alle Artikel dieses Produkts. Ein Protokoll verweist auf die Version, die am Prüftag galt.${p.kategorie_dokumente.length ? " Kategoriedokumente hängen an der Kategorie und gelten für alle Produkte darin." : ""}`)}</h2>
+          ${k ? '<button class="btn secondary small" data-act="dok-neu"><span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Dokument<span class="k-anlegen"> anlegen</span></span></button>' : ""}</div>
         ${p.dokumente.length ? dokTabelle(p.dokumente, k) : leer("Noch keine Dokumente am Produkt.")}
-        ${k ? '<button class="btn secondary small" data-act="dok-neu"><span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Dokument<span class="k-anlegen"> anlegen</span></span></button>' : ""}
         ${katGruppen(p.kategorie_dokumente).map((g) => `${katKopf(g.name, g.id)}
           <ul class="mat-doks">${g.docs.map((d) => `<li><a href="${esc(d.datei || d.url)}" target="_blank" rel="noopener">${esc(d.title)}</a>
             <span class="muted small">${esc(DOKART[d.kind] || d.kind)}${d.version ? `, ${esc(d.version)}` : ""}</span></li>`).join("")}</ul>`).join("")}
@@ -5015,7 +5017,7 @@
       } else if (w && w.zustand === "papierkorb") anzeige = "Die verknüpfte Seite liegt im Papierkorb der Strömipedia.";
       else if (w) anzeige = `Seite Nr. ${esc(w.seite)} – du darfst sie nicht lesen`;
       const warnung = w && w.zustand === "ok" ? REICHWEITE_HINWEIS[w.reichweite] : "";
-      const info = `${f.benutzt && f.wiki_aendern ? "Die Verknüpfung gehört nicht zum Prüfinhalt und lässt sich auch an benutzten Versionen ändern. " : ""}${WIKI_PRUEFUNG_INFO} Neue Konten haben keine Stufe in der Strömipedia und sehen nur öffentliche Seiten.`;
+      const info = `${f.benutzt && f.wiki_aendern ? "Die Verknüpfung gehört nicht zum Prüfinhalt und lässt sich auch an benutzten Versionen ändern. " : ""}${WIKI_PRUEFUNG_INFO} ${NEUE_KONTEN}`;
       return `<div class="mat-wikizeile" id="fp-wiki"><p><strong>Prüfanleitung in der Strömipedia${infoKnopf("Prüfanleitung in der Strömipedia", info)}:</strong> ${anzeige}
           ${f.wiki_aendern ? '<button type="button" class="lnk" data-act="wiki-waehlen">Ändern</button>' : ""}</p>
         ${warnung ? `<p class="small mat-warn-leise">${esc(warnung)}</p>` : ""}
@@ -5093,12 +5095,14 @@
     + "Ein kritischer Punkt mit Mangel schließt „einsatzbereit“ aus. Ein Punkt der Art „Länge (m)“ ist mit der Länge des Artikels vorbelegt; trägt der Prüfer eine andere ein, "
     + "übernimmt das Festschreiben sie in den Artikel (nur bei Kategorien mit „Artikel haben eine Länge“).";
   const WIKI_PRUEFUNG_INFO = "Hat die Seite eine Überschrift „Prüfung“, wird dieser Abschnitt in offenen Prüfungen eingeblendet, sonst nur verlinkt.";
-  const REICHWEITE_HINWEIS = { intern: "Prüfer ohne Zugang zur Strömipedia – das sind alle neuen Konten – sehen nur, dass es eine Anleitung gibt.",
+  // Wer die Anleitung sieht, steht sichtbar und in einer Zeile; dass neue Konten keinen Zugang haben, sagt das „i“ (NEUE_KONTEN).
+  const NEUE_KONTEN = "Neue Konten haben keine Stufe in der Strömipedia und sehen nur öffentliche Seiten.";
+  const REICHWEITE_HINWEIS = { intern: "Prüfer ohne Zugang zur Strömipedia sehen nur, dass es eine Anleitung gibt.",
                                beschraenkt: "Nur für Freigegebene lesbar – die meisten Prüfer sehen sie nicht." };
   function wikiWahl(formular, danach) {
     const aktuell = formular.wiki ? formular.wiki.seite : null;
     dialog(`<h2>Prüfanleitung aus der Strömipedia</h2>
-      <label for="ww-q">Seite suchen (Titel)${infoKnopf("Seite suchen", `${WIKI_PRUEFUNG_INFO} Jeder sieht nur, was er in der Strömipedia lesen darf.`)}</label>
+      <label for="ww-q">Seite suchen (Titel)${infoKnopf("Seite suchen", `${WIKI_PRUEFUNG_INFO} Jeder sieht nur, was er in der Strömipedia lesen darf. ${NEUE_KONTEN}`)}</label>
       <input type="search" id="ww-q" autocomplete="off" ${TASTATUR_SUCHE} placeholder="z. B. Karabiner">
       <p class="help" id="ww-lesemodus" hidden>Du siehst nur öffentliche Seiten.</p>
       <div class="mat-wikiwahl" id="ww-liste"></div>
@@ -5962,9 +5966,11 @@
       const nein = darfBerichtigen() && !pr.berichtigbar.ok && !pr.berichtigt_durch
         ? `<p class="small muted">Berichtigen geht nicht: ${esc(pr.berichtigbar.grund)}</p>` : "";
       if (!p) return `<section class="section mat-protokoll"><h2>Protokoll</h2><p class="muted">Vor Einführung des Festschreibens abgeschlossen – ohne Protokoll.</p>${nein}</section>`;
-      return `<section class="section mat-protokoll"><h2>Protokoll</h2>
-        <div class="mat-protokoll-kopf"><span class="mat-protokoll-id mat-hash">${esc(p.id)}</span>
+      // Die eine Abschnittsaktion („Protokoll (PDF)“) steht rechts neben der Überschrift (.mat-kastenkopf wie „Stammdaten“
+      // → „Änderung beantragen“; Nutzer 27.10.2026), die Kennung allein als erste Zeile darunter.
+      return `<section class="section mat-protokoll"><div class="mat-kastenkopf"><h2>Protokoll</h2>
           <a class="btn secondary small" href="${esc(p.url)}" target="_blank" rel="noopener">Protokoll (PDF)</a></div>
+        <div class="mat-protokoll-kopf"><span class="mat-protokoll-id mat-hash">${esc(p.id)}</span></div>
         <dl class="mat-daten">
           <dt>Festgeschrieben</dt><dd>${esc(fmtZeit(p.festgeschrieben))}${p.anmeldung ? ` von ${person(p.anmeldung)}` : ""}</dd>
           <dt>Prüfsumme${infoKnopf("Prüfsumme", PRUEFSUMME_INFO)}</dt><dd><span class="small muted">SHA-256 (erste ${esc(p.bytes)} Bytes)</span><br>${summeKnopf(p.sha256)}</dd>
@@ -6488,13 +6494,14 @@
         <div class="page-head"><h1>${esc(d.titel)} ${d.offen ? '<span class="badge">offen</span>' : `<span class="badge grey">${d.abgebrochen ? "abgebrochen" : "abgeschlossen"}</span>`}</h1>
           <div class="btn-row">${d.offen && darf ? `<button class="btn secondary" data-act="abbrechen">Durchgang abbrechen</button>
             <button class="btn" data-act="schliessen" ${d.abschliessbar ? "" : 'disabled aria-describedby="dg-abschluss"'}>Durchgang abschließen</button>` : ""}
-            ${!d.offen && d.protokoll ? `<a class="btn secondary" href="${esc(d.protokoll.url)}" target="_blank" rel="noopener">Sammelprotokoll (PDF)</a>` : ""}
             ${!d.offen && (d.set_protokolle || []).length ? `<a class="btn secondary" href="/materialablage/durchgang/${d.id}/protokolle.zip">Alle Protokolle (ZIP)</a>` : ""}</div></div>
         <p>Ordner <a href="/materialablage/ordner/${d.folder_id}">${esc(d.ordner)}</a> · eröffnet ${esc(fmtTag(d.eroeffnet_am))} von ${person(d.eroeffnet_von || "–")}
           ${d.offen ? "" : ` · ${d.abgebrochen ? "abgebrochen" : "abgeschlossen"} ${esc(fmtTag(d.geschlossen_am))} von ${person(d.geschlossen_von || "–")}`}</p>
-        ${d.protokoll ? `<p class="mat-protokoll-zeile">Sammelprotokoll <strong class="mat-hash">${esc(d.protokoll.id)}</strong> · festgeschrieben ${esc(fmtZeit(d.protokoll.festgeschrieben))}
+        ${d.protokoll ? `<section class="section mat-protokoll"><div class="mat-kastenkopf"><h2>Sammelprotokoll</h2>
+          ${d.offen ? "" : `<a class="btn secondary small" href="${esc(d.protokoll.url)}" target="_blank" rel="noopener" title="Sammelprotokoll ${esc(d.protokoll.id)} öffnen">Protokoll (PDF)</a>`}</div>
+          <p class="mat-protokoll-zeile"><strong class="mat-hash">${esc(d.protokoll.id)}</strong> · festgeschrieben ${esc(fmtZeit(d.protokoll.festgeschrieben))}
           · Prüfsumme${infoKnopf("Prüfsumme", (d.set_protokolle || []).length ? 'Die Prüfsumme steht im Fuß jeder Seite des PDFs, ebenso in jedem Set-Protokoll. Ob eine Datei unverändert ist, zeigt die <a href="/materialablage/pruefen">Prüfseite</a>.' : PRUEFSUMME_INFO)}
-          <span class="small muted">SHA-256 (erste ${esc(d.protokoll.bytes)} Bytes)</span> ${summeKnopf(d.protokoll.sha256)}</p>`
+          <span class="small muted">SHA-256 (erste ${esc(d.protokoll.bytes)} Bytes)</span> ${summeKnopf(d.protokoll.sha256)}</p></section>`
           : d.offen ? "" : '<p class="small muted">Vor Einführung des Festschreibens geschlossen – ohne Sammelprotokoll.</p>'}
         ${(d.set_protokolle || []).length ? `<section class="section"><h2>Set-Protokolle</h2>${setProtokolleHtml(d.set_protokolle)}</section>` : ""}
         <div class="mat-kachelrahmen"><div class="mat-kacheln mat-rundenzahlen">${zustaende.map(([k, t]) => `<div class="mat-kachel z-${k || "gesamt"}"><strong>${z[k || "gesamt"]}</strong><span>${k ? t : "Artikel"}</span></div>`).join("")}</div></div>
@@ -7100,7 +7107,9 @@
   const IMPORT_ZU_GROSS = "Die Datei ist größer als 5 MB – bitte nur die Liste speichern (ohne Bilder und weitere Blätter) oder als CSV.";
   const IMPORT_FEHLT = "Ordne mindestens Hersteller und Modell (oder Artikelnummer) zu.";        // bestandsimport.FEHLT_ZUORDNUNG
   const IMPORT_NICHTS = "Nichts zu übernehmen – alles steht schon im Bestand oder ist erledigt.";  // bestandsimport.NICHTS
-  const IMPORT_PERSONEN = "Personen werden nicht übernommen – Artikel ordnest du im Ordner über „Zuordnen“ zu.";
+  // Datenschutz bleibt sichtbar – kurz, eine Zeile; was man danach tun kann, steht im „i“ an „Spalten“.
+  const IMPORT_PERSONEN = "Personen werden nicht übernommen.";
+  const IMPORT_PERSONEN_INFO = "Artikel ordnest du nach dem Import im Ordner über „Zuordnen“ einer Person zu.";
   const IMPORT_NEUBESCHRIFTEN = "Alte Inventarnummern stehen in der Bemerkung und sind nicht suchbar – die Artikel bitte neu beschriften. Eine Liste dafür liefert „Export“ im Ordner.";
   const IMPORT_OHNE_SERIENSPALTE = "Keine Spalte ist als Seriennummer zugeordnet. Steht die Seriennummer doch in einer Spalte, ordne sie oben unter „Spalten“ zu – dann braucht es kein Häkchen.";
   const IMPORT_CSV_SATZ = "Korrigieren, speichern und hier als neue Liste hochladen – die Zeilen werden dabei erledigt. Die Spalte „Nacharbeit-Nr.“ bitte nicht ändern.";
@@ -7304,7 +7313,7 @@
           <td data-l="Feld" class="mat-k-ohne">${x.gesperrt ? '<span class="muted">Personenangaben – werden nicht übernommen</span>'
             : `<select data-spalte="${esc(x.index)}" aria-label="Feld für die Spalte ${esc(titel)}">${optionen(x)}</select>`}</td></tr>`;
       };
-      return `<details class="mat-auf mat-import-spalten" ${auf ? "open" : ""}><summary>Spalten – ${zugeordnet} von ${b.spalten.length} zugeordnet${infoKnopf("Spalten", "Mehrere Spalten in der Bemerkung erscheinen als „Titel: Wert“.")}</summary>
+      return `<details class="mat-auf mat-import-spalten" ${auf ? "open" : ""}><summary>Spalten – ${zugeordnet} von ${b.spalten.length} zugeordnet${infoKnopf("Spalten", `Mehrere Spalten in der Bemerkung erscheinen als „Titel: Wert“.${b.spalten.some((x) => x.gesperrt) ? `<span class="info-absatz">${esc(IMPORT_PERSONEN_INFO)}</span>` : ""}`)}</summary>
           <table class="list mat-tabelle mat-karten mat-spaltenwahl"><thead><tr><th>Spalte in der Datei</th><th>Beispiele</th><th>Feld</th></tr></thead>
             <tbody>${b.spalten.map(zeile).join("")}</tbody></table>
           ${b.spalten.some((x) => x.gesperrt) ? `<p class="help">${esc(IMPORT_PERSONEN)}</p>` : ""}</details>

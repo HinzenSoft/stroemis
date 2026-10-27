@@ -1731,6 +1731,11 @@ dialog.us-dlg { width: min(640px, 96vw); }
 .rundknopf:hover { border-color: var(--rot); color: var(--rot); }
 .rundknopf.on { border-color: var(--rot); background: var(--rot-hell); color: var(--rot); }
 .rundknopf.still { cursor: default; font-style: normal; }
+/* Gezeichnetes Symbol im Rundknopf („Angaben zur Seite“) – dieselben Strichregeln wie im Seitenkopf. */
+.rundknopf svg {
+  width: 14px; height: 14px; display: block; flex: none; pointer-events: none;
+  fill: none; stroke: currentColor; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round;
+}
 
 /* Angaben zur Seite in der rechten Leiste. */
 .seiten-info { margin-bottom: 22px; }

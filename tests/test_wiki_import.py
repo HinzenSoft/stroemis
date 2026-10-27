@@ -353,7 +353,7 @@ def test_abbruch():
         assert not zeilen(t.app, "SELECT id FROM wiki_revisions WHERE title IN ('A', 'B')")
         # Ein kaputtes Bild bricht nicht ab: Hinweis, Verweis bleibt.
         r = importieren(t.adm, zip_aus([("k.md", "# K\n\n![k](k.jpg)\n"), ("k.jpg", b"kein bild")]), ziel["id"])
-        assert r.status_code == 201 and "„k.jpg“ ließ sich nicht verarbeiten" in "\n".join(r.json["hinweise"]), r.json
+        assert r.status_code == 201 and "„k.jpg“ ließ sich nicht verarbeiten (Dateityp nicht lesbar)" in "\n".join(r.json["hinweise"]), r.json
     print("Abbruch bestanden.")
 
 
@@ -418,10 +418,20 @@ def test_oberflaeche_statisch():
     assert baum.index('data-a="export"') < baum.index('data-a="import"') < baum.index('data-a="del"')
     assert 'if (a === "import") { side.classList.remove("open"); return importDialog(page); }' in baum
     assert "const darfImportieren = () => { const u = window.STROEMIS && STROEMIS.user; return !!(u && u.rechte && u.rechte.wiki === 2); };" in js
-    assert '$("#btn-import").addEventListener("click", () => { side.classList.remove("open"); importDialog(null); });' in js
+    # Oberste Ebene: seit dem Auftrag „letzte offene Punkte“ (27.10.2026) im Menü „⋯“ neben „Neue Seite“ über dem Baum
+    # (mit dem Papierkorb) – vorher drei Knöpfe, „Importieren“ brach am Telefon in eine zweite Zeile.
+    menue = js[js.index("function baumMenu(anchor)"):js.index("function treeRowMenu(anchor, page)")]
+    assert '<button type="button" data-a="trash">Papierkorb</button>' in menue
+    assert '${darfImportieren() ? \'<button type="button" data-a="import">Seiten aus ZIP importieren</button>\' : ""}' in menue
+    assert 'if (b.dataset.a === "import") { side.classList.remove("open"); importDialog(null); }' in menue
+    assert 'if (b.dataset.a === "trash") return trashDialog();' in menue and "wireMenuKeys(box, close);" in menue
+    assert '$("#btn-baum-mehr").addEventListener("click", (e) => baumMenu(e.currentTarget));' in js
+    assert "#btn-import" not in js and "#btn-trash" not in js
     html = open(os.path.join(WURZEL, "app/templates/wiki.html"), encoding="utf-8").read()
-    assert ('{% if rechte.wiki == 2 %}<button class="btn secondary small" id="btn-import" type="button" title="Seiten aus einem ZIP '
-            'auf der obersten Ebene importieren') in html and "…" not in html[html.index('id="btn-import"'):html.index("{% endif %}</div>")]
+    anfang = html.rindex("<div", 0, html.index('id="btn-new-page"'))
+    zeile = html[anfang:html.index("</div>", anfang)]
+    assert zeile.count("<button") == 2 and 'class="btn small"' in zeile and 'class="btn secondary small" id="btn-baum-mehr"' in zeile
+    assert 'aria-haspopup="menu" aria-label="Weitere Aktionen"' in zeile and ">⋯</button>" in zeile and "…" not in zeile
     dlg = js[js.index("function importDialog(p)"):js.index("/* --- Ende Import")]
     assert '${p && k.id === p.id ? " selected" : ""}' in dlg
     assert "<h2>Seiten importieren</h2>" in dlg and 'accept=".zip' in dlg and "Einsortieren unter" in dlg

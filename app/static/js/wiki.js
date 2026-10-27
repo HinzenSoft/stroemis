@@ -220,9 +220,35 @@
     });
   }
 
+  /* Menü „⋯“ neben „Neue Seite“ über dem Seitenbaum: Papierkorb und – nur mit Wiki-Verwaltung – der Import auf die oberste
+     Ebene (der Dialog beginnt mit „– oberste Ebene –“). Seltene Aktionen gehören ins Menü; als drei Knöpfe brach die Zeile
+     am Telefon und in der 260 px schmalen Seitenleiste des Tablets um (Auftrag „letzte offene Punkte“, 27.10.2026). */
+  function baumMenu(anchor) {
+    const box = document.createElement("div");
+    box.className = "tree-menu";
+    box.innerHTML = `
+      <button type="button" data-a="trash">Papierkorb</button>
+      ${darfImportieren() ? '<button type="button" data-a="import">Seiten aus ZIP importieren</button>' : ""}`;
+    document.body.appendChild(box);
+    const r = anchor.getBoundingClientRect();
+    box.style.left = `${Math.max(8, Math.min(window.innerWidth - box.offsetWidth - 8, r.left))}px`;
+    box.style.top = `${window.scrollY + r.bottom + 4}px`;
+    const close = () => { box.remove(); document.removeEventListener("pointerdown", onDoc, true); if (anchor && anchor.focus) anchor.focus(); };
+    const onDoc = (e) => { if (!box.contains(e.target)) close(); };
+    setTimeout(() => document.addEventListener("pointerdown", onDoc, true), 0);
+    wireMenuKeys(box, close);
+    box.addEventListener("click", (e) => {
+      const b = e.target.closest("button[data-a]");
+      if (!b) return;
+      close();
+      if (b.dataset.a === "trash") return trashDialog();
+      if (b.dataset.a === "import") { side.classList.remove("open"); importDialog(null); }
+    });
+  }
+
   /* Kontextmenü an der Baumzeile – dieselben Aktionen wie im Seitenkopf. „Seiten aus ZIP importieren“ steht seit dem
      27.10.2026 nur hier (Wunsch des Nutzers: im Menü der Übersicht links statt im Menü des Seitenkopfs) – der Dialog
-     wählt die Seite der Zeile als Ziel vor; auf die oberste Ebene führt der graue Knopf „Importieren“ über dem Baum. */
+     wählt die Seite der Zeile als Ziel vor; auf die oberste Ebene führt das Menü „⋯“ neben „Neue Seite“ (baumMenu). */
   const darfImportieren = () => { const u = window.STROEMIS && STROEMIS.user; return !!(u && u.rechte && u.rechte.wiki === 2); };
   function treeRowMenu(anchor, page) {
     if (!page) return;
@@ -870,7 +896,7 @@
         <span class="avatar" aria-hidden="true">${avatarInhalt(p, p.created_by_name)}</span>
         <span class="autorname">Von ${esc(p.created_by_name || "unbekannt")}</span>
       </button>
-      <button type="button" class="rundknopf" id="pg-info" title="Angaben zur Seite" aria-label="Angaben zur Seite">i</button>
+      <button type="button" class="rundknopf" id="pg-info" title="Angaben zur Seite" aria-label="Angaben zur Seite">${I.seite}</button>
       ${p.read_restricted ? '<span class="rundknopf still" title="Nur für freigegebene Nutzer lesbar" aria-label="Nur für freigegebene Nutzer lesbar">🔒</span>' : ""}
     </div>`;
   }
@@ -1048,7 +1074,7 @@
 
   /* Seiten aus einem ZIP importieren (Wunsch vom 25.10.2026, nur die Wiki-Verwaltung): ein Export dieses Wikis oder ein
      Archiv mit Markdown-Dateien. Ziel ist die Seite, aus deren Menü im Baum der Dialog kam (p), oder ohne p die
-     oberste Ebene (Knopf „Importieren“ über dem Baum) – im Auswahlfeld lässt sich jedes andere wählen; die neuen Seiten
+     oberste Ebene (Menü „⋯“ neben „Neue Seite“ über dem Baum) – im Auswahlfeld lässt sich jedes andere wählen; die neuen Seiten
      erben Freigabe und Lesebeschränkung des Ziels – der Satz unter der Auswahl sagt das vorher. Das Ergebnis steht im
      selben Dialog. */
   function importDialog(p) {
@@ -1811,6 +1837,9 @@
     extern:    ico('<path d="M9.5 2.5h4v4M13.5 2.5L7.5 8.5M11.5 9.5V13H3V4.5h3.5"/>'),
     /* Sprechblase statt „💬“ im Kopf: keine Emoji in Knöpfen (designsprache.md, nach_merge_liste Punkt 13). */
     kommentar: ico('<path d="M2.5 3.5h11v7.5H7l-3 2.5V11H2.5z"/>'),
+    /* „Angaben zur Seite“: ein Blatt mit Eselsohr und Zeilen – vorher ein kursives „i“, das dem Info-„i“ (S.info, eine
+       Erklärung) glich; der Knopf öffnet aber eine Leiste mit Angaben (Auftrag „letzte offene Punkte“, 27.10.2026). */
+    seite:     ico('<path d="M4 1.5h5.5l2.5 2.5v10.5H4z"/><path d="M9.5 1.5V4H12M6 7h4M6 9.5h4M6 12h2.5"/>'),
     teilen:    ico('<circle cx="11.8" cy="3.7" r="1.9"/><circle cx="11.8" cy="12.3" r="1.9"/>'
                  + '<circle cx="4.2" cy="8" r="1.9"/><path d="M5.85 7.07l4.3-2.44M5.85 8.93l4.3 2.44"/>'),
     zurueck:   ico('<path d="M3 8h7a3.5 3.5 0 010 7H7M6 5L3 8l3 3"/>'),
@@ -5208,8 +5237,7 @@
      Start
      ====================================================================== */
   $("#btn-new-page").addEventListener("click", () => { side.classList.remove("open"); if (leaveEditor()) openEditor({ parent_id: state.current ? state.current.id : null }); });
-  $("#btn-trash").addEventListener("click", trashDialog);
-  if ($("#btn-import")) $("#btn-import").addEventListener("click", () => { side.classList.remove("open"); importDialog(null); });
+  $("#btn-baum-mehr").addEventListener("click", (e) => baumMenu(e.currentTarget));
 
   /* Sidebar-Breite ziehen und merken */
   (function () {
