@@ -204,15 +204,9 @@ def _rueckrufe(item):
 
 
 def _maengel(item):
-    """{Kennung: (Name des Melders, Beschreibung)} der Meldungen am Artikel, deren Inhalt das Konto sehen darf – wie in
-    der Oberfläche (mangel.darf_inhalt; bestand._melder_verbergen): Prüfer und Materialwart alle, sonst nur die eigenen.
-    Der Name ist der beim Melden gespeicherte – er bleibt, auch wenn das Konto später gelöscht wird (F3)."""
+    """Meldungen, deren Inhalt das Konto sehen darf – wie in der Oberfläche (mangel.sichtbare_inhalte)."""
     from . import mangel
-    alle = mangel.darf_inhalt(item)
-    return {r["id"]: (r["reporter_name"], r["description"])
-            for r in db.query("SELECT id, reporter_id, reporter_name, description FROM mat_defect_report WHERE item_id = ?",
-                              (item["id"],))
-            if alle or mangel.eigen(r)}
+    return mangel.sichtbare_inhalte(item)
 
 
 def daten(iid):

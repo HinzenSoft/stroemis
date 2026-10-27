@@ -1057,6 +1057,8 @@ def artikel_json(i, voll=False):
         out["maengel"] = mangel.fuer_artikel(i, inhalt)
         if out["journal"] and not inhalt:
             _melder_verbergen(out["journal"], i["id"])
+        if out["journal"]:
+            _mangel_beschreiben(out["journal"], i)
         out["mangel_nur_gemeldet"] = mangel.nur_gemeldet(i["id"])
         # Aussondern nur durch den Materialwart nach einer Prüfung (Schritt 28): die Empfehlung des Prüfers (für alle, die
         # den Artikel sehen) und – für den Materialwart – ob er jetzt aussondern darf und sonst warum nicht.
@@ -1093,6 +1095,23 @@ def _melder_verbergen(eintraege, iid):
     for e in eintraege:
         if e["action"] == "mangel_gemeldet" and (e.get("nachher") or {}).get("mangel") not in eigene:
             e["user_name"] = PERSON
+
+
+def _mangel_beschreiben(eintraege, item):
+    """Bei „Mangel gemeldet“ im Verlauf die Beschreibung der Meldung als Feld „mangelbeschreibung“ – wie im Lebenslauf
+    nur, wo das Konto den Inhalt sehen darf (mangel.sichtbare_inhalte: Prüfer, Materialwart, Verwaltung, eigene
+    Meldung). Gelesen aus der unveränderlichen Meldung; nur die Antwort bekommt das Feld, das Journal bleibt, wie es ist
+    (Wunsch vom 27.10.2026)."""
+    from . import mangel
+    sichtbar = None
+    for e in eintraege:
+        if e["action"] != "mangel_gemeldet" or e["entity"] != "item":
+            continue
+        if sichtbar is None:
+            sichtbar = mangel.sichtbare_inhalte(item)
+        meldung = sichtbar.get((e.get("nachher") or {}).get("mangel"))
+        if meldung:
+            e["nachher"] = dict(e.get("nachher") or {}, mangelbeschreibung=meldung[1])
 
 
 def _literale(ausdruck):

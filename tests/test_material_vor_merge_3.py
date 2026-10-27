@@ -15,6 +15,8 @@ python tests/test_material_vor_merge_3.py  oder  pytest tests/test_material_vor_
   V9   Eine graue Linie unter den Reitern (die klebende Reiterregel gilt nur den Reitern im Dialog).
   V11  Telefon quer: Die Reiter im Dialog kleben nicht.
   V13  Nebentext auf rotem Grund in den Riegenkarten in Anthrazit.
+Nachtrag (Entscheidungen des Nutzers 26./27.10.2026): V4 Nummernsuche am Telefon zu, Reiter in eigener Zeile; V7 Sperrgrund
+im Mangel-Banner; V10 Hilfetexte höchstens rund 120 Zeichen (test_material_textbreite); Mangelbeschreibung im Verlauf.
 
 Die Browserproben (Messungen der Tippflächen, Zurück/Vor, Fotos) stehen im Bericht; hier die Server-Seite und die
 Stellen im Code, an denen die Lösungen hängen. Alle Namen und Daten sind Platzhalter."""
@@ -25,7 +27,8 @@ import tempfile
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from test_material import umgebung  # noqa: E402
+from test_material import freigeben, umgebung  # noqa: E402
+from test_material_meine_psa import aufbau, melden, post_mangel  # noqa: E402
 
 WURZEL = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -126,6 +129,18 @@ def test_materialablage_statisch():
     assert ".c-tabs.mat-reiter { position: sticky; top: -18px;" in css
     assert not re.search(r"^\.mat-reiter \{ position: sticky", css, re.M)
     assert "@media (max-height: 500px) { .c-tabs.mat-reiter { position: static; } }" in css
+    # Nachtrag V4: Nummernsuche am Telefon zu (nur mit Suchbegriff offen); passen die Reiter nicht neben „☰“ und Lupe,
+    # bekommen sie eine eigene Zeile.
+    assert 'if (matNav && sucheForm && $("input", sucheForm).value) matNav.classList.add("suche-offen");' in js
+    assert '["dashboard", "bestand", "suche"].includes(ANSICHT)' not in js
+    for regel in (".mat-nav.enger .mat-lupe { order: 2; margin-left: auto; }",
+                  ".mat-nav.enger .mat-reiter { order: 3; flex: 1 1 100%; }", ".mat-nav.enger .mat-suche { order: 4; }"):
+        assert regel in css, regel
+    # Nachtrag V7: anderer Sperrgrund plus offene Mangelmeldung – eine Zeile im (ersten) Mangel-Banner, kein GESPERRT-Banner.
+    assert "const sperreImMangel = a.status === \"gesperrt\" && !sperreDurchMangel && offeneMaengel.length > 0;" in js
+    assert '${a.status === "gesperrt" && !sperreDurchMangel && !sperreImMangel ? `<p class="mat-banner s-gesperrt">' in js
+    assert 'offeneMaengel.map((m, i) => mangelBanner(m, sperreImMangel && i === 0 ? sperrText || "" : null))' in js
+    assert '<p class="mat-mangel-sperre"><strong>Außerdem gesperrt</strong>${sperre ? `: ${esc(sperre)}` : ""}.</p>' in js
     print("Materialablage (statisch) bestanden.")
 
 
@@ -167,7 +182,42 @@ def test_uebrige_module_statisch():
     print("Übrige Module (statisch) bestanden.")
 
 
+def test_mangelbeschreibung_im_verlauf():
+    """„Mangel gemeldet“ im Verlauf am Artikel trägt die Beschreibung (Feld „mangelbeschreibung“) – wie der Lebenslauf
+    nur für Materialwart, Prüfer, Verwaltung und die eigene Meldung; Leser sonst „(Person)“ ohne Text. Gelesen aus der
+    Meldung, das gespeicherte Journal bleibt unverändert."""
+    with post_mangel(), tempfile.TemporaryDirectory() as tmp:
+        t = aufbau(tmp)
+        a1 = t.art[0]
+        f, p, leser = t.k["fuehrung"], t.k["pruefer"], t.mitglied
+        freigeben(t.adm, t.gid, t.mitglied_id, "lesen")
+        assert melden(t.w, a1, "Platzhalter Mangel vom Materialwart").status_code == 201
+        assert melden(f, a1, 'Platzhalter <b>vom Leser</b> mit "Zeichen"').status_code == 201
+
+        def verlauf(c):
+            r = c.get(f"/api/material/artikel/{a1}")
+            assert r.status_code == 200, r.status_code
+            return [e for e in r.json["artikel"]["journal"] if e["action"] == "mangel_gemeldet"]
+        for c in (t.w, p, t.k["katalog"], t.adm):                    # Materialwart, Prüfer, Material-/Plattform-Verwaltung
+            texte = sorted(e["nachher"].get("mangelbeschreibung", "") for e in verlauf(c))
+            assert texte == ['Platzhalter <b>vom Leser</b> mit "Zeichen"', "Platzhalter Mangel vom Materialwart"], texte
+        # Leser ohne eigene Meldung: weder Text noch Name.
+        e = verlauf(leser)
+        assert len(e) == 2 and all("mangelbeschreibung" not in x["nachher"] and x["user_name"] == "(Person)" for x in e), e
+        # Leser mit eigener Meldung: nur die eigene mit Text.
+        e = verlauf(f)
+        assert sorted(x["nachher"].get("mangelbeschreibung", "") for x in e) == ["", 'Platzhalter <b>vom Leser</b> mit "Zeichen"'], e
+        assert [x["user_name"] for x in e if "mangelbeschreibung" not in x["nachher"]] == ["(Person)"], e
+        # Das gespeicherte Journal kennt das Feld nicht.
+        with t.app.app_context():
+            from app import db
+            roh = [r["after_json"] for r in db.query("SELECT after_json FROM mat_audit WHERE action = 'mangel_gemeldet'")]
+        assert len(roh) == 2 and not any("mangelbeschreibung" in x or "Mangel vom" in x or "vom Leser" in x for x in roh), roh
+    print("Mangelbeschreibung im Verlauf bestanden.")
+
+
 if __name__ == "__main__":
+    test_mangelbeschreibung_im_verlauf()
     test_seitentitel_vom_server()
     test_materialablage_statisch()
     test_uebrige_module_statisch()

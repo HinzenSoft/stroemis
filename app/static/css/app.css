@@ -278,6 +278,9 @@ input:focus, select:focus, textarea:focus { border-color: var(--anthrazit); outl
 /* Hilfe der Leitstelle in Absätzen und einer Liste je Stufe (admin.html). */
 .leitstelle-hilfe p { margin: 0 0 6px; }
 .leitstelle-hilfe ul { margin: 0 0 6px; padding-left: 1.2em; }
+/* Hilfetexte der Leitstelle höchstens rund 120 Zeichen je Zeile (wie die der Materialablage, Entscheidung des Nutzers
+   vom 27.10.2026, V10; 100ch sind gemessen rund 120 Zeichen – material.css). */
+.leitstelle-hilfe .accordion-body, #bereich-nutzer > p.help, #bereich-einstellungen > p.help { max-width: 100ch; }
 .error { color: var(--rot); font-weight: 600; margin: 10px 0; }
 .notice { background: var(--grau-hell); border-left: 4px solid var(--gelb); padding: 10px 12px; margin: 12px 0; }
 .notice a { color: var(--rot-auf-flaeche); }

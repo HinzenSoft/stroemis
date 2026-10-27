@@ -132,6 +132,19 @@ def eigen(r, user=None):
     return bool(user and r["reporter_id"] is not None and r["reporter_id"] == user["id"])
 
 
+def sichtbare_inhalte(item):
+    """{Kennung: (Name des Melders, Beschreibung)} der Meldungen am Artikel, deren Inhalt das Konto sehen darf: Prüfer und
+    Materialwart alle (darf_inhalt), sonst nur die eigenen. Der Name ist der beim Melden gespeicherte – er bleibt, auch
+    wenn das Konto später gelöscht wird (F3). Für den Lebenslauf und den Verlauf am Artikel (bestand.artikel): Dort steht
+    bei „Mangel gemeldet“ die Beschreibung, gelesen aus der unveränderlichen Meldung – das Journal selbst bleibt, wie es
+    ist (Nachtrag vor dem Merge, Runde 3, Wunsch vom 27.10.2026)."""
+    alle = darf_inhalt(item)
+    return {r["id"]: (r["reporter_name"], r["description"])
+            for r in db.query("SELECT id, reporter_id, reporter_name, description FROM mat_defect_report WHERE item_id = ?",
+                              (item["id"],))
+            if alle or eigen(r)}
+
+
 def _art(kind):
     return "aussonderung" if kind == "aussonderung" else "freipruefung"
 

@@ -322,7 +322,7 @@
     liste_inventarnummer: "bisherige Inventarnummer", liste_zuletzt_geprueft: "zuletzt geprüft laut Liste",
     liste_naechste_pruefung: "nächste Prüfung laut Liste", seite: "Seite der Strömipedia Nr.",
     // Phase 3 · Lieferung 1: Mangelmeldung
-    mangel: "Mangelmeldung Nr.",
+    mangel: "Mangelmeldung Nr.", mangelbeschreibung: "Mangelbeschreibung",
     // Änderungsanträge an festen Stammdaten (Entscheidungen vom 21.10.2026)
     antrag: "Änderungsantrag Nr.", begruendung: "Begründung", beantragt_von: "beantragt von", anmerkung: "Anmerkung",
     ablehnung: "Begründung der Ablehnung", feld: "Feld",
@@ -572,16 +572,16 @@
   /* Modulnavigation (Lieferung 5): Passen „☰ Ordner“, die Reiter und das Suchfeld nicht in eine Zeile, stand die
      Navigation am Telefon in drei Zeilen – über 200 px, bevor nach einem QR-Scan die Inventarnummer kam. Dann wird sie
      einzeilig (.eng): Die Reiter rollen seitlich (der Rand blendet aus, solange dort noch einer steht, der aktive
-     wird ins Bild gerollt), die Nummernsuche wartet hinter der Lupe und öffnet als eigene Zeile darunter. Auf der
-     Übersicht, im Bestand und auf der Trefferseite steht sie gleich offen – dort ist sie der Einstieg. Reicht der
-     Platz auch so nicht, zeigt „☰“ nur noch das Zeichen, und die Reiter rücken zusammen (.enger). */
+     wird ins Bild gerollt), die Nummernsuche wartet hinter der Lupe und öffnet als eigene Zeile darunter – auch auf der
+     Übersicht und im Bestand (Entscheidung des Nutzers, Nachtrag V4 vor dem Merge: „am Telefon zu, hinter der Lupe“;
+     bis dahin stand sie dort gleich offen). Offen steht sie nur, wenn sie schon einen Begriff trägt – auf der
+     Trefferseite sähe man sonst nicht, wonach gesucht wurde. Am Rechner (eine Zeile) steht das Feld immer da. Reicht der
+     Platz auch so nicht, zeigt „☰“ nur noch das Zeichen, und die Reiter bekommen eine eigene Zeile (.enger, material.css). */
   const matNav = $(".mat-nav");
   const reiter = $(".mat-reiter");
   const lupe = $("#mat-lupe");
   const sucheForm = $(".mat-nav .mat-suche");
-  if (matNav && sucheForm && (["dashboard", "bestand", "suche"].includes(ANSICHT) || $("input", sucheForm).value)) {
-    matNav.classList.add("suche-offen");
-  }
+  if (matNav && sucheForm && $("input", sucheForm).value) matNav.classList.add("suche-offen");
   function rollHinweis() {
     if (!reiter) return;
     const rest = reiter.scrollWidth - reiter.clientWidth - reiter.scrollLeft;
@@ -2719,14 +2719,18 @@
     // anderen Sperrgrund bleibt er; die Marke „gesperrt“ im Kopf bleibt immer.
     const offeneMaengel = maengel.filter((m) => m.offen);
     const sperreDurchMangel = /^Mangel gemeldet am /.test(a.lock_reason || "") && offeneMaengel.length > 0;
+    // Gesperrt aus einem anderen Grund (Prüfung, Verlust …) UND eine offene Mangelmeldung: Statt zweier gleich großer roter
+    // Kästen steht nur der Mangel-Banner, der Sperrgrund als Zeile darin – im ersten, wenn es mehrere gibt (Entscheidung
+    // des Nutzers, Nachtrag V7 vor dem Merge: „zusammenlegen“).
+    const sperreImMangel = a.status === "gesperrt" && !sperreDurchMangel && offeneMaengel.length > 0;
     const zuordnung = darf.grund ? zeile("Zugeordnet an", `${zu ? `${esc(zu.name)}${zu.gliederung ? ` <span class="muted">· ${esc(zu.gliederung)}</span>` : ""}${zu.aktiv ? "" : ' <span class="muted">(deaktiviert)</span>'}`
       : '<span class="muted">–</span>'}${zuKnoepfe}`) : "";
     seitenTitel(a.inventory_no);
     inhalt.innerHTML = `${quittungHtml()}${a.demo ? `<p class="mat-demo-banner">${DEMO_ARTIKEL}</p>` : ""}
       ${a.status === "ausgesondert" ? `<p class="mat-banner s-ausgesondert">AUSGESONDERT – dieser Artikel ist außer Dienst und darf nicht mehr verwendet werden.</p>` : ""}
-      ${a.status === "gesperrt" && !sperreDurchMangel ? `<p class="mat-banner s-gesperrt">GESPERRT${sperrText ? ` – ${esc(sperrText)}` : ""}. Nicht verwenden, bis eine Freiprüfung ihn freigibt.</p>` : ""}
+      ${a.status === "gesperrt" && !sperreDurchMangel && !sperreImMangel ? `<p class="mat-banner s-gesperrt">GESPERRT${sperrText ? ` – ${esc(sperrText)}` : ""}. Nicht verwenden, bis eine Freiprüfung ihn freigibt.</p>` : ""}
       ${empf ? `<p class="notice mat-empfehlung"><strong>Aussonderung empfohlen</strong> – ${esc(empf.pruefer || "Prüfer")} am ${esc(fmtTag(empf.datum))} (<a href="/materialablage/pruefung/${Number(empf.pruefung)}">${empf.protokoll_id ? `Protokoll ${esc(empf.protokoll_id)}` : "Prüfung ansehen"}</a>)${empf.grund ? `: ${esc(empf.grund)}` : ""}. Aussondern kann der Materialwart.</p>` : ""}
-      ${offeneMaengel.map(mangelBanner).join("")}
+      ${offeneMaengel.map((m, i) => mangelBanner(m, sperreImMangel && i === 0 ? sperrText || "" : null)).join("")}
       ${a.status === "lebensdauer" ? `<p class="mat-banner s-lebensdauer">LEBENSDAUER ERREICHT – nicht mehr verwenden, prüfen lassen und aussondern.</p>` : ""}
       ${a.status === "neu" ? '<p class="mat-banner s-neu">NEU – die Eingangsprüfung steht aus. Bis dahin nicht einsetzen.</p>' : ""}
       ${rueckrufBanner(a)}
@@ -7613,9 +7617,11 @@
   // Die erledigende Freiprüfung wurde später berichtigt und gibt nicht mehr frei – die Meldung ist wieder offen.
   const wiederOffen = (m) => (m.wieder_offen ? `<p class="mat-mangel-zeile mat-mangel-wieder"><a href="/materialablage/pruefung/${Number(m.wieder_offen.berichtigung)}">Freiprüfung später berichtigt</a> (jetzt: ${esc(ERGEBNIS[m.wieder_offen.ergebnis] || m.wieder_offen.ergebnis)}) – die Meldung ist wieder offen, die nächste Freiprüfung hakt sie ab.</p>` : "");
 
-  function mangelBanner(m) {
+  // sperre: Sperrgrund aus einem anderen Grund als dem Mangel (Text, auch leer) – dann steht er als Zeile darin; null: nichts.
+  function mangelBanner(m, sperre) {
     return `<div class="mat-banner mat-mangel-banner" role="note">
       <p class="mat-mangel-titel">MANGEL GEMELDET am ${esc(tagZeit(m.created_at))}${m.melder ? ` · von ${esc(m.melder)}` : ""}</p>
+      ${sperre === null || sperre === undefined ? "" : `<p class="mat-mangel-sperre"><strong>Außerdem gesperrt</strong>${sperre ? `: ${esc(sperre)}` : ""}.</p>`}
       ${mangelText(m, "mat-text mat-mangel-text")}
       ${mangelFotos(m, `Mangel vom ${S.fmtDate(m.created_at)}`)}
       ${wiederOffen(m)}

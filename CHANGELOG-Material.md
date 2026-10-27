@@ -44,7 +44,7 @@ Geschichte stehen. Schemaversion nach der Nachbesserung vor dem Merge: 30.
 | Nachbesserung vor dem Merge – übrige Module | Leitstelle: Rechte-Felder im Nutzerdialog (F1), Fokus in langen Dialogen; Strömipedia: ein Verlaufseintrag je Link (N1), Emoji-Raster mit einem Tab-Stopp (N4), Rollennamen in Meldungen (N5), Schrägstrich am Adressende und Kleinigkeiten (N6), Export → Import gleichnamiger Geschwister | gebaut 26.10.2026 (kein Schemaschritt), auf dev (vor dem Merge geprüft) |
 | Lebenslauf frisch, Melder und Mangelbeschreibung | Jeder Abruf eines Lebenslaufs (und der übrigen Dateien auf Abruf) mit eigener Adresse und Uhrzeit im Namen – gegen die alte Datei auf Android-Telefonen; „Mangel gemeldet“ im Lebenslauf mit Name und Beschreibung für Prüfer, Materialwart und den Melder selbst | gebaut 26.10.2026, bestätigt wie gebaut (Nutzer 26.10.2026), auf dev (vor dem Merge geprüft) |
 | Nachbesserung vor dem Merge, Runde 2 | Rückruf: nur eine Prüfung, deren Entwurf nach Rückruf bzw. Antrag begann, erledigt ihn (N-A1); „Bald fällig“ aus der `.env` nur 0–365, sonst Warnung und Vorgabe 30; README zur Inbetriebnahme (Prüfformulare neu anlegen, Kontrollen) | gebaut 26.10.2026 (kein Schemaschritt), zur Freigabe |
-| Nachbesserung vor dem Merge, Runde 3 | Tippflächen Brotkrumen und „Deine Meldungen“ (B-1, B-2); Katalog am Telefon kompakt, Liste nach der Kategoriewahl oben, Zurück an dieselbe Stelle (V1, V3); Seitentitel je Ansicht in allen Modulen (V2); Leitstelle: Hilfe zugeklappt, Zeilenmenü, E-Mail-Umbruch, Reiter als Linie (V5); Ankerplätze „+ Album“ (V6); „☰“ nicht vorgelesen (V8); eine Linie unter den Reitern (V9); Dialog-Reiter quer (V11); Kontrast in den Riegenkarten (V13) | gebaut 26.10.2026 (kein Schemaschritt), zur Freigabe |
+| Nachbesserung vor dem Merge, Runde 3 | Tippflächen Brotkrumen und „Deine Meldungen“ (B-1, B-2); Katalog am Telefon kompakt, Liste nach der Kategoriewahl oben, Zurück an dieselbe Stelle (V1, V3); Seitentitel je Ansicht in allen Modulen (V2); Leitstelle: Hilfe zugeklappt, Zeilenmenü, E-Mail-Umbruch, Reiter als Linie (V5); Ankerplätze „+ Album“ (V6); „☰“ nicht vorgelesen (V8); eine Linie unter den Reitern (V9); Dialog-Reiter quer (V11); Kontrast in den Riegenkarten (V13); Nachtrag: Nummernsuche am Telefon zu, Reiter in eigener Zeile (V4), Sperrgrund im Mangel-Banner (V7), Hinweis- und Hilfetexte höchstens rund 120 Zeichen je Zeile (V10), Mangelbeschreibung im Verlauf am Artikel | gebaut 26./27.10.2026 (kein Schemaschritt), zur Freigabe |
 
 ## Abgleich mit dem Bestand (vor Lieferung 1)
 
@@ -4183,8 +4183,8 @@ Danach liefen die ganze Suite (`st-test`) grün, `st-py`, `st-js` und `st-css` o
 Auftrag `planung/material-phase4/auftrag_nachbesserung_vor_merge_3.md` nach der Browserprüfung des Stands vor-merge
 2122b62 (`bericht_pruefung_vm_browser.md`, Abschnitt 1 B-1/B-2 und Abschnitt 3). Wunsch des Nutzers: „Jetzt schon
 angehen“. Nur Oberfläche, kein Schemaschritt (Schema bleibt 30), keine Änderung der Schnittstelle. Zweig `vm-3`.
-Nicht umgesetzt: V10 (volle Breite der Hilfetexte ist Entscheidung des Nutzers vom 25.10.2026), V12 (Katalogdaten),
-V14 (nur Hinweis); V4 und V7 warten auf Entscheidungen des Nutzers.
+Nicht umgesetzt: V12 (Katalogdaten), V14 (nur Hinweis). V4, V7 und V10 kamen mit den Entscheidungen des Nutzers als
+Nachtrag (unten).
 
 - **B-1 Brotkrumen:** Unter Touch ist jedes Glied mindestens 44 × 44 px (vorher „Gurte“ 37 × 44 px). Der Schrägstrich
   hängt am folgenden Glied (`pfadHtml` in `material.js`, `.mat-pfad-glied`) und bleibt beim Umbruch nicht mehr allein am
@@ -4233,6 +4233,40 @@ V14 (nur Hinweis); V4 und V7 warten auf Entscheidungen des Nutzers.
   statische Prüfungen der Stellen in JS und CSS; `test_umbenennung.py` und `test_material_mangel.py` auf den neuen Titel
   angepasst.
 
+### Nachtrag: Entscheidungen des Nutzers zu V4, V7 und V10 (26./27.10.2026)
+
+- **V4 „Am Telefon zu, hinter der Lupe“:** Die Nummernsuche steht, wo die Modulnavigation eng wird (Telefon, Fold,
+  Tablet hochkant – nach der Breite, nicht nach Touch), auch auf Übersicht und Bestand zu; die Lupe öffnet sie. Offen
+  steht sie nur, wenn das Feld schon einen Begriff trägt – auf der Trefferseite, damit man sieht, wonach gesucht wurde
+  (sonst stünde dort nur die Liste ohne den Suchbegriff). Am Rechner steht das Feld wie bisher in der Zeile. Weil die
+  Reiter auch bei geschlossener Suche nicht neben „☰“ und Lupe passten (360/390 px: „Bestand“ und „Katalog“
+  angeschnitten, die Zeile rollte – die offene Suche stand ohnehin in einer eigenen Zeile), bekommen sie in der engsten
+  Stufe (`.enger`) eine eigene Zeile über die ganze Breite: oben „☰“ links und die Lupe rechts, darunter die vier Reiter
+  (Polster 6 statt 8 px), darunter die geöffnete Suche. Gemessen bei 360 und 390 px: alle vier sichtbar (78, 84, 69,
+  65 × 44 px), kein seitliches Rollen; Navigation 101 px hoch (vorher 105 mit offener Suche). Das gilt auch für die
+  Katalog-Produktseite: „☰“ verdeckt „Übersicht“ nicht mehr.
+- **V7 „Zusammenlegen“:** Ist ein Artikel aus einem anderen Grund gesperrt (Prüfung, Verlust …) und liegt zugleich eine
+  offene Mangelmeldung vor, steht nur der rote Mangel-Banner, darin unter der Titelzeile „Außerdem gesperrt: <Grund>.“;
+  der eigene GESPERRT-Banner entfällt. Bei mehreren offenen Meldungen bleibt je Meldung ein Banner, die Sperrzeile steht im
+  ersten. Leser ohne Recht auf den Inhalt der Meldung sehen die Sperrzeile ebenso (den Sperrgrund sahen sie schon im
+  bisherigen Banner).
+- **V10 „Setze V10 um“** (löst „volle Inhaltsbreite“ vom 25.10.2026 ab): Hinweis- und Hilfetexte der Materialablage
+  (`.help`, `.notice`, `p.small`, `p.muted`, die Zeile zur Prüfanleitung, Fußsätze des Jahresberichts) und der Leitstelle
+  höchstens `100ch` breit – gemessen rund 120 Zeichen je Zeile; der Kasten darf schmaler sein als Tabellen und Felder
+  darunter. Abweichung vom Auftrag (`120ch`): ch ist die Breite der Ziffer „0“, deutscher Text ist im Schnitt schmaler –
+  mit `120ch` standen am Rechner gemessen rund 145 Zeichen in einer Zeile. Am Telefon und Tablet ändert sich nichts.
+  `tests/test_material_textbreite.py` prüft jetzt genau diese eine Regel.
+- **Mangelbeschreibung im Verlauf** (Wunsch vom 27.10.2026: „Bei Mängelmeldung von Artikeln soll im Journal auch die
+  Beschreibung des Mangels festgehalten werden“): Der Eintrag „Mangel gemeldet“ im Verlauf am Artikel zeigt das Feld
+  „Mangelbeschreibung“ – nach derselben Regel wie der Lebenslauf: Materialwart, Prüfer, Material- und
+  Plattform-Verwaltung bei jeder Meldung, wer nur liest bei der eigenen; sonst „(Person)“ ohne Text. Der Text kommt beim
+  Lesen aus der unveränderlichen Meldung (`mangel.sichtbare_inhalte`, vorher `lebenslauf._maengel`, das sie jetzt
+  nutzt); das gespeicherte Journal bleibt unverändert (Schritt 30). Weitere Stellen mit dem Artikel-Journal: Lebenslauf
+  (hatte die Beschreibung schon), Ordner-Journal und Kontoverlauf der Leitstelle (enthalten keine Einträge
+  „Mangel gemeldet“), Exporte (ohne Journal) – dort nichts zu tun.
+- **Schnittstelle:** `GET /api/material/artikel/<id>`: Einträge `journal[]` mit `action == "mangel_gemeldet"` tragen in
+  `nachher` zusätzlich `mangelbeschreibung` (Text), wenn das Konto den Inhalt der Meldung sehen darf; sonst fehlt das Feld.
+
 ### Bitte bestätigen
 
 1. **Leitstelle, Zeilenmenü:** „Reset-Mail senden“ und „Löschen …“ stehen hinter „Mehr“ (ein Tipp mehr), „Bearbeiten“
@@ -4242,6 +4276,10 @@ V14 (nur Hinweis); V4 und V7 warten auf Entscheidungen des Nutzers.
 3. **Katalog:** Dokumente der Kategorie unter 1024 px zugeklappt, am Rechner offen; die Zahl steht im Aufklapper.
 4. **Ankerplätze am Telefon:** Die Werkzeuge stehen in zwei Zeilen („+ Album“ in der zweiten) statt in einer rollenden.
 5. **Zurück in den Katalog** stellt auch nach dem Neuladen der Seite die Stelle wieder her (wie der Browser sonst auch).
+6. **V4:** Am Telefon stehen die Reiter in einer eigenen Zeile unter „☰“ und Lupe (statt seitlich zu rollen); auf der
+   Trefferseite steht die Suche mit dem Begriff offen.
+7. **V7:** Wortlaut „Außerdem gesperrt: <Grund>.“ im Mangel-Banner.
+8. **V10:** `100ch` statt `120ch` (gemessen rund 120 statt 145 Zeichen je Zeile).
 
 ## Nachbesserung vor dem Merge, Runde 2 (26.10.2026)
 
