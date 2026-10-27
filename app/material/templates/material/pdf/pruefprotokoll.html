@@ -18,6 +18,8 @@ table.befunde .krit { padding-left: 1mm; padding-right: 1mm; white-space: nowrap
 table.befunde tr.gruppe td { padding: 3mm 1.5mm 1mm; border-bottom: .8pt solid var(--linie); font-weight: 700;
   color: var(--schwarz); }
 table.befunde tr.gruppe { break-after: avoid; }
+/* Eine Gruppenzeile bleibt mit den ersten zwei Prüfpunkten ihrer Gruppe zusammen (der erste über break-after oben). */
+table.befunde tr.gruppe + tr + tr:not(.gruppe) { break-before: avoid; }
 table.befunde td.nr { text-align: right; }
 table.befunde tr.lang { break-inside: auto; }
 /* Mangel: Nummer als rote Marke, Befund fett – auch schwarz-weiß gedruckt erkennbar */
@@ -63,6 +65,12 @@ table.liste td.befund-mangel, table.liste td.befund-ok, table.liste td.befund-ni
 .foto .unter { margin-top: 1mm; line-height: 1.3; }
 .foto .unter strong { color: var(--schwarz); }
 
+/* Herstellerdokumente: Art und Version untereinander in einer Spalte, breit genug für „Konformitätserklärung“ und
+   „ausgestellt 20.01.2025 (Crolles)“ – umbrochen nur zwischen Wörtern, nie mitten im Wort oder im Datum. */
+table.dokumente col.c-artversion { width: 50mm; }
+table.dokumente col.c-datum { width: 21mm; }
+table.liste td.artversion { hyphens: manual; overflow-wrap: break-word; }
+
 /* Prüfsumme eines Dokuments oder Anhangs: eine eigene Zeile unter dem Titel, in voller Länge. In einer
    schmalen Spalte bräche sie um, und beim Kopieren (pdftotext) geriete der Text der Nachbarspalte
    zwischen ihre beiden Hälften. */
@@ -100,7 +108,19 @@ table.liste td.befund-mangel, table.liste td.befund-ok, table.liste td.befund-ni
 <section>
   <h2>Befunde</h2>
   {%- if gruppen %}
-  <table class="liste befunde">
+  {#- Höhe der Tabelle grob geschätzt (für „kurz“): je Zeile die längere der beiden Textspalten – Prüfpunkt rund 44
+      Zeichen je Zeile, Wert / Bemerkung rund 28 – zu 4,3 mm, dazu 2,6 mm Rand; eine Gruppenzeile 9 mm. #}
+  {%- set mass = namespace(mm=0) %}
+  {%- for g in gruppen %}
+    {%- if g.name and g.punkte %}{% set mass.mm = mass.mm + 9 %}{% endif %}
+    {%- for p in g.punkte %}
+      {%- set rechts = ([p.wert, p.notiz] + (p.nummern or [])) | select | join("\n") %}
+      {%- set zeilen = [(p.text or "") | length // 44 + 1 + (p.text or "").count("\n"),
+                        rechts | length // 28 + 1 + rechts.count("\n") + (1 if p.foto_nr else 0) + (3 if p.unterschrift else 0)] | max %}
+      {%- set mass.mm = mass.mm + zeilen * 4.3 + 2.6 %}
+    {%- endfor %}
+  {%- endfor %}
+  <table class="liste befunde{{ kurz(mass.mm) }}">
     <colgroup><col class="c-nr"><col><col class="c-krit"><col class="c-soll"><col class="c-befund"><col class="c-wert"></colgroup>
     <thead><tr><th class="zahl">Nr.</th><th>Prüfpunkt</th><th class="krit">kritisch</th><th>Soll</th><th>Befund</th><th>Wert / Bemerkung</th></tr></thead>
     <tbody>
@@ -109,11 +129,13 @@ table.liste td.befund-mangel, table.liste td.befund-ok, table.liste td.befund-ni
       <tr class="gruppe"><td colspan="6">{{ g.name }}</td></tr>
       {%- endif %}
       {%- for p in g.punkte %}
+      {#- Ein Prüfpunkt mit mehr als 200 Zeichen Text (rund fünf Zeilen) ist schon für sich kein Rest am Seitenende: Er
+          bleibt aus den Ketten heraus (hoch), sonst rückte die Tabelle wegen vier hoher Zeilen ganz auf die nächste Seite. #}
       {#- Eine Zeile, die höher als eine Seite werden kann (Wert und Bemerkung zusammen sehr lang oder sehr viele
           Zeilen), darf umbrechen – sonst schöbe WeasyPrint sie vergeblich auf die nächste Seite. #}
       {%- set lang = ((p.wert or "") | length) + ((p.notiz or "") | length) > 1200
                      or ((p.wert or "") ~ (p.notiz or "")).count("\n") > 20 %}
-      <tr class="befund{{ ' mangel' if p.befund == 'mangel' }}{{ ' lang' if lang }}">
+      <tr class="befund{{ ' mangel' if p.befund == 'mangel' }}{{ ' lang' if lang }}{{ hoch([p.text, p.wert, p.notiz] + (p.nummern or []), 200) }}">
         <td class="nr"><span class="nr-marke">{{ p.nr }}</span></td>
         <td><span class="text">{{ p.text }}</span></td>
         <td class="krit">{% if p.kritisch %}<span class="kritisch">kritisch</span>{% endif %}</td>
@@ -144,6 +166,10 @@ table.liste td.befund-mangel, table.liste td.befund-ok, table.liste td.befund-ni
   {%- endif %}
 </section>
 
+
+{#- Der Abschluss – Ergebnis, Bemerkung, Herstellerdokumente, Anhänge und Unterschrift – beginnt immer auf einer neuen
+    Seite und bleibt zusammen, soweit er auf eine Seite passt (Wunsch des Nutzers vom 27.10.2026). #}
+<div class="abschluss neue-seite">
 <section>
   <h2>Ergebnis</h2>
   <div class="ergebnis ergebnis-{{ pruefung.ergebnis }}">
@@ -166,41 +192,20 @@ table.liste td.befund-mangel, table.liste td.befund-ok, table.liste td.befund-ni
   {%- endif %}
 </section>
 
-{%- if fotos %}
-{#- Fotos gibt es zu Mängeln wie zu Prüfpunkten der Art „Foto“, die in Ordnung sind – die Bildunterschrift nennt
-    deshalb den Befund des Punkts. #}
-{%- set punkt_nach_nr = {} %}
-{%- for g in gruppen %}{% for p in g.punkte %}{% set _ = punkt_nach_nr.update({p.nr: p}) %}{% endfor %}{% endfor %}
-<section>
-  <h2>Fotos zu den Prüfpunkten</h2>
-  <div class="fotos">
-    {%- for f in fotos %}
-    {%- set fp = punkt_nach_nr.get(f.punkt_nr) %}
-    <div class="foto">
-      <div class="rahmen"><img src="{{ f.bild }}" alt="Foto {{ f.nr }}"></div>
-      <div class="unter"><strong>Foto {{ f.nr }}</strong> – Prüfpunkt {{ f.punkt_nr }}
-        {%- if fp and fp.befund_text %} (<span class="befund-{{ fp.befund }}">{{ fp.befund_text }}</span>){% endif %}: <span class="text">{{ f.punkt }}</span>
-        {%- if f.notiz %}<div class="text hinweis">{{ f.notiz }}</div>{% endif %}</div>
-    </div>
-    {%- endfor %}
-  </div>
-</section>
-{%- endif %}
 
 <section>
   <h2>Herstellerdokumente am Prüftag</h2>
   {%- if dokumente %}
-  <table class="liste">
-    <colgroup><col><col style="width: 30mm"><col style="width: 16mm"><col style="width: 19mm"></colgroup>
-    <thead><tr><th>Dokument</th><th>Art</th><th>Version</th><th>gültig ab</th></tr></thead>
+  <table class="liste dokumente{{ kurz(dokumente | length * 13) }}">
+    <colgroup><col><col class="c-artversion"><col class="c-datum"></colgroup>
+    <thead><tr><th>Dokument</th><th>Art · Version</th><th>gültig ab</th></tr></thead>
     <tbody>
     {%- for d in dokumente %}
       <tr>
         <td><div class="wert">{{ d.titel }}</div><div class="hinweis">aus {{ d.herkunft }}</div>
           {%- if d.sha256 %}<div class="pruefsumme"><span class="lbl">SHA-256</span> <span class="hash">{{ d.sha256 }}</span></div>{% endif %}</td>
-        <td>{{ d.art }}</td>
-        <td>{{ d.version }}</td>
-        <td>{{ d.gueltig_ab }}</td>
+        <td class="artversion">{{ d.art }}{% if d.version %}<div class="hinweis">{{ d.version }}</div>{% endif %}</td>
+        <td class="datum">{{ d.gueltig_ab }}</td>
       </tr>
     {%- endfor %}
     </tbody>
@@ -213,7 +218,7 @@ table.liste td.befund-mangel, table.liste td.befund-ok, table.liste td.befund-ni
 {%- if anhaenge %}
 <section>
   <h2>Anhänge</h2>
-  <table class="liste">
+  <table class="liste{{ kurz(anhaenge | length * 13) }}">
     <colgroup><col style="width: 8mm"><col><col style="width: 12mm"><col style="width: 20mm"></colgroup>
     <thead><tr><th class="zahl">Nr.</th><th>Anhang</th><th class="zahl">Seiten</th><th>hinten angefügt</th></tr></thead>
     <tbody>
@@ -237,4 +242,27 @@ table.liste td.befund-mangel, table.liste td.befund-ok, table.liste td.befund-ni
 {%- endif %}
 
 {{ unterschrift_block(unterschrift, dokument) }}
+</div>
+
+{%- if fotos %}
+{#- Fotos gibt es zu Mängeln wie zu Prüfpunkten der Art „Foto“, die in Ordnung sind – die Bildunterschrift nennt
+    deshalb den Befund des Punkts. Sie stehen als Anlage hinter der Unterschrift (seit 27.10.2026, vorher vor den
+    Herstellerdokumenten): Vor dem Abschluss ließen ein, zwei Fotos eine fast leere Seite vor dessen neuer Seite. #}
+{%- set punkt_nach_nr = {} %}
+{%- for g in gruppen %}{% for p in g.punkte %}{% set _ = punkt_nach_nr.update({p.nr: p}) %}{% endfor %}{% endfor %}
+<section>
+  <h2>Fotos zu den Prüfpunkten</h2>
+  <div class="fotos">
+    {%- for f in fotos %}
+    {%- set fp = punkt_nach_nr.get(f.punkt_nr) %}
+    <div class="foto">
+      <div class="rahmen"><img src="{{ f.bild }}" alt="Foto {{ f.nr }}"></div>
+      <div class="unter"><strong>Foto {{ f.nr }}</strong> – Prüfpunkt {{ f.punkt_nr }}
+        {%- if fp and fp.befund_text %} (<span class="befund-{{ fp.befund }}">{{ fp.befund_text }}</span>){% endif %}: <span class="text">{{ f.punkt }}</span>
+        {%- if f.notiz %}<div class="text hinweis">{{ f.notiz }}</div>{% endif %}</div>
+    </div>
+    {%- endfor %}
+  </div>
+</section>
+{%- endif %}
 {% endblock %}

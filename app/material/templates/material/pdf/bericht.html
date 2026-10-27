@@ -36,8 +36,13 @@ table.liste td.datum { white-space: nowrap; }
   color: var(--grau); padding: 0 .8mm; line-height: 1.4; }
 .marke.rot { border-color: var(--rot-dunkel); color: var(--rot-dunkel); }
 .kennzeichen { font-size: 7pt; color: var(--grau); margin-left: 1mm; }
-p.vor-tabelle { break-after: avoid; }
 p.rest { font-size: 7.5pt; color: var(--grau); margin-top: 1mm; }
+/* Zahlentabellen sind kurz: nie geteilt. Der Hinweis auf gekürzte Listen bleibt bei deren letzten Zeilen. Die Listen
+   halten die Regeln für table.liste in basis.html zusammen; je Liste schätzt die Vorlage die Höhe (kurz) mit rund
+   6,5 mm je einzeiliger Zeile. */
+table.zahlen, table.paar { break-inside: avoid; }
+.schluss { break-inside: avoid; }             /* die Hinweise am Ende nie geteilt */
+table.liste + p.rest { break-before: avoid; }
 .schluss { margin-top: 6mm; font-size: 8pt; color: var(--anthrazit); }
 .schluss li { margin-bottom: .6mm; }
 section { break-inside: auto; }
@@ -93,7 +98,7 @@ h2 { break-after: avoid; }
   </td></tr></table>
   {%- if bestand.unterordner %}
   <h3>Je Unterordner (nach Heimat)</h3>
-  <table class="liste">
+  <table class="liste{{ kurz(bestand.unterordner | length * 6.5) }}">
     <colgroup><col><col class="c-zahl"><col class="c-zahl"><col class="c-zahl"><col class="c-zahl"><col class="c-zahl"><col class="c-zahl"><col class="c-zahl"><col class="c-zahl"></colgroup>
     <thead><tr><th>Ordner</th><th class="zahl">Bestand</th><th class="zahl">einsatzbereit</th><th class="zahl">bald fällig</th><th class="zahl">überfällig</th><th class="zahl">neu</th><th class="zahl">gesperrt</th><th class="zahl">Lebensd.</th><th class="zahl">ausges.</th></tr></thead>
     <tbody>
@@ -144,7 +149,7 @@ h2 { break-after: avoid; }
   </table>
   {%- if pruefungen.nicht_geprueft %}
   <p class="hinweis vor-tabelle">Im Jahr nicht geprüft:</p>
-  <table class="liste">
+  <table class="liste{{ kurz(pruefungen.nicht_geprueft | length * 6.5) }}">
     <colgroup><col class="c-nr"><col><col class="c-datum"><col class="c-marke"></colgroup>
     <thead><tr><th>Inventarnummer</th><th>Produkt</th><th>letzte Prüfung</th><th></th></tr></thead>
     <tbody>
@@ -160,11 +165,11 @@ h2 { break-after: avoid; }
 <section>
   <h2>Prüfdurchgänge</h2>
   {%- if durchgaenge %}
-  <table class="liste">
+  <table class="liste{{ kurz(durchgaenge | length * 6.5 + (durchgaenge | selectattr('ausnahmen') | list | length) * 6.5) }}">
     <colgroup><col><col class="c-art"><col class="c-art"><col class="c-zahl"><col class="c-zahl"><col class="c-zahl"><col class="c-zahl"></colgroup>
     <thead><tr><th>Durchgang</th><th>Zeitraum</th><th>Stand · Sammelprotokoll</th><th class="zahl">Artikel</th><th class="zahl">erledigt</th><th class="zahl">ausgen.</th><th class="zahl">nicht gepr.</th></tr></thead>
     {%- for r in durchgaenge %}
-    <tbody>
+    <tbody{{ ' class="hoch"' | safe if r.ausnahmen | length > 20 }}>
       <tr><td>{{ r.titel }}{{ demo_marke(r) }}</td><td>{{ r.zeitraum }}</td>
         <td>{{ r.stand }}{% if r.protokoll_id %} · <span class="mono">{{ r.protokoll_id }}</span>{% endif %}</td>
         <td class="zahl">{{ r.gesamt }}</td><td class="zahl">{{ r.erledigt }}</td><td class="zahl">{{ r.ausgenommen }}</td>
@@ -185,7 +190,7 @@ h2 { break-after: avoid; }
 {%- if pruefer %}
 <section>
   <h2>Prüfer im Jahr {{ kopf.jahr }}</h2>
-  <table class="liste">
+  <table class="liste{{ kurz(pruefer.pruefer | length * 6.5) }}">
     <colgroup><col><col class="c-art"><col class="c-zahl"></colgroup>
     <thead><tr><th>Prüfer</th><th>Urkundennummer</th><th class="zahl">Prüfungen</th></tr></thead>
     <tbody>
@@ -198,7 +203,7 @@ h2 { break-after: avoid; }
   </table>
   {%- if pruefer.aussonderungen_durch %}
   <h3>Aussonderungen durch</h3>
-  <table class="liste">
+  <table class="liste{{ kurz(pruefer.aussonderungen_durch | length * 6.5) }}">
     <colgroup><col><col class="c-zahl"></colgroup>
     <thead><tr><th>Name</th><th class="zahl">Aussonderungen</th></tr></thead>
     <tbody>
@@ -221,12 +226,12 @@ h2 { break-after: avoid; }
     <tr><td class="zahl">{{ sperren.freigegeben }}</td><td class="lbl">wieder freigegeben (Freiprüfung)</td></tr>
   </table>
   {%- if sperren.liste %}
-  <table class="liste">
+  <table class="liste{{ kurz(sperren.liste | length * 6.5 + (sperren.liste | map(attribute='grund') | select | join | length) // 80 * 3.8) }}">
     <colgroup><col class="c-datum"><col class="c-nr"><col class="c-art"><col><col class="c-marke"></colgroup>
     <thead><tr><th>Datum</th><th>Inventarnummer</th><th>Art</th><th>Grund</th><th></th></tr></thead>
     <tbody>
     {%- for s in sperren.liste %}
-      <tr><td class="datum">{{ s.datum }}</td><td class="mono">{{ s.inventarnummer }}</td><td>{{ s.art_text }}</td><td class="text">{{ s.grund }}</td><td>{{ demo_marke(s) }}</td></tr>
+      <tr class="{{ hoch([s.grund]) | trim }}"><td class="datum">{{ s.datum }}</td><td class="mono">{{ s.inventarnummer }}</td><td>{{ s.art_text }}</td><td class="text">{{ s.grund }}</td><td>{{ demo_marke(s) }}</td></tr>
     {%- endfor %}
     </tbody>
   </table>
@@ -243,12 +248,12 @@ h2 { break-after: avoid; }
     {%- endfor %}
   </table>
   {%- if aussonderungen.liste %}
-  <table class="liste">
+  <table class="liste{{ kurz(aussonderungen.liste | length * 6.5 + (aussonderungen.liste | map(attribute='grund') | select | join | length) // 50 * 3.8) }}">
     <colgroup><col class="c-datum"><col class="c-nr"><col><col><col class="c-marke"></colgroup>
     <thead><tr><th>Datum</th><th>Inventarnummer</th><th>Produkt</th><th>Grund{% if kopf.pruefer_nennen %} · durch{% endif %}</th><th></th></tr></thead>
     <tbody>
     {%- for a in aussonderungen.liste %}
-      <tr><td class="datum">{{ a.datum }}</td><td class="mono">{{ a.inventarnummer }}</td><td>{{ a.produkt }}</td>
+      <tr class="{{ hoch([a.grund, a.durch]) | trim }}"><td class="datum">{{ a.datum }}</td><td class="mono">{{ a.inventarnummer }}</td><td>{{ a.produkt }}</td>
         <td class="text">{{ a.grund }}{% if a.durch %} · durch {{ a.durch }}{% endif %}{% if a.protokoll_id %} · <span class="mono">{{ a.protokoll_id }}</span>{% endif %}</td><td>{{ demo_marke(a) }}</td></tr>
     {%- endfor %}
     </tbody>
@@ -267,7 +272,7 @@ h2 { break-after: avoid; }
     <tr><td class="zahl">{{ maengel.offen_stichtag }}</td><td class="lbl">offene Meldungen zum Stichtag (alle Jahre)</td></tr>
   </table>
   {%- if maengel.offen_liste %}
-  <table class="liste">
+  <table class="liste{{ kurz(maengel.offen_liste | length * 6.5) }}">
     <colgroup><col class="c-nr"><col><col class="c-marke"></colgroup>
     <thead><tr><th>Inventarnummer</th><th>gemeldet am</th><th></th></tr></thead>
     <tbody>
@@ -284,11 +289,11 @@ h2 { break-after: avoid; }
   <h2>Rückrufe</h2>
   {%- if rueckrufe %}
   <p class="hinweis vor-tabelle">Rückrufe, die im Jahr angelegt oder beendet wurden oder heute laufen – zu Produkten mit Artikeln im Zweig.</p>
-  <table class="liste">
+  <table class="liste{{ kurz(rueckrufe | length * 14) }}">
     <colgroup><col class="c-art"><col><col class="c-zahl"><col class="c-zahl"></colgroup>
     <thead><tr><th>Angelegt · beendet</th><th>Rückruf</th><th class="zahl">betroffen</th><th class="zahl">offen</th></tr></thead>
     {%- for r in rueckrufe %}
-    <tbody>
+    <tbody{{ ' class="hoch"' | safe if r.artikel | length > 20 }}>
       <tr><td>{{ r.angelegt }}{% if r.beendet %}<br>beendet {{ r.beendet }}{% else %}<br>läuft{% endif %}</td>
         <td><strong>{{ r.titel }}</strong> – {{ r.produkt }} <span class="hinweis">({{ "alle Artikel des Produkts" if r.alle else "nach Seriennummern" }})</span>
           {%- if r.url %}<div class="text">Meldung des Herstellers: <span class="mono">{{ r.url }}</span></div>{% endif %}
@@ -304,8 +309,8 @@ h2 { break-after: avoid; }
 
 <section>
   <h2>Ausblick – zwölf Monate ab {{ kopf.stichtag }}</h2>
-  <p class="hinweis">Jetzt: {{ ausblick.jetzt.ueberfaellig }} überfällig, {{ ausblick.jetzt.neu }} neu (Eingangsprüfung ausstehend), {{ ausblick.jetzt.gesperrt }} gesperrt.</p>
-  <table class="liste">
+  <p class="hinweis vor-tabelle">Jetzt: {{ ausblick.jetzt.ueberfaellig }} überfällig, {{ ausblick.jetzt.neu }} neu (Eingangsprüfung ausstehend), {{ ausblick.jetzt.gesperrt }} gesperrt.</p>
+  <table class="liste{{ kurz(ausblick.monate | length * 6.5) }}">
     <colgroup><col class="c-art"><col class="c-zahl"><col class="c-zahl"><col></colgroup>
     <thead><tr><th>Monat</th><th class="zahl">fällig</th><th class="zahl">Lebensende (textil)</th><th></th></tr></thead>
     <tbody>

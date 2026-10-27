@@ -19,7 +19,8 @@
 .kopf-id .kennung { string-set: kennung content(); }
 
 /* Prüfungen: je Vorgang eine Hauptzeile und darunter eine Zeile über die ganze Breite für Grund, Bemerkung,
-   Verweise und die Prüfsumme der Protokolldatei (in voller Länge, nicht in einer schmalen Spalte umgebrochen). */
+   Verweise und die Prüfsumme der Protokolldatei (in voller Länge, nicht in einer schmalen Spalte umgebrochen). Ein
+   tbody je Vorgang, ebenso je Durchgang – zusammengehalten von den Regeln für table.liste in basis.html. */
 table.vorgaenge col.c-nr { width: 7mm; }
 table.vorgaenge col.c-datum { width: 20mm; }
 table.vorgaenge col.c-art { width: 30mm; }
@@ -27,7 +28,6 @@ table.vorgaenge col.c-ergebnis { width: 25mm; }
 table.vorgaenge col.c-maengel { width: 12mm; }
 table.vorgaenge col.c-naechste { width: 20mm; }
 table.vorgaenge td.datum { white-space: nowrap; }
-table.vorgaenge tbody.vorgang { break-inside: avoid; }
 table.vorgaenge tbody.vorgang tr.haupt td { border-bottom: 0; padding-bottom: .4mm; }
 table.vorgaenge tr.detail td { padding-top: 0; font-size: 8pt; color: var(--anthrazit); }
 table.vorgaenge tr.detail .zeile { margin-top: .5mm; }
@@ -46,7 +46,6 @@ table.vorgaenge tbody.ersetzt tr.haupt td { color: var(--grau); }
 table.runden col.c-ordner { width: 46mm; }
 table.runden col.c-zeit { width: 34mm; }
 table.runden col.c-darin { width: 44mm; }
-table.runden tbody.runde { break-inside: avoid; }
 table.runden tbody.runde tr.haupt td { border-bottom: 0; padding-bottom: .4mm; }
 table.runden tr.detail td { padding-top: 0; font-size: 8pt; }
 table.runden tr.detail .lbl { display: inline; margin-right: 1mm; }
@@ -54,7 +53,6 @@ table.runden tr.detail .lbl { display: inline; margin-right: 1mm; }
 /* Ereignisse aus dem Journal */
 table.ereignisse { font-size: 8pt; }
 table.rueckrufe { font-size: 8.5pt; }
-p.vor-tabelle { break-after: avoid; }        /* Überschrift und Satz nicht allein am Seitenende stehen lassen */
 table.rueckrufe col.c-zeit { width: 33mm; }
 table.rueckrufe .text { white-space: pre-line; overflow-wrap: anywhere; margin: .5mm 0; }
 table.ereignisse col.c-zeit { width: 33mm; }
@@ -91,7 +89,7 @@ table.ereignisse .aenderung .feld { color: var(--grau); }
 
 <section>
   <h2>Bestandteile (laut Katalog)</h2>
-  <table class="liste">
+  <table class="liste{{ kurz(bestandteile | length * 7) }}">
     <thead><tr><th>Bestandteil</th><th>Seriennummern</th></tr></thead>
     <tbody>
     {%- for b in bestandteile %}
@@ -118,11 +116,11 @@ table.ereignisse .aenderung .feld { color: var(--grau); }
 <section>
   <h2>Prüfungen und Aussonderung</h2>
   {%- if pruefungen %}
-  <table class="liste vorgaenge">
+  <table class="liste vorgaenge{{ kurz(pruefungen | length * 15) }}">
     <colgroup><col class="c-nr"><col class="c-datum"><col class="c-art"><col><col class="c-ergebnis"><col class="c-maengel"><col class="c-naechste"></colgroup>
     <thead><tr><th class="zahl">Nr.</th><th>Datum</th><th>Art</th><th>Prüfer bzw. durch</th><th>Ergebnis</th><th class="zahl">Mängel</th><th>Nächste Prüfung</th></tr></thead>
     {%- for x in pruefungen %}
-    <tbody class="vorgang{{ ' ersetzt' if x.berichtigt_durch }}">
+    <tbody class="vorgang{{ ' ersetzt' if x.berichtigt_durch }}{{ hoch([x.grund, x.bemerkung, x.berichtigung_von.grund if x.berichtigung_von]) }}">
       <tr class="haupt">
         <td class="nr">{{ x.nr }}</td>
         <td class="datum">{{ x.datum }}</td>
@@ -161,7 +159,7 @@ table.ereignisse .aenderung .feld { color: var(--grau); }
 <section>
   <h2>Prüfdurchgänge</h2>
   {%- if durchgaenge %}
-  <table class="liste runden">
+  <table class="liste runden{{ kurz(durchgaenge | length * 11) }}">
     <colgroup><col><col class="c-ordner"><col class="c-zeit"><col class="c-darin"></colgroup>
     <thead><tr><th>Durchgang</th><th>Ordner</th><th>Zeitraum</th><th>Dieser Artikel</th></tr></thead>
     {%- for r in durchgaenge %}
@@ -185,12 +183,13 @@ table.ereignisse .aenderung .feld { color: var(--grau); }
 <section>
   <h2>Rückrufe</h2>
   <p class="hinweis vor-tabelle">Rückrufe des Herstellers zu diesem Produkt, die den Artikel betreffen – angelegt im Katalog.</p>
-  <table class="liste rueckrufe">
+  {#- Höhe geschätzt: je Rückruf drei Zeilen, dazu die Beschreibung mit rund 90 Zeichen je Zeile #}
+  <table class="liste rueckrufe{{ kurz(rueckrufe | length * 14 + (rueckrufe | map(attribute='beschreibung') | select | join | length) // 90 * 4) }}">
     <colgroup><col class="c-zeit"><col></colgroup>
     <thead><tr><th>Angelegt</th><th>Rückruf</th></tr></thead>
     <tbody>
     {%- for r in rueckrufe %}
-      <tr>
+      <tr class="{{ hoch([r.beschreibung, r.vermerk]) | trim }}">
         <td class="zeit">{{ r.angelegt }}<br><span class="hinweis">von {{ r.von }}</span></td>
         <td><strong>{{ r.titel }}</strong> <span class="hinweis">({{ r.betrifft }})</span>
           {%- if r.beschreibung %}<div class="text">{{ r.beschreibung }}</div>{% endif %}
@@ -205,18 +204,26 @@ table.ereignisse .aenderung .feld { color: var(--grau); }
 
 <section>
   <h2>Ereignisse</h2>
-  <p class="hinweis">Aus dem Journal des Artikels, älteste zuerst: Anlegen, Verschieben, Sperren, Freiprüfen, Aussondern
+  <p class="hinweis vor-tabelle">Aus dem Journal des Artikels, älteste zuerst: Anlegen, Verschieben, Sperren, Freiprüfen, Aussondern
     und jede Änderung der Stammdaten – dazu die Änderungen an seinem Produkt im Katalog („Produkt …“). Bei
     Mangelmeldungen stehen Melder und Beschreibung, wenn das abrufende Konto sie sehen darf (Prüfer, Materialwart, die
     eigene Meldung), sonst ohne Namen und Text.{% if ereignisse_gekuerzt %} Es enthält mehr Einträge, als hier Platz haben – die
     ältesten fehlen.{% endif %}</p>
   {%- if ereignisse %}
-  <table class="liste ereignisse">
+  {#- Höhe der Ereignisliste geschätzt: je Ereignis so viele Zeilen wie Änderungen (rund 60 Zeichen je Zeile), mindestens
+      eine, zu 3,8 mm, dazu 2 mm Rand. #}
+  {%- set mass = namespace(mm=0) %}
+  {%- for e in ereignisse %}
+    {%- set zeilen = namespace(n=0) %}
+    {%- for f in e.felder %}{% set zeilen.n = zeilen.n + ((f.feld or "") ~ (f.vorher or "") ~ (f.nachher or "")) | length // 60 + 1 %}{% endfor %}
+    {%- set mass.mm = mass.mm + [zeilen.n, 1] | max * 3.8 + 2 %}
+  {%- endfor %}
+  <table class="liste ereignisse{{ kurz(mass.mm) }}">
     <colgroup><col class="c-zeit"><col class="c-aktion"><col class="c-von"><col></colgroup>
     <thead><tr><th>Zeitpunkt</th><th>Ereignis</th><th>von</th><th>Änderung</th></tr></thead>
     <tbody>
     {%- for e in ereignisse %}
-      <tr>
+      <tr class="{{ hoch((e.felder | map(attribute='vorher') | list) + (e.felder | map(attribute='nachher') | list)) | trim }}">
         <td class="zeit">{{ e.zeit }}</td>
         <td>{{ e.aktion }}</td>
         <td>{{ e.von }}</td>
