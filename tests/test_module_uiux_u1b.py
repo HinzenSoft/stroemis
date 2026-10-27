@@ -129,7 +129,9 @@ def test_a8_tippflaechen():
     assert ".map-shell .leaflet-control-layers label { display: flex; align-items: center; min-height: 44px; margin: 0; }" in touch
     assert ".map-shell .leaflet-control-layers-expanded .leaflet-control-layers-toggle { display: block; }" in touch
     assert ".pruef table.list td a.titel::after { content: \"\"; position: absolute; inset: -14px -4px; }" in touch
-    assert ".home-baum li > a { display: block; }" in touch and ".home-cols li > a::after" in touch
+    assert ".home-baum li > a { display: flex; align-items: center; min-height: 44px; }" in touch
+    assert ".fav-list a { min-height: 44px; padding: 12px 6px; }" in touch
+    assert ".home-cols li > a::after" in touch
     assert ".maengel-filter label.inline { min-height: 44px; }" in coarse_bloecke(rk)
     assert ".mat-na-werte > summary { display: flex; align-items: center; min-height: 44px;" in coarse_bloecke(mat)
     print("A8 bestanden.")

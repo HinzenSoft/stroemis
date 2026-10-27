@@ -1164,7 +1164,6 @@ details.accordion .accordion-body > :first-child { margin-top: 0; } details.acco
   .toc-list a { padding: 7px 8px; }
   .album-list li { padding: 10px 0; }
   .search-results li { padding: 9px 6px; }
-  .fav-list a { padding: 7px 6px; }
 }
 @media (max-width: 640px) {
   /* iOS zoomt in jedes Feld unter 16 px hinein – und danach nicht mehr heraus. */
@@ -2532,13 +2531,17 @@ dialog.us-dlg { width: min(640px, 96vw); }
   .map-shell .leaflet-control-layers label { display: flex; align-items: center; min-height: 44px; margin: 0; }
   .map-shell .leaflet-control-layers label > span, .map-shell .leaflet-control-layers label > div { display: flex; align-items: center; }
   .map-shell .leaflet-control-layers-selector { width: 20px; height: 20px; margin: 0 8px 0 0; }
-  /* Listenlinks am Finger (UI/UX A8), ohne die Listen höher zu machen: Lehrgangs- und Katalogtitel der Riegenkarten
-     bekommen eine unsichtbare Fläche von 45 px (die Zeilen stehen weit genug auseinander – Muster der Materialablage,
-     material.css); in den dichten Listen der Strömipedia-Übersicht ist die ganze Zeile der Link (volle Breite). */
+  /* Listenlinks am Finger (UI/UX A8): Lehrgangs- und Katalogtitel der Riegenkarten bekommen eine unsichtbare Fläche von
+     45 px, ohne dass die Zeilen höher werden (sie stehen weit genug auseinander – Muster der Materialablage, material.css).
+     Die dichten Listen der Strömipedia (Übersicht, „Zuletzt …“, Merkliste) stehen am Finger wie der Seitenbaum in Zeilen
+     von 44 px, die ganze Zeile ist der Link – dort ginge eine Fläche nur auf Kosten der Nachbarzeile. */
   .pruef table.list td a.titel { position: relative; }
   .pruef table.list td a.titel::after { content: ""; position: absolute; inset: -14px -4px; }
-  .home-baum li > a { display: block; }
-  .home-cols li { position: relative; }
+  .home-baum li { padding: 0; }
+  .home-baum li > a { display: flex; align-items: center; min-height: 44px; }
+  .fav-list a { min-height: 44px; padding: 12px 6px; }   /* Block mit „…“ am Ende bleibt */
+  .home-cols li { position: relative; display: flex; flex-wrap: wrap; align-items: center; column-gap: 4px; min-height: 44px;
+    padding-top: 0; padding-bottom: 0; }
   .home-cols li > a::after { content: ""; position: absolute; inset: 0; }
   /* Alle Dialoge (Ankerplätze „Album anlegen“, Riegenkarten, Kommentar der Strömipedia …): Felder und Knöpfe. */
   dialog input:not([type=checkbox]):not([type=radio]):not([type=file]):not([type=range]):not([type=color]),
