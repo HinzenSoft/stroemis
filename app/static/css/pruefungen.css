@@ -7,6 +7,10 @@
 /* Die Prüfungsseite darf den ganzen Bildschirm nutzen – die Matrix und die Teilnehmertabelle
    zeigen am Abend am Rechner umso mehr Spalten ohne Rollen. Das Wiki bleibt bei seiner Lesebreite. */
 .pruef { max-width: none; }
+/* Lehrgangs- und Katalogliste auf breiten Bildschirmen begrenzt wie die Leitstelle (.page.breit): bei 5120 px lagen die
+   Spalten über 1000 px auseinander (Browserprüfung vor dem Merge, Verbesserung 6). Der Lehrgang selbst (Matrix) bleibt
+   breit. */
+.pruef[data-ansicht=liste], .pruef[data-ansicht=kataloge] { max-width: 1280px; }
 .pruef .page-head h1 { margin: 0; overflow-wrap: anywhere; }
 .pruef .page-head .btn-row { margin-left: auto; }
 .pruef .zurueck { display: inline-block; margin-bottom: 8px; font-size: var(--fs-mittel); text-decoration: none; }
@@ -187,13 +191,12 @@ p.dlg-tn { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .vk-zeile .vk-text small { display: block; font-size: .72rem; color: var(--grau); }
 .vk-zeile .vk-text small.ja { color: var(--ok); }
 .vk-zeile .vk-text small.nein { color: var(--rot); }
-.vk-zeile .vk-verlauf { width: 44px; height: 44px; background: none; border: 0; font-size: 1.1rem; color: var(--grau); cursor: pointer; }
+.vk-zeile .vk-verlauf { min-height: 44px; }   /* Text statt „🕓“ (Knopfregel, nach_merge_liste Punkt 13) */
 
-/* Verwalten-Dialog der Voraussetzungen: eine Zeile je Eintrag, Pfeile rechts. */
+/* Verwalten-Dialog der Voraussetzungen: eine Zeile je Eintrag, „Hoch“, „Runter“ und „Löschen“ rechts. */
 .vor-liste { margin: 8px 0; padding: 0; list-style: none; }
 .vor-liste li { display: flex; gap: 6px; align-items: center; padding: 4px 0; border-bottom: 1px solid var(--linie); }
 .vor-liste li input[type=text] { flex: 1 1 auto; min-width: 0; }
-.vor-liste .btn.ghost { padding: 6px 8px; }
 .vor-neu { display: flex; gap: 6px; margin-top: 10px; }
 .vor-neu input[type=text] { flex: 1 1 auto; min-width: 0; }
 
@@ -206,8 +209,6 @@ p.dlg-tn { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .leistung-karte .md-vorschau p, .leistung-karte .md-vorschau ul, .leistung-karte .md-vorschau ol { margin: 0 0 .3em; }
 .leistung-karte .md-vorschau h1, .leistung-karte .md-vorschau h2, .leistung-karte .md-vorschau h3 { font-size: 1em; margin: 0 0 .2em; color: var(--grau); }
 .leistung-karte .btn-row { justify-content: flex-end; align-self: start; }
-.leistung-karte .pfeile { display: inline-flex; gap: 2px; }
-.leistung-karte .pfeile .btn { padding: 6px 9px; }
 #pl-editor { margin-top: 4px; }
 .pl-fallback { min-height: 220px; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: .9rem; }
 /* Keine feste Toolbar mehr (toolbarItems: []) – die schwebende Formatleiste (.ed-bubble, siehe
@@ -426,7 +427,6 @@ dialog.pruef-dlg { width: min(720px, 96vw); }
 .ausb-zeile .ausb-wer { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .ausb-zeile label.inline { margin: 0; font-size: var(--fs-klein); }
 .ausb-zeile .ausb-leit { white-space: nowrap; font-size: var(--fs-mittel); font-weight: 600; }
-.ausb-zeile .btn.ghost { padding: 6px 9px; }
 
 /* Verlauf-Dialog: Liste der Zustände, neueste oben. */
 .verlauf-liste { list-style: none; margin: 8px 0; padding: 0; }
@@ -478,10 +478,10 @@ body:has(.pruef.druck) #toast { top: 12px; }
   .leistung-karte .btn-row { justify-content: flex-start; }
   .maengel-filter { grid-template-columns: 1fr; }
   .maengel-filter .knoepfe .btn { flex: 1 1 auto; justify-content: center; }
-  /* Schmal: oben Person und ✕, darunter Funktion und der Haken „Leitung“. */
+  /* Schmal: oben Person und „Entfernen“, darunter Funktion und der Haken „Leitung“. */
   .ausb-zeile { grid-template-columns: 1fr auto; }
   .ausb-zeile .ausb-wer { grid-column: 1; grid-row: 1; }
-  .ausb-zeile .btn.ghost { grid-column: 2; grid-row: 1; }
+  .ausb-zeile [data-weg] { grid-column: 2; grid-row: 1; }
   .ausb-zeile .ausb-funktion { grid-column: 1; grid-row: 2; }
   .ausb-zeile .ausb-leit { grid-column: 2; grid-row: 2; }
   .import-spalten thead { display: none; }
@@ -519,11 +519,12 @@ body:has(.pruef.druck) #toast { top: 12px; }
   .pruef .c-tabs button, .bew-umschalter .c-tabs button { min-height: 44px; }
   .pruef .filter select, .pruef .filter input, .bew-umschalter select, .maengel-filter select,
   .import-dlg select, .import-spalten select { min-height: 44px; }
-  .vk input[type=checkbox] { width: 40px; height: 40px; }
-  .vk-stempel { min-height: 24px; }
+  /* Haken und Stempel mindestens 44 px (nach_merge_liste Punkt 12; vorher 40 und 24 px). */
+  .vk input[type=checkbox] { width: 44px; height: 44px; }
+  .vk-stempel { min-height: 44px; display: inline-flex; align-items: center; }
   .zelle { min-height: 56px; }
   .linkbtn { min-height: 44px; display: inline-flex; align-items: center; }
-  .vor-liste .btn.ghost, .leistung-karte .pfeile .btn, .ausb-zeile .btn.ghost { min-width: 44px; min-height: 44px; justify-content: center; }
+  .vor-liste .btn, .ausb-zeile [data-weg] { min-width: 44px; min-height: 44px; justify-content: center; }
   .ausb-zeile .ausb-leit { min-height: 44px; }
   .ausb-zeile .ausb-leit input[type=checkbox] { width: 24px; height: 24px; }
   .medien-grid .medium-weg { width: 44px; height: 44px; }

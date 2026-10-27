@@ -108,8 +108,8 @@ FELDER = [
                "ablaufenden Freigaben; wessen Freigabe abläuft, bekommt sie auch selbst. Aus: keine Mails – Journal "
                "und Aufräumen laufen trotzdem. Jede Fälligkeit wird je Stufe einmal gemeldet: 30 und 7 Tage vorher und "
                "einmal, wenn sie überschritten ist; das Lebensende 90 Tage vorher, eine Freigabe 30 Tage vor ihrem "
-               "Ende. Stand und Probelauf: Materialablage → Übersicht (unten). Hier einschalten, nicht in der .env: Die "
-               "Entwicklung kopiert die .env der Produktion."),
+               "Ende. Stand und Probelauf: Materialablage → Übersicht (unten). Nur hier einschalten, nicht in der Datei "
+               ".env – die Entwicklungsumgebung übernimmt sie von der Produktion und verschickte sonst ebenfalls Mails."),
 
     # --- E-Mail -----------------------------------------------------------------------------
     Feld("MAIL_FROM", "E-Mail", "Absender",

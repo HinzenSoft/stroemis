@@ -91,17 +91,8 @@
   }
 
   /* Zeilenaktionen nach der Knopfregel (Browserprüfung vor dem Merge, V5): „Bearbeiten“ als grauer Knopf, die seltenen
-     „Reset-Mail senden“ und „Löschen“ im Zeilenmenü „Mehr“ – vorher drei rote Textlinks (btn ghost) je Zeile. Ein Klick
-     daneben oder Escape schließt das Menü, ein Eintrag auch. */
-  document.addEventListener("click", (e) => {
-    document.querySelectorAll("details.zeilenmenue[open]").forEach((m) => {
-      if (!m.contains(e.target) || e.target.closest(".zeilenmenue-liste button")) m.open = false;
-    });
-  });
-  document.addEventListener("keydown", (e) => {
-    if (e.key !== "Escape") return;
-    document.querySelectorAll("details.zeilenmenue[open]").forEach((m) => { m.open = false; m.querySelector("summary").focus(); });
-  });
+     „Reset-Mail senden“ und „Löschen“ im Zeilenmenü „Mehr“ – vorher drei rote Textlinks (btn ghost) je Zeile. Schließen
+     per Klick daneben, Escape oder Eintrag: app-weit in common.js (seit der Lieferung nach dem Merge auch Riegenkarten). */
   // Eine E-Mail bricht in ihrer schmalen Spalte am „@“ um (und vor Punkten der Domain), nicht mitten im Wort (V5).
   const mailUmbruch = (mail) => S.esc(mail).replace(/@/, "<wbr>@").replace(/\.(?=[^@]*$)/g, "<wbr>.");
 
@@ -114,7 +105,7 @@
       <div class="request" data-id="${u.id}">
         <div><strong>${S.esc(u.name)}</strong> · ${S.esc(u.email)}<br><span class="small">${S.esc(u.gliederung)}${u.phone ? " · " + S.esc(u.phone) : ""} · angefragt ${S.fmtDate(u.created_at, true)}</span>
           ${u.reason ? `<div class="c-quote" style="margin-top:6px">${S.esc(u.reason)}</div>` : ""}</div>
-        <div class="btn-row"><button class="btn small" data-act="approve">Freigeben</button><button class="btn danger small" data-act="reject">Ablehnen</button></div>
+        <div class="btn-row"><button class="btn secondary small" data-act="approve">Freigeben</button><button class="btn secondary small" data-act="reject">Ablehnen …</button></div>
       </div>`).join("")}` : "";
     tbody.innerHTML = users.filter((u) => u.status !== "pending").map((u) => `
       <tr data-id="${u.id}" ${u.active ? "" : 'class="muted"'}>
@@ -128,7 +119,7 @@
           <button class="btn secondary small" data-act="edit">Bearbeiten</button>
           <details class="zeilenmenue"><summary class="btn secondary small" aria-haspopup="true">Mehr</summary>
             <div class="zeilenmenue-liste">
-              <button type="button" data-act="reset">Reset-Mail senden</button>
+              <button type="button" data-act="reset">Reset-Mail senden …</button>
               ${u.id !== STROEMIS.user.id ? '<button type="button" data-act="delete">Löschen …</button>' : ""}
             </div></details>
         </div></td>
@@ -195,7 +186,7 @@
     try {
       if (b.dataset.act === "approve") {
         const r = await S.api(`/api/admin/users/${id}/approve`, { method: "POST", body: {} });
-        S.toast(r.mailed ? `${u.name} freigegeben – E-Mail verschickt` : `${u.name} freigegeben (keine E-Mail: SMTP nicht konfiguriert)`);
+        S.toast(r.mailed ? `${u.name} freigegeben – E-Mail verschickt` : `${u.name} freigegeben (keine E-Mail: kein Mailserver eingerichtet)`);
       } else {
         if (!(await S.confirm(`Anfrage von ${u.name} ablehnen und löschen?`, "Ablehnen"))) return;
         await S.api(`/api/admin/users/${id}/reject`, { method: "POST", body: {} });
@@ -328,7 +319,7 @@
             const info = r.initial_password
               ? `<p>Erzeugtes Passwort: <code>${S.esc(r.initial_password)}</code></p><p class="help">Bitte sicher weitergeben – es wird nicht erneut angezeigt.</p>`
               : "";
-            const mail = d.send_invite ? (r.invite_sent ? "<p>Die Einladung wurde per E-Mail verschickt.</p>" : "<p class='notice'>SMTP ist nicht konfiguriert – der Einladungslink steht im Server-Log (docker logs).</p>") : "";
+            const mail = d.send_invite ? (r.invite_sent ? "<p>Die Einladung wurde per E-Mail verschickt.</p>" : "<p class='notice'>Kein Mailserver eingerichtet – der Einladungslink steht im Protokoll des Servers.</p>") : "";
             S.dialog(`<h2>Nutzer angelegt</h2><p>${S.esc(d.email)}</p>${info}${mail}<div class="dlg-actions"><button class="btn" data-close type="button">Schließen</button></div>`);
           } catch (e) { S.toast(e.message, true); }
           finally { knopf.disabled = false; }
@@ -396,6 +387,9 @@
           };
         });
     } else if (btn.dataset.act === "reset") {
+      // Rückfrage: Ein Versehen im Zeilenmenü schickte sofort eine Passwort-Mail (Browserprüfung vor dem Merge,
+      // Verbesserung 14).
+      if (!(await S.confirm(`Eine Mail zum Zurücksetzen des Passworts an ${u.email} senden?`, "Senden"))) return;
       try { const r = await S.api(`/api/admin/users/${id}/reset-mail`, { method: "POST", body: {} }); S.toast(r.message); }
       catch (err) { S.toast(err.message, true); }
     } else if (btn.dataset.act === "delete") {

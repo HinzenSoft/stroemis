@@ -7,8 +7,14 @@ Punkte der nach_merge_liste:
   20  Export → Import: Seite ohne „# Titel“ mit gleichnamigem Geschwister behält ihren Titel (der Export schreibt die
       Titelzeile), auch der Einzelexport.
   17  Riegenkarten: kein Name von Teilnehmenden im Seitentitel (Browserverlauf).
-Die Oberflächenpunkte (9, 10, 12, 13, 14) sind im Browser gemessen (Bericht); hier die Stellen im Code, an denen die
-Lösungen hängen. Alle Namen und Seiten sind Platzhalter."""
+  9/10 Leitstelle: „Globale Suchen“ höchstens 100ch, Spalten Name/E-Mail/Gliederung breiter.
+  12  Tippflächen ≥ 44 px unter pointer: coarse (Dialoge, Anmeldung, Kommentar-Aktionen, Sortierpfeile, „Kopieren“,
+      Album-Panel, Haken und Stempel der Riegenkarten).
+  13  Knopfsprache: kein btn ghost, keine Emoji in Knöpfen, eine rote Hauptaktion, btn danger nur in der Rückfrage,
+      Zeilenmenü „Mehr“ (app-weit in common.js), Sprunglink „Zum Inhalt“, „Teilnehmende“ statt „TN“/„Teilnehmende:r“.
+  14  Reset-Mail mit Rückfrage, Einstellungen ohne Entwicklersprache, Lehrgangsliste auf Ultrawide begrenzt.
+Die Oberflächenpunkte sind im Browser gemessen (Bericht); hier die Stellen im Code, an denen die Lösungen hängen. Alle
+Namen und Seiten sind Platzhalter."""
 import io
 import os
 import re
@@ -18,6 +24,7 @@ import zipfile
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+from test_smoke import H  # noqa: E402
 from test_wiki_import import aufbau, importieren, seite  # noqa: E402
 
 WURZEL = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -123,6 +130,107 @@ def test_riegenkarten_titel_ohne_namen():
         assert "tnName" not in a and "tnVoll" not in a and ".vorname" not in a and ".name" not in a, a
     assert 'S.titel(["Prüfungsleistungen", lg.titel], "pruefungen");' in js
     print("Riegenkarten-Titel ohne Namen bestanden.")
+
+
+
+# --- 13: Knopfsprache und Sprunglink -----------------------------------------------------------------------------------
+
+ALTE_MODULE = ("app/static/js/pruefungen.js", "app/static/js/wiki.js", "app/static/js/map.js", "app/static/js/admin.js",
+               "app/templates/wiki.html", "app/templates/index.html", "app/templates/admin.html")
+# Emoji und Bildzeichen, die als Knopfbeschriftung nichts zu suchen haben (☰ und ⋯ als Menüzeichen bleiben erlaubt,
+# ‹ › × in Großansicht und Panel ebenso).
+BILDZEICHEN = re.compile("[\U0001F300-\U0001FAFF\u2600-\u27BF\u2190-\u21FF\u25A0-\u25FF]")
+
+
+def test_knopfsprache_alte_module():
+    for pfad in ALTE_MODULE:
+        text = lies(pfad)
+        assert "btn ghost" not in text.replace("(btn ghost)", ""), pfad
+        for m in re.finditer(r"<button\b([^>]*)>(.*?)</button>", text, re.S):
+            # Bewusst geblieben (Bericht, „Bitte bestätigen“): Zustandszeichen in den Bewertungszellen, 👍/👎 der großen
+            # Bewertungswahl am Gewässer (immer mit Wort) und das Farbfeld „keine Farbe“ im Callout-Menü.
+            if 'data-act="zelle"' in m.group(1) or "data-erg=" in m.group(1) or 'class="farbe' in m.group(1):
+                continue
+            innen = re.sub(r"\$\{[^}]*\}", "", m.group(2))
+            assert not BILDZEICHEN.search(innen.replace("☰", "")), (pfad, m.group(0)[:160])
+    assert ".btn.ghost" not in lies("app/static/css/app.css")
+    pr = lies("app/static/js/pruefungen.js")
+    # btn danger nur noch in der Rückfrage (common.js S.confirm), nicht als Auslöser.
+    for pfad in ("app/static/js/pruefungen.js", "app/static/js/map.js"):
+        assert "btn danger" not in lies(pfad), pfad
+    assert 'class="btn danger small" data-act="reject"' not in lies("app/static/js/admin.js")
+    assert '<button class="btn danger" id="c-ok" type="button">' in lies("app/static/js/common.js")
+    # Lehrgangs- und Katalogliste: „Öffnen“ grau, Seltenes im Zeilenmenü; je Leistung „Bearbeiten“ + „Mehr“.
+    assert '<a class="btn secondary small" href="/riegenkarten/${lg.id}">Öffnen</a>' in pr
+    assert pr.count("zeilenMenue(`") == 3
+    assert 'const zeilenMenue = (eintraege) => `<details class="zeilenmenue">' in pr
+    # Eine rote Hauptaktion: Mängel-Reiter und Stoppuhr grau, „Bewertung speichern“ rot.
+    assert '<button class="btn secondary small" data-act="m-np"' in pr
+    assert '<button type="button" class="btn secondary" data-su="start">Start</button>' in pr
+    # Zeilenmenü app-weit: Schließen per Klick daneben und Escape in common.js, nicht mehr nur in admin.js.
+    co = lies("app/static/js/common.js")
+    assert 'document.querySelectorAll("details.zeilenmenue[open]")' in co
+    assert 'details.zeilenmenue[open]' not in lies("app/static/js/admin.js")
+    # Kopfleiste der Strömipedia: Sprechblase als Symbol statt Emoji, grau umrandet.
+    wiki = lies("app/static/js/wiki.js")
+    assert 'aria-label="Kommentieren">${I.kommentar}</button>' in wiki and "kommentar: ico(" in wiki
+    assert wiki.count('class="btn secondary small kopfknopf') == 7
+    print("Knopfsprache bestanden.")
+
+
+def test_sprunglink_und_begriffe():
+    with tempfile.TemporaryDirectory() as tmp:
+        t = aufbau(tmp)
+        anon = t.app.test_client()
+        for c, pfad in ((anon, "/login"), (t.adm, "/leitstelle"), (t.adm, "/riegenkarten"), (t.adm, "/ankerplaetze")):
+            r = c.get(pfad)
+            assert r.status_code == 200, pfad
+            text = r.get_data(as_text=True)
+            # Erster Tab-Stopp: der Sprunglink, sein Ziel direkt hinter der Kopfleiste.
+            body = text[text.index("<body"):]
+            assert re.search(r"<body[^>]*>\s*(?:\{#.*?#\}\s*)?<a class=\"sprunglink\" href=\"#inhalt\">Zum Inhalt</a>", body), pfad
+            assert '<span id="inhalt" class="sprungziel" tabindex="-1"></span>' in text, pfad
+            assert body.index('id="inhalt"') > body.index("</header>"), pfad
+        assert '<a class="sprunglink" href="#inhalt">Zum Inhalt</a>' in lies("app/templates/public.html")
+        # Reset-Mail: Meldung ohne Mailserver in Alltagssprache; im Menü mit Rückfrage.
+        uid = [u for u in t.adm.get("/api/admin/users").json["users"] if u["email"] == "mitglied@example.org"][0]["id"]
+        r = t.adm.post(f"/api/admin/users/{uid}/reset-mail", json={}, headers=H)
+        assert r.status_code == 200 and r.json["message"] == "Kein Mailserver eingerichtet – der Link steht im Protokoll des Servers.", r.json
+    admin = lies("app/static/js/admin.js")
+    assert 'S.confirm(`Eine Mail zum Zurücksetzen des Passworts an ${u.email} senden?`, "Senden")' in admin
+    assert "Server-Log" not in admin and "in allen\n      Arbeitsprozessen" not in lies("app/templates/admin.html")
+    pr = lies("app/static/js/pruefungen.js")
+    for alt in ("Teilnehmende:r", "Teilnehmende:n", "je TN<", ">TN<", " TN mit "):
+        assert alt not in pr, alt
+    print("Sprunglink und Begriffe bestanden.")
+
+
+# --- 9, 10, 12, 14: Regeln im Stylesheet -------------------------------------------------------------------------------
+
+def test_stylesheet_regeln():
+    css = lies("app/static/css/app.css")
+    block = css[css.index("Lieferung nach dem Merge, Teil B"):]
+    assert "#mat-globalsuche .accordion-body > p.help { max-width: 100ch; }" in block
+    assert ".page.breit.leitstelle { max-width: 1280px; }" in block
+    coarse = block[block.index("@media (pointer: coarse) {"):]
+    for regel in ("dialog select, dialog .btn { min-height: 44px; }",
+                  ".login-form input, .login-form .btn { min-height: 44px; }",
+                  ".login-links a { display: inline-flex; align-items: center; min-height: 44px; }",
+                  ".c-actions .lnk { min-height: 44px;", ".th-sort { right: 0; width: 44px; height: 44px;",
+                  ".code-copy { min-height: 44px;", ".panel .btn { min-height: 44px; }", ".lb-nav { min-width: 44px; }"):
+        assert regel in coarse, regel
+    # Touch-Regeln nur unter pointer: coarse – außerhalb des Blocks keine 44-px-Mindesthöhen.
+    ausserhalb = block[:block.index("@media (pointer: coarse) {")]
+    assert "44px" not in ausserhalb
+    pcss = lies("app/static/css/pruefungen.css")
+    assert ".vk input[type=checkbox] { width: 44px; height: 44px; }" in pcss
+    assert ".vk-stempel { min-height: 44px; display: inline-flex; align-items: center; }" in pcss
+    assert ".pruef[data-ansicht=liste], .pruef[data-ansicht=kataloge] { max-width: 1280px; }" in pcss
+    assert "ghost" not in pcss
+    admin = lies("app/templates/admin.html")
+    assert '<col style="width:11%"><col style="width:12%"><col style="width:12%">' in admin
+    assert '<main class="page breit leitstelle">' in admin
+    print("Stylesheet-Regeln bestanden.")
 
 
 if __name__ == "__main__":

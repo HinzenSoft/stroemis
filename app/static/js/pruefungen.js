@@ -110,6 +110,14 @@
      Lehrgangsergebnis gehören der Lehrgangsleitung und der Administration (darf_leiten). */
   const darfLeiten = () => !!(state.lehrgang && state.lehrgang.darf_leiten);
   const istAdmin = () => !!(window.STROEMIS && STROEMIS.user && STROEMIS.user.rechte && STROEMIS.user.rechte.pruefungen === 2);
+  /* Knopfsprache (designsprache.md, nach_merge_liste Punkt 13): Seltene Zeilenaktionen stehen im Zeilenmenü „Mehr“
+     (details.zeilenmenue wie in der Leitstelle, schließt über common.js), Verschieben als Textknöpfe statt ↑/↓. Die
+     Einträge sind <button data-act …> – derselbe Klickverteiler wie vorher die einzelnen Knöpfe. */
+  const zeilenMenue = (eintraege) => `<details class="zeilenmenue"><summary class="btn secondary small" aria-haspopup="true">Mehr</summary>
+    <div class="zeilenmenue-liste">${eintraege}</div></details>`;
+  const sortierKnoepfe = (i, n, hoch, runter) =>
+    `<button type="button" class="btn secondary small" ${hoch} ${i === 0 ? "disabled" : ""} aria-label="Nach oben verschieben">Hoch</button>
+     <button type="button" class="btn secondary small" ${runter} ${i === n - 1 ? "disabled" : ""} aria-label="Nach unten verschieben">Runter</button>`;
   // Derselbe Text wie im Server (409) – damit die Oberfläche nicht anders erklärt als die Antwort.
   const EINGEFROREN = "Für diese Person ist das Lehrgangsergebnis vermerkt – die Prüfungsdaten sind eingefroren. Die Lehrgangsleitung kann das Ergebnis aufheben.";
 
@@ -241,7 +249,7 @@
           hochgeladen von ${esc(m.hochgeladen_von_name || "")} am ${esc(fmtDate(m.hochgeladen_am, true))}
           ${m.width ? `<br>${m.width} × ${m.height} px` : ""}</div>
         <div class="btn-row"><a class="btn secondary small" href="${esc(m.orig)}" target="_blank" rel="noopener">Original öffnen</a>
-          ${onDelete ? '<button class="btn danger small" id="lb-del" type="button">Löschen</button>' : ""}</div>
+          ${onDelete ? '<button class="btn secondary small" id="lb-del" type="button">Löschen …</button>' : ""}</div>
       </div>`;
     lb.tabIndex = -1;
     lb.focus();
@@ -323,7 +331,7 @@
       el.dataset.fuer = `${su.tid}:${su.lid}:${su.start}`;
       el.innerHTML = `<span aria-hidden="true">⏱</span><span>Stoppuhr läuft: ${esc(su.tn_name)} – ${esc(su.leistung)}</span>
         <span class="zeit" id="su-banner-zeit"></span>
-        <button type="button" class="btn small" data-act="su-oeffnen">Öffnen</button>`;
+        <button type="button" class="btn secondary small" data-act="su-oeffnen">Öffnen</button>`;
     }
     const z = $("#su-banner-zeit", el);
     if (z) z.textContent = fmtZeit(Math.floor((Date.now() - su.start) / 1000));
@@ -378,7 +386,7 @@
       </div>
       <input type="text" class="ausb-funktion" list="ausb-funktionen" placeholder="Funktion (optional)" value="${esc(a.funktion || "")}" aria-label="Funktion">
       <label class="inline ausb-leit" title="Lehrgangsleitung: darf den Lehrgang bearbeiten, Prüfungen löschen und das Lehrgangsergebnis vermerken"><input type="checkbox" class="ausb-leitung" ${a.ist_leitung ? "checked" : ""}> Leitung</label>
-      <button type="button" class="btn ghost" data-weg aria-label="Zeile entfernen" title="Zeile entfernen">✕</button>
+      <button type="button" class="btn secondary small" data-weg aria-label="Zeile entfernen">Entfernen</button>
     </div>`;
   }
 
@@ -563,7 +571,7 @@
       return;
     }
     ziel.innerHTML = `<table class="list" id="lg-tabelle">
-      <colgroup><col style="width:30%"><col style="width:16%"><col style="width:10%"><col style="width:6%"><col style="width:18%"><col style="width:20%"></colgroup>
+      <colgroup><col style="width:28%"><col style="width:15%"><col style="width:10%"><col style="width:11%"><col style="width:20%"><col style="width:16%"></colgroup>
       <thead><tr><th>Lehrgang</th><th>Datum</th><th>Status</th><th>Teilnehmende</th><th>Fortschritt</th><th></th></tr></thead>
       <tbody>${state.liste.map((lg) => `<tr data-id="${lg.id}">
         <td data-l="Lehrgang"><a class="titel" href="/riegenkarten/${lg.id}">${esc(lg.titel)}</a>
@@ -573,10 +581,10 @@
         <td data-l="Teilnehmende">${lg.tn_anzahl}</td>
         <td data-l="Fortschritt">${fortschrittHtml(lg)}</td>
         <td class="tabelle-aktionen"><div class="btn-row">
-          <a class="btn small" href="/riegenkarten/${lg.id}">Öffnen</a>
-          ${lg.darf_leiten ? `<button class="btn ghost small" data-act="lg-edit" data-id="${lg.id}">Bearbeiten</button>
-          <button class="btn ghost small" data-act="lg-kopie" data-id="${lg.id}">Kopieren</button>
-          <button class="btn ghost small" data-act="lg-del" data-id="${lg.id}">Löschen</button>` : ""}
+          <a class="btn secondary small" href="/riegenkarten/${lg.id}">Öffnen</a>
+          ${lg.darf_leiten ? zeilenMenue(`<button type="button" data-act="lg-edit" data-id="${lg.id}">Bearbeiten</button>
+            <button type="button" data-act="lg-kopie" data-id="${lg.id}">Kopieren …</button>
+            <button type="button" data-act="lg-del" data-id="${lg.id}">Löschen …</button>`) : ""}
         </div></td></tr>`).join("")}</tbody></table>`;
   }
 
@@ -616,9 +624,9 @@
         <td data-l="Beschreibung">${k.beschreibung ? esc(kuerzen(k.beschreibung, 140)) : '<span class="muted">–</span>'}</td>
         <td data-l="Leistungen">${k.leistungen_anzahl}</td>
         <td class="tabelle-aktionen"><div class="btn-row">
-          <a class="btn small" href="/riegenkarten/kataloge/${k.id}">Öffnen</a>
-          ${istAdmin() ? `<button class="btn ghost small" data-act="kat-edit" data-id="${k.id}">Bearbeiten</button>
-          <button class="btn ghost small" data-act="kat-del" data-id="${k.id}">Löschen</button>` : ""}
+          <a class="btn secondary small" href="/riegenkarten/kataloge/${k.id}">Öffnen</a>
+          ${istAdmin() ? zeilenMenue(`<button type="button" data-act="kat-edit" data-id="${k.id}">Bearbeiten</button>
+            <button type="button" data-act="kat-del" data-id="${k.id}">Löschen …</button>`) : ""}
         </div></td></tr>`).join("")}</tbody></table>`;
   }
 
@@ -681,7 +689,7 @@
     root.innerHTML = `<a class="zurueck" href="/riegenkarten/kataloge">← Alle Kataloge</a>
       <div class="page-head"><h1>${esc(k.titel)}</h1>
         ${admin ? `<div class="btn-row"><button class="btn secondary small" data-act="kat-edit" data-id="${k.id}">Bearbeiten</button>
-        <button class="btn ghost small" data-act="kat-del" data-id="${k.id}">Löschen</button></div>` : ""}</div>
+        <button class="btn secondary small" data-act="kat-del" data-id="${k.id}">Löschen …</button></div>` : ""}</div>
       ${k.beschreibung ? `<details class="beschreibung-kopf"><summary>Beschreibung</summary><div class="md">${esc(k.beschreibung).replace(/\n/g, "<br>")}</div></details>` : ""}
       <div class="reiter-kopf"><h2>Prüfungsleistungen</h2>
         ${admin ? '<div class="btn-row"><button class="btn small" data-act="kl-neu"><span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Prüfungsleistung<span class="k-anlegen"> anlegen</span></span></button></div>' : ""}</div>
@@ -929,7 +937,7 @@
           </div></td>`;
         }).join("")}
       </tr>`).join("")}</tbody></table></div>`;
-    // Telefon: Karten je TN mit großen Kästen.
+    // Telefon: Karten je Person mit großen Kästen.
     const karten = `<div class="tn-mobil">${tns.map((tn) => `<div class="tn-karte ${tn.voraussetzungen_offen ? "offen" : ""}${tn.eingefroren ? " gesperrt" : ""}">
       <div class="tn-kopf">${tnKopfHtml(tn, leitung ? `<button type="button" class="linkbtn" data-act="tn-edit" data-tid="${tn.id}">${esc(tnName(tn))}</button>` : null)}
         ${tn.voraussetzungen_offen ? `<span class="badge rot">${tn.voraussetzungen_offen} offen</span>` : (vor.length ? '<span class="badge gruen">alle erfüllt</span>' : "")}${ergebnisMarkeHtml(tn)}</div>
@@ -942,7 +950,7 @@
           return `<div class="vk-zeile">
             <input type="checkbox" id="${id}" data-vk data-tid="${tn.id}" data-vid="${v.id}" ${st && st.erfuellt ? "checked" : ""} ${tn.eingefroren ? "disabled" : ""}>
             <label class="vk-text" for="${id}">${esc(v.bezeichnung)}${st ? `<small class="${st.erfuellt ? "ja" : "nein"}">${stempelHtml(st)}</small>` : ""}</label>
-            <button type="button" class="vk-verlauf" data-act="vk-verlauf" data-tid="${tn.id}" data-vid="${v.id}" ${st ? "" : "disabled"} aria-label="Verlauf anzeigen" title="Verlauf">🕓</button>
+            <button type="button" class="btn secondary small vk-verlauf" data-act="vk-verlauf" data-tid="${tn.id}" data-vid="${v.id}" ${st ? "" : "disabled"} aria-label="Verlauf anzeigen">Verlauf</button>
           </div>`;
         }).join("")}
       </details>` : ""}
@@ -981,7 +989,7 @@
       ${d.verlauf.length ? `<ul class="verlauf-liste">${d.verlauf.map((e) => `<li><span class="${e.erfuellt ? "ja" : "nein"}">${e.erfuellt ? "✓ erfüllt" : "✗ nicht erfüllt"}</span>
         · ${esc(e.user_name)} · ${esc(fmtDate(e.zeit, true))} <span class="quelle">${e.quelle === "import" ? "(importiert)" : "(manuell)"}</span></li>`).join("")}</ul>`
         : '<p class="muted">Noch keine Einträge.</p>'}
-      <div class="dlg-actions"><button class="btn" data-close type="button">Schließen</button></div>`);
+      <div class="dlg-actions"><button class="btn secondary" data-close type="button">Schließen</button></div>`);
   }
 
   /* Ein Foto vom Telefon hat schnell zehn Megabyte – für einen Kreis von 256 Pixeln. Der Browser
@@ -1026,7 +1034,7 @@
         <div class="pb-text">
           <p class="help">${neu ? "Ein Profilbild lässt sich hinzufügen, sobald die Person angelegt ist." : "Quadratisch zugeschnitten, 256 Pixel. Es erscheint vor dem Namen in Listen und Matrix."}</p>
           <div class="btn-row"><button type="button" class="btn secondary small" id="tn-pb-waehlen" ${neu ? "disabled" : ""}>Bild wählen …</button>
-            <button type="button" class="btn ghost small${bildAdresse(tn) ? "" : " hidden"}" id="tn-pb-weg">Entfernen</button></div>
+            <button type="button" class="btn secondary small${bildAdresse(tn) ? "" : " hidden"}" id="tn-pb-weg">Entfernen</button></div>
           <input type="file" id="tn-pb-datei" class="hidden" accept="image/*,.heic,.heif">
         </div>
       </div>
@@ -1039,7 +1047,7 @@
       <label for="tn-email">E-Mail</label><input type="email" id="tn-email" value="${esc(tn.email)}" autocomplete="off">
       <div class="feld-kopf"><label for="tn-bem">Bemerkung</label>${diktatKnopf("tn-bem")}</div><textarea id="tn-bem" style="min-height:60px">${esc(tn.bemerkung)}</textarea>
       ${extra.length ? `<label>Weitere Angaben aus dem Import</label><dl class="kv">${extra.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join("")}</dl>` : ""}
-      <div class="dlg-actions">${neu ? "" : '<button class="btn danger" id="tn-del" type="button" style="margin-right:auto">Löschen</button>'}
+      <div class="dlg-actions">${neu ? "" : '<button class="btn secondary" id="tn-del" type="button" style="margin-right:auto">Löschen …</button>'}
         <button class="btn secondary" data-close type="button">Abbrechen</button>
         <button class="btn" id="tn-save" type="button">${neu ? "Anlegen" : "Speichern"}</button></div>`,
       (dlg, body) => {
@@ -1126,9 +1134,8 @@
         <p class="help">Jede:r Teilnehmende bekommt für jede Voraussetzung einen Kasten zum Abhaken. Umbenennen: Text ändern und das Feld verlassen.</p>
         <div class="vor-wrap">${vor.length ? `<ul class="vor-liste">${vor.map((v, i) => `<li data-vid="${v.id}">
           <input type="text" value="${esc(v.bezeichnung)}" data-bez aria-label="Bezeichnung">
-          <button type="button" class="btn ghost" data-hoch ${i === 0 ? "disabled" : ""} aria-label="nach oben" title="nach oben">↑</button>
-          <button type="button" class="btn ghost" data-runter ${i === vor.length - 1 ? "disabled" : ""} aria-label="nach unten" title="nach unten">↓</button>
-          <button type="button" class="btn ghost" data-del aria-label="löschen" title="löschen">🗑</button></li>`).join("")}</ul>`
+          ${sortierKnoepfe(i, vor.length, "data-hoch", "data-runter")}
+          <button type="button" class="btn secondary small" data-del>Löschen</button></li>`).join("")}</ul>`
           : '<p class="muted">Noch keine Voraussetzungen.</p>'}</div>
         <div class="vor-neu"><input type="text" id="vor-neu-text" placeholder="Neue Voraussetzung, z. B. DRSA Silber (nicht älter als 2 Jahre)" aria-label="Neue Voraussetzung">
           <button type="button" class="btn" id="vor-neu-go">Hinzufügen</button></div>
@@ -1207,10 +1214,10 @@
       <div class="titel">${esc(l.bezeichnung)} ${l.zeitansatz_sekunden != null ? `<span class="badge grey" title="Zeitansatz (Sollzeit)">⏱ ${fmtZeit(l.zeitansatz_sekunden)}</span>` : ""}
         ${l.kriterien && l.kriterien.length ? `<span class="badge grey" title="Kriterienliste">📋 ${l.kriterien.length}</span>` : ""}</div>
       ${editierbar ? `<div class="btn-row">
-        <span class="pfeile"><button class="btn ghost small" data-act="${praefix}-hoch" data-lid="${l.id}" ${i === 0 ? "disabled" : ""} aria-label="nach oben" title="nach oben">↑</button>
-          <button class="btn ghost small" data-act="${praefix}-runter" data-lid="${l.id}" ${i === gesamt - 1 ? "disabled" : ""} aria-label="nach unten" title="nach unten">↓</button></span>
-        <button class="btn ghost small" data-act="${praefix}-edit" data-lid="${l.id}">Bearbeiten</button>
-        <button class="btn ghost small" data-act="${praefix}-del" data-lid="${l.id}">Löschen</button></div>` : '<div class="btn-row"></div>'}
+        <button class="btn secondary small" data-act="${praefix}-edit" data-lid="${l.id}">Bearbeiten</button>
+        ${zeilenMenue(`${i > 0 ? `<button type="button" data-act="${praefix}-hoch" data-lid="${l.id}">Nach oben</button>` : ""}
+          ${i < gesamt - 1 ? `<button type="button" data-act="${praefix}-runter" data-lid="${l.id}">Nach unten</button>` : ""}
+          <button type="button" data-act="${praefix}-del" data-lid="${l.id}">Löschen …</button>`)}</div>` : '<div class="btn-row"></div>'}
       ${l.beschreibung_md ? `<div class="md-vorschau">${md(l.beschreibung_md)}</div>` : '<div class="md-vorschau muted">Keine Beschreibung.</div>'}
     </div>`;
   }
@@ -1417,9 +1424,8 @@
     const html = () => `<div id="krit-wrap">
       ${liste.length ? `<ul class="vor-liste">${liste.map((bez, i) => `<li>
         <input type="text" value="${esc(bez)}" data-krit-entwurf aria-label="Kriterium">
-        <button type="button" class="btn ghost" data-krit-hoch ${i === 0 ? "disabled" : ""} aria-label="nach oben" title="nach oben">↑</button>
-        <button type="button" class="btn ghost" data-krit-runter ${i === liste.length - 1 ? "disabled" : ""} aria-label="nach unten" title="nach unten">↓</button>
-        <button type="button" class="btn ghost" data-krit-del aria-label="entfernen" title="entfernen">🗑</button></li>`).join("")}</ul>`
+        ${sortierKnoepfe(i, liste.length, "data-krit-hoch", "data-krit-runter")}
+        <button type="button" class="btn secondary small" data-krit-del>Entfernen</button></li>`).join("")}</ul>`
         : '<p class="muted">Noch keine Kriterien.</p>'}
       <div class="vor-neu"><input type="text" id="krit-neu-text" placeholder="Neues Kriterium, z. B. Wurfsack sicher gegriffen" aria-label="Neues Kriterium">
         <button type="button" class="btn secondary small" id="krit-neu-go"><span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Kriterium<span class="k-anlegen"> anlegen</span></span></button></div>
@@ -1461,9 +1467,8 @@
     return `<div id="krit-wrap">
       ${ks.length ? `<ul class="vor-liste">${ks.map((k, i) => `<li data-kid="${k.id}">
         <input type="text" value="${esc(k.bezeichnung)}" data-krit-bez aria-label="Kriterium">
-        <button type="button" class="btn ghost" data-krit-hoch ${i === 0 ? "disabled" : ""} aria-label="nach oben" title="nach oben">↑</button>
-        <button type="button" class="btn ghost" data-krit-runter ${i === ks.length - 1 ? "disabled" : ""} aria-label="nach unten" title="nach unten">↓</button>
-        <button type="button" class="btn ghost" data-krit-del aria-label="löschen" title="löschen">🗑</button></li>`).join("")}</ul>`
+        ${sortierKnoepfe(i, ks.length, "data-krit-hoch", "data-krit-runter")}
+        <button type="button" class="btn secondary small" data-krit-del>Löschen</button></li>`).join("")}</ul>`
         : '<p class="muted">Noch keine Kriterien.</p>'}
       <div class="vor-neu"><input type="text" id="krit-neu-text" placeholder="Neues Kriterium, z. B. Wurfsack sicher gegriffen" aria-label="Neues Kriterium">
         <button type="button" class="btn secondary small" id="krit-neu-go"><span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Kriterium<span class="k-anlegen"> anlegen</span></span></button></div>
@@ -1658,7 +1663,7 @@
       </div>
       ${a === "leistung" ? `<select id="bew-sel-leistung" aria-label="Prüfungsleistung">${ls.map((l) => `<option value="${l.id}" ${l.id === state.bewLeistung ? "selected" : ""}>${esc(l.bezeichnung)}${l.zeitansatz_sekunden != null ? ` (⏱ ${fmtZeit(l.zeitansatz_sekunden)})` : ""}</option>`).join("")}</select>` : ""}
       ${a === "tn" ? `<select id="bew-sel-tn" aria-label="Teilnehmende">${tns.map((t) => `<option value="${t.id}" ${t.id === state.bewTn ? "selected" : ""}>${esc(tnName(t))}${t.gliederung ? ` (${esc(t.gliederung)})` : ""}</option>`).join("")}</select>
-        <button type="button" class="btn secondary small" data-act="bew-tn-druck" title="Alle Leistungen dieser Person mit Kommentaren und Bildern drucken oder als PDF speichern">🖨 Druckansicht</button>` : ""}
+        <button type="button" class="btn secondary small" data-act="bew-tn-druck" title="Alle Leistungen dieser Person mit Kommentaren und Bildern drucken oder als PDF speichern">Druckansicht</button>` : ""}
     </div>`;
     let inhalt;
     if (a === "matrix") {
@@ -1808,8 +1813,8 @@
         <span class="muted">– von ${esc(s.von_name)}, galt ${esc(fmtDate(s.stand_ab, true))} bis ${esc(fmtDate(s.ersetzt_am, true))}</span></li>`).join("")}</ul></details>` : ""}
       ${opts.knoepfe ? `<div class="btn-row">
         <button type="button" class="btn secondary small" data-v-edit="${v.id}">Bearbeiten</button>
-        ${istLetzter ? `<button type="button" class="btn secondary small" data-v-medien="${v.id}">📷 Medien hinzufügen</button>
-          ${darfLeiten() ? `<button type="button" class="btn danger small" data-v-del="${v.id}">Versuch löschen</button>` : ""}` : ""}
+        ${istLetzter ? `<button type="button" class="btn secondary small" data-v-medien="${v.id}">Medien hinzufügen</button>
+          ${darfLeiten() ? `<button type="button" class="btn secondary small" data-v-del="${v.id}">Versuch löschen …</button>` : ""}` : ""}
         <input type="file" class="hidden" data-v-datei="${v.id}" accept="image/*,video/*,.heic,.heif,.mp4,.mov,.m4v,.webm" multiple>
       </div><div class="up-stand hidden"><span class="up-text small muted"></span><progress max="100" value="0"></progress></div>` : ""}
     </div>`;
@@ -1821,9 +1826,9 @@
     return `<h3 id="bw-form-titel">${titel}</h3>
       ${l.zeitansatz_sekunden != null ? `<div class="stoppuhr">
         <div class="su-zeile"><span class="su-anzeige" aria-live="off">00:00.0</span><span class="su-soll">Soll ${fmtZeit(l.zeitansatz_sekunden)}</span></div>
-        <div class="su-knoepfe"><button type="button" class="btn" data-su="start">▶ Start</button>
-          <button type="button" class="btn secondary" data-su="stopp" disabled>■ Stopp</button>
-          <button type="button" class="btn ghost" data-su="reset">Zurücksetzen</button></div>
+        <div class="su-knoepfe"><button type="button" class="btn secondary" data-su="start">Start</button>
+          <button type="button" class="btn secondary" data-su="stopp" disabled>Stopp</button>
+          <button type="button" class="btn secondary" data-su="reset">Zurücksetzen</button></div>
         <div class="su-hinweis"></div></div>` : ""}
       <label for="bw-zeit">Zeit (mm:ss oder 230 für 2:30)</label>
       <div class="zeit-zeile"><input type="text" id="bw-zeit" class="zeitfeld" inputmode="numeric" placeholder="mm:ss" autocomplete="off"
@@ -1846,7 +1851,7 @@
       <textarea id="bw-komm" placeholder="Was war gut, was hat gefehlt? Bei mangelhaft: die Fehler für das Feedbackgespräch.">${esc(v.kommentar)}</textarea>
       ${diktatHinweis()}
       <label>Medien</label>
-      <button type="button" class="btn secondary medien-knopf" id="bw-medien-knopf">📷 Foto/Video aufnehmen oder wählen</button>
+      <button type="button" class="btn secondary medien-knopf" id="bw-medien-knopf">Foto/Video aufnehmen oder wählen</button>
       <input type="file" id="bw-dateien" class="hidden" accept="image/*,video/*,.heic,.heif,.mp4,.mov,.m4v,.webm" multiple>
       <ul class="medien-wahl" id="bw-medien-liste"></ul>
       <div class="help">Bilder (auch HEIC) und Videos bis ${STROEMIS.maxUploadMb >= 1024 ? `${(STROEMIS.maxUploadMb / 1024).toFixed(STROEMIS.maxUploadMb % 1024 ? 1 : 0).replace(".", ",")} GB` : `${STROEMIS.maxUploadMb} MB`} je Hochladevorgang.</div>
@@ -2090,7 +2095,7 @@
           let vorschau = '<span class="video-icon" aria-hidden="true">🎬</span>';
           if (!isVideo(f)) { const u = URL.createObjectURL(f); urls.push(u); vorschau = `<img src="${u}" alt="">`; }
           return `<li>${vorschau}<span class="name">${esc(f.name)}<small>${groesseText(f.size)}${isVideo(f) ? " · Video" : ""}</small></span>
-            <button type="button" class="btn ghost small" data-weg="${i}" aria-label="Entfernen" title="Entfernen">✕</button></li>`;
+            <button type="button" class="btn secondary small" data-weg="${i}" aria-label="${esc(f.name)} entfernen">Entfernen</button></li>`;
         }).join("");
         $$("[data-weg]", liste).forEach((b) => b.onclick = () => { dateien.splice(+b.dataset.weg, 1); listeZeichnen(); });
       };
@@ -2164,14 +2169,16 @@
         <div><label for="mf-l">Prüfungsleistung</label><select id="mf-l"><option value="">Alle</option>${ls.map((l) => `<option value="${l.id}" ${String(l.id) === String(state.mf.leistung) ? "selected" : ""}>${esc(l.bezeichnung)}</option>`).join("")}</select></div>
         <label class="inline"><input type="checkbox" id="mf-offen" ${state.mf.nur_offen ? "checked" : ""}> nur offene Mängel</label>
         <div class="btn-row knoepfe"><button class="btn secondary small" data-act="m-druck">Druckansicht</button>
-          <button class="btn secondary small" data-act="m-alle" id="mf-alle" ${state.mf.teilnehmer ? "" : "disabled"} title="Alle Bewertungen der gewählten Person, auch die bestandenen">Alle Bewertungen</button></div>
+          <button class="btn secondary small" data-act="m-alle" id="mf-alle" title="Alle Bewertungen der gewählten Person, auch die bestandenen">Alle Bewertungen</button></div>
       </div>
       <div id="maengel-liste"><p class="help">Wird geladen …</p></div>`;
   }
 
   function maengelBinden() {
     const tn = $("#mf-tn"), l = $("#mf-l"), offen = $("#mf-offen");
-    const neu = () => { state.mf = { teilnehmer: tn.value, leistung: l.value, nur_offen: offen.checked }; $("#mf-alle").disabled = !tn.value; maengelLaden(); };
+    // „Alle Bewertungen“ bleibt bedienbar – ohne gewählte Person sagt ein Hinweis, was fehlt (wirkte ausgegraut
+    // ohne Grund, Browserprüfung vor dem Merge, Verbesserung 8).
+    const neu = () => { state.mf = { teilnehmer: tn.value, leistung: l.value, nur_offen: offen.checked }; maengelLaden(); };
     tn.onchange = neu; l.onchange = neu; offen.onchange = neu;
   }
 
@@ -2194,8 +2201,8 @@
       ${medienGridHtml(v.medien, { klein: !!opts.druck })}
       <div class="abnahme">abgenommen von ${esc(v.geprueft_von_name)} am ${esc(fmtDate(v.geprueft_am, true))}${bearbeitet}</div>
       ${opts.druck ? "" : `<div class="btn-row">
-        ${m.nachpruefung_status === "offen" ? `<button class="btn small" data-act="m-np" data-tid="${m.teilnehmer.id}" data-lid="${m.leistung.id}">Nachprüfung durchführen</button>` : ""}
-        <button class="btn ghost small" data-act="zelle" data-tid="${m.teilnehmer.id}" data-lid="${m.leistung.id}">Alle Versuche</button></div>`}
+        ${m.nachpruefung_status === "offen" ? `<button class="btn secondary small" data-act="m-np" data-tid="${m.teilnehmer.id}" data-lid="${m.leistung.id}">Nachprüfung durchführen</button>` : ""}
+        <button class="btn secondary small" data-act="zelle" data-tid="${m.teilnehmer.id}" data-lid="${m.leistung.id}">Alle Versuche</button></div>`}
     </div>`;
   }
 
@@ -2255,7 +2262,7 @@
     dialogOeffnen(`<h2 class="dlg-tn">${tnKopfHtml(tn)}</h2>
       <p class="help">${esc(tn.gliederung || "")}${tn.gliederung ? " · " : ""}${plural(versuche.length, "Bewertung", "Bewertungen")}${tn.ergebnis ? ` · Lehrgang ${ERGEBNIS[tn.ergebnis][0]}` : ""}</p>
       ${bewertungenListeHtml(tn, versuche, soll)}
-      <div class="dlg-actions"><button class="btn" data-close type="button">Schließen</button></div>`,
+      <div class="dlg-actions"><button class="btn secondary" data-close type="button">Schließen</button></div>`,
       undefined, ["pruef-dlg"]);
   }
 
@@ -2276,7 +2283,7 @@
     const filter = [tn ? `Teilnehmende: ${tnName(tn)}` : "alle Teilnehmenden", l ? `Leistung: ${l.bezeichnung}` : "alle Leistungen", mf.nur_offen ? "nur offene Mängel" : "alle mangelhaften Bewertungen"];
     S.titel(`Mängelübersicht ${lg.titel}`, "pruefungen");
     root.innerHTML = `<div class="druck-kopf"><h1>Mängelübersicht – ${esc(lg.titel)}</h1>
-        <button class="btn no-print" id="druck-los" type="button">🖨 Drucken</button>
+        <button class="btn no-print" id="druck-los" type="button">Drucken</button>
         <div class="druck-filter">${esc([spanne(lg.datum_von, lg.datum_bis), lg.ort, lg.nummer ? `Nr. ${lg.nummer}` : ""].filter(Boolean).join(" · "))}<br>${esc(filter.join(" · "))} · Stand ${esc(fmtDate(new Date().toISOString(), true))}</div></div>
       ${maengelGruppenHtml(d.maengel || [], { druck: true, nurOffen: mf.nur_offen })}`;
     $("#druck-los").onclick = () => window.print();
@@ -2302,7 +2309,7 @@
     // Punkt 17) – er nennt Ansicht und Lehrgang, die Person steht nur auf der Seite.
     S.titel(["Prüfungsleistungen", lg.titel], "pruefungen");
     root.innerHTML = `<div class="druck-kopf"><h1>Prüfungsleistungen – ${esc(tnName(tn))}</h1>
-        <button class="btn no-print" id="druck-los" type="button">🖨 Drucken</button>
+        <button class="btn no-print" id="druck-los" type="button">Drucken</button>
         <div class="druck-filter">${esc([lg.titel, spanne(lg.datum_von, lg.datum_bis), lg.ort].filter(Boolean).join(" · "))}<br>
           ${esc(tn.gliederung || "")}${tn.gliederung ? " · " : ""}${plural(versuche.length, "Bewertung", "Bewertungen")}${tn.ergebnis ? ` · Lehrgang ${ERGEBNIS[tn.ergebnis][0]}` : ""} · Stand ${esc(fmtDate(new Date().toISOString(), true))}</div></div>
       <div class="tn-block-kopf">${tnBildHtml(tn, "gross")}<div class="tn-block-text"><span class="tn-name-zeile">${schlossHtml(tn)}<span class="tn-name">${esc(tnName(tn))}</span></span>${tn.gliederung ? `<span class="muted tn-gliederung">${esc(tn.gliederung)}</span>` : ""}</div></div>

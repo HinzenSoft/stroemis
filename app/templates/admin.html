@@ -2,7 +2,7 @@
 {% set active = 'admin' %}
 {% block title %}{{ modul.name.verwaltung }} – strömis.de{% endblock %}
 {% block body %}
-<main class="page breit">
+<main class="page breit leitstelle">
   <div class="page-head"><h1 id="seitentitel">Nutzerverwaltung</h1>
     <div class="btn-row" id="kopf-knoepfe"><button class="btn secondary" id="btn-testmail">Testmail senden</button><button class="btn" id="btn-new-user"><span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Nutzer<span class="k-anlegen"> anlegen</span></span></button></div></div>
   {# Reiter als Linie: rot gefüllt ist allein „Nutzer anlegen“ (Browserprüfung vor dem Merge, V5). #}
@@ -39,7 +39,9 @@
          brauchen je so viel Platz, dass „Verwaltung“ im Auswahlfeld ausgeschrieben steht (rund
          90 px); dafür ist die Seite breiter als sonst (.page.breit), und „Zuletzt da“ wie Inhalte
          sind schmaler und brechen in mehrere Zeilen um. -->
-    <colgroup><col style="width:9%"><col style="width:11%"><col style="width:8%"><col style="width:10%"><col style="width:10%"><col style="width:10%"><col style="width:10%"><col style="width:10%"><col style="width:6.5%"><col style="width:6%"><col class="col-aktionen"></colgroup>
+    {# Name, E-Mail und Gliederung breiter (nach_merge_liste Punkt 10: bei 1280 px brach „Kreisverband“ mitten im Wort),
+       die Rechte-Felder schmaler – „Verwaltung“ passt in der kleinen Schrift der Matrix auch so. #}
+    <colgroup><col style="width:11%"><col style="width:12%"><col style="width:12%"><col style="width:8.6%"><col style="width:8.6%"><col style="width:8.6%"><col style="width:8.6%"><col style="width:8.6%"><col style="width:6%"><col style="width:7%"><col class="col-aktionen"></colgroup>
     <thead><tr><th>Name</th><th>E-Mail</th><th>Gliederung</th><th>{{ modul.name.wiki }}</th><th>{{ modul.name.karte }}</th><th>{{ modul.name.pruefungen }}</th><th>{{ modul.name.material }}</th><th>{{ modul.name.verwaltung }}</th><th>Zuletzt da</th><th>Inhalte</th><th></th></tr></thead><tbody></tbody>
   </table>
   {# Protokoll der Blicke über den eigenen Bereich hinaus (Materialablage, Phase 2): selten gebraucht, daher
@@ -56,10 +58,9 @@
   </section>
 
   <section id="bereich-einstellungen" class="hidden">
-    <p class="help">Diese Werte standen bisher nur in der Datei <code>.env</code> auf dem Server.
-      Was hier gesetzt wird, gilt <strong>vorrangig</strong> und wirkt sofort – in allen
-      Arbeitsprozessen. „Zurücksetzen“ nimmt den Wert wieder aus der <code>.env</code>
-      beziehungsweise der eingebauten Vorgabe.</p>
+    <p class="help">Was hier gesetzt wird, gilt <strong>vorrangig</strong> vor der Datei <code>.env</code> auf dem
+      Server und wirkt sofort. „Zurücksetzen“ nimmt wieder den Wert aus der <code>.env</code> oder die eingebaute
+      Vorgabe.</p>
     <div id="einst-aus" class="notice hidden">Die Einstellungen sind über
       <code>EINSTELLUNGEN_AUS=1</code> abgeschaltet – es gilt allein die <code>.env</code>.
       Gespeicherte Werte bleiben erhalten und greifen wieder, sobald die Variable entfällt.</div>

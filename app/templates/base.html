@@ -12,6 +12,8 @@
   {% block head %}{% endblock %}
 </head>
 <body>
+{# Sprunglink für die Tastatur (nach_merge_liste Punkt 13): erster Tab-Stopp, springt hinter die Kopfleiste. #}
+<a class="sprunglink" href="#inhalt">Zum Inhalt</a>
 <header class="bauchbinde">
   <a class="brand" href="/">
     {% if cfg.MASKOTTCHEN %}<span class="maskottchen"><img src="{{ url_for('static', filename=cfg.MASKOTTCHEN) }}" alt="strömis.de"></span>{% else %}<span class="wortmarke">{% if cfg.WORTMARKE %}<img src="{{ url_for('static', filename='img/dlrg-wortmarke.svg') }}" alt="DLRG">{% else %}DLRG{% endif %}</span>{% endif %}
@@ -40,6 +42,7 @@
   </nav>
   {% endif %}
 </header>
+<span id="inhalt" class="sprungziel" tabindex="-1"></span>
 {% block body %}{% endblock %}
 <div id="toast" role="status" aria-live="polite"></div>
 <script nonce="{{ csp_nonce }}">window.STROEMIS = { user: {{ (user and {'id': user.id, 'name': user.name, 'email': user.email, 'rechte': rechte}) | tojson }}, mapCenter: {{ cfg.MAP_CENTER | tojson }}, mapZoom: {{ cfg.MAP_ZOOM }}, tileUrl: {{ cfg.TILE_URL | tojson }}, tileAttribution: {{ cfg.TILE_ATTRIBUTION | tojson }}, topoUrl: {{ cfg.TOPO_URL | tojson }}, topoAttribution: {{ cfg.TOPO_ATTRIBUTION | tojson }}, satUrl: {{ cfg.SAT_URL | tojson }}, satAttribution: {{ cfg.SAT_ATTRIBUTION | tojson }}, satLabelsUrl: {{ cfg.SAT_LABELS_URL | tojson }}, publicUrl: {{ cfg.PUBLIC_URL | tojson }}, maxUploadMb: {{ cfg.MAX_CONTENT_LENGTH // 1048576 }}, spracheingabe: {{ cfg.SPRACHEINGABE | tojson }}, module: {{ modul | tojson }} };</script>

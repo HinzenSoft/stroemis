@@ -291,7 +291,7 @@ def reset_mail(uid):
     except Exception as exc:
         return jsonify(error=f"Versand fehlgeschlagen: {exc}"), 500
     return jsonify(ok=True, sent=bool(sent),
-                   message="E-Mail verschickt." if sent else "SMTP nicht konfiguriert – Link steht im Server-Log.")
+                   message="E-Mail verschickt." if sent else "Kein Mailserver eingerichtet – der Link steht im Protokoll des Servers.")
 
 
 @bp.delete("/users/<int:uid>")

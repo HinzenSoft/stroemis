@@ -118,7 +118,7 @@
      verschiebt. */
   const TOC_AUS = "stroemis-toc-aus";
   const tocKnopf = () =>
-    '<button class="btn ghost small kopfknopf" id="pg-toc" title="Inhaltsverzeichnis ein- oder ausblenden" aria-label="Inhaltsverzeichnis">☰</button>';
+    '<button class="btn secondary small kopfknopf" id="pg-toc" title="Inhaltsverzeichnis ein- oder ausblenden" aria-label="Inhaltsverzeichnis">☰</button>';
   const tocStandAnwenden = () => {
     let aus = false;
     try { aus = localStorage.getItem(TOC_AUS) === "1"; } catch (e) { /* egal */ }
@@ -344,7 +344,7 @@
       <div class="em-row"><input type="text" id="em-input" maxlength="8" autocomplete="off"><span class="help">Emoji eintippen oder unten wählen</span></div>
       <div class="em-grid" id="em-grid"></div>
       <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button>
-      <button class="btn ghost" id="ic-clear" type="button">Entfernen</button>
+      <button class="btn secondary" id="ic-clear" type="button">Entfernen</button>
       <button class="btn" id="ic-ok" type="button">Übernehmen</button></div>`,
       (dlg, body) => {
         dlg.classList.add("wide");
@@ -883,17 +883,17 @@
     const pubBadge = p.effective_public ? '<span class="badge pubbadge" title="Ohne Anmeldung erreichbar">🌐 öffentlich</span>' : "";
     content.innerHTML = `
       <div class="wiki-head">
-        <button class="btn ghost small kopfknopf baum-knopf" id="pg-baum" type="button" title="Seiten" aria-label="Seitenbaum öffnen">☰</button>
+        <button class="btn secondary small kopfknopf baum-knopf" id="pg-baum" type="button" title="Seiten" aria-label="Seitenbaum öffnen">☰</button>
         ${krumenPfad(crumbs, p)}
         <div class="btn-row">
           ${p.can_edit ? `<div class="mode-toggle" role="group" aria-label="Ansicht wechseln">
             <button type="button" id="pg-edit" data-mode="bearbeiten" aria-pressed="false">Bearbeiten</button>
             <button type="button" class="on" data-mode="lesen" aria-pressed="true">Lesen</button>
           </div>` : ""}
-          <button class="btn ghost small kopfknopf" id="pg-comment" title="Kommentieren – Text markieren oder allgemein zur Seite" aria-label="Kommentieren">💬</button>
-          ${p.can_share || p.can_publish ? `<button class="btn ghost small kopfknopf" id="pg-share" title="Teilen" aria-label="Teilen">${I.teilen}</button>` : ""}
+          <button class="btn secondary small kopfknopf" id="pg-comment" title="Kommentieren – Text markieren oder allgemein zur Seite" aria-label="Kommentieren">${I.kommentar}</button>
+          ${p.can_share || p.can_publish ? `<button class="btn secondary small kopfknopf" id="pg-share" title="Teilen" aria-label="Teilen">${I.teilen}</button>` : ""}
           ${tocKnopf()}
-          <button class="btn ghost small kopfknopf" id="pg-more" title="Weitere Aktionen" aria-label="Weitere Aktionen">⋯</button>
+          <button class="btn secondary small kopfknopf" id="pg-more" title="Weitere Aktionen" aria-label="Weitere Aktionen">⋯</button>
         </div>
       </div>
       <h1 class="seitentitel"><button class="page-icon" id="pg-icon" type="button" title="Symbol der Seite ändern">${p.icon ? esc(p.icon) : "＋"}</button>${esc(p.title)} ${pubBadge}</h1>
@@ -1807,6 +1807,8 @@
     kette:     ico('<path d="M6.5 9.5l3-3M7.5 4.5l1-1a2.8 2.8 0 014 4l-1 1M8.5 11.5l-1 1a2.8 2.8 0 01-4-4l1-1"/>'),
     ketteWeg:  ico('<path d="M7.5 4.5l1-1a2.8 2.8 0 014 4l-1 1M8.5 11.5l-1 1a2.8 2.8 0 01-4-4l1-1M11.7 11.7l1.8 1.8M4.3 4.3L2.5 2.5"/>'),
     extern:    ico('<path d="M9.5 2.5h4v4M13.5 2.5L7.5 8.5M11.5 9.5V13H3V4.5h3.5"/>'),
+    /* Sprechblase statt „💬“ im Kopf: keine Emoji in Knöpfen (designsprache.md, nach_merge_liste Punkt 13). */
+    kommentar: ico('<path d="M2.5 3.5h11v7.5H7l-3 2.5V11H2.5z"/>'),
     teilen:    ico('<circle cx="11.8" cy="3.7" r="1.9"/><circle cx="11.8" cy="12.3" r="1.9"/>'
                  + '<circle cx="4.2" cy="8" r="1.9"/><path d="M5.85 7.07l4.3-2.44M5.85 8.93l4.3 2.44"/>'),
     zurueck:   ico('<path d="M3 8h7a3.5 3.5 0 010 7H7M6 5L3 8l3 3"/>'),
@@ -1992,7 +1994,7 @@
         Blau als Kennfarbe für Gewässer, Gelb als Hinweis.</p>
         <div class="callout-pick">${MD.COLOR_NAMES.map((c) =>
           `<button type="button" class="btn secondary" data-c="${c}"><span class="tc tc-${c}">${esc(NAMES[c] || c)}</span></button>`).join("")}
-          <button type="button" class="btn ghost" data-c="">Farbe entfernen</button></div>
+          <button type="button" class="btn secondary" data-c="">Farbe entfernen</button></div>
         <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button></div>`,
         (dlg, body) => body.querySelectorAll("[data-c]").forEach((b2) => b2.onclick = () => {
           const c = b2.dataset.c;
@@ -4479,7 +4481,7 @@
     const crumbs = isNew ? [] : ancestors(p);
     content.innerHTML = `
       <div class="wiki-head editing-head">
-        <button class="btn ghost small kopfknopf baum-knopf" id="pg-baum" type="button" title="Seiten" aria-label="Seitenbaum öffnen">☰</button>
+        <button class="btn secondary small kopfknopf baum-knopf" id="pg-baum" type="button" title="Seiten" aria-label="Seitenbaum öffnen">☰</button>
         ${krumenPfad(crumbs, p, isNew)}
         <div class="btn-row">
           <span class="muted small" id="ed-status"></span>
@@ -4487,9 +4489,9 @@
             <button type="button" class="on" data-mode="bearbeiten" aria-pressed="true">Bearbeiten</button>
             <button type="button" id="ed-read" data-mode="lesen" aria-pressed="false">Lesen</button>
           </div>`}
-          ${isNew ? '<button class="btn ghost small" id="ed-cancel">Verwerfen</button>'
+          ${isNew ? '<button class="btn secondary small" id="ed-cancel">Verwerfen</button>'
                   + '<button class="btn small" id="ed-save">Anlegen</button>' : ""}
-          <button class="btn ghost small kopfknopf" id="ed-more" type="button" title="Weitere Werkzeuge" aria-label="Weitere Werkzeuge">⋯</button>
+          <button class="btn secondary small kopfknopf" id="ed-more" type="button" title="Weitere Werkzeuge" aria-label="Weitere Werkzeuge">⋯</button>
           ${tocKnopf()}
         </div>
       </div>
@@ -5117,7 +5119,7 @@
     dialog(`<h2>Verlauf: ${esc(p.title)}</h2>
       <ul class="rev-list" style="list-style:none;padding:0;margin:10px 0">${revs.map((r, i) => `
         <li><span>${fmtDate(r.created_at, true)}</span><span class="muted small">${esc(r.user_name || "")} · ${(r.size / 1000).toFixed(1)} kB${i === 0 ? " · aktuell" : ""}</span>
-          <span class="btn-row" style="margin-left:auto"><button class="btn ghost small" data-view="${r.id}">Ansehen</button>${i < revs.length - 1 ? `<button class="btn ghost small" data-diff="${i}">Änderungen</button>` : ""}${i > 0 && p.can_edit ? `<button class="btn secondary small" data-restore="${r.id}">Wiederherstellen</button>` : ""}</span></li>`).join("")}</ul>
+          <span class="btn-row" style="margin-left:auto"><button class="btn secondary small" data-view="${r.id}">Ansehen</button>${i < revs.length - 1 ? `<button class="btn secondary small" data-diff="${i}">Änderungen</button>` : ""}${i > 0 && p.can_edit ? `<button class="btn secondary small" data-restore="${r.id}">Wiederherstellen</button>` : ""}</span></li>`).join("")}</ul>
       <div id="rev-view"></div>
       <div class="dlg-actions"><button class="btn secondary" data-close type="button">Schließen</button></div>`,
       (dlg, body) => {

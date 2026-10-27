@@ -10,6 +10,7 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
 </head>
 <body class="public">
+<a class="sprunglink" href="#inhalt">Zum Inhalt</a>
 <header class="bauchbinde">
   <a class="brand" href="/oeffentlich/">
     {% if cfg.MASKOTTCHEN %}<span class="maskottchen"><img src="{{ url_for('static', filename=cfg.MASKOTTCHEN) }}" alt="strömis.de"></span>{% else %}<span class="wortmarke">{% if cfg.WORTMARKE %}<img src="{{ url_for('static', filename='img/dlrg-wortmarke.svg') }}" alt="DLRG">{% else %}DLRG{% endif %}</span>{% endif %}
@@ -18,6 +19,7 @@
   </a>
   <nav class="nav"><a href="{{ cfg.BASE_URL }}/login">Anmelden</a></nav>
 </header>
+<span id="inhalt" class="sprungziel" tabindex="-1"></span>
 <div class="wiki-shell public" data-slug="{{ slug }}">
   <aside class="wiki-side" id="wiki-side">
     <input type="search" id="wiki-search" placeholder="Strömipedia durchsuchen …" aria-label="Strömipedia durchsuchen">
