@@ -1,10 +1,15 @@
 """Lebenslauf eines Artikels als PDF (Lieferung 4; Konzept: „Stammdaten plus alle Prüfungen chronologisch, für
 Weitergabe oder Aussonderungsnachweis“).
 
-Auf Abruf gesetzt und NICHT festgeschrieben: kein Prüfsummen-Stempel, keine Datei unter DATA_DIR/pdf, kein Eintrag in
-mat_inspection oder im Journal – der Fuß jeder Seite sagt „nicht festgeschrieben“. Verbindlich bleiben die Protokolle;
-der Lebenslauf nennt jedes mit Protokoll-ID und der Prüfsumme der Datei, so lässt es sich zuordnen und auf der
-Prüfseite prüfen. Gesetzt wird über services/pdf.py als PDF/A-3b wie die Protokolle (Vorlage
+Auf Abruf gesetzt, nie festgeschrieben (auch nicht bei der Aussonderung): keine Datei unter DATA_DIR/pdf, kein Eintrag in
+mat_inspection oder im Journal. Seit Schritt 31 (Wunsch vom 27.10.2026) bekommt jeder Abruf eine Kennung L-<jahr>-<nr>
+(fortlaufend je Jahr, Zähler in mat_meta) und einen Prüfsummen-Stempel wie ein Protokoll (stempel.py); mat_lebenslauf
+verzeichnet Kennung, Inventarnummer, Stand und die Prüfsummen – nicht, wer abgerufen hat, nicht den Inhalt, keine Datei.
+So erkennt die Prüfseite (protokoll.pruefen) einen ausgegebenen Lebenslauf Byte für Byte wieder. Die Kennung wird in
+einer eigenen kurzen Schreibtransaktion vergeben, gesetzt wird ohne Schreibsperre, verzeichnet in einer zweiten kurzen
+Transaktion; scheitert das Setzen dazwischen, bleibt eine Lücke in den Nummern (wie bei den T-Nummern). Der Lebenslauf
+nennt außerdem jedes Protokoll mit Protokoll-ID und der Prüfsumme der Datei, so lässt es sich zuordnen und ebenfalls auf
+der Prüfseite prüfen. Gesetzt wird über services/pdf.py als PDF/A-3b wie die Protokolle (Vorlage
 templates/material/pdf/lebenslauf.html). Gelesen wird ohne Transaktion – das Setzen hält keine Schreibsperre.
 
 Inhalt: Stammdaten (wie im Protokoll), Zustand (Status, Sperre, Fälligkeit, wirksames Intervall, Lebensdauer,
@@ -20,11 +25,15 @@ from datetime import date
 
 from ... import db
 from ..models import ERGEBNISSE, MATERIALARTEN
-from . import bestand, heute, journal, katalog, protokoll, qr, teilnummern
+from . import bestand, heute, journal, katalog, protokoll, qr, stempel, teilnummern
 from . import status as st
 from .beschriftung import SPERRZUSTAND, journal_zeilen
 from .interval import wirksam
 from .protokoll import PRUEFART_TEXT, datum_text, ortszeit, zeit_text
+
+VORSATZ = "L"
+ZAEHLER = "lebenslauf_zaehler_{jahr}"         # Schlüssel in mat_meta, je Jahr ein Zähler
+ART = "Lebenslauf"                            # so nennt ihn die Prüfseite
 
 # So viele Journaleinträge nimmt der Lebenslauf höchstens auf (journal.lesen liest die neuesten zuerst).
 JOURNAL_MAX = 2000
@@ -209,8 +218,9 @@ def _maengel(item):
     return mangel.sichtbare_inhalte(item)
 
 
-def daten(iid):
-    """Alle Werte für die Vorlage, fertig formatiert."""
+def daten(iid, stand=None):
+    """Alle Werte für die Vorlage, fertig formatiert. stand: Zeitpunkt (UTC, wie db.now()), Vorgabe jetzt; die Kennung
+    trägt rendern() nach (dokument.kennung)."""
     item = bestand.artikel(iid)
     produkt = katalog.produkt(item["product_id"])
     tag = heute()
@@ -241,7 +251,7 @@ def daten(iid):
     if not antrag.darf_beantragen(item):
         antrag.journal_verbergen(eintraege)
     return {
-        "dokument": {"art": "lebenslauf", "titel": "Lebenslauf", "stand": zeit_text(db.now()),
+        "dokument": {"art": "lebenslauf", "titel": "Lebenslauf", "stand": zeit_text(stand or db.now()), "kennung": "",
                      "plattform": qr.anzeige(qr.basis()).split("://", 1)[-1], "pruefseite": protokoll.pruefseite(),
                      "demo": bestand.ist_demo(iid)},
         "artikel": protokoll._artikel(item, produkt, item["folder_id"]),
@@ -259,8 +269,43 @@ def daten(iid):
     }
 
 
+def kennung_vergeben(stand):
+    """Die nächste Kennung L-<jahr>-<nr> (Jahr des Stands in deutscher Zeit) – in einer eigenen, kurzen
+    Schreibtransaktion. Der Zähler steht in mat_meta; die höchste verzeichnete Nummer des Jahres zählt mit, falls er
+    fehlt oder zurückliegt."""
+    jahr = ortszeit(stand).year
+    schluessel = ZAEHLER.format(jahr=jahr)
+    vorsatz = f"{VORSATZ}-{jahr}-"
+    with db.transaction(sofort=True):
+        zeile = db.query("SELECT wert FROM mat_meta WHERE schluessel = ?", (schluessel,), one=True)
+        hoechste = db.query("SELECT MAX(CAST(substr(kennung, ?) AS INTEGER)) AS n FROM mat_lebenslauf WHERE kennung LIKE ?",
+                            (len(vorsatz) + 1, vorsatz + "%"), one=True)["n"] or 0
+        n = max(int(zeile["wert"]) if zeile else 0, hoechste) + 1
+        db.execute("INSERT INTO mat_meta (schluessel, wert) VALUES (?, ?) "
+                   "ON CONFLICT(schluessel) DO UPDATE SET wert = excluded.wert", (schluessel, str(n)))
+    return f"{vorsatz}{n:06d}"
+
+
+def stempel_zeilen(kennung, n, summe):
+    """Zwei Zeilen wie beim Protokoll (protokoll.stempel_zeilen), die Kennung vorn – jede bleibt unter
+    pdf.STEMPEL_ZEICHEN."""
+    return [f"{ART} {kennung} · {stempel.stempel_text(n, summe)}",
+            f"nachrechnen: head -c {n} datei.pdf | sha256sum · prüfen: {protokoll.pruefseite()}"]
+
+
 def rendern(iid):
-    """(PDF als bytes, Inventarnummer) – nichts davon wird gespeichert."""
+    """(PDF als bytes, Inventarnummer, Kennung): setzen, Kennung vergeben, stempeln und in mat_lebenslauf verzeichnen.
+    Die Datei selbst wird nicht gespeichert."""
     from . import pdf
-    d = daten(iid)
-    return pdf.rendern("lebenslauf", d), d["artikel"]["inventarnummer"]
+    stand = db.now()
+    d = daten(iid, stand)
+    kennung = kennung_vergeben(stand)
+    d["dokument"]["kennung"] = kennung
+    basis = pdf.rendern("lebenslauf", d)
+    n, summe = len(basis), stempel.sha256(basis)
+    fertig = stempel.stempeln(basis, pdf.stempelvorlage(stempel_zeilen(kennung, n, summe)), kennung, art=ART)
+    inventarnummer = d["artikel"]["inventarnummer"]
+    with db.transaction(sofort=True):
+        db.execute("INSERT INTO mat_lebenslauf (kennung, inventory_no, stand, pdf_sha256, pdf_hashed_bytes, file_sha256) "
+                   "VALUES (?,?,?,?,?,?)", (kennung, inventarnummer, stand, summe, n, stempel.sha256(fertig)))
+    return fertig, inventarnummer, kennung

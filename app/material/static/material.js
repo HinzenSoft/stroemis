@@ -2428,7 +2428,7 @@
         <a href="#" role="button" data-act="loeschen"><strong>Löschen …</strong>
           <span>Geht nur bei einem leeren Ordner – ohne Unterordner und Artikel, ohne Prüfdurchgänge und Set-Protokolle, ohne offene Nacharbeit eines Bestandsimports und ohne gesperrte Artikel, die hierher zurückkehren; vorher wird nachgefragt.</span></a>
       </div></details>`;
-  const LEBENSLAUF_TEXT = "Stammdaten, alle Prüfungen in zeitlicher Reihenfolge, Prüfdurchgänge und Ereignisse als PDF – zum Weitergeben oder als Aussonderungsnachweis. Stand jetzt, nicht festgeschrieben.";
+  const LEBENSLAUF_TEXT = "Stammdaten, alle Prüfungen in zeitlicher Reihenfolge, Prüfdurchgänge und Ereignisse als PDF – zum Weitergeben oder als Aussonderungsnachweis. Stand jetzt, mit Kennung und Prüfsumme – prüfbar auf der Prüfseite.";
   const lebenslaufKnopf = (a) => `<a class="btn secondary small" href="/materialablage/artikel/${a.id}/lebenslauf.pdf" target="_blank" rel="noopener" data-frisch
     title="${LEBENSLAUF_TEXT}">Lebenslauf (PDF)</a>`;
   // Auf Abruf gesetzte Dateien (Lebenslauf, Jahresbericht, Exporte, Nacharbeit, Katalog – data-frisch): Beim Antippen

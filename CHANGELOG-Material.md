@@ -5,7 +5,7 @@ Gliederungen, Prüfnachweise je Ausrüstungsteil, unveränderliche PDF-Prüfprot
 umgesetzt, Phase 2 (mehrere Gliederungen und externe Prüfer in einer Instanz) in drei, Phase 3 und 4 in Lieferungen
 und Wünschen des Nutzers; jede war für sich deploybar. Seit dem 26.10.2026 heißt das Modul „Materialablage“ (im Code,
 in Tabellen und unter `/api/material` weiter `material`). Ältere Abschnitte sagen noch „Modul Material“ – sie bleiben als
-Geschichte stehen. Schemaversion nach der Nachbesserung vor dem Merge: 30.
+Geschichte stehen. Schemaversion nach der Nachbesserung vor dem Merge: 30; mit der Prüfsumme für den Lebenslauf: 31.
 
 | Lieferung | Inhalt | Stand |
 | --- | --- | --- |
@@ -45,6 +45,7 @@ Geschichte stehen. Schemaversion nach der Nachbesserung vor dem Merge: 30.
 | Lebenslauf frisch, Melder und Mangelbeschreibung | Jeder Abruf eines Lebenslaufs (und der übrigen Dateien auf Abruf) mit eigener Adresse und Uhrzeit im Namen – gegen die alte Datei auf Android-Telefonen; „Mangel gemeldet“ im Lebenslauf mit Name und Beschreibung für Prüfer, Materialwart und den Melder selbst | gebaut 26.10.2026, bestätigt wie gebaut (Nutzer 26.10.2026), auf dev (vor dem Merge geprüft) |
 | Nachbesserung vor dem Merge, Runde 2 | Rückruf: nur eine Prüfung, deren Entwurf nach Rückruf bzw. Antrag begann, erledigt ihn (N-A1); „Bald fällig“ aus der `.env` nur 0–365, sonst Warnung und Vorgabe 30; README zur Inbetriebnahme (Prüfformulare neu anlegen, Kontrollen) | gebaut 26.10.2026 (kein Schemaschritt), zur Freigabe |
 | Nachbesserung vor dem Merge, Runde 3 | Tippflächen Brotkrumen und „Deine Meldungen“ (B-1, B-2); Katalog am Telefon kompakt, Liste nach der Kategoriewahl oben, Zurück an dieselbe Stelle (V1, V3); Seitentitel je Ansicht in allen Modulen (V2); Leitstelle: Hilfe zugeklappt, Zeilenmenü, E-Mail-Umbruch, Reiter als Linie (V5); Ankerplätze „+ Album“ (V6); „☰“ nicht vorgelesen (V8); eine Linie unter den Reitern (V9); Dialog-Reiter quer (V11); Kontrast in den Riegenkarten (V13); Nachtrag: Nummernsuche am Telefon zu, Reiter in eigener Zeile (V4), Sperrgrund im Mangel-Banner (V7), Hinweis- und Hilfetexte höchstens rund 120 Zeichen je Zeile (V10), Mangelbeschreibung im Verlauf am Artikel | gebaut 26./27.10.2026 (kein Schemaschritt), zur Freigabe |
+| Prüfsumme für den Lebenslauf (Schritt 31) | Jeder Abruf eines Lebenslaufs mit Kennung L-<Jahr>-<Nr> und Prüfsummen-Stempel, verzeichnet ohne Konto; die Prüfseite erkennt ihn; kein „nicht festgeschrieben“ mehr im Lebenslauf | gebaut 27.10.2026 (Schema 31), zur Freigabe |
 
 ## Abgleich mit dem Bestand (vor Lieferung 1)
 
@@ -4284,6 +4285,64 @@ Nachtrag (unten).
    Trefferseite steht die Suche mit dem Begriff offen.
 7. **V7:** Wortlaut „Außerdem gesperrt: <Grund>.“ im Mangel-Banner.
 8. **V10:** `100ch` statt `120ch` (gemessen rund 120 statt 145 Zeichen je Zeile).
+
+## Prüfsumme für den Lebenslauf (Schritt 31, 27.10.2026)
+
+Auftrag `planung/material-phase4/auftrag_lebenslauf_pruefsumme.md`. Wunsch des Nutzers: „Wie sieht es mit einer
+Prüfsumme für die Lebensläufe aus?“ – Entscheidungen vom 27.10.2026: „Ja, noch vor dem Merge“ und „Nein, nur Artikel und
+Zeitpunkt“ (kein Konto des Abrufenden speichern); Nachtrag „Entferne bei Lebensläufen einfach den Kommentar bezüglich
+Festschreibung“. Zweig `ll-summe` ab vor-merge 8da606a.
+
+- **Schritt 31** (`models.SCHRITT_31`, rein additiv, wiederholbar): Tabelle `mat_lebenslauf` – `kennung` (`L-<jahr>-<nr>`,
+  UNIQUE, CHECK auf die Form), `inventory_no` (der Artikel; ohne Fremdschlüssel, damit ein falsch angelegter Artikel ohne
+  Prüfung löschbar bleibt – die Inventarnummer wird nie wieder vergeben), `stand` (UTC), `pdf_sha256`,
+  `pdf_hashed_bytes`, `file_sha256`; Indizes auf beide Summen. Kein Konto, kein Inhalt, keine Datei. Trigger
+  `mat_lebenslauf_neu` (kein Einfügen über eine vorhandene Kennung oder Zeile – auch INSERT OR REPLACE ohne
+  recursive_triggers), `mat_lebenslauf_aendern` (jedes UPDATE, ohne Spaltenliste – auch `SET rowid`),
+  `mat_lebenslauf_loeschen`. Der Zähler je Jahr steht in `mat_meta` (`lebenslauf_zaehler_<jahr>`); `dev-zuruecksetzen`
+  leert beides mit (alle `mat_*`). Rückweg: ein älterer Stand ignoriert die Tabelle.
+- **Abruf** (`services/lebenslauf.py`, `routes_export.py`): Kennung vergeben (eigene kurze Schreibtransaktion,
+  `kennung_vergeben` – fortlaufend je Jahr in deutscher Zeit; die höchste verzeichnete Nummer zählt mit), ohne
+  Schreibsperre setzen, stempeln wie ein Protokoll (`stempel.stempeln`, Kennung im Nachtrag als
+  `%Stroemis-Lebenslauf L-… N=… SHA-256=…`), dann in einer zweiten kurzen Transaktion verzeichnen. Scheitert das Setzen
+  dazwischen, bleibt eine Lücke in den Nummern. Stempel (zwei Zeilen, unter `STEMPEL_ZEICHEN`): „Lebenslauf
+  L-2026-000123 · SHA-256 (erste N Bytes): …“ und „nachrechnen: head -c N datei.pdf | sha256sum · prüfen: …/pruefen“.
+  Kopf: Inventarnummer, darunter „Kennung …“ und „Stand …“; Fuß: „Lebenslauf <Inventarnummer> · <Kennung> · Stand …“;
+  unten 24 mm Rand wie bei den Protokollen. **Kein „nicht festgeschrieben“ mehr** (Kopf, Fuß, Schlusssatz); der
+  Schlusssatz lautet „Dieser Lebenslauf (<Kennung>, Stand …) und die genannten Protokolle lassen sich mit ihrer
+  Prüfsumme prüfen: <Prüfseite>“. Festgeschrieben wird ein Lebenslauf weiterhin nie, auch nicht bei der Aussonderung.
+  Dateiname zusätzlich mit Kennung. Abruf weiter `no-store`, `?stand=` wird übergangen. PDF/A-3b bleibt gültig
+  (veraPDF, mehrseitig). Der Hilfetext am Knopf „Lebenslauf (PDF)“ sagt „Stand jetzt, mit Kennung und Prüfsumme –
+  prüfbar auf der Prüfseite.“ statt „nicht festgeschrieben“.
+- **Prüfseite** (`protokoll.pruefen`, `pruefen.js`, `pruefen.html`): erkennt Lebensläufe über die volle Summe
+  („unverändert“), die Summe der ersten N Bytes („Stempel fehlt“), die Kennung im Nachtrag (gilt nur, wenn N und Summe
+  passen) und die %%EOF-Grenzen. Antwort mit `art` „Lebenslauf“, `protokoll_id` = Kennung und `stand` – ohne
+  Inventarnummer, ohne Personendaten; angemeldet mit Leserecht am Artikel `link` „Zum Artikel in strömis.de“. Sätze
+  je Art (Protokoll bzw. Lebenslauf); „Kein Protokoll erkannt“ heißt „Nicht erkannt“. Einleitung der Seite nennt den
+  Lebenslauf.
+- **Schnittstelle:** `POST /api/material/pruefen` liefert bei Lebensläufen zusätzlich `stand`; der Dateiname des
+  Lebenslaufs endet auf `_<Kennung>.pdf`. Sonst unverändert.
+- Tests: `tests/test_material_lebenslauf_summe.py` (neu) – Abruf legt genau eine Zeile an (Summen der ausgelieferten
+  Datei, nachrechenbar), zwei Abrufe zwei Kennungen, Stempel und Fuß auf jeder Seite eines mehrseitigen Lebenslaufs,
+  kein „nicht festgeschrieben“, PDF/A-Kennzeichen; Kennung je Jahr (Jahreswechsel in deutscher Zeit, Lücke, fehlender
+  Zähler), Stempelzeilen kurz genug; Prüfseite unverändert/Stempel fehlt/angehängt/Inhalt verändert/fremd/Kennung mit
+  falscher Summe oder Länge/erfundene Kennung, Link nur mit Leserecht, gelöschter Artikel, Protokoll als Gegenprobe;
+  Trigger-Matrix (UPDATE auch über rowid, DELETE, INSERT OR REPLACE, REPLACE, UPSERT, falsche Kennung – je mit und
+  ohne foreign_keys/recursive_triggers); Migration frisch / 30 → 31 mit Altbestand / zweiter Lauf.
+  Angepasst: `test_material_export.py` (Dateiname, Stempel statt „nicht festgeschrieben“), `test_material_vor_merge.py`
+  (Schemaversion nicht mehr fest 30, neue leere Tabelle), `test_material_dev_zuruecksetzen.py` (Lebenslauf im Bestand,
+  danach leer, kein Zähler), `test_material_antrag.py`, `test_material_antrag_zustaendig.py`,
+  `test_material_aussondern.py` (Trigger und Tabelle aus Schritt 31 in den Migrationserwartungen),
+  `test_material_ueberblick.py` (die Führungskraft ändert nichts – ausgenommen das Verzeichnis der Lebensläufe, das
+  jeder Abruf füllt).
+
+### Bitte bestätigen
+
+1. **Artikel als Inventarnummer** statt Kennung mit Fremdschlüssel: Ein falsch angelegter Artikel ohne Prüfung bleibt
+   löschbar, auch wenn jemand seinen Lebenslauf abgerufen hat; die Prüfseite erkennt den Lebenslauf danach weiter (ohne
+   Link).
+2. **Jeder Abruf zählt**, auch einer, den der Browser von sich aus wiederholt (Vorabladen, erneutes Öffnen): Er bekommt
+   eine eigene Kennung. Die Nummern sind deshalb kein Maß dafür, wie oft ein Lebenslauf „weitergegeben“ wurde.
 
 ## Nachbesserung vor dem Merge, Runde 2 (26.10.2026)
 
@@ -8771,7 +8830,7 @@ oder Plattform-Verwaltung).
 | `GET/PUT/DELETE /api/material/unterschrift` (`bild`: data:-URL vom Signatur-Pad) | GET und DELETE angemeldet (eigene Daten, auch ohne Modulzugang); PUT mit Modulzugang nur Prüfer (seit Lieferung 5 schon mit dem Häkchen, ohne Urkundennummer) und wer irgendwo verwaltet (eigenes Konto) | eigene Unterschrift im Profil |
 | `PUT /api/material/urkundennummer` (`urkundennummer`; leer entfernt sie) | Häkchen „Prüfer“ (eigenes Konto), sonst 403 | eigene Urkundennummer im Profil; Antwort `urkundennummer`, `pruefen` (darf jetzt prüfen); ungültig 400 (Lieferung 5) |
 | `GET /materialablage/pruefung/<id>/pdf`, `GET /materialablage/durchgang/<id>/sammelprotokoll` | lesen | Protokoll als PDF (nur, solange die Datei ihre Prüfsumme hat) |
-| `GET /materialablage/pruefen`, `POST /api/material/pruefen` (`datei`) | ohne Anmeldung | Prüfseite: `ergebnis` (unveraendert, veraendert, unbekannt), `protokoll_id`, `art`, `hinweis` – angemeldet mit Zugang dazu `link` |
+| `GET /materialablage/pruefen`, `POST /api/material/pruefen` (`datei`) | ohne Anmeldung | Prüfseite: `ergebnis` (unveraendert, veraendert, unbekannt), `protokoll_id`, `art`, `hinweis` – angemeldet mit Zugang dazu `link`; seit Schritt 31 auch Lebensläufe: `protokoll_id` = Kennung `L-…`, `art` „Lebenslauf“, dazu `stand`, `link` zum Artikel (nur mit Leserecht) |
 | `GET /api/material/entwuerfe` | Modulzugang | offene Prüfungen aller Prüfer im eigenen Bereich |
 | `POST /api/material/artikel/<id>/sperren` (`grund`: sturz, beschaedigung, verlust, rueckruf; `text`) | Prüfer | Sperre ohne Prüfung |
 | `POST /api/material/artikel/<id>/aussondern` (`grund`: lebensdauer, verlust, irreparabel; `datum`, `bemerkung`) | Materialwart (mit Unterschrift) | Aussonderung gesperrter Artikel mit Aussonderungsprotokoll; liefert `aussonderung` (Kennung) |
@@ -8780,7 +8839,7 @@ oder Plattform-Verwaltung).
 | `POST /api/material/durchgaenge/<id>/abbrechen` | Materialwart oder Prüfer | vorzeitig beenden; `durchgang` ist `null`, wenn er mangels Geprüftem entfernt wurde |
 | `GET /materialablage/export/<ordner>.csv` | Grundrecht am Ordner (Phase 2) | Artikel, deren Heimat im Ordner oder darunter liegt (auch von hier gesperrte und ausgesonderte), als CSV für Excel; Spalte „Zugeordnet an“ (Phase 2), hinter „Modell“ „Bemerkung (Produkt)“ (Nachbesserung vom 18.10.2026), hinter „Lebensende“ die Spalte „Länge (m)“ als „57,5“ (Schritt 20) |
 | `GET /materialablage/export/<ordner>-protokolle.zip` | Grundrecht am Ordner (Phase 2) | alle Protokolle dieser Artikel, die Sammelprotokolle der Durchgänge und die Set-Protokolle der Sets im Zweig, mit `Verzeichnis.csv` (Spalte „Set“ seit 25.10.2026); Dateiname mit ASCII-Ersatz („ue“) und `filename*` |
-| `GET /materialablage/artikel/<id>/lebenslauf.pdf` | Grundrecht an der Heimat (Phase 2) | Lebenslauf als PDF/A-3b, auf Abruf, nicht festgeschrieben |
+| `GET /materialablage/artikel/<id>/lebenslauf.pdf` | Grundrecht an der Heimat (Phase 2) | Lebenslauf als PDF/A-3b, auf Abruf; seit Schritt 31 mit Kennung `L-<jahr>-<nr>` und Prüfsummen-Stempel, je Abruf eine Zeile in `mat_lebenslauf` (ohne Konto); Dateiname `Lebenslauf_<Inventarnummer>_<JJJJ-MM-TT>_<HHMM>_<Kennung>.pdf` |
 | `GET /api/material/katalog/export`, `GET …/export/vorschau` | Katalog | Katalog ohne DEMO als ZIP (Format 2) bzw. seine Zahlen vorab |
 | `POST /api/material/katalog/import` (`file`: ZIP oder JSON, `trocken`: Vorgabe `1`) | Katalog | Katalogimport im Hintergrund (seit 24.10.2026): **202** `auftrag`, 409 mit dem laufenden, 507 bei zu wenig Platz (Datei + 64 MB); der Bericht (neu/geändert/unverändert je Art, Bilder, Dokumente, Änderungen, Hinweise, Warnungen, Fehler) kommt über `GET …/katalog/import/<kennung>` |
 | `GET /api/material/katalog/import/<kennung>`, `POST …/<kennung>/uebernehmen`, `GET …/katalog/import/aktuell` | Katalog (Übernehmen: wer den Probelauf gestartet hat) | Stand und Bericht eines Auftrags (`von`: Name, frisch aus dem Kontoverweis aufgelöst, „(gelöschtes Konto)“ nach dem Löschen); echter Lauf mit der Datei des Probelaufs (202, 507 bei zu wenig Platz; auch mit der Kennung eines abgebrochenen „Übernehmen“, dessen Probelauf seine Datei zurückbekam); laufender oder zuletzt beendeter Auftrag für die Katalogseite – Einzelheiten unter „Katalogimport im Hintergrund“ und seiner Nachbesserung |

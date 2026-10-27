@@ -1159,7 +1159,12 @@ def pruefen():
 
 def _protokoll_link(pid):
     """Für Angemeldete, die den Artikel bzw. den Durchgang sehen dürfen: wohin das Protokoll in der Oberfläche gehört –
-    sonst None (ein fremdes Protokoll prüft die Seite trotzdem, sie verlinkt nur nicht)."""
+    sonst None (ein fremdes Protokoll prüft die Seite trotzdem, sie verlinkt nur nicht). Ein Lebenslauf (L-…) führt zu
+    seinem Artikel – nur mit Leserecht daran; einen gelöschten Artikel findet die Inventarnummer nicht mehr."""
+    if pid.startswith("L-"):
+        r = db.query("SELECT i.id, i.folder_id, i.origin_folder_id, i.lock_state FROM mat_lebenslauf l "
+                     "JOIN mat_item i ON i.inventory_no = l.inventory_no WHERE l.kennung = ?", (pid,), one=True)
+        return f"/materialablage/artikel/{r['id']}" if r and darf_artikel("lesen", r) else None
     if pid.startswith("S-"):
         r = db.query("SELECT id, folder_id FROM mat_round WHERE protocol_id = ?", (pid,), one=True)
         return f"/materialablage/durchgang/{r['id']}" if r and darf("lesen", r["folder_id"]) else None

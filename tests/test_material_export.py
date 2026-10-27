@@ -293,16 +293,18 @@ def test_lebenslauf():
         r = f.get(f"/materialablage/artikel/{a['formel']['id']}/lebenslauf.pdf")
         assert r.status_code == 200 and r.mimetype == "application/pdf" and r.data.startswith(b"%PDF"), r.status_code
         cd = r.headers["Content-Disposition"]
-        assert cd.startswith("inline") and re.search(rf"Lebenslauf_{a['formel']['inventory_no']}_{_heute().isoformat()}_\d{{4}}\.pdf", cd), cd
+        assert cd.startswith("inline") and re.search(
+            rf"Lebenslauf_{a['formel']['inventory_no']}_{_heute().isoformat()}_\d{{4}}_L-{_heute().year}-\d{{6}}\.pdf", cd), cd
         assert "no-store" in r.headers["Cache-Control"] and r.headers["Content-Security-Policy"] == CSP_PDF
-        # Nicht festgeschrieben: keine neue Datei unter DATA_DIR/pdf, keine Zeile in mat_inspection, kein Journaleintrag.
+        # Kein Protokoll: keine neue Datei unter DATA_DIR/pdf, keine Zeile in mat_inspection, kein Journaleintrag (die Zeile
+        # in mat_lebenslauf prüft test_material_lebenslauf_summe.py).
         assert _dateien(os.path.join(tmp, "pdf")) == vorher and _zahlen(app) == zahlen
         pfad = os.path.join(tmp, "lebenslauf.pdf")
         with open(pfad, "wb") as fh:
             fh.write(r.data)
         seiten = pdf_seiten(pfad)
         text = _flach(" ".join(seiten))
-        for wert in (a["formel"]["inventory_no"], p["protocol_id"], b["protocol_id"], s["protocol_id"], "nicht festgeschrieben",
+        for wert in (a["formel"]["inventory_no"], p["protocol_id"], b["protocol_id"], s["protocol_id"], "Kennung L-",
                      "Lebenslauf", "Testwerk HMS Beta", "Jahresprüfung Fach 1", "Bemerkung vergessen", "Nachgetragen",
                      "Urkunde 1012-4711", "zweite Zeile äöüß", "angelegt", "geprüft"):
             assert wert in text, (wert, text[:1500])
@@ -310,9 +312,12 @@ def test_lebenslauf():
         ohne_leer = text.replace(" ", "")
         assert p["file_sha256"] in ohne_leer and b["file_sha256"] in ohne_leer and s["file_sha256"] in ohne_leer
         assert text.index(f"Protokoll {p['protocol_id']}") < text.index(f"Protokoll {b['protocol_id']}"), text[:2000]
-        # Kein Protokoll: kein Stempel, keine Unterschrift, keine Protokoll-Kennung im Kopf, eigener Fuß auf jeder Seite.
-        assert "SHA-256 (erste" not in text and "Unterschrift" not in text and "Prüfnachweis" not in text
-        assert all("nicht festgeschrieben" in _flach(x) and "Lebenslauf" in _flach(x) for x in seiten)
+        # Kein Protokoll: keine Unterschrift, keine Protokoll-Kennung im Kopf, kein „festgeschrieben“ (Nachtrag des Nutzers
+        # vom 27.10.2026); eigener Fuß mit Kennung und der Prüfsummen-Stempel auf jeder Seite (Schritt 31).
+        assert "Unterschrift" not in text and "Prüfnachweis" not in text and "nicht festgeschrieben" not in text
+        kennung = re.search(r"L-\d{4}-\d{6}", cd).group(0)
+        assert all(f"Lebenslauf {a['formel']['inventory_no']} · {kennung} · Stand" in _flach(x)
+                   and f"Lebenslauf {kennung} · SHA-256 (erste" in _flach(x) for x in seiten), seiten[0][-400:]
         leser = PdfReader(pfad)
         assert leser.metadata.get("/Keywords", "").startswith("strömis-lebenslauf"), leser.metadata
         assert "protokoll" not in leser.metadata.get("/Keywords", "")
@@ -385,8 +390,8 @@ def test_lebenslauf_jeder_abruf_frisch():
         with uhrzeit(18, 18):
             cd2, text2 = abruf(f"{url}?stand=1761495480000")
             cd3, text3 = abruf(url)
-        assert cd1.startswith("inline") and f"_{tag}_1546.pdf" in cd1, cd1
-        assert f"_{tag}_1818.pdf" in cd2 and cd3 == cd2, (cd2, cd3)
+        assert cd1.startswith("inline") and f"_{tag}_1546_L-" in cd1, cd1
+        assert f"_{tag}_1818_L-" in cd2 and f"_{tag}_1818_L-" in cd3 and cd3 != cd2, (cd2, cd3)     # je Abruf eine Kennung
         assert "Platzhalter nach dem ersten Abruf" not in text1
         assert "Platzhalter nach dem ersten Abruf" in text2 and "Platzhalter nach dem ersten Abruf" in text3, text2[:1500]
         # Die übrigen Dateien auf Abruf: CSV und ZIP des Ordners mit Uhrzeit (Jahresbericht: test_material_bericht).

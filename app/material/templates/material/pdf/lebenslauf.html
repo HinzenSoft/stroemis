@@ -1,20 +1,22 @@
 {% extends "material/pdf/basis.html" %}
 {# Lebenslauf eines Artikels (Export, Lieferung 4): Stammdaten, Zustand, alle abgeschlossenen Prüfungen und die
    Aussonderung in zeitlicher Reihenfolge, die Prüfdurchgänge und die Ereignisse aus dem Journal des Artikels – zum
-   Weitergeben oder als Aussonderungsnachweis. Auf Abruf gesetzt und NICHT festgeschrieben: kein Stempel (deshalb
-   unten nur der Rand für den Fuß), keine Unterschrift, keine Protokoll-ID. Verbindlich sind die Protokolle; jede
-   Zeile nennt das ihre mit der Prüfsumme der Datei. Daten laut services/lebenslauf.py (dokument, artikel, zustand,
-   hinweis, pruefungen, durchgaenge, rueckrufe, ereignisse, ereignisse_gekuerzt). #}
+   Weitergeben oder als Aussonderungsnachweis. Auf Abruf gesetzt, nie festgeschrieben; keine Unterschrift, keine
+   Protokoll-ID, aber seit Schritt 31 eine Kennung L-<jahr>-<nr> (dokument.kennung) im Kopf und Fuß und unten der
+   Prüfsummen-Stempel wie bei den Protokollen (deshalb dieselben 24 mm Rand unten). Jede Prüfung nennt ihr Protokoll mit
+   der Prüfsumme der Datei. Daten laut services/lebenslauf.py (dokument, artikel, zustand, hinweis, pruefungen,
+   durchgaenge, rueckrufe, ereignisse, ereignisse_gekuerzt). #}
 {% block titel %}Lebenslauf {{ artikel.inventarnummer }}{% endblock %}
-{% block keywords %}strömis-lebenslauf {{ artikel.inventarnummer }}{% endblock %}
-{% block rand_unten %}16mm{% endblock %}
+{% block keywords %}strömis-lebenslauf {{ artikel.inventarnummer }} {{ dokument.kennung }}{% endblock %}
 {% block kopf_rechts %}Materialablage · Lebenslauf{% endblock %}
-{# string(protokoll) ist hier die Inventarnummer (.kopf-id .pid), string(stand) der Zeitpunkt aus dem Kopf. #}
-{% block fuss_links %}"Lebenslauf " string(protokoll) " · Stand " string(stand) " · nicht festgeschrieben"{% endblock %}
+{# string(protokoll) ist hier die Inventarnummer (.kopf-id .pid), string(kennung) und string(stand) Kennung und Zeitpunkt
+   aus dem Kopf. #}
+{% block fuss_links %}"Lebenslauf " string(protokoll) " · " string(kennung) " · Stand " string(stand){% endblock %}
 {% block demo_hinweis %}Dieser Lebenslauf stammt aus der Demo-Umgebung von {{ dokument.plattform }} und belegt keine Prüfung.{% endblock %}
 
 {% block stil %}
 .kopf-id .stand { string-set: stand content(); }
+.kopf-id .kennung { string-set: kennung content(); }
 
 /* Prüfungen: je Vorgang eine Hauptzeile und darunter eine Zeile über die ganze Breite für Grund, Bemerkung,
    Verweise und die Prüfsumme der Protokolldatei (in voller Länge, nicht in einer schmalen Spalte umgebrochen). */
@@ -70,8 +72,8 @@ table.ereignisse .aenderung .feld { color: var(--grau); }
 {% block kopf_id %}
       <div class="lbl">Inventarnummer</div>
       <div class="pid">{{ artikel.inventarnummer }}</div>
+      <div class="zeit">Kennung <span class="kennung mono">{{ dokument.kennung }}</span></div>
       <div class="zeit">Stand <span class="stand">{{ dokument.stand }}</span></div>
-      <div class="zeit">nicht festgeschrieben</div>
     {% endblock %}
 
 {% block kopfzeile %}
@@ -233,7 +235,6 @@ table.ereignisse .aenderung .feld { color: var(--grau); }
   {%- endif %}
 </section>
 
-<p class="schluss">Dieser Lebenslauf ist ein Auszug auf Abruf (Stand {{ dokument.stand }}) und nicht festgeschrieben.
-  Verbindlich sind die festgeschriebenen Protokolle; ihre Dateien lassen sich mit der angegebenen Prüfsumme prüfen:
-  <span class="nowrap">{{ dokument.pruefseite }}</span></p>
+<p class="schluss">Dieser Lebenslauf (<span class="mono">{{ dokument.kennung }}</span>, Stand {{ dokument.stand }}) und die genannten Protokolle
+  lassen sich mit ihrer Prüfsumme prüfen: <span class="nowrap">{{ dokument.pruefseite }}</span></p>
 {% endblock %}
