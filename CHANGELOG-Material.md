@@ -47,6 +47,7 @@ Geschichte stehen. Schemaversion nach der Nachbesserung vor dem Merge: 30; mit d
 | Nachbesserung vor dem Merge, Runde 3 | Tippflächen Brotkrumen und „Deine Meldungen“ (B-1, B-2); Katalog am Telefon kompakt, Liste nach der Kategoriewahl oben, Zurück an dieselbe Stelle (V1, V3); Seitentitel je Ansicht in allen Modulen (V2); Leitstelle: Hilfe zugeklappt, Zeilenmenü, E-Mail-Umbruch, Reiter als Linie (V5); Ankerplätze „+ Album“ (V6); „☰“ nicht vorgelesen (V8); eine Linie unter den Reitern (V9); Dialog-Reiter quer (V11); Kontrast in den Riegenkarten (V13); Nachtrag: Nummernsuche am Telefon zu, Reiter in eigener Zeile (V4), Sperrgrund im Mangel-Banner (V7), Hinweis- und Hilfetexte höchstens rund 120 Zeichen je Zeile (V10), Mangelbeschreibung im Verlauf am Artikel | gebaut 26./27.10.2026 (kein Schemaschritt), zur Freigabe |
 | Prüfsumme für den Lebenslauf (Schritt 31) | Jeder Abruf eines Lebenslaufs mit Kennung L-<Jahr>-<Nr> und Prüfsummen-Stempel, verzeichnet ohne Konto; die Prüfseite erkennt ihn; kein „nicht festgeschrieben“ mehr im Lebenslauf | gebaut 27.10.2026 (Schema 31), zur Freigabe |
 | Liste nach dem Merge – Teil A (Schritt 32) | Lebenslauf: Kennung nach dem Zurückspielen nie doppelt, HEAD ohne Eintrag, Abrufbremse; Prüfseite „Protokoll oder Lebenslauf prüfen“; REPLACE ohne recursive_triggers verdrängt nichts Geschütztes; Rückruf nach Antrag wieder offen (gesagt), Rückruf-Text nach dem Stand beim Versand; Journal am Telefon als Karten, Mangeltext und Reiter; Verbesserungen der Browserberichte (Artikelseite „Mehr“, Prüfungen, Katalogimport, Meine PSA …) | gebaut 27.10.2026 (Schema 32), zur Freigabe |
+| Reste vor dem finalen Test | Langer Mangeltext im Banner mit „Weiterlesen“; Brotkrumen am Telefon in einer Zeile (lange Glieder mit „…“, ab vier Gliedern „…“ für den Mittelteil); Knopf „Produktmeldungen“; Ergebnisseite ohne „Ergebnis / Ergebnis“; Fokus im Unterschrift-Dialog auf Zeichenfläche bzw. Titel | gebaut 27.10.2026 (kein Schemaschritt, Schema bleibt 32), zur Freigabe |
 
 ## Abgleich mit dem Bestand (vor Lieferung 1)
 
@@ -4179,6 +4180,59 @@ Danach liefen die ganze Suite (`st-test`) grün, `st-py`, `st-js` und `st-css` o
 14. **Kasten „Mailversand“ am Telefon**: Eine Karte hat vier Inhaltszeilen (Mail mit Betreff, Empfänger, Fehler mit
     Antwort), bei 360 px umbrochen etwa 170 px hoch; die Antwort des Mailservers ließe sich noch hinter „Technische
     Antwort“ einklappen – bitte am Gerät ansehen.
+
+## Reste vor dem finalen Test (27.10.2026)
+
+Auftrag `planung/material-phase4/auftrag_reste.md`: die fünf offenen Punkte aus `nach_merge_liste.md` („Noch offen“, aus
+Teil A). Wunsch des Nutzers: „Erstelle einen Stand ohne Reste, damit final auf dev getestet werden kann und dann ggf.
+gemerged“. Zweig `nm-c` ab d41dcb2 (vor-merge, Schema 32). Nur Oberfläche – kein Schemaschritt, keine Änderung der
+Schnittstelle.
+
+- **1 – Langer Mangeltext im Banner (Artikelseite):** Ab 600 Zeichen steht die Beschreibung eingeklappt – der Anfang bis
+  zum letzten Leerzeichen bzw. Zeilenumbruch vor 400 Zeichen, „ …“, darunter der Knopf „Weiterlesen“ (`btn secondary
+  small`, `aria-expanded`, `aria-controls` auf den Text). Er zeigt den Rest an Ort und Stelle und heißt dann „Weniger
+  anzeigen“; der Fokus bleibt auf ihm, Enter und Leertaste wirken wie ein Tipp. Der Rest ist bis dahin `hidden`, auch für
+  Vorlesehilfen. Kürzere Texte unverändert; der Hinweis in der Prüfung, die erledigten Meldungen und der Lebenslauf
+  zeigen den Text weiter ganz. Gemessen mit DEMO-Platzhaltertext (1 766 Zeichen): Banner bei 344 px 500 statt 1 305 px
+  hoch, bei 390 px 459 statt 1 264, bei 1280 px 223 statt 484; Knopf 99 × 44 px unter Touch (Mitte trifft ihn), 95 × 28
+  am Rechner. 620 Zeichen: eingeklappt 500 / aufgeklappt 631 px bei 344 px. 62 Zeichen: kein Knopf.
+- **2 – Brotkrumen am Telefon** (Container „mat-seite“ bis 600 px, nur unter Touch): eine Zeile statt einer 44-px-Zeile je
+  Glied. Ein langes Glied endet mit „…“ (der Linktext bleibt vollständig, die Vorlesehilfe liest ihn ganz): zuerst ein
+  mittleres (bis 44 px), dann das erste; das letzte – das nächste zur Seite – erst über der halben Breite, bei nur zwei
+  Gliedern zuerst das zweite („alle Kategorien / …“ bleibt lesbar). Ab vier Gliedern stehen nur das erste und das letzte
+  da, dazwischen der Knopf „…“ („Ganzen Pfad zeigen“, 44 × 44 px): Er zeigt den ganzen Pfad umgebrochen wie bisher und
+  gibt den Fokus an das erste Glied, das dazukam. `pfadHtml` setzt dafür auch das erste Glied in ein `.mat-pfad-glied`
+  (ebenso die Vorlage der Prüfseite). Am Rechner und ab 601 px unverändert. Gemessen (Chromium, Touch): Produktseite
+  „Katalog / Persöhnliche Schutzausrüs… / Gurte“ bei 344 px eine Zeile 44 px hoch (vorher drei, rund 190 px), Glieder
+  48/177/44 × 44; Kategorie „alle Kategorien / Persöhnliche …“ 91/165 × 44; Artikel mit fünf Gliedern (Set im Set)
+  „DEMO-Kre… / … / DEMO-Flaschenzugt…“ 83/57/142 × 44, nach „…“ 220 px (fünf Zeilen, wie vorher); Prüfung „DEMO-Kreisverband
+  Fl… / Gespe… / M-000004“. Kein waagerechter Bildlauf bei 344/360/390, Mitte jedes Glieds trifft das Glied.
+  Abweichung vom Vorschlag im Auftrag: kein `title` mit dem vollen Pfad – am Telefon (dem einzigen Ort der Kürzung) zeigt
+  ihn niemand an, die Vorlesehilfe liest die vollständigen Linktexte, und „…“ öffnet den ganzen Pfad.
+- **3 – „Produktmeldungen“:** Der Knopf im Katalogkopf heißt wie die Seite (vorher „Meldungen“), ebenso das feste Wort im
+  Seitentitel vom Server („Produktmeldungen – Materialablage – strömis.de“). Gemessen: 167 × 44 px, kein Überlauf, eine
+  Zeile; bei 390 px stehen für die Material-Verwaltung „Produktmeldungen“ und „Export / Import“ in einer Zeile (zwei
+  Knopfzeilen), bei 344 und 360 px brechen sie in drei Zeilen (vorher zwei; +52 px) – Bitte bestätigen 2. Wer nur liest,
+  sieht nur diesen einen Knopf.
+- **4 – Ergebnisseite einer Prüfung:** Unter der Überschrift „Ergebnis“ steht direkt die Marke (`.mat-ergebnis-zeile`),
+  die Zeile „Ergebnis“ in der Liste darunter entfällt (vorher „Ergebnis“ als Überschrift und als erste Zeile).
+- **5 – Unterschrift-Dialog:** Der Fokus startet nicht mehr auf „Abbrechen“ (das erste Bedienelement, weil „Leeren“
+  ausgegraut ist). Am Rechner bekommt ihn die Zeichenfläche (`tabindex="-1"` – nicht in der Tab-Reihenfolge, die
+  Vorlesehilfe nennt „Feld zum Unterschreiben – mit Finger, Stift oder Maus“; Tab führt zu „Abbrechen“), am Touchgerät der
+  Titel wie in jedem Dialog (`S.dialog`). Gemessen (Profil → „Neu unterschreiben“): 1280 px Fokus auf der Zeichenfläche,
+  390/344 px auf dem Titel; Tab → „Abbrechen“, Esc schließt und gibt den Fokus an „Neu unterschreiben“ zurück. Gilt auch
+  für die Unterschrift beim Festschreiben (dieselbe Funktion).
+
+**Tests:** `tests/test_material_reste.py` (neu) – Code-Stellen der fünf Punkte, Seitentitel „Produktmeldungen“ vom Server,
+lange Beschreibung kommt ganz an. Angepasst: `test_material_vor_merge_3.py` (pfadHtml, Seitentitel).
+
+### Bitte bestätigen
+
+1. **„Weiterlesen“ nur auf der Artikelseite** (wie im Auftrag); im Hinweis „GEMELDETER MANGEL“ der Prüfung steht der Text
+   weiter ganz – der Prüfer soll ihn vor dem Prüfen lesen. Ab 600 Zeichen, eingeklappt rund 400.
+2. **„Produktmeldungen“ am Telefon:** Für die Material-Verwaltung bei 344/360 px drei statt zwei Knopfzeilen im
+   Katalogkopf. Alternative: am Telefon nur „Meldungen“ (dann wieder zwei Begriffe) – empfohlen ist, es so zu lassen.
+3. **Brotkrumen ab vier Gliedern** am Telefon mit „…“ für den Mittelteil (ein Tipp zeigt alles), sonst Kürzung je Glied.
 
 ## Liste nach dem Merge – Teil A: Materialablage, Lebenslauf, Sicherheit (Schritt 32, 27.10.2026)
 

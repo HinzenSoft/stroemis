@@ -53,7 +53,7 @@ def test_seitentitel_vom_server():
                             ("/materialablage/pruefungen", "Prüfungen – Materialablage – strömis.de"),
                             ("/materialablage/bestand", "Bestand – Materialablage – strömis.de"),
                             ("/materialablage/katalog", "Katalog – Materialablage – strömis.de"),
-                            ("/materialablage/katalog/meldungen", "Meldungen – Materialablage – strömis.de"),
+                            ("/materialablage/katalog/meldungen", "Produktmeldungen – Materialablage – strömis.de"),
                             ("/materialablage/suche?q=PLATZHALTER", "Suche – Materialablage – strömis.de")):
             r = c.get(pfad)
             assert r.status_code == 200, (pfad, r.status_code)
@@ -86,7 +86,8 @@ def test_materialablage_statisch():
     css = lies("app/material/static/material.css")
     seite = lies("app/material/templates/material/seite.html")
     # B-1: Brotkrumen nur noch über pfadHtml – keine Glieder mehr mit „ / “ aneinandergehängt.
-    assert 'const pfadHtml = (glieder) => glieder.filter(Boolean).map((g, i) => (i ? `<span class="mat-pfad-glied">/ ${g}</span>` : g)).join(" ");' in js
+    # Seit den Resten vor dem finalen Test (2) steht auch das erste Glied in einem .mat-pfad-glied (test_material_reste).
+    assert 'const html = glieder.filter(Boolean).map((g, i) => `<span class="mat-pfad-glied">${i ? "/ " : ""}${g}</span>`);' in js
     for m in re.finditer(r'<div class="mat-pfad">(.*)', js):
         zeile = m.group(1)
         assert zeile.startswith("${pfadHtml(") or zeile.startswith("${bc}"), zeile[:80]
