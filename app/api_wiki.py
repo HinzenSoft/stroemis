@@ -14,7 +14,7 @@ from flask import Blueprint, current_app, jsonify, request
 
 from . import db
 from .auth import avatar_url, current_user, eingabefehler_abfangen, json_body, nutzt, verwaltet, wiki_required
-from .images import EMBED_EXT, crop_wiki_image, rotate_wiki_image, store_wiki_file, wiki_endung
+from .images import EMBED_EXT, crop_wiki_image, fehlerart, rotate_wiki_image, store_wiki_file, wiki_endung
 from .mailer import send_mail
 
 bp = Blueprint("wiki", __name__, url_prefix="/api/wiki")
@@ -1789,11 +1789,11 @@ def upload_file():
         name, kind = store_wiki_file(f, current_app.config["MEDIA_DIR"])
     except ValueError as exc:
         return jsonify(error=str(exc)), 400
-    except Exception:
+    except Exception as exc:
         # Der Grund ins Protokoll, nicht in die Antwort: Pillow und das Dateisystem nennen darin
-        # Serverpfade.
+        # Serverpfade. Die Antwort nennt nur die Art (fehlerart).
         current_app.logger.exception("Wiki-Upload von %s fehlgeschlagen", f.filename)
-        return jsonify(error="Die Datei konnte nicht verarbeitet werden."), 400
+        return jsonify(error=f"Die Datei konnte nicht verarbeitet werden ({fehlerart(exc)})."), 400
     _datei_vermerken(name, f.filename or "", kind)
     url = f"/media/wiki/{name}"
     return jsonify(url=url, kind=kind, data={"filePath": url})
@@ -1812,9 +1812,9 @@ def rotate_file():
         neu = rotate_wiki_image(current_app.config["MEDIA_DIR"], name, d.get("grad"))
     except ValueError as exc:
         return jsonify(error=str(exc)), 400
-    except Exception:
+    except Exception as exc:
         current_app.logger.exception("Drehen von %s fehlgeschlagen", name)
-        return jsonify(error="Das Bild ließ sich nicht drehen."), 400
+        return jsonify(error=f"Das Bild ließ sich nicht drehen ({fehlerart(exc)})."), 400
     _datei_vermerken(neu, name, "image")
     return jsonify(url=f"/media/wiki/{neu}")
 
@@ -1834,9 +1834,9 @@ def crop_file():
                               (d.get("x"), d.get("y"), d.get("w"), d.get("h")))
     except ValueError as exc:
         return jsonify(error=str(exc)), 400
-    except Exception:
+    except Exception as exc:
         current_app.logger.exception("Zuschneiden von %s fehlgeschlagen", name)
-        return jsonify(error="Das Bild ließ sich nicht zuschneiden."), 400
+        return jsonify(error=f"Das Bild ließ sich nicht zuschneiden ({fehlerart(exc)})."), 400
     _datei_vermerken(neu, name, "image")
     return jsonify(url=f"/media/wiki/{neu}")
 

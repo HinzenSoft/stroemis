@@ -1,14 +1,17 @@
 """Bildverarbeitung: EXIF-Geotags lesen, Thumbnails erzeugen, Dateien ablegen."""
+import errno
 import json
 import logging
 import os
 import secrets
 import shutil
+import struct
 import subprocess
 import threading
+import zlib
 from datetime import datetime
 
-from PIL import Image, ImageOps
+from PIL import Image, ImageOps, UnidentifiedImageError
 
 try:  # HEIC/HEIF von iPhones – optional
     import pillow_heif
@@ -538,6 +541,24 @@ def wiki_endung(file_storage):
         if ext not in ALLOWED_EXT | {".gif"}:
             ext = ""
     return ext
+
+
+def fehlerart(exc):
+    """Die Art eines Fehlers beim Ablegen einer Datei, für die Meldung an den Nutzer – aus der Ausnahme abgeleitet, nicht
+    aus ihrem Text: Pillow und das Dateisystem nennen darin Serverpfade. Den ganzen Fehler behält das Protokoll."""
+    if isinstance(exc, PermissionError) or (isinstance(exc, OSError) and exc.errno == errno.EROFS):
+        return "keine Schreibrechte im Ablageordner"
+    if isinstance(exc, OSError) and exc.errno in (errno.ENOSPC, getattr(errno, "EDQUOT", errno.ENOSPC)):
+        return "Speicher voll"
+    if isinstance(exc, UnidentifiedImageError):         # vor OSError: Pillow erkennt kein Bildformat
+        return "Dateityp nicht lesbar"
+    # BildFehler (zu viele Pixel) ist ein ValueError; abgeschnittene oder kaputte Bilder meldet Pillow als OSError ohne
+    # errno, als ValueError, SyntaxError, struct- oder zlib-Fehler.
+    if (isinstance(exc, (ValueError, Image.DecompressionBombError, MemoryError, EOFError, SyntaxError, struct.error,
+                         zlib.error))
+            or (isinstance(exc, OSError) and exc.errno is None)):
+        return "Bild beschädigt oder zu groß"
+    return "unbekannter Fehler – siehe Serverprotokoll"
 
 
 def store_wiki_file(file_storage, media_dir):

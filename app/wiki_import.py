@@ -43,7 +43,7 @@ from flask import current_app
 from werkzeug.datastructures import FileStorage
 
 from . import api_wiki, db
-from .images import VIDEO_EXT, WIKI_EXT, store_wiki_file
+from .images import VIDEO_EXT, WIKI_EXT, fehlerart, store_wiki_file
 
 MAX_EINTRAEGE = 2000
 MAX_VERZEICHNIS = 512 * 1024
@@ -287,9 +287,9 @@ class _Import:
             tmp.seek(0)
             try:
                 neu, art = store_wiki_file(FileStorage(stream=tmp, filename=name), current_app.config["MEDIA_DIR"])
-            except Exception:                    # noqa: BLE001 – Pillow und Dateisystem nennen Serverpfade
+            except Exception as exc:             # noqa: BLE001 – Pillow und Dateisystem nennen Serverpfade
                 current_app.logger.exception("Wiki-Import: %s ließ sich nicht ablegen", pfad)
-                self.hinweis("Dateien", f"„{pfad}“ ließ sich nicht verarbeiten – nicht übernommen.")
+                self.hinweis("Dateien", f"„{pfad}“ ließ sich nicht verarbeiten ({fehlerart(exc)}) – nicht übernommen.")
                 return None
         finally:
             tmp.close()
