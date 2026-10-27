@@ -226,6 +226,7 @@ def test_stylesheet_regeln():
     assert ".vk input[type=checkbox] { width: 44px; height: 44px; }" in pcss
     assert ".vk-stempel { min-height: 44px; display: inline-flex; align-items: center; }" in pcss
     assert ".pruef[data-ansicht=liste], .pruef[data-ansicht=kataloge] { max-width: 1280px; }" in pcss
+    assert ".pruef p.help { max-width: 100ch; }" in pcss
     assert "ghost" not in pcss
     admin = lies("app/templates/admin.html")
     assert '<col style="width:11%"><col style="width:12%"><col style="width:12%">' in admin

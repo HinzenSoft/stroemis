@@ -9022,7 +9022,7 @@ Teil B: Strömipedia, Ankerplätze, Riegenkarten, Leitstelle, Anmeldung. Kein Sc
   Zurücksetzen des Passworts an … senden?“); Einstellungen und Meldungen der Leitstelle ohne Entwicklersprache
   („Server-Log“, „docker logs“, „in allen Arbeitsprozessen“, „SMTP nicht konfiguriert“ → „Kein Mailserver eingerichtet – der
   Link steht im Protokoll des Servers.“); Lehrgangs- und Katalogliste auf breiten Bildschirmen höchstens 1280 px breit
-  (vorher volle Breite bis 5120 px), Spalte „Teilnehmende“ breit genug für ihre Überschrift; „Alle Bewertungen“ im
+  (vorher volle Breite bis 5120 px), ihre Hilfetexte höchstens 100ch, Spalte „Teilnehmende“ breit genug für ihre Überschrift; „Alle Bewertungen“ im
   Mängel-Reiter nicht mehr ausgegraut ohne Grund – ohne gewählte Person sagt ein Hinweis, was fehlt; die Seitenleiste der
   Ankerplätze deckt die Karte ganz ab (vorher 96 % deckend).
 - **Schnittstelle:** `POST /api/admin/users/<id>/reset-mail` meldet ohne Mailserver „Kein Mailserver eingerichtet – der

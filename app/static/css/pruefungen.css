@@ -11,6 +11,8 @@
    Spalten über 1000 px auseinander (Browserprüfung vor dem Merge, Verbesserung 6). Der Lehrgang selbst (Matrix) bleibt
    breit. */
 .pruef[data-ansicht=liste], .pruef[data-ansicht=kataloge] { max-width: 1280px; }
+/* Hilfetexte höchstens rund 120 Zeichen je Zeile wie in Leitstelle und Materialablage (V10; st-geraete: 189 Zeichen). */
+.pruef p.help { max-width: 100ch; }
 .pruef .page-head h1 { margin: 0; overflow-wrap: anywhere; }
 .pruef .page-head .btn-row { margin-left: auto; }
 .pruef .zurueck { display: inline-block; margin-bottom: 8px; font-size: var(--fs-mittel); text-decoration: none; }
