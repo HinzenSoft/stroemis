@@ -4283,7 +4283,7 @@ erlaubte Änderungen, App arbeitet weiter), Migration 31 → 32 mit Altbestand u
 (Schemaversion nicht mehr fest 31), `test_material_export.py` (die Zählerdatei ist kein Protokoll),
 `test_material_antrag.py` und `test_material_antrag_zustaendig.py` (`wieder_offen`, Trigger aus Schritt 32 in den
 Migrationserwartungen), `test_material_aussondern.py` (Schritt 32 kommt nach 28 dazu; der Lebenslauf-Satz steht im Menü),
-`test_umbenennung.py` (Titel der Prüfseite).
+`test_umbenennung.py` (Titel der Prüfseite), `test_material_l5.py` (Lebenslauf im Menü „Mehr“, weiter am Grundrecht).
 
 **Schnittstelle:** `HEAD …/lebenslauf.pdf` nur Kopfzeilen; `GET …/lebenslauf.pdf` über 60 Abrufe je Konto und
 Viertelstunde 429 (Fehlerseite, `Retry-After: 900`); `antraege[].rueckruf` zusätzlich `wieder_offen` [{id, title}];
