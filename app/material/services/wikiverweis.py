@@ -22,7 +22,7 @@ from . import Abgelehnt, journal, katalog, kennung
 
 FEHLT = "Seite der Strömipedia nicht gefunden."          # nicht vorhanden, im Papierkorb und nicht lesbar antworten gleich
 NUR_MIT_WIKI = ("Prüfanleitungen verknüpft, wer in der Materialablage die Stufe „Verwaltung“ und in der Strömipedia "
-                "mindestens die Stufe „Mitglied“ hat – dir fehlt die Stufe in der Strömipedia (Nutzerverwaltung).")
+                "mindestens die Stufe „Mitglied“ hat – dir fehlt die Stufe in der Strömipedia (Leitstelle).")
 TREFFER_MAX = 30
 
 

@@ -795,8 +795,8 @@ def test_nutzersuche():
         assert "1012-7001" not in r.get_data(as_text=True)
         # Die Material-Verwaltung (Plattform-Verwaltung eingeschlossen) hat das Grundrecht überall – der Reiter bietet
         # ihr beim Prüfen „dauerhaft“ auch ohne lesen oder verwalten an, wie der Dienst es annimmt (grundrecht_an).
-        r = w.get("/api/material/nutzer", query_string={"q": "Administrator"})
-        assert [(x["name"], x["grundrecht_ueberall"]) for x in r.json["nutzer"]] == [("Administrator", True)], r.get_json()
+        r = w.get("/api/material/nutzer", query_string={"q": "Plattform-Verwaltung"})
+        assert [(x["name"], x["grundrecht_ueberall"]) for x in r.json["nutzer"]] == [("Plattform-Verwaltung", True)], r.get_json()
         r = w.get("/api/material/nutzer", query_string={"q": "katalog"})
         assert [(x["name"], x["grundrecht_ueberall"]) for x in r.json["nutzer"]] == [("katalog", True)], r.get_json()
         # Unter 3 Zeichen 400; Führungskraft 403; Material-Verwaltung und Plattform-Verwaltung dürfen; ohne Anmeldung 401.

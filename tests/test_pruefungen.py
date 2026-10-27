@@ -1556,7 +1556,7 @@ def test_rechte_und_ergebnis():
         # Die Administration setzt Berts Ergebnis; Namen und Zähler folgen.
         r = adm.put(f"/api/pruefungen/teilnehmer/{bert['id']}/ergebnis", json={"ergebnis": "nicht_bestanden"})
         assert r.status_code == 200, r.get_json()
-        assert r.json["teilnehmer"]["ergebnis"] == "nicht_bestanden" and r.json["teilnehmer"]["ergebnis_von_name"] == "Administrator", r.get_json()
+        assert r.json["teilnehmer"]["ergebnis"] == "nicht_bestanden" and r.json["teilnehmer"]["ergebnis_von_name"] == "Plattform-Verwaltung", r.get_json()
         det = zweit.get(f"/api/pruefungen/lehrgaenge/{lid}").json["lehrgang"]
         assert det["ergebnis_bestanden"] == 1 and det["ergebnis_nicht_bestanden"] == 1, det
         tn = {t["id"]: t for t in det["teilnehmer"]}
@@ -2022,7 +2022,7 @@ def test_kataloge():
         kat = r.json["katalog"]
         hat_felder(kat, *KATALOG_DETAIL)
         assert kat["titel"] == "Strömungsretter 1" and kat["beschreibung"] == "Standardkatalog SR1"
-        assert kat["leistungen_anzahl"] == 0 and kat["leistungen"] == [] and kat["created_by_name"] == "Administrator"
+        assert kat["leistungen_anzahl"] == 0 and kat["leistungen"] == [] and kat["created_by_name"] == "Plattform-Verwaltung"
         kid = kat["id"]
         r = pr.get(f"/api/pruefungen/kataloge/{kid}")
         assert r.status_code == 200 and r.json["katalog"]["titel"] == "Strömungsretter 1"

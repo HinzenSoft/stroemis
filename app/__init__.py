@@ -669,7 +669,9 @@ def create_app():
                 "modul": {"name": module.NAME, "pfad": module.PFAD},
                 "csp_nonce": getattr(g, "csp_nonce", ""),
                 # Überschriften der Fehlerseiten – auch für error.html aus den Modulen, die nur Zahl und Satz geben.
-                "fehler_titel": FEHLER_TITEL}
+                "fehler_titel": FEHLER_TITEL,
+                # Hinweis „Entwicklungsserver“ nach der Anmeldung (C10): erst base.html ruft es – und holt den Merker ab.
+                "dev_hinweis_einmal": auth.dev_hinweis_einmal}
 
     @app.errorhandler(413)
     def too_large(_e):

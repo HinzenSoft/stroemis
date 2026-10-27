@@ -80,7 +80,7 @@ def testmail():
                        an=ziel, absender=cfg.get("MAIL_FROM", ""))
     ok, meldung = versand(
         ziel, f"{cfg['SITE_NAME']} – Probemail",
-        f"Diese Mail hat {ich['name'] or ich['email']} in der Nutzerverwaltung von {cfg['SITE_NAME']} "
+        f"Diese Mail hat {ich['name'] or ich['email']} in der Leitstelle von {cfg['SITE_NAME']} "
         "ausgelöst, um den Versand zu prüfen.\n\n"
         "Kommt sie an, funktioniert der Weg vom Server bis zu diesem Postfach. Landet sie im "
         "Spam oder gar nicht, liegt es meist an SPF, DKIM oder DMARC der Absenderdomain – die "

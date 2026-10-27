@@ -1155,7 +1155,7 @@ def test_haertung():
         adm.put(f"/api/wiki/pages/{mit['id']}/editors", json={"user_ids": [uid1]})
         c1.put(f"/api/wiki/pages/{mit['id']}", json={"content": "# Gemeinsam\n\nZwei", "format": "markdown"})
         r = adm.get(f"/api/wiki/pages/{mit['id']}/contributors").json
-        assert r["owner"]["name"] == "Administrator", r
+        assert r["owner"]["name"] == "Plattform-Verwaltung", r
         assert [x["name"] for x in r["contributors"]] == ["a@e"], r      # der Ersteller steht nicht doppelt
         assert c2.get(f"/api/wiki/pages/{mit['id']}/contributors").status_code == 200
 

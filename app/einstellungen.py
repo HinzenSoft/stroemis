@@ -108,45 +108,47 @@ FELDER = [
                "ablaufenden Freigaben; wessen Freigabe abläuft, bekommt sie auch selbst. Aus: keine Mails – Journal "
                "und Aufräumen laufen trotzdem. Jede Fälligkeit wird je Stufe einmal gemeldet: 30 und 7 Tage vorher und "
                "einmal, wenn sie überschritten ist; das Lebensende 90 Tage vorher, eine Freigabe 30 Tage vor ihrem "
-               "Ende. Stand und Probelauf: Materialablage → Übersicht (unten). Nur hier einschalten, nicht in der Datei "
-               ".env – die Entwicklungsumgebung übernimmt sie von der Produktion und verschickte sonst ebenfalls Mails."),
+               "Ende. Stand und Probelauf: Materialablage → Übersicht (unten). Nur hier einschalten, nicht in der "
+               "Grundeinstellung auf dem Server – die Entwicklungsumgebung übernimmt sie von der Produktion und "
+               "verschickte sonst ebenfalls Mails."),
 
     # --- E-Mail -----------------------------------------------------------------------------
     Feld("MAIL_FROM", "E-Mail", "Absender",
-         hilfe="Name und Adresse, wie sie beim Empfänger stehen. Die Domain dahinter entscheidet "
-               "über SPF, DKIM und DMARC – sie sollte zur Seite gehören.",
+         hilfe="Name und Adresse, wie sie beim Empfänger stehen. Die Adresse sollte zur Domain der Seite gehören, "
+               "sonst landen Mails eher im Spam (Stichworte SPF, DKIM, DMARC).",
          platzhalter="strömis.de <noreply@xn--strmis-yxa.de>"),
     Feld("SMTP_HOST", "E-Mail", "Mailserver",
          hilfe="Leer heißt: Es wird nichts verschickt, Mails stehen nur im Protokoll."),
     Feld("SMTP_PORT", "E-Mail", "Port",
-         hilfe="Leer nimmt 465 bei SSL, sonst 587.", platzhalter="587"),
+         hilfe="Leer nimmt 465, wenn die Verbindung von Anfang an verschlüsselt ist, sonst 587.", platzhalter="587"),
     Feld("SMTP_USER", "E-Mail", "Benutzername"),
     Feld("SMTP_PASSWORD", "E-Mail", "Kennwort", art="passwort", geheim=True,
          hilfe="Wird nie zurückgegeben. Leer lassen behält das gespeicherte Kennwort."),
-    Feld("SMTP_SSL", "E-Mail", "Verbindung von Anfang an verschlüsselt (SMTPS)", art="schalter",
-         hilfe="Für Port 465. Sonst wird über STARTTLS verschlüsselt."),
-    Feld("SMTP_STARTTLS", "E-Mail", "STARTTLS verwenden", art="schalter"),
+    Feld("SMTP_SSL", "E-Mail", "Verbindung von Anfang an verschlüsselt", art="schalter",
+         hilfe="Für Port 465. Aus: Die Verbindung wird nach dem Aufbau verschlüsselt (nächster Schalter)."),
+    Feld("SMTP_STARTTLS", "E-Mail", "Verbindung nach dem Aufbau verschlüsseln", art="schalter",
+         hilfe="Für Port 587 (STARTTLS). Vorgabe an – aus nur, wenn der Mailserver keine Verschlüsselung kann."),
     Feld("SMTP_ENVELOPE_FROM", "E-Mail", "Absender des Umschlags",
-         hilfe="Gegen diese Adresse prüft der Empfänger SPF, und an sie gehen Rückläufer. Leer "
-               "heißt: dieselbe wie oben – so verlangt es DMARC."),
+         hilfe="An diese Adresse gehen Rückläufer (unzustellbare Mails). Leer heißt: dieselbe wie oben – so ist es "
+               "meist richtig."),
     Feld("ADMIN_NOTIFY_EMAIL", "E-Mail", "Benachrichtigungen an",
          hilfe="Zusätzliche Adresse für Kontoanfragen. Leer heißt: nur an die Plattform-Verwaltung."),
 
-    # --- Karte ------------------------------------------------------------------------------
-    Feld("MAP_CENTER", "Karte", "Mittelpunkt beim Öffnen",
+    # --- Ankerplätze (Modul karte; Gruppe heißt nach dem Modul wie die übrigen, UI/UX vor dem Merge C5) -------------
+    Feld("MAP_CENTER", "Ankerplätze", "Mittelpunkt beim Öffnen",
          hilfe="Breite und Länge, durch Komma getrennt.", platzhalter="51.0,10.4"),
-    Feld("MAP_ZOOM", "Karte", "Zoomstufe beim Öffnen", art="zahl", platzhalter="6"),
-    Feld("TILE_URL", "Karte", "Straßenkarte"),
-    Feld("TILE_ATTRIBUTION", "Karte", "Rechtehinweis Straßenkarte", art="mehrzeilig",
+    Feld("MAP_ZOOM", "Ankerplätze", "Zoomstufe beim Öffnen", art="zahl", platzhalter="6"),
+    Feld("TILE_URL", "Ankerplätze", "Straßenkarte"),
+    Feld("TILE_ATTRIBUTION", "Ankerplätze", "Rechtehinweis Straßenkarte", art="mehrzeilig",
          hilfe="OpenStreetMap verlangt die Namensnennung. Leer setzt die Vorgabe wieder ein."),
-    Feld("SAT_URL", "Karte", "Luftbild",
-         hilfe="Achtung: Esri ordnet die Kacheln {z}/{y}/{x}, nicht {z}/{x}/{y}."),
-    Feld("SAT_LABELS_URL", "Karte", "Beschriftung über dem Luftbild", art="mehrzeilig",
+    Feld("SAT_URL", "Ankerplätze", "Luftbild",
+         hilfe="Adresse der Kacheln mit den Platzhaltern {z}, {x} und {y} – bei Esri steht {y} vor {x}."),
+    Feld("SAT_LABELS_URL", "Ankerplätze", "Beschriftung über dem Luftbild", art="mehrzeilig",
          hilfe="Mehrere Ebenen durch Komma getrennt, von unten nach oben. Leer schaltet sie ab."),
-    Feld("SAT_ATTRIBUTION", "Karte", "Rechtehinweis Luftbild", art="mehrzeilig"),
-    Feld("TOPO_URL", "Karte", "Geländekarte"),
-    Feld("TOPO_ATTRIBUTION", "Karte", "Rechtehinweis Geländekarte", art="mehrzeilig"),
-    Feld("GEOCODE_URL", "Karte", "Adresssuche",
+    Feld("SAT_ATTRIBUTION", "Ankerplätze", "Rechtehinweis Luftbild", art="mehrzeilig"),
+    Feld("TOPO_URL", "Ankerplätze", "Geländekarte"),
+    Feld("TOPO_ATTRIBUTION", "Ankerplätze", "Rechtehinweis Geländekarte", art="mehrzeilig"),
+    Feld("GEOCODE_URL", "Ankerplätze", "Adresssuche",
          hilfe="Leer schaltet die Suche ab. Die öffentliche Nominatim-Adresse erlaubt eine "
                "Anfrage je Sekunde und keine Massenabfragen."),
 

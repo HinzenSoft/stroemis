@@ -9,7 +9,7 @@ from flask import Blueprint, abort, current_app, g, jsonify, redirect, request, 
 from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 from werkzeug.security import check_password_hash, generate_password_hash
 
-from . import db
+from . import db, module
 from .images import delete_avatar, store_avatar
 from .mailer import send_mail
 
@@ -68,6 +68,17 @@ def sitzung_beginnen(u):
     session["uid"] = u["id"]
     session["pw"] = sitzungsmarke(u)
     session.permanent = True
+    # Auf dev nach jeder Anmeldung einmal der Hinweis „Entwicklungsserver“ (UI/UX vor dem Merge C10): Der Merker steht in
+    # der Sitzung, bis die erste Seite mit Kopfleiste ihn abholt (dev_hinweis_einmal, base.html) – egal welches Modul.
+    # Alle Wege, die eine Sitzung beginnen, laufen hier durch: Anmelden, erstes Konto, neues Passwort per Link.
+    if module.dev_umgebung():
+        session["dev_hinweis"] = 1
+
+
+def dev_hinweis_einmal():
+    """Für base.html: Steht der Hinweis „Entwicklungsserver“ aus? Holt den Merker ab – wahr genau einmal je Anmeldung,
+    nur mit Konto und nur auf dev."""
+    return bool(session.pop("dev_hinweis", None)) and current_user() is not None and module.dev_umgebung()
 
 
 def _einzeilig(text, n=120):
@@ -340,7 +351,7 @@ def send_reset_mail(user):
 
 
 def ensure_admin():
-    """Legt beim Start den Administrator aus ADMIN_EMAIL / ADMIN_PASSWORD an, falls nötig."""
+    """Legt beim Start das Konto der Plattform-Verwaltung aus ADMIN_EMAIL / ADMIN_PASSWORD an, falls nötig."""
     email = (current_app.config.get("ADMIN_EMAIL") or "").strip().lower()
     pw = current_app.config.get("ADMIN_PASSWORD") or ""
     if not email or not pw:
@@ -355,7 +366,9 @@ def ensure_admin():
             db.execute(
                 "INSERT INTO users (email, password_hash, name, recht_karte, recht_wiki, recht_pruefungen, "
                 "recht_material, recht_verwaltung, created_at) VALUES (?,?,?,2,2,2,2,2,?)",
-                (email, generate_password_hash(pw), "Administrator", db.now()))
+                # Name nach der Rolle, wie sie überall heißt (UI/UX vor dem Merge C5; bis dahin „Administrator“) – nur bei
+                # der Neuanlage, ein bestehendes Startkonto behält seinen Namen.
+                (email, generate_password_hash(pw), "Plattform-Verwaltung", db.now()))
             current_app.logger.info("Administrator %s angelegt.", email)
         except sqlite3.IntegrityError:
             # Gunicorn startet die App in jedem Arbeitsprozess getrennt. Beim allerersten Start
