@@ -130,7 +130,7 @@ def test_app_weit_bereitgestellt():
 
 
 def test_makro_wie_skript():
-    with tempfile.TemporaryDirectory() as tmp:
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
         app = make_app(tmp)
         with app.app_context():
             t = app.jinja_env.from_string('{% from "_makros.html" import info %}{% call info("probe", "Probe <x>") %}'
@@ -209,7 +209,7 @@ def test_nebenbefunde():
 
 
 def test_vorlagen_gerendert():
-    with tempfile.TemporaryDirectory() as tmp:
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
         app = make_app(tmp)
         c = app.test_client()
         assert c.post("/api/auth/login", json={"email": "admin@example.org", "password": "geheim123"}).status_code == 200
@@ -221,6 +221,10 @@ def test_vorlagen_gerendert():
         assert 'aria-label="Info zu Profilbild"' in profil and 'id="info-profilbild" hidden>Es steht neben deinem Namen' in profil
         wiki = c.get("/stroemipedia").get_data(as_text=True)
         assert 'id="btn-import"' in wiki and ">Importieren</button>" in wiki
+        # Am Finger sind die Einträge des „⋯“-Menüs im Seitenbaum (mit dem Import) 44 px hoch.
+        css = lies("app/static/css/app.css")
+        touch = css[css.index("/* Fingerbedienung (Punkt 12"):]
+        assert ".tree-menu button { min-height: 44px; }" in touch[:touch.index("\n}\n")]
         # Ohne Wiki-Verwaltung kein Knopf „Importieren“ (der Server lehnt den Import ohnehin ab).
         r = c.post("/api/admin/users", json={"email": "mitglied-info@example.org", "name": "Mitglied Platzhalter",
                                              "password": "geheim123", "rechte": {"wiki": 1}})

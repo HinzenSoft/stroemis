@@ -2446,6 +2446,8 @@ dialog.us-dlg { width: min(640px, 96vw); }
   .wiki-content th:has(.th-sort) { height: 44px; }   /* Breite wie im Editor: Der Knopf liegt durchsichtig über dem Rand */
   .th-sort { right: 0; width: 44px; height: 44px; padding: 0; display: inline-flex; align-items: center; justify-content: center; }
   .code-copy { min-height: 44px; padding: 6px 12px; }
+  /* „⋯“-Menü einer Seite im Seitenbaum (seit 27.10.2026 mit „Seiten aus ZIP importieren“): vorher 34 px je Eintrag. */
+  .tree-menu button { min-height: 44px; }
   /* Ankerplätze: Knöpfe im Album-Panel und in der Großansicht, Telefon-/Mail-Links, Blättern, „herunterladen“. */
   .panel .btn { min-height: 44px; }
   .panel dl.contact a, .lb-side .kv a { display: inline-flex; align-items: center; min-height: 44px; }
