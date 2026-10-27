@@ -409,10 +409,21 @@ def test_erben():
 
 def test_oberflaeche_statisch():
     js = open(os.path.join(WURZEL, "app/static/js/wiki.js"), encoding="utf-8").read()
-    menue = js[js.index("function pageMenu(anchor, p)"):js.index("async function loadBacklinks")]
-    assert '${p.can_publish ? \'<button type="button" data-a="import">Seiten aus ZIP importieren</button>\' : ""}' in menue
-    assert menue.index('data-a="exportzip"') < menue.index('data-a="import"')
+    # Seit 27.10.2026 (Wunsch des Nutzers) im „⋯“-Menü jeder Seite im Seitenbaum, nicht mehr im Menü des Seitenkopfs;
+    # der Dialog wählt die Seite der Zeile vor, auf die oberste Ebene führt der graue Knopf „Importieren“ über dem Baum.
+    kopf = js[js.index("function pageMenu(anchor, p)"):js.index("/* Seiten aus einem ZIP importieren")]
+    assert 'data-a="import"' not in kopf and "importDialog" not in kopf
+    baum = js[js.index("function treeRowMenu(anchor, page)"):js.index("function wireTreeDrag()")]
+    assert '${darfImportieren() ? \'<button type="button" data-a="import">Seiten aus ZIP importieren</button>\' : ""}' in baum
+    assert baum.index('data-a="export"') < baum.index('data-a="import"') < baum.index('data-a="del"')
+    assert 'if (a === "import") { side.classList.remove("open"); return importDialog(page); }' in baum
+    assert "const darfImportieren = () => { const u = window.STROEMIS && STROEMIS.user; return !!(u && u.rechte && u.rechte.wiki === 2); };" in js
+    assert '$("#btn-import").addEventListener("click", () => { side.classList.remove("open"); importDialog(null); });' in js
+    html = open(os.path.join(WURZEL, "app/templates/wiki.html"), encoding="utf-8").read()
+    assert ('{% if rechte.wiki == 2 %}<button class="btn secondary small" id="btn-import" type="button" title="Seiten aus einem ZIP '
+            'auf der obersten Ebene importieren') in html and "…" not in html[html.index('id="btn-import"'):html.index("{% endif %}</div>")]
     dlg = js[js.index("function importDialog(p)"):js.index("/* --- Ende Import")]
+    assert '${p && k.id === p.id ? " selected" : ""}' in dlg
     assert "<h2>Seiten importieren</h2>" in dlg and 'accept=".zip' in dlg and "Einsortieren unter" in dlg
     assert dlg.count('class="btn"') == 1 and '<button class="btn" id="im-ok" type="button">Importieren</button>' in dlg
     assert "Wird importiert …" in dlg and "btn ghost" not in dlg and "esc(" in dlg

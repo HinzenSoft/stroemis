@@ -303,7 +303,8 @@ def test_oberflaeche_statisch():
     assert folge == sorted(folge), folge
     # Anlegen unverändert: eigenes Formular, Seriennummer über die volle Breite, Herstellung neben Kauf.
     neu = js[js.index("async function artikelNeu()"):]
-    assert '<label for="an-sn">Seriennummer des Herstellers</label><input type="text" id="an-sn"' in neu
+    assert '<label for="an-sn">Seriennummer des Herstellers${infoKnopf("Seriennummer des Herstellers", ' in neu
+    assert '</label><input type="text" id="an-sn"' in neu
     assert re.search(r'<div class="field-row"><div><label for="an-herst">Herstellung \(Monat\)</label>\$\{datumFeld\("an-herst"'
                      r'[^\n]*\n\s*<div><label for="an-kauf">', neu)
     assert "mat-stammzeile" not in neu[:neu.index("async function anlegen(")]

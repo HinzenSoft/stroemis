@@ -5,7 +5,7 @@
    ist das vermerkt, sind die Daten der Person eingefroren.
    Alles läuft auf einer Seite; welche Ansicht gemeint ist, sagt data-ansicht am <main>. */
 (function () {
-  const { esc, api, toast, dialog, fmtDate } = S;
+  const { esc, api, toast, dialog, fmtDate, info } = S;
   const root = document.getElementById("pruef");
   if (!root) return;
   const ANSICHT = root.dataset.ansicht || "liste";
@@ -120,6 +120,12 @@
      <button type="button" class="btn secondary small" ${runter} ${i === n - 1 ? "disabled" : ""} aria-label="Nach unten verschieben">Runter</button>`;
   // Derselbe Text wie im Server (409) – damit die Oberfläche nicht anders erklärt als die Antwort.
   const EINGEFROREN = "Für diese Person ist das Lehrgangsergebnis vermerkt – die Prüfungsdaten sind eingefroren. Die Lehrgangsleitung kann das Ergebnis aufheben.";
+  /* Erklärungen hinter einem „i“ (S.info, designsprache „Info-Symbol „i““): Zeitansatz und Kriterienliste stehen im
+     Katalog und im Lehrgang; das Schloss eingefrorener Personen erklärt ein „i“ an der Überschrift der Liste (je Zeile
+     bleibt das title für die Maus). */
+  const ZEITANSATZ_INFO = "Mit Zeitansatz zeigt der Bewertungsdialog eine Stoppuhr mit Sollzeit. Über das Bestehen entscheidet sie nicht.";
+  const KRITERIEN_INFO = "Zusätzlich zur Beschreibung: einzeln abhakbare Punkte.";
+  const eingefrorenInfo = (tns) => (tns.some((t) => t.eingefroren) ? info("eingefroren", `🔒 eingefroren: ${esc(EINGEFROREN)}`) : "");
 
   /* --- Teilnehmende: Bild, Schloss, Ergebnis ------------------------------------------------ */
   // Ein Eintrag der Mängelliste kennt nur id/name/vorname – Bild, Kommentar und Ergebnis kommen
@@ -385,7 +391,7 @@
         <label class="inline"><input type="checkbox" class="ausb-extern" ${extern ? "checked" : ""}> extern (Freitext)</label>
       </div>
       <input type="text" class="ausb-funktion" list="ausb-funktionen" placeholder="Funktion (optional)" value="${esc(a.funktion || "")}" aria-label="Funktion">
-      <label class="inline ausb-leit" title="Lehrgangsleitung: darf den Lehrgang bearbeiten, Prüfungen löschen und das Lehrgangsergebnis vermerken"><input type="checkbox" class="ausb-leitung" ${a.ist_leitung ? "checked" : ""}> Leitung</label>
+      <label class="inline ausb-leit"><input type="checkbox" class="ausb-leitung" ${a.ist_leitung ? "checked" : ""}> Leitung</label>
       <button type="button" class="btn secondary small" data-weg aria-label="Zeile entfernen">Entfernen</button>
     </div>`;
   }
@@ -429,20 +435,18 @@
       <select id="lg-status">
         ${Object.keys(STATUS).map((s) => `<option value="${s}" ${(lg.status || "geplant") === s ? "selected" : ""}>${STATUS[s][0]}</option>`).join("")}
       </select>
-      <label>Lehrgangsleitung und Referierende</label>
-      <div class="help">Mehrere Personen können Lehrgangsleitung sein – dafür den Haken „Leitung“ setzen. Die Leitung darf den Lehrgang
+      <label>Lehrgangsleitung und Referierende${info("Lehrgangsleitung und Referierende", `Mehrere Personen können Lehrgangsleitung sein – dafür den Haken „Leitung“ setzen. Die Leitung darf den Lehrgang
         bearbeiten, Stammdaten pflegen, Prüfungen löschen und das Lehrgangsergebnis vermerken; alle anderen prüfen und haken ab.
-        Rechte bekommt nur, wer über sein Nutzerkonto gewählt ist – ein externer Freitext-Eintrag erscheint nur in der Anzeige.</div>
+        Rechte bekommt nur, wer über sein Nutzerkonto gewählt ist – ein externer Freitext-Eintrag erscheint nur in der Anzeige.`)}</label>
       <div class="ausb-liste" id="ausb-liste">${(lg.ausbilder || []).map((a) => ausbilderZeileHtml(a, nutzer)).join("")}</div>
       <datalist id="ausb-funktionen"><option value="Referierende:r"><option value="Seiltechnik"><option value="Wasser"><option value="Helfer:in"></datalist>
       <div class="btn-row"><button type="button" class="btn secondary small" id="ausb-plus"><span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Person<span class="k-anlegen"> anlegen</span></span></button></div>
       <div class="feld-kopf"><label for="lg-besch">Beschreibung / Bemerkungen</label>${diktatKnopf("lg-besch")}</div>
       <textarea id="lg-besch" placeholder="Ablauf, Treffpunkt, Besonderheiten …">${esc(lg.beschreibung)}</textarea>
-      ${neu && kataloge.length ? `<label for="lg-katalog">Prüfungsleistungen aus Katalog übernehmen (optional)</label>
+      ${neu && kataloge.length ? `<label for="lg-katalog">Prüfungsleistungen aus Katalog übernehmen (optional)${info("Prüfungsleistungen aus Katalog", `Die Leistungen werden einmalig in diesen Lehrgang kopiert – eine spätere Änderung am Katalog wirkt sich nicht mehr
+        aus. Weitere Leistungen lassen sich jederzeit einzeln ergänzen, auch während der Lehrgang schon läuft.`)}</label>
       <select id="lg-katalog"><option value="">– Keine Vorlage, leer beginnen –</option>
-        ${kataloge.map((k) => `<option value="${k.id}">${esc(k.titel)} (${plural(k.leistungen_anzahl, "Leistung", "Leistungen")})</option>`).join("")}</select>
-      <div class="help">Die Leistungen werden einmalig in diesen Lehrgang kopiert – eine spätere Änderung am Katalog wirkt sich nicht mehr
-        aus. Weitere Leistungen lassen sich jederzeit einzeln ergänzen, auch während der Lehrgang schon läuft.</div>` : ""}
+        ${kataloge.map((k) => `<option value="${k.id}">${esc(k.titel)} (${plural(k.leistungen_anzahl, "Leistung", "Leistungen")})</option>`).join("")}</select>` : ""}
       <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button>
         <button class="btn" id="lg-save" type="button">${neu ? "Lehrgang anlegen" : "Speichern"}</button></div>`,
       (dlg, body) => {
@@ -603,10 +607,9 @@
   async function renderKataloge() {
     S.titel("Prüfungsleistungskataloge", "pruefungen");
     root.innerHTML = `<a class="zurueck" href="/riegenkarten">← Alle Lehrgänge</a>
-      <div class="page-head"><h1>Prüfungsleistungskataloge</h1>
+      <div class="page-head"><h1>Prüfungsleistungskataloge${info("Prüfungsleistungskataloge", `Ein Katalog ist eine Vorlage: Seine Prüfungsleistungen lassen sich beim Anlegen eines Lehrgangs
+        einmalig übernehmen. Spätere Änderungen am Katalog wirken sich nicht mehr auf schon angelegte Lehrgänge aus.`)}</h1>
         ${istAdmin() ? '<div class="btn-row"><button class="btn" data-act="kat-neu"><span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Katalog<span class="k-anlegen"> anlegen</span></span></button></div>' : ""}</div>
-      <p class="help">Ein Katalog ist eine Vorlage: Seine Prüfungsleistungen lassen sich beim Anlegen eines Lehrgangs
-        einmalig übernehmen. Spätere Änderungen am Katalog wirken sich nicht mehr auf schon angelegte Lehrgänge aus.</p>
       <div id="kat-liste"><p class="help">Wird geladen …</p></div>`;
     const ziel = $("#kat-liste");
     const kataloge = await katalogeLaden(true);
@@ -703,15 +706,13 @@
     dialogOeffnen(`<h2>${neu ? "Prüfungsleistung anlegen" : "Prüfungsleistung bearbeiten"}</h2>
       <label for="kl-bez">Bezeichnung</label>
       <input type="text" id="kl-bez" value="${esc(l.bezeichnung)}" placeholder="z. B. Wurfsackwurf auf Ziel, Aufbau Flaschenzug 3:1" required>
-      <label for="kl-zeit">Zeitansatz (mm:ss oder 300 für 3:00) – leer lassen, wenn es keine Sollzeit gibt</label>
+      <label for="kl-zeit">Zeitansatz${info("Zeitansatz", ZEITANSATZ_INFO)} (mm:ss oder 300 für 3:00) – leer lassen, wenn es keine Sollzeit gibt</label>
       <input type="text" id="kl-zeit" class="zeitfeld" inputmode="numeric" placeholder="mm:ss" autocomplete="off"
              value="${l.zeitansatz_sekunden != null ? fmtZeit(l.zeitansatz_sekunden) : ""}">
-      <div class="help">Mit Zeitansatz zeigt der Bewertungsdialog später eine Stoppuhr mit Sollzeit. Über das Bestehen entscheidet sie nicht.</div>
       <label>Beschreibung – Ablauf</label>
       <div id="kl-editor"></div>
-      <label>Kriterienliste (optional)</label>
-      <div class="help">Zusätzlich zur Beschreibung: einzeln abhakbare Punkte. Wird beim Anlegen eines Lehrgangs aus diesem Katalog
-        als Vorlage in die neue Prüfungsleistung kopiert.</div>
+      <label>Kriterienliste (optional)${info("Kriterienliste", `${KRITERIEN_INFO} Wird beim Anlegen eines Lehrgangs aus diesem Katalog
+        als Vorlage in die neue Prüfungsleistung kopiert.`)}</label>
       ${neu ? '<div id="krit-wrap"></div>' : kriterienListeHtml(l)}
       <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button>
         <button class="btn" id="kl-save" type="button">${neu ? "Anlegen" : "Speichern"}</button></div>`,
@@ -911,7 +912,7 @@
   function teilnehmerHtml(lg) {
     const vor = lg.voraussetzungen || [], tns = lg.teilnehmer || [];
     const leitung = darfLeiten();
-    const kopf = `<div class="reiter-kopf"><h2>Teilnehmende</h2>
+    const kopf = `<div class="reiter-kopf"><h2>Teilnehmende${eingefrorenInfo(tns)}</h2>
       ${leitung ? `<div class="btn-row"><button class="btn secondary small" data-act="vor-verwalten">Voraussetzungen verwalten</button>
         <button class="btn small" data-act="tn-neu"><span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Teilnehmende<span class="k-anlegen"> anlegen</span></span></button></div>` : ""}</div>`;
     if (!tns.length) {
@@ -1481,15 +1482,13 @@
     dialogOeffnen(`<h2>${neu ? "Prüfungsleistung anlegen" : "Prüfungsleistung bearbeiten"}</h2>
       <label for="pl-bez">Bezeichnung</label>
       <input type="text" id="pl-bez" value="${esc(l.bezeichnung)}" placeholder="z. B. Wurfsackwurf auf Ziel, Aufbau Flaschenzug 3:1" required>
-      <label for="pl-zeit">Zeitansatz (mm:ss oder 300 für 3:00) – leer lassen, wenn es keine Sollzeit gibt</label>
+      <label for="pl-zeit">Zeitansatz${info("Zeitansatz", ZEITANSATZ_INFO)} (mm:ss oder 300 für 3:00) – leer lassen, wenn es keine Sollzeit gibt</label>
       <input type="text" id="pl-zeit" class="zeitfeld" inputmode="numeric" placeholder="mm:ss" autocomplete="off"
              value="${l.zeitansatz_sekunden != null ? fmtZeit(l.zeitansatz_sekunden) : ""}">
-      <div class="help">Mit Zeitansatz zeigt der Bewertungsdialog eine Stoppuhr mit Sollzeit. Über das Bestehen entscheidet sie nicht.</div>
       <label>Beschreibung – Ablauf</label>
       <div id="pl-editor"></div>
-      <label>Kriterienliste (optional)</label>
-      <div class="help">Zusätzlich zur Beschreibung: einzeln abhakbare Punkte. Im Bewertungsdialog lässt sich jeder Punkt antippen –
-        nicht bewertet, ✅ erfüllt, ❌ nicht erfüllt.</div>
+      <label>Kriterienliste (optional)${info("Kriterienliste", `${KRITERIEN_INFO} Im Bewertungsdialog lässt sich jeder Punkt antippen –
+        nicht bewertet, ✅ erfüllt, ❌ nicht erfüllt.`)}</label>
       ${neu ? '<div id="krit-wrap"></div>' : kriterienListeHtml(l)}
       <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button>
         <button class="btn" id="pl-save" type="button">${neu ? "Anlegen" : "Speichern"}</button></div>`,
@@ -1648,7 +1647,7 @@
   function bewertungHtml(lg) {
     const tns = lg.teilnehmer || [], ls = lg.leistungen || [];
     const a = bewAnsichtLesen();
-    const kopf = `<div class="reiter-kopf"><h2>Bewertung</h2></div>`;
+    const kopf = `<div class="reiter-kopf"><h2>Bewertung${eingefrorenInfo(tns)}</h2></div>`;
     if (!tns.length || !ls.length) {
       return kopf + `<div class="leer"><strong>${!tns.length ? "Noch keine Teilnehmenden" : "Noch keine Prüfungsleistungen"}</strong>
         ${!tns.length ? "Teilnehmende anlegen oder importieren – dann erscheint hier die Matrix." : "Im Reiter „Leistungen“ die Prüfungsleistungen anlegen."}</div>`;
@@ -2338,14 +2337,13 @@
       dialogOeffnen(`<h2>Import</h2>
         <p class="help">${lehrgang ? `Teilnehmende und Voraussetzungen in „${esc(lehrgang.titel)}“ übernehmen. Bestehende Teilnehmende (gleicher Name, ggf. Geburtsdatum) werden aktualisiert, nicht doppelt angelegt.`
           : "Aus einer Excel-Teilnehmerliste (.xlsx) wird ein neuer Lehrgang mit Teilnehmenden und Voraussetzungen angelegt. Vorher gibt es eine Vorschau."}</p>
-        <p class="help import-isc">Die Stammdaten der Teilnehmenden lassen sich aus dem ISC übernehmen: Dort unter
+        <p class="help import-isc">Die Stammdaten der Teilnehmenden lassen sich aus dem ISC${info("ISC", `Im ISC unter
           <strong>Dokumente → Checkliste Voraussetzungen (Excel)</strong> die Option <strong>„Allgemeine Lehrgangsinformationen mit ausgeben“</strong>
-          wählen und die erzeugte Excel-Datei hier hochladen.</p>
+          wählen und die erzeugte Excel-Datei hier hochladen.`)} übernehmen.</p>
         <div class="import-schritt import-datei">
-          <label for="imp-datei">Datei (.xlsx)</label>
+          <label for="imp-datei">Datei (.xlsx)${info("Datei", "Kopfzeilen über der Tabelle, verbundene Zellen und Leerzeilen am Ende sind kein Problem. Spalten mit „ja/nein“ oder Daten werden als Voraussetzungen erkannt.")}</label>
           <input type="file" id="imp-datei" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">
           ${datei ? `<div class="help">Gewählt: ${esc(datei.name)}</div>` : ""}
-          <div class="help">Kopfzeilen über der Tabelle, verbundene Zellen und Leerzeilen am Ende sind kein Problem. Spalten mit „ja/nein“ oder Daten werden als Voraussetzungen erkannt.</div>
         </div>
         <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button>
           <button class="btn" id="imp-weiter" type="button" ${datei ? "" : "disabled"}>Vorschau</button></div>`,

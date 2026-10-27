@@ -151,7 +151,8 @@ def test_e3_verlauf_des_kontos():
             assert "VORG" not in str(d) and d["eintraege"], (weg, d)
     # Oberfläche: eingeklappt im Dialog „Bearbeiten“, geladen erst beim Aufklappen.
     js = lesen("app/static/js/admin.js")
-    assert '<details class="accordion" id="u-verlauf"><summary>Verlauf (Materialablage)</summary>' in js
+    # Seit 27.10.2026 erklärt ein „i“ an der Zusammenfassung, was der Verlauf zeigt (statt eines Satzes darin).
+    assert '<details class="accordion" id="u-verlauf"><summary>Verlauf (Materialablage)${S.info("Verlauf", "Änderungen an Stufe' in js
     assert "verlaufAnbinden(body.querySelector(\"#u-verlauf\"), u);" in js and "/journal`" in js
     print("E3 A bestanden.")
 
@@ -197,7 +198,7 @@ def test_texte_statisch():
             assert w not in text, (name, w)
     da = {
         "freigaben.js": (fjs, ["→ „Offene Prüfungen“ mit „Reservierung aufheben“."]),
-        "admin.js": (ajs, ["→ „Offene Prüfungen“ mit „Reservierung aufheben“.", "> Prüfer (Sachkundiger)</label>"]),
+        "admin.js": (ajs, ["→ „Offene Prüfungen“ mit „Reservierung aufheben“.", "> Prüfer (Sachkundiger)${S.info(\"Prüfer\", "]),
         "material.js": (mjs, [
             "auch die von hier gesperrten und ausgesonderten, mit Status, Fälligkeiten und Stammdaten – für Excel.",
             "Sperren und Freiprüfungen im Jahr",

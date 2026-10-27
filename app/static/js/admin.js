@@ -132,8 +132,7 @@
   document.getElementById("btn-testmail").addEventListener("click", () => {
     S.dialog(`<h2>Testmail senden</h2>
       <p class="help">Verschickt eine Probemail über den eingerichteten Mailserver und zeigt, was er
-        dazu sagt. Kommt sie an, funktioniert der Weg bis zu diesem Postfach; landet sie im Spam oder
-        gar nicht, liegt es meist an SPF, DKIM oder DMARC der Absenderdomain.</p>
+        dazu sagt.${S.info("SPF, DKIM, DMARC", "Kommt sie an, funktioniert der Weg bis zu diesem Postfach; landet sie im Spam oder gar nicht, liegt es meist an SPF, DKIM oder DMARC der Absenderdomain.")}</p>
       <label for="tm-to">Empfänger</label>
       <input type="email" id="tm-to" value="${S.esc(STROEMIS.user.email || "")}" autocomplete="off">
       <div id="tm-out"></div>
@@ -215,29 +214,25 @@
       </div>
       <label>E-Mail-Adresse</label><input type="email" id="u-email" value="${S.esc(u.email)}" required>
       <label>Telefon</label><input type="tel" id="u-phone" value="${S.esc(u.phone)}">
-      <label>Rechte</label>
-      <div class="rechte-reihe">${MODULE.map((m) => `<div><label for="u-r-${m.k}">${m.t}</label>${rechtFeld(m, rechte, { id: "u-r-" + m.k, eigenes, konto: u })}</div>`).join("")}</div>
-      <div class="help">„–“ kein Zugriff (in der Strömipedia: nur die öffentlichen Seiten lesen) · „Mitglied“ eigene Inhalte, bei den Riegenkarten:
+      <label>Rechte${S.info("Rechte", `„–“ kein Zugriff (in der Strömipedia: nur die öffentlichen Seiten lesen) · „Mitglied“ eigene Inhalte, bei den Riegenkarten:
         Prüfungen abnehmen, bei der Materialablage: sie nutzen (Bestand über Freigaben je Ordner) · „Verwaltung“ alles im Modul,
         bei der Materialablage auch Produktkatalog und alle Bestände. Verwaltung in der Leitstelle schließt alle Rechte ein.
-        Was eine Stufe genau umfasst, steht als Hinweis am Feld.</div>
+        Was eine Stufe genau umfasst, steht als Hinweis am Feld.`)}</label>
+      <div class="rechte-reihe">${MODULE.map((m) => `<div><label for="u-r-${m.k}">${m.t}</label>${rechtFeld(m, rechte, { id: "u-r-" + m.k, eigenes, konto: u })}</div>`).join("")}</div>
       <fieldset class="mat-rollen"><legend>Materialablage</legend>
-        <label class="inline"><input type="checkbox" id="u-mat-pruefer" ${u.mat_pruefer ? "checked" : ""}> Prüfer (Sachkundiger)</label>
-        <p class="mat-urkunde" ${u.mat_pruefer ? "" : "hidden"}>${urkundeLesend(u)}</p>
-        <p class="help mat-stufe-auto" role="status" hidden>Materialablage steht jetzt auf „Mitglied“ – ohne Stufe wirkt das Häkchen nicht. Gespeichert wird beim Speichern.</p>
-        <div class="help">Das Häkchen wirkt nur mit Stufe „Mitglied“ oder „Verwaltung“ in der Materialablage. Urkundennummer und Unterschrift
+        <label class="inline"><input type="checkbox" id="u-mat-pruefer" ${u.mat_pruefer ? "checked" : ""}> Prüfer (Sachkundiger)${S.info("Prüfer", `Das Häkchen wirkt nur mit Stufe „Mitglied“ oder „Verwaltung“ in der Materialablage. Urkundennummer und Unterschrift
           trägt der Prüfer selbst in seinem Profil ein („Urkundennummer und Unterschrift“); beides steht später auf jedem Prüfprotokoll.
           Prüfen kann er erst mit Urkundennummer und einer Prüffreigabe am Ordner (befristet nur für externe Prüfer) – auch die
-          Verwaltung. Das Konto braucht einen Namen, damit es in der Materialablage handeln kann.</div>
+          Verwaltung. Das Konto braucht einen Namen, damit es in der Materialablage handeln kann.`)}</label>
+        <p class="mat-urkunde" ${u.mat_pruefer ? "" : "hidden"}>${urkundeLesend(u)}</p>
+        <p class="help mat-stufe-auto" role="status" hidden>Materialablage steht jetzt auf „Mitglied“ – ohne Stufe wirkt das Häkchen nicht. Gespeichert wird beim Speichern.</p>
       </fieldset>
-      ${u.id ? `<fieldset class="mat-rollen"><legend>Freigaben in der Materialablage</legend>
+      ${u.id ? `<fieldset class="mat-rollen"><legend>Freigaben in der Materialablage${S.info("Freigaben in der Materialablage", "Angelegt wird eine Freigabe am Ordner (Bestand → Ordner → Bearbeiten → Freigaben), nicht hier.")}</legend>
         <p class="notice u-freigaben-kein-zugang" ${(rechte.material | 0) || !(u.mat_freigaben | 0) ? "hidden" : ""}>Diese Freigaben wirken nicht – das Konto hat keinen Zugang zur Materialablage.</p>
         <div id="u-freigaben"><p class="help">Wird geladen …</p></div>
-        <div class="help">Angelegt wird eine Freigabe am Ordner (Bestand → Ordner → Bearbeiten → Freigaben), nicht hier.</div>
       </fieldset>
-      <details class="accordion" id="u-verlauf"><summary>Verlauf (Materialablage)</summary>
-        <div class="accordion-body"><p class="help">Änderungen an Stufe, Häkchen „Prüfer“, Urkundennummer und Unterschrift (ohne Bild) –
-          die letzten 50, neueste zuerst.</p><div id="u-verlauf-liste" aria-live="polite"><p class="help">Wird geladen …</p></div></div></details>` : ""}
+      <details class="accordion" id="u-verlauf"><summary>Verlauf (Materialablage)${S.info("Verlauf", "Änderungen an Stufe, Häkchen „Prüfer“, Urkundennummer und Unterschrift (ohne Bild) – die letzten 50, neueste zuerst.")}</summary>
+        <div class="accordion-body"><div id="u-verlauf-liste" aria-live="polite"><p class="help">Wird geladen …</p></div></div></details>` : ""}
       <label>${u.id ? "Neues Passwort (leer lassen, um es zu behalten)" : "Passwort (leer lassen, um eines zu erzeugen)"}</label>
       <input type="text" id="u-pw" autocomplete="off">
       ${u.id ? `<label class="inline"><input type="checkbox" id="u-active" ${u.active ? "checked" : ""}> Konto aktiv</label>`
@@ -582,6 +577,7 @@
     document.getElementById("bereich-nutzer").classList.toggle("hidden", name !== "nutzer");
     document.getElementById("bereich-einstellungen").classList.toggle("hidden", name === "nutzer");
     document.getElementById("seitentitel").textContent = name === "nutzer" ? "Nutzerverwaltung" : "Einstellungen";
+    document.querySelectorAll("[data-titel-info]").forEach((el) => el.classList.toggle("hidden", el.dataset.titelInfo !== name));
     S.titel(name === "nutzer" ? "Nutzerverwaltung" : "Einstellungen", "verwaltung");   // Reiter des Browsers (V2)
     // „Nutzer anlegen“ gehört zur Liste. Die Probemail bleibt auf beiden Reitern stehen: Sie ist
     // die Gegenprobe zu den Mail-Einstellungen und gerade dort am nötigsten.

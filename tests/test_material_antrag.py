@@ -1587,7 +1587,7 @@ def test_oberflaeche_17():
     abschnitt = ('`<section class="section mat-antraege-offen"><h2>Offene Änderungsanträge</h2>'
                  '${a.antraege.map(antragOffenHtml).join("")}</section>`')
     assert "(a.antraege || []).length ? " + abschnitt in rechts
-    assert rechts.index("Offene Änderungsanträge") < rechts.index("<h2>QR-Code und NFC</h2>") < rechts.index("<h2>Herstellerdokumente</h2>")
+    assert rechts.index("Offene Änderungsanträge") < rechts.index("<h2>QR-Code und NFC${infoKnopf(") < rechts.index("<h2>Herstellerdokumente</h2>")
     assert "order:" not in css[css.index(".mat-spalten {"):css.index(".mat-daten {")] and ".mat-spalte { min-width: 0; }" in css
     dlg = js[js.index("function artikelDialog(a)"):js.index("/* --- Änderungsanträge")]
     assert "querySelectorAll('[data-act=\"antrag-zurueck\"]')" in dlg and "dlg.close(); return zeigen(artikel);" in dlg

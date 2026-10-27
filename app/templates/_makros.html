@@ -1,0 +1,12 @@
+{# Gemeinsame Makros für die Vorlagen. Einbinden: {% from "_makros.html" import info %} #}
+
+{# Info zu einem Begriff (designsprache „Info-Symbol „i““): dasselbe Markup wie S.info in common.js – Verhalten (Hover,
+   Fokus, Antippen, Esc) kommt von dort, das Aussehen aus app.css (.info). Der Text der Info steht im Rumpf des Aufrufs:
+     {% call info("profilbild", "Profilbild") %}Es steht neben deinem Namen …{% endcall %}
+   id: auf der Seite eindeutig (wird zu „info-<id>“), thema: der Begriff für „Info zu …“. #}
+{% macro info(id, thema) -%}
+<span class="info"><button type="button" class="info-knopf" aria-label="Info zu {{ thema }}" aria-expanded="false"
+  aria-controls="info-{{ id }}" aria-describedby="info-{{ id }}"><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true" focusable="false"><circle cx="10" cy="10" r="8.6"
+  fill="none" stroke="currentColor" stroke-width="1.7"/><circle cx="10" cy="6.1" r="1.25" fill="currentColor"/><path d="M10 9v5.6" stroke="currentColor"
+  stroke-width="2" stroke-linecap="round"/></svg></button><span class="info-text" role="tooltip" id="info-{{ id }}" hidden>{{ caller() }}</span></span>
+{%- endmacro %}

@@ -106,8 +106,12 @@ window.S = (function () {
     if (!dlg.open) dlg.showModal();
     // Rollt der Inhalt (lange Dialoge wie „Nutzer bearbeiten“), zählt Chromium den rollenden Körper selbst als erstes
     // Bedienelement und setzt den Fokus dorthin statt aufs erste Feld – dann eben von Hand aufs erste Feld.
-    if (document.activeElement === body) {
-      const erstes = body.querySelector("input:not([type=hidden]):not([disabled]), select:not([disabled]), textarea:not([disabled]), button:not([disabled]), a[href], summary");
+    // Ebenso, wenn es das „i“ hinter dem Titel oder einem Feld traf: Der Fokus gehört aufs erste Bedienelement, und die
+    // Info soll nicht beim Öffnen von selbst aufgehen.
+    const ae = document.activeElement;
+    if (ae === body || (ae && ae.closest && body.contains(ae) && ae.closest(".info"))) {
+      const erstes = [...body.querySelectorAll("input:not([type=hidden]):not([disabled]), select:not([disabled]), textarea:not([disabled]), button:not([disabled]), a[href], summary")]
+        .find((el) => !el.closest(".info"));
       if (erstes) erstes.focus();
     }
     if (onOpen) onOpen(dlg, body);
@@ -290,6 +294,95 @@ window.S = (function () {
     document.querySelectorAll("details.zeilenmenue[open]").forEach((m) => { m.open = false; m.querySelector("summary").focus(); });
   });
 
+  /* Info zu einem Begriff (designsprache „Info-Symbol „i““; seit 27.10.2026 app-weit, vorher infoKnopf in material.js):
+     ein gekringeltes „i“ hinter dem Begriff statt eines Erklärsatzes darunter. Ein Knopf (aria-label „Info zu …“,
+     aria-expanded, aria-describedby auf die Info); die Info (role="tooltip", darf Links enthalten – html ist fertiges
+     HTML ohne Eingaben) erscheint beim Darüberfahren mit der Maus, bei Tastaturfokus und beim Antippen; Esc, ein Tipp
+     daneben oder der Fokus woanders schließt. Aussehen in app.css (.info), dasselbe Markup erzeugt das Jinja-Makro
+     „info“ (templates/_makros.html). */
+  let infoZahl = 0;
+  function info(thema, html) {
+    const id = `info-${++infoZahl}`;
+    return `<span class="info"><button type="button" class="info-knopf" aria-label="Info zu ${esc(thema)}" aria-expanded="false"
+      aria-controls="${id}" aria-describedby="${id}"><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true" focusable="false"><circle cx="10" cy="10" r="8.6"
+      fill="none" stroke="currentColor" stroke-width="1.7"/><circle cx="10" cy="6.1" r="1.25" fill="currentColor"/><path d="M10 9v5.6" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round"/></svg></button><span class="info-text" role="tooltip" id="${id}" hidden>${html}</span></span>`;
+  }
+
+  /* Verhalten der Info-Symbole, einmal je Seite für alle (auch später gezeichnete): offen, solange die Maus über „i“
+     oder Info steht, der Fokus darin ist oder sie angetippt wurde (fest – bis zum nächsten Tipp auf „i“, daneben oder
+     Esc). Die Info steht unter dem „i“ und rückt ins Bild – in einem Dialog in dessen Inhalt, der sie sonst abschnitte. */
+  const infoTeil = (w, sel) => (w ? w.querySelector(sel) : null);
+  const infoOffen = (w) => { const t = infoTeil(w, ".info-text"); return Boolean(t && !t.hidden); };
+  function infoZeigen(w, an, fest) {
+    const k = infoTeil(w, ".info-knopf");
+    const t = infoTeil(w, ".info-text");
+    if (!k || !t) return;
+    w.classList.toggle("fest", Boolean(an && (fest || w.classList.contains("fest"))));
+    if (!an) w.classList.remove("fest");
+    k.setAttribute("aria-expanded", String(an));
+    t.hidden = !an;
+    if (!an) return;
+    const rahmen = w.closest("dialog .dlg-body, dialog");
+    const r0 = rahmen ? rahmen.getBoundingClientRect() : null;
+    const links = (r0 ? r0.left : 0) + 8;
+    const rechts = (r0 ? r0.left + rahmen.clientWidth : document.documentElement.clientWidth) - 8;
+    t.style.maxWidth = r0 ? `${Math.max(160, Math.min(320, Math.floor(rechts - links)))}px` : "";
+    t.style.left = "0px";
+    const r = t.getBoundingClientRect();
+    const verschub = r.right > rechts ? rechts - r.right : 0;
+    t.style.left = `${Math.round(Math.max(verschub, links - r.left))}px`;
+  }
+  const infoAlleZu = (ausser) => document.querySelectorAll(".info").forEach((w) => { if (w !== ausser && infoOffen(w)) infoZeigen(w, false); });
+  document.addEventListener("click", (e) => {
+    const k = e.target.closest && e.target.closest(".info-knopf");
+    const w = e.target.closest && e.target.closest(".info");
+    infoAlleZu(w);
+    // Ein Tipp in die Info (nicht auf einen Link darin) wirkt nicht auf das, worin das „i“ steht – ein Haken in einem
+    // <label> kippte sonst, ein <summary> klappte auf oder zu.
+    if (!k && w && e.target.closest(".info-text") && !e.target.closest("a[href]")) e.preventDefault();
+    if (!k || !w) return;
+    e.preventDefault();
+    // Mit der Maus ist die Info beim Klick schon offen (Darüberfahren): Der Klick hält sie fest, ein zweiter schließt.
+    infoZeigen(w, !(infoOffen(w) && w.classList.contains("fest")), true);
+  });
+  document.addEventListener("pointerover", (e) => {
+    if (e.pointerType !== "mouse") return;
+    const w = e.target.closest && e.target.closest(".info");
+    if (w && !infoOffen(w)) { infoAlleZu(w); infoZeigen(w, true); }
+  });
+  document.addEventListener("pointerout", (e) => {
+    if (e.pointerType !== "mouse") return;
+    const w = e.target.closest && e.target.closest(".info");
+    if (!w || w.contains(e.relatedTarget) || w.classList.contains("fest") || w.contains(document.activeElement)) return;
+    infoZeigen(w, false);
+  });
+  document.addEventListener("focusin", (e) => {
+    const w = e.target.closest && e.target.closest(".info");
+    infoAlleZu(w);
+    // Nach Esc kommt der Fokus auf das „i“ zurück – ohne die Info gleich wieder zu öffnen.
+    if (w && w.dataset.esc) { delete w.dataset.esc; return; }
+    if (w && e.target.matches(".info-knopf:focus-visible")) infoZeigen(w, true);
+  });
+  document.addEventListener("focusout", (e) => {
+    const w = e.target.closest && e.target.closest(".info");
+    if (w && !w.contains(e.relatedTarget) && !w.classList.contains("fest") && !w.matches(":hover")) infoZeigen(w, false);
+  });
+  /* Esc schließt zuerst eine offene Info – und nur sie: Ein Dialog, in dem sie steht, bleibt offen (darum in der
+     Erfassungsphase, vor den Esc-Regeln der Dialoge und Menüs). */
+  document.addEventListener("keydown", (e) => {
+    if (e.key !== "Escape") return;
+    const w = [...document.querySelectorAll(".info")].find(infoOffen);
+    if (!w) return;
+    infoZeigen(w, false);
+    if (w.closest("dialog")) { e.preventDefault(); e.stopPropagation(); }
+    const k = infoTeil(w, ".info-knopf");
+    if (w.contains(document.activeElement) && document.activeElement !== k) {
+      w.dataset.esc = "1";
+      k.focus();
+    }
+  }, true);
+
   /* Seitentitel im Reiter des Browsers und im Verlauf: das Gezeigte vorn, dann das Modul, dann die Seite –
      „M-000123 – Materialablage – strömis.de“ (Browserprüfung vor dem Merge, V2). teile: Texte (leere fallen weg),
      modul: Schlüssel aus app/module.py („material“ …) oder leer. Kein HTML: document.title zeigt Text, wie er ist. */
@@ -298,5 +391,5 @@ window.S = (function () {
     document.title = [...[].concat(teile || []), name, "strömis.de"].map((t) => String(t || "").trim()).filter(Boolean).join(" – ");
   }
 
-  return { esc, api, toast, dialog, confirm, fmtDate, fmtCoord, CAT, titel };
+  return { esc, api, toast, dialog, confirm, fmtDate, fmtCoord, CAT, titel, info };
 })();

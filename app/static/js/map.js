@@ -240,8 +240,8 @@
   function albumDialog(a) {
     a = a || { category: "seil" };
     const isNew = !a.id;
-    dialog(`<h2>${isNew ? "Album anlegen" : "Album bearbeiten"}</h2>
-      <p class="help">Ein Album ist ein Übungsobjekt oder ein Übungsgewässer. Alle angemeldeten Nutzer können es sehen.</p>
+    dialog(`<h2>${isNew ? "Album anlegen" : "Album bearbeiten"}${S.info("Album", "Ein Album ist ein Übungsobjekt oder ein Übungsgewässer.")}</h2>
+      <p class="help">Alle angemeldeten Nutzer können es sehen.</p>
       <label>Titel</label><input type="text" id="al-title" value="${esc(a.title)}" placeholder="z. B. Wehr Musterstadt, Brücke B12" required>
       <label>Art</label>
       <select id="al-cat">

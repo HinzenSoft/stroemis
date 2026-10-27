@@ -484,19 +484,9 @@
      27.10.2026): rutscht als Ganzes in die nächste Zeile statt nach „demo-“ oder „@“ zu brechen – nur ein Name, der
      länger ist als die ganze Zeile, bricht in sich (material.css, .mat-name). Der Text bleibt unverändert kopierbar. */
   const person = (n) => `<span class="mat-name">${esc(n)}</span>`;
-  /* Info zu einem Begriff (Nachtrag vom 27.10.2026, designsprache „Zusatzinfos“): ein gekringeltes „i“ hinter dem Begriff
-     statt eines Erklärsatzes darunter. Ein Knopf (aria-label „Info zu …“, aria-expanded, aria-describedby auf die Info);
-     die Info (role="tooltip", darf Links enthalten – html ist fertiges HTML ohne Eingaben) erscheint beim Darüberfahren
-     mit der Maus, bei Tastaturfokus und beim Antippen; Esc, ein Tipp daneben oder der Fokus woanders schließt
-     (Verhalten unten bei den Untermenüs, Aussehen in material.css, .mat-info). */
-  let infoZahl = 0;
-  function infoKnopf(thema, html) {
-    const id = `mat-info-${++infoZahl}`;
-    return `<span class="mat-info"><button type="button" class="mat-info-knopf" aria-label="Info zu ${esc(thema)}" aria-expanded="false"
-      aria-controls="${id}" aria-describedby="${id}"><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true" focusable="false"><circle cx="10" cy="10" r="8.6"
-      fill="none" stroke="currentColor" stroke-width="1.7"/><circle cx="10" cy="6.1" r="1.25" fill="currentColor"/><path d="M10 9v5.6" stroke="currentColor"
-      stroke-width="2" stroke-linecap="round"/></svg></button><span class="mat-info-text" role="tooltip" id="${id}" hidden>${html}</span></span>`;
-  }
+  /* Info zu einem Begriff: das gekringelte „i“ hinter dem Begriff statt eines Erklärsatzes darunter – seit 27.10.2026
+     app-weit in common.js (S.info, Verhalten und Aussehen dort bzw. in app.css, .info). */
+  const infoKnopf = S.info;
   const PRUEFSUMME_INFO = 'Die Prüfsumme steht im Fuß jeder Seite des PDFs. Ob eine Datei unverändert ist, zeigt die <a href="/materialablage/pruefen">Prüfseite</a>.';
   const statusMarke = (s, gross) => `<span class="mat-status s-${esc(s)}${gross ? " gross" : ""}">${esc(STATUS[s] || s)}</span>`;
   const demoMarke = (x) => (x ? '<span class="mat-demo" title="DEMO – nicht für echte Prüfungen">DEMO</span>' : "");
@@ -1041,11 +1031,14 @@
   }
   // Legende zu zahlen(): jeder Zähler mit seinem Wort statt der Zahl – die Farbe ist nicht das einzige Merkmal, und die
   // Reihenfolge ist dieselbe wie hinter den Ordnern.
-  const ZAEHLER_LEGENDE = `<p class="help mat-legende">Hinter einem Ordner steht sein <span class="mat-baum-zahl">Bestand</span>,
+  // Seit 27.10.2026 steht sie mit der Erklärung des Bestands im „i“ an der Überschrift (BESTAND_INFO).
+  const ZAEHLER_LEGENDE = `<span class="mat-legende">Hinter einem Ordner steht sein <span class="mat-baum-zahl">Bestand</span>,
       dahinter, wie viele davon <span class="mat-zahl s-ueberfaellig">überfällig</span> <span class="mat-zahl s-neu">neu</span>
       (Eingangsprüfung offen) <span class="mat-zahl s-lebensdauer">Lebensdauer erreicht</span>
       <span class="mat-zahl s-gesperrt">gesperrt</span> <span class="mat-zahl s-bald_faellig">bald fällig</span> sind –
-      in dieser Reihenfolge, nur was vorkommt.</p>`;
+      in dieser Reihenfolge, nur was vorkommt.</span>`;
+  const BESTAND_INFO = "Oben stehen die Gliederungen, darunter frei verschachtelt Standorte, Fahrzeuge, Sets. Jede Gliederung hat die "
+    + "Systemordner „Gesperrt“ und „Ausgesondert“ – dorthin kommen Artikel nur durch eine Sperre oder Aussonderung.";
   function zahlen(z) {
     if (!z) return "";
     const teile = [];
@@ -1175,7 +1168,7 @@
         ${[...kacheln.filter(([s]) => z[s]), ...kacheln.filter(([s]) => !z[s])].map(kachel).join("")}
       </div></div>
       <div id="mat-runden"></div>
-      <div class="mat-nebeneinander"><section class="section"><h2>Fälligkeiten je Ordner</h2>
+      <div class="mat-nebeneinander"><section class="section"><h2>Fälligkeiten je Ordner${d.ordner_uebersicht.length ? infoKnopf("Fälligkeiten je Ordner", ordnerUebersichtInfo(d.ordner_uebersicht)) : ""}</h2>
         ${d.ordner_uebersicht.length ? ordnerUebersichtHtml(d.ordner_uebersicht)
           : leer(DARF.gliederung_anlegen ? "Noch keine Gliederung – lege unter „Bestand“ die erste an." : "Noch keine Gliederung angelegt.")}
       </section>
@@ -1502,19 +1495,16 @@
         <td data-l="Bestand" class="mat-ue-zahl">${o.bestand}</td>${zahlen}
         <td data-l="nächste Fälligkeit" class="mat-ue-tag${o.naechste ? "" : " mat-ue-null"}">${o.naechste ? `<a class="t-${esc(o.naechste_status)}" href="/materialablage/pruefungen?ordner=${o.id}" title="Alles Fällige in ${esc(o.name)}">${esc(fmtTag(o.naechste))}</a>` : '<span class="muted">–</span>'}</td></tr>`;
     };
-    const pfadZeilen = zeilen.some((o) => o.nur_pfad);
-    const teilweise = zeilen.some((o) => o.teilweise);
-    // Die Erklärung steht UNTER der Tabelle (Wunsch vom 22.10.2026): Nebeneinander mit „Als Nächstes zu prüfen“ (ab
-    // 1500 px Inhaltsbreite) beginnen so beide Tabellen direkt unter ihrer Überschrift auf gleicher Höhe – mit dem
-    // Absatz davor stand der linke Tabellenkopf rund 100 px tiefer als der rechte.
+    // Die Erklärung steht seit 27.10.2026 im „i“ an der Überschrift (ordnerUebersichtInfo) – vorher als Absatz unter der
+    // Tabelle, damit beide Tabellen nebeneinander auf gleicher Höhe beginnen (Wunsch vom 22.10.2026); das bleibt so.
     return `<table class="list mat-tabelle mat-ue" id="mat-ue"><thead><tr><th>Ordner</th><th class="mat-ue-zahl">Bestand</th>
         ${UE_SPALTEN.map(([s, kurz, lang]) => `<th class="mat-ue-zahl" title="${esc(lang)}">${esc(kurz)}</th>`).join("")}<th>nächste Fälligkeit</th></tr></thead>
-      <tbody>${zeilen.map(zeile).join("")}</tbody></table>
-      <p class="help">Die Zahlen gelten für den ganzen Zweig. Gesperrte und ausgesonderte Artikel liegen in ihrer Gliederung und zählen dort.
-        Nächste Fälligkeit: das früheste Prüfdatum im Zweig – ohne neue (Eingangsprüfung), gesperrte und Artikel am Lebensende, die ihre eigenen Spalten haben.
-        ${pfadZeilen ? "Grau: übergeordnete Ordner, in denen du keine Freigabe hast – nur der Weg zu deinen." : ""}
-        ${teilweise ? "„Gesperrt (deine Artikel)“: deine gesperrten Artikel in einer Gliederung, die du sonst nicht siehst." : ""}</p>`;
+      <tbody>${zeilen.map(zeile).join("")}</tbody></table>`;
   }
+  const ordnerUebersichtInfo = (zeilen) => `Die Zahlen gelten für den ganzen Zweig. Gesperrte und ausgesonderte Artikel liegen in ihrer Gliederung und zählen dort.
+    Nächste Fälligkeit: das früheste Prüfdatum im Zweig – ohne neue (Eingangsprüfung), gesperrte und Artikel am Lebensende, die ihre eigenen Spalten haben.
+    ${zeilen.some((o) => o.nur_pfad) ? "Grau: übergeordnete Ordner, in denen du keine Freigabe hast – nur der Weg zu deinen." : ""}
+    ${zeilen.some((o) => o.teilweise) ? "„Gesperrt (deine Artikel)“: deine gesperrten Artikel in einer Gliederung, die du sonst nicht siehst." : ""}`;
   // Auf- und Zuklappen: Eine Zeile ist verborgen, solange einer ihrer Oberordner zugeklappt ist.
   function ordnerUebersichtKlappen(tabelle) {
     if (!tabelle) return;
@@ -1688,21 +1678,22 @@
       if (DATEN.ordner) q.set("ordner", DATEN.ordner);
       if (zugeordnet) q.set("zugeordnet", zugeordnet);
       const d = await api(`${API}/faellig?${q}`);
+      const zuInfo = $("#pr-zu-info");
+      if (zuInfo) zuInfo.innerHTML = infoKnopf("Zu prüfen", `Überfällig, Lebensdauer erreicht (die Prüfung endet mit „aussondern empfohlen“ oder „instandsetzen“), neu (die Eingangsprüfung steht aus) oder in den nächsten ${esc(String(d.schwelle_tage))} Tagen fällig. Prüfen lässt sich jeder Artikel aber jederzeit – auch aus seiner Ansicht.`);
       // Aus der Übersicht kommt die Liste nach Ordner gefiltert – samt Unterordnern; „alle Ordner“ hebt das auf.
       const ordnerZeile = d.ordner ? `<p class="mat-pr-ordner">Nur <a href="/materialablage/ordner/${d.ordner.id}">${esc(d.ordner.pfad.map((o) => o.name).join(" / "))}</a> mit Unterordnern
         · <a href="${adresse({ ordner: null })}">alle Ordner</a></p>` : "";
       const name = (d.artikel.find((a) => a.zugeordnet_name) || {}).zugeordnet_name;
       const personZeile = zugeordnet ? `<p class="mat-pr-ordner">Nur Artikel, die ${name ? esc(name) : "einer Person"} zugeordnet sind
         · <a href="${adresse({ zugeordnet: null })}">alle Personen</a></p>` : "";
-      $("#pr-liste").innerHTML = `${ordnerZeile}${personZeile}<p class="help">Überfällig, Lebensdauer erreicht (die Prüfung endet mit „aussondern empfohlen“ oder „instandsetzen“), neu (die Eingangsprüfung steht aus) oder in den nächsten ${d.schwelle_tage} Tagen fällig. Prüfen lässt sich jeder Artikel aber jederzeit – auch aus seiner Ansicht.</p>
+      $("#pr-liste").innerHTML = `${ordnerZeile}${personZeile}
         <div class="c-tabs mat-filter">${FILTER.map(([f, t]) => `<button type="button" data-act="filter" data-f="${f}" class="${f === filter ? "sel" : ""}">${esc(t)}</button>`).join("")}</div>
         ${d.artikel.length ? artikelTabelle(d.artikel, { pfad: true, pruefen: d.artikel.some((a) => a.darf && a.darf.pruefen), sort }) : leer("Keine Artikel in dieser Auswahl.")}
         ${seitenleiste(d.gesamt, seite, 50)}`;
     }
     async function offene() {
       const liste = (await api(`${API}/entwuerfe`)).entwuerfe;
-      $("#pr-offen").innerHTML = liste.length ? `<section class="section"><h2>Offene Prüfungen</h2>
-        <p class="help">Eine offene Prüfung reserviert ihren Artikel: Nur ihr Prüfer arbeitet daran weiter. Bleibt eine Prüfung liegen, hebt der Materialwart die Reservierung auf.</p>
+      $("#pr-offen").innerHTML = liste.length ? `<section class="section"><h2>Offene Prüfungen${infoKnopf("Offene Prüfungen", "Eine offene Prüfung reserviert ihren Artikel: Nur ihr Prüfer arbeitet daran weiter. Bleibt eine Prüfung liegen, hebt der Materialwart die Reservierung auf.")}</h2>
         <table class="list mat-tabelle mat-karten"><thead><tr><th>Artikel</th><th>Prüfung</th><th>Prüfer</th><th>begonnen</th><th></th></tr></thead><tbody>
         ${liste.map((x) => `<tr><td data-l="Artikel" class="mat-k-titel"><a href="/materialablage/artikel/${x.item_id}"><strong>${esc(x.artikel.inventory_no)}</strong></a> ${nameHtml(x.artikel)}${zusatzHtml(x.artikel)} <div class="small muted">${esc(x.artikel.pfad)}</div></td>
           <td data-l="Prüfung" class="mat-k-halb">${esc(PRUEFART_KURZ[x.art] || x.art)}</td><td data-l="Prüfer" class="mat-k-halb">${person(x.pruefer)}${x.eigen ? ' <span class="badge">du</span>' : ""}</td>
@@ -1729,7 +1720,7 @@
             ${rundenMenue()}</div></div>
         ${!DARF.pruefen ? `<p class="notice">${pruefHinweis()}</p>` : ""}
         <div id="pr-runden"></div><div id="pr-offen"></div>
-        <section class="section"><h2>Zu prüfen</h2><div id="pr-liste"><p class="help">Wird geladen …</p></div></section>`;
+        <section class="section"><h2>Zu prüfen<span id="pr-zu-info"></span></h2><div id="pr-liste"><p class="help">Wird geladen …</p></div></section>`;
       await Promise.all([zeigenIn(liste, "#pr-liste"), zeigenIn(offene, "#pr-offen"), rundenKasten($("#pr-runden"), true)]);
     }
     // Die Adresse dieser Liste mit Ordner, Person und Filter – was in aendern null ist, fällt weg.
@@ -1973,13 +1964,11 @@
   async function bestand() {
     const liste = await ordnerBaum();
     seitenTitel("Bestand");
-    inhalt.innerHTML = `<div class="page-head"><h1>Bestand</h1>
+    const info = `${BESTAND_INFO}${liste.some((o) => o.nur_pfad) ? " Grau: übergeordnete Ordner, in denen du keine Freigabe hast – nur der Weg zu deinen." : ""}
+      <span class="info-absatz">${ZAEHLER_LEGENDE}</span>`;
+    inhalt.innerHTML = `<div class="page-head"><h1>Bestand${infoKnopf("Bestand", info)}</h1>
         <div class="btn-row">${DARF.gliederung_anlegen ? '<button class="btn secondary" data-act="gliederung"><span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Gliederung<span class="k-anlegen"> anlegen</span></span></button>' : ""}
           ${DARF.verwalten || DARF.pruefen ? '<a class="btn secondary mat-mit-zahl" href="/materialablage/bestand/antraege">Änderungsanträge<span class="mat-meldezahl" id="bst-antraege" hidden></span></a>' : ""}</div></div>
-      <p class="help">Oben stehen die Gliederungen, darunter frei verschachtelt Standorte, Fahrzeuge, Sets. Jede Gliederung hat die
-        Systemordner „Gesperrt“ und „Ausgesondert“ – dorthin kommen Artikel nur durch eine Sperre oder Aussonderung.
-        ${liste.some((o) => o.nur_pfad) ? "Grau: übergeordnete Ordner, in denen du keine Freigabe hast – nur der Weg zu deinen." : ""}</p>
-      ${ZAEHLER_LEGENDE}
       ${liste.length ? baumHtml(liste) : leer(DARF.lesen ? "Noch kein Ordner angelegt." : "Du hast noch keine Freigabe im Bestand – der Materialwart deiner Gliederung vergibt sie.")}`;
     aktionen = { gliederung: () => ordnerDialog({ kind: "gliederung" }, null) };
     antraegeZaehlen($("#bst-antraege"));
@@ -2155,8 +2144,7 @@
         <div><label for="od-kind">Art</label><select id="od-kind" ${oben || o.kind === "gliederung" ? "disabled" : ""}>
           ${arten.map(([k, t]) => `<option value="${k}" ${(o.kind || "standort") === k ? "selected" : ""}>${esc(t)}</option>`).join("")}</select>
           ${o.kind === "gliederung" && !neu ? '<div class="help">Eine Gliederung bleibt eine Gliederung.</div>' : ""}</div>
-        <div><label for="od-int">Prüfintervall (Monate)</label><input type="number" id="od-int" min="1" max="120" value="${o.interval_months || ""}" placeholder="vom Produkt">
-          <div class="help">Nur zum Verschärfen: Gilt die Herstellervorgabe kürzer, gilt sie.</div></div>
+        <div><label for="od-int">Prüfintervall (Monate)${infoKnopf("Prüfintervall", "Nur zum Verschärfen: Gilt die Herstellervorgabe kürzer, gilt sie.")}</label><input type="number" id="od-int" min="1" max="120" value="${o.interval_months || ""}" placeholder="vom Produkt"></div>
       </div>
       ${erinnerungFeld}
       <label for="od-desc">Beschreibung</label><textarea id="od-desc" rows="3" maxlength="2000">${esc(o.description || "")}</textarea>
@@ -2744,69 +2732,6 @@
   // vorher behielt es die Lage vom Öffnen und ragte nach dem Zuklappen 31 px links aus dem Bild.
   window.addEventListener("resize", () => $$("details.mat-menue[open]").forEach(menueAusrichten));
 
-  /* Info-Symbole (infoKnopf): offen, solange die Maus über „i“ oder Info steht, der Fokus darin ist oder sie angetippt
-     wurde (fest – bis zum nächsten Tipp auf „i“, daneben oder Esc). Die Info steht unter dem „i“ und rückt wie die
-     Untermenüs ins Bild. */
-  function infoZeigen(w, an, fest) {
-    const k = $(".mat-info-knopf", w);
-    const t = $(".mat-info-text", w);
-    if (!k || !t) return;
-    w.classList.toggle("fest", Boolean(an && (fest || w.classList.contains("fest"))));
-    if (!an) w.classList.remove("fest");
-    k.setAttribute("aria-expanded", String(an));
-    t.hidden = !an;
-    if (!an) return;
-    t.style.left = "0px";
-    const r = t.getBoundingClientRect();
-    const ende = document.documentElement.clientWidth - 8;
-    const verschub = r.right > ende ? ende - r.right : 0;
-    t.style.left = `${Math.round(Math.max(verschub, 8 - (r.left)))}px`;
-  }
-  const infoAlleZu = (ausser) => $$(".mat-info").forEach((w) => { if (w !== ausser && !$(".mat-info-text", w).hidden) infoZeigen(w, false); });
-  document.addEventListener("click", (e) => {
-    const k = e.target.closest && e.target.closest(".mat-info-knopf");
-    const w = e.target.closest && e.target.closest(".mat-info");
-    infoAlleZu(w);
-    if (!k) return;
-    e.preventDefault();
-    const offen = !$(".mat-info-text", w).hidden;
-    // Mit der Maus ist die Info beim Klick schon offen (Darüberfahren): Der Klick hält sie fest, ein zweiter schließt.
-    infoZeigen(w, !(offen && w.classList.contains("fest")), true);
-  });
-  document.addEventListener("pointerover", (e) => {
-    if (e.pointerType !== "mouse") return;
-    const w = e.target.closest && e.target.closest(".mat-info");
-    if (w && $(".mat-info-text", w).hidden) { infoAlleZu(w); infoZeigen(w, true); }
-  });
-  document.addEventListener("pointerout", (e) => {
-    if (e.pointerType !== "mouse") return;
-    const w = e.target.closest && e.target.closest(".mat-info");
-    if (!w || w.contains(e.relatedTarget) || w.classList.contains("fest") || w.contains(document.activeElement)) return;
-    infoZeigen(w, false);
-  });
-  document.addEventListener("focusin", (e) => {
-    const w = e.target.closest && e.target.closest(".mat-info");
-    infoAlleZu(w);
-    // Nach Esc kommt der Fokus auf das „i“ zurück – ohne die Info gleich wieder zu öffnen.
-    if (w && w.dataset.esc) { delete w.dataset.esc; return; }
-    if (w && e.target.matches(".mat-info-knopf:focus-visible")) infoZeigen(w, true);
-  });
-  document.addEventListener("focusout", (e) => {
-    const w = e.target.closest && e.target.closest(".mat-info");
-    if (w && !w.contains(e.relatedTarget) && !w.classList.contains("fest") && !w.matches(":hover")) infoZeigen(w, false);
-  });
-  document.addEventListener("keydown", (e) => {
-    if (e.key !== "Escape") return;
-    const w = $$(".mat-info").find((x) => !$(".mat-info-text", x).hidden);
-    if (!w) return;
-    infoZeigen(w, false);
-    if (w.contains(document.activeElement) && document.activeElement !== $(".mat-info-knopf", w)) {
-      w.dataset.esc = "1";
-      $(".mat-info-knopf", w).focus();
-    }
-  });
-
-
   /* --- Jahresbericht je Zweig (Phase 4 · Lieferung 1) --------------------------------------------------------------
      Seite /materialablage/ordner/<fid>/bericht (Ansicht „bericht“, DATEN = {id}); die Daten kommen fertig formatiert von
      GET /api/material/ordner/<fid>/bericht?jahr=&pruefer= (services/bericht.daten) – dieselben Blöcke in derselben
@@ -2898,8 +2823,8 @@
         ${zahlen([[ma.gemeldet, `<strong>gemeldet im Jahr ${esc(String(k.jahr))}</strong>`], [ma.offen, "davon heute offen"], [ma.freipruefung, "erledigt durch Freiprüfung"], [ma.aussonderung, "erledigt durch Aussonderung"], [ma.offen_stichtag, "offene Meldungen zum Stichtag (alle Jahre)"]])}
         ${ma.offen_liste.length ? `${liste([["Inventarnummer"], ["gemeldet am"]],
           ma.offen_liste.map((x) => `<tr>${td("Inventarnummer", `${mono(x.inventarnummer)}${demoMarke(x.demo)}`)}${td("gemeldet am", esc(x.gemeldet))}</tr>`))}${kappung(ma.offen_liste.length, "Meldungen")}` : ""}</section>`;
-      const rueckrufe = `<section class="section" id="be-rueckrufe"><h2>Rückrufe</h2>
-        ${b.rueckrufe.length ? `<p class="help">Rückrufe, die im Jahr angelegt oder beendet wurden oder heute laufen – zu Produkten mit Artikeln im Zweig.</p>${liste([["Angelegt · beendet"], ["Rückruf"], ["betroffen", "mat-be-zahl"], ["offen", "mat-be-zahl"]],
+      const rueckrufe = `<section class="section" id="be-rueckrufe"><h2>Rückrufe${infoKnopf("Rückrufe", "Rückrufe, die im Jahr angelegt oder beendet wurden oder heute laufen – zu Produkten mit Artikeln im Zweig.")}</h2>
+        ${b.rueckrufe.length ? `${liste([["Angelegt · beendet"], ["Rückruf"], ["betroffen", "mat-be-zahl"], ["offen", "mat-be-zahl"]],
           b.rueckrufe.map((r) => `<tr>${td("Angelegt · beendet", `${esc(r.angelegt)}<br>${r.beendet ? `beendet ${esc(r.beendet)}` : "läuft"}`)}
             ${td("Rückruf", `<strong>${esc(r.titel)}</strong> – ${esc(r.produkt)} <span class="muted">(${r.alle ? "alle Artikel des Produkts" : "nach Seriennummern"})</span>${r.url ? `<div class="small">Meldung des Herstellers: ${mono(r.url)}</div>` : ""}${r.artikel.length ? `<details class="mat-auf mat-be-rr"><summary>Betroffene Artikel anzeigen (${r.artikel.length})</summary><ul class="mat-be-rr-liste">${[...r.artikel].sort((x, y) => (x.zustand !== "offen") - (y.zustand !== "offen")).map((a) => `<li>${mono(a.inventarnummer)} <span class="muted">${esc(a.zustand)}</span>${demoMarke(a.demo)}</li>`).join("")}</ul></details>` : ""}`)}
             ${td("betroffen", String(r.betroffen), "mat-be-zahl")}${td("offen", String(r.offen), "mat-be-zahl")}</tr>`))}` : leer("Kein Rückruf betrifft Artikel im Zweig.")}</section>`;
@@ -2929,9 +2854,9 @@
         <div class="page-head"><h1>Jahresbericht ${esc(k.ordner)} <span id="be-titel-jahr">${esc(String(k.jahr))}</span>${demoMarke(k.demo)}</h1>
           <div class="btn-row" id="be-dateien">${dateien(b)}</div></div>
         <div class="mat-bericht-wahl">
-          <label for="be-jahr">Kalenderjahr <select id="be-jahr">${jahre.map((j) => `<option value="${Number(j)}"${j === k.jahr ? " selected" : ""}>${Number(j)}</option>`).join("")}</select></label>
+          <label for="be-jahr">Kalenderjahr${infoKnopf("Kalenderjahr", "Bestandszahlen gelten zum Stichtag heute, Ereignisse für das Kalenderjahr.")} <select id="be-jahr">${jahre.map((j) => `<option value="${Number(j)}"${j === k.jahr ? " selected" : ""}>${Number(j)}</option>`).join("")}</select></label>
           <label class="inline" for="be-pruefer"><input type="checkbox" id="be-pruefer"${k.pruefer_nennen ? " checked" : ""}> Prüfer nennen</label>
-          <span class="help">Ohne Haken nennt keine Ausgabe einen Prüfer – weder die Seite noch PDF oder CSV. Bestandszahlen gelten zum Stichtag heute, Ereignisse für das Kalenderjahr.</span></div>
+          <span class="help">Ohne Haken nennt keine Ausgabe einen Prüfer – weder die Seite noch PDF oder CSV.</span></div>
         <div id="be-inhalt">${inhaltHtml(b)}</div>`;
       $("#be-jahr").addEventListener("change", (e) => { jahr = +e.target.value; laden(true); });
       $("#be-pruefer").addEventListener("change", (e) => { pruefer = e.target.checked; laden(true); });
@@ -3098,8 +3023,7 @@
         </dl></section>
         <div class="mat-spalte">
         ${(a.antraege || []).length ? `<section class="section mat-antraege-offen"><h2>Offene Änderungsanträge</h2>${a.antraege.map(antragOffenHtml).join("")}</section>` : ""}
-        <section class="section"><h2>QR-Code und NFC</h2>
-          <p class="help">Diese Adresse öffnet nach der Anmeldung diesen Artikel. Kopiere sie und schreibe sie auf einen NFC- oder RFID-Tag oder drucke sie mit einem beliebigen Etikettenprogramm als QR-Code – die Kamera-App des Telefons öffnet sie.</p>
+        <section class="section"><h2>QR-Code und NFC${infoKnopf("QR-Code und NFC", "Diese Adresse öffnet nach der Anmeldung diesen Artikel. Kopiere sie und schreibe sie auf einen NFC- oder RFID-Tag oder drucke sie mit einem beliebigen Etikettenprogramm als QR-Code – die Kamera-App des Telefons öffnet sie.")}</h2>
           <div class="mat-qr"><input type="text" readonly value="${esc(a.qr_adresse)}" id="mat-qr" aria-label="Adresse für QR, NFC und RFID">
           <button class="btn secondary small" data-act="qr-kopieren">Kopieren</button></div>
           <h2>Herstellerdokumente</h2>
@@ -3109,7 +3033,7 @@
       </div>
       <section class="section"><h2>Prüfungen</h2>${pruefListe(a.pruefungen)}</section>
       ${mangelErledigt(maengel.filter((m) => !m.offen))}
-      ${darf.grund ? `<section class="section"><h2>Journal</h2><p class="help">Änderungen am Artikel und an seinem Produkt, neueste zuerst.</p>${journalHtml(a.journal, true)}</section>` : ""}`;
+      ${darf.grund ? `<section class="section"><h2>Journal${infoKnopf("Journal", "Änderungen am Artikel und an seinem Produkt, neueste zuerst.")}</h2>${journalHtml(a.journal, true)}</section>` : ""}`;
     aktionen = {
       "qr-kopieren": async () => {
         const feld = $("#mat-qr");
@@ -3690,7 +3614,7 @@
     if (!wahl.anzahl) { inhalt.innerHTML = `<h1>Artikel anlegen</h1>${leer("Du verwaltest noch keinen Ordner – Artikel legt an, wer den Ordner verwaltet.")}`; return; }
     leisteMarkieren(DATEN.ordner);
     let produkt = null;
-    inhalt.innerHTML = `<div class="page-head"><h1>Artikel anlegen</h1></div>
+    inhalt.innerHTML = `<div class="page-head"><h1>Artikel anlegen${infoKnopf("Artikel anlegen", "Neu angelegte Artikel stehen auf <strong>neu</strong>, bis ein Prüfer die Eingangsprüfung gemacht hat – erst sie gibt sie frei und setzt die erste Fälligkeit.")}</h1></div>
       <div class="mat-formular">
         <label for="an-q">Produkt aus dem Katalog</label>
         <div class="mat-produktwahl"><input type="search" id="an-q" placeholder="Hersteller, Modell, Bemerkung, Artikelnummer …" autocomplete="off" ${TASTATUR_SUCHE}>
@@ -3699,8 +3623,7 @@
         <p class="help">Fehlt das Produkt im Katalog? <button type="button" class="lnk" data-act="melden">Fehlendes Produkt melden</button>
           – die Material-Verwaltung nimmt es auf, du bekommst Bescheid.</p>
         <label for="an-ordner">Ordner</label><select id="an-ordner">${wahl.html}</select>
-        <label for="an-sn">Seriennummer des Herstellers</label><input type="text" id="an-sn" maxlength="80" placeholder="leer lassen, wenn der Hersteller keine vergibt" ${TASTATUR_NUMMER}>
-        <div class="help">Ohne Herstellernummer vergibt das System eine eindeutige (STR-…), die dann am Artikel angebracht wird. Die Inventarnummer vergibt immer das System.</div>
+        <label for="an-sn">Seriennummer des Herstellers${infoKnopf("Seriennummer des Herstellers", "Ohne Herstellernummer vergibt das System eine eindeutige (STR-…), die dann am Artikel angebracht wird. Die Inventarnummer vergibt immer das System.")}</label><input type="text" id="an-sn" maxlength="80" placeholder="leer lassen, wenn der Hersteller keine vergibt" ${TASTATUR_NUMMER}>
         <div class="field-row"><div><label for="an-herst">Herstellung (Monat)</label>${datumFeld("an-herst", "", "monat")}</div>
           <div><label for="an-kauf">Kauf (Monat)</label>${datumFeld("an-kauf", "", "monat")}</div></div>
         <div class="field-row"><div><label for="an-erst">Erstgebrauch (Monat)</label>${datumFeld("an-erst", "", "monat")}</div>
@@ -3710,9 +3633,7 @@
         <div class="field-row"><div id="an-laenge-feld" hidden><label for="an-laenge">Länge (m)</label><input type="text" id="an-laenge" class="mat-laenge-feld" inputmode="decimal" autocomplete="off" maxlength="10" placeholder="z. B. 57,5">
           <div class="help">Tatsächliche Länge in Metern, eine Nachkommastelle – ein Prüfpunkt „Länge“ fragt sie bei jeder Prüfung ab.</div></div><div></div></div>
         <div id="an-bestandteile" hidden></div>
-        <p class="notice">Neu angelegte Artikel stehen auf <strong>neu</strong>, bis ein Prüfer die Eingangsprüfung gemacht hat – erst sie gibt sie frei und setzt die erste Fälligkeit.</p>
         <label for="an-notes">Bemerkung</label><textarea id="an-notes" rows="2" maxlength="4000"></textarea>
-        <p class="help mat-nur-touch">„Anlegen und nächsten“: Produkt und Ordner bleiben für den nächsten Artikel stehen.</p>
         <div class="btn-row mat-knoepfe"><button class="btn" data-act="anlegen">Anlegen</button>
           <button class="btn secondary" data-act="anlegen-weiter" title="Produkt und Ordner bleiben für den nächsten Artikel stehen">Anlegen und nächsten</button></div>
       </div>
@@ -4007,8 +3928,7 @@
             <p class="small">${angaben}${formularZeile}</p>
             ${DARF.katalog ? `<div class="btn-row">${kategorieMenue}
               <button class="btn secondary small" data-act="kat-formular">Generisches Formular</button></div>` : ""}
-            <details class="mat-katdoks mat-auf"${alsSchublade() ? "" : " open"}><summary>Dokumente für alle Produkte dieser Kategorie<span id="kat-doks-zahl"></span></summary>
-              <p class="help">Pflegehinweise, allgemeine Anleitungen … – sie gelten für jedes Produkt hier und in den Unterkategorien und stehen dort bei den Herstellerdokumenten.</p>
+            <details class="mat-katdoks mat-auf"${alsSchublade() ? "" : " open"}><summary>Dokumente für alle Produkte dieser Kategorie<span id="kat-doks-zahl"></span>${infoKnopf("Dokumente für alle Produkte dieser Kategorie", "Pflegehinweise, allgemeine Anleitungen … – sie gelten für jedes Produkt hier und in den Unterkategorien und stehen dort bei den Herstellerdokumenten.")}</summary>
               <div id="kat-doks"><p class="help">Wird geladen …</p></div>
               ${DARF.katalog ? '<button class="btn secondary small" data-act="dok-neu"><span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Dokument<span class="k-anlegen"> anlegen</span></span></button>' : ""}</details></div>`
           : (kats.length ? "" : leer(DARF.katalog ? "Noch keine Kategorien – mit „Kategorie anlegen“." : "Noch keine Kategorien."))}
@@ -4147,9 +4067,8 @@
     const flach = bl.neu || bl.geaendert || bl.unveraendert ? `<tr><th scope="row">Bestandteil-Listen</th><td>${bl.neu || 0}</td><td>${bl.geaendert || 0}</td><td>${bl.unveraendert || 0}</td></tr>` : "";
     return `${stand}
       ${h.quelle || h.erstellt ? `<p class="help">Export von ${esc(h.quelle || "?")}${h.erstellt ? `, erstellt ${esc(fmtZeit(h.erstellt))}.` : /…$/.test(h.quelle || "") ? "" : "."}</p>` : ""}
-      <table class="mat-austausch"><thead><tr><th></th><th>neu</th><th>geändert</th><th>unverändert</th></tr></thead>
+      <table class="mat-austausch"><thead><tr><th></th><th>neu</th><th>geändert${b.version === 2 ? infoKnopf("neu und geändert", "Eine geänderte Prüfliste wird eine neue Formularversion (zählt als neu); eine neue Dokumentversion zählt als geändert.") : ""}</th><th>unverändert</th></tr></thead>
         <tbody>${arten.map(zeile).join("")}${flach}</tbody></table>
-      ${b.version === 2 ? '<p class="help">Eine geänderte Prüfliste wird eine neue Formularversion (zählt als neu); eine neue Dokumentversion zählt als geändert.</p>' : ""}
       ${austauschListe("Fehler", b.fehler, "fehler")}
       ${austauschListe("Achtung – betrifft vorhandene Artikel", b.warnungen, "warnung")}
       ${austauschListe("Hinweis", b.hinweise, "")}
@@ -4442,10 +4361,9 @@
       <div class="field-row"><div><label for="kd-art">Materialart (Vorgabe für Produkte)</label><select id="kd-art"><option value="">–</option>
           ${Object.entries(MATERIALART).map(([w, t]) => `<option value="${w}" ${k.default_material_kind === w ? "selected" : ""}>${esc(t)}</option>`).join("")}</select></div>
         <div><label for="kd-int">Prüfintervall (Monate, Vorgabe)</label><input type="number" id="kd-int" min="1" max="120" value="${k.default_interval_months || ""}"></div></div>
-      <label for="kd-ld">Lebensdauer (Jahre, Vorschlag – nur textil)</label><input type="number" id="kd-ld" min="1" max="50" value="${k.default_lifetime_years || ""}">
-      <div class="help">Nur ein Vorschlag beim Anlegen eines Produkts: Die Lebensdauer steht am Produkt, aus der Anleitung des Herstellers.</div>
-      <label class="inline mat-kd-laenge"><input type="checkbox" id="kd-laenge" ${k.items_have_length ? "checked" : ""}> Artikel haben eine Länge</label>
-      <div class="help">Seile und Meterware: Artikel dieser Kategorie und aller Unterkategorien bekommen ein Feld „Länge (m)“; ein Prüfpunkt „Länge“ fragt sie bei der Prüfung ab.${geerbt ? " Hier schon durch eine Oberkategorie gesetzt." : ""}</div>
+      <label for="kd-ld">Lebensdauer (Jahre, Vorschlag – nur textil)${infoKnopf("Lebensdauer", "Nur ein Vorschlag beim Anlegen eines Produkts: Die Lebensdauer steht am Produkt, aus der Anleitung des Herstellers.")}</label><input type="number" id="kd-ld" min="1" max="50" value="${k.default_lifetime_years || ""}">
+      <label class="inline mat-kd-laenge"><input type="checkbox" id="kd-laenge" ${k.items_have_length ? "checked" : ""}> Artikel haben eine Länge${infoKnopf("Artikel haben eine Länge", "Seile und Meterware: Artikel dieser Kategorie und aller Unterkategorien bekommen ein Feld „Länge (m)“; ein Prüfpunkt „Länge“ fragt sie bei der Prüfung ab.")}</label>
+      ${geerbt ? '<div class="help">Hier schon durch eine Oberkategorie gesetzt.</div>' : ""}
       <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button><button class="btn" id="kd-ok" type="button">${neu ? "Anlegen" : "Speichern"}</button></div>`,
     (dlg, body) => {
       const art = $("#kd-art", body), ld = $("#kd-ld", body);
@@ -4659,6 +4577,7 @@
      dieselben Zahlen wie in models.py). Fehler des Servers („Position n: …“) markieren die Position. Liefert liste(),
      pruefen() (Text oder ""), geaendert(), gespeichert(), fehlerZeigen(text). */
   const STUECK_GRENZEN = { positionen: 30, anzahl: 20, bezeichnung: 120 };
+  const BESTANDTEILE_INFO = "Jede Prüfung fragt je Position ab, ob sie vorhanden ist; Seriennummern einzelner Stücke stehen am Artikel.";
   function stuecklisteEditor(teil, p) {
     const g = Object.assign({}, STUECK_GRENZEN, p.stueckliste_grenzen || {});
     const pos = (p.bestandteile || []).map((z) => ({ bezeichnung: z.bezeichnung, anzahl: z.anzahl }));
@@ -4675,10 +4594,11 @@
     function zaehler() {
       const z = $(".mat-bt-zaehler", teil);
       if (z) z.textContent = `${pos.length} von ${g.positionen} Positionen`;
+      const info = $(".mat-bt-info", teil);
+      if (info && !info.firstChild) info.innerHTML = infoKnopf("Positionen", BESTANDTEILE_INFO);
     }
     function zeichnen(fokusSel) {
-      teil.innerHTML = `<p class="help mat-bt-flach">Jede Prüfung fragt je Position ab, ob sie vorhanden ist; Seriennummern einzelner Stücke stehen am Artikel.</p>
-        <div class="mat-bt-liste">${pos.map((x, i) => `<fieldset class="mat-bt" data-i="${i}"><legend>Position ${i + 1}</legend>
+      teil.innerHTML = `<div class="mat-bt-liste">${pos.map((x, i) => `<fieldset class="mat-bt" data-i="${i}"><legend>Position ${i + 1}</legend>
           <div class="mat-bt-kopf"><span></span>
             <div class="btn-row"><button class="btn secondary small" type="button" data-bt="hoch" data-i="${i}" aria-label="Position ${i + 1} nach oben" ${i ? "" : "disabled"}>↑</button><button class="btn secondary small" type="button" data-bt="runter" data-i="${i}" aria-label="Position ${i + 1} nach unten" ${i < pos.length - 1 ? "" : "disabled"}>↓</button><button class="btn secondary small" type="button" data-bt="weg" data-i="${i}" aria-label="Position ${i + 1} entfernen">Entfernen</button></div></div>
           <div class="field-row mat-bt-felder nur-text"><div><label for="bt-${i}-bez">Bezeichnung</label><input type="text" id="bt-${i}-bez" class="bt-bez" maxlength="${g.bezeichnung}" value="${esc(x.bezeichnung || "")}" ${TASTATUR_NAME}></div>
@@ -4686,7 +4606,7 @@
           <p class="error mat-bt-fehler" hidden></p></fieldset>`).join("")}</div>
         ${pos.length ? "" : '<p class="mat-leer">Noch keine Bestandteile.</p>'}
         <div class="btn-row mat-bt-neu"><button class="btn secondary small" type="button" data-bt="neu" ${pos.length >= g.positionen ? "disabled" : ""}><span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Bestandteil<span class="k-anlegen"> anlegen</span></span></button>
-          <span class="help mat-bt-zaehler"></span></div>`;
+          <span class="help mat-bt-zaehler"></span><span class="mat-bt-info"></span></div>`;
       zaehler();
       if (fokusSel) fokus($(fokusSel, teil));
     }
@@ -4827,7 +4747,7 @@
   function bestandteilListeHtml(p, k) {
     const liste = p.bestandteile || [];
     if (!liste.length) return "";
-    return `<section class="section mat-bestandteil-liste"><div class="mat-kastenkopf"><h2>Bestandteile</h2>${k ? '<button class="btn secondary small" data-act="stueckliste">Bestandteile bearbeiten</button>' : ""}</div>
+    return `<section class="section mat-bestandteil-liste"><div class="mat-kastenkopf"><h2>Bestandteile${infoKnopf("Bestandteile", BESTANDTEILE_INFO)}</h2>${k ? '<button class="btn secondary small" data-act="stueckliste">Bestandteile bearbeiten</button>' : ""}</div>
       ${bestandteilZeilen(liste)}</section>`;
   }
 
@@ -4872,22 +4792,19 @@
           ${zusatz && zusatz.voll ? zeile("Bemerkung", `<span class="mat-text">${esc(p.description)}</span>
             <div class="help">Länger als ${BESCHREIBUNG_MAX} Zeichen, in der Überschrift gekürzt – gedacht ist ein kurzer Zusatz hinter dem Namen.${k ? " Bitte unter „Bearbeiten“ kürzen." : ""}</div>`) : ""}
         </dl></section>
-        <section class="section"><h2>Prüfformular</h2>
+        <section class="section"><h2>Prüfformular${infoKnopf("Prüfformular", "Ein aktives spezifisches Formular ersetzt das generische der Kategorie.")}</h2>
           ${p.formular ? `<p>Geprüft wird nach <a href="/materialablage/katalog/formular/${p.formular.id}"><strong>${esc(p.formular.title || "Formular")}</strong> · Version ${p.formular.version}</a> <span class="muted">(${esc(p.formular.quelle)}, ${plural(p.formular.punkte, "Prüfpunkt", "Prüfpunkte")})</span>.</p>` : '<p class="mat-warn">Für dieses Produkt gilt kein aktives Prüfformular – weder ein spezifisches noch ein generisches der Kategorie.</p>'}
           ${formulare.length ? `<p class="small">Spezifische Versionen: ${formulare.map((f) => `<a href="/materialablage/katalog/formular/${f.id}">v${f.version}${f.aktiv ? " (aktiv)" : ""}</a>`).join(", ")}</p>` : ""}
           ${k ? '<button class="btn secondary small" data-act="formular">Spezifisches Formular bearbeiten</button>' : ""}
-          <p class="help">Ein aktives spezifisches Formular ersetzt das generische der Kategorie.</p>
         </section>
       </div>
       ${bestandteilListeHtml(p, k)}
-      <section class="section"><h2>Herstellerdokumente</h2>
-        <p class="help">Gelten für alle Artikel dieses Produkts. Ein Protokoll verweist auf die Version, die am Prüftag galt.</p>
+      <section class="section"><h2>Herstellerdokumente${infoKnopf("Herstellerdokumente", `Gelten für alle Artikel dieses Produkts. Ein Protokoll verweist auf die Version, die am Prüftag galt.${p.kategorie_dokumente.length ? " Kategoriedokumente hängen an der Kategorie und gelten für alle Produkte darin." : ""}`)}</h2>
         ${p.dokumente.length ? dokTabelle(p.dokumente, k) : leer("Noch keine Dokumente am Produkt.")}
         ${k ? '<button class="btn secondary small" data-act="dok-neu"><span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Dokument<span class="k-anlegen"> anlegen</span></span></button>' : ""}
         ${katGruppen(p.kategorie_dokumente).map((g) => `${katKopf(g.name, g.id)}
           <ul class="mat-doks">${g.docs.map((d) => `<li><a href="${esc(d.datei || d.url)}" target="_blank" rel="noopener">${esc(d.title)}</a>
             <span class="muted small">${esc(DOKART[d.kind] || d.kind)}${d.version ? `, ${esc(d.version)}` : ""}</span></li>`).join("")}</ul>`).join("")}
-        ${p.kategorie_dokumente.length ? '<p class="help">Kategoriedokumente hängen an der Kategorie und gelten für alle Produkte darin.</p>' : ""}
       </section>
       <section class="section"><h2>Journal</h2>${journalHtml(p.journal, true)}</section>`;
     aktionen = {
@@ -5098,11 +5015,10 @@
       } else if (w && w.zustand === "papierkorb") anzeige = "Die verknüpfte Seite liegt im Papierkorb der Strömipedia.";
       else if (w) anzeige = `Seite Nr. ${esc(w.seite)} – du darfst sie nicht lesen`;
       const warnung = w && w.zustand === "ok" ? REICHWEITE_HINWEIS[w.reichweite] : "";
-      return `<div class="mat-wikizeile" id="fp-wiki"><p><strong>Prüfanleitung in der Strömipedia:</strong> ${anzeige}
+      const info = `${f.benutzt && f.wiki_aendern ? "Die Verknüpfung gehört nicht zum Prüfinhalt und lässt sich auch an benutzten Versionen ändern. " : ""}${WIKI_PRUEFUNG_INFO} Neue Konten haben keine Stufe in der Strömipedia und sehen nur öffentliche Seiten.`;
+      return `<div class="mat-wikizeile" id="fp-wiki"><p><strong>Prüfanleitung in der Strömipedia${infoKnopf("Prüfanleitung in der Strömipedia", info)}:</strong> ${anzeige}
           ${f.wiki_aendern ? '<button type="button" class="lnk" data-act="wiki-waehlen">Ändern</button>' : ""}</p>
         ${warnung ? `<p class="small mat-warn-leise">${esc(warnung)}</p>` : ""}
-        ${f.benutzt && f.wiki_aendern ? '<p class="help">Die Verknüpfung gehört nicht zum Prüfinhalt und lässt sich auch an benutzten Versionen ändern.</p>' : ""}
-        <p class="help">Hat die Seite eine Überschrift „Prüfung“, wird dieser Abschnitt in der Prüfung eingeblendet, sonst nur verlinkt. Neue Konten haben keine Stufe in der Strömipedia und sehen nur öffentliche Seiten.</p>
         ${f.wiki_aendern ? "" : '<p class="help">Verknüpfen kann, wer in der Strömipedia mindestens Mitglied ist.</p>'}</div>`;
     }
     function zeichnen() {
@@ -5114,10 +5030,9 @@
             <button class="btn secondary small" data-act="neue-version">Neue Version</button>${!f.aktiv && !f.benutzt ? '<button class="btn secondary small" data-act="loeschen">Löschen</button>' : ""}` : ""}</div></div>
         ${wikiZeile()}
         <p class="help">${esc(zielText)}. ${f.gueltig_ab ? `Gültig ab ${esc(fmtTag(f.gueltig_ab))}.` : "Noch nie aktiviert."}
-          ${f.benutzt ? " Diese Version wurde schon für Prüfungen benutzt und bleibt unverändert – Änderungen gehen über eine neue Version." : ""}
-          Bei der Prüfung ist jeder Befund mit „in Ordnung“ vorbelegt, Ja/Nein-Punkte mit ihrem Sollwert; bei Text und Zahl ist das Soll ein Hinweis für den Prüfer. Ein kritischer Punkt mit Mangel schließt „einsatzbereit“ aus.
-          Ein Punkt der Art „Länge (m)“ ist mit der Länge des Artikels vorbelegt; trägt der Prüfer eine andere ein, übernimmt das Festschreiben sie in den Artikel (nur bei Kategorien mit „Artikel haben eine Länge“).</p>
+          ${f.benutzt ? " Diese Version wurde schon für Prüfungen benutzt und bleibt unverändert – Änderungen gehen über eine neue Version." : ""}</p>
         ${bearbeitbar ? `<label for="fp-titel">Titel</label><input type="text" id="fp-titel" value="${esc(f.titel || "")}" maxlength="160">` : ""}
+        <h2 class="mat-fp-punkte">Prüfpunkte${infoKnopf("Prüfpunkte", PRUEFPUNKTE_INFO)}</h2>
         <table class="list mat-tabelle mat-formtabelle" id="fp-tabelle">
           <colgroup><col style="width:13%"><col style="width:48%"><col style="width:12%"><col style="width:11%"><col style="width:16%"></colgroup><thead><tr><th>Gruppe</th><th>Prüfpunkt</th><th>Art</th><th>Soll</th><th></th></tr></thead>
           <tbody>${punkte.map(punktZeile).join("")}</tbody></table>
@@ -5174,14 +5089,16 @@
      geänderten); je Treffer die Reichweite als graue Marke und, bei interner oder beschränkter Seite, wer sie nicht sieht.
      Gespeichert wird sofort (PUT …/formulare/<id>/wiki), danach zeichnet die Formularansicht ihre Zeile neu. */
   const REICHWEITE = { oeffentlich: "öffentlich", intern: "intern", beschraenkt: "beschränkt" };
+  const PRUEFPUNKTE_INFO = "Bei der Prüfung ist jeder Befund mit „in Ordnung“ vorbelegt, Ja/Nein-Punkte mit ihrem Sollwert; bei Text und Zahl ist das Soll ein Hinweis für den Prüfer. "
+    + "Ein kritischer Punkt mit Mangel schließt „einsatzbereit“ aus. Ein Punkt der Art „Länge (m)“ ist mit der Länge des Artikels vorbelegt; trägt der Prüfer eine andere ein, "
+    + "übernimmt das Festschreiben sie in den Artikel (nur bei Kategorien mit „Artikel haben eine Länge“).";
+  const WIKI_PRUEFUNG_INFO = "Hat die Seite eine Überschrift „Prüfung“, wird dieser Abschnitt in offenen Prüfungen eingeblendet, sonst nur verlinkt.";
   const REICHWEITE_HINWEIS = { intern: "Prüfer ohne Zugang zur Strömipedia – das sind alle neuen Konten – sehen nur, dass es eine Anleitung gibt.",
                                beschraenkt: "Nur für Freigegebene lesbar – die meisten Prüfer sehen sie nicht." };
   function wikiWahl(formular, danach) {
     const aktuell = formular.wiki ? formular.wiki.seite : null;
     dialog(`<h2>Prüfanleitung aus der Strömipedia</h2>
-      <p class="help">Hat die Seite eine Überschrift „Prüfung“, wird dieser Abschnitt in offenen Prüfungen eingeblendet, sonst nur verlinkt.
-        Jeder sieht nur, was er in der Strömipedia lesen darf.</p>
-      <label for="ww-q">Seite suchen (Titel)</label>
+      <label for="ww-q">Seite suchen (Titel)${infoKnopf("Seite suchen", `${WIKI_PRUEFUNG_INFO} Jeder sieht nur, was er in der Strömipedia lesen darf.`)}</label>
       <input type="search" id="ww-q" autocomplete="off" ${TASTATUR_SUCHE} placeholder="z. B. Karabiner">
       <p class="help" id="ww-lesemodus" hidden>Du siehst nur öffentliche Seiten.</p>
       <div class="mat-wikiwahl" id="ww-liste"></div>
@@ -5310,11 +5227,10 @@
         ${a.durchgang ? `<p>Im Prüfdurchgang ${a.durchgang.sichtbar ? `<a href="/materialablage/durchgang/${a.durchgang.id}">${esc(a.durchgang.titel)}</a>` : `„${esc(a.durchgang.titel)}“`} – die Prüfung zählt dort.</p>` : ""}
         ${hinweis ? `<p class="notice">${hinweis}</p><p><a class="btn secondary" href="/materialablage/artikel/${a.id}">Zum Artikel</a></p>` : `
           <fieldset class="mat-arten"><legend>Art der Prüfung</legend>
-            ${pa.arten.map((x) => `<label class="mat-art-wahl"><input type="radio" name="art" value="${x}" ${x === pa.vorschlag ? "checked" : ""}> ${esc(PRUEFART[x] || x)}</label>`).join("")}
-            ${pa.arten.length === 1 && pa.arten[0] === "eingang" ? '<p class="help">Die erste Prüfung eines Artikels ist die Eingangsprüfung. Erst sie gibt ihn frei; bis dahin steht er auf „neu“.</p>' : ""}
+            ${pa.arten.map((x) => `<label class="mat-art-wahl"><input type="radio" name="art" value="${x}" ${x === pa.vorschlag ? "checked" : ""}> ${esc(PRUEFART[x] || x)}${x === "eingang" && pa.arten.length === 1 ? infoKnopf("Eingangsprüfung", "Die erste Prüfung eines Artikels ist die Eingangsprüfung. Erst sie gibt ihn frei; bis dahin steht er auf „neu“.") : ""}</label>`).join("")}
           </fieldset>
-          <div class="btn-row mat-knoepfe"><button class="btn" data-act="beginnen">Prüfung beginnen</button><a class="btn secondary" href="/materialablage/artikel/${a.id}">Abbrechen</a></div>
-          <p class="help">Mit dem Beginn reservierst du den Artikel: Andere sehen „in Prüfung bei dir“, bis du abschließt oder verwirfst. Jede Eingabe wird sofort gespeichert – du kannst jederzeit unterbrechen.</p>`}
+          <p class="help" id="pa-folge">Mit dem Beginn reservierst du den Artikel: Andere sehen „in Prüfung bei dir“, bis du abschließt oder verwirfst. Jede Eingabe wird sofort gespeichert – du kannst jederzeit unterbrechen.</p>
+          <div class="btn-row mat-knoepfe"><button class="btn" data-act="beginnen" aria-describedby="pa-folge">Prüfung beginnen</button><a class="btn secondary" href="/materialablage/artikel/${a.id}">Abbrechen</a></div>`}
       </div>`;
     aktionen = {
       beginnen: async (b) => {
@@ -5914,8 +5830,7 @@
           <ol class="mat-scan" id="ah-seiten"></ol>
           <label class="inline"><input type="checkbox" id="ah-protokoll" checked> hinten ans Protokoll hängen</label>
           <div class="btn-row"><button type="button" class="btn secondary small" data-act="anhang-hoch" id="ah-hoch" disabled>Als ein PDF anhängen</button></div></div>` : "";
-      return `<section class="section"><h2>Anhänge</h2>
-        ${bearbeitbar() ? '<p class="help">Externe Prüfkarte, Bericht eines Prüfdienstes … als PDF oder Foto. Mehrere Fotos (eine je Seite) und PDFs werden in der Reihenfolge der Liste ein PDF.</p>' : ""}
+      return `<section class="section"><h2>Anhänge${bearbeitbar() ? infoKnopf("Anhänge", "Externe Prüfkarte, Bericht eines Prüfdienstes … als PDF oder Foto. Mehrere Fotos (eine je Seite) und PDFs werden in der Reihenfolge der Liste ein PDF.") : ""}</h2>
         <div id="ah-liste">${anhaengeListe()}</div>${neu}</section>`;
     }
 
@@ -6018,7 +5933,7 @@
           ${pr.basis_id ? `<dt>Grundlage</dt><dd><a href="/materialablage/pruefung/${pr.basis_id}">Prüfung vom Tag der Aussonderung</a></dd>` : ""}
           <dt>Abgeschlossen</dt><dd>${esc(fmtZeit(pr.abgeschlossen_am))}</dd></dl></section>${protokollHtml()}</div>`;
       return `${ergebnisBox}
-        ${pr.punkte.length ? `<section class="section"><h2>Befunde</h2><table class="list mat-tabelle mat-karten mat-befunde"><thead><tr><th>Prüfpunkt</th><th class="mat-krit-spalte"><span class="mat-vorlesen">kritisch</span></th><th>Befund</th><th>Wert</th><th>Bemerkung</th><th>Foto</th></tr></thead><tbody>${zeilen}</tbody></table></section>` : ""}
+        ${pr.punkte.length ? `<section class="section"><h2>Befunde${pr.punkte.some((x) => x.kritisch) ? infoKnopf("kritisch", "„kritisch“: Ein Mangel an diesem Prüfpunkt schließt „einsatzbereit“ aus.") : ""}</h2><table class="list mat-tabelle mat-karten mat-befunde"><thead><tr><th>Prüfpunkt</th><th class="mat-krit-spalte"><span class="mat-vorlesen">kritisch</span></th><th>Befund</th><th>Wert</th><th>Bemerkung</th><th>Foto</th></tr></thead><tbody>${zeilen}</tbody></table></section>` : ""}
         ${pr.art !== "aussonderung" ? anhaengeHtml() : ""}
         ${pr.dokumente.length ? `<section class="section"><h2>Herstellerdokumente am Prüftag</h2>${dokListe(pr.dokumente, false)}</section>` : ""}`;
     }
@@ -6776,9 +6691,8 @@
       const liste = d.antraege;
       const antrag = (b) => liste.find((x) => x.id === +b.dataset.id);
       seitenTitel("Änderungsanträge");
-      inhalt.innerHTML = `<div class="page-head"><h1>Änderungsanträge</h1>
+      inhalt.innerHTML = `<div class="page-head"><h1>Änderungsanträge${infoKnopf("Änderungsanträge", "Seit der ersten Prüfung stehen die Stammdaten eines Artikels fest – Materialwarte und Prüfer beantragen hier Änderungen mit Begründung, die Materialwarte des Ordners bestätigen oder lehnen ab.")}</h1>
           <div class="btn-row"><a class="btn secondary" href="/materialablage/bestand">Bestand</a></div></div>
-        <p class="help">Seit der ersten Prüfung stehen die Stammdaten eines Artikels fest – Materialwarte und Prüfer beantragen hier Änderungen mit Begründung, die Materialwarte des Ordners bestätigen oder lehnen ab.</p>
         <div class="c-tabs mat-filter" role="group" aria-label="Status">${[["offen", "offen"], ["erledigt", "erledigt"], ["alle", "alle"]].map(([w, t]) => `<button type="button" class="${w === filter ? "sel" : ""}" data-act="filter" data-f="${w}" aria-pressed="${w === filter}">${t}${w === "offen" && d.zu_entscheiden ? ` (${d.zu_entscheiden} zu entscheiden)` : ""}</button>`).join("")}</div>
         ${liste.length ? liste.map(antragKarte).join("") : leer(filter === "offen" ? "Keine offenen Änderungsanträge." : "Keine Änderungsanträge.")}`;
       aktionen = {
@@ -7107,10 +7021,8 @@
       <label for="rr-titel">Titel</label><input type="text" id="rr-titel" maxlength="200" placeholder="kurz, wie in der Meldung des Herstellers">
       <label for="rr-text">Was ist betroffen, was ist zu tun?</label><textarea id="rr-text" rows="5" maxlength="4000" placeholder="Beschreibung und Empfehlung des Herstellers"></textarea>
       <label for="rr-url">Link zur Meldung des Herstellers</label><input type="text" id="rr-url" maxlength="500" placeholder="https://…" ${TASTATUR_ADRESSE}>
-      <label for="rr-serien">Betroffene Seriennummern</label><textarea id="rr-serien" rows="4" ${TASTATUR_NUMMER} placeholder="eine je Zeile – leer lassen, wenn alle Artikel des Produkts betroffen sind"></textarea>
-      <div class="help">Groß/klein und Leerzeichen am Rand spielen keine Rolle.</div>
-      <label class="inline"><input type="checkbox" id="rr-mail" checked> Mail an Materialwarte und Prüfer</label>
-      <div class="help">An die Verwalter der betroffenen Artikel und an die Prüfer, die einen davon schon geprüft haben – jeder bekommt nur die Artikel, die er sehen darf.</div>
+      <label for="rr-serien">Betroffene Seriennummern${infoKnopf("Betroffene Seriennummern", "Groß/klein und Leerzeichen am Rand spielen keine Rolle.")}</label><textarea id="rr-serien" rows="4" ${TASTATUR_NUMMER} placeholder="eine je Zeile – leer lassen, wenn alle Artikel des Produkts betroffen sind"></textarea>
+      <label class="inline"><input type="checkbox" id="rr-mail" checked> Mail an Materialwarte und Prüfer${infoKnopf("Mail an Materialwarte und Prüfer", "An die Verwalter der betroffenen Artikel und an die Prüfer, die einen davon schon geprüft haben – jeder bekommt nur die Artikel, die er sehen darf.")}</label>
       <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button><button class="btn" id="rr-ok" type="button">Rückruf anlegen</button></div>`,
     (dlg, body) => {
       fokus($("#rr-titel", body));
@@ -7297,7 +7209,7 @@
     let berichtFuer = "";        // die Zuordnung, zu der bericht gehört – weicht sie ab, gilt „Übernehmen“ nicht
     let ohneSerie = false;       // Häkchen „Diese Liste hat keine Seriennummern“ – gilt nur für den Bericht, unter dem es steht
     inhalt.innerHTML = `<div class="mat-pfad">${pfadHtml(['<a href="/materialablage/bestand">Bestand</a>', ...o.pfad.map(pfadGlied), "<span>Import</span>"])}</div>
-      <div class="page-head"><h1>Bestandsliste importieren ${demoMarke(o.demo)}</h1></div>
+      <div class="page-head"><h1>Bestandsliste importieren${infoKnopf("Bestandsliste importieren", "Importierte Artikel stehen auf „neu“, bis sie im System geprüft sind. Die Fälligkeit kommt aus „nächste Prüfung“ oder „zuletzt geprüft“ der Liste; ohne beides ist die Eingangsprüfung sofort fällig.")} ${demoMarke(o.demo)}</h1></div>
       <p class="help">Zielordner: <strong>${esc(o.pfad.map((x) => x.name).join(" / "))}</strong> – mit der Spalte „Ordner“ auch seine Unterordner.</p>
       <section class="section mat-import" id="bi-neu" aria-labelledby="bi-neu-titel"><h2 id="bi-neu-titel">Neue Liste</h2>
         <div class="mat-ablage" id="bi-ablage">
@@ -7313,8 +7225,6 @@
             Datum als TT.MM.JJJJ oder MM/JJJJ. Personen (Ausgegeben an, Telefon …) werden nicht übernommen. Was schon im Bestand steht
             (Produkt und Seriennummer), erkennt der Import und überspringt es; Zeilen ohne Seriennummer bekommen eine Seriennummer vom System (STR-…).
             Hat die Liste gar keine Spalte mit Seriennummern, bestätigst du das vor dem Übernehmen mit einem Häkchen.</p></details>
-        <p class="help">Importierte Artikel stehen auf „neu“, bis sie im System geprüft sind. Die Fälligkeit kommt aus „nächste Prüfung“ oder
-          „zuletzt geprüft“ der Liste; ohne beides ist die Eingangsprüfung sofort fällig.</p>
         <div id="bi-stand" class="mat-import-stand" aria-live="polite"></div>
         <div id="bi-bericht" class="mat-import-bericht"></div>
       </section>
@@ -7394,10 +7304,10 @@
           <td data-l="Feld" class="mat-k-ohne">${x.gesperrt ? '<span class="muted">Personenangaben – werden nicht übernommen</span>'
             : `<select data-spalte="${esc(x.index)}" aria-label="Feld für die Spalte ${esc(titel)}">${optionen(x)}</select>`}</td></tr>`;
       };
-      return `<details class="mat-auf mat-import-spalten" ${auf ? "open" : ""}><summary>Spalten – ${zugeordnet} von ${b.spalten.length} zugeordnet</summary>
+      return `<details class="mat-auf mat-import-spalten" ${auf ? "open" : ""}><summary>Spalten – ${zugeordnet} von ${b.spalten.length} zugeordnet${infoKnopf("Spalten", "Mehrere Spalten in der Bemerkung erscheinen als „Titel: Wert“.")}</summary>
           <table class="list mat-tabelle mat-karten mat-spaltenwahl"><thead><tr><th>Spalte in der Datei</th><th>Beispiele</th><th>Feld</th></tr></thead>
             <tbody>${b.spalten.map(zeile).join("")}</tbody></table>
-          <p class="help">Mehrere Spalten in der Bemerkung erscheinen als „Titel: Wert“.${b.spalten.some((x) => x.gesperrt) ? ` ${esc(IMPORT_PERSONEN)}` : ""}</p></details>
+          ${b.spalten.some((x) => x.gesperrt) ? `<p class="help">${esc(IMPORT_PERSONEN)}</p>` : ""}</details>
         ${fehlt ? `<p class="error">${esc(IMPORT_FEHLT)}</p>` : ""}`;
     }
     function zeilenHtml(b) {

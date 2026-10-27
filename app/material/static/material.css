@@ -101,6 +101,8 @@ a.mat-kachel:hover { background: var(--grau-hell); }
    Nur der Formular-Editor hat feste Spalten. */
 table.list.mat-tabelle { table-layout: auto; }
 table.list.mat-formtabelle { table-layout: fixed; }
+/* Zwischenüberschrift „Prüfpunkte“ (mit „i“, 27.10.2026) – Abstand zum Feld „Titel“ darüber. */
+.mat-fp-punkte { margin: 22px 0 6px; }
 /* Tabelle oder Karte entscheidet die Breite des Inhalts, nicht die des Fensters: Gemessen wird am <main> des Moduls
    (Container „mat-seite“; Dialoge liegen außerhalb und haben keine Modullisten). Die Kartenregel aus app.css (Fenster
    bis 860 px, jede table.list) nimmt den Modullisten deshalb nichts vorweg – sie wird hier zurückgenommen (dieselben
@@ -1288,11 +1290,9 @@ table.list.mat-artikel tr:has(.mat-wahl-art:checked) { background: var(--co-info
 .mat-dateiwahl { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; }
 .mat-dateiwahl-name { flex: 1 1 160px; min-width: 0; font-size: var(--fs-klein); color: var(--grau); overflow-wrap: anywhere; }
 .mat-dateiwahl-name.gewaehlt { color: var(--anthrazit); font-weight: 600; }
-/* Nur mit Maus bzw. nur ohne Hover: der Hinweis aufs Ziehen; Erklärungen, die am Rechner im title stehen. */
-.mat-nur-maus, .mat-nur-touch { display: none; }
+/* Nur mit Maus: der Hinweis aufs Ziehen. */
+.mat-nur-maus { display: none; }
 @media (hover: hover) and (pointer: fine) { .mat-nur-maus { display: inline; } }
-@media (hover: none) { .mat-nur-touch { display: block; } }
-.mat-artikeltitel .mat-nur-touch { margin: 6px 0 0; }
 .mat-sn-hinweis { display: block; margin-top: 2px; }
 /* Ein gesperrtes Auswahlkästchen nimmt am Touchgerät keinen Tipp an – er geht an die Zelle, die den Grund nennt
    (material.js). Mit der Maus bleibt der Tooltip am Kästchen. */
@@ -1875,7 +1875,6 @@ table.list.mat-na-zeilen tr:has(.mat-na-wahl:checked) { background: var(--co-inf
 .mat-bt-kopf { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 12px; }
 .mat-bt-label { margin: 10px 0 0; font-weight: 600; }
 .field-row.mat-bt-felder.nur-text { grid-template-columns: minmax(0, 4fr) minmax(0, 1fr); }
-.mat-bt-flach { margin: 0 0 4px; }
 .mat-bestandteile { margin: 0; padding-left: 18px; }
 .mat-bestandteile li + li { margin-top: 2px; }
 .mat-bestandteil-liste .mat-bestandteile { margin-bottom: 8px; }
@@ -1971,25 +1970,7 @@ table.list.mat-na-zeilen tr:has(.mat-na-wahl:checked) { background: var(--co-inf
   .mat-dg-klapp > summary { min-height: 44px; box-sizing: border-box; padding-top: 7px; }
 }
 
-/* --- Info zu einem Begriff und Namen als Einheit (Nachträge vom 27.10.2026) -----------------------------------------
-   Gekringeltes „i“ hinter einem Begriff (material.js, infoKnopf): im DLRG-Blau, ohne Rahmen; die Info als schwebende
-   Fläche unter dem „i“ (rückt ins Bild), mit Links. Ein unsichtbarer Steg über der Fläche hält sie offen, während die
-   Maus vom „i“ hinüberwandert. Am Finger ist das „i“ 44 × 44 px groß – negative Ränder halten die Zeile dabei so hoch
-   wie vorher. */
-.mat-info { position: relative; display: inline-block; vertical-align: middle; line-height: 1; }
-.mat-info-knopf { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; margin: -2px 0 0 4px;
-  padding: 0; border: 0; border-radius: 50%; background: none; color: var(--wasser); cursor: help; }
-.mat-info-knopf:hover, .mat-info-knopf[aria-expanded="true"] { color: var(--anthrazit); }
-.mat-info-knopf:focus-visible { outline: 2px solid var(--wasser); outline-offset: 1px; }
-.mat-info-text { position: absolute; top: calc(100% + 6px); left: 0; z-index: 70; width: max-content; max-width: min(320px, calc(100vw - 32px));
-  padding: 8px 12px; background: var(--weiss); color: var(--anthrazit); border: 1px solid var(--linie); border-radius: var(--radius-gross);
-  box-shadow: var(--schatten-menue); font-size: var(--fs-klein); font-weight: 400; line-height: 1.45; white-space: normal; text-align: left; }
-.mat-info-text::before { content: ""; position: absolute; left: 0; right: 0; top: -8px; height: 8px; }
-.mat-info-text[hidden] { display: none; }
-@media (pointer: coarse) {
-  .mat-info-knopf { width: 44px; height: 44px; margin: -11px -8px -11px -6px; }
-  .mat-info-text a { padding: 15px 0; }          /* 44 px Trefferfläche, ohne die Zeile zu sprengen (inline) */
-}
+/* --- Namen als Einheit (Nachtrag vom 27.10.2026; das „i“ zu einem Begriff steht seit 27.10.2026 in app.css, .info) --- */
 /* Namen und Anmeldungen (material.js, person): als Einheit – ganz in die nächste Zeile statt nach „demo-“ oder „@“; nur
    wenn ein Name allein länger ist als die Zeile, bricht er in sich. */
 .mat-name { display: inline-block; max-width: 100%; overflow-wrap: anywhere; }

@@ -2,8 +2,21 @@
 {% set active = 'admin' %}
 {% block title %}{{ modul.name.verwaltung }} – strömis.de{% endblock %}
 {% block body %}
+{% from "_makros.html" import info %}
 <main class="page breit leitstelle">
-  <div class="page-head"><h1 id="seitentitel">Nutzerverwaltung</h1>
+  {# Das „i“ am Seitentitel gehört zum Reiter (admin.js, reiter): bei „Nutzer“ erklärt es die Marken der Nutzerliste
+     (je Zeile bleibt das title für die Maus), bei „Einstellungen“, woher ein Wert kommt. #}
+  <div class="page-head"><h1><span id="seitentitel">Nutzerverwaltung</span><span data-titel-info="nutzer">{% call info("nutzerliste", "Nutzerverwaltung") -%}
+      Marken in der Spalte „{{ modul.name.material }}“:
+      <span class="info-absatz">„Prüfer“ – Prüfer (Sachkundiger) mit Urkundennummer.</span>
+      <span class="info-absatz">„Prüfer – Urkundennummer fehlt“ – Häkchen „Prüfer“ gesetzt, aber noch keine Urkundennummer; die trägt der Prüfer selbst im Profil ein. Bis dahin darf er nicht prüfen.</span>
+      <span class="info-absatz">„wirkt nicht – kein Zugang“ – ohne Stufe Mitglied oder Verwaltung in der {{ modul.name.material }} wirken Häkchen und Freigaben nicht.</span>
+      <span class="info-absatz">„ohne Namen – kein Zugang“ – in der {{ modul.name.material }} steht jeder mit Namen in Journal und Protokollen; ohne Namen kein Zugang.</span>
+      <span class="info-absatz">„n Freigaben“ – gültige Freigaben in der {{ modul.name.material }}, vergeben am Ordner (Bestand → Ordner → Bearbeiten → Freigaben).</span>
+    {%- endcall %}</span><span data-titel-info="einstellungen" class="hidden">{% call info("einstellungen", "Einstellungen") -%}
+      Was hier gesetzt wird, gilt <strong>vorrangig</strong> vor der Datei <code>.env</code> auf dem Server und wirkt sofort.
+      „Zurücksetzen“ nimmt wieder den Wert aus der <code>.env</code> oder die eingebaute Vorgabe.
+    {%- endcall %}</span></h1>
     <div class="btn-row" id="kopf-knoepfe"><button class="btn secondary" id="btn-testmail">Testmail senden</button><button class="btn" id="btn-new-user"><span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Nutzer<span class="k-anlegen"> anlegen</span></span></button></div></div>
   {# Reiter als Linie: rot gefüllt ist allein „Nutzer anlegen“ (Browserprüfung vor dem Merge, V5). #}
   <div class="c-tabs reiter-linie" role="tablist">
@@ -58,9 +71,6 @@
   </section>
 
   <section id="bereich-einstellungen" class="hidden">
-    <p class="help">Was hier gesetzt wird, gilt <strong>vorrangig</strong> vor der Datei <code>.env</code> auf dem
-      Server und wirkt sofort. „Zurücksetzen“ nimmt wieder den Wert aus der <code>.env</code> oder die eingebaute
-      Vorgabe.</p>
     <div id="einst-aus" class="notice hidden">Die Einstellungen sind über
       <code>EINSTELLUNGEN_AUS=1</code> abgeschaltet – es gilt allein die <code>.env</code>.
       Gespeicherte Werte bleiben erhalten und greifen wieder, sobald die Variable entfällt.</div>

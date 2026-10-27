@@ -294,10 +294,13 @@ def test_info_symbol_und_namen():
     role=tooltip und Link zur Prüfseite, 44 px am Finger). Nachtrag 2: Namen hinter „von“ und in Personenfeldern als
     Einheit (person, .mat-name)."""
     js, css = lies("app/material/static/material.js"), lies("app/material/static/material.css")
-    info = js[js.index("function infoKnopf(thema, html) {"):js.index("const PRUEFSUMME_INFO")]
-    for stelle in ('class="mat-info-knopf" aria-label="Info zu ${esc(thema)}" aria-expanded="false"',
+    # Seit 27.10.2026 app-weit: S.info in common.js, Aussehen in app.css (.info) – material.js nimmt sie als infoKnopf.
+    common, app_css = lies("app/static/js/common.js"), lies("app/static/css/app.css")
+    assert "const infoKnopf = S.info;" in js and "function infoKnopf" not in js and "mat-info" not in js + css
+    info = common[common.index("function info(thema, html) {"):common.index("/* Verhalten der Info-Symbole")]
+    for stelle in ('class="info-knopf" aria-label="Info zu ${esc(thema)}" aria-expanded="false"',
                    'aria-controls="${id}" aria-describedby="${id}"', '<svg viewBox="0 0 20 20"', 'aria-hidden="true" focusable="false"',
-                   '<span class="mat-info-text" role="tooltip" id="${id}" hidden>${html}</span>'):
+                   '<span class="info-text" role="tooltip" id="${id}" hidden>${html}</span>'):
         assert stelle in info, stelle
     assert ("const PRUEFSUMME_INFO = 'Die Prüfsumme steht im Fuß jeder Seite des PDFs. Ob eine Datei unverändert ist, "
             "zeigt die <a href=\"/materialablage/pruefen\">Prüfseite</a>.';") in js
@@ -305,14 +308,14 @@ def test_info_symbol_und_namen():
     assert '<p class="help">Die Prüfsumme steht im Fuß jeder Seite des PDFs.' not in js
     assert "auf der Prüfseite prüfen</a>" not in js
     assert '· Prüfsumme${infoKnopf("Prüfsumme", (d.set_protokolle || []).length' in js
-    verhalten = js[js.index("function infoZeigen(w, an, fest) {"):js.index("/* --- Jahresbericht je Zweig")]
+    verhalten = common[common.index("function infoZeigen(w, an, fest) {"):common.index("/* Seitentitel im Reiter")]
     for stelle in ('k.setAttribute("aria-expanded", String(an));', "t.hidden = !an;", 'e.pointerType !== "mouse"',
-                   '"focusin"', '"focusout"', 'e.key !== "Escape"', '$(".mat-info-knopf", w).focus();'):
+                   '"focusin"', '"focusout"', 'e.key !== "Escape"', "k.focus();"):
         assert stelle in verhalten, stelle
-    for regel in (".mat-info-text { position: absolute;", ".mat-info-text[hidden] { display: none; }",
-                  "@media (pointer: coarse) {\n  .mat-info-knopf { width: 44px; height: 44px;",
-                  ".mat-name { display: inline-block; max-width: 100%; overflow-wrap: anywhere; }"):
-        assert regel in css, regel
+    for regel in (".info-text { position: absolute;", ".info-text[hidden] { display: none; }",
+                  "@media (pointer: coarse) {\n  .info-knopf { width: 44px; height: 44px;"):
+        assert regel in app_css, regel
+    assert ".mat-name { display: inline-block; max-width: 100%; overflow-wrap: anywhere; }" in css
     assert 'const person = (n) => `<span class="mat-name">${esc(n)}</span>`;' in js
     for stelle in ('${p.anmeldung ? ` von ${person(p.anmeldung)}` : ""}', '<dd>${person(pr.pruefer || "–")}',
                    'von ${person(d.eroeffnet_von || "–")}', 'von ${person(d.geschlossen_von || "–")}',
@@ -351,7 +354,7 @@ def test_knopftexte_ohne_auslassung():
     assert "Reset-Mail senden</button>" in lies("app/static/js/admin.js")
     assert ">Seiten aus ZIP importieren</button>" in lies("app/static/js/wiki.js")
     assert "von dev in die Produktion" not in js and "zum Sichern oder für eine andere Installation" in js
-    assert ("<div class=\"mat-kastenkopf\"><h2>Bestandteile</h2>${k ? '<button class=\"btn secondary small\" "
+    assert ("<div class=\"mat-kastenkopf\"><h2>Bestandteile${infoKnopf(\"Bestandteile\", BESTANDTEILE_INFO)}</h2>${k ? '<button class=\"btn secondary small\" "
             "data-act=\"stueckliste\">") in js
     assert ".mat-kastenkopf:has(> .btn) { border-bottom: 1px solid var(--linie);" in lies("app/material/static/material.css")
     print("Knopftexte ohne „…“ bestanden.")

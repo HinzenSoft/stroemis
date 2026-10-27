@@ -1325,6 +1325,28 @@ details.accordion .accordion-body > :first-child { margin-top: 0; } details.acco
 .c-tabs.reiter-linie button:hover { color: var(--rot); }
 .c-tabs.reiter-linie button.sel { background: none; border-bottom-color: var(--rot); color: var(--rot); }
 
+/* Info zu einem Begriff (common.js, S.info; Jinja-Makro „info“ in templates/_makros.html; designsprache „Info-Symbol
+   „i““, seit 27.10.2026 app-weit): gekringeltes „i“ hinter einem Begriff, im DLRG-Blau, ohne Rahmen; die Info als
+   schwebende Fläche unter dem „i“ (rückt ins Bild), mit Links. Ein unsichtbarer Steg über der Fläche hält sie offen,
+   während die Maus vom „i“ hinüberwandert. Am Finger ist das „i“ 44 × 44 px groß – negative Ränder halten die Zeile
+   dabei so hoch wie vorher. */
+.info { position: relative; display: inline-block; vertical-align: middle; line-height: 1; }
+.info-knopf { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; margin: -2px 0 0 4px;
+  padding: 0; border: 0; border-radius: 50%; background: none; color: var(--wasser); cursor: help; }
+.info-knopf:hover, .info-knopf[aria-expanded="true"] { color: var(--anthrazit); }
+.info-knopf:focus-visible { outline: 2px solid var(--wasser); outline-offset: 1px; }
+.info-text { position: absolute; top: calc(100% + 6px); left: 0; z-index: 70; width: max-content; max-width: min(320px, calc(100vw - 32px));
+  padding: 8px 12px; background: var(--weiss); color: var(--anthrazit); border: 1px solid var(--linie); border-radius: var(--radius-gross);
+  box-shadow: var(--schatten-menue); font-size: var(--fs-klein); font-weight: 400; line-height: 1.45; white-space: normal; text-align: left;
+  text-transform: none; letter-spacing: normal; cursor: auto; }
+.info-text::before { content: ""; position: absolute; left: 0; right: 0; top: -8px; height: 8px; }
+.info-text[hidden] { display: none; }
+.info-absatz { display: block; margin-top: 6px; }   /* zweiter Absatz in einer Info (in <span> kein <p>) */
+@media (pointer: coarse) {
+  .info-knopf { width: 44px; height: 44px; margin: -11px -8px -11px -6px; }
+  .info-text a { padding: 15px 0; }          /* 44 px Trefferfläche, ohne die Zeile zu sprengen (inline) */
+}
+
 /* Zeilenmenü der Nutzerverwaltung (admin.js): „Mehr“ öffnet „Reset-Mail senden“ und „Löschen“ – seltene Aktionen nicht
    als eigene Knöpfe je Zeile (Knopfregel, V5). Aussehen wie das Untermenü der Materialablage (details.mat-menue). */
 .zeilenmenue { position: relative; display: inline-block; }
@@ -1626,7 +1648,6 @@ h1.seitentitel .page-icon { margin-right: 6px; }
 }
 .profilbild .pb-vorschau img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .profilbild .pb-text { min-width: 0; }
-.profilbild .pb-text .help { margin: 0 0 10px; }
 
 /* Unterschrift (Modul Material, unterschrift.js): der Dialog mit dem Signatur-Pad – auf Weiß über einer Linie
    wie auf Papier; Linie und Platzhalter liegen über der Zeichenfläche und kommen nicht ins Bild – und die

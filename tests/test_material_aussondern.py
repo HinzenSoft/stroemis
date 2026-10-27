@@ -303,7 +303,6 @@ def test_oberflaeche_statisch():
     # Satz zum Lebenslauf steht seit der Liste nach dem Merge im Menü „Mehr“ am Eintrag (test_material_nach_merge).
     for satz, knoepfe in (('id="mat-aussondern-hilfe"', '<div class="btn-row mat-pruefknoepfe">'),
                           ('id="mat-schon-gemeldet"', '<div class="btn-row mat-pruefknoepfe">'),
-                          ('<p class="help mat-nur-touch">„Anlegen und nächsten“', '<div class="btn-row mat-knoepfe">'),
                           ('id="psa-schon-${Number(k.id)}"', '<div class="btn-row mat-psa-knoepfe">'),
                           ('<p class="help">${esc(b.frist)}</p>', 'data-act="bi-neu">Neu wählen</button>'),
                           ('id="pr-hinweis" aria-live="polite"', '<div class="mat-ergebnis" role="group"'),

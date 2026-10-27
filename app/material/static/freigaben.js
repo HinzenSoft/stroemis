@@ -20,7 +20,7 @@
    was ohnehin scheitern würde. */
 (function () {
   if (!window.S) return;
-  const { esc, api, toast, confirm } = S;
+  const { esc, api, toast, confirm, info } = S;
   const API = "/api/material";
   const $ = (sel, el) => (el || document).querySelector(sel);
   const $$ = (sel, el) => Array.from((el || document).querySelectorAll(sel));
@@ -175,8 +175,7 @@
       <details class="mf-teil" open><summary>Hier vergeben <span class="mf-zahl">${d.direkt.length}</span></summary>
         ${pruefzeilen.length ? '<div class="btn-row mf-verl-reihe"><button class="btn secondary small" type="button" data-act="verlaengern" id="mf-verlaengern">Alle Prüffreigaben verlängern</button></div>' : ""}
         ${tabelleHtml(d.direkt, "direkt", "An diesem Ordner selbst ist nichts vergeben.")}</details>
-      <details class="mf-teil"><summary>Geerbt von oben <span class="mf-zahl">${d.geerbt.length}</span></summary>
-        <p class="help">Freigaben an Oberordnern gelten auch hier. Ändern lassen sie sich nur dort, wo sie vergeben sind.</p>
+      <details class="mf-teil"><summary>Geerbt von oben <span class="mf-zahl">${d.geerbt.length}</span>${info("Geerbt von oben", "Freigaben an Oberordnern gelten auch hier. Ändern lassen sie sich nur dort, wo sie vergeben sind.")}</summary>
         ${tabelleHtml(d.geerbt, "geerbt", "Nichts geerbt.")}</details>
       <details class="mf-teil"><summary>In Unterordnern <span class="mf-zahl">${d.unten.length}</span></summary>
         ${tabelleHtml(d.unten, "unten", "In den Unterordnern ist nichts eigens vergeben.")}</details>
@@ -194,7 +193,7 @@
         <ul class="mf-treffer" id="mf-treffer" aria-label="Gefundene Personen" hidden></ul>
         <div class="mf-gewaehlt" id="mf-gewaehlt" hidden></div>
       </div>
-      <label for="mf-anker">Gilt für</label>
+      <label for="mf-anker">Gilt für${info("Gilt für", `Freigaben für „${esc(d.ordner.pfad)}“ gelten dort und in allen Unterordnern, bis einschließlich zum letzten Tag. Rechte addieren sich; weiter unten lässt sich nichts entziehen.`)}</label>
       <select id="mf-anker">${d.anker_wahl.map((a) => `<option value="${a.id}"${a.id === d.anker_vorgabe ? " selected" : ""}>${esc(a.pfad)}</option>`).join("")}</select>
       <div class="help">… und alle Ordner darunter.</div>
       <fieldset class="mf-vorlagen"><legend>Vorlage</legend>
@@ -525,9 +524,7 @@
     try { stand.daten = await api(`${API}/ordner/${id}/freigaben`); }
     catch (e) { el.innerHTML = `<p class="notice">${esc(e.message)}</p>`; return; }
     const d = stand.daten;
-    el.innerHTML = `<p class="help">Freigaben für „${esc(d.ordner.pfad)}“ gelten dort und in allen Unterordnern, bis
-        einschließlich zum letzten Tag. Rechte addieren sich; weiter unten lässt sich nichts entziehen.</p>
-      ${formHtml(d)}<div id="mf-hinweis"></div><div id="mf-listen">${listenHtml(d)}</div>`;
+    el.innerHTML = `${formHtml(d)}<div id="mf-hinweis"></div><div id="mf-listen">${listenHtml(d)}</div>`;
 
     // Nach jedem Schreiben: Bescheid an material.js (lädt den Ordner nach dem Schließen neu), dann die Listen frisch.
     async function neuLaden() {

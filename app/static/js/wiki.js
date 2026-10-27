@@ -1,7 +1,7 @@
 /* Strömipedia (Modul wiki): Seitenbaum, Ansicht mit Inhaltsverzeichnis und Kommentaren, WYSIWYG-Editor (Toast UI),
    Bearbeitungsfreigaben, öffentliche Freigabe, Versionen, Suche, Import */
 (function () {
-  const { esc, api, toast, dialog, fmtDate } = S;
+  const { esc, api, toast, dialog, fmtDate, info } = S;
   const $ = (sel, root) => (root || document).querySelector(sel);
   // Seitenadressen: /stroemipedia/<slug> (seit der Umbenennung vom 26.10.2026; /wiki/<slug> leitet der Server weiter).
   const SEITEN = "/stroemipedia/";
@@ -220,7 +220,10 @@
     });
   }
 
-  /* Kontextmenü an der Baumzeile – dieselben Aktionen wie im Seitenkopf. */
+  /* Kontextmenü an der Baumzeile – dieselben Aktionen wie im Seitenkopf. „Seiten aus ZIP importieren“ steht seit dem
+     27.10.2026 nur hier (Wunsch des Nutzers: im Menü der Übersicht links statt im Menü des Seitenkopfs) – der Dialog
+     wählt die Seite der Zeile als Ziel vor; auf die oberste Ebene führt der graue Knopf „Importieren“ über dem Baum. */
+  const darfImportieren = () => { const u = window.STROEMIS && STROEMIS.user; return !!(u && u.rechte && u.rechte.wiki === 2); };
   function treeRowMenu(anchor, page) {
     if (!page) return;
     const box = document.createElement("div");
@@ -231,6 +234,7 @@
       <button type="button" data-a="icon">Symbol ändern</button>
       <button type="button" data-a="dup">Duplizieren</button>
       <button type="button" data-a="export">Als Markdown herunterladen</button>
+      ${darfImportieren() ? '<button type="button" data-a="import">Seiten aus ZIP importieren</button>' : ""}
       <button type="button" data-a="del" class="danger">In den Papierkorb</button>`;
     document.body.appendChild(box);
     const r = anchor.getBoundingClientRect();
@@ -249,6 +253,7 @@
       if (a === "fav") return toggleFavorite(page.id, !page.favorite);
       if (a === "icon") return iconDialog(page.id, page.icon || "");
       if (a === "export") { window.location.href = `/api/wiki/pages/${page.id}/export`; return; }
+      if (a === "import") { side.classList.remove("open"); return importDialog(page); }
       if (a === "dup") {
         try { const r2 = await api(`/api/wiki/pages/${page.id}/duplicate`, { method: "POST", body: {} });
           toast("Seite dupliziert"); await loadTree(); navigate(r2.page.slug); }
@@ -684,10 +689,9 @@
     let d;
     try { d = await api("/api/wiki/trash"); } catch (e) { return toast(e.message, true); }
     const rows = d.pages;
-    dialog(`<h2>Papierkorb</h2>
-      ${rows.length ? `<p class="help">Wiederhergestellte Seiten kommen an ihren alten Platz zurück; ist die
-      übergeordnete Seite noch gelöscht, landen sie auf der obersten Ebene.</p>
-      <ul class="trash-list">${rows.map((r) => `<li data-id="${r.id}">
+    dialog(`<h2>Papierkorb${rows.length ? info("Papierkorb", `Wiederhergestellte Seiten kommen an ihren alten Platz zurück; ist die
+      übergeordnete Seite noch gelöscht, landen sie auf der obersten Ebene.`) : ""}</h2>
+      ${rows.length ? `      <ul class="trash-list">${rows.map((r) => `<li data-id="${r.id}">
         <div><strong>${r.icon ? esc(r.icon) + " " : ""}${esc(r.title)}</strong>
           <span class="muted small">${r.children ? `· ${r.children} Unterseite${r.children > 1 ? "n" : ""} ` : ""}· gelöscht ${fmtDate(r.deleted_at, true)}${r.created_by_name ? " · " + esc(r.created_by_name) : ""}</span></div>
         <div class="btn-row">${r.can_restore
@@ -993,7 +997,6 @@
       <button type="button" data-a="watch">${p.watch ? "Nicht mehr beobachten" : "Bei Änderungen benachrichtigen"}</button>
       <button type="button" data-a="export">Als Markdown herunterladen</button>
       <button type="button" data-a="exportzip">Abschnitt als ZIP herunterladen</button>
-      ${p.can_publish ? '<button type="button" data-a="import">Seiten aus ZIP importieren</button>' : ""}
       <button type="button" data-a="print">Drucken / als PDF sichern</button>
       ${p.can_edit ? `<button type="button" data-a="template">${p.is_template ? "Nicht mehr als Vorlage" : "Als Vorlage anbieten"}</button>` : ""}
       <button type="button" data-a="dup">Duplizieren</button>
@@ -1025,7 +1028,6 @@
       }
       if (a === "export") { window.location.href = `/api/wiki/pages/${p.id}/export`; return; }
       if (a === "exportzip") { window.location.href = `/api/wiki/pages/${p.id}/export?children=1`; return; }
-      if (a === "import") return importDialog(p);
       if (a === "print") { window.print(); return; }
       if (a === "del") return trashPage(p);
       try {
@@ -1045,12 +1047,14 @@
   }
 
   /* Seiten aus einem ZIP importieren (Wunsch vom 25.10.2026, nur die Wiki-Verwaltung): ein Export dieses Wikis oder ein
-     Archiv mit Markdown-Dateien. Ziel ist diese Seite oder eine andere aus dem Baum; die neuen Seiten erben Freigabe und
-     Lesebeschränkung des Ziels – der Satz unter der Auswahl sagt das vorher. Das Ergebnis steht im selben Dialog. */
+     Archiv mit Markdown-Dateien. Ziel ist die Seite, aus deren Menü im Baum der Dialog kam (p), oder ohne p die
+     oberste Ebene (Knopf „Importieren“ über dem Baum) – im Auswahlfeld lässt sich jedes andere wählen; die neuen Seiten
+     erben Freigabe und Lesebeschränkung des Ziels – der Satz unter der Auswahl sagt das vorher. Das Ergebnis steht im
+     selben Dialog. */
   function importDialog(p) {
     const zeilen = [];
     const ablaufen = (pid, tiefe) => children(pid).forEach((k) => {
-      zeilen.push(`<option value="${k.id}"${k.id === p.id ? " selected" : ""}>${"\u00a0\u00a0".repeat(tiefe)}${esc(k.title)}</option>`);
+      zeilen.push(`<option value="${k.id}"${p && k.id === p.id ? " selected" : ""}>${"\u00a0\u00a0".repeat(tiefe)}${esc(k.title)}</option>`);
       if (tiefe < 30) ablaufen(k.id, tiefe + 1);
     });
     ablaufen(null, 0);
@@ -1476,14 +1480,12 @@
     const editorIds = new Set((p.editors || []).map((u) => u.id));
     const publicLink = `${STROEMIS.publicUrl}/${p.slug}`;
     dialog(`<h2>Teilen: ${esc(p.title)}</h2>
-      ${p.can_share ? `<h3>Bearbeiten erlauben</h3>
-      <p class="help">Freigegebene Nutzer dürfen diese Seite und ihre Unterseiten bearbeiten, aber nicht löschen.</p>
+      ${p.can_share ? `<h3>Bearbeiten erlauben${info("Bearbeiten erlauben", "Freigegebene Nutzer dürfen diese Seite und ihre Unterseiten bearbeiten, aber nicht löschen.")}</h3>
       <input type="search" id="sh-filter" placeholder="Nutzer suchen …">
       <div class="user-pick" id="sh-users">${state.users.filter((u) => u.id !== p.created_by).map((u) => `
         <label class="inline"><input type="checkbox" value="${u.id}" ${editorIds.has(u.id) ? "checked" : ""}> ${esc(u.name || "Unbenannt")} <span class="muted small">${esc(u.gliederung || "")}</span></label>`).join("") || '<div class="muted small">Keine weiteren Nutzer.</div>'}</div>` : ""}
-      ${p.can_share ? `<h3 style="margin-top:18px">Lesen einschränken</h3>
-      <p class="help">Normalerweise darf jeder Angemeldete jede Seite lesen. Eingeschränkt sehen die Seite
-      und ihre Unterseiten nur noch du, die Wiki-Verwaltung und die oben freigegebenen Nutzer.</p>
+      ${p.can_share ? `<h3 style="margin-top:18px">Lesen einschränken${info("Lesen einschränken", `Normalerweise darf jeder Angemeldete jede Seite lesen. Eingeschränkt sehen die Seite
+      und ihre Unterseiten nur noch du, die Wiki-Verwaltung und die oben freigegebenen Nutzer.`)}</h3>
       <label class="inline"><input type="checkbox" id="sh-restrict" ${p.read_restricted ? "checked" : ""}
         ${p.effective_public ? "disabled" : ""}> Nur für freigegebene Nutzer lesbar</label>
       ${p.effective_public ? '<div class="help">Nicht möglich, solange die Seite öffentlich freigegeben ist.</div>' : ""}` : ""}
@@ -1989,9 +1991,8 @@
       if (!text) return toast("Bitte zuerst Text markieren.", true);
       const NAMES = { rot: "Rot", blau: "Blau (Gewässer)", gruen: "Grün", grau: "Grau", gelb: "Gelb hinterlegt" };
       hideBubble();
-      dialog(`<h2>Textfarbe</h2>
-        <p class="help">Nach dem Handbuch CD sind nur die Hausfarben vorgesehen – Rot als Auszeichnung,
-        Blau als Kennfarbe für Gewässer, Gelb als Hinweis.</p>
+      dialog(`<h2>Textfarbe${info("Textfarbe", `Nach dem Handbuch CD sind nur die Hausfarben vorgesehen – Rot als Auszeichnung,
+        Blau als Kennfarbe für Gewässer, Gelb als Hinweis.`)}</h2>
         <div class="callout-pick">${MD.COLOR_NAMES.map((c) =>
           `<button type="button" class="btn secondary" data-c="${c}"><span class="tc tc-${c}">${esc(NAMES[c] || c)}</span></button>`).join("")}
           <button type="button" class="btn secondary" data-c="">Farbe entfernen</button></div>
@@ -2397,11 +2398,10 @@
     /* Ohne Rückruf wird der Einbau eingefügt; mit Rückruf bekommt dieser das Ziel
        ("seite#kennung") – so ändert das Blockmenü das Ziel eines vorhandenen Einbaus. */
     function einbauDialog(aufZiel, vorgabe) {
-      dialog(`<h2>Abschnitt einbinden</h2>
-        <p class="help">Zeigt einen synchronisierten Abschnitt einer anderen Seite. Der Text wird
+      dialog(`<h2>Abschnitt einbinden${info("Abschnitt einbinden", `Zeigt einen synchronisierten Abschnitt einer anderen Seite. Der Text wird
           dort gepflegt und erscheint hier immer in seinem neuesten Stand. Aufgeführt ist, was
           gespeichert ist – ein eben erst angelegter Abschnitt erscheint erst nach dem Speichern
-          seiner Seite.</p>
+          seiner Seite.`)}</h2>
         <label for="eb-search">Abschnitt suchen</label>
         <input type="search" id="eb-search" placeholder="Kennung, Seite oder Text …" autocomplete="off">
         <ul class="link-pages bausteinliste" id="eb-liste"><li class="muted small">Wird gelesen …</li></ul>
@@ -4564,7 +4564,7 @@
           });
       };
       const columnsMenu = () => {
-        dialog(`<h2>Spalten einfügen</h2><p class="help">Die Spalten stehen im Editor wie im Artikel nebeneinander; Anfang, Trenner und Ende sind schmale Marken. Auf schmalen Bildschirmen stehen sie untereinander.</p>
+        dialog(`<h2>Spalten einfügen${info("Spalten einfügen", "Die Spalten stehen im Editor wie im Artikel nebeneinander; Anfang, Trenner und Ende sind schmale Marken. Auf schmalen Bildschirmen stehen sie untereinander.")}</h2>
           <div class="callout-pick">${[2, 3, 4, 5].map((n) => `<button type="button" class="btn secondary" data-n="${n}">${n} Spalten</button>`).join("")}</div>
           <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button></div>`,
           (dlg, body) => body.querySelectorAll("[data-n]").forEach((b) => b.onclick = () => {
@@ -5209,6 +5209,7 @@
      ====================================================================== */
   $("#btn-new-page").addEventListener("click", () => { side.classList.remove("open"); if (leaveEditor()) openEditor({ parent_id: state.current ? state.current.id : null }); });
   $("#btn-trash").addEventListener("click", trashDialog);
+  if ($("#btn-import")) $("#btn-import").addEventListener("click", () => { side.classList.remove("open"); importDialog(null); });
 
   /* Sidebar-Breite ziehen und merken */
   (function () {
