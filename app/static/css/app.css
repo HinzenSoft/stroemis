@@ -248,8 +248,6 @@ img { max-width: 100%; }
 .btn.secondary { background: var(--weiss); color: var(--anthrazit); border-color: var(--anthrazit); }
 .btn.secondary:hover { background: var(--grau-hell); }
 .btn.secondary:disabled, .btn.secondary:disabled:hover { background: var(--weiss); color: var(--anthrazit); border-color: var(--anthrazit); }
-.btn.ghost { background: transparent; color: var(--rot); border-color: transparent; padding: 8px 10px; }
-.btn.ghost:hover { background: var(--rot-hell); }
 .btn.danger { background: var(--weiss); color: var(--rot); border-color: var(--rot); }
 .btn.danger:hover { background: var(--rot-hell); }
 .btn.small { padding: 5px 10px; font-size: var(--fs-klein); }
@@ -2388,7 +2386,48 @@ dialog.us-dlg { width: min(640px, 96vw); }
    „Reset-Mail“ (92–94 px) ragten aus ihrer 80 px breiten Spalte 2 px über den Fensterrand – waagerechter Bildlauf
    (Geräte-Prüfung vom 22.10.2026). Die Spalte (col.col-aktionen in admin.html – bei festem Tabellenlayout zählt die
    Breite der Spalte, nicht die der Kopfzelle) bekommt die Breite der Knöpfe, „Inhalte“ rückt zusammen. */
-#users .col-aktionen { width: 9.5%; }                /* vorher als style am <col> */
+#users .col-aktionen { width: 9%; }                  /* vorher als style am <col>; 9 % seit nach_merge_liste Punkt 10 */
 @media (min-width: 861px) and (max-width: 1100px) {
   #users .col-aktionen { width: 112px; }
+}
+
+/* ============================================================================
+   Lieferung nach dem Merge, Teil B (27.10.2026) – Strömipedia, Ankerplätze, Riegenkarten, Leitstelle, Anmeldung
+   (nach_merge_liste Punkte 9, 10, 12, 13, 14).
+   ============================================================================ */
+/* Sprunglink „Zum Inhalt“ (base.html, public.html): erster Tab-Stopp, erscheint erst mit dem Fokus über der Kopfleiste;
+   das Ziel steht direkt hinter ihr. */
+.sprunglink { position: absolute; left: 8px; top: -60px; z-index: 1300; padding: 10px 14px; background: var(--weiss);
+  color: var(--anthrazit); font-weight: 700; border: 2px solid var(--anthrazit); border-radius: var(--radius);
+  text-decoration: none; }
+.sprunglink:focus { top: 4px; }
+.sprungziel { display: block; height: 0; }
+.sprungziel:focus { outline: none; box-shadow: none; }
+/* Leitstelle: „Globale Suchen“ wie die übrige Hilfe höchstens rund 120 Zeichen je Zeile (Punkt 9); die Seite darf am
+   Rechner etwas breiter werden, damit Name und Gliederung nicht im Wort brechen (Punkt 10, Spalten in admin.html). */
+#mat-globalsuche .accordion-body > p.help { max-width: 100ch; }
+.page.breit.leitstelle { max-width: 1280px; }
+/* Ankerplätze: Die Seitenleiste deckt die Karte ganz ab – die Karte schien durch und machte Text unruhig. */
+.panel { background: var(--weiss); }
+/* Fingerbedienung (Punkt 12, gemessen bei pointer: coarse): Tippflächen mindestens 44 px. */
+@media (pointer: coarse) {
+  /* Alle Dialoge (Ankerplätze „Album anlegen“, Riegenkarten, Kommentar der Strömipedia …): Felder und Knöpfe. */
+  dialog input:not([type=checkbox]):not([type=radio]):not([type=file]):not([type=range]):not([type=color]),
+  dialog select, dialog .btn { min-height: 44px; }
+  dialog label.inline:has(input[type=checkbox]) { min-height: 44px; }
+  /* Anmeldung, Konto anfragen, Passwort vergessen/setzen: Felder, Knopf und die Links darunter. */
+  .login-form input, .login-form .btn { min-height: 44px; }
+  .login-links a { display: inline-flex; align-items: center; min-height: 44px; }
+  .login-links { gap: 0 20px; }
+  /* Strömipedia: Kommentar-Aktionen, Sortierpfeile der Tabellenköpfe, „Kopieren“ am Codeblock. */
+  .c-actions .lnk { min-height: 44px; display: inline-flex; align-items: center; padding: 0 6px; }
+  .c-actions { gap: 0 4px; }
+  .wiki-content th:has(.th-sort) { height: 44px; }   /* Breite wie im Editor: Der Knopf liegt durchsichtig über dem Rand */
+  .th-sort { right: 0; width: 44px; height: 44px; padding: 0; display: inline-flex; align-items: center; justify-content: center; }
+  .code-copy { min-height: 44px; padding: 6px 12px; }
+  /* Ankerplätze: Knöpfe im Album-Panel und in der Großansicht, Telefon-/Mail-Links, Blättern, „herunterladen“. */
+  .panel .btn { min-height: 44px; }
+  .panel dl.contact a, .lb-side .kv a { display: inline-flex; align-items: center; min-height: 44px; }
+  .lb-nav { min-width: 44px; }
+  .lb-side .btn { min-height: 44px; }
 }

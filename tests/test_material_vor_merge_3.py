@@ -151,7 +151,7 @@ def test_uebrige_module_statisch():
     assert 'S.titel(name === "nutzer" ? "Nutzerverwaltung" : "Einstellungen", "verwaltung");' in admin
     assert "ghost" not in admin.replace("(btn ghost)", "")
     assert '<details class="zeilenmenue"><summary class="btn secondary small" aria-haspopup="true">Mehr</summary>' in admin
-    assert '<button type="button" data-act="reset">Reset-Mail senden</button>' in admin
+    assert '<button type="button" data-act="reset">Reset-Mail senden …</button>' in admin   # Rückfrage seit nach_merge_liste 14
     assert 'const mailUmbruch = (mail) => S.esc(mail).replace(/@/, "<wbr>@").replace(/\\.(?=[^@]*$)/g, "<wbr>.");' in admin
     assert '<td class="mail" data-l="E-Mail">${mailUmbruch(u.email)}</td>' in admin
     app_css = lies("app/static/css/app.css")

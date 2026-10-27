@@ -275,7 +275,7 @@ def _lehrgang(lid):
 def _tn(tid):
     row = db.query("SELECT * FROM pruef_teilnehmer WHERE id = ?", (tid,), one=True)
     if not row:
-        raise Abgelehnt("Teilnehmende:r nicht gefunden", 404)
+        raise Abgelehnt("Teilnehmende nicht gefunden", 404)
     return row
 
 

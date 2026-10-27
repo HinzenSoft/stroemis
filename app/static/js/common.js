@@ -277,6 +277,19 @@ window.S = (function () {
     setzen();
   })();
 
+  /* Zeilenmenü „Mehr“ (details.zeilenmenue, app.css) für seltene Zeilenaktionen – Leitstelle, Riegenkarten: Ein Klick
+     daneben oder auf einen Eintrag schließt es, Escape auch und gibt den Fokus an „Mehr“ zurück (Knopfregel,
+     nach_merge_liste Punkt 13; vorher nur in admin.js). */
+  document.addEventListener("click", (e) => {
+    document.querySelectorAll("details.zeilenmenue[open]").forEach((m) => {
+      if (!m.contains(e.target) || e.target.closest(".zeilenmenue-liste button")) m.open = false;
+    });
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key !== "Escape") return;
+    document.querySelectorAll("details.zeilenmenue[open]").forEach((m) => { m.open = false; m.querySelector("summary").focus(); });
+  });
+
   /* Seitentitel im Reiter des Browsers und im Verlauf: das Gezeigte vorn, dann das Modul, dann die Seite –
      „M-000123 – Materialablage – strömis.de“ (Browserprüfung vor dem Merge, V2). teile: Texte (leere fallen weg),
      modul: Schlüssel aus app/module.py („material“ …) oder leer. Kein HTML: document.title zeigt Text, wie er ist. */

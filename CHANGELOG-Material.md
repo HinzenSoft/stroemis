@@ -9090,3 +9090,78 @@ Riegenkarten: CHANGELOG-Pruefungen.md, Nachtrag vom 26.10.2026. Zweig `vm-module
 - Bitte bestätigen: (1) Rechte-Felder im Dialog drei plus zwei statt fünf in einer Reihe; (2) „Wiki-Verwaltung“ bzw.
   „Plattform-Verwaltung“ in den Meldungen, „Verwaltung der Riegenkarten“ in den Riegenkarten; (3) der Fokus aufs erste
   Feld gilt für alle Dialoge über `S.dialog`, nicht nur für den Nutzerdialog.
+
+## Lieferung nach dem Merge, Teil B – übrige Module (27.10.2026)
+
+Abarbeitung der nach_merge_liste (Entscheidung des Nutzers vom 27.10.2026: alles nach dem Merge in einer Lieferung),
+Teil B: Strömipedia, Ankerplätze, Riegenkarten, Leitstelle, Anmeldung. Kein Schemaschritt; Basis dev 126d7a1.
+
+- **16 Wiki-Export – Namen bis frei:** Ist der Ausweichname `Titel-<slug>` selbst schon vergeben (ein drittes
+  Geschwister heißt so), zählt der Export weiter (`-<slug>-2`, `-<slug>-3` …), bis der Pfad frei ist – samt Ordner für die
+  Unterseiten. Vorher stand der Name zweimal im ZIP, und der eigene Import lehnte das Archiv ab (Probe q06).
+- **20 Export → Import – Titel bleibt:** Fehlt einer Seite die Titelzeile `# …` (nie im Editor gespeichert, etwa per
+  Schnittstelle angelegt), schreibt der Export – ZIP und einzelne `.md` – `# <Titel>` davor. Der Import nahm sonst den
+  Dateinamen, bei gleichnamigen Geschwistern also `Titel-<slug>`, als Titel. Gespeichert wird dabei nichts.
+- **17 Riegenkarten – kein Name im Seitentitel:** Die Druckansicht „Prüfungsleistungen“ einer Person heißt im Reiter
+  „Prüfungsleistungen – <Lehrgang> – Riegenkarten – strömis.de“; der Name steht nur auf der Seite (Browserverlauf
+  gemeinsam genutzter Geräte). Alle übrigen Titel trugen schon keinen Namen.
+- **9 Leitstelle „Globale Suchen“:** Erklärtext höchstens 100ch (rund 120 Zeichen je Zeile) wie die übrige Hilfe.
+- **10 Leitstelle bei 1280 px:** Spalten Name 11 %, E-Mail 12 %, Gliederung 12 % (vorher 9/11/8), die fünf Rechte-Felder
+  je 8,6 % (vorher 10), „Inhalte“ 7 %, Aktionen 9 %; die Seite darf bis 1280 px breit werden (vorher 1180). Gemessen bei
+  1280 px: Name 135 px, E-Mail 147 px, Gliederung 147 px, Rechte-Feld 105 px – „DEMO-Kreisverband Flussland“ bricht an den
+  Leerzeichen statt „Kreisverba/nd“, „Verwaltung“ steht ganz im Feld.
+- **12 Tippflächen ≥ 44 px** (nur `@media (pointer: coarse)`, gemessen mit `getBoundingClientRect`, auch mit offenen
+  Dialogen, Panel und Großansicht): alle Dialoge – Felder, Auswahllisten, Knöpfe, Häkchen mit Etikett (Ankerplätze „Album
+  anlegen“ vorher 37/36 px, Kommentar-Dialog 36 px, Riegenkarten-Felder 36–37 px); Anmeldung, Konto anfragen, Passwort
+  vergessen (Felder 37, Knopf 36, Links 21 px); Strömipedia Kommentar-Aktionen (35 px), Sortierpfeile (21×29 px, jetzt
+  44×44 durchsichtig über dem Rand der Kopfzelle – die Spaltenbreite bleibt wie im Editor), „Kopieren“ am Codeblock
+  (34 px); Ankerplätze Knöpfe im Album-Panel und in der Großansicht, Telefon-/Mail-Links, „herunterladen“, Blättern
+  (39 px breit); Riegenkarten Voraussetzungs-Haken (40 px) und Stempel (24 px) ab Tablet. Ausnahme: Textlinks im Fließtext
+  (WCAG 2.5.8) und die Quellenangabe der Karte (Leaflet).
+- **13 Knopfsprache der älteren Module** (designsprache.md):
+  - kein `btn ghost` mehr (Strömipedia, Riegenkarten, Ankerplätze) – grau umrandet; die Regel `.btn.ghost`
+    ist entfernt. Die Symbolknöpfe im Kopf der Strömipedia (☰ Seiten, Kommentare, Teilen, ☰ Inhaltsverzeichnis, ⋯) sind
+    grau umrandet; „💬“ ist ein gezeichnetes Symbol (Sprechblase wie die übrigen SVG-Symbole), der schwebende Knopf heißt
+    „Kommentieren“ ohne Emoji.
+  - keine Emoji/Pfeile in Knöpfen: „Hoch“/„Runter“/„Löschen“ statt ↑/↓/🗑 (Voraussetzungen, Kriterien), „Entfernen“ statt ✕,
+    „Start“/„Stopp“ statt ▶/■, „Drucken“/„Druckansicht“ statt 🖨, „Medien hinzufügen“ und „Foto/Video …“ ohne 📷, „Verlauf“
+    statt 🕓 (Voraussetzungen am Telefon). Bewusst geblieben: die Zustandszeichen in den Bewertungszellen und 👍/👎 der
+    großen Bewertungswahl (immer mit Wort) – siehe „Bitte bestätigen“.
+  - je Ansicht/Dialog eine rote Hauptaktion: Lehrgangs- und Katalogliste „Öffnen“ grau (rot bleibt „Lehrgang anlegen“ bzw.
+    „Katalog anlegen“), Mängel „Nachprüfung durchführen“ grau, Stoppuhr „Start“ grau (rot bleibt „Bewertung speichern“),
+    Stoppuhr-Banner „Öffnen“ grau, Album-Panel „Bilder / Videos hochladen“ grau (rot bleibt „Album anlegen“), Großansicht
+    „Bearbeiten“ grau, Kontoanfragen „Freigeben“ grau (rot bleibt „Nutzer anlegen“), Dialoge nur mit „Schließen“ grau.
+  - `btn danger` nur zum Bestätigen: „Album löschen …“, „Löschen …“ (Großansicht, Leuchtkasten der Riegenkarten),
+    „Versuch löschen …“, „Löschen …“ im Teilnehmenden-Dialog, „Endgültig löschen …“ im Papierkorb der Strömipedia und
+    „Ablehnen …“ (Kontoanfrage) sind graue Auslöser; rot
+    umrandet ist allein der Knopf der Rückfrage (`S.confirm`).
+  - seltene Zeilenaktionen im Zeilenmenü „Mehr“ (wie in der Leitstelle): Lehrgangsliste (Bearbeiten, Kopieren …, Löschen …),
+    Katalogliste (Bearbeiten, Löschen …), Prüfungsleistungen in Lehrgang und Katalog („Bearbeiten“ als Knopf; Nach oben,
+    Nach unten, Löschen … im Menü). Öffnen/Schließen (Klick daneben, Eintrag, Escape mit Fokus zurück auf „Mehr“) liegt
+    jetzt app-weit in common.js statt in admin.js.
+  - **Sprunglink „Zum Inhalt“**: erster Tab-Stopp jeder Seite (base.html, öffentliche Strömipedia), erscheint erst mit dem
+    Fokus und springt hinter die Kopfleiste.
+  - **Begriffe:** „Teilnehmende“ statt „TN“, „Teilnehmende:r“, „Teilnehmende:n“ und „Jede:r Teilnehmende“ in sichtbaren
+    Texten (Spalte der Lehrgangsliste, Zähler, „Teilnehmende anlegen“/„+ Teilnehmende“, Reiter „je Teilnehmende“, Filter,
+    Druckkopf, zwei Meldungen des Servers). „Excel-Teilnehmerliste“ bleibt (Name der Datei aus dem Lehrgangswesen).
+  - Kontrast: Nebentext auf `--rot-hell` war seit Runde 3 (V13) schon Anthrazit; st-geraete meldet keine Unterschreitung.
+- **14 Weitere Verbesserungen aus den Browserberichten:** Reset-Mail aus dem Zeilenmenü mit Rückfrage („Eine Mail zum
+  Zurücksetzen des Passworts an … senden?“); Einstellungen und Meldungen der Leitstelle ohne Entwicklersprache
+  („Server-Log“, „docker logs“, „in allen Arbeitsprozessen“, „SMTP nicht konfiguriert“ → „Kein Mailserver eingerichtet – der
+  Link steht im Protokoll des Servers.“); Lehrgangs- und Katalogliste auf breiten Bildschirmen höchstens 1280 px breit
+  (vorher volle Breite bis 5120 px), ihre Hilfetexte höchstens 100ch, Spalte „Teilnehmende“ breit genug für ihre Überschrift; „Alle Bewertungen“ im
+  Mängel-Reiter nicht mehr ausgegraut ohne Grund – ohne gewählte Person sagt ein Hinweis, was fehlt; die Seitenleiste der
+  Ankerplätze deckt die Karte ganz ab (vorher 96 % deckend).
+- **Schnittstelle:** `POST /api/admin/users/<id>/reset-mail` meldet ohne Mailserver „Kein Mailserver eingerichtet – der
+  Link steht im Protokoll des Servers.“ (vorher „SMTP nicht konfiguriert – Link steht im Server-Log.“). Export
+  `GET /api/wiki/pages/<id>/export[?children=1]`: Seiten ohne Titelzeile mit `# <Titel>` davor, Ausweichnamen
+  `-<slug>-<n>`. Sonst unverändert.
+- Tests: `tests/test_module_nach_merge.py` (neu: Export-Kollision mit dem Fall aus q06, Export ohne Titelzeile samt Import,
+  Seitentitel ohne Namen, Knopfsprache, Sprunglink, Reset-Mail, Stylesheet-Regeln), `tests/test_material_vor_merge_3.py`
+  („Reset-Mail senden …“).
+- Bitte bestätigen: (1) Kopf der Strömipedia bleibt eine Symbolleiste (Sprechblase, Teilen, ☰, ⋯ grau umrandet) – Text
+  statt Symbol bräuchte am Telefon eine zweite Zeile; (2) 👍/👎 in der Bewertungswahl und die Zustandszeichen in der
+  Matrix bleiben; (3) Album-Panel „Bilder / Videos hochladen“ grau, weil „Album anlegen“ daneben die rote Hauptaktion
+  ist; (4) Prüfungsleistungen verschieben über „Mehr → Nach oben/Nach unten“ statt eigener Pfeilknöpfe; (5) Reset-Mail
+  mit Rückfrage; (6) Strömipedia-Seitenleiste: „Neue Seite“ bleibt rot (Hauptaktion), der Umschalter „Lesen“ ist ein
+  Zustand, keine Aktion.

@@ -200,15 +200,15 @@
     openPanel(a.title, `
       <div class="btn-row">
         <span class="cat ${esc(a.category)}">${CAT[a.category] || esc(a.category)}</span>
-        ${a.photos.some((p) => p.lat != null) ? '<button class="btn ghost small" id="a-fit">Auf Karte zeigen</button>' : ""}
-        ${a.can_edit ? '<button class="btn ghost small" id="a-edit">Bearbeiten</button>' : ""}
+        ${a.photos.some((p) => p.lat != null) ? '<button class="btn secondary small" id="a-fit">Auf Karte zeigen</button>' : ""}
+        ${a.can_edit ? '<button class="btn secondary small" id="a-edit">Bearbeiten</button>' : ""}
       </div>
       ${a.description ? `<h3>Beschreibung</h3><div style="white-space:pre-wrap">${esc(a.description)}</div>` : ""}
       <h3>Ansprechpartner</h3>
       ${contact.length ? `<dl class="contact">${contact.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join("")}</dl>`
                        : `<div class="muted small">Kein Ansprechpartner eingetragen.${a.can_edit ? " Über „Bearbeiten“ nachtragen." : ""}</div>`}
       <h3>Bilder (${a.photos.length})${a.unlocated_count ? ` <span class="badge">${a.unlocated_count} ohne Position</span>` : ""}</h3>
-      ${a.can_edit ? `<div class="btn-row"><button class="btn small" id="a-upload">Bilder / Videos hochladen</button>
+      ${a.can_edit ? `<div class="btn-row"><button class="btn secondary small" id="a-upload">Bilder / Videos hochladen</button>
         ${a.unlocated_count ? '<button class="btn yellow small" id="a-locate">Bilder ohne Position lokalisieren</button>' : ""}</div>` : ""}
       ${a.photos.length ? `<div class="photo-grid">${a.photos.map((p, i) => `
         <button data-i="${i}" ${p.id === highlightId ? 'class="hi"' : ""} title="${esc(p.title || p.original_name)}">
@@ -219,7 +219,7 @@
         </button>`).join("")}</div>`
         : `<div class="empty"><strong>Noch keine Bilder</strong>${a.can_edit ? "Lade Bilder hoch – Geotags werden automatisch ausgelesen." : ""}</div>`}
       <div class="meta" style="margin-top:16px">Angelegt von ${esc(a.owner_name || "")}${a.owner_gliederung ? " (" + esc(a.owner_gliederung) + ")" : ""}, zuletzt geändert ${fmtDate(a.updated_at, true)}</div>
-      ${a.can_edit ? '<div class="btn-row" style="margin-top:14px"><button class="btn danger small" id="a-delete">Album löschen</button></div>' : ""}
+      ${a.can_edit ? '<div class="btn-row" style="margin-top:14px"><button class="btn secondary small" id="a-delete">Album löschen …</button></div>' : ""}
     `);
     panelBody.querySelectorAll(".photo-grid button").forEach((b) => b.addEventListener("click", () => openLightbox(+b.dataset.i)));
     const hi = panelBody.querySelector(".photo-grid .hi");
@@ -538,7 +538,7 @@
         ${albumPos ? '<button class="btn secondary small" id="loc-album">Album-Position übernehmen</button>' : ""}
         <button class="btn secondary small" id="loc-me">Mein Standort</button>
         <button class="btn secondary small" id="loc-skip">Überspringen</button>
-        <button class="btn ghost small" id="loc-cancel">Abbrechen</button>
+        <button class="btn secondary small" id="loc-cancel">Abbrechen</button>
       </div>
       <ul class="loc-treffer hidden" id="loc-treffer"></ul>`;
     /* Adresssuche: Sie fährt die Karte nur an die Stelle – gesetzt wird die Position weiterhin
@@ -643,13 +643,13 @@
       ${p.details ? `<h3 class="small muted">Weitere Infos</h3><div style="white-space:pre-wrap;font-size:.92rem">${esc(p.details)}</div>` : ""}
       <div class="lb-aktionen">
         <div class="btn-row">
-          ${canEdit ? '<button class="btn small" id="lb-edit">Bearbeiten</button>' : ""}
+          ${canEdit ? '<button class="btn secondary small" id="lb-edit">Bearbeiten</button>' : ""}
           ${canEdit ? `<button class="btn secondary small" id="lb-loc">${p.lat != null ? "Position ändern" : "Auf Karte platzieren"}</button>` : ""}
           ${p.lat != null ? '<button class="btn secondary small" id="lb-fit">Auf Karte zeigen</button>' : ""}
           ${canEdit && a.can_edit ? `<button class="btn secondary small" id="lb-cover"${a.cover_photo_id === p.id ? " disabled" : ""}>${
             a.cover_photo_id === p.id ? "Ist das Deckblatt" : "Als Deckblatt"}</button>` : ""}
         </div>
-        ${canEdit ? '<div class="btn-row lb-aktionen-weg"><button class="btn danger small" id="lb-del">Löschen</button></div>' : ""}
+        ${canEdit ? '<div class="btn-row lb-aktionen-weg"><button class="btn secondary small" id="lb-del">Löschen …</button></div>' : ""}
       </div>`;
 
     const form = `
