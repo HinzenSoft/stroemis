@@ -31,6 +31,8 @@ tr.offen .nr-marke { background: var(--rot); color: #ffffff; font-weight: 700; }
 tr.set-kopf td { padding: 2.5mm 1.3mm .8mm; border-bottom: .8pt solid var(--linie); font-weight: 700;
   color: var(--schwarz); }
 tr.set-kopf { break-after: avoid; }
+/* Eine Zwischenzeile bleibt mit den ersten zwei Artikeln ihres Sets zusammen (der erste über break-after oben). */
+table.artikel-liste tr.set-kopf + tr:not(.set-kopf) + tr:not(.set-kopf) { break-before: avoid; }
 /* Der Pfad bricht an › und Leerzeichen um, nicht mitten im Ordnernamen („Flaschenzugta-sche“). */
 tr.set-kopf td { hyphens: manual; overflow-wrap: normal; }
 tr.im-set td.nr { border-left: 1.2mm solid var(--linie); }
@@ -101,7 +103,8 @@ table.verzeichnis .hash { font-size: 7pt; }
 
 <section>
   <h2>Artikel {{ "im Set" if set_info else "im Durchgang" }}</h2>
-  <table class="liste artikel-liste">
+  {#- Höhe geschätzt: eine Artikelzeile (zweizeilig) rund 10 mm, eine Zwischenzeile 7,5 mm #}
+  <table class="liste artikel-liste{{ kurz(artikel | length * 10 + (artikel | map(attribute='zwischen') | map('length') | sum) * 7.5) }}">
     <colgroup><col style="width: 10mm"><col style="width: 27mm"><col><col style="width: 23mm"><col style="width: 31mm"><col style="width: 25mm"></colgroup>
     <thead><tr><th class="zahl">Nr.</th><th>Inventar- / Seriennummer</th><th>Produkt und Ordner</th><th>Ergebnis</th><th>geprüft</th><th>Protokoll</th></tr></thead>
     <tbody>
@@ -131,8 +134,8 @@ table.verzeichnis .hash { font-size: 7pt; }
 <section>
   <h2>Verzeichnis der Einzelprotokolle</h2>
   {%- if mit_protokoll %}
-  <p class="hinweis">SHA-256 jeder Protokolldatei, wie sie abgelegt ist – zum Abgleich mit den einzelnen PDFs.</p>
-  <table class="liste verzeichnis">
+  <p class="hinweis vor-tabelle">SHA-256 jeder Protokolldatei, wie sie abgelegt ist – zum Abgleich mit den einzelnen PDFs.</p>
+  <table class="liste verzeichnis{{ kurz(mit_protokoll | length * 6) }}">
     <colgroup><col style="width: 30mm"><col style="width: 24mm"><col style="width: 18mm"><col></colgroup>
     <thead><tr><th>Protokoll-ID</th><th>Inventarnummer</th><th>Prüftag</th><th>SHA-256 der Datei</th></tr></thead>
     <tbody>
@@ -151,9 +154,9 @@ table.verzeichnis .hash { font-size: 7pt; }
 {%- if set_protokolle %}
 <section>
   <h2>Set-Protokolle dieses Durchgangs</h2>
-  <p class="hinweis">Je Ordner der Art „Set“ ein eigenes Protokoll mit allen Artikeln darin (auch in inneren Sets) und
+  <p class="hinweis vor-tabelle">Je Ordner der Art „Set“ ein eigenes Protokoll mit allen Artikeln darin (auch in inneren Sets) und
     SHA-256 seiner Datei – zum Abgleich mit den einzelnen PDFs.</p>
-  <table class="liste verzeichnis">
+  <table class="liste verzeichnis{{ kurz(set_protokolle | length * 10) }}">
     <colgroup><col style="width: 30mm"><col><col style="width: 16mm"><col style="width: 62mm"></colgroup>
     <thead><tr><th>Protokoll-ID</th><th>Set</th><th class="zahl">Artikel</th><th>SHA-256 der Datei</th></tr></thead>
     <tbody>

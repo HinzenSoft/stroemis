@@ -8,6 +8,10 @@
 .aussonderung-kasten .grund { font-size: 11pt; color: var(--schwarz); margin-top: 1mm; }
 .aussonderung-kasten .endgueltig { margin-top: 2mm; color: var(--schwarz); }
 .bemerkung { margin-top: 1mm; }
+/* Aussonderung, letzte Prüfung und Unterschrift bleiben zusammen – passt das nicht mehr auf die erste Seite, beginnen sie
+   gemeinsam auf der nächsten. Ein fester Umbruch wie beim Prüfprotokoll entfällt: Das Ergebnis (der Grund) steht schon
+   im Kasten oben, und das Protokoll passt meist auf eine Seite. */
+.abschluss { break-inside: avoid; }
 {% endblock %}
 
 {% block unterzeile %}Aussonderung am {{ aussonderung.datum }}{% endblock %}
@@ -23,6 +27,7 @@
 {% block inhalt %}
 {{ artikel_block(artikel, mit_ordner=False) }}
 
+<div class="abschluss">
 <section>
   <h2>Aussonderung</h2>
   {{ felder([
@@ -57,4 +62,5 @@
 </section>
 
 {{ unterschrift_block(unterschrift, dokument) }}
+</div>
 {% endblock %}

@@ -7,7 +7,7 @@
    (Bemerkung, Notiz, Wert) stehen in .text mit white-space: pre-wrap, nie mit |safe.
    Schriften: DLRG Univers aus static/fonts (Basisadresse ist dieses Verzeichnis); Zeichen, die ihr fehlen,
    setzt DejaVu Sans. Prüfsummen und Kennungen in DejaVu Sans Mono.
-   Die Makros unten (felder, produkt_mit_zusatz, artikel_block, unterschrift_block, festschreibung) benutzen die
+   Die Makros unten (felder, produkt_mit_zusatz, artikel_block, unterschrift_block, kurz, hoch, festschreibung) benutzen die
    abgeleiteten Vorlagen; sie stehen vor dem Block „inhalt“ und sind deshalb dort sichtbar.
    Der Lebenslauf (lebenslauf.html) ist kein Protokoll: Er überschreibt Titel, Stichwörter, Kopf rechts, Fuß,
    Kennungskasten und Demo-Hinweis (Blöcke titel, keywords, kopf_rechts, fuss_links, kopf_id, demo_hinweis); seit
@@ -84,6 +84,24 @@
     </tr></table>
     {{ festschreibung(dokument) }}
   </section>
+{%- endmacro -%}
+
+{%- macro kurz(mm, grenze=120) -%}
+  {#- Klasse „kurz“ für eine Liste, die geschätzt höchstens „grenze“ mm hoch ist (etwa eine halbe Seite): Sie wird
+      nicht geteilt, sondern rückt samt Überschrift auf die nächste Seite. mm schätzt die Vorlage je Liste, meist
+      Anzahl × Zeilenhöhe. Höher als eine Seite darf eine kurze Liste nie werden – WeasyPrint teilte sie dann doch,
+      und die Überschrift stünde allein. #}
+  {{- " kurz" if mm <= grenze -}}
+{%- endmacro -%}
+
+{%- macro hoch(texte, grenze=800) -%}
+  {#- Klasse „hoch“ für eine Zeile (oder einen Eintrag) mit viel freiem Text – zusammen mehr als „grenze“ Zeichen oder
+      mehr als zwölf Zeilenwechsel. Sie bleibt aus den Ketten heraus, die Anfang und Ende einer Liste zusammenhalten
+      (table.liste unten): Eine Kette höher als eine Seite setzte WeasyPrint ohne Tabellenkopf und ließe die Überschrift
+      allein stehen. Vier Zeilen unter der Vorgabe bleiben unter einer Seite (rund 60 mm je Zeile in der breiten
+      Textspalte); die Befunde nehmen eine kleinere Grenze. #}
+  {%- set t = texte | select | map("string") | join("\n") -%}
+  {{- " hoch" if t | length > grenze or t.count("\n") > 12 -}}
 {%- endmacro -%}
 
 {%- macro festschreibung(dokument) -%}
@@ -222,6 +240,35 @@ table.liste td {
 }
 table.liste tr { break-inside: avoid; }
 table.liste .zahl { text-align: right; }
+/* Seitenumbrüche in Listen – keine Waisen am Seitenende. WeasyPrint hält Zeilen über break-before: avoid zusammen;
+   break-inside: avoid an einem tbody wirkt beim ersten nach dem Tabellenkopf nicht (WeasyPrint setzt es, als wäre
+   die Seite leer), deshalb Ketten aus Zeilen:
+   - Anfang: Überschrift (h2, h3 – break-after: avoid) und der Satz davor (p.vor-tabelle) bleiben mit dem Kopf und
+     den ersten vier Zeilen zusammen.
+   - Ende: Die letzten drei Zeilen gehen zusammen auf die neue Seite, nie eine oder zwei allein.
+   - Listen mit einem tbody je Eintrag (Lebenslauf, Bericht): ebenso mit Einträgen, und jeder Eintrag bleibt ganz.
+   - Kurze Listen (Makro kurz) werden gar nicht geteilt; Zeilen mit viel Text (Makro hoch) bleiben aus den Ketten. */
+table.liste.kurz { break-inside: avoid; }
+table.liste > tbody:only-of-type > tr:nth-child(n+2):nth-child(-n+4),
+table.liste > tbody:only-of-type > tr:nth-last-child(-n+2):not(:first-child),
+table.liste > tbody:not(:only-of-type) > tr + tr,
+table.liste > tbody:nth-of-type(n+2):nth-of-type(-n+4),
+table.liste > tbody:nth-last-of-type(-n+2):not(:first-of-type) { break-before: avoid; }
+table.liste > tbody > tr.hoch, table.liste > tbody > tr.hoch + tr,
+table.liste > tbody.hoch, table.liste > tbody.hoch + tbody, table.liste > tbody.hoch > tr { break-before: auto !important; }
+/* Ein Eintrag mit viel Text bleibt trotzdem ganz, außer als erstes tbody (siehe oben). */
+table.liste > tbody.hoch:not(:first-of-type) { break-inside: avoid; }
+p.vor-tabelle { break-after: avoid; }
+table.liste + .legende { break-before: avoid; }
+/* Fester Umbruch, wo ein Abschnitt fachlich neu beginnt (Abschluss des Prüfprotokolls): Er beginnt auf einer neuen
+   Seite, die Überschrift oben ohne Abstand. */
+.neue-seite { break-before: page; }
+.neue-seite > h2:first-child, .neue-seite > section:first-child > h2:first-child { margin-top: 0; }
+/* Ein Datum in einer Liste nie umbrechen („17.02.20 26“) */
+table.liste td.datum { white-space: nowrap; hyphens: manual; }
+/* Felder nie geteilt, eine Beschriftung nie allein am Seitenende */
+table.felder { break-inside: avoid; }
+div.lbl { break-after: avoid; }
 /* Laufende Nummern nie zwischen den Ziffern trennen – auch dreistellige (Sammelprotokoll ab Nr. 100). */
 table.liste td.nr { color: var(--grau); overflow-wrap: normal; white-space: nowrap; }
 /* Laufende Nummer; hervorgehobene Zeilen (Mangel, nicht geprüft) setzen sie als kleine rote Marke */
