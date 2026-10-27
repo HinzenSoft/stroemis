@@ -4223,7 +4223,10 @@ Festschreibung“. Zweig `ll-summe` ab vor-merge 8da606a.
   ohne foreign_keys/recursive_triggers); Migration frisch / 30 → 31 mit Altbestand / zweiter Lauf.
   Angepasst: `test_material_export.py` (Dateiname, Stempel statt „nicht festgeschrieben“), `test_material_vor_merge.py`
   (Schemaversion nicht mehr fest 30, neue leere Tabelle), `test_material_dev_zuruecksetzen.py` (Lebenslauf im Bestand,
-  danach leer, kein Zähler).
+  danach leer, kein Zähler), `test_material_antrag.py`, `test_material_antrag_zustaendig.py`,
+  `test_material_aussondern.py` (Trigger und Tabelle aus Schritt 31 in den Migrationserwartungen),
+  `test_material_ueberblick.py` (die Führungskraft ändert nichts – ausgenommen das Verzeichnis der Lebensläufe, das
+  jeder Abruf füllt).
 
 ### Bitte bestätigen
 

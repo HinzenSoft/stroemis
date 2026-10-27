@@ -72,6 +72,12 @@ def trigger_30():
     return {x.split("CREATE TRIGGER IF NOT EXISTS ", 1)[1].split()[0] for x in models.SCHRITT_30}
 
 
+def trigger_31():
+    """Die Trigger aus Schritt 31 (Verzeichnis ausgegebener Lebensläufe, unveränderlich)."""
+    from app.material import models
+    return {x.split("CREATE TRIGGER IF NOT EXISTS ", 1)[1].split()[0] for x in models.SCHRITT_31 if "CREATE TRIGGER" in x}
+
+
 def trigger_25(nur_antrag=False):
     """Die Trigger aus Schritt 25 (Bestandteil-Liste, Seriennummern der Bestandteile) – zwei ersetzen gleichnamige aus
     Schritt 21. nur_antrag: nur die, die mat_item_change lesen (wer die Tabelle entfernt, entfernt sie mit)."""
@@ -759,12 +765,14 @@ def _schema(pfad):
 
 def _zahlen(pfad):
     """Zeilen je mat_-Tabelle – ohne mat_item_set_slot (entfällt mit Schritt 26), mat_round_setprotokoll (kommt mit
-    Schritt 27) und mat_antrag_ohne_verwalter (kommt mit Schritt 29); in den Altständen hier alle leer."""
+    Schritt 27), mat_antrag_ohne_verwalter (kommt mit Schritt 29) und mat_lebenslauf (kommt mit Schritt 31); in den
+    Altständen hier alle leer."""
     conn = sqlite3.connect(pfad)
     try:
         return {n: conn.execute(f"SELECT COUNT(*) FROM {n}").fetchone()[0] for (n,) in conn.execute(
             "SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE 'mat%' AND name NOT LIKE '%fts%' "
-            "AND name NOT IN ('mat_item_set_slot', 'mat_round_setprotokoll', 'mat_antrag_ohne_verwalter')")}
+            "AND name NOT IN ('mat_item_set_slot', 'mat_round_setprotokoll', 'mat_antrag_ohne_verwalter', "
+            "'mat_lebenslauf')")}
     finally:
         conn.close()
 
@@ -1457,10 +1465,10 @@ def test_migration_17():
         v17, t17, _ = _schema(pfad)
         # Schritt 18: keine Trigger; 19: die zwei des Mailfehler-Protokolls; 21: die der Sets; 23: die Gruppe; 25: die der
         # Seriennummern der Bestandteile.
-        # 26: die Wächter des Rückbaus statt der entfallenen Set-Trigger; 30: Kennungen und Kontoverweise.
+        # 26: die Wächter des Rückbaus statt der entfallenen Set-Trigger; 30: Kennungen und Kontoverweise; 31: Lebensläufe.
         neu_26, weg_26 = trigger_26()
         erwartet = (set(t16) | TRIGGER_17 | TRIGGER_19 | trigger_21() | TRIGGER_23 | trigger_25() | neu_26 | trigger_27()
-                    | trigger_30()) - weg_26
+                    | trigger_30() | trigger_31()) - weg_26
         assert v17 == endversion() and set(t17) == erwartet, set(t17) ^ erwartet
         assert t17["mat_item_stammdaten_fest"] != t16["mat_item_stammdaten_fest"]
         assert t17["mat_item_antrag_angewendet"] != t16["mat_item_antrag_angewendet"]          # seit Schritt 23 alle Felder

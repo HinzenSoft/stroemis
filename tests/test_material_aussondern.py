@@ -236,10 +236,10 @@ def test_schritt_28():
         schema = _schema(pfad)
         assert schema == schema_frisch, _unterschied(schema, schema_frisch)
         conn = sqlite3.connect(pfad)
-        # Schritt 28 legt jeden Trigger und Index in seiner genauen Fassung wieder an; Schritt 30 kommt nur dazu.
+        # Schritt 28 legt jeden Trigger und Index in seiner genauen Fassung wieder an; Schritt 30 und 31 kommen nur dazu.
         neu_30 = {x.split("CREATE TRIGGER IF NOT EXISTS ", 1)[1].split()[0] for x in models.SCHRITT_30}
         nachher = sorted(r for r in conn.execute("SELECT name, sql FROM sqlite_master WHERE type IN ('trigger', 'index')")
-                         if r[0] not in neu_30)
+                         if r[0] not in neu_30 and "mat_lebenslauf" not in r[0])
         assert nachher == trigger_27
         conn.close()
         # Eine festgeschriebene Prüfung (nach dem Umbau entstanden) bleibt geschützt; der Zähler wächst weiter.
