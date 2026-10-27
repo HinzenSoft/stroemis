@@ -1,6 +1,7 @@
 {% extends "material/pdf/basis.html" %}
 {# Prüfprotokoll einer abgeschlossenen Prüfung, angelehnt an die Prüfkarte nach EN 365: Artikel, Prüfung,
-   Befunde je Gruppe, Ergebnis, Fotos zu den Prüfpunkten, Herstellerdokumente am Prüftag, Anhänge, Unterschrift.
+   Befunde je Gruppe; ab neuer Seite der Abschluss: Ergebnis, Bemerkung, Herstellerdokumente am Prüftag, Anhänge,
+   Unterschrift; danach als Anlage die Fotos zu den Prüfpunkten (Seitenumbrüche in den PDF-Protokollen, 27.10.2026).
    Daten laut services/pdf.py (dokument, artikel, pruefung, gruppen, maengel, fotos, dokumente, anhaenge,
    anhaenge_angefuegt, unterschrift). #}
 {% block stil %}

@@ -4107,8 +4107,8 @@
     const e = v.enthalten, a = v.ausgelassen;
     const zeile = (t, n, raus) => `<tr><th scope="row">${t}</th><td>${n}</td><td>${raus === null ? "–" : raus}</td></tr>`;
     dialog(`<h2>Katalog exportieren</h2>
-      <p>Kategorien, Produkte mit Bild und Dokumenten und die Prüfformulare als ZIP – zum Sichern oder zum Import in
-        einer anderen Installation. Bestand, Artikel und Prüfungen kommen nie mit, DEMO-Einträge auch nicht.</p>
+      <p>Kategorien, Produkte mit Bild und Dokumenten und die Prüfformulare als ZIP – zum Sichern oder für eine
+        andere Installation. Bestand, Artikel und Prüfungen kommen nie mit, DEMO-Einträge auch nicht.</p>
       <table class="mat-austausch"><thead><tr><th></th><th>im Export</th><th>ausgelassen (DEMO)</th></tr></thead><tbody>
         ${zeile("Kategorien", e.kategorien, a.kategorien)}${zeile("Produkte", e.produkte, a.produkte)}
         ${zeile("davon mit Bild", e.bilder, null)}${zeile("Formulare", e.formulare, a.formulare)}${zeile("Dokumente", e.dokumente, a.dokumente)}
