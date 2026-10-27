@@ -104,7 +104,7 @@ def test_materialablage_statisch():
     assert 'data-act="kat-loeschen">Löschen</button>' not in js
     menue = js[js.index("const kategorieMenue = "):js.index("</details>`;", js.index("const kategorieMenue = "))]
     assert 'data-act="kat-bearbeiten"' in menue and 'data-act="kat-loeschen"><strong>Löschen</strong>' in menue
-    assert '<details class="mat-katdoks mat-auf"${alsSchublade() ? "" : " open"}><summary>Dokumente für alle Produkte dieser Kategorie<span id="kat-doks-zahl"></span></summary>' in js
+    assert '<details class="mat-katdoks mat-auf"${alsSchublade() ? "" : " open"}><summary>Dokumente für alle Produkte dieser Kategorie<span id="kat-doks-zahl"></span>${infoKnopf("Dokumente für alle Produkte dieser Kategorie", ' in js
     assert "katalogWahl(kat.dataset.kat ? +kat.dataset.kat : null, alsSchublade());" in js
     assert "window.scrollTo(0, ziel.getBoundingClientRect().top + window.scrollY - such.offsetHeight - oben);" in js
     # V2: Titel je Ansicht.
@@ -147,7 +147,7 @@ def test_materialablage_statisch():
 
 def test_uebrige_module_statisch():
     co = lies("app/static/js/common.js")
-    assert "function titel(teile, modul) {" in co and "return { esc, api, toast, dialog, confirm, fmtDate, fmtCoord, CAT, titel };" in co
+    assert "function titel(teile, modul) {" in co and "return { esc, api, toast, dialog, confirm, fmtDate, fmtCoord, CAT, titel, info };" in co  # info seit 27.10.2026
     admin = lies("app/static/js/admin.js")
     assert 'S.titel(name === "nutzer" ? "Nutzerverwaltung" : "Einstellungen", "verwaltung");' in admin
     assert "ghost" not in admin.replace("(btn ghost)", "")

@@ -71,7 +71,7 @@ def test_urkundennummer_im_profil():
         # 3. Profilseite: Reihenfolge Profilbild → Stammdaten → Urkundennummer und Unterschrift → Passwort; Feld und
         #    Hinweis sichtbar.
         html = p.get("/profil").get_data(as_text=True)
-        stellen = [html.index(t) for t in ("<h2>Profilbild</h2>", "<h2>Stammdaten</h2>",
+        stellen = [html.index(t) for t in ("<h2>Profilbild", "<h2>Stammdaten</h2>",       # hinter „Profilbild“ seit 27.10.2026 ein „i“
                                            "<h2>Urkundennummer und Unterschrift</h2>", "<h2>Passwort ändern</h2>")]
         assert stellen == sorted(stellen), stellen
         assert html.index('id="f-profile"') > html.index("<h2>Stammdaten</h2>")

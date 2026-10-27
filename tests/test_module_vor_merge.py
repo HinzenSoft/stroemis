@@ -130,7 +130,8 @@ def test_oberflaeche_statisch():
     # N3: Fokus nicht auf dem rollenden Dialogkörper.
     co = lies("app/static/js/common.js")
     d = co[co.index("function dialog(html, onOpen)"):co.index("function confirm(")]
-    assert d.index("dlg.showModal()") < d.index("document.activeElement === body") < d.index("onOpen(dlg, body)")
+    # Seit 27.10.2026 auch, wenn der Fokus auf einem „i“ im Titel landete (Info-„i“ app-weit).
+    assert d.index("dlg.showModal()") < d.index("if (ae === body || (ae && ae.closest && body.contains(ae) && ae.closest(\".info\")))") < d.index("onOpen(dlg, body)")
     print("Oberfläche (statisch) bestanden.")
 
 
