@@ -61,6 +61,7 @@ FELD = {
     "antrag": "Änderungsantrag Nr.", "begruendung": "Begründung", "beantragt_von": "beantragt von",
     "anmerkung": "Anmerkung", "ablehnung": "Begründung der Ablehnung", "feld": "Feld",
     "rueckruf_nicht_mehr": "Rückruf trifft ihn nicht mehr", "rueckruf_neu": "Rückruf trifft ihn jetzt",
+    "rueckruf_wieder_offen": "Rückruf wieder offen (erneut prüfen)",
     # Artikellänge (Schritt 20)
     "length_m": "Länge (m)", "items_have_length": "Artikel haben eine Länge",
     # Änderungsanträge an alle Stammdaten (Schritt 23): das von Hand vorgezogene Lebensende

@@ -274,7 +274,10 @@ def test_zip():
 # --- Lebenslauf-PDF ----------------------------------------------------------------------------------------------
 
 def _dateien(wurzel):
-    return {os.path.join(d, n) for d, _, namen in os.walk(wurzel) for n in namen}
+    """Dateien unter wurzel – ohne die Zählerdatei der Lebensläufe (pdf/lebenslauf/<Kennung>, leer; seit der Liste nach
+    dem Merge, test_material_nach_merge.py)."""
+    return {os.path.join(d, n) for d, _, namen in os.walk(wurzel) for n in namen
+            if os.path.basename(d) != "lebenslauf"}
 
 
 def _zahlen(app):

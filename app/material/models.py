@@ -253,13 +253,19 @@ Feldnamen folgen dem Konzept vom 16.10.2026 (englisch, wie dort festgelegt). Abw
     über rowid, kein DELETE, kein INSERT OR REPLACE). Der Zähler je Jahr steht in mat_meta (lebenslauf_zaehler_<jahr>).
     Rein additiv, wiederholbar (IF NOT EXISTS). Rückweg: ein älterer Stand ignoriert die Tabelle; seine Lebensläufe
     tragen dann wieder keinen Stempel.
+  - Schritt 32 (Liste nach dem Merge, 27.10.2026): REPLACE ohne recursive_triggers verdrängt keine geschützte Zeile
+    mehr – die *_zeile-Trigger an Prüfung, Befundzeile, Anhang, Durchgang und Durchgangszeile gelten jetzt auch an
+    offenen Zeilen (die App ändert nie eine Kennung), und am Artikel weisen zwei Trigger jedes Einfügen und Ändern ab,
+    das Inventarnummer, QR-Kennung oder Produkt + Seriennummer eines geprüften Artikels träfe. Dazu mat_recall.mail_still
+    (warum beim Versand keine Mail hinausging). Rein additiv, wiederholbar. Rückweg: ein älterer Stand lässt Trigger
+    und Spalte stehen.
 """
 import json
 import re
 import sqlite3
 from datetime import datetime, timezone
 
-SCHEMA_VERSION = 31
+SCHEMA_VERSION = 32
 
 # --- Wertelisten -------------------------------------------------------------------------------
 # Was die Datenbank per CHECK erzwingt, steht hier ein zweites Mal – mit den Wörtern, die die
@@ -2781,6 +2787,54 @@ SCHRITT_31 = [
 ]
 
 
+# --- Schritt 32: REPLACE ohne recursive_triggers, Rückruf-Mail beim Versand (Liste nach dem Merge, 27.10.2026) ------------
+# Ohne recursive_triggers (Vorgabe des sqlite3-Werkzeugs) löscht REPLACE die verdrängte Zeile, ohne dass ihr Lösch-Trigger
+# greift. Zwei Wege blieben nach Schritt 30 offen (Sicherheitsprüfung vor dem Merge, Befund 1):
+#   - „UPDATE OR REPLACE … SET id = <Kennung einer festgeschriebenen Zeile>“ aus einer OFFENEN Zeile heraus (Entwurf,
+#     offener Durchgang) – die *_zeile-Trigger aus Schritt 30 sahen nur abgeschlossene. Die App ändert nie eine Kennung,
+#     auch nicht an Entwürfen; die fünf Trigger gelten deshalb jetzt immer (gleicher Name: DROP und CREATE).
+#   - REPLACE über einen anderen eindeutigen Schlüssel des Artikels (Inventarnummer, QR-Kennung, Produkt + Seriennummer):
+#     ein neuer oder geänderter Artikel verdrängte einen geprüften. Die App legt keinen Artikel mit dem Schlüssel eines
+#     anderen an und ändert keinen darauf (eindeutige Indizes, Dublettenprüfung) – der Trigger trifft nur diesen Umweg.
+# Dazu mat_recall.mail_still: warum beim Anlegen keine Mail hinausging (mailprotokoll.still – „kein Mailserver“,
+# „Umgebungssperre“), festgehalten beim Versand statt bei jedem Lesen nach dem Mailserver von heute (Ablaufprüfung vor
+# dem Merge, Verbesserung 1). NULL: es ging normal hinaus, keine Mail angefordert, oder angelegt vor Schritt 32.
+KENNUNG_FEST = "'Die Kennung einer Prüfung oder eines Prüfdurchgangs (samt ihrer Zeilen) ändert sich nie.'"
+GEPRUEFT_VERDRAENGEN = ("'Ein geprüfter Artikel lässt sich nicht ersetzen – auch nicht über Inventarnummer, QR-Kennung "
+                        "oder Seriennummer.'")
+_GLEICHER_SCHLUESSEL = ("(i.inventory_no = NEW.inventory_no OR i.qr_token = NEW.qr_token "
+                        "OR (i.product_id = NEW.product_id AND i.serial_no = NEW.serial_no COLLATE NOCASE))")
+_I_GEPRUEFT = "EXISTS (SELECT 1 FROM mat_inspection x WHERE x.item_id = i.id AND x.completed_at IS NOT NULL)"
+TRIGGER_32_ZEILE = [
+    _trigger("mat_inspection_zeile", "BEFORE UPDATE ON mat_inspection", _KENNUNG, KENNUNG_FEST),
+    _trigger("mat_result_zeile", "BEFORE UPDATE ON mat_inspection_result", _KENNUNG, KENNUNG_FEST),
+    _trigger("mat_attachment_zeile", "BEFORE UPDATE ON mat_inspection_attachment", _KENNUNG, KENNUNG_FEST),
+    _trigger("mat_round_zeile", "BEFORE UPDATE ON mat_round", _KENNUNG, KENNUNG_FEST),
+    _trigger("mat_round_item_zeile", "BEFORE UPDATE ON mat_round_item", _KENNUNG, KENNUNG_FEST),
+]
+TRIGGER_32_ARTIKEL = [
+    _trigger("mat_item_schluessel_neu", "BEFORE INSERT ON mat_item",
+             f"EXISTS (SELECT 1 FROM mat_item i WHERE {_GLEICHER_SCHLUESSEL} AND {_I_GEPRUEFT})", GEPRUEFT_VERDRAENGEN),
+    _trigger("mat_item_schluessel_aendern", "BEFORE UPDATE OF inventory_no, qr_token, product_id, serial_no ON mat_item",
+             f"EXISTS (SELECT 1 FROM mat_item i WHERE i.id <> OLD.id AND {_GLEICHER_SCHLUESSEL} AND {_I_GEPRUEFT})",
+             GEPRUEFT_VERDRAENGEN),
+]
+
+
+def _schritt_32(conn):
+    """Die fünf *_zeile-Trigger aus Schritt 30 ohne „abgeschlossen“ (erst entfernen – CREATE TRIGGER IF NOT EXISTS fände
+    sonst die alte Fassung vor), die beiden Schlüssel-Trigger am Artikel und die Spalte mat_recall.mail_still. Rein
+    additiv: keine Zeile ändert sich, die Spalte kommt leer dazu. Wiederholbar (DROP … IF EXISTS, IF NOT EXISTS, Spalte
+    nur, wenn sie fehlt). Rückweg: ein älterer Stand lässt Trigger und Spalte stehen – sie sperren nur, was er nie tut."""
+    for name in ("mat_inspection_zeile", "mat_result_zeile", "mat_attachment_zeile", "mat_round_zeile",
+                 "mat_round_item_zeile"):
+        conn.execute(f"DROP TRIGGER IF EXISTS {name}")
+    for sql in TRIGGER_32_ZEILE + TRIGGER_32_ARTIKEL:
+        conn.execute(sql)
+    if "mail_still" not in _spalten(conn, "mat_recall"):
+        conn.execute("ALTER TABLE mat_recall ADD COLUMN mail_still TEXT")
+
+
 # Je Version die Schritte, die von der Vorversion dorthin führen: eine Liste von SQL-Befehlen (für sich
 # wiederholbar, IF NOT EXISTS) oder eine Funktion. Alle Schritte eines Starts laufen in EINER
 # Transaktion – bricht einer ab, bleibt die Datenbank, wie sie war, und der nächste Start versucht es neu.
@@ -2789,7 +2843,7 @@ SCHRITTE = {1: SCHRITT_1, 2: _schritt_2, 3: _schritt_3, 4: SCHRITT_4, 5: _schrit
             14: _schritt_14, 15: _schritt_15, 16: _schritt_16, 17: _schritt_17, 18: SCHRITT_18, 19: SCHRITT_19,
             20: _schritt_20, 21: _schritt_21, 22: _schritt_22, 23: _schritt_23, 24: _schritt_24,
             25: _schritt_25, 26: _schritt_26, 27: _schritt_27, 28: _schritt_28, 29: SCHRITT_29, 30: SCHRITT_30,
-            31: SCHRITT_31}
+            31: SCHRITT_31, 32: _schritt_32}
 
 
 def _meta(conn, schluessel, vorgabe=None):
