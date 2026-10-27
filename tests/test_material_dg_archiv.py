@@ -254,11 +254,11 @@ def test_oberflaeche_statisch():
     assert "mat-runden-alt" not in js and "pr-runden-alt" not in js and "mat-runden-alt" not in css
     assert 'rundenKasten($("#pr-runden"), true)' in js and 'rundenKasten($("#mat-runden"));' in js
     assert 'leer("Gerade läuft kein Prüfdurchgang.")' in js and "durchgaenge?offen=1" in js
-    menue = js[js.index("const rundenMenue = () =>"):js.index("</details>`;", js.index("const rundenMenue = () =>"))]
-    assert '<summary class="btn secondary" aria-haspopup="true">Prüfdurchgänge</summary>' in menue
-    assert ('${DARF.verwalten || DARF.pruefen ? `<a href="#" role="button" data-act="runde"><strong>Prüfdurchgang '
-            'anlegen</strong>') in menue
-    assert '<strong>Abgeschlossene Prüfdurchgänge</strong>' in menue and 'href="/materialablage/durchgaenge' in menue
+    # Seit dem gemeinsamen Menübaustein (UI/UX vor dem Merge, A3): S.menue – ohne Recht zum Anlegen ein Knopf.
+    menue = js[js.index("const rundenMenue = () =>"):js.index("] });", js.index("const rundenMenue = () =>"))]
+    assert 'S.menue({ text: "Prüfdurchgänge", klein: false, art: "mat-menue", links: true, eintraege: [' in menue
+    assert '(DARF.verwalten || DARF.pruefen) && { text: "Prüfdurchgang anlegen"' in menue and 'attrs: \'data-act="runde"\'' in menue
+    assert '{ text: "Abgeschlossene Prüfdurchgänge"' in menue and 'href: `/materialablage/durchgaenge' in menue
     assert "${rundenMenue()}</div></div>" in js
     pruef = js[js.index("async function pruefungen() {"):js.index("async function zeigenIn(")]
     assert "k-anlegen" not in pruef and 'class="btn"' not in pruef
@@ -351,9 +351,9 @@ def test_knopftexte_ohne_auslassung():
                 "Prüfdurchgang anlegen …", "Löschen …</strong>", "Übernehmen …</button>"):
         assert alt not in js, alt
     assert '<label class="btn secondary mat-bildwahl-knopf">${esc(wort)} wählen<input' in js
-    assert "Reset-Mail senden</button>" in lies("app/static/js/admin.js")
+    assert '{ text: "Reset-Mail senden", kurz: "Reset-Mail", attrs: \'data-act="reset"\' }' in lies("app/static/js/admin.js")   # S.menue (A3)
     assert ">Seiten aus ZIP importieren</button>" in lies("app/static/js/wiki.js")
-    assert "von dev in die Produktion" not in js and "zum Sichern oder für eine andere Installation" in js
+    assert "von dev in die Produktion" not in js and "Zum Sichern oder für eine andere Installation" in js
     assert ("<div class=\"mat-kastenkopf\"><h2>Bestandteile${infoKnopf(\"Bestandteile\", BESTANDTEILE_INFO)}</h2>${k ? '<button class=\"btn secondary small\" "
             "data-act=\"stueckliste\">") in js
     assert ".mat-kastenkopf:has(> .btn) { border-bottom: 1px solid var(--linie);" in lies("app/material/static/material.css")

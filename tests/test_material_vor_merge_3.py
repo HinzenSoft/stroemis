@@ -102,8 +102,8 @@ def test_materialablage_statisch():
     assert ".mat-psa-meldungen > summary, .mat-mangel-alt > summary { padding: 10px 0; min-height: 44px; box-sizing: border-box; }" in css
     # V1: Bearbeiten-Menü mit „Löschen“, kein eigener Löschen-Knopf; Dokumente einklappbar, als Schublade zu.
     assert 'data-act="kat-loeschen">Löschen</button>' not in js
-    menue = js[js.index("const kategorieMenue = "):js.index("</details>`;", js.index("const kategorieMenue = "))]
-    assert 'data-act="kat-bearbeiten"' in menue and 'data-act="kat-loeschen"><strong>Löschen</strong>' in menue
+    menue = js[js.index("const kategorieMenue = "):js.index("] });", js.index("const kategorieMenue = "))]
+    assert 'data-act="kat-bearbeiten"' in menue and '{ text: "Löschen", satz: "Nur ohne Unterkategorien und Produkte.", attrs: \'data-act="kat-loeschen"\' }' in menue
     assert '<details class="mat-katdoks mat-auf"${alsSchublade() ? "" : " open"}><summary>Dokumente für alle Produkte dieser Kategorie<span id="kat-doks-zahl"></span>${infoKnopf("Dokumente für alle Produkte dieser Kategorie", ' in js
     assert "katalogWahl(kat.dataset.kat ? +kat.dataset.kat : null, alsSchublade());" in js
     assert "window.scrollTo(0, ziel.getBoundingClientRect().top + window.scrollY - such.offsetHeight - oben);" in js
@@ -147,12 +147,12 @@ def test_materialablage_statisch():
 
 def test_uebrige_module_statisch():
     co = lies("app/static/js/common.js")
-    assert "function titel(teile, modul) {" in co and "return { esc, api, toast, dialog, confirm, fmtDate, fmtCoord, CAT, titel, info };" in co  # info seit 27.10.2026
+    assert "function titel(teile, modul) {" in co and "return { esc, api, toast, dialog, confirm, fmtDate, fmtCoord, CAT, titel, info, overlayVerlauf," in co  # info seit 27.10.2026, Bausteine UI/UX vor dem Merge
     admin = lies("app/static/js/admin.js")
     assert 'S.titel(name === "nutzer" ? "Nutzerverwaltung" : "Einstellungen", "verwaltung");' in admin
     assert "ghost" not in admin.replace("(btn ghost)", "")
-    assert '<details class="zeilenmenue"><summary class="btn secondary small" aria-haspopup="true">Mehr</summary>' in admin
-    assert '<button type="button" data-act="reset">Reset-Mail senden</button>' in admin   # Rückfrage seit nach_merge_liste 14
+    # Zeilenmenü seit UI/UX vor dem Merge (A3) über S.menue – beim eigenen Konto bleibt ein Eintrag, dann ein Knopf.
+    assert 'S.menue({ art: "zeilenmenue", eintraege: [{ text: "Reset-Mail senden", kurz: "Reset-Mail", attrs: \'data-act="reset"\' },' in admin
     assert 'const mailUmbruch = (mail) => S.esc(mail).replace(/@/, "<wbr>@").replace(/\\.(?=[^@]*$)/g, "<wbr>.");' in admin
     assert '<td class="mail" data-l="E-Mail">${mailUmbruch(u.email)}</td>' in admin
     app_css = lies("app/static/css/app.css")

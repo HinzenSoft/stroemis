@@ -200,10 +200,10 @@ def test_texte_statisch():
         "freigaben.js": (fjs, ["→ „Offene Prüfungen“ mit „Reservierung aufheben“."]),
         "admin.js": (ajs, ["→ „Offene Prüfungen“ mit „Reservierung aufheben“.", "> Prüfer (Sachkundiger)${S.info(\"Prüfer\", "]),
         "material.js": (mjs, [
-            "auch die von hier gesperrten und ausgesonderten, mit Status, Fälligkeiten und Stammdaten – für Excel.",
+            # Menüeinträge seit UI/UX vor dem Merge (A3 e) kurz – die Bedingungen nennt die Rückfrage darunter.
+            'satz: "Alle Artikel hier und darunter – für Excel."',
             "Sperren und Freiprüfungen im Jahr",
-            "ohne Unterordner und Artikel, ohne Prüfdurchgänge und Set-Protokolle, ohne offene Nacharbeit eines "
-            "Bestandsimports und ohne gesperrte Artikel, die hierher zurückkehren; vorher wird nachgefragt.",
+            '{ text: "Löschen", satz: "Nur ein leerer Ordner.", attrs: \'data-act="loeschen"\' }',
             "endgültig löschen? Danach ist er weg. Das geht nur bei einem leeren Ordner – ohne Unterordner und Artikel, "
             "ohne Prüfdurchgänge und Set-Protokolle,",
             "„Deine PSA“ an die Personen, denen hier etwas zugeordnet ist",

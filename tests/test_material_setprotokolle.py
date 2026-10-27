@@ -386,7 +386,7 @@ def test_oberflaeche_statisch():
     css = open(os.path.join(wurzel, "app/material/static/material.css"), encoding="utf-8").read()
     assert ".mat-summe-text { border-bottom: 1px dashed var(--grau); }" in css
     common = open(os.path.join(wurzel, "app/static/js/common.js"), encoding="utf-8").read()
-    assert "function confirm(text, okLabel, neinLabel)" in common and '${esc(neinLabel || "Abbrechen")}' in common
+    assert "function confirm(text, okLabel, neinLabel, opt = {})" in common and '${esc(neinLabel || "Abbrechen")}' in common
     from app.material.services import beschriftung
     assert f'set_protokolle: "{beschriftung.FELD["set_protokolle"]}"' in js
     print("Oberfläche (statisch) bestanden.")

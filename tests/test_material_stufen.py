@@ -640,10 +640,14 @@ def test_letzter_materialwart_oberflaeche():
     def funktion(name):
         return re.search(r"\n  (?:async )?function " + name + r"\(.*?\n  \}\n", js, re.S).group(0)
 
-    rueck = funktion("rueckfrage")
-    assert '<button class="btn secondary" id="rf-nein" type="button">Abbrechen</button>' in rueck
-    assert '<button class="btn" id="rf-ja" type="button">' in rueck and "danger" not in rueck and "ghost" not in rueck
-    assert rueck.index("rf-nein") < rueck.index("rf-ja") and 'dlg.querySelector("#rf-nein").focus();' in rueck
+    # Seit UI/UX vor dem Merge (A4) geht die Rückfrage in S.confirm auf: Form für Nicht-Endgültiges (roter Hauptknopf,
+    # kein „danger“), „Abbrechen“ vorn mit dem Fokus.
+    assert 'const rueckfrage = (titel, html, okLabel) => S.confirm("", okLabel, "", { titel, html, endgueltig: false, fokus: "nein" });' in js
+    with open(os.path.join(wurzel, "app", "static", "js", "common.js"), encoding="utf-8") as f:
+        co = f.read()
+    conf = co[co.index("  function confirm(text, okLabel, neinLabel, opt = {}) {"):co.index("  function fmtDate(")]
+    assert '<button class="btn secondary" id="c-no" type="button">' in conf and 'opt.endgueltig === false ? "btn" : "btn danger"' in conf
+    assert conf.index("c-no") < conf.index("c-ok") and 'if (opt.fokus === "nein") dlg.querySelector("#c-no").focus();' in conf
     bleibt = funktion("materialwartBleibt")
     for da in ("letzter_materialwart", "/material-folgen", "(material | 0) === 0", "aktiv === false",
                "gliederungenText(gl)", "nur noch die Material-Verwaltung", '"Trotzdem speichern"',

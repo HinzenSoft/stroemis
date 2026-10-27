@@ -146,30 +146,32 @@ def test_knopfsprache_alte_module():
     for pfad in ALTE_MODULE:
         text = lies(pfad)
         assert "btn ghost" not in text.replace("(btn ghost)", ""), pfad
-        for m in re.finditer(r"<button\b([^>]*)>(.*?)</button>", text, re.S):
+        # Nicht über ein weiteres „<button“ hinweg (etwa aus einem Kommentar bis zum nächsten echten Knopf).
+        for m in re.finditer(r"<button\b([^>]*)>((?:(?!<button\b).)*?)</button>", text, re.S):
             # Bewusst geblieben (Bericht, „Bitte bestätigen“): Zustandszeichen in den Bewertungszellen, 👍/👎 der großen
             # Bewertungswahl am Gewässer (immer mit Wort) und das Farbfeld „keine Farbe“ im Callout-Menü.
             if 'data-act="zelle"' in m.group(1) or "data-erg=" in m.group(1) or 'class="farbe' in m.group(1):
                 continue
             innen = re.sub(r"\$\{[^}]*\}", "", m.group(2))
-            assert not BILDZEICHEN.search(innen.replace("☰", "")), (pfad, m.group(0)[:160])
+            # ↑ ↓ ✕ sind seit UI/UX vor dem Merge (D3, Nutzer V13) die Bedienzeichen aller Module – mit Namen fürs Vorlesen.
+            assert not BILDZEICHEN.search(re.sub("[☰↑↓✕]", "", innen)), (pfad, m.group(0)[:160])
     assert ".btn.ghost" not in lies("app/static/css/app.css")
     pr = lies("app/static/js/pruefungen.js")
     # btn danger nur noch in der Rückfrage (common.js S.confirm), nicht als Auslöser.
     for pfad in ("app/static/js/pruefungen.js", "app/static/js/map.js", "app/static/js/wiki.js"):
         assert "btn danger" not in lies(pfad), pfad
     assert 'class="btn danger small" data-act="reject"' not in lies("app/static/js/admin.js")
-    assert '<button class="btn danger" id="c-ok" type="button">' in lies("app/static/js/common.js")
+    assert 'class="${opt.endgueltig === false ? "btn" : "btn danger"}" id="c-ok" type="button">' in lies("app/static/js/common.js")
     # Lehrgangs- und Katalogliste: „Öffnen“ grau, Seltenes im Zeilenmenü; je Leistung „Bearbeiten“ + „Mehr“.
     assert '<a class="btn secondary small" href="/riegenkarten/${lg.id}">Öffnen</a>' in pr
-    assert pr.count("zeilenMenue(`") == 3
-    assert 'const zeilenMenue = (eintraege) => `<details class="zeilenmenue">' in pr
+    assert pr.count("zeilenMenue([") == 3       # seit UI/UX vor dem Merge (A3) über S.menue
+    assert 'const zeilenMenue = (eintraege) => S.menue({ art: "zeilenmenue",' in pr
     # Eine rote Hauptaktion: Mängel-Reiter und Stoppuhr grau, „Bewertung speichern“ rot.
     assert '<button class="btn secondary small" data-act="m-np"' in pr
     assert '<button type="button" class="btn secondary" data-su="start">Start</button>' in pr
     # Zeilenmenü app-weit: Schließen per Klick daneben und Escape in common.js, nicht mehr nur in admin.js.
     co = lies("app/static/js/common.js")
-    assert 'document.querySelectorAll("details.zeilenmenue[open]")' in co
+    assert 'const menueOffen = () => [...document.querySelectorAll("details.menue[open], .menue-schwebend")];' in co
     assert 'details.zeilenmenue[open]' not in lies("app/static/js/admin.js")
     # Kopfleiste der Strömipedia: Sprechblase als Symbol statt Emoji, grau umrandet.
     wiki = lies("app/static/js/wiki.js")
@@ -197,7 +199,7 @@ def test_sprunglink_und_begriffe():
         r = t.adm.post(f"/api/admin/users/{uid}/reset-mail", json={}, headers=H)
         assert r.status_code == 200 and r.json["message"] == "Kein Mailserver eingerichtet – der Link steht im Protokoll des Servers.", r.json
     admin = lies("app/static/js/admin.js")
-    assert 'S.confirm(`Eine Mail zum Zurücksetzen des Passworts an ${u.email} senden?`, "Senden")' in admin
+    assert 'S.confirm(`Eine Mail zum Zurücksetzen des Passworts an ${u.email} senden?`, "Senden", "", { endgueltig: false })' in admin
     assert "Server-Log" not in admin and "in allen\n      Arbeitsprozessen" not in lies("app/templates/admin.html")
     pr = lies("app/static/js/pruefungen.js")
     for alt in ("Teilnehmende:r", "Teilnehmende:n", "je TN<", ">TN<", " TN mit "):

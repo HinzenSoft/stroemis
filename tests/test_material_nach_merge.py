@@ -393,8 +393,8 @@ def test_oberflaeche_statisch():
     assert "function artikelMehr(a, eintraege) {" in js and '<p class="help mat-nur-touch">Lebenslauf (PDF)' not in js
     assert 'darfPflegen && frei ? "verschieben" : "", darf.grund ? "lebenslauf" : "", darfPflegen && a.darf_loeschen ? "loeschen" : ""' in js
     assert "Prüfen dürfen Prüfer mit Urkundennummer und Prüffreigabe (Häkchen" not in js
-    produkt = js[js.index("const produktMenue = "):js.index("</details>`;", js.index("const produktMenue = "))]
-    assert 'data-act="loeschen"><strong>Löschen</strong>' in produkt
+    produkt = js[js.index("const produktMenue = "):js.index("] });", js.index("const produktMenue = "))]
+    assert 'p.loeschbar && { text: "Löschen", satz: "Nur ohne Artikel dieses Produkts.", attrs: \'data-act="loeschen"\' }' in produkt   # S.menue
     assert """${p.loeschbar ? '<button class="btn secondary small" data-act="loeschen">Löschen</button>' : ""}${produktMenue}""" not in js
     # Prüfungen: laufende oben; die abgeschlossenen seit dem 27.10.2026 auf eigener Seite (Menü „Prüfdurchgänge“,
     # test_material_dg_archiv); ausgegrautes „Durchgang abschließen“ mit Grund

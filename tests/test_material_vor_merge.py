@@ -376,7 +376,7 @@ def test_oberflaeche_statisch():
     # B2: dialog/confirm sind eigene Hüllen, die den Auslöser merken; der alte Einzelfall ist weg.
     assert "const { esc, api, toast } = S;" in js and "function dialog(html, onOpen) {" in js
     assert "if (dlgEl && !dlgEl.open && !dlgZiel) dlgZiel = fokusZiel();" in js
-    assert "return S.confirm(text, okLabel, neinLabel).then((ja) => {" in js
+    assert "return S.confirm(text, okLabel, neinLabel, opt).then((ja) => {" in js
     assert 'dlg.addEventListener("close", () => { if (knopf.isConnected) knopf.focus(); }, { once: true });' not in js
     # B3/B4: nur unter pointer: coarse; die Notiz-Regel steht hinter der Grundregel (gleiche Spezifität).
     assert ".mf-notiz > summary { padding: 11px 0; }" in _coarse_bloecke(fg_css)

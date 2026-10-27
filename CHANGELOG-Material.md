@@ -52,6 +52,7 @@ Geschichte stehen. Schemaversion nach der Nachbesserung vor dem Merge: 30; mit d
 | Seitenumbrüche in den PDF-Protokollen | Keine Waisen am Seitenende: Überschrift, Tabellenkopf und die ersten vier Zeilen zusammen, die letzten drei zusammen, kurze Listen ungeteilt; Prüfprotokoll: Abschluss (Ergebnis bis Unterschrift) immer ab neuer Seite, Fotos als Anlage danach, Herstellerdokumente ohne zerhackte Spalten; Aussonderungsprotokoll: Abschluss zusammen | gebaut 27.10.2026 (kein Schemaschritt, nur neue PDFs), zur Freigabe |
 | Info-„i“ app-weit | Erklärsätze unter Überschriften und Feldern hinter ein „i“ am Begriff (55 Stellen in allen Modulen), `S.info` und Jinja-Makro, ein „i“ je Liste für Marken; „Seiten aus ZIP importieren“ im Seitenbaum der Strömipedia | gebaut 27.10.2026 (kein Schemaschritt, Schema bleibt 32), zur Freigabe |
 | Letzte offene Punkte | Datenschutzsätze an einem „i“ auf eine Zeile; Strömipedia: „Neue Seite“ und „⋯“ (Papierkorb, Import) über dem Baum, Blatt-Symbol statt kursivem „i“ für „Angaben zur Seite“, Fehlerart beim Ablegen von Dateien; eine Abschnittsaktion neben der Überschrift (Protokoll, Sammelprotokoll, Prüfformular, Herstellerdokumente); Leitstelle: Marken in der Hilfe-Box statt im „i“ | gebaut 27.10.2026 (kein Schemaschritt, Schema bleibt 32), zur Freigabe |
+| UI/UX vor dem Merge – U1a Verhalten | Zurück schließt Dialoge, Schubladen und Großansichten; Fehler am Feld; ein Menübaustein (ein Eintrag → Knopf, kurze Einträge, im Bild); Rückfragen mit Gegenstand, Nicht-Endgültiges ohne „danger“; Mehrzahl; Export mit Uhrzeit; deutsche Fehlerseiten; Bewegung reduzieren; Beschriftungen; Dialogfuß; Bedienzeichen ✕ ↑ ↓ app-weit | gebaut 27.10.2026 (kein Schemaschritt), Zweig uiux-1a |
 
 ## Abgleich mit dem Bestand (vor Lieferung 1)
 
@@ -9676,3 +9677,99 @@ Teil B: Strömipedia, Ankerplätze, Riegenkarten, Leitstelle, Anmeldung. Kein Sc
   ist; (4) Prüfungsleistungen verschieben über „Mehr → Nach oben/Nach unten“ statt eigener Pfeilknöpfe; (5) Reset-Mail
   mit Rückfrage; (6) Strömipedia-Seitenleiste: „Neue Seite“ bleibt rot (Hauptaktion), der Umschalter „Lesen“ ist ein
   Zustand, keine Aktion.
+
+## UI/UX vor dem Merge (27.10.2026)
+
+Grundlage: `planung/material-phase4/uiux_liste.md` (vier UI/UX-Prüfungen vor dem Merge, Stand 6f43e3f) und der Bauauftrag
+`auftrag_uiux_bau.md`. Gebaut in Teilen; je Teil ein Unterabschnitt. Kein Schemaschritt.
+
+### Teil U1a – Verhalten (gemeinsame Bausteine in common.js, alle Module)
+
+- **A1 Zurück schließt Overlays.** Die Zurück-Taste bzw. -Geste (Android, Wischen am iPhone) verließ die Seite, auch wenn
+  nur ein Dialog, eine Schublade oder eine Großansicht offen war – ein halb ausgefülltes Formular war damit weg. Jetzt legt
+  jedes Overlay beim Öffnen einen eigenen Verlaufseintrag an (dieselbe Adresse); Zurück schließt das oberste Overlay.
+  Schließt es auf anderem Weg (Knopf, Esc, Tippen daneben), nimmt es seinen Eintrag wieder heraus – kein doppeltes Zurück,
+  und „Vor“ führt nicht in einen Zustand, den es nicht mehr gibt. Bausteine `S.overlayVerlauf(schliessen)`,
+  `S.dialogVerlauf(dlg)` und `S.klassenVerlauf(el, klasse, schliessen, gilt)`; eingebaut in `S.dialog` und `S.confirm`
+  (damit alle Dialoge der Module), die eigenen Dialoge (Freigaben-Unterdialoge, Unterschrift, Link-Dialog der
+  Riegenkarten), die Schubladen (Materialablage „☰ Ordner“/Filter/Katalog „☰“, Seitenbaum der Strömipedia auch im
+  Lesemodus), die Seitenleiste der Ankerplätze (Alben, Album) und alle Großansichten (Materialablage-Fotos, Ankerplätze,
+  Riegenkarten-Medien und Profilbild, Bilder der Strömipedia). Zurück wirkt wie Esc: Wer Esc abfängt – ungespeicherte
+  Freigaben (Rückfrage „Änderungen verwerfen?“), laufendes Hochladen, Unterschrift unterwegs –, hält auch Zurück auf.
+  Verträglich mit der Adressführung der Seiten: Schreibt eine Seite ihre Adresse um, während ein Overlay offen ist (Filter,
+  `#album=…`), gilt sie auch danach; wechselt die Strömipedia die Seite aus der offenen Schublade, nimmt die neue Seite den
+  Eintrag der Schublade ein. Ein Zurück, das nur ein Overlay schließt, erreicht den Code der Seite nicht (der Editor der
+  Strömipedia fragte sonst „Änderungen verwerfen?“). Geht die Seite gerade (Speichern, dann neue Seite), unterbleibt der
+  Schritt zurück – Chromium bräche den Seitenwechsel sonst ab (geprüft: Chromium, Firefox, WebKit).
+- **A2 Fehler am Feld.** `S.feldFehler(feld, text)`: das Feld bekommt `aria-invalid` und einen roten Rahmen, darunter steht
+  der Satz (per `aria-describedby` verknüpft), der Fokus geht aufs Feld; die nächste Eingabe nimmt beides weg.
+  `S.fehlschlag(knopf, fehler, feld)` für das `catch` nach einer Anfrage: gibt den Knopf frei, meldet am Feld, wenn eins
+  betroffen ist (nennt der Server „„Titel“ fehlt.“, findet die Hilfe das Feld mit dieser Beschriftung im Dialog), sonst
+  als Toast mit dem Fokus zurück auf dem Knopf – nie mehr auf der Seite (BODY). Eingesetzt an allen 36 Stellen mit „Toast
+  und Knopf frei“ und an den Pflichtfeldern der Dialoge aller Module (Prüfdurchgang anlegen, Ausnehmen, Grund in der
+  Prüfleiste, Nächste Prüfung, Berichtigung, Antrag, Ordnerwahl, Freigabe erteilen/ändern/verlängern, Lehrgang, Kopie,
+  Katalog, Prüfungsleistung, Teilnehmende, Bewertung, Link, Album, Einwurf, Nutzer anlegen/bearbeiten, Kommentar,
+  Ersteller, ZIP-Import, Link, Abschnitt, Suchen, Bildbreite …). Pflicht sichtbar: Ausnehmen heißt „Grund (Pflicht)“; in
+  der Prüfleiste steht bei „instandsetzen“/„aussondern empfohlen“ ohne Mangel „Ohne Mangel ist ein Grund Pflicht“ in der
+  Hinweiszeile (nicht nur im Platzhalter).
+- **A3/D1 Ein Menübaustein.** `details.mat-menue`, `details.zeilenmenue` und die schwebenden Menüs der Strömipedia
+  haben eine Logik in common.js: nur ein Menü offen, Klick daneben oder auf einen Eintrag schließt, Esc schließt (Fokus
+  zurück auf den Menüknopf; in einem Dialog schließt Esc nur das Menü), Tab hinaus schließt (focusout), ↑/↓, Pos1/Ende
+  wandern durch die Einträge (`role="menu"`/`menuitem`), ↓ auf dem Menüknopf öffnet, mit der Tastatur geöffnet steht der
+  Fokus auf dem ersten Eintrag. Die Liste bleibt im Bild: waagerecht rückt sie ein (Doppelbildschirm: in die eigene
+  Hälfte), senkrecht öffnet sie nach oben, wenn unten der Platz fehlt, sonst rollt sie in sich (gemessen 375×667 und
+  844×390: alle Menüs ganz im Bild). Markup über `S.menue({ text, art, links, eintraege })` (Klasse `menue`, bis zur
+  Zusammenführung mit dem Aussehen aus Teil U1b zusätzlich die bisherigen Klassen) bzw. `S.menueSchwebend(anker, box)`.
+  **Bleibt nur ein Eintrag, zeichnet die Hilfe einen grauen Knopf** (Nutzer 27.10.2026): Leitstelle „Reset-Mail senden“
+  (eigenes Konto), Riegenkarten „Löschen“ der Prüfungsleistung, Mailversand „Alle erledigt“, Nacharbeit „Als CSV
+  herunterladen“, „Prüfdurchgänge“ für Rollen ohne Anlegen („Abgeschlossene Prüfdurchgänge“). Die Sätze unter den
+  Einträgen sind kurz (höchstens 45 Zeichen, am 390er zwei Zeilen je Eintrag; Ordner-„Löschen“ vorher 200 Zeichen) – die
+  Bedingungen sagt die Rückfrage.
+- **A4 Rückfragen.** `S.confirm(text, ok, nein, { endgueltig: false })` für Rückfragen, bei denen nichts verloren geht: der
+  gewöhnliche rote Hauptknopf statt des rot umrandeten für Endgültiges – Reset-Mail „Senden“, Version „Wiederherstellen“,
+  Produktmeldung „Zuordnen“, Freigabe „Entziehen“ (Leitstelle und Ordner), „Zurückziehen“ (Antrag, Herstellerdokument),
+  dazu Lehrgangsergebnis „Vermerken/Aufheben“. Die Rückfrage „Trotzdem speichern“ der Leitstelle ist darin aufgegangen
+  (Fokus auf „Abbrechen“). Der Titel jeder Rückfrage ist die Frage selbst („Ordner „X“ endgültig löschen?“) statt
+  „Bist du sicher?“; der Rest des Texts steht darunter.
+- **A11 Mehrzahl:** `S.plural` app-weit – „1 Bild“, „1 Album“, „1 Seite“, „1 Voraussetzung offen“, „1 Voraussetzung ist
+  noch nicht erfüllt“, „auf 1 Seite eingebunden“, Album löschen „mit seinem Bild“ (vorher „mit allen 1 Bildern“);
+  Materialablage, Riegenkarten, Freigaben und Leitstelle nutzen ihn statt eigener Kopien.
+- **A12 Strömipedia-Export:** Dateiname mit Datum und Uhrzeit (`<Titel>_<JJJJ-MM-TT>_<HHMM>.md` bzw. `.zip`, dieselbe Uhr
+  wie die Materialablage, `zeitstempel()`), jede Abfrage mit eigener Adresse (`?stand=…`).
+- **A13 Fehlerseiten:** 400, 405, 429, 500 und alle übrigen HTTP-Fehler zeigen die deutsche Fehlerseite mit Kopfleiste und
+  Weg zurück; der Titel sagt, was los ist („Seite nicht gefunden – strömis.de“, „Etwas ist schiefgegangen“), die Zahl
+  steht klein darunter („Fehler 404“). Schnittstellen (`/api/…`) antworten weiter mit JSON (`{"error": "…"}`, jetzt auch
+  bei 405 und 500). Geht schon das Zeichnen der Seite schief, kommt eine schlichte deutsche Seite ohne Kopfleiste.
+- **A15 Bewegung:** Die weichen Bildläufe (Strömipedia, Riegenkarten, Materialablage) springen mit „Bewegung reduzieren“
+  (`S.rollen`, `S.weich`).
+- **A16 Beschriftungen:** `for=` bzw. `aria-label` an allen Feldern der Dialoge „Album anlegen/bearbeiten“, Einwurf, „Bild
+  bearbeiten“ (Ankerplätze), „Nutzer anlegen/bearbeiten“ (Leitstelle), Teilen und Ersteller (Nutzersuche, Link), Symbol
+  der Seite, Spalten/Callout/Ausrichtung (Strömipedia), Notiz der Freigabe. Browserprobe über 24 Dialoge aller Module:
+  jedes sichtbare Feld hat einen zugänglichen Namen.
+- **D2 Dialogfuß:** Eine dritte Aktion steht links außen, „Abbrechen“ und die Hauptaktion rechts (Klasse `dlg-neben`):
+  „Verknüpfung entfernen“ (Prüfanleitung), „Zuordnung entfernen“ (Nacharbeit), „Entfernen“ (Symbol der Seite),
+  „Löschen“ (Teilnehmende), „Leeren“ (Unterschrift). „Rückruf angelegt“ schließt mit grauem „Schließen“ statt rotem
+  „OK“; „Teilen“ hat „Abbrechen“ neben „Speichern“.
+- **D3 Bedienzeichen:** ein Schließen-Knopf app-weit (✕ mit Namen „Schließen“, `S.schliessenKnopf`; vorher × und ✕
+  gemischt), Reihenfolge ↑/↓ (`S.reihenfolgeKnoepfe`) und Entfernen ✕ (`S.entfernenKnopf`) wie in der Materialablage
+  (Nutzer, V13) – jetzt auch in den Riegenkarten (Voraussetzungen, Kriterien, Prüfungsleistungen statt „Hoch/Runter“ und
+  „Nach oben/Nach unten“ im Menü, Referierende, Medien) und in der Materialablage selbst überall gleich (Bestandteile,
+  Prüfpunkte, Dokumente).
+- **CSS, das die Logik braucht** (Aussehen sonst Teil U1b): `dialog .dlg-actions > .dlg-neben { margin-right: auto }`,
+  roter Rahmen für Felder mit `aria-invalid="true"`, Abstand von `.feld-fehler`, Zeichenknöpfe (↑ ↓ ✕) unter Touch
+  mindestens 44×44 px (`.zeichenknopf`) – vorher machten die Wörter „Hoch“/„Entfernen“ die Knöpfe breit genug (app.css).
+  In der Leitstelle heißt der einzelne Knopf am eigenen Konto „Reset-Mail“ (Name fürs Vorlesen „Reset-Mail senden“) –
+  „Reset-Mail senden“ ragte bei 1024 und 1280 px 15–17 px aus der Tabelle.
+- **Strömipedia-relevante Texte** (Artikel „Materialablage“ und Bedienhilfe): Zurück schließt Dialoge und Schubladen;
+  Menüeinträge kürzer; „Prüfdurchgänge“ ohne Anlegen-Recht als Knopf „Abgeschlossene Prüfdurchgänge“; Ausnehmen „Grund
+  (Pflicht)“; Fehlerseiten mit Titel.
+- **Schnittstelle:** `GET /api/wiki/pages/<id>/export[?children=1]` – Dateiname mit Datum und Uhrzeit; 405/500 unter
+  `/api/` als JSON. Sonst unverändert.
+- Tests: `tests/test_module_uiux_verhalten.py` (neu); angepasst an die neuen Bausteine (Menü über `S.menue`,
+  `S.confirm` mit `opt`, Zeichenknöpfe, gekürzte Menüsätze): test_material_bestandteile, _dg_archiv, _export,
+  _feinschliff, _import, _nach_merge, _setprotokolle, _stufen, _vor_merge, _vor_merge_3, test_module_info_i,
+  test_module_nach_merge (Bildzeichen-Prüfung: ↑ ↓ ✕ erlaubt, kein Treffer über mehrere Knöpfe hinweg),
+  test_wiki_import.
+- Grenzen: Ein Overlay, das unmittelbar vor einem Seitenwechsel schließt (Speichern, dann neue Seite), lässt seinen
+  Eintrag stehen; kommt man ohne bfcache zurück, braucht es dort einmal Zurück mehr. Nach einem Download aus einem Dialog
+  (Chromium) wird ein solcher Eintrag beim nächsten Zurück übersprungen.

@@ -102,7 +102,7 @@ def test_app_weit_bereitgestellt():
                    'aria-label="Info zu ${esc(thema)}" aria-expanded="false"', 'aria-controls="${id}" aria-describedby="${id}"',
                    'aria-hidden="true" focusable="false"', '<span class="info-text" role="tooltip" id="${id}" hidden>${html}</span></span>'):
         assert stelle in info, stelle
-    assert "return { esc, api, toast, dialog, confirm, fmtDate, fmtCoord, CAT, titel, info };" in common
+    assert "return { esc, api, toast, dialog, confirm, fmtDate, fmtCoord, CAT, titel, info, overlayVerlauf," in common
     verhalten = common[common.index("function infoZeigen(w, an, fest) {"):common.index("/* Seitentitel im Reiter")]
     # Einmal je Seite am document (Delegation) – auch für später gezeichnete; Info in einem Dialog bleibt in dessen Inhalt.
     for stelle in ('document.addEventListener("click"', 'document.addEventListener("pointerover"', 'document.addEventListener("pointerout"',

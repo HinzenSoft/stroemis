@@ -424,7 +424,7 @@ def test_oberflaeche_statisch():
     assert '<button type="button" data-a="trash">Papierkorb</button>' in menue
     assert '${darfImportieren() ? \'<button type="button" data-a="import">Seiten aus ZIP importieren</button>\' : ""}' in menue
     assert 'if (b.dataset.a === "import") { side.classList.remove("open"); importDialog(null); }' in menue
-    assert 'if (b.dataset.a === "trash") return trashDialog();' in menue and "wireMenuKeys(box, close);" in menue
+    assert 'if (b.dataset.a === "trash") return trashDialog();' in menue and "const close = S.menueSchwebend(anchor, box);" in menue
     assert 'if (baumMehr) baumMehr.addEventListener("click", (e) => baumMenu(e.currentTarget));' in js
     assert "#btn-import" not in js and "#btn-trash" not in js
     html = open(os.path.join(WURZEL, "app/templates/wiki.html"), encoding="utf-8").read()

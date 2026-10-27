@@ -405,9 +405,12 @@ def test_lebenslauf_jeder_abruf_frisch():
                 assert "no-store" in r.headers["Cache-Control"]
         # Oberfläche: Die Knöpfe tragen data-frisch, beim Klick (nicht beim Zeichnen) kommt ?stand=<ms> dazu.
         js = w.get("/static/material/material.js").get_data(as_text=True)
-        for knopf in ('/lebenslauf.pdf" target="_blank" rel="noopener" data-frisch', '/export/${d.id}.csv" data-frisch',
-                      '/export/${d.id}-protokolle.zip" data-frisch', '${mit}.pdf" target="_blank" rel="noopener" data-frisch',
-                      '${mit}.csv" data-frisch', '/nacharbeit.csv" data-frisch', '/katalog/export" download data-frisch'):
+        # Menüeinträge seit UI/UX vor dem Merge (A3) über S.menue: Adresse (href) und Attribute (attrs) getrennt.
+        for knopf in ('/lebenslauf.pdf`,\n                    attrs: `target="_blank" rel="noopener" data-frisch',
+                      'href: `/materialablage/export/${d.id}.csv`,\n      attrs: \'data-frisch',
+                      'href: `/materialablage/export/${d.id}-protokolle.zip`,\n      attrs: \'data-frisch',
+                      '${mit}.pdf" target="_blank" rel="noopener" data-frisch', '${mit}.csv" data-frisch',
+                      '/nacharbeit.csv`,\n          attrs: `data-frisch', '/katalog/export" download data-frisch'):
             assert knopf in js, knopf
         assert 'u.searchParams.set("stand", String(Date.now()))' in js
         assert 'for (const art of ["click", "auxclick", "contextmenu"]) document.addEventListener(art, frischeAdresse, true);' in js
