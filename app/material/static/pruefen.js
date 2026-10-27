@@ -16,7 +16,7 @@
   const TEXT = {
     unveraendert: ["ok", "Unverändert", "Die Datei ist genau das Protokoll, das strömis.de festgeschrieben hat."],
     veraendert: ["bad", "Verändert", "Die Datei weicht vom festgeschriebenen Protokoll ab."],
-    unbekannt: ["neutral", "Kein Protokoll erkannt", ""],
+    unbekannt: ["neutral", "Nicht erkannt", ""],
   };
 
   const WAHL = "PDF-Datei hierher ziehen oder <u>auswählen</u>";
@@ -45,9 +45,11 @@
       box.className = "mat-pruefergebnis " + klasse;
       // Der Hinweis des Servers sagt genauer, was los ist; der eigene Satz springt nur ein, wenn er fehlt.
       box.innerHTML = `<strong>${esc(titel)}</strong>`
-        + (r.protokoll_id ? `<p>${esc(r.art || "Protokoll")} <span class="mat-hash">${esc(r.protokoll_id)}</span></p>` : "")
+        + (r.protokoll_id ? `<p>${esc(r.art || "Protokoll")} <span class="mat-hash">${esc(r.protokoll_id)}</span>`
+          + (r.stand ? ` · Stand ${esc(r.stand)}` : "") + "</p>" : "")
         + ((r.hinweis || satz) ? `<p>${esc(r.hinweis || satz)}</p>` : "")
-        + (r.link ? `<p><a href="${esc(r.link)}">Zum Vorgang in strömis.de</a></p>` : "");
+        // Ein Lebenslauf (mit Stand) führt zu seinem Artikel, ein Protokoll zu seinem Vorgang.
+        + (r.link ? `<p><a href="${esc(r.link)}">${r.stand ? "Zum Artikel" : "Zum Vorgang"} in strömis.de</a></p>` : "");
       box.hidden = false;
     } catch (err) {
       // Auch im Ergebniskasten, nicht nur im Toast: Er bleibt stehen (etwa „zu viele Anfragen – bitte warten“).
