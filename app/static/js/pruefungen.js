@@ -569,7 +569,7 @@
       sel.value = jahr;
     }
     if (!state.liste.length) {
-      ziel.innerHTML = `<div class="leer"><strong>${q || jahr ? "Kein Lehrgang passt zur Suche." : "Noch keine Lehrgänge"}</strong>
+      ziel.innerHTML = `<div class="leerzustand"><strong>${q || jahr ? "Kein Lehrgang passt zur Suche." : "Noch keine Lehrgänge"}</strong>
         ${q || jahr ? "" : "Lege einen Lehrgang an oder importiere eine Excel-Teilnehmerliste."}</div>`;
       return;
     }
@@ -613,7 +613,7 @@
     const kataloge = await katalogeLaden(true);
     if (!ziel) return;
     if (!kataloge.length) {
-      ziel.innerHTML = `<div class="leer"><strong>Noch keine Kataloge</strong>${istAdmin()
+      ziel.innerHTML = `<div class="leerzustand"><strong>Noch keine Kataloge</strong>${istAdmin()
         ? "Lege einen an, um Prüfungsleistungen als Vorlage bereitzustellen." : "Die Verwaltung der Riegenkarten legt sie an."}</div>`;
       return;
     }
@@ -691,9 +691,9 @@
         ${admin ? `<div class="btn-row"><button class="btn secondary small" data-act="kat-edit" data-id="${k.id}">Bearbeiten</button>
         <button class="btn secondary small" data-act="kat-del" data-id="${k.id}">Löschen</button></div>` : ""}</div>
       ${k.beschreibung ? `<details class="beschreibung-kopf"><summary>Beschreibung</summary><div class="md">${esc(k.beschreibung).replace(/\n/g, "<br>")}</div></details>` : ""}
-      <div class="reiter-kopf"><h2>Prüfungsleistungen</h2>
+      <div class="abschnittskopf"><h2>Prüfungsleistungen</h2>
         ${admin ? '<div class="btn-row"><button class="btn small" data-act="kl-neu"><span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Prüfungsleistung<span class="k-anlegen"> anlegen</span></span></button></div>' : ""}</div>
-      ${!ls.length ? '<div class="leer"><strong>Noch keine Prüfungsleistungen</strong>Sie werden beim Anlegen eines Lehrgangs mit diesem Katalog als Vorlage in den Lehrgang kopiert.</div>'
+      ${!ls.length ? '<div class="leerzustand"><strong>Noch keine Prüfungsleistungen</strong>Sie werden beim Anlegen eines Lehrgangs mit diesem Katalog als Vorlage in den Lehrgang kopiert.</div>'
         : ls.map((l, i) => leistungKarteHtml(l, i, ls.length, admin, "kl")).join("")}`;
   }
 
@@ -873,11 +873,11 @@
       ${ausb ? `<p class="ausbilder-zeile">${ausb}</p>` : ""}
       ${lg.beschreibung ? `<details class="beschreibung-kopf"><summary>Beschreibung</summary><div class="md">${esc(lg.beschreibung).replace(/\n/g, "<br>")}</div></details>` : ""}
       ${fortschrittHtml(lg)}
-      <div class="c-tabs reiter" role="tablist">
-        <button type="button" role="tab" data-reiter="teilnehmer">Teilnehmende <span class="z">(${lg.tn_anzahl})</span></button>
-        <button type="button" role="tab" data-reiter="leistungen">Leistungen <span class="z">(${lg.leistungen_anzahl})</span></button>
+      <div class="c-tabs reiter reiter-linie" role="tablist">
+        <button type="button" role="tab" data-reiter="teilnehmer">Teilnehmende<span class="reiter-zahl">${lg.tn_anzahl}</span></button>
+        <button type="button" role="tab" data-reiter="leistungen">Leistungen<span class="reiter-zahl">${lg.leistungen_anzahl}</span></button>
         <button type="button" role="tab" data-reiter="bewertung">Bewertung</button>
-        <button type="button" role="tab" data-reiter="maengel">Mängel${lg.offene_maengel ? ` <span class="badge rot">${lg.offene_maengel}</span>` : ""}</button>
+        <button type="button" role="tab" data-reiter="maengel">Mängel${lg.offene_maengel ? `<span class="reiter-zahl offen" title="offene Mängel">${lg.offene_maengel}</span>` : ""}</button>
       </div>
       <div class="su-banner hidden" id="su-banner"></div>
       <div id="reiter-inhalt"></div>`;
@@ -909,13 +909,13 @@
   function teilnehmerHtml(lg) {
     const vor = lg.voraussetzungen || [], tns = lg.teilnehmer || [];
     const leitung = darfLeiten();
-    const kopf = `<div class="reiter-kopf"><h2>Teilnehmende${eingefrorenInfo(tns)}</h2>
+    const kopf = `<div class="abschnittskopf"><h2>Teilnehmende${eingefrorenInfo(tns)}</h2>
       ${leitung ? `<div class="btn-row"><button class="btn secondary small" data-act="vor-verwalten">Voraussetzungen verwalten</button>
         <button class="btn small" data-act="tn-neu"><span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Teilnehmende<span class="k-anlegen"> anlegen</span></span></button></div>` : ""}</div>`;
     if (!tns.length) {
-      return kopf + `<div class="leer"><strong>Noch keine Teilnehmenden</strong>${leitung ? "Lege sie an oder importiere die Excel-Teilnehmerliste – daraus kommen auch die Voraussetzungen." : "Die Lehrgangsleitung legt sie an oder importiert die Excel-Teilnehmerliste."}</div>`;
+      return kopf + `<div class="leerzustand"><strong>Noch keine Teilnehmenden</strong>${leitung ? "Lege sie an oder importiere die Excel-Teilnehmerliste – daraus kommen auch die Voraussetzungen." : "Die Lehrgangsleitung legt sie an oder importiert die Excel-Teilnehmerliste."}</div>`;
     }
-    const hinweis = vor.length ? "" : `<p class="help">Noch keine Voraussetzungen angelegt${leitung ? " – über „Voraussetzungen verwalten“ oder den Import." : "."}</p>`;
+    const hinweis = vor.length ? "" : `<p class="leerzustand">Noch keine Voraussetzungen angelegt${leitung ? " – über „Voraussetzungen verwalten“ oder den Import." : "."}</p>`;
     // Der Name ist für die Leitung ein Knopf (Bearbeiten), für alle anderen nur Text.
     const nameHtml = (tn) => (leitung
       ? `<button type="button" class="linkbtn tn-name" data-act="tn-edit" data-tid="${tn.id}" title="Bearbeiten">${esc(tnName(tn))}</button>`
@@ -986,7 +986,7 @@
       <p class="help">${esc(tn ? tnName(tn) : "")} · ${esc(v ? v.bezeichnung : "")}</p>
       ${d.verlauf.length ? `<ul class="verlauf-liste">${d.verlauf.map((e) => `<li><span class="${e.erfuellt ? "ja" : "nein"}">${e.erfuellt ? "✓ erfüllt" : "✗ nicht erfüllt"}</span>
         · ${esc(e.user_name)} · ${esc(fmtDate(e.zeit, true))} <span class="quelle">${e.quelle === "import" ? "(importiert)" : "(manuell)"}</span></li>`).join("")}</ul>`
-        : '<p class="muted">Noch keine Einträge.</p>'}
+        : '<p class="leerzustand">Noch keine Einträge.</p>'}
       <div class="dlg-actions"><button class="btn secondary" data-close type="button">Schließen</button></div>`);
   }
 
@@ -1134,7 +1134,7 @@
           <input type="text" value="${esc(v.bezeichnung)}" data-bez aria-label="Bezeichnung">
           ${sortierKnoepfe(i, vor.length, "data-hoch", "data-runter")}
           ${S.entfernenKnopf("data-del", `Voraussetzung „${v.bezeichnung}“ löschen`)}</li>`).join("")}</ul>`
-          : '<p class="muted">Noch keine Voraussetzungen.</p>'}</div>
+          : '<p class="leerzustand">Noch keine Voraussetzungen.</p>'}</div>
         <div class="vor-neu"><input type="text" id="vor-neu-text" placeholder="Neue Voraussetzung, z. B. DRSA Silber (nicht älter als 2 Jahre)" aria-label="Neue Voraussetzung">
           <button type="button" class="btn" id="vor-neu-go">Hinzufügen</button></div>
         <div class="dlg-actions"><button class="btn secondary" data-close type="button">Schließen</button></div>`,
@@ -1222,9 +1222,9 @@
   function leistungenHtml(lg) {
     const ls = lg.leistungen || [];
     const leitung = darfLeiten();
-    const kopf = `<div class="reiter-kopf"><h2>Prüfungsleistungen</h2>
+    const kopf = `<div class="abschnittskopf"><h2>Prüfungsleistungen</h2>
       ${leitung ? '<div class="btn-row"><button class="btn small" data-act="pl-neu"><span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Prüfungsleistung<span class="k-anlegen"> anlegen</span></span></button></div>' : ""}</div>`;
-    if (!ls.length) return kopf + '<div class="leer"><strong>Noch keine Prüfungsleistungen</strong>Alle Teilnehmenden bekommen für jede Leistung ein Bewertungsfeld in der Matrix.</div>';
+    if (!ls.length) return kopf + '<div class="leerzustand"><strong>Noch keine Prüfungsleistungen</strong>Alle Teilnehmenden bekommen für jede Leistung ein Bewertungsfeld in der Matrix.</div>';
     return kopf + ls.map((l, i) => leistungKarteHtml(l, i, ls.length, leitung, "pl")).join("");
   }
 
@@ -1424,7 +1424,7 @@
         <input type="text" value="${esc(bez)}" data-krit-entwurf aria-label="Kriterium">
         ${sortierKnoepfe(i, liste.length, "data-krit-hoch", "data-krit-runter")}
         ${S.entfernenKnopf("data-krit-del", "Kriterium entfernen")}</li>`).join("")}</ul>`
-        : '<p class="muted">Noch keine Kriterien.</p>'}
+        : '<p class="leerzustand">Noch keine Kriterien.</p>'}
       <div class="vor-neu"><input type="text" id="krit-neu-text" placeholder="Neues Kriterium, z. B. Wurfsack sicher gegriffen" aria-label="Neues Kriterium">
         <button type="button" class="btn secondary small" id="krit-neu-go"><span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Kriterium<span class="k-anlegen"> anlegen</span></span></button></div>
     </div>`;
@@ -1467,7 +1467,7 @@
         <input type="text" value="${esc(k.bezeichnung)}" data-krit-bez aria-label="Kriterium">
         ${sortierKnoepfe(i, ks.length, "data-krit-hoch", "data-krit-runter")}
         ${S.entfernenKnopf("data-krit-del", `Kriterium „${k.bezeichnung}“ löschen`)}</li>`).join("")}</ul>`
-        : '<p class="muted">Noch keine Kriterien.</p>'}
+        : '<p class="leerzustand">Noch keine Kriterien.</p>'}
       <div class="vor-neu"><input type="text" id="krit-neu-text" placeholder="Neues Kriterium, z. B. Wurfsack sicher gegriffen" aria-label="Neues Kriterium">
         <button type="button" class="btn secondary small" id="krit-neu-go"><span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Kriterium<span class="k-anlegen"> anlegen</span></span></button></div>
     </div>`;
@@ -1644,9 +1644,9 @@
   function bewertungHtml(lg) {
     const tns = lg.teilnehmer || [], ls = lg.leistungen || [];
     const a = bewAnsichtLesen();
-    const kopf = `<div class="reiter-kopf"><h2>Bewertung${eingefrorenInfo(tns)}</h2></div>`;
+    const kopf = `<div class="abschnittskopf"><h2>Bewertung${eingefrorenInfo(tns)}</h2></div>`;
     if (!tns.length || !ls.length) {
-      return kopf + `<div class="leer"><strong>${!tns.length ? "Noch keine Teilnehmenden" : "Noch keine Prüfungsleistungen"}</strong>
+      return kopf + `<div class="leerzustand"><strong>${!tns.length ? "Noch keine Teilnehmenden" : "Noch keine Prüfungsleistungen"}</strong>
         ${!tns.length ? "Teilnehmende anlegen oder importieren – dann erscheint hier die Matrix." : "Im Reiter „Leistungen“ die Prüfungsleistungen anlegen."}</div>`;
     }
     if (state.bewLeistung == null || !ls.some((l) => l.id === state.bewLeistung)) state.bewLeistung = ls[0].id;
@@ -2160,7 +2160,7 @@
   /* --- Reiter Mängel / Feedback ------------------------------------------------------------ */
   function maengelHtml(lg) {
     const tns = lg.teilnehmer || [], ls = lg.leistungen || [];
-    return `<div class="reiter-kopf"><h2>Mängel / Feedback</h2></div>
+    return `<div class="abschnittskopf"><h2>Mängel / Feedback</h2></div>
       <div class="maengel-filter">
         <div><label for="mf-tn">Teilnehmende</label><select id="mf-tn"><option value="">Alle</option>${tns.map((t) => `<option value="${t.id}" ${String(t.id) === String(state.mf.teilnehmer) ? "selected" : ""}>${esc(tnName(t))}</option>`).join("")}</select></div>
         <div><label for="mf-l">Prüfungsleistung</label><select id="mf-l"><option value="">Alle</option>${ls.map((l) => `<option value="${l.id}" ${String(l.id) === String(state.mf.leistung) ? "selected" : ""}>${esc(l.bezeichnung)}</option>`).join("")}</select></div>
@@ -2204,7 +2204,7 @@
   }
 
   function maengelGruppenHtml(maengel, opts = {}) {
-    if (!maengel.length) return `<div class="leer"><strong>Keine Mängel${opts.nurOffen ? " offen" : ""}</strong>${opts.nurOffen ? "Alles, was mangelhaft war, wurde nachgeprüft – oder es gab nichts zu beanstanden." : "Zu dieser Auswahl gibt es keine mangelhaften Bewertungen."}</div>`;
+    if (!maengel.length) return `<div class="leerzustand"><strong>Keine Mängel${opts.nurOffen ? " offen" : ""}</strong>${opts.nurOffen ? "Alles, was mangelhaft war, wurde nachgeprüft – oder es gab nichts zu beanstanden." : "Zu dieser Auswahl gibt es keine mangelhaften Bewertungen."}</div>`;
     const gruppen = [];
     for (const m of maengel) {
       let g = gruppen.find((x) => x.tn.id === m.teilnehmer.id);
@@ -2247,7 +2247,7 @@
         ${kriterienErgebnisHtml(v.leistung_id, v.kriterien)}
         ${medienGridHtml(v.medien)}
         <div class="abnahme">abgenommen von ${esc(v.geprueft_von_name)} am ${esc(fmtDate(v.geprueft_am, true))}${v.bearbeitet_am ? ` · bearbeitet von ${esc(v.bearbeitet_von_name)} am ${esc(fmtDate(v.bearbeitet_am, true))}` : ""}</div>
-      </div>`).join("") : '<p class="muted">Noch keine Bewertungen.</p>'}`;
+      </div>`).join("") : '<p class="leerzustand">Noch keine Bewertungen.</p>'}`;
   }
 
   /* Alle Bewertungen einer Person – auch die bestandenen mit ihren Kommentaren, für das Gespräch. */

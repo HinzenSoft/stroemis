@@ -24,13 +24,13 @@
     try { d = await S.api(`/api/material/globalsuche/protokoll?seite=${seite}`); }
     catch (e) { ziel.innerHTML = `<p class="notice">${S.esc(e.message)}</p>`; return; }
     geladen = true;
-    if (!d.gesamt) { ziel.innerHTML = '<p class="muted">Keine globalen Suchen in den letzten zwölf Monaten.</p>'; return; }
+    if (!d.gesamt) { ziel.innerHTML = '<p class="leerzustand">Keine globalen Suchen in den letzten zwölf Monaten.</p>'; return; }
     const seiten = Math.max(1, Math.ceil(d.gesamt / d.pro_seite));
     ziel.innerHTML = `<table class="list">
         <colgroup><col style="width:15%"><col style="width:17%"><col style="width:15%"><col style="width:21%"><col style="width:8%"><col style="width:24%"></colgroup>
         <thead><tr><th>Zeit</th><th>Name</th><th>Art</th><th>Anfrage</th><th>Treffer</th><th>Gliederungen</th></tr></thead>
         <tbody>${d.eintraege.map(zeile).join("")}</tbody></table>
-      <div class="btn-row" style="margin-top:10px">
+      <div class="btn-row abgesetzt">
         <button class="btn secondary small" type="button" data-seite="${d.seite - 1}"${d.seite <= 1 ? " disabled" : ""}>Neuere</button>
         <span class="small muted">Seite ${d.seite} von ${seiten} · ${d.gesamt} ${d.gesamt === 1 ? "Eintrag" : "Einträge"}</span>
         <button class="btn secondary small" type="button" data-seite="${d.seite + 1}"${d.seite >= seiten ? " disabled" : ""}>Ältere</button>

@@ -171,7 +171,7 @@
     try { d = await api("/api/albums"); } catch (e) { return toast("Die Alben ließen sich nicht laden: " + e.message, true); }
     state.album = null;
     if (!d.albums.length) {
-      return openPanel("Alben", `<div class="empty"><strong>Noch keine Alben</strong>Lege ein Album an und lade Bilder hoch – Bilder mit Geotag erscheinen sofort auf der Karte.</div>`);
+      return openPanel("Alben", `<div class="leerzustand"><strong>Noch keine Alben</strong>Lege ein Album an und lade Bilder hoch – Bilder mit Geotag erscheinen sofort auf der Karte.</div>`);
     }
     openPanel("Alben", `<ul class="album-list">${d.albums.map((a) => `
       <li data-id="${a.id}">
@@ -205,7 +205,7 @@
         ${a.photos.some((p) => p.lat != null) ? '<button class="btn secondary small" id="a-fit">Auf Karte zeigen</button>' : ""}
         ${a.can_edit ? '<button class="btn secondary small" id="a-edit">Bearbeiten</button>' : ""}
       </div>
-      ${a.description ? `<h3>Beschreibung</h3><div style="white-space:pre-wrap">${esc(a.description)}</div>` : ""}
+      ${a.description ? `<h3>Beschreibung</h3><div class="text-zeilen">${esc(a.description)}</div>` : ""}
       <h3>Ansprechpartner</h3>
       ${contact.length ? `<dl class="contact">${contact.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join("")}</dl>`
                        : `<div class="muted small">Kein Ansprechpartner eingetragen.${a.can_edit ? " Über „Bearbeiten“ nachtragen." : ""}</div>`}
@@ -219,9 +219,9 @@
           ${p.lat == null ? '<span class="badge nogeo" title="Keine Position">ohne Ort</span>' : ""}
           ${p.title ? `<span class="cap">${esc(p.title)}</span>` : ""}
         </button>`).join("")}</div>`
-        : `<div class="empty"><strong>Noch keine Bilder</strong>${a.can_edit ? "Lade Bilder hoch – Geotags werden automatisch ausgelesen." : ""}</div>`}
-      <div class="meta" style="margin-top:16px">Angelegt von ${esc(a.owner_name || "")}${a.owner_gliederung ? " (" + esc(a.owner_gliederung) + ")" : ""}, zuletzt geändert ${fmtDate(a.updated_at, true)}</div>
-      ${a.can_edit ? '<div class="btn-row" style="margin-top:14px"><button class="btn secondary small" id="a-delete">Album löschen</button></div>' : ""}
+        : `<div class="leerzustand"><strong>Noch keine Bilder</strong>${a.can_edit ? "Lade Bilder hoch – Geotags werden automatisch ausgelesen." : ""}</div>`}
+      <div class="meta abgesetzt">Angelegt von ${esc(a.owner_name || "")}${a.owner_gliederung ? " (" + esc(a.owner_gliederung) + ")" : ""}, zuletzt geändert ${fmtDate(a.updated_at, true)}</div>
+      ${a.can_edit ? '<div class="btn-row abgesetzt"><button class="btn secondary small" id="a-delete">Album löschen</button></div>' : ""}
     `);
     panelBody.querySelectorAll(".photo-grid button").forEach((b) => b.addEventListener("click", () => openLightbox(+b.dataset.i)));
     const hi = panelBody.querySelector(".photo-grid .hi");
@@ -253,7 +253,7 @@
       </select>
       <label for="al-desc">Allgemeine Infos</label>
       <textarea id="al-desc" placeholder="Zufahrt, Parken, Besonderheiten, Genehmigungen, Gefahren …">${esc(a.description)}</textarea>
-      <h3 style="margin-top:18px">Ansprechpartner für das Objekt</h3>
+      <h3 class="abgesetzt">Ansprechpartner für das Objekt</h3>
       <div class="field-row">
         <div><label for="al-cname">Name</label><input type="text" id="al-cname" value="${esc(a.contact_name)}"></div>
         <div><label for="al-corg">Gliederung / Organisation</label><input type="text" id="al-corg" value="${esc(a.contact_org)}"></div>
@@ -262,7 +262,7 @@
       </div>
       <label for="al-cnotes">Hinweise zur Kontaktaufnahme</label>
       <textarea id="al-cnotes" style="min-height:60px" placeholder="z. B. Übungen bitte 2 Wochen vorher anmelden">${esc(a.contact_notes)}</textarea>
-      ${isNew ? '<label class="inline" style="margin-top:14px"><input type="checkbox" id="al-upload" checked> Danach direkt Bilder hochladen</label>' : ""}
+      ${isNew ? '<label class="inline abgesetzt"><input type="checkbox" id="al-upload" checked> Danach direkt Bilder hochladen</label>' : ""}
       <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button><button class="btn" id="al-save" type="button">${isNew ? "Album anlegen" : "Speichern"}</button></div>`,
       (dlg, body) => {
         body.querySelector("#al-save").onclick = async (ev) => {
@@ -644,7 +644,7 @@
       <div class="meta">Bild ${state.lbIndex + 1} von ${a.photos.length} · ${esc(a.title)}</div>
       ${p.note ? `<div class="note-box">${esc(p.note)}</div>` : ""}
       <dl class="kv">${kv.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join("")}</dl>
-      ${p.details ? `<h3 class="small muted">Weitere Infos</h3><div style="white-space:pre-wrap;font-size:.92rem">${esc(p.details)}</div>` : ""}
+      ${p.details ? `<h3 class="small muted">Weitere Infos</h3><div class="text-zeilen lb-details">${esc(p.details)}</div>` : ""}
       <div class="lb-aktionen">
         <div class="btn-row">
           ${canEdit ? '<button class="btn secondary small" id="lb-edit">Bearbeiten</button>' : ""}

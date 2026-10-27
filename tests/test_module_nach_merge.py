@@ -218,7 +218,7 @@ def test_stylesheet_regeln():
     for regel in ("dialog select, dialog .btn { min-height: 44px; }",
                   ".login-form input, .login-form .btn { min-height: 44px; }",
                   ".login-links a { display: inline-flex; align-items: center; min-height: 44px; }",
-                  ".c-actions .lnk { min-height: 44px;", ".th-sort { right: 0; width: 44px; height: 44px;",
+                  ".c-actions .lnk { padding-left: 6px; padding-right: 6px; }", ".th-sort { right: 0; width: 44px; height: 44px;",
                   ".code-copy { min-height: 44px;", ".panel .btn { min-height: 44px; }", ".lb-nav { min-width: 44px; }"):
         assert regel in coarse, regel
     # Touch-Regeln nur unter pointer: coarse – außerhalb des Blocks keine 44-px-Mindesthöhen.
@@ -228,7 +228,7 @@ def test_stylesheet_regeln():
     assert ".vk input[type=checkbox] { width: 44px; height: 44px; }" in pcss
     assert ".vk-stempel { min-height: 44px; display: inline-flex; align-items: center; }" in pcss
     assert ".pruef[data-ansicht=liste], .pruef[data-ansicht=kataloge] { max-width: 1280px; }" in pcss
-    assert ".pruef p.help { max-width: 100ch; }" in pcss
+    assert ".pruef :is(.help, .notice) { max-width: 100ch; }" in pcss   # seit UI/UX D12 auch div.help und .notice
     assert "ghost" not in pcss
     admin = lies("app/templates/admin.html")
     assert '<col style="width:11%"><col style="width:12%"><col style="width:12%">' in admin

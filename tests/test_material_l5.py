@@ -388,7 +388,8 @@ def test_geraete_nachbesserung():
     # Tippflächen: echte Flächen; die Sortierköpfe stehen nicht mehr in der ::after-Liste.
     block = css[css.index("/* Nachbesserung nach der Geräte-Prüfung vom 21.10.2026"):]
     # (Sortierköpfe, Klappknopf und Brotkrumen seit der zweiten Nachbesserung anders: test_geraete_nachbesserung_zwei)
-    for regel in (":where(#mat-inhalt, #dlg) .lnk { min-height: 44px; }", "#kat-q { min-height: 44px; }",
+    # .lnk seit UI/UX D9 app-weit (44 px Trefferfläche ohne höhere Zeile, test_module_uiux_u1b).
+    for regel in ("#kat-q { min-height: 44px; }",
                   "background-clip: padding-box;"):
         assert regel in block, regel
     assert ".mat-sort)::after" not in css and ".mat-sort, .mat-summe)::after" not in css

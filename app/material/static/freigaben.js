@@ -144,14 +144,14 @@
   }
 
   function tabelleHtml(liste, art, leerText) {
-    if (!liste.length) return `<p class="mat-leer">${esc(leerText)}</p>`;
+    if (!liste.length) return `<p class="leerzustand">${esc(leerText)}</p>`;
     return `<table class="list mf-tabelle"><thead><tr><th>Person</th><th>Recht</th><th>bis</th><th>Zustand</th>
       ${art === "geerbt" ? "" : "<th>Notiz</th>"}<th>Vergeben</th><th></th></tr></thead>
       <tbody>${liste.map((f) => zeileHtml(f, art)).join("")}</tbody></table>`;
   }
 
   function verlaufHtml(liste) {
-    if (!liste.length) return '<p class="mat-leer">Noch nichts vergeben oder geändert.</p>';
+    if (!liste.length) return '<p class="leerzustand">Noch nichts vergeben oder geändert.</p>';
     const was = (e) => {
       const recht = `„${RECHT[e.recht] || e.recht || "?"}“`;
       if (e.aktion === "freigabe_erteilt") return `${recht} an ${esc(e.konto)} erteilt – ${bisText(e.bis)}`;

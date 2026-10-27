@@ -410,8 +410,10 @@ def test_oberflaeche_statisch():
     touch = css[css.index("/* --- Liste nach dem Merge, Teil A"):]
     assert ".mat-psa-doks .mat-doks > li > a, .mat-psa-titel h2 > a, .mat-psa-knoepfe > a" in touch
     assert "display: inline-flex; align-items: center; min-height: 44px; }" in touch
-    assert ":is(.muted, .help) { color: var(--anthrazit); }" in touch
-    assert ":is(a:not(.btn), .lnk) { color: var(--rot-auf-flaeche); }" in touch
+    # Kontrast auf Rot-hell seit UI/UX A5 als app-weite Regel in app.css („Text auf hellen Flächen“, test_module_uiux_u1b).
+    app_css = lies("app/static/css/app.css")
+    assert ":is(.muted, .help, .sub, small) { color: var(--anthrazit); }" in app_css
+    assert ":is(a:not(.btn), .lnk) { color: var(--rot-auf-flaeche); }" in app_css
     assert "rgba(0, 0, 0, .16)" not in css and "rgba(0, 0, 0, .18)" not in css and "font-size: .85rem" not in css
     print("Oberfläche (statisch) bestanden.")
 

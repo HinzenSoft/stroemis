@@ -9773,3 +9773,62 @@ Grundlage: `planung/material-phase4/uiux_liste.md` (vier UI/UX-Prüfungen vor de
 - Grenzen: Ein Overlay, das unmittelbar vor einem Seitenwechsel schließt (Speichern, dann neue Seite), lässt seinen
   Eintrag stehen; kommt man ohne bfcache zurück, braucht es dort einmal Zurück mehr. Nach einem Download aus einem Dialog
   (Chromium) wird ein solcher Eintrag beim nächsten Zurück übersprungen.
+
+### Teil U1b – Aussehen (app.css, material.css, pruefungen.css, Klassen-Markup)
+
+- **A5 Kontrast:** Text auf `--rot-hell`/`--grau-hell` und den hellen Hinweisflächen app-weit nach einer Regel (app.css,
+  „Text auf hellen Flächen“, vorher nur in der Materialablage): Links und Textknöpfe im dunklen Rot (`--rot-auf-flaeche`,
+  6,2–6,5 : 1), Nebentext in Anthrazit – Hinweiskästen, Callouts (Lese- und Editoransicht), Tabellenzeile beim Überfahren,
+  Riegenkarten-Matrix „mangelhaft“ (Text 6,21, Nebenzeile 6,25 statt 4,22/4,48), offene Teilnehmende, die Flächen der
+  Materialablage. Einzelstellen auf `--rot-auf-flaeche`: Avatare (Strömipedia Autorzeile und Autor-Tafel, Profilbild,
+  Riegenkarten-Kreise), „hier gesetzt“ (Leitstelle), Versionsvergleich „gelöscht“, Editorleiste (aktiv und Überfahren),
+  Kopfleiste „Mehr“ beim Überfahren, `btn danger` beim Überfahren, Rundknopf „an“. Menüeinträge: Rahmen des
+  Tastaturfokus sichtbar (vorher `outline: none` in der Materialablage), Titel bei Fokus/Überfahren dunkelrot (6,47 : 1).
+  Merklisten-Stern der Strömipedia mit anthrazitfarbener Kontur (vorher Gelb-dunkel auf Hellgrau 1,45 : 1).
+- **A6** Dialoge am Telefon: `overflow-wrap: break-word` statt `anywhere` – Tabellenköpfe („neu“, „unverändert“) behalten
+  ihre Mindestbreite; Namen im Zielbaum „Verschieben“ trennen an der Silbe (`hyphens: auto`, Zeile in voller Breite).
+- **A7** `.k-text { position: relative }`: „Lehrgang anlegen“ am iPhone SE ohne Überlauf (gemessen 0 statt 87 px).
+- **A8 Tippflächen am Finger:** Felder und Knöpfe im Inhalt jeder Seite mindestens 44 px (`:where(main)`, eigene Regeln
+  gehen vor; Leitstelle-Einstellungen 44 statt 37/36 px), „nur offene Mängel“ 44 px, Ebenen der Karte (Zeilen 44 px, der
+  Ebenenknopf bleibt unter der offenen Liste an seiner Stelle), „alle Werte“ der Nacharbeit 44 px, Lehrgangs- und
+  Katalogtitel der Riegenkarten mit unsichtbarer 46-px-Fläche (Zeilen nicht höher), Strömipedia-Übersicht, „Zuletzt …“
+  und Merkliste am Finger in Zeilen von 44 px wie der Seitenbaum (ganze Zeile ist der Link, bei „Zuletzt …“ samt Datum –
+  in diesen dichten Listen ginge eine Fläche nur auf Kosten der Nachbarzeile). Listenlinks der Materialablage hatten die Fläche schon (gemessen 44–46 px).
+  Strömipedia-Editor „Verwerfen“/„Anlegen“, Entwurfsbalken und „Angaben zur Seite“ (Rollenläufe N1): 44 px durch die
+  allgemeine Regel (gemessen bei 344, 390, 844×390, 1024×768).
+- **A9 große Systemschrift:** Seitenreiter brechen als Zeile um (ein Reiter selbst nie), Riegenkarten-Reiter ab 375 px in
+  einer Zeile, lange Überschriften (`h1`) brechen notfalls im Wort. Probe 130/175/200 % bei 344–430 px auf zwölf Seiten:
+  kein waagerechter Bildlauf, Kopfleiste faltet in „Mehr“.
+- **A14** Auswahlpunkte und Kästchen in Anthrazit (`accent-color`), die Häkchen der Riegenkarten-Voraussetzungen bleiben grün.
+- **A15 Touch:** 44-px-Regeln für Kopfleiste „Mehr“, „alle Treffer“ der Nummernsuche, Bild-/Dateiwahl und Namen in den
+  Teilnehmenden-Karten nur noch unter `pointer: coarse`; bewusst groß bleiben Prüf- und Bewertungsdialog, Bild- und
+  Griffmaße, Schubladen- und Leistenknöpfe schmaler Fenster (Liste im Bericht und in tests/test_module_uiux_u1b.py).
+- **D4 Menü-Aussehen:** ein Baustein `details.menue` / `.menue-liste` / `.menue-schwebend` (app.css) – Einträge rot und fett,
+  darunter bei Bedarf ein grauer Satz, „Löschen“ wie jeder Eintrag; `mat-menue`, `zeilenmenue` (Leitstelle, Riegenkarten)
+  und die schwebenden Menüs der Strömipedia sehen gleich aus (Logik: Teil U1a).
+- **D5 Abschnittskopf:** `.abschnittskopf` statt `.mat-kastenkopf` und `.reiter-kopf` (Materialablage 7, Riegenkarten 5
+  Stellen); Profil: „Unterschreiben“ (bzw. „Neu unterschreiben“/„Entfernen“) neben der Überschrift „Unterschrift“.
+- **D6 Leerzustand:** `.leerzustand` statt `.empty`, `.pruef .leer`, `.mat-leer` und freier `p.help`/`.muted`-Sätze
+  (linksbündig, fette Kernaussage bei Bedarf); Strömipedia und Lesemodus „Seite nicht gefunden“ mit `h1`.
+- **D7 Statusmarken:** ein Farbsystem (gefüllt grün/rot mit weißer Schrift, gelb, hellblau mit Kante, hellgrau mit Kante)
+  für Materialablage, Riegenkarten und Strömipedia – `{status:…}` der Strömipedia jetzt gefüllt (vorher Rot auf Hellrot
+  4,2 : 1); umbrechende Marken einheitlich mit `--radius-gross` (vorher 2 px bzw. 9 px).
+- **D8 Reiter:** Seitenreiter app-weit als Linie (Riegenkarten-Lehrgang, Reiter in den Dialogen der Materialablage);
+  Filter-Umschalter bleiben Kästen; Zahl am Reiter als kleine Marke („Teilnehmende 4“, „Mängel 2“ rot), ohne Umbruch.
+- **D9 Textknopf `.lnk`:** ein Stil (`--fs-klein`), am Finger 44 px Trefferfläche ohne höhere Zeile (Innenabstand mit
+  negativem Außenabstand; vorher 44 px Mindesthöhe – „Entwurf verwerfen“ machte eine 63 px hohe Zeile).
+- **D10 Namen als Einheit:** `.name-einheit` (= `.mat-name`) app-weit – Strömipedia „Angaben zur Seite“, E-Mail der
+  Leitstellen-Liste (bricht nur noch am „@“); Riegenkarten-Namen ohne `overflow-wrap: anywhere`.
+- **D11 Tokens:** neu `--abdunkeln-leicht/--abdunkeln/--abdunkeln-stark`, `--fokus-hof`, `--markierung`, `--ok-hell`;
+  20 tokengleiche Schriftgrößen, 4 Farben, 3 Radien ersetzt, Schriftgrößen .7–.93rem auf das nächste `--fs-*`, freie Radien,
+  Hex-Farben und Schatten auf Tokens; Warnkante der Editor-Zelle `--co-warning-ka`. Überschriftgrößen, DEMO-Streifen und die
+  Masken der rollenden Reiter bleiben (Fotos vorher/nachher je Modul im Bericht).
+- **D12 CSS-Hygiene:** 14 tote spätere Überschreibungen in app.css aufgelöst (5 bleiben: gemeinsame Regel + Abweichung);
+  wiederkehrende Inline-Abstände als Klassen (`.abgesetzt`, `.text-zeilen`, `.baum-knoepfe`); Hinweisbreite der
+  Riegenkarten auch für `div.help` und `.notice`.
+- **JavaScript (nur Markup):** Klassen in material.js, pruefungen.js, wiki.js, map.js, admin.js, admin_globalsuche.js,
+  public.js, freigaben.js, global.js; admin.js `mailUmbruch` (Einheit, Umbruch nur am „@“).
+- Strömipedia-relevant (Artikel „Materialablage“ und Hilfe): Statusmarken `{status:…}` gefüllt; Reiter der Riegenkarten
+  als Linie mit Zahl; „Unterschreiben“ im Profil neben der Überschrift.
+- Tests: `tests/test_module_uiux_u1b.py` (neu); angepasst: test_material_antrag, test_module_letzte_offene,
+  test_material_vor_merge_3, test_material_dg_archiv, test_material_l5, test_module_nach_merge, test_module_info_i.

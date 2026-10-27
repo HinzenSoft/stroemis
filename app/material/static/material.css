@@ -22,7 +22,7 @@
 .mat-suche input { flex: 1; min-width: 0; }
 @media (max-width: 640px) { .mat-suche { margin-left: 0; flex-basis: 100%; max-width: none; } }
 
-.mat-leer { color: var(--grau); padding: 14px 0; }
+/* Leerzustand: .leerzustand (app.css, UI/UX D6). */
 .mat-text { white-space: pre-wrap; }
 .mat-warn { color: var(--rot); font-weight: 600; }
 .mat-pfad { font-size: var(--fs-klein); color: var(--grau); margin-bottom: 6px; }
@@ -39,7 +39,8 @@
 .s-neu.mat-status { background: var(--co-info-fl); color: var(--wasser); box-shadow: inset 0 0 0 1px var(--wasser); }
 .s-lebensdauer.mat-status { background: var(--mat-lebensdauer); }
 .s-gesperrt.mat-status { background: var(--mat-gesperrt); }
-.s-ausgesondert.mat-status { background: var(--grau-hell); color: var(--grau); border: 1px solid var(--linie); }
+.s-ausgesondert.mat-status { background: var(--grau-hell); color: var(--grau); box-shadow: inset 0 0 0 1px var(--linie); }
+/* Dieselben Farbpaare wie .badge in app.css (ein Farbsystem für alle Module, UI/UX D7). */
 
 /* Groß und unübersehbar: gesperrt, ausgesondert, Lebensdauer erreicht – auch nach einem QR-Scan */
 .mat-banner { padding: 12px 16px; font-weight: 700; margin: 0 0 14px; color: var(--weiss); letter-spacing: .01em; }
@@ -275,7 +276,7 @@ table.list.mat-artikel th.mat-wahlspalte, table.list.mat-artikel td.mat-wahlspal
 .mat-produktfoto .mat-mini { margin-right: 0; }
 .mat-lupe-marke { position: absolute; right: -5px; bottom: -5px; width: 18px; height: 18px; display: flex; align-items: center;
   justify-content: center; border-radius: 50%; background: var(--weiss); color: var(--anthrazit); border: 1px solid var(--linie);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, .2); pointer-events: none; }
+  box-shadow: var(--schatten-karte); pointer-events: none; }
 .mat-lupe-marke svg { display: block; }
 .mat-gewaehlt > .mat-bildlink { flex: none; display: block; padding: 3px; margin-right: 6px; cursor: zoom-in; }
 .mat-knoepfe { margin-top: 18px; }
@@ -393,10 +394,10 @@ table.list.mat-artikel th.mat-wahlspalte, table.list.mat-artikel td.mat-wahlspal
   .mat-shell.mit-leiste { display: block; }
   .mat-shell.mit-leiste .mat-side-auf { display: inline-flex; margin-right: 4px; }
   .mat-side { position: fixed; left: 0; top: var(--topbar); bottom: 0; height: auto; width: min(320px, 88vw);
-    transform: translateX(-105%); transition: transform .2s; z-index: 1100; box-shadow: 2px 0 10px rgba(0, 0, 0, .25); }
+    transform: translateX(-105%); transition: transform .2s; z-index: 1100; box-shadow: var(--schatten-leiste); }
   .mat-side.open { transform: translateX(0); }
   .mat-side-zu { display: inline-block; }
-  body:has(.mat-side.open)::after { content: ""; position: fixed; inset: var(--topbar) 0 0 0; background: rgba(60, 60, 59, .35); z-index: 1090; }
+  body:has(.mat-side.open)::after { content: ""; position: fixed; inset: var(--topbar) 0 0 0; background: var(--abdunkeln-leicht); z-index: 1090; }
 }
 
 /* Prüfungen: Listen, Marken, Durchgänge */
@@ -546,7 +547,7 @@ html:has(.mat-mit-leiste) { scroll-padding-bottom: 210px; }
   .mat-pruefung .page-head { margin-bottom: 12px; }
 }
 @media (max-width: 560px) {
-  .mat-ergebnis button { font-size: .86rem; }
+  .mat-ergebnis button { font-size: var(--fs-mittel); }
   .mat-abschluss-zeile .btn { flex: 1 1 100%; margin-left: 0; }
   .mat-abschluss-zeile .mat-due { flex: 1 1 100%; justify-content: space-between; }
   .mat-abschluss { margin-left: -12px; margin-right: -12px; }
@@ -602,7 +603,7 @@ html:has(.mat-mit-leiste) { scroll-padding-bottom: 210px; }
 .mat-pruefergebnis { margin: 16px 0; padding: 12px 14px; border-radius: var(--radius-gross); border: 1px solid var(--linie); }
 .mat-pruefergebnis strong { font-size: 1.15rem; display: block; margin-bottom: 4px; }
 .mat-pruefergebnis p { margin: 4px 0; }
-.mat-pruefergebnis.ok { background: var(--co-success-fl, #e9f5ec); border-color: var(--ok); }
+.mat-pruefergebnis.ok { background: var(--co-success-fl); border-color: var(--ok); }
 .mat-pruefergebnis.ok strong { color: var(--ok); }
 .mat-pruefergebnis.bad { background: var(--rot-hell); border-color: var(--rot); }
 .mat-pruefergebnis.bad strong { color: var(--rot-dunkel); }
@@ -726,8 +727,8 @@ button.mat-ue-klapp:focus-visible { outline: 3px solid var(--gelb); outline-offs
    (WCAG AA) für normale Schrift. Hier ein Viertel zum Textgrau hin abgedunkelt: 4,86:1 und weiter grau wie die
    Artikelnummer, nicht so dunkel wie der Text daneben. Kennt ein Browser color-mix() nicht, erbt er das Textgrau. */
 .mat-rr-kasten .mat-zusatz { color: color-mix(in srgb, var(--grau) 75%, var(--anthrazit)); }
-/* Links auf dem hellroten Grund im dunklen Rot (das Rot käme fett auf 4,22:1 – Geräte-Matrix P4-L1). */
-.mat-rr-kasten a, .mat-rr-kasten .mat-warn { color: var(--rot-auf-flaeche); }
+/* Links auf dem hellroten Grund im dunklen Rot (das Rot käme fett auf 4,22:1 – Geräte-Matrix P4-L1; Links app.css A5). */
+.mat-rr-kasten .mat-warn { color: var(--rot-auf-flaeche); }
 .mat-rr-liste { list-style: none; margin: 0; padding: 0; }
 .mat-rr-liste li { padding: 6px 0; border-bottom: 1px solid var(--linie); display: flex; flex-wrap: wrap; align-items: baseline;
   gap: 4px 10px; }
@@ -735,23 +736,8 @@ button.mat-ue-klapp:focus-visible { outline: 3px solid var(--gelb); outline-offs
 .mat-rr-was { overflow-wrap: anywhere; }
 
 /* Lieferung 4 – export */
-/* Untermenü (details.mat-menue), etwa „Export“ im Ordnerkopf: Der Knopf sieht aus wie seine Nachbarn, die Liste
-   liegt darüber, rechtsbündig unter dem Knopf; material.js rückt sie beim Öffnen ins Bild, wenn sie über einen Rand
-   ragte. Einträge mit Titel und einem Satz Erklärung; groß genug für den Finger. */
-.mat-menue { position: relative; display: inline-block; }
-.mat-menue > summary { list-style: none; cursor: pointer; }
-.mat-menue > summary::-webkit-details-marker { display: none; }
-.mat-menue > summary::after { content: ""; display: inline-block; width: 6px; height: 6px; margin-left: 8px;
-  border: solid currentColor; border-width: 0 2px 2px 0; transform: translateY(-2px) rotate(45deg); }
-.mat-menue[open] > summary::after { transform: translateY(1px) rotate(-135deg); }
-.mat-menue-liste { position: absolute; right: 0; top: calc(100% + 6px); z-index: 60; width: max-content;
-  min-width: 240px; max-width: min(340px, calc(100vw - 32px)); padding: 6px 0; background: var(--weiss);
-  border: 1px solid var(--linie); border-radius: var(--radius); box-shadow: var(--schatten-menue); text-align: left; }
-.mat-menue-liste a { display: block; padding: 10px 14px; color: var(--anthrazit); text-decoration: none; white-space: normal; }
-.mat-menue-liste a + a { border-top: 1px solid var(--linie); }
-.mat-menue-liste a:hover, .mat-menue-liste a:focus-visible { background: var(--grau-hell); outline: none; }
-.mat-menue-liste strong { display: block; color: var(--rot); }
-.mat-menue-liste span { display: block; margin-top: 2px; font-size: var(--fs-klein); color: var(--grau); line-height: 1.35; }
+/* Untermenü (details.mat-menue), etwa „Export“ im Ordnerkopf: Aussehen seit UI/UX D4 im gemeinsamen Menübaustein
+   (app.css, details.menue). */
 
 /* Lieferung 4 – katalog */
 /* Katalogaustausch: Zahlen von Export und Import als kleine Tabelle (bleibt auch am Telefon eine Tabelle), darunter
@@ -810,8 +796,9 @@ button.mat-ue-klapp:focus-visible { outline: 3px solid var(--gelb); outline-offs
 .mv-produkt { overflow: hidden; overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical;
   -webkit-line-clamp: 2; line-clamp: 2; }
 .mv-zeile { font-size: var(--fs-klein); color: var(--grau); }
-.mat-vorschlaege mark { background: var(--gelb); color: inherit; padding: 0 1px; border-radius: 2px; }
-.mv-alle a { justify-content: center; min-height: 44px; font-weight: 700; color: var(--rot); }
+.mat-vorschlaege mark { background: var(--gelb); color: inherit; padding: 0 1px; border-radius: var(--radius); }
+.mv-alle a { justify-content: center; font-weight: 700; color: var(--rot); }
+@media (pointer: coarse) { .mv-alle a { min-height: 44px; } }   /* Tippfläche nur am Finger (UI/UX A15) */
 .mv-leer { padding: 12px; color: var(--grau); font-size: var(--fs-klein); }
 @media (max-width: 640px) { .mat-vorschlaege { left: 0; right: 0; width: auto; } }
 
@@ -1064,7 +1051,7 @@ html:has(.mat-pruefung.tippt) { scroll-padding-top: 8px; scroll-padding-bottom: 
    den Rollbalken und ließe statt seiner einen weißen Streifen stehen. Schließen (.md-lightbox-close in app.css: am
    Finger 44 px, mit der Maus 36 px wie im Wiki) und Pfeile (bei „Fotos groß zeigen“) halten Kerbe und Rundung frei. */
 dialog.mat-lightbox, html.tastatur dialog.mat-lightbox[open] { position: fixed; inset: 0; width: 100%; height: 100%; max-width: none;
-  max-height: none; margin: 0; padding: 24px; border: 0; border-radius: 0; box-shadow: none; background: rgba(60, 60, 59, .9);
+  max-height: none; margin: 0; padding: 24px; border: 0; border-radius: 0; box-shadow: none; background: var(--abdunkeln-stark);
   color: var(--weiss); cursor: zoom-out; overflow: hidden; overscroll-behavior: contain; touch-action: none; }
 dialog.mat-lightbox[open] { display: flex; align-items: center; justify-content: center; }
 dialog.mat-lightbox::backdrop { background: transparent; }
@@ -1094,7 +1081,7 @@ dialog.mat-lightbox::backdrop { background: transparent; }
    nicht (die Fläche oben ist gleich spezifisch und wird später geladen), deshalb eigens. Die andere Hälfte ist
    abgedunkelt wie bei jedem Dialog – sie ist inert, ein Tipp darauf schließt. */
 @media (horizontal-viewport-segments: 2), (vertical-viewport-segments: 2) {
-  dialog.mat-lightbox::backdrop { background: rgba(60, 60, 59, .55); }
+  dialog.mat-lightbox::backdrop { background: var(--abdunkeln); }
 }
 @media (horizontal-viewport-segments: 2) {
   dialog.mat-lightbox, html.tastatur dialog.mat-lightbox[open] { left: env(viewport-segment-left 1 0); right: auto;
@@ -1146,7 +1133,7 @@ table.list.mat-artikel tr:has(.mat-wahl-art:checked) { background: var(--co-info
   .mat-ue th.mat-ue-zahl { white-space: normal; }
   /* Marken dürfen hier umbrechen („Lebensdauer erreicht“): Mit dem kleineren Radius sieht eine einzeilige Marke weiter
      wie eine Pille aus, eine zweizeilige wie ein Kästchen. */
-  table.list.mat-tabelle :is(.mat-status, .mat-rr-marke, .mat-ergebnis-marke, .mat-empfohlen-marke) { white-space: normal; border-radius: 9px; }
+  table.list.mat-tabelle :is(.mat-status, .mat-rr-marke, .mat-ergebnis-marke, .mat-empfohlen-marke) { white-space: normal; border-radius: var(--radius-gross); line-height: 1.3; }
 }
 
 @container mat-seite (max-width: 600px) {
@@ -1169,7 +1156,7 @@ table.list.mat-artikel tr:has(.mat-wahl-art:checked) { background: var(--co-info
   table.list.mat-karten td.mat-k-marke { flex: 0 1 auto; max-width: 65%; margin-left: auto; text-align: right; }
   /* Die lange Marke „Aussonderung empfohlen“ bricht in der Karte um, statt über den Rand zu ragen (344 px, Browserprüfung
      vom 25.10.2026). */
-  table.list.mat-karten td.mat-k-marke .mat-empfohlen-marke { white-space: normal; max-width: 100%; border-radius: 9px; }
+  table.list.mat-karten td.mat-k-marke .mat-empfohlen-marke { white-space: normal; max-width: 100%; border-radius: var(--radius-gross); line-height: 1.3; }
   table.list.mat-karten td.mat-k-halb { flex: 0 0 calc(50% - 6px); }
   table.list.mat-karten td.mat-k-kurz { flex: 0 1 auto; }
   /* Unten: links das Häkchen mit „auswählen“, rechts „Prüfen“ – oder nur der Knopf. */
@@ -1220,7 +1207,10 @@ table.list.mat-artikel tr:has(.mat-wahl-art:checked) { background: var(--co-info
 
 /* Ordnerwahl (Dialog „verschieben nach …“): Ein langer Name bricht um, die Art-Marke daneben bleibt ganz. */
 .mat-wahl label .mat-art { flex: none; }
-.mat-wahl .mat-wahl-name { min-width: 0; overflow-wrap: anywhere; }
+/* Zielbaum („Ordner verschieben“): Ein Wort, das neben Auswahlpunkt und Art nicht passt, trennt an der Silbe statt
+   mitten im Wort („…rettungsgr/uppe“, UI/UX A6). */
+.mat-wahl label.inline { display: flex; }   /* so breit wie die Zeile – sonst schöbe das lange Wort die Art hinaus */
+.mat-wahl .mat-wahl-name { min-width: 0; overflow-wrap: break-word; -webkit-hyphens: auto; hyphens: auto; }
 
 /* Fingerbedienung: Knöpfe, Reiter, Kästchen und Links in Listen mindestens 44 px hoch – nur bei grobem Zeiger, am
    Rechner bleibt alles, wie es ist. Wo ein größerer Knopf die Zeile aufblähen würde (Inventar-Nr. und andere Textlinks
@@ -1281,7 +1271,8 @@ table.list.mat-artikel tr:has(.mat-wahl-art:checked) { background: var(--co-info
 .mat-bildwahl-bild.weg::after { content: ""; position: absolute; inset: 0; pointer-events: none;
   background: linear-gradient(to top right, transparent calc(50% - 1.5px), var(--rot) calc(50% - 1.5px), var(--rot) calc(50% + 1.5px), transparent calc(50% + 1.5px)); }
 .mat-bildwahl-steuer { flex: 1 1 165px; min-width: 0; }
-.mat-bildwahl-knopf, .mat-bildwahl-weg, .mat-dateiwahl-weg { min-height: 44px; justify-content: center; }
+.mat-bildwahl-knopf, .mat-bildwahl-weg, .mat-dateiwahl-weg { justify-content: center; }
+@media (pointer: coarse) { .mat-bildwahl-knopf, .mat-bildwahl-weg, .mat-dateiwahl-weg { min-height: 44px; } }   /* UI/UX A15 */
 .mat-bildwahl-knopf { margin: 0; }          /* ein <label> – ohne den Abstand der Feldbeschriftungen (app.css) */
 .mat-bildwahl-name { margin-top: 6px; font-size: var(--fs-klein); overflow-wrap: anywhere; }
 .mat-bildwahl-name:empty { display: none; }
@@ -1369,8 +1360,8 @@ table.list.mat-runde tr.mat-fremd td { color: var(--grau); }
    dem Merge, V9).
    Telefon quer (Höhe ≤ 500 px): Die Reiter kleben nicht – mit ihnen und der klebenden Knopfzeile blieben im Dialog
    „Freigaben“ nur rund 190 px Inhalt (V11). Sie stehen dann oben im Inhalt; die Knopfzeile unten bleibt. */
-.c-tabs.mat-reiter { position: sticky; top: -18px; z-index: 2; background: var(--weiss); margin: 10px 0 12px; padding: 6px 0;
-  box-shadow: 0 1px 0 var(--linie); }
+.c-tabs.mat-reiter { position: sticky; top: -18px; z-index: 2; background: var(--weiss); margin: 10px 0 12px; padding: 6px 0 0; }
+/* Die Linie zieht seit UI/UX D8 .reiter-linie (app.css) – unter ihr steht der gewählte Reiter rot unterstrichen. */
 @media (max-height: 500px) { .c-tabs.mat-reiter { position: static; } }
 .mat-reiter button { font-size: var(--fs-mittel); padding: 8px 10px; }
 @media (pointer: coarse) { .mat-reiter button { min-height: 44px; } }
@@ -1392,8 +1383,7 @@ table.list.mat-runde tr.mat-fremd td { color: var(--grau); }
   padding: 8px 10px; background: var(--grau-hell); font-size: var(--fs-klein); line-height: 1.45; }
 
 /* Phase 2 · Lieferung 3 – Bestandsimport und Prüfanleitung (material.js, bestandsimport, anleitungBauen, wikiWahl) */
-/* Untermenü „Export / Import“ im Ordnerkopf: ein Strich zwischen den Downloads und dem Import. */
-.mat-menue-trenner { border: 0; border-top: 2px solid var(--linie); margin: 0; }
+/* Untermenü „Export / Import“ im Ordnerkopf: ein Strich zwischen den Downloads und dem Import (.mat-menue-trenner, app.css). */
 /* Importseite: Ablagefläche, Stand des Probelaufs, Zuordnung der Spalten, Ergebnis je Reiter. Während ein neuer Probelauf
    läuft, steht der alte Bericht blass da. */
 .mat-import .mat-ablage { margin: 10px 0 6px; }
@@ -1478,7 +1468,8 @@ table.list.mat-na-zeilen tr:has(.mat-na-wahl:checked) { background: var(--co-inf
 @media (pointer: coarse) {
   .mat-anleitung > summary, .mat-wikiwahl button { min-height: 44px; box-sizing: border-box; }
   table.list.mat-spaltenwahl select { min-height: 44px; }
-  .mat-na-werte > summary { padding: 8px 0; }
+  /* „alle Werte“ der Nacharbeit: 44 px wie jedes summary des Moduls (vorher 35 px; UI/UX A8). */
+  .mat-na-werte > summary { display: flex; align-items: center; min-height: 44px; box-sizing: border-box; padding: 8px 0; }
 }
 @container mat-seite (max-width: 600px) {
   table.list.mat-spaltenwahl select { max-width: none; }
@@ -1629,7 +1620,6 @@ table.list.mat-na-zeilen tr:has(.mat-na-wahl:checked) { background: var(--co-inf
     border: solid transparent; border-width: 13.5px 9px; background-clip: padding-box; }
   #mat-inhalt table.list.mat-ue td.mat-ue-tag a { display: inline-block; min-height: 44px; margin-block: -12px;
     border: solid transparent; border-width: 12px 0; background-clip: padding-box; }
-  :where(#mat-inhalt, #dlg) .lnk { min-height: 44px; }
   /* Brotkrumen: eine umbrechende Reihe; jeder Link ist 44 px hoch, ein langer bricht in sich mit normalem
      Zeilenabstand um (vorher line-height 44 px – das sah bei Umbruch wie ein Absatz aus). */
   .mat-pfad { display: flex; flex-wrap: wrap; align-items: center; gap: 0 6px; }
@@ -1823,14 +1813,7 @@ table.list.mat-na-zeilen tr:has(.mat-na-wahl:checked) { background: var(--co-inf
    Mailservers), „Erledigt“; die Antwort bricht notfalls im Wort (Platzhalter „[Mailserver]“, Antwortcodes ohne
    Leerzeichen). Überschrift und Meldung nehmen den Fokus, wenn nichts mehr offen ist (tabindex -1). */
 .mat-mail-kasten { margin-top: 10px; }
-.mat-kastenkopf { display: flex; align-items: baseline; justify-content: space-between; gap: 8px 16px; flex-wrap: wrap; }
-.mat-kastenkopf h2 { flex: 1 1 auto; }
-.mat-kastenkopf .mat-menue, .mat-kastenkopf > .btn { align-self: center; }
-/* Ein Abschnitt mit genau einer Aktion (Artikelseite „Stammdaten“ → „Änderung beantragen“, Produktseite „Bestandteile“
-   → „Bestandteile bearbeiten“; Nutzer 27.10.2026): der Knopf rechts neben der Überschrift statt am Ende des Blocks – passt
-   er nicht daneben, steht er direkt darunter. Die Linie der Überschrift läuft dann unter dem Knopf durch. */
-.mat-kastenkopf:has(> .btn) { border-bottom: 1px solid var(--linie); margin-bottom: 8px; padding-bottom: 4px; }
-.mat-kastenkopf:has(> .btn) > h2 { border-bottom: 0; padding-bottom: 0; margin-bottom: 0; }
+/* Überschrift und Aktion in einer Zeile: Abschnittskopf (.abschnittskopf, app.css – UI/UX D5). */
 #mat-inhalt table.list.mat-mail td { vertical-align: top; }
 #mat-inhalt table.list.mat-mail td.mat-mail-an { width: 11em; }
 #mat-inhalt table.list.mat-mail td.mat-mail-fehler { width: 19rem; }
@@ -1929,13 +1912,7 @@ table.list.mat-na-zeilen tr:has(.mat-na-wahl:checked) { background: var(--co-inf
 #ad-ende-zeile[hidden], #ad-laenge-zeile[hidden] { display: none; }
 
 /* --- Liste nach dem Merge, Teil A (27.10.2026) ---------------------------------------------------------------------
-   Nebentext (grau) auf Rot-hell-Flächen in Anthrazit: --grau auf --rot-hell ergab 4,48 : 1 (Browserprüfung vor dem
-   Merge, Verbesserung 14; wie V13 in den Riegenkarten). */
-:is(.mat-mangelzeile, .mat-punkt.mangel, .mat-fs-warnung, .mat-pruefergebnis.bad, .mat-austausch-liste.fehler,
-    .mat-importhinweis.bad, .mat-mangel-warnung, .mat-fs-maengel) :is(.muted, .help) { color: var(--anthrazit); }
-/* Links dort im dunkleren Rot (--rot auf --rot-hell: 4,22 : 1, „Bericht ansehen“ im Hinweis zum Katalogimport). */
-:is(.mat-mangelzeile, .mat-punkt.mangel, .mat-fs-warnung, .mat-pruefergebnis.bad, .mat-austausch-liste.fehler,
-    .mat-importhinweis.bad, .mat-mangel-warnung, .mat-fs-maengel) :is(a:not(.btn), .lnk) { color: var(--rot-auf-flaeche); }
+   Nebentext und Links auf Rot-hell-Flächen: seit UI/UX A5 eine app-weite Regel (app.css, „Text auf hellen Flächen“). */
 /* Gleiche Fehler des Katalogimports in einer Zeile, die Fundstellen darunter (austauschListe). */
 .mat-austausch-liste ul ul { margin: 2px 0 4px; padding-left: 18px; }
 /* Meine PSA am Finger: Dokumente, Inventarnummer, „Zum Artikel“ und „im Profil ändern“ als Zeilen von 44 px (vorher
@@ -1973,7 +1950,7 @@ table.list.mat-na-zeilen tr:has(.mat-na-wahl:checked) { background: var(--co-inf
 /* --- Namen als Einheit (Nachtrag vom 27.10.2026; das „i“ zu einem Begriff steht seit 27.10.2026 in app.css, .info) --- */
 /* Namen und Anmeldungen (material.js, person): als Einheit – ganz in die nächste Zeile statt nach „demo-“ oder „@“; nur
    wenn ein Name allein länger ist als die Zeile, bricht er in sich. */
-.mat-name { display: inline-block; max-width: 100%; overflow-wrap: anywhere; }
+/* .mat-name seit UI/UX D10 in app.css (.name-einheit). */
 /* Abgeschlossene Prüfdurchgänge am Finger: der Titel als Zeile von 44 px (Karte und Tabelle). */
 @media (pointer: coarse) {
   #mat-inhalt .mat-dg-tabelle td.mat-k-titel > a { display: inline-flex; align-items: center; min-height: 44px; }

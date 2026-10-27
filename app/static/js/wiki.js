@@ -178,7 +178,7 @@
   }
 
   function renderTree() {
-    treeEl.innerHTML = branch(null, 0) || '<li class="muted small" style="padding:6px">Noch keine Seiten.</li>';
+    treeEl.innerHTML = branch(null, 0) || '<li class="leerzustand">Noch keine Seiten.</li>';
     treeEl.querySelectorAll(".tg").forEach((b) => b.addEventListener("click", () => {
       const li = b.closest("li"), id = +li.dataset.id;
       li.classList.toggle("collapsed");
@@ -596,7 +596,8 @@
       seitenInfoSchliessen();
       // Bei 404 sagt die Schnittstelle selbst nur „Seite nicht gefunden“ – das stand dann zweimal untereinander.
       const text = e.status === 404 ? "Diese Seite gibt es nicht (mehr) – vielleicht wurde sie gelöscht oder umbenannt." : e.message;
-      content.innerHTML = `<div class="empty"><strong>Seite nicht gefunden</strong>${esc(text)}<div class="btn-row" style="justify-content:center;margin-top:12px"><a class="btn secondary small" href="/stroemipedia" id="home-link">Zur Übersicht</a></div></div>`;
+      content.innerHTML = `<div class="wiki-head"><h1>Seite nicht gefunden</h1></div><p class="leerzustand">${esc(text)}</p>
+        <div class="btn-row"><a class="btn secondary small" href="/stroemipedia" id="home-link">Zur Übersicht</a></div>`;
       // Der Reiter trug sonst weiter „Strömipedia – strömis.de“ bzw. den Titel der vorigen Seite (Browserprüfung vor dem
       // Merge, V2) – wie im Lesemodus (public.js).
       document.title = "Seite nicht gefunden – Strömipedia – strömis.de";
@@ -637,8 +638,8 @@
     renderRail([]);
     const roots = children(null);
     if (!roots.length) {
-      content.innerHTML = `<div class="empty"><strong>Die Strömipedia ist noch leer</strong>Lege die erste Seite an.
-        <div class="btn-row" style="justify-content:center;margin-top:14px"><button class="btn" id="h-new">Erste Seite anlegen</button></div></div>`;
+      content.innerHTML = `<div class="leerzustand"><strong>Die Strömipedia ist noch leer</strong>Lege die erste Seite an.
+        <div class="btn-row"><button class="btn" id="h-new">Erste Seite anlegen</button></div></div>`;
       $("#h-new").onclick = () => openEditor({ parent_id: null });
       return;
     }
@@ -672,9 +673,9 @@
     let d;
     try { d = await api("/api/wiki/recent"); } catch (e) { return; }
     const list = (rows, meta) => rows.length
-      ? `<ul>${rows.map((r) => `<li><a href="/stroemipedia/${esc(r.slug)}">${r.icon ? esc(r.icon) + " " : ""}${esc(r.title)}</a>`
-        + `<span class="muted small"> · ${fmtDate(meta(r), true)}</span></li>`).join("")}</ul>`
-      : '<p class="muted small">Noch nichts.</p>';
+      ? `<ul>${rows.map((r) => `<li><a href="/stroemipedia/${esc(r.slug)}">${r.icon ? esc(r.icon) + " " : ""}${esc(r.title)}`
+        + `<span class="muted small"> · ${fmtDate(meta(r), true)}</span></a></li>`).join("")}</ul>`
+      : '<p class="leerzustand">Noch nichts.</p>';
     box.innerHTML = `
       <div><div class="side-title">Zuletzt besucht</div>${list(d.seen, (r) => r.seen_at)}</div>
       <div><div class="side-title">Zuletzt geändert</div>${list(d.changed, (r) => r.updated_at)}</div>`;
@@ -1216,8 +1217,8 @@
     }
     const woerter = text ? text.split(" ").length : 0;
     const zeilen = [
-      ["Angelegt von", esc(p.created_by_name || "unbekannt")],
-      ["Zuletzt geändert von", esc(p.updated_by_name || p.created_by_name || "unbekannt")],
+      ["Angelegt von", `<span class="name-einheit">${esc(p.created_by_name || "unbekannt")}</span>`],
+      ["Zuletzt geändert von", `<span class="name-einheit">${esc(p.updated_by_name || p.created_by_name || "unbekannt")}</span>`],
       ["Angelegt", esc(fmtDate(p.created_at, true))],
       ["Zuletzt geändert", esc(fmtDate(p.updated_at, true))],
       ["Wörter", String(woerter)],
@@ -1474,12 +1475,12 @@
       <input type="search" id="sh-filter" placeholder="Nutzer suchen …" aria-label="Nutzer suchen">
       <div class="user-pick" id="sh-users">${state.users.filter((u) => u.id !== p.created_by).map((u) => `
         <label class="inline"><input type="checkbox" value="${u.id}" ${editorIds.has(u.id) ? "checked" : ""}> ${esc(u.name || "Unbenannt")} <span class="muted small">${esc(u.gliederung || "")}</span></label>`).join("") || '<div class="muted small">Keine weiteren Nutzer.</div>'}</div>` : ""}
-      ${p.can_share ? `<h3 style="margin-top:18px">Lesen einschränken${info("Lesen einschränken", `Normalerweise darf jeder Angemeldete jede Seite lesen. Eingeschränkt sehen die Seite
+      ${p.can_share ? `<h3 class="abgesetzt">Lesen einschränken${info("Lesen einschränken", `Normalerweise darf jeder Angemeldete jede Seite lesen. Eingeschränkt sehen die Seite
       und ihre Unterseiten nur noch du, die Wiki-Verwaltung und die oben freigegebenen Nutzer.`)}</h3>
       <label class="inline"><input type="checkbox" id="sh-restrict" ${p.read_restricted ? "checked" : ""}
         ${p.effective_public ? "disabled" : ""}> Nur für freigegebene Nutzer lesbar</label>
       ${p.effective_public ? '<div class="help">Nicht möglich, solange die Seite öffentlich freigegeben ist.</div>' : ""}` : ""}
-      ${p.can_publish ? `<h3 style="margin-top:18px">Öffentlich freigeben</h3>
+      ${p.can_publish ? `<h3 class="abgesetzt">Öffentlich freigeben</h3>
       <p class="help">Öffentliche Seiten sind ohne Anmeldung über den Link unten erreichbar – samt ihrer Bilder und Videos.</p>
       <label class="inline"><input type="checkbox" id="sh-public" ${p.is_public ? "checked" : ""}> Diese Seite öffentlich zeigen</label>
       <label class="inline"><input type="checkbox" id="sh-children" ${p.public_children ? "checked" : ""} ${p.is_public ? "" : "disabled"}> … einschließlich aller Unterseiten (ganzer Abschnitt)</label>
@@ -3220,7 +3221,7 @@
       if (b.kind === "columns") {
         const cols = body.join("\n").split(/\n[ \t]*\|\|\|[ \t]*\n/);
         dialog(`<h2>Spalten bearbeiten</h2><div class="block-edit"><div class="cols">${cols.map((c, i) => `<div><label for="be-col-${i}">Spalte ${i + 1}</label><textarea id="be-col-${i}" data-col="${i}">${esc(c)}</textarea></div>`).join("")}</div>
-          <div class="btn-row" style="margin-top:10px"><button class="btn secondary small" id="be-add" type="button"><span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Spalte<span class="k-anlegen"> anlegen</span></span></button><button class="btn secondary small" id="be-del" type="button">– letzte Spalte</button></div></div>
+          <div class="btn-row abgesetzt"><button class="btn secondary small" id="be-add" type="button"><span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Spalte<span class="k-anlegen"> anlegen</span></span></button><button class="btn secondary small" id="be-del" type="button">– letzte Spalte</button></div></div>
           <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button><button class="btn" id="be-ok" type="button">Übernehmen</button></div>`,
           (dlg, box) => {
             dlg.classList.add("wide"); dlg.addEventListener("close", () => dlg.classList.remove("wide"), { once: true });
@@ -4781,12 +4782,12 @@
       bar.innerHTML = veraltet
         ? `Entwurf von ${esc(when)} gefunden – er beruht auf einer älteren Fassung, seither hat jemand
            anderes gespeichert. Er wird nicht von selbst übernommen.
-        <div class="btn-row" style="margin-top:8px">
+        <div class="btn-row abgesetzt">
           <button class="btn secondary small" id="dr-drop" type="button">Verwerfen</button>
           <button class="btn small" id="dr-show" type="button">Entwurf anzeigen</button>
         </div>`
         : `Ungespeicherter Entwurf von ${esc(when)} gefunden.
-        <div class="btn-row" style="margin-top:8px">
+        <div class="btn-row abgesetzt">
           <button class="btn secondary small" id="dr-drop" type="button">Verwerfen</button>
           <button class="btn small" id="dr-use" type="button">Entwurf übernehmen</button>
         </div>`;

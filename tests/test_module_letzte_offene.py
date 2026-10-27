@@ -56,7 +56,7 @@ def test_datenschutz_eine_zeile():
 
 def test_baumknoepfe_einzeilig():
     html, css = lies("app/templates/wiki.html"), lies("app/static/css/app.css")
-    zeile = html[html.index('<div class="btn-row" style="margin-bottom:10px">'):]
+    zeile = html[html.index('<div class="btn-row baum-knoepfe">'):]   # Abstand als Klasse seit UI/UX D12
     zeile = zeile[:zeile.index("</div>")]
     # Zwei Knöpfe: die Hauptaktion rot, daneben grau – mit Wiki-Verwaltung „⋯“ (Papierkorb, Import), sonst der Knopf
     # „Papierkorb“ (eine Funktion steht als Knopf da, Nutzer 27.10.2026); am Finger je mindestens 44 px.
@@ -83,12 +83,12 @@ def test_abschnittsaktion_in_der_kopfzeile():
     mat = lies(MAT)
     # Prüfung: „Protokoll (PDF)“ neben „Protokoll“, die Kennung allein darunter.
     prot = mat[mat.index("function protokollHtml() {"):mat.index("function bearbeitenHtml() {")]
-    assert ('<div class="mat-kastenkopf"><h2>Protokoll</h2>\n          <a class="btn secondary small" href="${esc(p.url)}" '
+    assert ('<div class="abschnittskopf"><h2>Protokoll</h2>\n          <a class="btn secondary small" href="${esc(p.url)}" '
             'target="_blank" rel="noopener">Protokoll (PDF)</a></div>\n        <div class="mat-protokoll-kopf"><span '
             'class="mat-protokoll-id mat-hash">${esc(p.id)}</span></div>') in prot
     # Durchgang: „Sammelprotokoll (PDF)“ nicht mehr im Seitenkopf, sondern neben der Überschrift „Sammelprotokoll“.
     # Der Knopf heißt dort „Protokoll (PDF)“ – die Überschrift sagt „Sammelprotokoll“, und so passt beides am Telefon in eine Zeile.
-    assert ('<div class="mat-kastenkopf"><h2>Sammelprotokoll</h2>\n          ${d.offen ? "" : `<a class="btn secondary small" '
+    assert ('<div class="abschnittskopf"><h2>Sammelprotokoll</h2>\n          ${d.offen ? "" : `<a class="btn secondary small" '
             'href="${esc(d.protokoll.url)}" target="_blank" rel="noopener" title="Sammelprotokoll ${esc(d.protokoll.id)} öffnen">'
             'Protokoll (PDF)</a>`}</div>') in mat
     assert "Sammelprotokoll (PDF)</a>" not in mat
@@ -96,12 +96,13 @@ def test_abschnittsaktion_in_der_kopfzeile():
     assert ('Ein aktives spezifisches Formular ersetzt das generische der Kategorie.")}</h2>\n          ${k ? \'<button class="btn '
             'secondary small" data-act="formular">Spezifisches Formular bearbeiten</button>\' : ""}</div>') in mat
     assert mat.count('data-act="formular">Spezifisches Formular bearbeiten</button>') == 1
-    doks = mat[mat.index('<div class="mat-kastenkopf"><h2>Herstellerdokumente'):]
+    doks = mat[mat.index('<div class="abschnittskopf"><h2>Herstellerdokumente'):]
     doks = doks[:doks.index("</section>")]
     assert doks.index('data-act="dok-neu"') < doks.index("</div>") < doks.index("dokTabelle(p.dokumente, k)")
-    # Das Muster in material.css (Linie unter Überschrift und Knopf) gilt für <button> und <a> mit .btn.
-    mcss = lies("app/material/static/material.css")
-    assert ".mat-kastenkopf:has(> .btn) { border-bottom: 1px solid var(--linie);" in mcss
+    # Das Muster (Linie unter Überschrift und Aktion) gilt für <button> und <a> mit .btn – seit UI/UX D5 als gemeinsamer
+    # Abschnittskopf in app.css.
+    css = lies("app/static/css/app.css")
+    assert ".section .abschnittskopf:has(> :not(h2, h3)) { border-bottom: 1px solid var(--linie);" in css
     print("Abschnittsaktion in der Kopfzeile bestanden.")
 
 

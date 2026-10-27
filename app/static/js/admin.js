@@ -93,8 +93,9 @@
   /* Zeilenaktionen nach der Knopfregel (Browserprüfung vor dem Merge, V5): „Bearbeiten“ als grauer Knopf, die seltenen
      „Reset-Mail senden“ und „Löschen“ im Zeilenmenü „Mehr“ – vorher drei rote Textlinks (btn ghost) je Zeile. Schließen
      per Klick daneben, Escape oder Eintrag: app-weit in common.js (seit der Lieferung nach dem Merge auch Riegenkarten). */
-  // Eine E-Mail bricht in ihrer schmalen Spalte am „@“ um (und vor Punkten der Domain), nicht mitten im Wort (V5).
-  const mailUmbruch = (mail) => S.esc(mail).replace(/@/, "<wbr>@").replace(/\.(?=[^@]*$)/g, "<wbr>.");
+  // Eine E-Mail steht als Einheit (name-einheit, UI/UX D10): ganz in die nächste Zeile; passt sie allein nicht in die
+  // schmale Spalte, bricht sie am „@“ (V5), erst ein Teil, der allein nicht passt, im Wort.
+  const mailUmbruch = (mail) => `<span class="name-einheit">${S.esc(mail).replace(/@/, "<wbr>@")}</span>`;
 
   async function load() {
     try { users = (await S.api("/api/admin/users")).users; }
@@ -436,8 +437,8 @@
         <td class="tabelle-aktionen"><button class="btn secondary small" type="button" data-entziehen="${f.id}">Entziehen</button></td>
       </tr>`).join("")}</tbody></table>`
       : ((u.rechte || {}).material | 0) === 2
-        ? '<p class="help">Keine Freigaben – als Material-Verwaltung sieht das Konto ohnehin alle Bestände; prüfen nur mit eigener Prüffreigabe.</p>'
-        : '<p class="help">Keine Freigaben – das Konto sieht keinen Bestand.</p>';
+        ? '<p class="leerzustand">Keine Freigaben – als Material-Verwaltung sieht das Konto ohnehin alle Bestände; prüfen nur mit eigener Prüffreigabe.</p>'
+        : '<p class="leerzustand">Keine Freigaben – das Konto sieht keinen Bestand.</p>';
     el.querySelectorAll("[data-entziehen]").forEach((b) => b.addEventListener("click", async () => {
       const f = liste.find((x) => x.id === +b.dataset.entziehen);
       // An einem Grundrecht können dauerhafte Prüffreigaben hängen, die ohne es nicht mehr wirken – die Rückfrage sagt es.
@@ -479,7 +480,7 @@
       ziel.innerHTML = zeilen.length ? `<table class="list"><thead><tr><th>Zeit</th><th>Was</th><th>Von</th><th>Änderung</th></tr></thead><tbody>
         ${zeilen.map((z) => `<tr><td data-l="Zeit">${S.esc(z.zeit)}</td><td data-l="Was">${S.esc(z.aktion)}</td>
           <td data-l="Von">${S.esc(z.von)}</td><td data-l="Änderung">${z.felder.length ? z.felder.map(feld).join("<br>") : "–"}</td></tr>`).join("")}
-        </tbody></table>` : '<p class="help">Noch keine Einträge.</p>';
+        </tbody></table>` : '<p class="leerzustand">Noch keine Einträge.</p>';
     });
   }
 

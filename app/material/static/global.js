@@ -80,7 +80,7 @@ window.MatGlobal = (function () {
   // Die Karten mit Hinweis – auf der Trefferseite unter der Trennlinie, in der Ansicht „fremd“ allein.
   function ergebnis(d, q) {
     if (!d.treffer.length) {
-      return `<p class="mat-leer">Außerhalb deines Bereichs hat kein Artikel die Seriennummer „${esc(q)}“.</p>`;
+      return `<p class="leerzustand">Außerhalb deines Bereichs hat kein Artikel die Seriennummer „${esc(q)}“.</p>`;
     }
     return `<div class="mg-karten">${d.treffer.map(karte).join("")}</div>
       ${d.mehr ? `<p class="help">Weitere Artikel haben diese Seriennummer – gezeigt werden die ersten ${d.treffer.length}.</p>` : ""}

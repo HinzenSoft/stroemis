@@ -315,7 +315,8 @@ def test_info_symbol_und_namen():
     for regel in (".info-text { position: absolute;", ".info-text[hidden] { display: none; }",
                   "@media (pointer: coarse) {\n  .info-knopf { width: 44px; height: 44px;"):
         assert regel in app_css, regel
-    assert ".mat-name { display: inline-block; max-width: 100%; overflow-wrap: anywhere; }" in css
+    # Seit UI/UX D10 app-weit (app.css, .name-einheit).
+    assert ".name-einheit, .mat-name { display: inline-block; max-width: 100%; overflow-wrap: anywhere; }" in app_css
     assert 'const person = (n) => `<span class="mat-name">${esc(n)}</span>`;' in js
     for stelle in ('${p.anmeldung ? ` von ${person(p.anmeldung)}` : ""}', '<dd>${person(pr.pruefer || "–")}',
                    'von ${person(d.eroeffnet_von || "–")}', 'von ${person(d.geschlossen_von || "–")}',
@@ -354,9 +355,9 @@ def test_knopftexte_ohne_auslassung():
     assert '{ text: "Reset-Mail senden", kurz: "Reset-Mail", attrs: \'data-act="reset"\' }' in lies("app/static/js/admin.js")   # S.menue (A3)
     assert ">Seiten aus ZIP importieren</button>" in lies("app/static/js/wiki.js")
     assert "von dev in die Produktion" not in js and "Zum Sichern oder für eine andere Installation" in js
-    assert ("<div class=\"mat-kastenkopf\"><h2>Bestandteile${infoKnopf(\"Bestandteile\", BESTANDTEILE_INFO)}</h2>${k ? '<button class=\"btn secondary small\" "
+    assert ("<div class=\"abschnittskopf\"><h2>Bestandteile${infoKnopf(\"Bestandteile\", BESTANDTEILE_INFO)}</h2>${k ? '<button class=\"btn secondary small\" "
             "data-act=\"stueckliste\">") in js
-    assert ".mat-kastenkopf:has(> .btn) { border-bottom: 1px solid var(--linie);" in lies("app/material/static/material.css")
+    assert ".section .abschnittskopf:has(> :not(h2, h3)) { border-bottom: 1px solid var(--linie);" in lies("app/static/css/app.css")
     print("Knopftexte ohne „…“ bestanden.")
 
 

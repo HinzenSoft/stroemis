@@ -28,7 +28,7 @@
       <label for="phone">Telefon</label>
       <input id="phone" type="tel" value="{{ user.phone }}" autocomplete="tel">
       <div class="help">Name und Kontaktdaten sind für andere angemeldete Nutzer sichtbar, wenn du als Ansprechpartner eingetragen bist.</div>
-      <div class="btn-row" style="margin-top:14px"><button class="btn" type="submit">Speichern</button></div>
+      <div class="btn-row abgesetzt"><button class="btn" type="submit">Speichern</button></div>
     </form>
   </section>
   {# Unterschrift nur für wen, der sie braucht: Prüfer (Festschreiben) und Materialwarte (Aussondern, irgendwo
@@ -42,8 +42,14 @@
   {% set us_setzen = mat_unterschrift %}
   {% set mit_urkunde = mat_zugang and user.mat_pruefer %}
   <section class="section" id="unterschrift" data-setzen="{{ 1 if us_setzen else 0 }}">
-    <h2>{% if mit_urkunde %}Urkundennummer und Unterschrift{% else %}Unterschrift{% endif %}</h2>
+    {# Die Abschnittsaktion „Unterschreiben“ (bzw. „Neu unterschreiben“ / „Entfernen“) steht neben der Überschrift
+       „Unterschrift“ (.abschnittskopf, UI/UX D5). #}
+    {% set us_knoepfe %}<div class="btn-row us-knoepfe">
+        <button class="btn secondary" id="us-zeichnen" type="button" disabled>Unterschreiben</button>
+        <button class="btn secondary hidden" id="us-weg" type="button">Entfernen</button>
+      </div>{% endset %}
     {% if mit_urkunde %}
+    <h2>Urkundennummer und Unterschrift</h2>
     <p class="notice{% if darf_pruefen %} hidden{% endif %}" id="ur-hinweis" role="status"><strong>Noch keine Urkundennummer:</strong> Die Verwaltung hat dich als Prüfer eingetragen – prüfen kannst du aber erst, wenn du hier deine Urkundennummer gespeichert hast.</p>
     <form id="f-urkunde" class="ur-form" novalidate>
       <label for="urkundennummer">Urkundennummer (Prüfernummer)</label>
@@ -53,15 +59,13 @@
       </div>
       <div class="help" id="ur-hilfe">Sie steht auf jedem Prüfprotokoll, das du festschreibst. Leer speichern entfernt sie – dann kannst du nicht mehr prüfen.</div>
     </form>
-    <h3 class="us-titel">Unterschrift</h3>
+    <div class="abschnittskopf"><h3 class="us-titel">Unterschrift</h3>{{ us_knoepfe }}</div>
+    {% else %}
+    <div class="abschnittskopf"><h2>Unterschrift</h2>{{ us_knoepfe }}</div>
     {% endif %}
     <div class="help">Für die Materialablage: Sie wird beim Festschreiben einer Prüfung oder Aussonderung als Kopie ins Protokoll übernommen – zusammen mit deiner Anmeldung (E-Mail-Adresse), dem Zeitpunkt und der Prüfsumme. Änderst oder entfernst du sie, wirkt das nur auf künftige Protokolle.{% if not mat_zugang %} Dein Konto hat keinen Zugang zur Materialablage – du brauchst sie gerade nicht. Entferne sie, wenn du magst.{% elif not us_setzen %} Du bist weder Prüfer noch Materialwart und brauchst sie nicht mehr – entferne sie, wenn du magst.{% endif %}</div>
     <div class="us-profil">
       <div class="us-vorschau leer" id="us-vorschau"><span class="muted">Wird geladen …</span></div>
-      <div class="btn-row us-knoepfe">
-        <button class="btn secondary" id="us-zeichnen" type="button" disabled>Unterschreiben</button>
-        <button class="btn secondary hidden" id="us-weg" type="button">Entfernen</button>
-      </div>
     </div>
   </section>
   {% endif %}
@@ -81,7 +85,7 @@
       <input id="password" type="password" autocomplete="new-password" minlength="8" required>
       <label for="password2">Neues Passwort wiederholen</label>
       <input id="password2" type="password" autocomplete="new-password" minlength="8" required>
-      <div class="btn-row" style="margin-top:14px"><button class="btn secondary" type="submit">Passwort ändern</button></div>
+      <div class="btn-row abgesetzt"><button class="btn secondary" type="submit">Passwort ändern</button></div>
     </form>
   </section>
 </main>
