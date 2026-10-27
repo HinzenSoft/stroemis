@@ -939,6 +939,14 @@ def _formulare(liste, lauf):
             bericht["fehler"].append(f"{ort}{f' ({titel_roh})' if titel_roh else ''}: {exc}")
 
 
+def _gekuerzt(t, n):
+    """Höchstens n Zeichen: ein längerer Text endet am letzten Leerzeichen davor mit „…“ (geschütztes Leerzeichen davor)."""
+    if len(t) <= n:
+        return t
+    kurz = t[:n - 2]
+    return (kurz.rsplit(" ", 1)[0] if " " in kurz else kurz).rstrip(" ,;") + "\u00a0…"          # „…“ bricht nicht allein um
+
+
 # --- Dateien im Archiv -----------------------------------------------------------------------------
 
 def _uids(daten):
@@ -1260,7 +1268,8 @@ def importieren(daten, trocken=False, quelle="Datei", archiv=None, fortschritt=N
         return bericht
     basis = {"version": version, "trocken": bool(trocken)}
     if version == 2:
-        herkunft = {k: daten[k][:200] for k in ("quelle", "erstellt") if isinstance(daten.get(k), str)}
+        # Höchstens 200 Zeichen – gekürzt am Wortende mit „…“, nicht mitten im Wort (Browserprüfung vor dem Merge, V7).
+        herkunft = {k: _gekuerzt(daten[k], 200) for k in ("quelle", "erstellt") if isinstance(daten.get(k), str)}
         if herkunft:
             basis["herkunft"] = herkunft
     bericht.update(basis)

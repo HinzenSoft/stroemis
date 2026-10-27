@@ -207,9 +207,10 @@ def rueckruf_json(r, mit_artikel=False):
                              "closed_at", "closed_by_name", "close_note")}
     # Angefordert heißt: _benachrichtigen lief – mit Empfängern steht ihre Zahl da, ohne ist mailed_at gleich gesetzt.
     out["mail"] = bool(r["mailed_at"] or r["mail_count"])
-    # Warum heute keine Mail hinausginge (kein Mailserver, Umgebungssperre) – damit „verschickt“ nicht lügt; die
-    # Zählung (mail_failed) bleibt wie sie ist (Nachbesserung vor dem Merge, Verbesserung 1).
-    out["still"] = mailprotokoll.still() if out["mail"] else None
+    # Warum beim Versand keine Mail hinausging (kein Mailserver, Umgebungssperre) – damit „verschickt“ nicht lügt; die
+    # Zählung (mail_failed) bleibt wie sie ist (Nachbesserung vor dem Merge, Verbesserung 1). Festgehalten beim Anlegen
+    # (mail_still, Schritt 32), nicht nach dem Mailserver von heute; Rückrufe von vor Schritt 32 haben keinen Wert.
+    out["still"] = r.get("mail_still") if out["mail"] else None
     if verwaltung:
         out.update({f: r[f] for f in ("mailed_at", "mail_count", "mail_failed")})
     out["serien"] = serien(r)
@@ -383,8 +384,10 @@ def anlegen(pid, d, nutzer=None):
     r = rueckruf(ruid)
     alle = _artikel_im_bestand(pid, sichtbar=False)
     liste = betroffene(r, alle)
-    an, erreicht = _benachrichtigen(r, liste) if mail else (0, set())
     still = mailprotokoll.still() if mail else None           # „wird verschickt“ nur, wenn auch etwas hinausgeht
+    if still:
+        db.execute("UPDATE mat_recall SET mail_still = ? WHERE id = ?", (still, ruid))     # Stand beim Versand
+    an, erreicht = _benachrichtigen(r, liste) if mail else (0, set())
     if rechte.sicht(nutzer).alles:
         return ruid, dict(_zahlen(liste), nicht_gefunden=nicht_gefunden(r, alle), empfaenger=an, mail=mail, still=still)
     eigene = [a for a in liste if rechte.darf_artikel("lesen", a, nutzer)]

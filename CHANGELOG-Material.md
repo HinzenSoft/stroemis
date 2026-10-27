@@ -5,7 +5,7 @@ Gliederungen, Prüfnachweise je Ausrüstungsteil, unveränderliche PDF-Prüfprot
 umgesetzt, Phase 2 (mehrere Gliederungen und externe Prüfer in einer Instanz) in drei, Phase 3 und 4 in Lieferungen
 und Wünschen des Nutzers; jede war für sich deploybar. Seit dem 26.10.2026 heißt das Modul „Materialablage“ (im Code,
 in Tabellen und unter `/api/material` weiter `material`). Ältere Abschnitte sagen noch „Modul Material“ – sie bleiben als
-Geschichte stehen. Schemaversion nach der Nachbesserung vor dem Merge: 30; mit der Prüfsumme für den Lebenslauf: 31.
+Geschichte stehen. Schemaversion nach der Nachbesserung vor dem Merge: 30; mit der Prüfsumme für den Lebenslauf: 31; mit der Liste nach dem Merge (Teil A): 32.
 
 | Lieferung | Inhalt | Stand |
 | --- | --- | --- |
@@ -46,6 +46,7 @@ Geschichte stehen. Schemaversion nach der Nachbesserung vor dem Merge: 30; mit d
 | Nachbesserung vor dem Merge, Runde 2 | Rückruf: nur eine Prüfung, deren Entwurf nach Rückruf bzw. Antrag begann, erledigt ihn (N-A1); „Bald fällig“ aus der `.env` nur 0–365, sonst Warnung und Vorgabe 30; README zur Inbetriebnahme (Prüfformulare neu anlegen, Kontrollen) | gebaut 26.10.2026 (kein Schemaschritt), zur Freigabe |
 | Nachbesserung vor dem Merge, Runde 3 | Tippflächen Brotkrumen und „Deine Meldungen“ (B-1, B-2); Katalog am Telefon kompakt, Liste nach der Kategoriewahl oben, Zurück an dieselbe Stelle (V1, V3); Seitentitel je Ansicht in allen Modulen (V2); Leitstelle: Hilfe zugeklappt, Zeilenmenü, E-Mail-Umbruch, Reiter als Linie (V5); Ankerplätze „+ Album“ (V6); „☰“ nicht vorgelesen (V8); eine Linie unter den Reitern (V9); Dialog-Reiter quer (V11); Kontrast in den Riegenkarten (V13); Nachtrag: Nummernsuche am Telefon zu, Reiter in eigener Zeile (V4), Sperrgrund im Mangel-Banner (V7), Hinweis- und Hilfetexte höchstens rund 120 Zeichen je Zeile (V10), Mangelbeschreibung im Verlauf am Artikel | gebaut 26./27.10.2026 (kein Schemaschritt), zur Freigabe |
 | Prüfsumme für den Lebenslauf (Schritt 31) | Jeder Abruf eines Lebenslaufs mit Kennung L-<Jahr>-<Nr> und Prüfsummen-Stempel, verzeichnet ohne Konto; die Prüfseite erkennt ihn; kein „nicht festgeschrieben“ mehr im Lebenslauf | gebaut 27.10.2026 (Schema 31), zur Freigabe |
+| Liste nach dem Merge – Teil A (Schritt 32) | Lebenslauf: Kennung nach dem Zurückspielen nie doppelt, HEAD ohne Eintrag, Abrufbremse; Prüfseite „Protokoll oder Lebenslauf prüfen“; REPLACE ohne recursive_triggers verdrängt nichts Geschütztes; Rückruf nach Antrag wieder offen (gesagt), Rückruf-Text nach dem Stand beim Versand; Journal am Telefon als Karten, Mangeltext und Reiter; Verbesserungen der Browserberichte (Artikelseite „Mehr“, Prüfungen, Katalogimport, Meine PSA …) | gebaut 27.10.2026 (Schema 32), zur Freigabe |
 
 ## Abgleich mit dem Bestand (vor Lieferung 1)
 
@@ -4178,6 +4179,129 @@ Danach liefen die ganze Suite (`st-test`) grün, `st-py`, `st-js` und `st-css` o
 14. **Kasten „Mailversand“ am Telefon**: Eine Karte hat vier Inhaltszeilen (Mail mit Betreff, Empfänger, Fehler mit
     Antwort), bei 360 px umbrochen etwa 170 px hoch; die Antwort des Mailservers ließe sich noch hinter „Technische
     Antwort“ einklappen – bitte am Gerät ansehen.
+
+## Liste nach dem Merge – Teil A: Materialablage, Lebenslauf, Sicherheit (Schritt 32, 27.10.2026)
+
+Auftrag `planung/material-phase4/auftrag_nach_merge_liste.md`, Teil A (Punkte 1–8, 11, 15, 18, 19 und 14 für die
+Materialablage) aus `nach_merge_liste.md`; Quellen: bericht_pruefung_r3_*, bericht_pruefung_vm_*,
+bericht_pruefung_vor_merge_*. Zweig `nm-a` ab 126d7a1. Teil B (übrige Module) baut parallel und schreibt ans Dateiende.
+
+**Lebenslauf (1–3)**
+- **1 – Kennung nach dem Zurückspielen nie doppelt:** Die zuletzt vergebene Kennung steht zusätzlich als leere Datei
+  unter `DATA_DIR/pdf/lebenslauf/` (Name = Kennung, eine je Jahr, die ältere wird gelöscht). `kennung_vergeben` nimmt das
+  Maximum aus Zähler (`mat_meta`), höchster verzeichneter Nummer und Datei – unter der Schreibsperre, also nie von zwei
+  Arbeitsprozessen zugleich. Warum unter `pdf/`: Das Zurückspielen (README) ersetzt die Datenbank, ergänzt `pdf/` aber nur
+  – die Datei aus der Sicherung liegt danach neben der neueren, es zählt die höchste; `dev-zuruecksetzen` räumt sie mit
+  den Protokollen weg (dann beginnt die Zählung wieder bei 1). Ist die Ablage nicht beschreibbar, geht der Abruf trotzdem
+  (Warnung im Log). Der Nummernschutz der Protokolle (`_nummern_schuetzen`) sieht die Dateien nicht (nur P/A/S/T).
+- **2 – HEAD:** `HEAD …/lebenslauf.pdf` antwortet nach der Rechteprüfung nur mit Kopfzeilen (`application/pdf`,
+  `no-store`) – keine Kennung, keine Zeile in `mat_lebenslauf`, kein Zähler, keine Satzarbeit.
+- **3 – Abrufbremse:** je Konto höchstens 60 Lebensläufe in einer Viertelstunde (`LEBENSLAUF_JE_VIERTELSTUNDE`, dieselbe
+  Tabelle und dasselbe Zeitfenster wie die Bremse der Prüfseite); darüber eine Fehlerseite 429 „Du hast in kurzer Zeit sehr
+  viele Lebensläufe abgerufen. Bitte in einer Viertelstunde noch einmal.“ mit `Retry-After: 900`. Abgewiesene Abrufe
+  (ohne Recht, fremd) und HEAD zählen nicht.
+
+**Texte und Doku (4–6)**
+- **4:** README „Meine PSA und Mangelmeldung“ nennt die Mangelbeschreibung im Verlauf am Artikel; in der
+  Schnittstellen-Übersicht `journal[].nachher.mangelbeschreibung`.
+- **5:** Die Prüfseite heißt „Protokoll oder Lebenslauf prüfen“ (Seitentitel, Überschrift, Knopf auf „Prüfungen“); die
+  Verweise in Prüfung und Durchgang sagen „Prüfseite“. Die Einleitung sagt: Lebensläufe, die abgerufen wurden, bevor sie
+  eine Kennung bekamen, tragen keine Prüfsumme und werden nicht erkannt (bewusst ohne Datum – in der Produktion ist das
+  der Tag des Deploys).
+- **6:** Eine Fehlermeldung der Prüfseite (etwa die Bremse) steht nur noch im Ergebniskasten („Nicht geprüft“, wird
+  vorgelesen), nicht zusätzlich als Toast.
+
+**Oberfläche (7, 8, 11)**
+- **7 – Journal am Telefon:** Bis 600 px Inhaltsbreite (Container „mat-seite“) wird jede Zeile der Tabelle „Feld /
+  vorher / nachher“ zur Karte: das Feld, darunter „vorher: …“ und „nachher: …“ über die ganze Breite, Wörter ganz (vorher
+  125 px schmale Zellen, eine lange Mangelbeschreibung 2 272 px hoch, „Kreisve/rband“). Ein Feld ohne „vorher“ zeigt nur
+  „nachher: …“, ein Eintrag ganz ohne „vorher“ nur den Wert. Die Mangelbeschreibung behält ihre Zeilenumbrüche. Gemessen
+  bei 360/390 px: kein waagerechter Bildlauf, Mangeltext 305/335 px breit (vorher 125).
+- **8 – Mangeltext im Banner:** höchstens `100ch` je Absatz (wie V10; gemessen 120 Zeichen je Zeile bei 1280 und
+  1920 px, vorher bis 246 am Ultrawide), ebenso unter „n erledigte Meldungen“.
+- **11 – Reiter bei 344 px:** Unter 350 px Fensterbreite 4 statt 6 px Innenabstand – gemessen 312 von 312 px, kein
+  Rollen (vorher 316 in 312), alle vier Reiter 44 px hoch.
+
+**Sicherheit und Ablauf (15, 18, 19) – Schritt 32**
+- **15 – REPLACE ohne `recursive_triggers`** (Sicherheitsprüfung vor dem Merge, Befund 1): Die Trigger
+  `mat_inspection_zeile`, `mat_result_zeile`, `mat_attachment_zeile`, `mat_round_zeile`, `mat_round_item_zeile` gelten jetzt
+  ohne die Bedingung „abgeschlossen“ (`WHEN NEW.rowid IS NOT OLD.rowid`) – `UPDATE OR REPLACE … SET id = <festgeschrieben>`
+  aus einem Entwurf bzw. offenen Durchgang heraus geht nicht mehr; die App ändert nie eine Kennung. Am Artikel weisen
+  `mat_item_schluessel_neu` (BEFORE INSERT) und `mat_item_schluessel_aendern` (BEFORE UPDATE OF inventory_no, qr_token,
+  product_id, serial_no) alles ab, was Inventarnummer, QR-Kennung oder Produkt + Seriennummer (ohne Rücksicht auf
+  Groß/klein) eines geprüften Artikels träfe – über REPLACE verdrängte das sonst den geprüften Artikel samt Lebenslauf. Ein
+  legitimer Ablauf trifft das nie (eindeutige Indizes, Dublettenprüfung); geprüft mit der ganzen Suite und den Fällen der
+  Proben p05/q03 (`test_material_nach_merge.py`, je mit und ohne foreign_keys/recursive_triggers).
+- **18 – Rückruf nach Antrag wieder offen:** Trifft ein laufender Rückruf (etwa „für alle Artikel“) den Artikel vor und
+  nach einem Antrag auf Seriennummer oder Produkt und war er für ihn durch eine Prüfung erledigt, gilt er nach dem
+  Bestätigen wieder als offen (Regel R1 – auch bei einem reinen Tippfehler). Karte und Rückfrage „Bestätigen“ sagen es
+  vorher („Der Rückruf „…“ gilt danach wieder als offen – der Artikel muss erneut geprüft werden.“), das Journal vermerkt es
+  („Rückruf wieder offen (erneut prüfen)“, `rueckruf_wieder_offen`). Ein gesperrter Artikel bleibt erledigt, ein schon
+  offener bekommt den Satz nicht.
+- **19 – „keine Mail hinaus“ nach dem Stand beim Versand:** Neue Spalte `mat_recall.mail_still`, beim Anlegen gesetzt
+  (`kein Mailserver`, `Umgebungssperre`); die Texte lesen sie statt des Mailservers von heute. Rückrufe von vor Schritt 32
+  haben keinen Vermerk – für sie steht der Text nach der Zählung (Material-Verwaltung) bzw. „Mail an die Verwalter und
+  Prüfer der betroffenen Artikel.“.
+- **Schritt 32** (`models._schritt_32`): fünf Trigger entfernt und neu angelegt (gleicher Name), zwei neue, eine Spalte
+  (nur, wenn sie fehlt) – keine Zeile ändert sich. Wiederholbar. Rückweg: ein älterer Stand lässt Trigger und Spalte
+  stehen. Probe an einer Kopie des Beispielbestands (Stand 126d7a1, Katalogteil 01, 60 Artikel, dazu Lebenslauf, Rückruf
+  und Mangel): frisch und 31 → 32 ergeben dasselbe Schema, alle Zeilen gleich bis auf die neue leere Spalte und
+  `schema_version`, integrity/foreign_key_check sauber, andere Module unverändert, zweiter Start ohne Änderung
+  (`planung/material-phase4/proben_nm_a/migration.txt`).
+
+**Verbesserungen aus den Browserberichten (14)** – erledigt / offen / bewusst nicht:
+- erledigt: **Artikelseite** – neben „Bearbeiten“ ein Menü „Mehr“ mit „Verschieben …“, „Lebenslauf (PDF)“ und „Löschen …“
+  (je mit dem Satz, was sie tun; bleibt nur eine Funktion, steht sie als Knopf da); der Erklärabsatz zum Lebenslauf
+  unter Touch zwischen den Knopfreihen entfällt (der Satz steht im Menü), ebenso der Dauerhinweis „Prüfen dürfen Prüfer
+  mit Urkundennummer …“ für alle, die nicht prüfen (für Konten mit Prüfer-Häkchen oder Urkundennummer bleibt der gezielte
+  Hinweis). **Produktseite:** „Löschen …“ im Menü „Mehr“ statt als Knopf neben „Bearbeiten“. **Prüfungen:** oben
+  „Laufende Prüfdurchgänge“, die abgeschlossenen und abgebrochenen zugeklappt ganz unten („Abgeschlossene
+  Prüfdurchgänge (n)“). **Ausgegrautes „Durchgang abschließen“:** `aria-describedby` auf den Satz über der Liste, der vorn
+  die Zahl nennt („Noch 7 Artikel offen oder in Prüfung.“); „Festschreiben“ hatte es schon. **Meine PSA am Finger:**
+  Dokumente, Inventarnummer, „Zum Artikel“, „im Profil ändern“ als mindestens 44 px hohe Zeilen (gemessen 44–65 px,
+  vorher 15–24). **Katalogimport:** Fundstellen lesbar („Produkt 1 „Name“: „Materialart“ fehlt.“ statt „produkte[0]
+  (Name): …“), gleiche Fehler an drei und mehr Stellen als eine Zeile mit den Fundstellen darunter; die Herkunft der
+  Datei wird am Wortende mit „…“ gekürzt statt mitten im Wort. Der Bericht der Schnittstelle bleibt, wie er ist.
+  **Inventarnummer** in Überschriften (Artikel, Prüfung, Meine PSA) bricht nicht mehr am Bindestrich. **Kontrast:**
+  Nebentext (`.muted`, `.help`) auf Rot-hell-Flächen in Anthrazit (vorher 4,48 : 1), Links und
+  Textknöpfe dort in `--rot-auf-flaeche` (vorher 4,22 : 1, „Bericht ansehen“ im Hinweis zum Katalogimport). **Tokens:** freie Schriftgrößen
+  .72/.8/.85/.9 rem und zwei eigene Schatten in `material.css` durch `--fs-*` bzw. `--schatten-menue` ersetzt.
+  **Begriffe:** Dialog „Prüfdurchgang anlegen“ mit Knopf „Prüfdurchgang anlegen“ (vorher „eröffnen“/„Eröffnen“),
+  Dialog „Unterordner anlegen“ (vorher „Ordner anlegen“). **„n erledigte Meldungen“** unter Touch gemessen: 350 × 44 px.
+- offen: Banner mit sehr langem Mangeltext am Telefon einklappen („Weiterlesen“, Vorschlag R3) – Bitte bestätigen 4;
+  Brotkrumen am 344-px-Fold in drei 44-px-Zeilen (R3 V8); „Produktmeldungen“ ↔ Knopf „Meldungen“; doppeltes
+  „Ergebnis / Ergebnis“ auf der Ergebnisseite einer Prüfung; Fokus im Unterschrift-Dialog auf „Abbrechen“.
+- bewusst nicht: Überschriftgrößen (1.05–2.6 rem) und die hellgelben DEMO-Streifen (`#fff8a6`) – dafür gibt es keine
+  Tokens; Zurück aus einer gewählten Kategorie verlässt den Katalog (gewollt, `replaceState`); Hover nach Tipp (nur
+  Emulation, auf dem Gerät prüfen); Reihenfolge im Journal des Beispielbestands (Artefakt der zurückgestellten Uhr);
+  Sprunglink „Zum Inhalt“ (Teil B, app-weit).
+
+**Tests:** `tests/test_material_nach_merge.py` (neu) – Kennung nach dem Zurückspielen (mit Gegenprobe ohne Datei, anderes
+Jahr, schreibgeschützte Ablage), HEAD und Bremse, Prüfseite, Schritt-32-Trigger (14 Umgehungen × 4 PRAGMA-Kombinationen,
+erlaubte Änderungen, App arbeitet weiter), Migration 31 → 32 mit Altbestand und zweiter Lauf, Rückruf wieder offen,
+`still` beim Versand, Oberfläche statisch, Kürzung der Herkunft. Angepasst: `test_material_lebenslauf_summe.py`
+(Schemaversion nicht mehr fest 31), `test_material_export.py` (die Zählerdatei ist kein Protokoll),
+`test_material_antrag.py` und `test_material_antrag_zustaendig.py` (`wieder_offen`, Trigger aus Schritt 32 in den
+Migrationserwartungen), `test_material_aussondern.py` (Schritt 32 kommt nach 28 dazu; der Lebenslauf-Satz steht im Menü),
+`test_umbenennung.py` (Titel der Prüfseite), `test_material_l5.py` (Lebenslauf im Menü „Mehr“, weiter am Grundrecht).
+
+**Schnittstelle:** `HEAD …/lebenslauf.pdf` nur Kopfzeilen; `GET …/lebenslauf.pdf` über 60 Abrufe je Konto und
+Viertelstunde 429 (Fehlerseite, `Retry-After: 900`); `antraege[].rueckruf` zusätzlich `wieder_offen` [{id, title}];
+Journal `antrag_bestaetigt` mit `nachher.rueckruf_wieder_offen`; `produkt.rueckrufe[].still` und die Antwort auf `POST
+…/rueckrufe` sind der Stand beim Anlegen (vor Schritt 32 angelegte: `null`). Sonst unverändert.
+
+### Bitte bestätigen
+
+1. **Zählerdatei unter `pdf/lebenslauf/`** (statt einer Datei direkt unter `data/`): nur so übersteht sie das
+   Zurückspielen laut README, das `pdf/` ergänzt und den Rest überschreibt. Alternative: Datei unter `data/` und im Befehl
+   zum Zurückspielen ein `--exclude` dafür.
+2. **Bremse 60 Lebensläufe je Konto und Viertelstunde** (die Prüfseite hat 20 je Adresse).
+3. **Artikelseite „Mehr“:** „Verschieben …“ und „Lebenslauf (PDF)“ einen Tipp tiefer; „Bearbeiten“ bleibt sichtbar. Der
+   allgemeine Hinweis „Prüfen dürfen Prüfer mit Urkundennummer …“ steht nicht mehr auf jeder Artikelseite.
+4. **Langer Mangeltext im Banner** am Telefon nicht eingeklappt (nur die Zeilenlänge begrenzt) – soll ab etwa 600 Zeichen
+   ein „Weiterlesen“ kommen?
+5. **Rückrufe von vor Schritt 32** sagen nicht mehr „Es ging keine Mail hinaus“ nach dem heutigen Mailserver, sondern
+   stehen wie vor der Nachbesserung (Zählung bzw. allgemeiner Satz).
 
 ## Nachbesserung vor dem Merge, Runde 3 (26.10.2026)
 
@@ -8900,7 +9024,7 @@ oder Plattform-Verwaltung).
 | `PUT /api/material/artikel/<id>` | wie bisher | seit den Entscheidungen vom 21.10.2026: bei Metall ein fehlendes `manufactured_on` nachtragen auch nach der ersten Prüfung (200); `artikel.herstellung_nachtragbar`; Text der 409 nennt den Antrag |
 | `PUT /api/material/artikel/<id>` (`product_id`) | wie bisher | seit dem Feintuning (23.10.2026): Produkt ändern bis zur ersten abgeschlossenen Prüfung; 409 bei offenem Entwurf und über die DEMO-Grenze; `artikel.produkt_aenderbar`; Journal „produkt_geaendert“ – siehe Abschnitt „Feintuning nach dem Kommentar-Dokument“ |
 | `POST /api/material/artikel/<id>/antrag` (`serial_no`, `manufactured_on`, `begruendung` Pflicht; `herstellung_entfernen` → 400 seit 21.10.2026) | Materialwart oder Prüfer am Artikel (fremd 404, nur lesen 403) | Änderung beantragen → 201 `antraege` (je Feld einer: `id`, `feld`, `feld_text`, `alt`, `neu`, `status`, `begruendung`, `antragsteller`, `eigen`, `passt`, …), `artikel`, `mail`; 400 Eingaben, 409 ungeprüft, ausgesondert, schon beantragt, Dublette, Metall-Nachtragen (21.10.2026) |
-| `GET /api/material/antraege?status=offen\|erledigt\|alle` | Modulzugang | Material-Verwaltung alle (Vorgabe offen), sonst die eigenen zu lesbaren Artikeln (Vorgabe alle); je Antrag `artikel` (`id`, `inventory_no`, `produkt`, `gliederung`, `pfad`, `lock_state`, `demo`) und `rueckruf` (`{nicht_mehr, neu}` – laufende Rückrufe, aus denen der Artikel mit der neuen Seriennummer fiele bzw. in die er käme; nur offen, sonst `null`); `alle`, `bearbeiten`, `offen`, `meldungen_offen` (21.10.2026) |
+| `GET /api/material/antraege?status=offen\|erledigt\|alle` | Modulzugang | Material-Verwaltung alle (Vorgabe offen), sonst die eigenen zu lesbaren Artikeln (Vorgabe alle); je Antrag `artikel` (`id`, `inventory_no`, `produkt`, `gliederung`, `pfad`, `lock_state`, `demo`) und `rueckruf` (`{nicht_mehr, neu, wieder_offen}` – laufende Rückrufe, aus denen der Artikel mit der neuen Seriennummer fiele bzw. in die er käme; seit Schritt 32 auch die, die danach wieder offen sind; nur offen, sonst `null`); `alle`, `bearbeiten`, `offen`, `meldungen_offen` (21.10.2026) |
 | `POST /api/material/antraege/<id>/bestaetigen` (`antwort` freiwillig), `…/ablehnen` (`antwort` Pflicht) | Material-Verwaltung (Plattform-Verwaltung eingeschlossen) | entscheiden → `antrag`; 409 schon entschieden, Stand geändert, ausgesondert (nur ablehnen), Dublette, alter Antrag aufs Entfernen des Herstelldatums (nur ablehnen; `antrag.entfernen`) (21.10.2026) |
 | `POST /api/material/antraege/<id>/zurueckziehen` | Modulzugang; nur der Antragsteller, solange er den Artikel liest (sonst 404) | eigenen offenen Antrag zurückziehen → `antrag` (Stand `zurueckgezogen`, keine Mail; Journal `antrag_zurueckgezogen`); 409 schon entschieden oder zurückgezogen; `GET /api/material/antraege?status=erledigt` schließt `zurueckgezogen` ein (21.10.2026) |
 | (Artikel, Übersicht, Meldungen, Kontofolgen) | – | neu: `artikel.antraege` (offene; Begründung und Namen nur für Materialwart und Prüfer, sonst `inhalt: false` – ebenso in `artikel.journal` und im Lebenslauf: ohne `begruendung`, `beantragt_von`, `anmerkung`, `ablehnung`, Handelnder „(Person)“), `artikel.darf_antrag`; `start.antraege_offen` und `meldungen.antraege_offen` (nur Material-Verwaltung, sonst `null`); `material-folgen.antraege` (21.10.2026) |
@@ -8916,6 +9040,9 @@ oder Plattform-Verwaltung).
 | `POST /api/material/artikel/<id>/aussondern`, `POST …/pruefungen/<id>/festschreiben`, `GET …/artikel/<id>` | wie bisher | seit Schritt 28: Ergebnis `aussondern` → 400, neu `aussondern_empfohlen` (sperrt); Aussondern nur nach einer letzten Prüfung `instandsetzen`/`aussondern_empfohlen` oder bei `verloren`, sonst 409 mit Grund; Artikel trägt `aussonderung_empfohlen` ({pruefung, protokoll_id, datum, pruefer, grund} bzw. in Listen true/false) und für Materialwarte `aussondern` {ok, grund} |
 | `GET /api/material/ordner/<fid>?status=aussonderung_empfohlen`, `GET /api/material/start`; `POST/PUT/DELETE …/freigaben…`, `POST …/ordner/<fid>/verschieben`, `PUT/DELETE /api/admin/users/<id>` | wie bisher | A4: Filter und `empfohlen` (Zahl) am Ordner, `aussonderung_empfohlen` [{ordner_id, gliederung, anzahl}] auf der Übersicht; N5: Antworten tragen `mail` (Mail an die Material-Verwaltung zu Anträgen ohne Materialwart) |
 | `GET /materialablage/artikel/<id>/lebenslauf.pdf`, `…/export/<fid>.csv`, `…/export/<fid>-protokolle.zip`, `…/ordner/<fid>/bericht-<jahr>[-mit-pruefern].pdf`, `…/export/<fid>-pruefungen-<jahr>[-mit-pruefern].csv`, `…/ordner/<fid>/nacharbeit.csv`, `GET /api/material/katalog/export` | wie bisher | seit dem 26.10.2026: Dateiname mit Datum und Uhrzeit (`…_<JJJJ-MM-TT>_<HHMM>.<endung>`, deutsche Zeit); ein Abfrageparameter `stand` (vom Knopf beim Antippen) wird übergangen. Lebenslauf: bei „Mangel gemeldet“ Name des Melders und „Mangelbeschreibung“ für Prüfer, Materialwart und die eigene Meldung, sonst „(Person)“ |
+| `GET /api/material/artikel/<id>` | wie bisher | seit Runde 3 (27.10.2026): `journal[].nachher.mangelbeschreibung` bei „Mangel gemeldet“, wenn das Konto den Inhalt der Meldung sehen darf (sonst fehlt das Feld) |
+| `HEAD …/lebenslauf.pdf`; `GET …/lebenslauf.pdf` | wie bisher | seit Schritt 32: HEAD nur Kopfzeilen (keine Kennung, kein Eintrag); über 60 Lebensläufe je Konto und Viertelstunde 429; Kennung nach dem Zurückspielen nie doppelt (Zählerdatei `pdf/lebenslauf/`) |
+| `produkt.rueckrufe[].still`, Antwort auf `POST …/produkte/<id>/rueckrufe`; `antraege[].rueckruf` | wie bisher | seit Schritt 32: `still` = Stand beim Anlegen (`mat_recall.mail_still`; vorher angelegte `null`); `rueckruf.wieder_offen` |
 
 ## Nachbesserung vor dem Merge – übrige Module (26.10.2026)
 

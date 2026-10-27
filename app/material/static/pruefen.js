@@ -4,7 +4,7 @@
   "use strict";
   const root = document.getElementById("pruefen");
   if (!root) return;
-  const { esc, api, toast } = S;
+  const { esc, api } = S;
   const form = document.getElementById("pr-form");
   const feld = document.getElementById("pr-datei");
   const ablage = document.getElementById("pr-ablage");
@@ -52,11 +52,11 @@
         + (r.link ? `<p><a href="${esc(r.link)}">${r.stand ? "Zum Artikel" : "Zum Vorgang"} in strömis.de</a></p>` : "");
       box.hidden = false;
     } catch (err) {
-      // Auch im Ergebniskasten, nicht nur im Toast: Er bleibt stehen (etwa „zu viele Anfragen – bitte warten“).
+      // Nur im Ergebniskasten (role="status", wird vorgelesen), kein Toast dazu: Er bleibt stehen (etwa „zu viele
+      // Prüfungen – bitte warten“), und derselbe Satz stand sonst doppelt da (Liste nach dem Merge, 6).
       box.className = "mat-pruefergebnis fehler";
       box.innerHTML = `<strong>Nicht geprüft</strong><p>${esc(err.message)}</p>`;
       box.hidden = false;
-      toast(err.message, true);
     } finally {
       los.disabled = !datei;
       los.textContent = "Prüfen";

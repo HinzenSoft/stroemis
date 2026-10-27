@@ -1,9 +1,10 @@
 """Lebenslauf eines Artikels als PDF (Lieferung 4; Konzept: „Stammdaten plus alle Prüfungen chronologisch, für
 Weitergabe oder Aussonderungsnachweis“).
 
-Auf Abruf gesetzt, nie festgeschrieben (auch nicht bei der Aussonderung): keine Datei unter DATA_DIR/pdf, kein Eintrag in
+Auf Abruf gesetzt, nie festgeschrieben (auch nicht bei der Aussonderung): kein PDF unter DATA_DIR/pdf, kein Eintrag in
 mat_inspection oder im Journal. Seit Schritt 31 (Wunsch vom 27.10.2026) bekommt jeder Abruf eine Kennung L-<jahr>-<nr>
-(fortlaufend je Jahr, Zähler in mat_meta) und einen Prüfsummen-Stempel wie ein Protokoll (stempel.py); mat_lebenslauf
+(fortlaufend je Jahr, Zähler in mat_meta und – gegen Doppelte nach dem Zurückspielen einer Sicherung – als
+Datei unter DATA_DIR/pdf/lebenslauf) und einen Prüfsummen-Stempel wie ein Protokoll (stempel.py); mat_lebenslauf
 verzeichnet Kennung, Inventarnummer, Stand und die Prüfsummen – nicht, wer abgerufen hat, nicht den Inhalt, keine Datei.
 So erkennt die Prüfseite (protokoll.pruefen) einen ausgegebenen Lebenslauf Byte für Byte wieder. Die Kennung wird in
 einer eigenen kurzen Schreibtransaktion vergeben, gesetzt wird ohne Schreibsperre, verzeichnet in einer zweiten kurzen
@@ -21,6 +22,9 @@ Melders und der Mangelbeschreibung für Prüfer und Materialwart und für den Me
 Daten seines Produkts seit dem Anlegen des Artikels (PRODUKT_AKTIONEN, als „Produkt …“ – Entscheidung E8 vom 24.10.2026: Die
 Material-Verwaltung pflegt Katalogprodukte weiter, jede Änderung steht im Produktjournal und im Lebenslauf der Artikel);
 Rückrufe stehen in ihrem eigenen Abschnitt, Meldungen gehören zum Katalog."""
+import logging
+import os
+import re
 from datetime import date
 
 from ... import db
@@ -269,10 +273,44 @@ def daten(iid, stand=None):
     }
 
 
+def _zaehler_ordner():
+    """DATA_DIR/pdf/lebenslauf – neben den Protokollen: Beim Zurückspielen einer Sicherung wird pdf/ nur ergänzt, nie
+    überschrieben oder geleert (README „Zurückspielen“), und dev-zuruecksetzen räumt es mit den Protokollen weg."""
+    return os.path.join(protokoll.ablage(), "lebenslauf")
+
+
+def _zaehler_datei(jahr):
+    """Die höchste Nummer des Jahres laut Zählerdatei (0, wenn keine da ist). Die Datei ist leer, ihr Name ist die
+    zuletzt vergebene Kennung – nach dem Zurückspielen liegen dort auch die Namen aus der Sicherung, es zählt die höchste."""
+    muster = re.compile(rf"{VORSATZ}-{jahr}-(\d{{6,}})")
+    try:
+        namen = os.listdir(_zaehler_ordner())
+    except OSError:
+        return 0
+    return max((int(m.group(1)) for m in map(muster.fullmatch, namen) if m), default=0)
+
+
+def _zaehler_schreiben(jahr, kennung):
+    """Die eben vergebene Kennung als leere Datei ablegen und die älteren desselben Jahres löschen. Scheitert das (etwa
+    ein schreibgeschütztes Volume), geht der Abruf trotzdem – dann schützt nur noch die Datenbank vor Doppelten."""
+    ordner = _zaehler_ordner()
+    try:
+        os.makedirs(ordner, exist_ok=True)
+        with open(os.path.join(ordner, kennung), "a"):
+            pass
+        for name in os.listdir(ordner):
+            if name != kennung and name.startswith(f"{VORSATZ}-{jahr}-"):
+                os.remove(os.path.join(ordner, name))
+    except OSError as exc:
+        logging.getLogger(__name__).warning("Zählerdatei für Lebensläufe nicht geschrieben (%s): %s", kennung, exc)
+
+
 def kennung_vergeben(stand):
     """Die nächste Kennung L-<jahr>-<nr> (Jahr des Stands in deutscher Zeit) – in einer eigenen, kurzen
     Schreibtransaktion. Der Zähler steht in mat_meta; die höchste verzeichnete Nummer des Jahres zählt mit, falls er
-    fehlt oder zurückliegt."""
+    fehlt oder zurückliegt, und ebenso die Zählerdatei unter DATA_DIR/pdf/lebenslauf: Nach dem Zurückspielen einer
+    Sicherung kennt die Datenbank die seither ausgegebenen Kennungen nicht mehr – die Datei schon (Prüfung nach dem
+    Merge, Befund 1). Geschrieben wird sie unter der Schreibsperre, also nie von zwei Prozessen zugleich."""
     jahr = ortszeit(stand).year
     schluessel = ZAEHLER.format(jahr=jahr)
     vorsatz = f"{VORSATZ}-{jahr}-"
@@ -280,9 +318,10 @@ def kennung_vergeben(stand):
         zeile = db.query("SELECT wert FROM mat_meta WHERE schluessel = ?", (schluessel,), one=True)
         hoechste = db.query("SELECT MAX(CAST(substr(kennung, ?) AS INTEGER)) AS n FROM mat_lebenslauf WHERE kennung LIKE ?",
                             (len(vorsatz) + 1, vorsatz + "%"), one=True)["n"] or 0
-        n = max(int(zeile["wert"]) if zeile else 0, hoechste) + 1
+        n = max(int(zeile["wert"]) if zeile else 0, hoechste, _zaehler_datei(jahr)) + 1
         db.execute("INSERT INTO mat_meta (schluessel, wert) VALUES (?, ?) "
                    "ON CONFLICT(schluessel) DO UPDATE SET wert = excluded.wert", (schluessel, str(n)))
+        _zaehler_schreiben(jahr, f"{vorsatz}{n:06d}")
     return f"{vorsatz}{n:06d}"
 
 

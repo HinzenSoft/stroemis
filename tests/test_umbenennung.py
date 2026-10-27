@@ -132,7 +132,7 @@ def test_neue_adressen_wie_die_alten():
             assert quote(pfad, safe="") in r.headers["Location"] or pfad in r.headers["Location"], r.headers["Location"]
         assert anon.get("/materialablage/pruefen").status_code == 200
         r = anon.get("/material/pruefen", follow_redirects=True)
-        assert r.status_code == 200 and "Protokoll prüfen" in r.text
+        assert r.status_code == 200 and "Protokoll oder Lebenslauf prüfen" in r.text
         # Mitglied nur in der Materialablage (Vorgabe neuer Konten): Riegenkarten, Ankerplätze, Leitstelle zu.
         w = k["wart"]
         assert w.get("/materialablage").status_code == 200

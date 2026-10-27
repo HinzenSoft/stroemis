@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Protokoll prüfen – strömis.de{% endblock %}
+{% block title %}Protokoll oder Lebenslauf prüfen – strömis.de{% endblock %}
 {% block head %}
 <link rel="stylesheet" href="{{ url_for('material.static', filename='material.css') }}">
 {% endblock %}
@@ -9,11 +9,12 @@
    Kennung und Stand –, keine Personendaten. Die Datei wird nicht gespeichert. #}
 <main class="page narrow mat-pruefen" id="pruefen" data-angemeldet="{{ 'ja' if angemeldet else 'nein' }}">
   {% if angemeldet %}<div class="mat-pfad"><a href="/materialablage">Materialablage</a> <span class="mat-pfad-glied">/ <a href="/materialablage/pruefungen">Prüfungen</a></span></div>{% endif %}
-  <h1>Protokoll prüfen</h1>
+  <h1>Protokoll oder Lebenslauf prüfen</h1>
   <p>Jedes festgeschriebene Protokoll von strömis.de – Prüf-, Aussonderungs-, Sammel- und Set-Protokoll – und jeder
     Lebenslauf trägt im Fuß jeder Seite eine Prüfsumme: „SHA-256 (erste N Bytes): …“. Lade die PDF-Datei hier hoch; die
     Seite vergleicht sie mit dem Wert, der beim Festschreiben bzw. beim Abruf des Lebenslaufs gespeichert wurde. Die Datei
-    wird dabei nicht gespeichert.</p>
+    wird dabei nicht gespeichert. Lebensläufe, die abgerufen wurden, bevor sie eine Kennung (L-…) bekamen, tragen keine
+    Prüfsumme – sie werden hier nicht erkannt.</p>
   <form id="pr-form" class="mat-pruefen-form">
     <label class="mat-ablage" id="pr-ablage" for="pr-datei">
       <span id="pr-name">PDF-Datei hierher ziehen oder <u>auswählen</u></span>

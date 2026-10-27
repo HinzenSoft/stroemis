@@ -289,15 +289,25 @@ def antrag_json(k, item=None, inhalt=True, rows=None):
 
 def rueckruf_folgen(item, wuensche):
     """Was eine neue Seriennummer und/oder ein anderes Produkt an laufenden Rückrufen ändert: {"nicht_mehr": […],
-    "neu": […]} mit {id, title} – Rückrufe, die den Artikel heute treffen und danach nicht mehr, und umgekehrt (Vorbild
-    bestand.produktwechsel_eintragen). Ein ausgesonderter Artikel zählt nicht (rueckruf)."""
+    "neu": […], "wieder_offen": […]} mit {id, title} – Rückrufe, die den Artikel heute treffen und danach nicht mehr, und
+    umgekehrt (Vorbild bestand.produktwechsel_eintragen); dazu die, die ihn weiter treffen und für ihn heute durch eine
+    Prüfung erledigt sind: Nach dem Antrag zählt nur eine Prüfung, die danach begann (rueckruf.BETROFFEN_AB_SQL, R1) –
+    der Rückruf gilt dann wieder als offen, auch bei einem reinen Tippfehler (Liste nach dem Merge, 18). Ein
+    ausgesonderter Artikel zählt nicht (rueckruf)."""
     if not ({"serial_no", "product_id"} & set(wuensche)) or item["lock_state"] == "ausgesondert":
-        return {"nicht_mehr": [], "neu": []}
+        return {"nicht_mehr": [], "neu": [], "wieder_offen": []}
     vorher = {r["id"]: r for r in rueckruf.betrifft(item["product_id"], item["serial_no"])}
     nachher = {r["id"]: r for r in rueckruf.betrifft(wuensche.get("product_id", item["product_id"]),
                                                      wuensche.get("serial_no", item["serial_no"]))}
+    wieder = []
+    bleiben = [i for i in vorher if i in nachher]
+    zeile = (rueckruf._artikel_im_bestand(item["product_id"], item["id"], sichtbar=False) or [None])[0] if bleiben else None
+    for i in bleiben if zeile else ():
+        if rueckruf.zustand(rueckruf.rueckruf(i), zeile) == ("erledigt", "geprueft"):
+            wieder.append({"id": i, "title": vorher[i]["title"]})
     return {"nicht_mehr": [{"id": i, "title": r["title"]} for i, r in vorher.items() if i not in nachher],
-            "neu": [{"id": i, "title": r["title"]} for i, r in nachher.items() if i not in vorher]}
+            "neu": [{"id": i, "title": r["title"]} for i, r in nachher.items() if i not in vorher],
+            "wieder_offen": wieder}
 
 
 def journal_verbergen(eintraege):
@@ -651,8 +661,10 @@ def bestaetigen(aid, d):
         _produktnamen(vorher, nachher, item, wuensche)
         if antwort:
             nachher["anmerkung"] = antwort
-        # Laufende Rückrufe, aus denen der Artikel danach fällt (oder in die er kommt) – bewusst entschieden.
-        for schluessel, liste_ in (("rueckruf_nicht_mehr", folgen["nicht_mehr"]), ("rueckruf_neu", folgen["neu"])):
+        # Laufende Rückrufe, aus denen der Artikel danach fällt (oder in die er kommt oder die für ihn wieder offen sind)
+        # – bewusst entschieden.
+        for schluessel, liste_ in (("rueckruf_nicht_mehr", folgen["nicht_mehr"]), ("rueckruf_neu", folgen["neu"]),
+                                   ("rueckruf_wieder_offen", folgen["wieder_offen"])):
             if liste_:
                 nachher[schluessel] = [f"{x['title']} (Nr. {x['id']})" for x in liste_]
         journal.eintragen("item", item["id"], "antrag_bestaetigt", vorher, nachher)

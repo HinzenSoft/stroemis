@@ -239,7 +239,7 @@ def test_migration():
         vorher = _zeilen_je_tabelle(pfad)
         assert vorher["mat_round_setprotokoll"] and vorher["mat_audit"] and vorher["mat_inspection"]
         app = make_app(tmp)
-        assert zeilen(app, "SELECT wert FROM mat_meta WHERE schluessel = 'schema_version'")[0]["wert"] == endversion() == "31"
+        assert zeilen(app, "SELECT wert FROM mat_meta WHERE schluessel = 'schema_version'")[0]["wert"] == endversion()
         schema = _schema(pfad)
         assert schema == schema_frisch, _unterschied(schema, schema_frisch)
         nachher = _zeilen_je_tabelle(pfad)

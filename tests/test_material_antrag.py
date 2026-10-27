@@ -78,6 +78,14 @@ def trigger_31():
     return {x.split("CREATE TRIGGER IF NOT EXISTS ", 1)[1].split()[0] for x in models.SCHRITT_31 if "CREATE TRIGGER" in x}
 
 
+def trigger_32():
+    """Die Trigger aus Schritt 32 (REPLACE ohne recursive_triggers): fünf ersetzen gleichnamige aus Schritt 30, zwei sind
+    neu am Artikel."""
+    from app.material import models
+    return {x.split("CREATE TRIGGER IF NOT EXISTS ", 1)[1].split()[0]
+            for x in models.TRIGGER_32_ZEILE + models.TRIGGER_32_ARTIKEL}
+
+
 def trigger_25(nur_antrag=False):
     """Die Trigger aus Schritt 25 (Bestandteil-Liste, Seriennummern der Bestandteile) – zwei ersetzen gleichnamige aus
     Schritt 21. nur_antrag: nur die, die mat_item_change lesen (wer die Tabelle entfernt, entfernt sie mit)."""
@@ -1149,14 +1157,15 @@ def test_rueckruf_hinweis():
         assert vorher == {"Platzhalter-Rückruf alt": False, "Platzhalter-Rückruf alle": True}, vorher
         aid = beantragen(t.p, t.k1, serial_no="AN-100-K").json["antrag"]["id"]
         erwartet = {"nicht_mehr": [{"id": rueckrufe["Platzhalter-Rückruf alt"], "title": "Platzhalter-Rückruf alt"}],
-                    "neu": [{"id": rueckrufe["Platzhalter-Rückruf neu"], "title": "Platzhalter-Rückruf neu"}]}
+                    "neu": [{"id": rueckrufe["Platzhalter-Rückruf neu"], "title": "Platzhalter-Rückruf neu"}],
+                    "wieder_offen": []}
         karte = [x for x in t.w.get("/api/material/antraege").json["antraege"] if x["id"] == aid][0]
         assert karte["rueckruf"] == erwartet, karte["rueckruf"]
         assert lesen(t.w, t.k1)["antraege"][0]["rueckruf"] == erwartet
         # Herstelldatum und ein Artikel ohne passende Rückrufe: leer.
         a2 = beantragen(t.p, t.s1, serial_no="AN-S1X").json["antrag"]["id"]
         x = [y for y in t.w.get("/api/material/antraege").json["antraege"] if y["id"] == a2][0]
-        assert x["rueckruf"] == {"nicht_mehr": [], "neu": []}, x
+        assert x["rueckruf"] == {"nicht_mehr": [], "neu": [], "wieder_offen": []}, x
         assert bestaetigen(t.w, aid).status_code == 200
         j = journal(t.app, t.k1, "antrag_bestaetigt")[-1]["nachher"]
         assert j["rueckruf_nicht_mehr"] == [f"Platzhalter-Rückruf alt (Nr. {rueckrufe['Platzhalter-Rückruf alt']})"], j
@@ -1468,7 +1477,7 @@ def test_migration_17():
         # 26: die Wächter des Rückbaus statt der entfallenen Set-Trigger; 30: Kennungen und Kontoverweise; 31: Lebensläufe.
         neu_26, weg_26 = trigger_26()
         erwartet = (set(t16) | TRIGGER_17 | TRIGGER_19 | trigger_21() | TRIGGER_23 | trigger_25() | neu_26 | trigger_27()
-                    | trigger_30() | trigger_31()) - weg_26
+                    | trigger_30() | trigger_31() | trigger_32()) - weg_26
         assert v17 == endversion() and set(t17) == erwartet, set(t17) ^ erwartet
         assert t17["mat_item_stammdaten_fest"] != t16["mat_item_stammdaten_fest"]
         assert t17["mat_item_antrag_angewendet"] != t16["mat_item_antrag_angewendet"]          # seit Schritt 23 alle Felder

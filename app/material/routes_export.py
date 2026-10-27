@@ -8,12 +8,20 @@ allein gibt keinen Export. Fremdes antwortet wie Unbekanntes mit 404. Den Inhalt
 services/lebenslauf.py. Nichts davon wird zwischengespeichert: Die Antworten tragen Cache-Control no-store."""
 import io
 
-from flask import redirect, render_template, request, send_file, url_for
+from flask import current_app, redirect, render_template, request, send_file, url_for
 
-from ..auth import current_user
+from .. import db
+from ..auth import attempts_exceeded, current_user, note_attempt
 from .routes import seiten
 from .services import Abgelehnt, antwort_privat, export, lebenslauf, zeitstempel
 from .services.rechte import NUR_GRUNDRECHT, _bezug, darf, zugang, zugang_meldung
+
+
+# Abrufbremse je Konto für den Lebenslauf (wie an der Prüfseite, auth.ATTEMPT_WINDOW = eine Viertelstunde): Jeder Abruf
+# kostet die Satzarbeit eines PDFs und schreibt eine unveränderliche Zeile in mat_lebenslauf (Prüfung nach dem Merge, V2).
+LEBENSLAUF_JE_VIERTELSTUNDE = 60
+ZU_VIELE_LEBENSLAEUFE = ("Du hast in kurzer Zeit sehr viele Lebensläufe abgerufen. Bitte in einer Viertelstunde noch "
+                         "einmal.")
 
 
 def _zugang(quelle, kennung_wert):
@@ -101,10 +109,23 @@ def durchgang_protokolle(rid):
 @seiten.get("/materialablage/artikel/<int:iid>/lebenslauf.pdf")
 def lebenslauf_pdf(iid):
     """Lebenslauf eines Artikels als PDF – im Browser geöffnet wie die Protokolle, auf Abruf gesetzt, mit Kennung und
-    Prüfsummen-Stempel; jeder Abruf ist in mat_lebenslauf verzeichnet, ohne das Konto (services/lebenslauf.py)."""
+    Prüfsummen-Stempel; jeder Abruf ist in mat_lebenslauf verzeichnet, ohne das Konto (services/lebenslauf.py). HEAD
+    antwortet nach der Rechteprüfung nur mit Kopfzeilen; je Konto höchstens LEBENSLAUF_JE_VIERTELSTUNDE Abrufe."""
     nein = _zugang("iid", iid)
     if nein:
         return nein
+    if request.method == "HEAD":
+        # Nach der Rechteprüfung nur die Kopfzeilen – ohne Kennung, ohne Eintrag in mat_lebenslauf, ohne Satzarbeit:
+        # Vorabladen bekäme sonst einen Lebenslauf, den niemand sieht (Prüfung nach dem Merge, V1).
+        resp = _privat(current_app.response_class(mimetype="application/pdf"))
+        resp.automatically_set_content_length = False
+        return resp
+    bereich = [f"lebenslauf-konto:{current_user()['id']}"]
+    if attempts_exceeded(bereich, LEBENSLAUF_JE_VIERTELSTUNDE):
+        seite, code = _fehler(Abgelehnt(ZU_VIELE_LEBENSLAEUFE, 429))
+        return seite, code, {"Retry-After": "900"}
+    with db.transaction():
+        note_attempt(bereich[0])
     try:
         daten, inventarnummer, kennung = lebenslauf.rendern(iid)
     except Abgelehnt as exc:
