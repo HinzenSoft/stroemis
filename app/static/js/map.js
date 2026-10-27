@@ -57,6 +57,8 @@
         const div = L.DomUtil.create("div", "leaflet-bar");
         const a = L.DomUtil.create("a", "locate-me", div);
         a.href = "#"; a.title = "Meinen Standort anzeigen"; a.textContent = "◎"; a.setAttribute("role", "button");
+        // Das Zeichen allein wäre der Name fürs Vorlesen („◎“) – der Knopf heißt, was er tut (UI/UX vor dem Merge C3).
+        a.setAttribute("aria-label", "Meinen Standort anzeigen");
         L.DomEvent.on(a, "click", (e) => {
           L.DomEvent.preventDefault(e);
           state.map.locate({ setView: true, maxZoom: 17, enableHighAccuracy: true });
@@ -211,7 +213,7 @@
                        : `<div class="muted small">Kein Ansprechpartner eingetragen.${a.can_edit ? " Über „Bearbeiten“ nachtragen." : ""}</div>`}
       <h3>Bilder (${a.photos.length})${a.unlocated_count ? ` <span class="badge">${a.unlocated_count} ohne Position</span>` : ""}</h3>
       ${a.can_edit ? `<div class="btn-row"><button class="btn secondary small" id="a-upload">Bilder / Videos hochladen</button>
-        ${a.unlocated_count ? '<button class="btn yellow small" id="a-locate">Bilder ohne Position lokalisieren</button>' : ""}</div>` : ""}
+        ${a.unlocated_count ? '<button class="btn secondary small" id="a-locate">Bilder ohne Position lokalisieren</button>' : ""}</div>` : ""}
       ${a.photos.length ? `<div class="photo-grid">${a.photos.map((p, i) => `
         <button data-i="${i}" ${p.id === highlightId ? 'class="hi"' : ""} title="${esc(p.title || p.original_name)}">
           <img src="${esc(p.thumb)}" alt="${esc(p.title || p.original_name)}" loading="lazy">
@@ -221,7 +223,6 @@
         </button>`).join("")}</div>`
         : `<div class="leerzustand"><strong>Noch keine Bilder</strong>${a.can_edit ? "Lade Bilder hoch – Geotags werden automatisch ausgelesen." : ""}</div>`}
       <div class="meta abgesetzt">Angelegt von ${esc(a.owner_name || "")}${a.owner_gliederung ? " (" + esc(a.owner_gliederung) + ")" : ""}, zuletzt geändert ${fmtDate(a.updated_at, true)}</div>
-      ${a.can_edit ? '<div class="btn-row abgesetzt"><button class="btn secondary small" id="a-delete">Album löschen</button></div>' : ""}
     `);
     panelBody.querySelectorAll(".photo-grid button").forEach((b) => b.addEventListener("click", () => openLightbox(+b.dataset.i)));
     const hi = panelBody.querySelector(".photo-grid .hi");
@@ -231,11 +232,20 @@
     const ed = $("#a-edit"); if (ed) ed.onclick = () => albumDialog(a);
     const up = $("#a-upload"); if (up) up.onclick = () => { fileInput.value = ""; fileInput.click(); };
     const lo = $("#a-locate"); if (lo) lo.onclick = () => startLocate(a.photos.filter((p) => p.lat == null));
-    const del = $("#a-delete"); if (del) del.onclick = async () => {
-      if (!(await S.confirm(`Album „${a.title}“${a.photos.length === 1 ? " mit seinem Bild" : a.photos.length ? ` mit allen ${a.photos.length} Bildern` : ""} endgültig löschen?`))) return;
-      try { await api(`/api/albums/${a.id}`, { method: "DELETE" }); toast("Album gelöscht"); closePanel(); loadMap(); }
-      catch (e) { toast(e.message, true); }
-    };
+  }
+
+  /* Album löschen: selten und endgültig – deshalb nicht mehr als eigener Knopf im Panel, sondern links außen im Dialog
+     „Album bearbeiten“ (UI/UX vor dem Merge C7; Knopfsprache „seltene Funktionen in Dialog oder Untermenü“). */
+  async function albumLoeschen(a, dlg) {
+    const n = (a.photos || []).length;
+    if (!(await S.confirm(`Album „${a.title}“${n === 1 ? " mit seinem Bild" : n ? ` mit allen ${n} Bildern` : ""} endgültig löschen?`))) return;
+    try {
+      await api(`/api/albums/${a.id}`, { method: "DELETE" });
+      if (dlg) dlg.close();
+      toast("Album gelöscht");
+      closePanel();
+      loadMap();
+    } catch (e) { toast(e.message, true); }
   }
 
   /* --- Album anlegen / bearbeiten --------------------------------------- */
@@ -263,8 +273,10 @@
       <label for="al-cnotes">Hinweise zur Kontaktaufnahme</label>
       <textarea id="al-cnotes" style="min-height:60px" placeholder="z. B. Übungen bitte 2 Wochen vorher anmelden">${esc(a.contact_notes)}</textarea>
       ${isNew ? '<label class="inline abgesetzt"><input type="checkbox" id="al-upload" checked> Danach direkt Bilder hochladen</label>' : ""}
-      <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button><button class="btn" id="al-save" type="button">${isNew ? "Album anlegen" : "Speichern"}</button></div>`,
+      <div class="dlg-actions">${!isNew && a.can_edit ? '<button class="btn secondary dlg-neben" id="al-del" type="button">Album löschen</button>' : ""}<button class="btn secondary" data-close type="button">Abbrechen</button><button class="btn" id="al-save" type="button">${isNew ? "Album anlegen" : "Speichern"}</button></div>`,
       (dlg, body) => {
+        const weg = body.querySelector("#al-del");
+        if (weg) weg.onclick = () => albumLoeschen(a, dlg);
         body.querySelector("#al-save").onclick = async (ev) => {
           const knopf = ev.currentTarget;
           if (knopf.disabled) return;          // zweiter Klick, während die Anfrage läuft
@@ -397,7 +409,7 @@
         dialog(`<h2>${unl.length === 1 ? "Ein Bild ohne Geotag" : unl.length + " Bilder ohne Geotag"}</h2>
           <p>${unl.length === 1 ? "Dieses Bild enthält" : "Diese Bilder enthalten"} keine Positionsdaten. Möchtest du ${unl.length === 1 ? "es" : "sie"} jetzt auf der Karte platzieren?</p>
           <div class="photo-grid">${unl.map((p) => `<button type="button" disabled><img src="${esc(p.thumb)}" alt=""></button>`).join("")}</div>
-          <div class="dlg-actions"><button class="btn secondary" data-close type="button">Später</button><button class="btn yellow" id="loc-start" type="button">Jetzt auf der Karte platzieren</button></div>`,
+          <div class="dlg-actions"><button class="btn secondary" data-close type="button">Später</button><button class="btn" id="loc-start" type="button">Jetzt auf der Karte platzieren</button></div>`,
           (dl2, body) => { body.querySelector("#loc-start").onclick = () => { dl2.close(); startLocate(unl); }; });
       }
     };
@@ -639,6 +651,8 @@
     if (p.kind === "video") kv.push(["Video", `${esc(p.original_name)} – <a href="${esc(p.orig)}" target="_blank" rel="noopener">herunterladen</a>`]);
     else if (p.width) kv.push(["Original", `${p.width} × ${p.height} px – <a href="${esc(p.orig)}" target="_blank" rel="noopener">herunterladen</a>`]);
 
+    // Knöpfe der Großansicht: was man oft braucht, als Knopf; „Als Deckblatt“ und „Löschen“ sind selten und stehen im Menü
+    // „Mehr“ (UI/UX vor dem Merge C7 – vorher fünf Knöpfe). Bleibt nur einer von beiden, steht er als Knopf da (S.menue).
     const view = `
       <h2>${esc(p.title || p.original_name)}</h2>
       <div class="meta">Bild ${state.lbIndex + 1} von ${a.photos.length} · ${esc(a.title)}</div>
@@ -650,10 +664,11 @@
           ${canEdit ? '<button class="btn secondary small" id="lb-edit">Bearbeiten</button>' : ""}
           ${canEdit ? `<button class="btn secondary small" id="lb-loc">${p.lat != null ? "Position ändern" : "Auf Karte platzieren"}</button>` : ""}
           ${p.lat != null ? '<button class="btn secondary small" id="lb-fit">Auf Karte zeigen</button>' : ""}
-          ${canEdit && a.can_edit ? `<button class="btn secondary small" id="lb-cover"${a.cover_photo_id === p.id ? " disabled" : ""}>${
-            a.cover_photo_id === p.id ? "Ist das Deckblatt" : "Als Deckblatt"}</button>` : ""}
+          ${S.menue({ art: "zeilenmenue", eintraege: [
+            canEdit && a.can_edit && { text: a.cover_photo_id === p.id ? "Ist das Deckblatt" : "Als Deckblatt",
+                                      attrs: `id="lb-cover"${a.cover_photo_id === p.id ? " disabled" : ""}` },
+            canEdit && { text: "Löschen", attrs: 'id="lb-del"' }] })}
         </div>
-        ${canEdit ? '<div class="btn-row lb-aktionen-weg"><button class="btn secondary small" id="lb-del">Löschen</button></div>' : ""}
       </div>`;
 
     const form = `

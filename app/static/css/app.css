@@ -266,8 +266,6 @@ h3.abgesetzt { margin-top: 18px; }
 .btn.danger { background: var(--weiss); color: var(--rot); border-color: var(--rot); }
 .btn.danger:hover { background: var(--rot-hell); color: var(--rot-auf-flaeche); }
 .btn.small { padding: 5px 10px; font-size: var(--fs-klein); }
-.btn.yellow { background: var(--gelb); color: var(--anthrazit); border-color: var(--gelb); }
-.btn.yellow:hover { background: var(--gelb-dunkel); border-color: var(--gelb-dunkel); color: var(--anthrazit); }
 /* Immer als <div> in eine Zelle setzen, nie die Klasse direkt an ein <td>: display:flex auf dem
    Zellen-Element selbst ließ die Zelle nur noch so hoch wie ihr Inhalt werden, nicht mehr so hoch
    wie die Tabellenzeile – Klick- und Hover-Fläche endeten dann sichtbar vor dem Zeilenende. */
@@ -557,7 +555,19 @@ html.tastatur dialog[open] .dlg-body { max-height: calc(var(--vv-h, 100dvh) - 22
   .login-shell { grid-template-columns: 1fr; }
   .login-side { padding: 28px 22px; }
   .login-side h1 { font-size: 2rem; }
-  .login-form { padding: 24px 22px 40px; }
+  /* Am Telefon zuerst das Formular, der Werbeteil darunter (UI/UX vor dem Merge C1): vorher endete „Anmelden“ am iPhone SE
+     bei 740 von 667 px – mit echten Browserleisten auch am 390er unter dem Rand. Das Zeichen steht ja schon in der
+     Kopfleiste. */
+  .login-form { order: -1; padding: 20px 22px 28px; }
+  .login-side { justify-content: flex-start; }
+}
+/* Wenig Höhe (Telefon quer): weniger Polster, damit Feld und Knopf ins erste Bild passen (C1, 844 × 390). */
+@media (max-height: 500px) {
+  .login-form { padding-top: 14px; padding-bottom: 20px; justify-content: flex-start; }
+  .login-form h2 { margin-bottom: 6px; }
+  .login-form label { margin-top: 8px; }
+  .login-form .btn { margin-top: 12px; }
+  .login-side { padding-top: 20px; padding-bottom: 20px; justify-content: flex-start; }
 }
 
 /* --- Karte ------------------------------------------------------------- */
@@ -744,7 +754,8 @@ dialog.lightbox { width: min(1200px, 97vw); border-top: 0; background: var(--ant
   display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px;
 }
 .lb-side .lb-aktionen > .btn-row:first-child .btn { width: 100%; justify-content: center; }
-.lb-side .lb-aktionen-weg { padding-top: 10px; border-top: 1px solid var(--linie); }
+/* „Als Deckblatt“ und „Löschen“ stehen im Menü „Mehr“ (UI/UX vor dem Merge C7) – es füllt seine Zelle wie die Knöpfe. */
+.lb-side .lb-aktionen > .btn-row:first-child > details.menue { display: block; }
 .kv { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; font-size: var(--fs-mittel); margin: 10px 0; }
 .kv dt { color: var(--grau); } .kv dd { margin: 0; white-space: pre-wrap; }
 .note-box { background: var(--grau-hell); border-left: 4px solid var(--gelb); padding: 8px 10px; white-space: pre-wrap; margin: 8px 0; }
@@ -924,7 +935,9 @@ h5:hover > .h-anchor, .h-anchor:focus-visible { opacity: 1; }
 /* Der Baum-Knopf in der Kopfzeile gehört dem Telefon (siehe unten). Steht vor dem Media-Block,
    weil die spätere .kopfknopf-Regel sonst auch am Rechner display:inline-flex durchsetzte. */
 .wiki-head .kopfknopf.baum-knopf { display: none; }
-@media (max-width: 800px) {
+/* Unter 1024 px ist der Seitenbaum eine Schublade hinter „☰“ – derselbe Umschaltpunkt wie die Ordnerleiste der
+   Materialablage (UI/UX vor dem Merge D13; vorher erst ab 800 px, dazwischen stand der Baum 260 px breit daneben). */
+@media (max-width: 1023px) {
   /* minmax(0, 1fr) statt 1fr: Ein "1fr" wächst mit dem breitesten Kind mit. Die Kopfzeile mit
      Pfad und Knöpfen zwang die Spalte so auf 458 px, das Dokument wurde breiter als das Fenster,
      und beim Herauszoomen hörte die Bauchbinde am alten Fensterrand auf. */
@@ -1033,6 +1046,11 @@ mark.cq { background: var(--markierung); padding: 0 1px; cursor: pointer; border
 .wiki-editor .toastui-editor-defaultUI { border-radius: var(--radius); font-family: var(--font); }
 .wiki-editor .toastui-editor-contents { font-family: var(--font); font-size: 1rem; color: var(--anthrazit); }
 .callout-pick { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
+/* Gewählte Art eines Callouts: Rand, Häkchen und fett statt rot gefüllt – rot bleibt die Hauptaktion des Dialogs (UI/UX C2). */
+.callout-art .btn[aria-pressed="true"] { border-color: var(--anthrazit); box-shadow: inset 0 0 0 1px var(--anthrazit); font-weight: 700; }
+.callout-art .btn[aria-pressed="true"]::before { content: "✓"; }
+/* Emoji-Raster der Callout-Dialoge erst auf Wunsch (D15): bis dahin nur der Knopf, ohne Rahmen. */
+.em-grid.em-zu { border: 0; padding: 0; max-height: none; }
 
 /* Teilen */
 .user-pick { max-height: 240px; overflow: auto; border: 1px solid var(--linie); padding: 4px 10px; margin-top: 6px; }
@@ -1459,19 +1477,19 @@ details:is(.menue, .mat-menue, .zeilenmenue)[open] > summary::after { transform:
 @media (max-width: 860px) { .zeilenmenue-liste { right: auto; left: 0; } }
 
 /* --- Einstellungen in der Verwaltung ---------------------------------------------------
-   Ein Feld trägt drei Angaben: wofür es gut ist, woher der geltende Wert kommt und wie die
-   Variable in der .env heißt. Die Herkunft ist das Entscheidende – ohne sie sieht man einem
-   Feld nicht an, ob der Wert hier gesetzt wurde oder aus der Datei stammt, und wer dann etwas
-   ändert und nichts geschieht, sucht an der falschen Stelle. */
-.einst-gruppe { border: 1px solid var(--linie); border-radius: var(--radius); padding: 4px 14px 14px; margin: 0 0 16px; }
-.einst-gruppe legend { font-weight: 700; padding: 0 6px; }
+   Ein Feld trägt zwei Angaben: wofür es gut ist und woher der geltende Wert kommt. Die Herkunft ist das Entscheidende –
+   ohne sie sieht man einem Feld nicht an, ob der Wert hier gesetzt wurde oder aus der Grundeinstellung auf dem Server
+   stammt, und wer dann etwas ändert und nichts geschieht, sucht an der falschen Stelle. Den Namen in der Datei (.env)
+   nennt nur noch das title der Marke (UI/UX vor dem Merge C4). Je Gruppe ein zugeklappter Abschnitt (details.accordion);
+   im Kopf klein die Zahl der Felder und was hier gesetzt ist. */
+.einst-gruppe { margin: 0 0 10px; }
+.einst-gruppe > summary .einst-zahl { margin-left: 10px; font-weight: 400; font-size: var(--fs-klein); color: var(--grau); }
 .einst-feld { margin: 12px 0; }
 .einst-feld input[type=text], .einst-feld input[type=password], .einst-feld input[type=number], .einst-feld textarea { width: 100%; }
 .einst-feld textarea { resize: vertical; }
 .einst-feld .help { margin-top: 2px; }
 .einst-kopf { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; margin-bottom: 2px; }
 .einst-kopf label { font-weight: 600; margin: 0; }
-.einst-name { color: var(--grau); font-size: var(--fs-marke); }
 .einst-quelle { font-size: var(--fs-marke); padding: 1px 6px; border-radius: var(--radius-pille); border: 1px solid var(--linie); color: var(--grau); }
 .einst-quelle.q-gespeichert { border-color: var(--rot); color: var(--rot-auf-flaeche); background: var(--rot-hell); }
 .einst-schalter { display: flex; align-items: center; gap: 8px; font-weight: 600; }
@@ -1699,7 +1717,11 @@ h1.seitentitel,
   font-size: 1.7rem; line-height: 1.2; font-weight: 700; color: var(--rot);
   letter-spacing: -.01em; margin: 0 0 .5em; padding: 0; border: 0;
 }
-h1.seitentitel .page-icon { margin-right: 6px; }
+/* Das Seitensymbol steht vor dem Titel, gehört aber nicht zur Überschrift (UI/UX vor dem Merge C3 – vorher las die
+   Vorlesehilfe „＋ DEMO-Start“): eine Zeile aus Knopf und h1, das Symbol so groß wie der Titel. */
+.seitentitel-zeile { display: flex; align-items: baseline; margin: 0 0 .5em; }
+.seitentitel-zeile > h1.seitentitel { margin: 0; min-width: 0; }
+.seitentitel-zeile > .page-icon { flex: none; margin-right: 6px; font-family: var(--font-marke); font-size: 1.7rem; line-height: 1.2; font-weight: 700; }
 
 /* Brotkrumen oben links – Symbol und Titel je Ebene, getrennt durch einen Schrägstrich. */
 .krumen { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: var(--fs-klein); min-width: 0; }
@@ -1906,6 +1928,12 @@ dialog.us-dlg { width: min(640px, 96vw); }
   z-index: auto;
 }
 .wiki-editor .toastui-editor-ww-container .ProseMirror > * { grid-column: 1 / -1; min-width: 0; }
+/* Steht nur der Titel da (neue Seite), zeigt eine gestrichelte Fläche, wo der Text hinkommt (UI/UX vor dem Merge C12);
+   ein Tipp darauf legt die erste Zeile an (wiki.js). */
+.wiki-editor .toastui-editor-ww-container .ProseMirror:not(:has(> :not(h1:first-child, .autorzeile)))::after {
+  content: "Hier beginnt der Text der Seite."; grid-column: 1 / -1; display: block;
+  min-height: 30vh; margin-top: 12px; padding: 14px 16px; border: 2px dashed var(--linie); border-radius: var(--radius);
+  color: var(--grau); font-size: var(--fs-mittel); cursor: text; }
 /* Die Autorzeile ist ein Widget ohne Dekoration – ihre Zeile hält das Plugin frei. */
 .wiki-editor .toastui-editor-ww-container .ProseMirror > .autorzeile { grid-column: 1 / -1; grid-row: 2; }
 
@@ -2368,7 +2396,7 @@ dialog.us-dlg { width: min(640px, 96vw); }
   /* Rechts mindestens 8 px: Der letzte Punkt der Hauptnavigation („Abmelden“ bzw. „Mehr“) stand sonst bündig am
      Fensterrand (Browserprüfung der Umbenennung, B2 – die längeren Modulnamen füllen die Leiste bis zum Rand). */
   .bauchbinde { padding-left: env(safe-area-inset-left); padding-right: max(8px, env(safe-area-inset-right)); }
-  @media (max-width: 800px) {
+  @media (max-width: 1023px) {
     .wiki-side { padding-left: calc(12px + env(safe-area-inset-left)); padding-bottom: calc(40px + env(safe-area-inset-bottom)); }
   }
 }
@@ -2379,12 +2407,12 @@ dialog.us-dlg { width: min(640px, 96vw); }
    Seitenbaum, rechts der Text; auf der Karte rechts die Albumleiste. Browser ohne diese
    Abfrage (Safari, Desktop) überspringen den Block.
    ============================================================================ */
-@media (horizontal-viewport-segments: 2) and (min-width: 801px) {
+@media (horizontal-viewport-segments: 2) and (min-width: 1024px) {
   body .wiki-shell, body.public .wiki-shell.public { grid-template-columns: env(viewport-segment-right 0 0) minmax(0, 1fr); }
   .wiki-side { width: auto; }
   .map-shell { --panel-w: env(viewport-segment-width 1 0); }
 }
-@media (horizontal-viewport-segments: 2) and (max-width: 800px) {
+@media (horizontal-viewport-segments: 2) and (max-width: 1023px) {
   /* Zusammengeklappt schmal, aber mit zwei Hälften: die Schublade füllt genau die linke. */
   .wiki-side { width: env(viewport-segment-right 0 0); }
   .panel { width: env(viewport-segment-width 1 0); }
@@ -2414,10 +2442,9 @@ dialog.us-dlg { width: min(640px, 96vw); }
   .md-lightbox img { max-height: calc(env(viewport-segment-height 0 1) - 48px); }
 }
 
-/* Tablet (801–1024 px): Der Seitenbaum ist höchstens 260 px breit – min() gegen die am
-   Rechner gespeicherte Breite. Steht hinter der 1180-px-Regel, damit es sie überstimmt;
-   unter 801 px gilt weiter die Schublade. */
-@media (min-width: 801px) and (max-width: 1024px) {
+/* Tablet quer (1024 px): Der Seitenbaum ist höchstens 260 px breit – min() gegen die am Rechner gespeicherte Breite.
+   Steht hinter der 1180-px-Regel, damit es sie überstimmt; darunter ist er eine Schublade (D13, vorher 801–1024 px). */
+@media (min-width: 1024px) and (max-width: 1024px) {
   body .wiki-shell, body.editing .wiki-shell, body.public .wiki-shell.public { grid-template-columns: min(var(--side-w), 260px) minmax(0, 1fr); }
 }
 
@@ -2467,7 +2494,7 @@ dialog.us-dlg { width: min(640px, 96vw); }
   .wiki-head .mode-toggle button { padding-left: 8px; padding-right: 8px; }
   /* Die Liste „Unterseiten“ unter dem Text: jeder Link eine 44-px-Zeile. */
   .children-list a { display: inline-block; padding: 12px 0; }
-  .seitentitel .page-icon { display: inline-flex; align-items: center; justify-content: center; min-width: 44px; min-height: 44px; padding: 0; }
+  .seitentitel-zeile .page-icon { display: inline-flex; align-items: center; justify-content: center; min-width: 44px; min-height: 44px; padding: 0; }
   .autorzeile .autor-knopf { min-height: 44px; }
   .rundknopf { width: 44px; height: 44px; }
   /* Der Anker „#“ an Überschriften als 44-px-Fläche – die negativen Ränder halten die Zeilenhöhe. */
@@ -2572,4 +2599,58 @@ dialog.us-dlg { width: min(640px, 96vw); }
   .panel dl.contact a, .lb-side .kv a { display: inline-flex; align-items: center; min-height: 44px; }
   .lb-nav { min-width: 44px; }
   .lb-side .btn { min-height: 44px; }
+}
+
+/* ============================================================================
+   UI/UX vor dem Merge, Teil U3 (27.10.2026) – Leitstelle, Riegenkarten, Profil, Anmeldung, Strömipedia, Ankerplätze.
+   ============================================================================ */
+/* D13: Listen der Leitstelle und der Riegenkarten (table.list) werden nach der Breite des Inhalts zu Karten, nicht nach der
+   des Fensters – wie die Materialablage (Container „mat-seite“). Auf dem Doppelbildschirm steht der Inhalt in einer Hälfte
+   (C11, unten): Das Fenster ist dort 1 114 px breit, die Liste aber nur gut 500 px. Die Fensterregel (860 px, oben) gilt
+   weiter für Dialoge und für Browser ohne Containerabfragen; für diese beiden Seiten nimmt der erste Block sie zurück, der
+   zweite setzt die Karten nach der Inhaltsbreite (820 px Inhalt = 860 px Fenster abzüglich Seitenrand). Die Selektoren
+   beginnen mit main:where(…), damit sie die Fensterregel sicher schlagen, aber nicht die Feinheiten der Rechte-Felder
+   (table.list td.recht). */
+main.leitstelle, main.pruef { container: liste / inline-size; }
+@supports (container-type: inline-size) {
+  @media (max-width: 860px) {
+    main:where(.leitstelle, .pruef) table.list { display: table; }
+    main:where(.leitstelle, .pruef) table.list thead { display: table-header-group; }
+    main:where(.leitstelle, .pruef) table.list tbody { display: table-row-group; }
+    main:where(.leitstelle, .pruef) table.list tr { display: table-row; padding: 0; border-bottom: 0; }
+    main:where(.leitstelle, .pruef) table.list td { display: table-cell; padding: 8px; border: 0; border-bottom: 1px solid var(--linie); }
+    main:where(.leitstelle, .pruef) table.list td[data-l]::before { content: none; }
+    main:where(.leitstelle, .pruef) table.list td.recht { display: table-cell; width: auto; padding: 8px 4px; }
+    main:where(.leitstelle, .pruef) table.list td.recht[data-modul] { margin: 0; }
+    main:where(.leitstelle, .pruef) table.list td.recht .recht-wahl { font-size: var(--fs-marke); padding: 4px 2px 4px 4px; }
+    main:where(.leitstelle, .pruef) table.list tr:hover td { background: var(--grau-hell); }
+  }
+  @container liste (max-width: 820px) {
+    main:where(.leitstelle, .pruef) table.list, main:where(.leitstelle, .pruef) table.list tbody,
+    main:where(.leitstelle, .pruef) table.list tr, main:where(.leitstelle, .pruef) table.list td { display: block; }
+    main:where(.leitstelle, .pruef) table.list thead { display: none; }
+    main:where(.leitstelle, .pruef) table.list tr { padding: 10px 0 12px; border-bottom: 1px solid var(--linie); }
+    main:where(.leitstelle, .pruef) table.list td { border: 0; padding: 2px 0; white-space: normal; }
+    main:where(.leitstelle, .pruef) table.list td[data-l]::before { content: attr(data-l) ": "; color: var(--grau); font-size: var(--fs-klein); }
+    main:where(.leitstelle, .pruef) table.list td.tabelle-aktionen { padding-top: 8px; }
+    main:where(.leitstelle, .pruef) table.list tr:hover td { background: none; }
+    main:where(.leitstelle, .pruef) table.list td.recht { display: block; width: auto; padding: 4px 0; }
+    main:where(.leitstelle, .pruef) table.list td.recht[data-modul] { margin: 0; }
+    main:where(.leitstelle, .pruef) table.list td.recht::before { display: block; content: attr(data-l); margin-bottom: 2px; }
+    main:where(.leitstelle, .pruef) table.list td.recht .recht-wahl { font-size: 16px; padding: 6px 8px; width: 100%; }
+    /* C4: Die fünf Rechte-Felder einer Karte als ruhiges Raster aus zwei gleich breiten Spalten (vorher Flexzeilen, deren
+       zweite Spalte je Zeile woanders begann); alles andere über die ganze Breite. Eine leere Angabe („Gliederung:“
+       ohne Wert) bekommt keine eigene Zeile. */
+    main.leitstelle #users tr { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: 12px; }
+    main.leitstelle #users td { grid-column: 1 / -1; }
+    main.leitstelle #users td.recht { grid-column: auto; }
+    main.leitstelle #users td[data-l]:empty { display: none; }
+  }
+}
+/* C11: Doppelbildschirm mit zwei Hälften nebeneinander (Surface Duo, Falz bei x 543–571): Leitstelle, Riegenkarten und
+   Profil stehen ganz in der rechten Hälfte – vorher lagen Hilfe-Box, Rechte-Felder, Suchfeld, Reiter und Profilfelder auf
+   der Falz. Wie die Materialablage ohne Leiste (material.css, „Doppelbildschirm mit Scharnier“). */
+@media (horizontal-viewport-segments: 2) {
+  main.page.breit.leitstelle, main.pruef[data-ansicht], main.page.profil-seite {
+    max-width: env(viewport-segment-width 1 0); margin-left: env(viewport-segment-left 1 0); margin-right: 0; }
 }

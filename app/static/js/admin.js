@@ -500,7 +500,7 @@
 
   /* Material von „Mitglied“ oder „Verwaltung“ auf „–“ oder das Konto deaktiviert: Ist es heute der einzige Materialwart
      einer Gliederung (letzter_materialwart aus GET …/material-folgen, gezählt wie die Regel „keine Gliederung ohne
-     Verwalter“ am Ordner), fragt die Nutzerverwaltung vorher nach – danach verwaltet dort nur noch die
+     Verwalter“ am Ordner), fragt die Leitstelle vorher nach – danach verwaltet dort nur noch die
      Material-Verwaltung. Nur eine Warnung, keine Sperre. Ohne Senkung, ohne betroffene Gliederung oder wenn die
      Auskunft fehlt: keine Rückfrage. true heißt speichern. */
   async function materialwartBleibt(u, material, aktiv) {
@@ -566,9 +566,8 @@
     document.querySelectorAll("[data-reiter]").forEach((b) => b.classList.toggle("sel", b.dataset.reiter === name));
     document.getElementById("bereich-nutzer").classList.toggle("hidden", name !== "nutzer");
     document.getElementById("bereich-einstellungen").classList.toggle("hidden", name === "nutzer");
-    document.getElementById("seitentitel").textContent = name === "nutzer" ? "Nutzerverwaltung" : "Einstellungen";
-    document.querySelectorAll("[data-titel-info]").forEach((el) => el.classList.toggle("hidden", el.dataset.titelInfo !== name));
-    S.titel(name === "nutzer" ? "Nutzerverwaltung" : "Einstellungen", "verwaltung");   // Reiter des Browsers (V2)
+    // Die Überschrift bleibt „Leitstelle“ (C5); der Reiter des Browsers nennt den Reiter vorn (V2).
+    S.titel(name === "nutzer" ? "Nutzer" : "Einstellungen", "verwaltung");
     // „Nutzer anlegen“ gehört zur Liste. Die Probemail bleibt auf beiden Reitern stehen: Sie ist
     // die Gegenprobe zu den Mail-Einstellungen und gerade dort am nötigsten.
     document.getElementById("btn-new-user").classList.toggle("hidden", name !== "nutzer");
@@ -585,26 +584,41 @@
      Konfiguration. Sonst müsste jede neue Einstellung an zwei Orten gepflegt werden. */
   let felder = [], gruppen = [];
   const form = document.getElementById("einst-form");
+  // Geprüft wird beim Server (Meldung am Feld): Die eingebaute Prüfung des Browsers bliebe an einem Feld in einer
+  // zugeklappten Gruppe stumm hängen.
+  form.noValidate = true;
 
+  /* Woher der geltende Wert kommt – in Worten der Plattform-Verwaltung (UI/UX vor dem Merge C4/C8): Die Datei auf dem
+     Server heißt hier „Grundeinstellung“, ihr Name (.env) und die Schlüssel (SMTP_STARTTLS …) stehen in der README und nur
+     noch im title der Marke für den, der in der Datei nachsehen will. */
   const QUELLE = {
-    gespeichert: ["hier gesetzt", "Gilt vorrangig vor der .env."],
-    umgebung: ["aus der .env", "Steht in der Datei auf dem Server."],
+    gespeichert: ["hier gesetzt", "Gilt vor der Grundeinstellung auf dem Server."],
+    umgebung: ["Grundeinstellung", "Steht in der Grundeinstellung auf dem Server."],
     vorgabe: ["Vorgabe", "Eingebauter Wert – nirgends gesetzt."],
   };
+  const offeneGruppen = new Set();
 
+  /* Gegliedert und kurz (C4): je Gruppe ein zugeklappter Abschnitt – vorher standen 37 Felder untereinander (rund 3 900 px).
+     Im Kopf steht, wie viele Werte hier gesetzt sind; was offen war, bleibt nach dem Speichern offen. */
   function zeichneEinstellungen() {
     form.innerHTML = gruppen.map((g) => {
       const meine = felder.filter((f) => f.gruppe === g);
-      return `<fieldset class="einst-gruppe"><legend>${S.esc(g)}</legend>${meine.map(feldHtml).join("")}</fieldset>`;
+      const gesetzt = meine.filter((f) => f.quelle === "gespeichert").length;
+      return `<details class="accordion einst-gruppe" data-gruppe="${S.esc(g)}"${offeneGruppen.has(g) ? " open" : ""}>
+        <summary>${S.esc(g)}<span class="einst-zahl">${S.plural(meine.length, "Feld", "Felder")}${gesetzt ? `, ${gesetzt} hier gesetzt` : ""}</span></summary>
+        <div class="accordion-body">${meine.map(feldHtml).join("")}</div></details>`;
     }).join("") + `<div class="btn-row einst-aktionen">
         <button class="btn" type="submit">Speichern</button>
         <span class="help" id="einst-stand"></span></div>`;
+    form.querySelectorAll("details.einst-gruppe").forEach((d) => d.addEventListener("toggle", () => {
+      if (d.open) offeneGruppen.add(d.dataset.gruppe); else offeneGruppen.delete(d.dataset.gruppe);
+    }));
   }
 
   function feldHtml(f) {
     const id = "e-" + f.schluessel;
     const [kurz, titel] = QUELLE[f.quelle] || QUELLE.vorgabe;
-    const marke = `<span class="einst-quelle q-${f.quelle}" title="${S.esc(titel)}">${kurz}</span>`;
+    const marke = `<span class="einst-quelle q-${f.quelle}" title="${S.esc(`${titel} (${f.schluessel})`)}">${kurz}</span>`;
     const zurueck = f.quelle === "gespeichert"
       ? `<button type="button" class="btn secondary small" data-zurueck="${f.schluessel}">Zurücksetzen</button>` : "";
     let eingabe;
@@ -622,7 +636,7 @@
     const hilfe = f.geheim && f.gesetzt ? (f.hilfe + " Zurzeit ist eines hinterlegt.") : f.hilfe;
     return `<div class="einst-feld">
       <div class="einst-kopf">${f.art === "schalter" ? "" : `<label for="${id}">${S.esc(f.titel)}</label>`}
-        ${marke}<code class="einst-name">${S.esc(f.schluessel)}</code>${zurueck}</div>
+        ${marke}${zurueck}</div>
       ${eingabe}
       ${hilfe ? `<div class="help">${S.esc(hilfe)}</div>` : ""}
     </div>`;
@@ -666,8 +680,14 @@
       const d = await S.api("/api/admin/einstellungen", { method: "PUT", body: { werte } });
       uebernehmen(d);
       S.toast("Einstellungen gespeichert");
-    } catch (err) { S.fehlschlag(knopf, err, form); }
-    finally { knopf.disabled = false; }
+    } catch (err) {
+      // Nennt die Meldung ein Feld („„Port“ braucht eine Zahl.“), geht seine Gruppe auf – zugeklappt fände der Fokus es nicht.
+      const m = String(err.message || "").match(/^„([^“]+)“/);
+      if (m) form.querySelectorAll("details.einst-gruppe").forEach((d) => {
+        if ([...d.querySelectorAll("label")].some((l) => l.textContent.trim() === m[1])) d.open = true;
+      });
+      S.fehlschlag(knopf, err, form);
+    } finally { knopf.disabled = false; }
   });
 
   form.addEventListener("click", async (e) => {
@@ -675,8 +695,8 @@
     if (!b) return;
     e.preventDefault();
     const f = felder.find((x) => x.schluessel === b.dataset.zurueck);
-    if (!(await S.confirm(`„${f ? f.titel : b.dataset.zurueck}“ zurücksetzen? Danach gilt wieder, `
-                          + "was in der .env steht – oder die eingebaute Vorgabe.", "Zurücksetzen"))) return;
+    if (!(await S.confirm(`„${f ? f.titel : b.dataset.zurueck}“ zurücksetzen? Danach gilt wieder die Grundeinstellung `
+                          + "auf dem Server – oder die eingebaute Vorgabe.", "Zurücksetzen"))) return;
     try {
       uebernehmen(await S.api(`/api/admin/einstellungen/${encodeURIComponent(b.dataset.zurueck)}`, { method: "DELETE" }));
       S.toast("Zurückgesetzt");
@@ -684,5 +704,5 @@
   });
 
   if (location.hash === "#einstellungen") reiter("einstellungen");
-  else S.titel("Nutzerverwaltung", "verwaltung");
+  else S.titel("Nutzer", "verwaltung");
 })();

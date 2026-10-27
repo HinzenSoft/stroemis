@@ -4,13 +4,17 @@
    table.list, dialog, .c-tabs). Gedacht für draußen am Gewässer, auf dem Telefon, mit einer Hand:
    große Ziele, wenig Text, Farben, die man auch bei Sonne unterscheidet. */
 
-/* Die Prüfungsseite darf den ganzen Bildschirm nutzen – die Matrix und die Teilnehmertabelle
-   zeigen am Abend am Rechner umso mehr Spalten ohne Rollen. Das Wiki bleibt bei seiner Lesebreite. */
-.pruef { max-width: none; }
+/* Die Prüfungsseite darf breit werden – die Matrix und die Teilnehmertabelle zeigen am Abend am Rechner umso mehr Spalten
+   ohne Rollen. Aber nicht grenzenlos (UI/UX vor dem Merge A10): Bei 3 440 px war der Lehrgang 3 425 px breit, die Reiter je
+   1 250 px und „Import/Bearbeiten“ am äußersten Rand. Der Lehrgang endet bei 1 600 px (Matrix mit rund zehn Leistungen
+   ohne Rollen), das Katalogdetail wie die Listen bei 1 280 px; die Kopfknöpfe stehen damit beim Inhalt. Die Druckansicht
+   bleibt ohne Grenze. */
+.pruef { max-width: 1600px; }
+.pruef.druck { max-width: none; }
 /* Lehrgangs- und Katalogliste auf breiten Bildschirmen begrenzt wie die Leitstelle (.page.breit): bei 5120 px lagen die
    Spalten über 1000 px auseinander (Browserprüfung vor dem Merge, Verbesserung 6). Der Lehrgang selbst (Matrix) bleibt
    breit. */
-.pruef[data-ansicht=liste], .pruef[data-ansicht=kataloge] { max-width: 1280px; }
+.pruef[data-ansicht=liste], .pruef[data-ansicht=kataloge], .pruef[data-ansicht=katalog] { max-width: 1280px; }
 /* Hilfetexte höchstens rund 120 Zeichen je Zeile wie in Leitstelle und Materialablage (V10; st-geraete: 189 Zeichen). */
 .pruef :is(.help, .notice) { max-width: 100ch; }
 .pruef .page-head h1 { margin: 0; overflow-wrap: anywhere; }
@@ -69,12 +73,16 @@ p.dlg-tn { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .erg-marke { margin-left: 6px; vertical-align: middle; }
 /* Spalte „Lehrgang“: zwei runde Knöpfe (Leitung) oder die Marke; darunter wer und wann. */
 .erg-block { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; min-width: 104px; }
-.erg-knoepfe { display: inline-flex; gap: 6px; }
+/* Zeichen mit Wort („👍 bestanden“, UI/UX D14 – vorher runde Knöpfe nur mit dem Zeichen); in der schmalen Spalte
+   untereinander. */
+.erg-knoepfe { display: flex; flex-wrap: wrap; gap: 6px; }
 .erg-knopf {
-  width: 44px; height: 44px; border-radius: 50%; border: 2px solid var(--linie); background: var(--weiss);
-  font-size: 1.25rem; line-height: 1; cursor: pointer; display: inline-flex; align-items: center; justify-content: center;
+  min-height: 36px; padding: 4px 10px 4px 8px; border-radius: var(--radius); border: 2px solid var(--linie); background: var(--weiss);
+  font: inherit; font-size: var(--fs-klein); font-weight: 600; color: var(--anthrazit); line-height: 1.2; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 6px; white-space: nowrap;
   filter: grayscale(1); opacity: .65; transition: transform .1s ease;
 }
+.erg-knopf .sym { font-size: 1.1rem; line-height: 1; }
 .erg-knopf:hover { filter: none; opacity: 1; transform: scale(1.06); }
 .erg-knopf.ja:hover { border-color: var(--ok); }
 .erg-knopf.nein:hover { border-color: var(--rot); }
@@ -534,7 +542,7 @@ body:has(.pruef.druck) #toast { top: 12px; }
   .maengel-filter input[type=checkbox] { width: 26px; height: 26px; }
   /* Kommentarzelle und Ergebnisknöpfe sind Ziele wie die Bewertungszellen. */
   .komm-zelle { min-height: 56px; }
-  .erg-knopf { width: 48px; height: 48px; }
+  .erg-knopf { min-height: 44px; }
 }
 
 /* --- Diktat: Mikrofon-Knopf neben Textfeldern (diktat.js) ------------------------------------
@@ -582,4 +590,19 @@ body:has(.pruef.druck) #toast { top: 12px; }
 /* Querformat mit Kerbe: Inhalt nicht unter Notch oder Dynamic Island. */
 @media (max-width: 760px) {
   .pruef { padding-left: max(12px, env(safe-area-inset-left)); padding-right: max(12px, env(safe-area-inset-right)); }
+}
+
+/* --- UI/UX vor dem Merge, Teil U3 (27.10.2026) -------------------------------------------------------------------
+   D13: Teilnehmende als Tabelle oder Karten nach der Breite des Inhalts (Container „liste“ am <main>, app.css), nicht
+   nach der des Fensters – auf dem Doppelbildschirm (eine Hälfte, Fenster 1 114 px) wurden sie sonst eine Tabelle in
+   543 px. Browser ohne Containerabfragen behalten die Fensterregel oben (760 px). */
+@supports (container-type: inline-size) {
+  @media (max-width: 760px) {
+    .tn-desktop { display: block; }
+    .tn-mobil { display: none; }
+  }
+  @container liste (max-width: 720px) {
+    .tn-desktop { display: none; }
+    .tn-mobil { display: block; }
+  }
 }
