@@ -8,6 +8,7 @@ Wiki-Seiten verlinken weiter mit /wiki/<slug>.
 Fließtexte setzen die Namen nicht aus NAME zusammen, sie sind wörtlich formuliert (die Strömipedia, die Ankerplätze,
 die Riegenkarten, die Materialablage, die Leitstelle). NAME gilt für Reiter, Seitentitel und die Spalten der
 Rechte-Matrix."""
+import os
 import unicodedata
 from urllib.parse import quote
 
@@ -44,3 +45,11 @@ def weiterleitung(pfad, abfrage=""):
             ziel = neu + ("" if rest == "/" else quote(rest, safe=_PFAD_ZEICHEN))
             return ziel + ("?" + abfrage if abfrage else "")
     return None
+
+
+def dev_umgebung():
+    """Ist dies die Entwicklung (dev.strömis.de)? STROEMIS_NAME (Container und Abbild, gesetzt von
+    scripts/dev-einrichten.sh) endet auf „-dev“ – dieselbe Regel wie erinnerung.dev_umgebung in der Materialablage, hier
+    für die ganze Anwendung (Hinweis „Entwicklungsserver“ nach jeder Anmeldung, UI/UX vor dem Merge C10). Lokal ohne
+    „-dev“ und in der Produktion falsch."""
+    return (os.environ.get("STROEMIS_NAME") or "").strip().endswith("-dev")

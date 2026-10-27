@@ -53,6 +53,7 @@ Geschichte stehen. Schemaversion nach der Nachbesserung vor dem Merge: 30; mit d
 | Info-„i“ app-weit | Erklärsätze unter Überschriften und Feldern hinter ein „i“ am Begriff (55 Stellen in allen Modulen), `S.info` und Jinja-Makro, ein „i“ je Liste für Marken; „Seiten aus ZIP importieren“ im Seitenbaum der Strömipedia | gebaut 27.10.2026 (kein Schemaschritt, Schema bleibt 32), zur Freigabe |
 | Letzte offene Punkte | Datenschutzsätze an einem „i“ auf eine Zeile; Strömipedia: „Neue Seite“ und „⋯“ (Papierkorb, Import) über dem Baum, Blatt-Symbol statt kursivem „i“ für „Angaben zur Seite“, Fehlerart beim Ablegen von Dateien; eine Abschnittsaktion neben der Überschrift (Protokoll, Sammelprotokoll, Prüfformular, Herstellerdokumente); Leitstelle: Marken in der Hilfe-Box statt im „i“ | gebaut 27.10.2026 (kein Schemaschritt, Schema bleibt 32), zur Freigabe |
 | UI/UX vor dem Merge – U1a Verhalten | Zurück schließt Dialoge, Schubladen und Großansichten; Fehler am Feld; ein Menübaustein (ein Eintrag → Knopf, kurze Einträge, im Bild); Rückfragen mit Gegenstand, Nicht-Endgültiges ohne „danger“; Mehrzahl; Export mit Uhrzeit; deutsche Fehlerseiten; Bewegung reduzieren; Beschriftungen; Dialogfuß; Bedienzeichen ✕ ↑ ↓ app-weit | gebaut 27.10.2026 (kein Schemaschritt), Zweig uiux-1a |
+| UI/UX vor dem Merge – U3 übrige Module | Hinweis „Entwicklungsserver“ nach jeder Anmeldung auf dev; Anmeldung am Telefon Formular zuerst; Leitstelle: Überschrift „Leitstelle“, Einstellungen gegliedert und ohne Entwicklersprache; 403 führt in den eigenen Bereich; Riegenkarten breitenbegrenzt, Reiter ohne Verlaufseintrag, Knöpfe mit Wort; Ankerplätze und Strömipedia: eine rote Hauptaktion, Löschen in Dialog/Menü, Tastatur, benannte Knöpfe; Listen und Schublade nach der Inhaltsbreite, Doppelbildschirm | gebaut 27.10.2026 (kein Schemaschritt), Zweig uiux-3 |
 
 ## Abgleich mit dem Bestand (vor Lieferung 1)
 
@@ -9832,3 +9833,69 @@ Grundlage: `planung/material-phase4/uiux_liste.md` (vier UI/UX-Prüfungen vor de
   als Linie mit Zahl; „Unterschreiben“ im Profil neben der Überschrift.
 - Tests: `tests/test_module_uiux_u1b.py` (neu); angepasst: test_material_antrag, test_module_letzte_offene,
   test_material_vor_merge_3, test_material_dg_archiv, test_material_l5, test_module_nach_merge, test_module_info_i.
+
+### Teil U3 – übrige Module (Strömipedia, Ankerplätze, Riegenkarten, Leitstelle, Anmeldung, Profil)
+
+- **C10 Hinweis „Entwicklungsserver“** (Nutzer 27.10.2026): Auf dev (`STROEMIS_NAME` endet auf „-dev“, `module.dev_umgebung`
+  – dieselbe Regel wie die Erinnerungssperre der Materialablage) erscheint nach JEDER erfolgreichen Anmeldung genau einmal ein
+  modaler Dialog in der Mitte, auf der ersten Seite mit Kopfleiste, egal welches Modul: „Entwicklungsserver“ – Daten können
+  sich ändern, verschwinden oder neu auftauchen; es kann und wird zu Fehlern kommen; Fehler und Vorschläge mit Screenshot
+  und/oder Beschreibung an bugs@stroemis.de (Mail-Link mit Betreff „strömis.de dev: “); ein Knopf „Verstanden“ (Fokus darauf,
+  Esc und Zurück schließen ihn). Wege, die eine Sitzung beginnen, setzen den Merker alle in `auth.sitzung_beginnen`:
+  Anmeldeformular, erstes Konto über die Kontoanfrage, „Neues Passwort setzen“ per Link. „Passwort ändern“ im Profil beginnt
+  keine neue Sitzung (kein Hinweis). Nie in der Produktion, nicht lokal ohne „-dev“, nicht ohne Konto (öffentliche
+  Strömipedia, Anmeldeseiten), nicht beim zweiten Seitenaufruf.
+- **C1 Anmeldeseiten am Telefon:** bis 760 px steht das Formular vor dem Werbeteil (das Zeichen steht schon in der
+  Kopfleiste), wenig Höhe (quer) mit weniger Polster. Gemessen: Knopf „Anmelden“ endet am iPhone SE bei 333 von 667 px
+  (vorher 740), 360×780 bei 333, quer 844×390 bei 307; „Passwort vergessen“ 343, „Neues Passwort“ 333. Kontoanfrage: der
+  lange Spam-Absatz steht unter dem Formular (erstes Feld bei 292 statt 555 px) und fällt nach dem Absenden weg (die Antwort
+  sagt es schon).
+- **C2 eine Hauptaktion:** Callout-Dialoge (einfügen, bearbeiten) – die gewählte Art ist eine Auswahl (`aria-pressed`,
+  Rand, Häkchen, fett), rot bleibt nur „Einfügen“/„Übernehmen“; „Neue Seite“ über dem Seitenbaum wird grau, solange der
+  Editor offen ist („Anlegen“, „Entwurf übernehmen“) oder die leere Übersicht „Erste Seite anlegen“ zeigt; Ankerplätze ohne
+  gelbe Knöpfe („Bilder ohne Position lokalisieren“ grau, „Jetzt auf der Karte platzieren“ ist die Hauptaktion des Dialogs),
+  `.btn.yellow` entfällt.
+- **C3 Symbolknöpfe:** das Seitensymbol der Strömipedia („＋“ oder das gewählte Zeichen) steht vor, nicht in der Überschrift
+  und heißt „Symbol der Seite ändern“; Kartenknopf „◎“ heißt „Meinen Standort anzeigen“.
+- **C4 Leitstelle-Einstellungen:** je Gruppe ein zugeklappter Abschnitt (Kopf: Zahl der Felder und was hier gesetzt ist;
+  vorher 37 Felder auf rund 3 900 px), Schlüsselnamen (`SMTP_STARTTLS` …) nicht mehr vorn – nur im title der Herkunftsmarke;
+  Marken „hier gesetzt“/„Grundeinstellung“/„Vorgabe“ statt „aus der .env“; Hilfetexte ohne Entwicklersprache (Verschlüsselung,
+  Rückläufer, Kachel-Platzhalter); Speichern meldet ein Feld in einer zugeklappten Gruppe am Feld (Gruppe geht auf).
+  Nutzerliste als Karte: die fünf Rechte-Felder in zwei gleich breiten Spalten, leere Angaben ohne eigene Zeile.
+- **C5 Texte:** Überschrift „Leitstelle“ auf beiden Reitern (Browser-Titel „Nutzer – Leitstelle“ bzw. „Einstellungen –
+  Leitstelle“); „Nutzerverwaltung“ → „Leitstelle“ in Probemail, Prüfer-Hinweis der Materialablage, Wiki-Verweis und Ausgabe von
+  `dev-zuruecksetzen`; Einstellungsgruppe „Ankerplätze“ statt „Karte“; neues Startkonto heißt „Plattform-Verwaltung“
+  (bestehende behalten ihren Namen); Spam-Satz nach „Passwort vergessen“ nur einmal; 403-Seite führt in einen Bereich, den
+  das Konto hat (Strömipedia mit Stufe, Materialablage, „Meine PSA“, Ankerplätze, Riegenkarten, dann Lesemodus, Profil);
+  Lesemodus-Übersicht „Öffentliche Seiten“ ohne Pfadzeile (vorher dreimal „Strömipedia“); Platzhalter der
+  Riegenkarten-Suche „Titel, Ort oder Nummer“ (passt bei 390 px).
+- **C6** Riegenkarten-Reiter ersetzen den Verlaufseintrag (`replaceState`, wie Leitstelle und Album); Neuladen mit `#bewertung`
+  usw. bleibt auf dem Reiter.
+- **C7 Löschen:** Ankerplätze „Album löschen“ im Dialog „Album bearbeiten“ links außen; Großansicht: „Als Deckblatt“ und
+  „Löschen“ im Menü „Mehr“ (vorher fünf Knöpfe); Katalogdetail der Riegenkarten: „Bearbeiten“/„Löschen“ im Menü „Mehr“ wie
+  in der Liste. Bleiben nach der Konfliktregel als grauer Knopf: Riegenkarten-Großansicht („Original öffnen“ + „Löschen“ –
+  nur eine seltene Aktion) und „Löschen“ links im Teilnehmenden-Dialog (schon im Dialog).
+- **C8 Info-„i“:** Sichtbarkeitssatz unter „Lesen einschränken“ (Teilen-Dialog) und die ISC-Anleitung im Import stehen als
+  Satz da; die Herkunft der Einstellungen als Satz über den Gruppen (vorher „i“ mit `.env`).
+- **C9 Tastatur:** Ankerplätze – Filter, „Alben“, „Album anlegen“ vor der Karte in der Tab-Reihenfolge; Kommentarmarken im
+  Strömipedia-Text sind Tab-Stopps („Kommentar zu „…“ von …“), Eingabe/Leertaste springt zum Kommentar und setzt den Fokus.
+- **C11 Doppelbildschirm** (Surface Duo nebeneinander): Leitstelle, Riegenkarten und Profil stehen ganz in der rechten
+  Hälfte (gemessen: 0 Texte/Bedienelemente auf der Falz x 543–571, vorher Leitstelle 9/5, Profil 1/3, Lehrgang 2).
+- **C12** Strömipedia-Baum: „<Seite> aufklappen/zuklappen“ mit `aria-expanded`, „Unterseite zu <Seite> anlegen“,
+  „Weitere Aktionen zu <Seite>“; Editor „Neue Seite“: gestrichelte Schreibfläche „Hier beginnt der Text der Seite.“, ein
+  Tipp darauf legt die erste Textzeile an.
+- **A10-RK** Lehrgang höchstens 1 600 px, Katalogdetail 1 280 px breit (vorher am Ultrawide 3 425 px), Kopfknöpfe beim Inhalt.
+- **D13 Umschaltpunkte:** Strömipedia-Seitenbaum unter 1024 px als Schublade (wie die Materialablage, vorher ≤ 800 px);
+  Listen der Leitstelle und Riegenkarten (`table.list`, Teilnehmende) nach der Inhaltsbreite (Container „liste“) statt der
+  Fensterbreite; Dialoge behalten die Fensterregel.
+- **D14 Emoji:** Lehrgangsergebnis-Knöpfe „👍 bestanden“/„👎 nicht bestanden“ mit Wort; Marken „Soll 2:00“, „2 Kriterien“,
+  „Kriterien 1/2“, „Zeit 1:30“ statt ⏱/📋; „öffentlich“ ohne 🌐; Fehlertoast und „i“ ohne Emoji. Bleiben: Zeichen der
+  Bewertungszellen und der großen Bewertungswahl (mit Wort), Kriterien-Häkchen ✅/❌, 📎 an Zellen, 🌐/★ im Seitenbaum.
+- **D15** Kopfknöpfe des Lehrgangs und des Katalogdetails so groß wie die der Liste; Callout-Dialoge zeichnen die
+  Emoji-Auswahl erst auf „Emoji-Auswahl zeigen“ (vorher 2 170 Knöpfe bei jedem Öffnen).
+- Strömipedia-relevant: Hinweis „Entwicklungsserver“; Leitstelle-Überschrift und Einstellungsgruppen; 403-Weg; Baum am
+  Tablet als Schublade; „Album löschen“ im Bearbeiten-Dialog; Katalog „Mehr“; Lehrgangsergebnis mit Wort.
+- Tests: `tests/test_module_uiux_u3.py` (neu, C10 mit Flask-Client inkl. Kontoanfrage und Reset); angepasst:
+  test_module_info_i (R9, W3, L5 wieder sichtbar), test_material_vor_merge_3, test_material_dev_zuruecksetzen,
+  test_module_vor_merge, test_module_nach_merge, test_wiki_lesemodus, test_material_freigaben, test_smoke, test_pruefungen
+  (Startkonto „Plattform-Verwaltung“).

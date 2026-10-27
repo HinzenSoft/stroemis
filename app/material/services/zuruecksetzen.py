@@ -189,7 +189,7 @@ def _bleibt(b):
 def _demo_text(b):
     if not b["demo_konten"]:
         return []
-    return (["DEMO-Konten (bleiben, jetzt ohne Freigaben – über die Nutzerverwaltung löschen, falls nicht mehr "
+    return (["DEMO-Konten (bleiben, jetzt ohne Freigaben – über die Leitstelle löschen, falls nicht mehr "
              "gebraucht; material_beispielbestand.py übernimmt vorhandene und legt nur fehlende an):"]
             + [f"  {mail} ({name})" for mail, name in b["demo_konten"]])
 

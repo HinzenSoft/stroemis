@@ -113,7 +113,7 @@ def test_oberflaeche_statisch():
     assert "if (verdrahtet.has(a)) return;" in w and "verdrahtet.add(a);" in w
     assert "const verdrahtet = new WeakSet();" in wiki
     # N4: Emoji-Raster – ein Tab-Stopp, Pfeiltasten, Pos1/Ende.
-    e = wiki[wiki.index("const emojiPicker = (body, initial) => {"):wiki.index("/* Bild wählen und hochladen")]
+    e = wiki[wiki.index("const emojiPicker = (body, initial, opt = {}) => {"):wiki.index("/* Bild wählen und hochladen")]
     assert 'tabindex="${i ? -1 : 0}"' in e and "ArrowDown: spalten()" in e and 'e.key === "Home"' in e
     assert 'grid.setAttribute("role", "group")' in e
     # N6: „Seite nicht gefunden“ nur einmal.

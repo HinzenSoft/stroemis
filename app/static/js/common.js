@@ -909,6 +909,19 @@ window.S = (function () {
     document.title = [...[].concat(teile || []), name, "strömis.de"].map((t) => String(t || "").trim()).filter(Boolean).join(" – ");
   }
 
+  /* Hinweis „Entwicklungsserver“ (UI/UX vor dem Merge C10): base.html setzt den Dialog nur auf dev und nur einmal nach der
+     Anmeldung in die Seite. Mittig und modal wie jeder Dialog, Zurück schließt ihn (A1), der Fokus steht auf „Verstanden“ –
+     sonst nähme der Browser den Mail-Link davor. Esc schließt ihn wie der Knopf. */
+  (function devHinweis() {
+    const dlg = document.getElementById("dev-hinweis");
+    if (!dlg || typeof dlg.showModal !== "function") return;
+    const ok = dlg.querySelector("#dev-hinweis-ok");
+    ok.addEventListener("click", () => dlg.close());
+    dlg.showModal();
+    dialogVerlauf(dlg);
+    ok.focus();
+  })();
+
   return { esc, api, toast, dialog, confirm, fmtDate, fmtCoord, CAT, titel, info, overlayVerlauf, dialogVerlauf, klassenVerlauf,
            feldFehler, feldOk, fehlschlag, menue, menueSchwebend, plural, rollen, weich, schliessenKnopf, entfernenKnopf,
            reihenfolgeKnoepfe };

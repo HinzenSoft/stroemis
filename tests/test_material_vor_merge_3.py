@@ -149,7 +149,7 @@ def test_uebrige_module_statisch():
     co = lies("app/static/js/common.js")
     assert "function titel(teile, modul) {" in co and "return { esc, api, toast, dialog, confirm, fmtDate, fmtCoord, CAT, titel, info, overlayVerlauf," in co  # info seit 27.10.2026, Bausteine UI/UX vor dem Merge
     admin = lies("app/static/js/admin.js")
-    assert 'S.titel(name === "nutzer" ? "Nutzerverwaltung" : "Einstellungen", "verwaltung");' in admin
+    assert 'S.titel(name === "nutzer" ? "Nutzer" : "Einstellungen", "verwaltung");' in admin   # Überschrift „Leitstelle“ (UI/UX C5)
     assert "ghost" not in admin.replace("(btn ghost)", "")
     # Zeilenmenü seit UI/UX vor dem Merge (A3) über S.menue – beim eigenen Konto bleibt ein Eintrag, dann ein Knopf.
     assert 'S.menue({ art: "zeilenmenue", eintraege: [{ text: "Reset-Mail senden", kurz: "Reset-Mail", attrs: \'data-act="reset"\' },' in admin

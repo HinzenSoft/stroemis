@@ -124,7 +124,7 @@
      bleibt das title für die Maus). */
   const ZEITANSATZ_INFO = "Mit Zeitansatz zeigt der Bewertungsdialog eine Stoppuhr mit Sollzeit. Über das Bestehen entscheidet sie nicht.";
   const KRITERIEN_INFO = "Zusätzlich zur Beschreibung: einzeln abhakbare Punkte.";
-  const eingefrorenInfo = (tns) => (tns.some((t) => t.eingefroren) ? info("eingefroren", `🔒 eingefroren: ${esc(EINGEFROREN)}`) : "");
+  const eingefrorenInfo = (tns) => (tns.some((t) => t.eingefroren) ? info("eingefroren", `Eingefroren (Schloss am Namen): ${esc(EINGEFROREN)}`) : "");
 
   /* --- Teilnehmende: Bild, Schloss, Ergebnis ------------------------------------------------ */
   // Ein Eintrag der Mängelliste kennt nur id/name/vorname – Bild, Kommentar und Ergebnis kommen
@@ -180,13 +180,14 @@
     return `<span class="badge ${e[1]} erg-marke" title="Lehrgang ${e[0]}">${e[0]}</span>`;
   }
   const ergebnisVonHtml = (tn) => (tn.ergebnis ? `<span class="erg-von">von ${esc(kurzName(tn.ergebnis_von_name))} am ${esc(fmtDate(tn.ergebnis_am, true))}</span>` : "");
-  /* Spalte „Lehrgang“: Die Leitung sieht 👍/👎 (der gesetzte ist hervorgehoben), alle anderen
-     nur die Marke. Darunter klein, wer das Ergebnis wann vermerkt hat. */
+  /* Spalte „Lehrgang“: Die Leitung sieht „👍 bestanden“/„👎 nicht bestanden“ (der gesetzte ist hervorgehoben), alle
+     anderen nur die Marke. Darunter klein, wer das Ergebnis wann vermerkt hat. Das Zeichen steht wie in der großen
+     Bewertungswahl immer mit dem Wort (UI/UX vor dem Merge D14 – vorher nur 👍/👎). */
   function ergebnisHtml(tn) {
     if (!darfLeiten()) return `<div class="erg-block">${ergebnisMarkeHtml(tn, { leer: true })}${ergebnisVonHtml(tn)}</div>`;
-    const knopf = (erg, sym, titel, kl) => `<button type="button" class="erg-knopf ${kl}${tn.ergebnis === erg ? " sel" : ""}" data-act="tn-ergebnis" data-tid="${tn.id}" data-erg="${erg}"
-        aria-pressed="${tn.ergebnis === erg}" aria-label="${titel}" title="${titel}${tn.ergebnis === erg ? " – antippen zum Aufheben" : ""}">${sym}</button>`;
-    return `<div class="erg-block"><div class="erg-knoepfe">${knopf("bestanden", "👍", "Lehrgang bestanden", "ja")}${knopf("nicht_bestanden", "👎", "Lehrgang nicht bestanden", "nein")}</div>${ergebnisVonHtml(tn)}</div>`;
+    const knopf = (erg, sym, wort, kl) => `<button type="button" class="erg-knopf ${kl}${tn.ergebnis === erg ? " sel" : ""}" data-act="tn-ergebnis" data-tid="${tn.id}" data-erg="${erg}"
+        aria-pressed="${tn.ergebnis === erg}" aria-label="Lehrgang ${wort}" title="Lehrgang ${wort}${tn.ergebnis === erg ? " – antippen zum Aufheben" : ""}"><span class="sym" aria-hidden="true">${sym}</span> ${wort}</button>`;
+    return `<div class="erg-block"><div class="erg-knoepfe">${knopf("bestanden", "👍", "bestanden", "ja")}${knopf("nicht_bestanden", "👎", "nicht bestanden", "nein")}</div>${ergebnisVonHtml(tn)}</div>`;
   }
   /* Spalte „Kommentar“: die Zelle selbst öffnet den Dialog; gekürzt auf rund 60 Zeichen. */
   function kommentarZelleHtml(tn, opts = {}) {
@@ -334,7 +335,7 @@
     if (!su) { el.innerHTML = ""; return; }
     if (!el.dataset.fuer || el.dataset.fuer !== `${su.tid}:${su.lid}:${su.start}`) {
       el.dataset.fuer = `${su.tid}:${su.lid}:${su.start}`;
-      el.innerHTML = `<span aria-hidden="true">⏱</span><span>Stoppuhr läuft: ${esc(su.tn_name)} – ${esc(su.leistung)}</span>
+      el.innerHTML = `<span>Stoppuhr läuft: ${esc(su.tn_name)} – ${esc(su.leistung)}</span>
         <span class="zeit" id="su-banner-zeit"></span>
         <button type="button" class="btn secondary small" data-act="su-oeffnen">Öffnen</button>`;
     }
@@ -541,7 +542,7 @@
           <button class="btn" data-act="lg-neu"><span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Lehrgang<span class="k-anlegen"> anlegen</span></span></button></div></div>
       <div class="su-banner hidden" id="su-banner"></div>
       <div class="filter">
-        <input type="search" id="lg-suche" placeholder="Titel, Ort oder Nummer suchen …" aria-label="Lehrgänge durchsuchen" autocomplete="off">
+        <input type="search" id="lg-suche" placeholder="Titel, Ort oder Nummer" aria-label="Lehrgänge durchsuchen" autocomplete="off">
         <select id="lg-jahr" aria-label="Jahr"><option value="">Alle Jahre</option></select>
       </div>
       <div id="lg-liste"><p class="help">Wird geladen …</p></div>`;
@@ -688,8 +689,9 @@
     S.titel(k.titel, "pruefungen");
     root.innerHTML = `<a class="zurueck" href="/riegenkarten/kataloge">← Alle Kataloge</a>
       <div class="page-head"><h1>${esc(k.titel)}</h1>
-        ${admin ? `<div class="btn-row"><button class="btn secondary small" data-act="kat-edit" data-id="${k.id}">Bearbeiten</button>
-        <button class="btn secondary small" data-act="kat-del" data-id="${k.id}">Löschen</button></div>` : ""}</div>
+        ${admin ? `<div class="btn-row">${S.menue({ art: "zeilenmenue", klein: false, eintraege: [
+          { text: "Bearbeiten", attrs: `data-act="kat-edit" data-id="${k.id}"` },
+          { text: "Löschen", attrs: `data-act="kat-del" data-id="${k.id}"` }] })}</div>` : ""}</div>
       ${k.beschreibung ? `<details class="beschreibung-kopf"><summary>Beschreibung</summary><div class="md">${esc(k.beschreibung).replace(/\n/g, "<br>")}</div></details>` : ""}
       <div class="abschnittskopf"><h2>Prüfungsleistungen</h2>
         ${admin ? '<div class="btn-row"><button class="btn small" data-act="kl-neu"><span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Prüfungsleistung<span class="k-anlegen"> anlegen</span></span></button></div>' : ""}</div>
@@ -852,7 +854,8 @@
     const referierende = (lg.ausbilder || []).filter((a) => !a.ist_leitung).map(person).join(", ");
     const ausb = [leitungen ? `<span class="muted">Leitung:</span> ${leitungen}` : "",
                   referierende ? `<span class="muted">Referierende:</span> ${referierende}` : ""].filter(Boolean).join(" · ");
-    // Kopfknöpfe nur für die Leitung; „Bearbeiten“ steht ganz rechts. Kopieren geht über die Liste.
+    // Kopfknöpfe nur für die Leitung; „Bearbeiten“ steht ganz rechts. Kopieren geht über die Liste. So groß wie die Kopfknöpfe
+    // der Liste (UI/UX vor dem Merge D15 – vorher „small“).
     const best = lg.ergebnis_bestanden || 0, nicht = lg.ergebnis_nicht_bestanden || 0;
     // Rollstand der Matrizen und offene Beschreibungen überleben das Neuzeichnen – sonst sprang die
     // Matrix nach jedem Speichern auf dem Tablet zurück in die erste Spalte.
@@ -863,8 +866,8 @@
       <a class="zurueck" href="/riegenkarten">← Alle Lehrgänge</a>
       <div class="page-head"><h1>${esc(lg.titel)}</h1>
         ${lg.darf_leiten ? `<div class="btn-row">
-          <button class="btn secondary small" data-act="lg-import-in" data-id="${lg.id}">Import</button>
-          <button class="btn secondary small" data-act="lg-edit" data-id="${lg.id}">Bearbeiten</button>
+          <button class="btn secondary" data-act="lg-import-in" data-id="${lg.id}">Import</button>
+          <button class="btn secondary" data-act="lg-edit" data-id="${lg.id}">Bearbeiten</button>
         </div>` : ""}</div>
       <div class="kopf-meta">${statusMarke(lg.status)}${lg.nummer ? `<span>Nr. ${esc(lg.nummer)}</span>` : ""}
         ${lg.datum_von || lg.datum_bis ? `<span>${esc(spanne(lg.datum_von, lg.datum_bis))}</span>` : ""}${lg.ort ? `<span>${esc(lg.ort)}</span>` : ""}
@@ -1209,8 +1212,8 @@
      bzw. "kl"), damit ein Klick nie im falschen Bereich landet. */
   function leistungKarteHtml(l, i, gesamt, editierbar, praefix) {
     return `<div class="leistung-karte" data-lid="${l.id}">
-      <div class="titel">${esc(l.bezeichnung)} ${l.zeitansatz_sekunden != null ? `<span class="badge grey" title="Zeitansatz (Sollzeit)">⏱ ${fmtZeit(l.zeitansatz_sekunden)}</span>` : ""}
-        ${l.kriterien && l.kriterien.length ? `<span class="badge grey" title="Kriterienliste">📋 ${l.kriterien.length}</span>` : ""}</div>
+      <div class="titel">${esc(l.bezeichnung)} ${l.zeitansatz_sekunden != null ? `<span class="badge grey" title="Zeitansatz (Sollzeit)">Soll ${fmtZeit(l.zeitansatz_sekunden)}</span>` : ""}
+        ${l.kriterien && l.kriterien.length ? `<span class="badge grey" title="Kriterienliste">${plural(l.kriterien.length, "Kriterium", "Kriterien")}</span>` : ""}</div>
       ${editierbar ? `<div class="btn-row">
         <button class="btn secondary small" data-act="${praefix}-edit" data-lid="${l.id}">Bearbeiten</button>
         ${gesamt > 1 ? sortierKnoepfe(i, gesamt, `data-act="${praefix}-hoch" data-lid="${l.id}"`, `data-act="${praefix}-runter" data-lid="${l.id}"`) : ""}
@@ -1633,7 +1636,7 @@
     // schneller Indikator, ohne dafür die Zelle öffnen zu müssen. In "je TN" steht stattdessen
     // die volle Liste darunter (siehe bewertungHtml) – dort unterbleibt das Kürzel (opts.ohneKrit).
     const krit = z && !opts.ohneKrit && l.kriterien && l.kriterien.length
-      ? `<span class="krit-stand" role="img" aria-label="${z.kriterien_erfuellt} von ${l.kriterien.length} Kriterien erfüllt" title="${z.kriterien_erfuellt} von ${l.kriterien.length} Kriterien erfüllt">📋 ${z.kriterien_erfuellt}/${l.kriterien.length}</span>`
+      ? `<span class="krit-stand" role="img" aria-label="${z.kriterien_erfuellt} von ${l.kriterien.length} Kriterien erfüllt" title="${z.kriterien_erfuellt} von ${l.kriterien.length} Kriterien erfüllt">Kriterien ${z.kriterien_erfuellt}/${l.kriterien.length}</span>`
       : "";
     return `${auf}
       <span class="sym" aria-hidden="true">${def.sym}</span>
@@ -1657,7 +1660,7 @@
         <button type="button" role="tab" data-act="bew-ansicht" data-a="leistung" class="${a === "leistung" ? "sel" : ""}">je Leistung</button>
         <button type="button" role="tab" data-act="bew-ansicht" data-a="tn" class="${a === "tn" ? "sel" : ""}">je Teilnehmende</button>
       </div>
-      ${a === "leistung" ? `<select id="bew-sel-leistung" aria-label="Prüfungsleistung">${ls.map((l) => `<option value="${l.id}" ${l.id === state.bewLeistung ? "selected" : ""}>${esc(l.bezeichnung)}${l.zeitansatz_sekunden != null ? ` (⏱ ${fmtZeit(l.zeitansatz_sekunden)})` : ""}</option>`).join("")}</select>` : ""}
+      ${a === "leistung" ? `<select id="bew-sel-leistung" aria-label="Prüfungsleistung">${ls.map((l) => `<option value="${l.id}" ${l.id === state.bewLeistung ? "selected" : ""}>${esc(l.bezeichnung)}${l.zeitansatz_sekunden != null ? ` (Soll ${fmtZeit(l.zeitansatz_sekunden)})` : ""}</option>`).join("")}</select>` : ""}
       ${a === "tn" ? `<select id="bew-sel-tn" aria-label="Teilnehmende">${tns.map((t) => `<option value="${t.id}" ${t.id === state.bewTn ? "selected" : ""}>${esc(tnName(t))}${t.gliederung ? ` (${esc(t.gliederung)})` : ""}</option>`).join("")}</select>
         <button type="button" class="btn secondary small" data-act="bew-tn-druck" title="Alle Leistungen dieser Person mit Kommentaren und Bildern drucken oder als PDF speichern">Druckansicht</button>` : ""}
     </div>`;
@@ -1667,7 +1670,7 @@
       // „je TN“ – in der Matrix machten die beiden Spalten die Tabelle am Gewässer nur breiter.
       // Das Schloss und die Dämpfung eingefrorener Personen bleiben.
       inhalt = `<div class="table-scroll"><table class="bew-matrix">
-        <thead><tr><th class="tn-kopf">Teilnehmende</th>${ls.map((l) => `<th title="${esc(l.bezeichnung)}">${esc(l.bezeichnung)}${l.zeitansatz_sekunden != null ? `<br><span class="muted">⏱ ${fmtZeit(l.zeitansatz_sekunden)}</span>` : ""}</th>`).join("")}</tr></thead>
+        <thead><tr><th class="tn-kopf">Teilnehmende</th>${ls.map((l) => `<th title="${esc(l.bezeichnung)}">${esc(l.bezeichnung)}${l.zeitansatz_sekunden != null ? `<br><span class="muted">Soll ${fmtZeit(l.zeitansatz_sekunden)}</span>` : ""}</th>`).join("")}</tr></thead>
         <tbody>${tns.map((tn) => `<tr class="${tn.eingefroren ? "gesperrt" : ""}">
           <td>${tnKopfHtml(tn, `<button type="button" class="linkbtn" data-act="bew-zu-tn" data-tid="${tn.id}" title="Ansicht „je Teilnehmende“ für ${esc(tnName(tn))} öffnen">${esc(tnName(tn))}</button>`)}<span class="tn-sub">${esc(tn.gliederung || "")}</span>
             ${tn.voraussetzungen_offen ? `<span class="badge rot" title="Voraussetzungen nicht vollständig">${tn.voraussetzungen_offen} Vorauss. offen</span>` : ""}</td>
@@ -1696,7 +1699,7 @@
           const z = tn.leistungen[String(l.id)];
           const status = z ? z.status : "offen";
           const zeit = z && z.letzte_zeit_sekunden != null
-            ? `<small class="zeile-zeit">⏱ ${fmtZeit(z.letzte_zeit_sekunden)}${l.zeitansatz_sekunden != null ? ` von ${fmtZeit(l.zeitansatz_sekunden)}${z.letzte_zeit_sekunden > l.zeitansatz_sekunden ? " – über Sollzeit" : ""}` : ""}</small>`
+            ? `<small class="zeile-zeit">Zeit ${fmtZeit(z.letzte_zeit_sekunden)}${l.zeitansatz_sekunden != null ? ` von ${fmtZeit(l.zeitansatz_sekunden)}${z.letzte_zeit_sekunden > l.zeitansatz_sekunden ? " – über Sollzeit" : ""}` : ""}</small>`
             : (l.zeitansatz_sekunden != null ? `<small>Sollzeit ${fmtZeit(l.zeitansatz_sekunden)}</small>` : "");
           const komm = z && z.letzter_kommentar ? `<small class="zeile-komm">${esc(kuerzen(z.letzter_kommentar, 220))}</small>` : "";
           // Volle Kriterienliste statt nur des X/Y-Kürzels: In dieser Ansicht steht ohnehin nur
@@ -1745,7 +1748,7 @@
       });
   }
 
-  /* Lehrgangsergebnis 👍/👎 (nur Leitung). Ein Klick auf das gesetzte Ergebnis hebt es auf –
+  /* Lehrgangsergebnis bestanden/nicht bestanden (nur Leitung). Ein Klick auf das gesetzte Ergebnis hebt es auf –
      erst dann lassen sich wieder Prüfungen erfassen. */
   async function ergebnisSetzen(tid, erg, knopf) {
     const tn = tnAusState(tid);
@@ -1800,7 +1803,7 @@
     return `<div class="versuch-karte ${v.ergebnis}" data-vid="${v.id}">
       <div class="vk-kopf"><span>${versuchTitel(v)}</span>
         <span class="erg ${v.ergebnis}">${v.ergebnis === "bestanden" ? "👍 bestanden" : "👎 mangelhaft"}</span>
-        ${v.zeit_sekunden != null ? `<span class="zeit">⏱ ${fmtZeit(v.zeit_sekunden)}${opts.soll != null ? ` <span class="muted">(Soll ${fmtZeit(opts.soll)})</span>` : ""}</span>` : ""}</div>
+        ${v.zeit_sekunden != null ? `<span class="zeit">Zeit ${fmtZeit(v.zeit_sekunden)}${opts.soll != null ? ` <span class="muted">(Soll ${fmtZeit(opts.soll)})</span>` : ""}</span>` : ""}</div>
       ${v.kommentar ? `<div class="kommentar">${esc(v.kommentar)}</div>` : ""}
       ${kriterienErgebnisHtml(v.leistung_id, v.kriterien)}
       ${medienGridHtml(v.medien, { loeschbar: !!opts.onMedienWeg, onDelete: opts.onMedienWeg })}
@@ -2104,7 +2107,7 @@
         const knopf = ev.currentTarget;
         if (knopf.disabled) return;
         const erg = gewaehlt();
-        if (!erg) { wahl.scrollIntoView({ block: "center" }); return toast("Bitte 👍 bestanden oder 👎 mangelhaft wählen.", true); }
+        if (!erg) { wahl.scrollIntoView({ block: "center" }); return toast("Bitte „bestanden“ oder „mangelhaft“ wählen.", true); }
         // Läuft die Stoppuhr noch und ist das Zeitfeld leer, gilt die gemessene Zeit – wer
         // direkt speichert, hat das Stoppen nur übersprungen, nicht die Messung verworfen.
         const laufend = suLesen();
@@ -2191,7 +2194,7 @@
     const bearbeitet = v.bearbeitet_am ? ` · bearbeitet von ${esc(v.bearbeitet_von_name)} am ${esc(fmtDate(v.bearbeitet_am, true))}` : "";
     return `<div class="mangel-karte ${m.nachpruefung_status === "bestanden" ? "gut" : ""}">
       <div class="mk-kopf"><span class="leistung">${esc(m.leistung.bezeichnung)}</span><span class="muted">${versuchTitel(v)}</span>
-        ${v.zeit_sekunden != null || m.leistung.zeitansatz_sekunden != null ? `<span class="zeit">⏱ ${v.zeit_sekunden != null ? fmtZeit(v.zeit_sekunden) : "–"}${m.leistung.zeitansatz_sekunden != null ? ` (Soll ${fmtZeit(m.leistung.zeitansatz_sekunden)})` : ""}</span>` : ""}
+        ${v.zeit_sekunden != null || m.leistung.zeitansatz_sekunden != null ? `<span class="zeit">Zeit ${v.zeit_sekunden != null ? fmtZeit(v.zeit_sekunden) : "–"}${m.leistung.zeitansatz_sekunden != null ? ` (Soll ${fmtZeit(m.leistung.zeitansatz_sekunden)})` : ""}</span>` : ""}
         <span class="${npKlasse}">${npText}</span></div>
       ${v.kommentar ? `<div class="kommentar">${esc(v.kommentar)}</div>` : '<div class="kommentar muted">Kein Kommentar.</div>'}
       ${kriterienErgebnisHtml(v.leistung_id, v.kriterien)}
@@ -2242,7 +2245,7 @@
       ${versuche.length ? versuche.map((v) => `<div class="versuch-karte ${v.ergebnis}">
         <div class="vk-kopf"><span>${esc(v.leistung_bezeichnung)}</span><span class="muted">${versuchTitel(v)}</span>
           <span class="erg ${v.ergebnis}">${v.ergebnis === "bestanden" ? "👍 bestanden" : "👎 mangelhaft"}</span>
-          ${v.zeit_sekunden != null ? `<span class="zeit">⏱ ${fmtZeit(v.zeit_sekunden)}${soll(v.leistung_id) != null ? ` <span class="muted">(Soll ${fmtZeit(soll(v.leistung_id))})</span>` : ""}</span>` : ""}</div>
+          ${v.zeit_sekunden != null ? `<span class="zeit">Zeit ${fmtZeit(v.zeit_sekunden)}${soll(v.leistung_id) != null ? ` <span class="muted">(Soll ${fmtZeit(soll(v.leistung_id))})</span>` : ""}</span>` : ""}</div>
         ${v.kommentar ? `<div class="kommentar">${esc(v.kommentar)}</div>` : ""}
         ${kriterienErgebnisHtml(v.leistung_id, v.kriterien)}
         ${medienGridHtml(v.medien)}
@@ -2331,13 +2334,14 @@
                  datum_von: $("#imp-von", body).value, datum_bis: $("#imp-bis", body).value };
     };
 
+    // Die Anleitung für den ISC steht als Satz da – man braucht sie zum Handeln, sie gehört nicht hinter ein „i“ (UI/UX vor
+    // dem Merge C8).
     const schrittDatei = () => {
       dialogOeffnen(`<h2>Import</h2>
         <p class="help">${lehrgang ? `Teilnehmende und Voraussetzungen in „${esc(lehrgang.titel)}“ übernehmen. Bestehende Teilnehmende (gleicher Name, ggf. Geburtsdatum) werden aktualisiert, nicht doppelt angelegt.`
           : "Aus einer Excel-Teilnehmerliste (.xlsx) wird ein neuer Lehrgang mit Teilnehmenden und Voraussetzungen angelegt. Vorher gibt es eine Vorschau."}</p>
-        <p class="help import-isc">Die Stammdaten der Teilnehmenden lassen sich aus dem ISC${info("ISC", `Im ISC unter
-          <strong>Dokumente → Checkliste Voraussetzungen (Excel)</strong> die Option <strong>„Allgemeine Lehrgangsinformationen mit ausgeben“</strong>
-          wählen und die erzeugte Excel-Datei hier hochladen.`)} übernehmen.</p>
+        <p class="help import-isc">Aus dem ISC: unter <strong>Dokumente → Checkliste Voraussetzungen (Excel)</strong> die Option
+          <strong>„Allgemeine Lehrgangsinformationen mit ausgeben“</strong> wählen und die erzeugte Excel-Datei hier hochladen.</p>
         <div class="import-schritt import-datei">
           <label for="imp-datei">Datei (.xlsx)${info("Datei", "Kopfzeilen über der Tabelle, verbundene Zellen und Leerzeilen am Ende sind kein Problem. Spalten mit „ja/nein“ oder Daten werden als Voraussetzungen erkannt.")}</label>
           <input type="file" id="imp-datei" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">
@@ -2464,7 +2468,13 @@
      ========================================================================================== */
   root.addEventListener("click", async (e) => {
     const tab = e.target.closest("[data-reiter]");
-    if (tab) { location.hash = "#" + tab.dataset.reiter; return; }
+    if (tab) {
+      // Der Reiter steht in der Adresse (Neuladen bleibt auf ihm), aber ohne eigenen Verlaufseintrag – wie Leitstelle und
+      // Album (UI/UX vor dem Merge C6): Zurück verlässt den Lehrgang, statt durch die Reiter zu blättern.
+      history.replaceState(history.state, "", "#" + tab.dataset.reiter);
+      if (state.reiter !== tab.dataset.reiter) { state.reiter = tab.dataset.reiter; renderReiter(); }
+      return;
+    }
     const b = e.target.closest("[data-act]");
     if (!b) return;
     const act = b.dataset.act, id = +b.dataset.id, tid = +b.dataset.tid, lid = +b.dataset.lid;

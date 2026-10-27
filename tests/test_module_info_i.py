@@ -75,10 +75,8 @@ STELLEN = [
     ("R6", RK, '${info("Kriterienliste", `${KRITERIEN_INFO} Wird beim Anlegen', "!Zusätzlich zur Beschreibung: einzeln abhakbare Punkte. Wird"),
     ("R7", RK, '${info("Kriterienliste", `${KRITERIEN_INFO} Im Bewertungsdialog', "!Zusätzlich zur Beschreibung: einzeln abhakbare Punkte. Im"),
     ("R8", RK, 'Datei (.xlsx)${info("Datei", "Kopfzeilen über der Tabelle', "Kopfzeilen über der Tabelle"),
-    ("R9", RK, 'aus dem ISC${info("ISC", `Im ISC unter', "!aus dem ISC übernehmen: Dort unter"),
     ("W1", WIKI, '<h2>Papierkorb${rows.length ? info("Papierkorb", `Wiederhergestellte Seiten', "Wiederhergestellte Seiten kommen"),
     ("W2", WIKI, '<h3>Bearbeiten erlauben${info("Bearbeiten erlauben", "Freigegebene Nutzer', "Freigegebene Nutzer dürfen"),
-    ("W3", WIKI, 'Lesen einschränken${info("Lesen einschränken", `Normalerweise darf', "Normalerweise darf jeder Angemeldete"),
     ("W4", WIKI, '<h2>Textfarbe${info("Textfarbe", `Nach dem Handbuch CD', "Nach dem Handbuch CD"),
     ("W5", WIKI, '<h2>Abschnitt einbinden${info("Abschnitt einbinden", `Zeigt einen synchronisierten', "Zeigt einen synchronisierten Abschnitt"),
     ("W6", WIKI, '<h2>Spalten einfügen${info("Spalten einfügen", "Die Spalten stehen im Editor', "Die Spalten stehen im Editor"),
@@ -87,7 +85,6 @@ STELLEN = [
     ("L2", ADM, 'Prüfer (Sachkundiger)${S.info("Prüfer", `Das Häkchen wirkt nur', "Das Häkchen wirkt nur mit Stufe"),
     ("L3", ADM, '<legend>Freigaben in der Materialablage${S.info("Freigaben in der Materialablage", "Angelegt wird', "Angelegt wird eine Freigabe am Ordner (Bestand"),
     ("L4", ADM, '<summary>Verlauf (Materialablage)${S.info("Verlauf", "Änderungen an Stufe', "!Änderungen an Stufe, Häkchen „Prüfer“, Urkundennummer und Unterschrift (ohne Bild) –\n"),
-    ("L5", ADMIN_HTML, '{% call info("einstellungen", "Einstellungen") -%}', '!<p class="help">Was hier gesetzt wird'),
     ("L6", ADM, 'dazu sagt.${S.info("SPF, DKIM, DMARC", "Kommt sie an', "!dazu sagt. Kommt sie an"),
     ("P1", PROFIL, '<h2>Profilbild{% call info("profilbild", "Profilbild") %}Es steht neben deinem Namen', '!<div class="help">Es steht neben deinem Namen'),
     ("P2", PROFIL, 'Erinnerungen zu meiner PSA per Mail{% call info("psa-mails", "Erinnerungen zu meiner PSA") %}Eine Mail am Morgen',
@@ -148,7 +145,9 @@ def test_makro_wie_skript():
 
 def test_alle_stellen():
     texte = {d: lies(d) for d in {s[1] for s in STELLEN}}
-    assert len(STELLEN) == 55
+    # R9 (ISC-Anleitung), W3 („Lesen einschränken“) und L5 (Herkunft der Einstellungen) stehen seit UI/UX vor dem Merge C8
+    # wieder als sichtbarer Satz da – geprüft in test_module_uiux_u3.py.
+    assert len(STELLEN) == 52
     # Der alte Satz steht nicht mehr als Hilfezeile da (class="help"/"notice" mit dem Satz) – er ist ins „i“ gewandert;
     # mit „!“ davor: dieses Stück (Markup oder Satzfolge von früher) darf gar nicht mehr vorkommen.
     for nr, datei, neu, alt in STELLEN:
@@ -158,7 +157,7 @@ def test_alle_stellen():
         else:
             assert alt in texte[datei], (nr, "Satz fehlt in der Info", alt)
             assert not re.search(r'class="(?:help|notice)[^"]*">[^<]{0,40}?' + re.escape(alt[:50]), texte[datei]), (nr, alt)
-    print("Alle 55 Stellen bestanden.")
+    print("Alle 52 Stellen bestanden.")
 
 
 def test_sichtbar_geblieben():
@@ -181,7 +180,7 @@ def test_marken_je_liste():
     rk, mat, html = lies(RK), lies(MAT), lies(ADMIN_HTML)
     # Riegenkarten: Schloss „eingefroren“ – title je Zeile bleibt, ein „i“ an „Teilnehmende“ und „Bewertung“.
     assert 'title="${esc(EINGEFROREN)}">🔒</span>' in rk
-    assert 'const eingefrorenInfo = (tns) => (tns.some((t) => t.eingefroren) ? info("eingefroren", `🔒 eingefroren: ${esc(EINGEFROREN)}`) : "");' in rk
+    assert 'const eingefrorenInfo = (tns) => (tns.some((t) => t.eingefroren) ? info("eingefroren", `Eingefroren (Schloss am Namen): ${esc(EINGEFROREN)}`) : "");' in rk   # ohne Emoji (UI/UX D14)
     assert '<h2>Teilnehmende${eingefrorenInfo(tns)}</h2>' in rk and '<h2>Bewertung${eingefrorenInfo(tns)}</h2>' in rk
     assert 'title="Lehrgangsleitung: darf' not in rk                                           # R1: das title je Zeile entfällt
     # Prüfung: „kritisch“ in den Befunden.
@@ -194,7 +193,7 @@ def test_marken_je_liste():
     html = html[html.index("<summary>Hilfe: Rechte je Modul</summary>"):html.index("</details>", html.index("Hilfe: Rechte je Modul"))]
     for marke in ("„Prüfer – Urkundennummer fehlt“", "„wirkt nicht – kein Zugang“", "„ohne Namen – kein Zugang“", "„n Freigaben“"):
         assert marke in html, marke
-    assert 'el.classList.toggle("hidden", el.dataset.titelInfo !== name)' in lies(ADM)
+    assert "titelInfo" not in lies(ADM)                        # die Überschrift heißt immer „Leitstelle“ (UI/UX C5)
     assert 'title="Ohne Stufe Mitglied oder Verwaltung in der Materialablage wirken Häkchen und Freigaben nicht."' in lies(ADM)
     print("Marken je Liste bestanden.")
 
@@ -218,8 +217,9 @@ def test_vorlagen_gerendert():
         assert c.post("/api/auth/login", json={"email": "admin@example.org", "password": "geheim123"}).status_code == 200
         leit = c.get("/leitstelle").get_data(as_text=True)
         assert 'Info zu Nutzerverwaltung' not in leit and 'info-nutzerliste' not in leit
-        assert '<span data-titel-info="einstellungen" class="hidden">' in leit and 'id="info-einstellungen" hidden>' in leit
-        assert leit.count('class="info-knopf"') == 1
+        # Seit UI/UX vor dem Merge C8 steht die Herkunft der Einstellungen als Satz da – kein „i“ mehr am Titel.
+        assert 'data-titel-info' not in leit and 'id="info-einstellungen"' not in leit
+        assert leit.count('class="info-knopf"') == 0
         hilfe = leit[leit.index("Hilfe: Rechte je Modul"):leit.index("</details>", leit.index("Hilfe: Rechte je Modul"))]
         assert "Marken in der Spalte „Materialablage“:" in hilfe and "„Prüfer – Urkundennummer fehlt“" in hilfe
         profil = c.get("/profil").get_data(as_text=True)

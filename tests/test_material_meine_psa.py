@@ -435,9 +435,11 @@ def test_keine_tuer():
                                                                  "material.meine_psa_artikel", "material_api.psa_liste")]
 
         def antworten():
-            # Einziger Unterschied auf Seiten: der Eintrag „Meine PSA“ in der Kopfleiste (test_kopfleiste).
-            return {r.rule: (x.status_code, re.sub(rb"\s+", b" ", re.sub(
-                rb'<a href="/materialablage/meine-psa" class="[^"]*">Meine PSA</a>', b"", seite(x)))) for r in regeln
+            # Einziger Unterschied auf Seiten: der Eintrag „Meine PSA“ in der Kopfleiste (test_kopfleiste) und – seit UI/UX
+            # vor dem Merge C5 – der Weg zurück auf der Fehlerseite, der mit Zuordnung zu „Meine PSA“ führt.
+            weg = rb'<a href="(?:/materialablage/meine-psa|/stroemipedia)">(?:Zu \xe2\x80\x9eMeine PSA\xe2\x80\x9c|Zur Str\xc3\xb6mipedia)</a>'
+            return {r.rule: (x.status_code, re.sub(rb"\s+", b" ", re.sub(weg, b"WEG", re.sub(
+                rb'<a href="/materialablage/meine-psa" class="[^"]*">Meine PSA</a>', b"", seite(x))))) for r in regeln
                     for x in [t.person.get(_url(r, a1, token))]}
         vorher = antworten()
         zuordnen(t, a1, t.person_id)

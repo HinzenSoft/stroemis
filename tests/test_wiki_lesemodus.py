@@ -51,6 +51,9 @@ def aufbau(tmp):
     app = make_app(tmp)
     adm = app.test_client()
     assert adm.post("/api/auth/login", json={"email": "admin@example.org", "password": "geheim123"}).status_code == 200
+    # Ein eigener Name für das Startkonto: „Plattform-Verwaltung“ (Vorgabe seit UI/UX C5) steht auch im Hinweis des Lesemodus.
+    with app.app_context():
+        db.execute("UPDATE users SET name = 'Admin Platzhalter' WHERE email = 'admin@example.org'")
     leser, leser_id = konto(app, adm, "leser@example.org", "Leserin Platzhalter", {"wiki": 0, "karte": 1})
     mitglied, mitglied_id = konto(app, adm, "mitglied@example.org", "Mitglied Platzhalter", {"wiki": 1})
 
@@ -105,7 +108,7 @@ def aufbau(tmp):
                 "Platzhalter Geheim", "GEHEIM-MARKE", "Platzhalter Gesperrt Offen", "GESPERRT-MARKE",
                 "Platzhalter Weg", "WEG-MARKE", "KOMMENTAR-INTERN", "KOMMENTAR-OFFEN",
                 datei_intern.rsplit("/", 1)[1], datei_weg.rsplit("/", 1)[1],
-                "Administrator", "admin@example.org", "Mitglied Platzhalter", "mitglied@example.org"]
+                "Admin Platzhalter", "admin@example.org", "Mitglied Platzhalter", "mitglied@example.org"]
     return dict(app=app, adm=adm, leser=leser, leser_id=leser_id, mitglied=mitglied, mitglied_id=mitglied_id,
                 oeffentlich=oeffentlich, nicht=nicht, merkmale=merkmale, datei_offen=datei_offen,
                 datei_intern=datei_intern, datei_weg=datei_weg)

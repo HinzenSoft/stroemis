@@ -149,13 +149,14 @@
     tocEl.innerHTML = "";
     // Im Lesemodus steht der Hinweis auf die Freischaltung schon über dem Text (wiki_lesemodus.html), und angemeldet
     // ist das Konto bereits – deshalb dort ohne „anmelden“ und mit eigenem Text, wenn nichts freigegeben ist.
-    const titel = lesemodus ? "Strömipedia" : "Öffentliche Strömipedia";
+    // Im Lesemodus heißt die Seite nicht noch einmal „Strömipedia“ – das stehen schon Reiter und Hinweis darüber (UI/UX vor
+    // dem Merge C5: vorher dreimal untereinander); die Pfadzeile mit nur dem Seitennamen fällt auf der Übersicht weg.
+    const titel = lesemodus ? "Öffentliche Seiten" : "Öffentliche Strömipedia";
     const einleitung = lesemodus
       ? "Freigegebene Inhalte aus der Strömungsrettung."
       : `Freigegebene Inhalte aus der Strömungsrettung. Für alles Weitere: <a href="${STROEMIS.baseUrl}/login">anmelden</a>.`;
     const leer = lesemodus ? "Derzeit sind keine Seiten öffentlich freigegeben." : "Derzeit sind keine Seiten freigegeben.";
-    content.innerHTML = `<div class="wiki-head"><nav class="krumen" aria-label="Pfad"><span class="krume" aria-current="page">${titel}</span></nav></div>
-      <h1 class="seitentitel">${titel}</h1>
+    content.innerHTML = `<h1 class="seitentitel">${titel}</h1>
       <p class="help">${einleitung}</p>
       <div class="wiki-content">${pages.length ? `<ul>${pages.map((p) => `<li><a href="${prefix}${esc(p.slug)}">${esc(p.title)}</a>${p.public_children ? ' <span class="muted small">(mit Unterseiten)</span>' : ""}</li>`).join("")}</ul>` : `<p class="muted">${leer}</p>`}</div>`;
     wire(content);

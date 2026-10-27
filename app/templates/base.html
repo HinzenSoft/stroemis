@@ -44,6 +44,22 @@
 </header>
 <span id="inhalt" class="sprungziel" tabindex="-1"></span>
 {% block body %}{% endblock %}
+{# Hinweis „Entwicklungsserver“ (UI/UX vor dem Merge C10, Nutzer 27.10.2026): nur auf dev, einmal nach jeder Anmeldung auf der
+   ersten Seite mit Kopfleiste – common.js öffnet ihn als Dialog in der Mitte. #}
+{% if user and dev_hinweis_einmal() %}
+<dialog id="dev-hinweis" class="dev-hinweis" aria-labelledby="dev-hinweis-titel"><div class="dlg-body">
+  <h2 id="dev-hinweis-titel">Entwicklungsserver</h2>
+  <p>Du bist auf dem Entwicklungsserver von strömis.de. Hier werden neue Funktionen erprobt, bevor sie auf die eigentliche
+    Plattform kommen.</p>
+  <ul>
+    <li>Daten können sich jederzeit ändern, verschwinden oder neu auftauchen.</li>
+    <li>Es kann und wird zu Fehlern und Problemen kommen.</li>
+  </ul>
+  <p>Fehler und Verbesserungsvorschläge bitte mit Screenshot und/oder Beschreibung an
+    <a href="mailto:bugs@stroemis.de?subject=str%C3%B6mis.de%20dev%3A%20">bugs@stroemis.de</a> schicken.</p>
+  <div class="dlg-actions"><button class="btn" type="button" id="dev-hinweis-ok">Verstanden</button></div>
+</div></dialog>
+{% endif %}
 <div id="toast" role="status" aria-live="polite"></div>
 <script nonce="{{ csp_nonce }}">window.STROEMIS = { user: {{ (user and {'id': user.id, 'name': user.name, 'email': user.email, 'rechte': rechte}) | tojson }}, mapCenter: {{ cfg.MAP_CENTER | tojson }}, mapZoom: {{ cfg.MAP_ZOOM }}, tileUrl: {{ cfg.TILE_URL | tojson }}, tileAttribution: {{ cfg.TILE_ATTRIBUTION | tojson }}, topoUrl: {{ cfg.TOPO_URL | tojson }}, topoAttribution: {{ cfg.TOPO_ATTRIBUTION | tojson }}, satUrl: {{ cfg.SAT_URL | tojson }}, satAttribution: {{ cfg.SAT_ATTRIBUTION | tojson }}, satLabelsUrl: {{ cfg.SAT_LABELS_URL | tojson }}, publicUrl: {{ cfg.PUBLIC_URL | tojson }}, maxUploadMb: {{ cfg.MAX_CONTENT_LENGTH // 1048576 }}, spracheingabe: {{ cfg.SPRACHEINGABE | tojson }}, module: {{ modul | tojson }} };</script>
 <script src="{{ url_for('static', filename='js/common.js') }}"></script>

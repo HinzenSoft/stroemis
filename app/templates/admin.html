@@ -2,15 +2,11 @@
 {% set active = 'admin' %}
 {% block title %}{{ modul.name.verwaltung }} – strömis.de{% endblock %}
 {% block body %}
-{% from "_makros.html" import info %}
 <main class="page breit leitstelle">
-  {# Das „i“ am Seitentitel gehört zum Reiter (admin.js, reiter): nur bei „Einstellungen“ – woher ein Wert kommt. Die
-     Marken der Nutzerliste erklärt die Box „Hilfe: Rechte je Modul“ (Nutzer 27.10.2026: „i“ und Box waren doppelt);
-     je Zeile bleibt das title für die Maus. #}
-  <div class="page-head"><h1><span id="seitentitel">Nutzerverwaltung</span><span data-titel-info="einstellungen" class="hidden">{% call info("einstellungen", "Einstellungen") -%}
-      Was hier gesetzt wird, gilt <strong>vorrangig</strong> vor der Datei <code>.env</code> auf dem Server und wirkt sofort.
-      „Zurücksetzen“ nimmt wieder den Wert aus der <code>.env</code> oder die eingebaute Vorgabe.
-    {%- endcall %}</span></h1>
+  {# Überschrift „Leitstelle“ auf beiden Reitern (Nutzer 27.10.2026, UI/UX vor dem Merge C5) – vorher „Nutzerverwaltung“
+     bzw. „Einstellungen“ mit einem „i“ zur .env. Woher ein Wert kommt, sagt jetzt ein Satz über den Einstellungen (C8). Die
+     Marken der Nutzerliste erklärt die Box „Hilfe: Rechte je Modul“; je Zeile bleibt das title für die Maus. #}
+  <div class="page-head"><h1>{{ modul.name.verwaltung }}</h1>
     <div class="btn-row" id="kopf-knoepfe"><button class="btn secondary" id="btn-testmail">Testmail senden</button><button class="btn" id="btn-new-user"><span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Nutzer<span class="k-anlegen"> anlegen</span></span></button></div></div>
   {# Reiter als Linie: rot gefüllt ist allein „Nutzer anlegen“ (Browserprüfung vor dem Merge, V5). #}
   <div class="c-tabs reiter-linie" role="tablist">
@@ -77,9 +73,13 @@
   </section>
 
   <section id="bereich-einstellungen" class="hidden">
-    <div id="einst-aus" class="notice hidden">Die Einstellungen sind über
-      <code>EINSTELLUNGEN_AUS=1</code> abgeschaltet – es gilt allein die <code>.env</code>.
-      Gespeicherte Werte bleiben erhalten und greifen wieder, sobald die Variable entfällt.</div>
+    <div id="einst-aus" class="notice hidden">Die Einstellungen sind auf dem Server abgeschaltet – es gilt allein die
+      Grundeinstellung dort. Gespeicherte Werte bleiben erhalten und greifen wieder, sobald der Schalter entfällt (README, Abschnitt
+      „Konfiguration“).</div>
+    {# Woher ein Wert kommt, steht sichtbar über den Gruppen (C8: vorher im „i“ am Titel, in Entwicklersprache „.env“). Die
+       Gruppen sind zugeklappt (C4: vorher 37 Felder auf rund 3 900 px) – wie die Datei auf dem Server heißt, sagt die README. #}
+    <p class="help">Was du hier speicherst, gilt sofort und vor der Grundeinstellung auf dem Server. „Zurücksetzen“ nimmt
+      wieder die Grundeinstellung.</p>
     <form id="einst-form"></form>
   </section>
 </main>

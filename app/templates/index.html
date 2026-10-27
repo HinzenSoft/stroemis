@@ -9,7 +9,9 @@
 <main class="map-shell">
   {# Die Karte füllt die Seite; die Überschrift ist nur für Vorlesehilfen da (Browserprüfung vor dem Merge, V6). #}
   <h1 class="nur-vorlesen">{{ modul.name.karte }}</h1>
-  <div id="map"></div>
+  {# Die Werkzeugleiste steht vor der Karte: Tab erreicht Filter, „Alben“ und „Album anlegen“ zuerst – so, wie man sie oben
+     links sieht –, danach die Karte mit Markern und Kartenknöpfen (UI/UX vor dem Merge C9). Über der Karte liegt sie per
+     z-index, nicht durch die Reihenfolge. #}
   <div class="map-tools">
     <button class="chip active" data-cat="">Alle</button>
     <button class="chip seil" data-cat="seil">Seiltechnik</button>
@@ -17,6 +19,7 @@
     <button class="btn secondary" id="btn-albums">Alben</button>
     <button class="btn" id="btn-new-album"><span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Album<span class="k-anlegen"> anlegen</span></span></button>
   </div>
+  <div id="map"></div>
   <div class="locate-banner hidden" id="locate-banner"></div>
   <aside class="panel" id="panel" aria-live="polite">
     <div class="panel-head"><h2 id="panel-title"></h2><button type="button" class="close" id="panel-close" aria-label="Schließen" title="Schließen">✕</button></div>

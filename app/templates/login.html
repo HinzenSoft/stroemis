@@ -36,9 +36,6 @@
         <p class="notice">Kontoanfragen sind deaktiviert. Die Plattform-Verwaltung kann dein Konto anlegen.</p>
       {% else %}
       <p class="help">Die Plattform-Verwaltung prüft deine Anfrage und schaltet das Konto frei – du bekommst dann eine E-Mail.</p>
-      <p class="help">Sieh bitte auch im <strong>Spam-Ordner</strong> nach: Automatisch verschickte
-        Mails landen dort häufiger. Findest du sie, hilft es allen, sie als „kein Spam“ zu
-        markieren und den Absender in die Kontakte aufzunehmen.</p>
       <form id="f-register">
         <label for="name">Name</label>
         <input id="name" name="name" type="text" autocomplete="name" required>
@@ -54,13 +51,18 @@
         <div class="error hidden" id="err"></div>
         <button class="btn" type="submit">Konto anfragen</button>
       </form>
+      {# Unter dem Formular statt darüber: Am Telefon soll das erste Feld im ersten Bild stehen (UI/UX vor dem Merge C1). #}
+      <p class="help abgesetzt" id="reg-spam">Sieh bitte auch im <strong>Spam-Ordner</strong> nach: Automatisch verschickte
+        Mails landen dort häufiger. Findest du sie, hilft es allen, sie als „kein Spam“ zu
+        markieren und den Absender in die Kontakte aufzunehmen.</p>
       {% endif %}
       <div class="login-links"><a href="/login">Zurück zur Anmeldung</a></div>
     {% elif mode == 'forgot' %}
       <h2>Passwort zurücksetzen</h2>
       <p>Wir schicken dir einen Link, mit dem du ein neues Passwort setzen kannst.</p>
-      <p class="help">Der Link ist eine Stunde gültig. Sieh bitte auch im <strong>Spam-Ordner</strong>
-        nach – automatisch verschickte Mails landen dort häufiger.</p>
+      {# Den Hinweis auf den Spam-Ordner gibt die Antwort nach dem Absenden – vorher stand er hier noch einmal darüber
+         (UI/UX vor dem Merge C5). #}
+      <p class="help">Der Link ist eine Stunde gültig.</p>
       <form id="f-forgot">
         <label for="email">E-Mail-Adresse</label>
         <input id="email" name="email" type="email" autocomplete="username" required>

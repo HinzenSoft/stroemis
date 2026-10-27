@@ -709,7 +709,7 @@ def _meldung(erlaubt, fid, s, user, leer="global"):
             return "Nur für Materialwarte und Prüfer mit Urkundennummer." + (" " + hinweis if hinweis else "")
         if s.qualifiziert:
             return hinweis
-        return ("Nur für Prüfer mit Urkundennummer (Häkchen „Prüfer“ in der Nutzerverwaltung, Urkundennummer im eigenen "
+        return ("Nur für Prüfer mit Urkundennummer (Häkchen „Prüfer“ in der Leitstelle, Urkundennummer im eigenen "
                 "Profil)." + (" " + hinweis if hinweis else ""))
     if "verwalten" in erlaubt:
         return "Nur für Materialwarte dieses Ordners."

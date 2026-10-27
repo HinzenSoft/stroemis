@@ -167,12 +167,16 @@
     return `<ul>${kids.map((p) => {
       const sub = branch(p.id, depth + 1);
       const collapsed = sub && !path.has(p.id) && (state.collapsed.has(p.id) || (depth >= 1 && !state.collapsed.has(-p.id)));
+      // Die Knöpfe der Zeile nennen ihre Seite (UI/UX vor dem Merge C12 – vorher sechsmal „Auf- oder zuklappen“ ohne Bezug);
+      // der Klappknopf sagt zudem, ob die Unterseiten offen sind. Ohne Unterseiten ist er unsichtbar und nicht erreichbar.
+      const tg = sub ? `aria-label="${esc(p.title)} ${collapsed ? "aufklappen" : "zuklappen"}" aria-expanded="${!collapsed}"`
+        : 'aria-hidden="true" tabindex="-1"';
       return `<li class="${sub ? "" : "leaf"}${collapsed ? " collapsed" : ""}" data-id="${p.id}" data-slug="${esc(p.slug)}">
         <div class="row" draggable="true">
-          <button class="tg" type="button" aria-label="Auf- oder zuklappen"></button>
+          <button class="tg" type="button" ${tg}></button>
           <a href="/stroemipedia/${esc(p.slug)}" title="${esc(p.title)}" class="${state.current && state.current.id === p.id ? "active" : ""}">${p.icon ? `<span class="tree-icon" aria-hidden="true">${esc(p.icon)}</span>` : ""}${esc(p.title)}${p.is_public ? ' <span class="pub" title="öffentlich freigegeben">🌐</span>' : ""}${p.favorite ? ' <span class="fav" title="auf der Merkliste">★</span>' : ""}</a>
-          <button class="row-add" type="button" title="Unterseite anlegen" aria-label="Unterseite anlegen">+</button>
-          <button class="row-menu" type="button" title="Mehr" aria-label="Weitere Aktionen">⋯</button>
+          <button class="row-add" type="button" title="Unterseite anlegen" aria-label="Unterseite zu ${esc(p.title)} anlegen">+</button>
+          <button class="row-menu" type="button" title="Mehr" aria-haspopup="menu" aria-label="Weitere Aktionen zu ${esc(p.title)}">⋯</button>
         </div>${sub}</li>`;
     }).join("")}</ul>`;
   }
@@ -182,8 +186,14 @@
     treeEl.querySelectorAll(".tg").forEach((b) => b.addEventListener("click", () => {
       const li = b.closest("li"), id = +li.dataset.id;
       li.classList.toggle("collapsed");
-      if (li.classList.contains("collapsed")) { state.collapsed.add(id); state.collapsed.delete(-id); }
+      const zu = li.classList.contains("collapsed");
+      if (zu) { state.collapsed.add(id); state.collapsed.delete(-id); }
       else { state.collapsed.delete(id); state.collapsed.add(-id); }
+      if (b.hasAttribute("aria-expanded")) {
+        const seite = state.byId.get(id);
+        b.setAttribute("aria-expanded", String(!zu));
+        if (seite) b.setAttribute("aria-label", `${seite.title} ${zu ? "aufklappen" : "zuklappen"}`);
+      }
     }));
     treeEl.querySelectorAll("a").forEach((a) => a.addEventListener("click", (e) => {
       e.preventDefault();
@@ -882,7 +892,8 @@
     const p = state.current;
     const crumbs = ancestors(p);
     const kids = children(p.id);
-    const pubBadge = p.effective_public ? '<span class="badge pubbadge" title="Ohne Anmeldung erreichbar">🌐 öffentlich</span>' : "";
+    // Marke als Wort ohne Zeichen (UI/UX vor dem Merge D14 – vorher „🌐 öffentlich“).
+    const pubBadge = p.effective_public ? '<span class="badge pubbadge" title="Ohne Anmeldung erreichbar">öffentlich</span>' : "";
     content.innerHTML = `
       <div class="wiki-head">
         <button class="btn secondary small kopfknopf baum-knopf" id="pg-baum" type="button" title="Seiten" aria-label="Seitenbaum öffnen">☰</button>
@@ -898,7 +909,8 @@
           <button class="btn secondary small kopfknopf" id="pg-more" title="Weitere Aktionen" aria-label="Weitere Aktionen">⋯</button>
         </div>
       </div>
-      <h1 class="seitentitel"><button class="page-icon" id="pg-icon" type="button" title="Symbol der Seite ändern">${p.icon ? esc(p.icon) : "＋"}</button>${esc(p.title)} ${pubBadge}</h1>
+      <div class="seitentitel-zeile"><button class="page-icon" id="pg-icon" type="button" title="Symbol der Seite ändern"
+        aria-label="Symbol der Seite ändern">${p.icon ? esc(p.icon) : "＋"}</button><h1 class="seitentitel">${esc(p.title)} ${pubBadge}</h1></div>
       ${autorZeile(p)}
       <article class="wiki-content" id="article"></article>
       ${kids.length ? `<div class="children-list"><strong>Unterseiten</strong><ul>${kids.map((k) => `<li><a href="/stroemipedia/${esc(k.slug)}">${k.icon ? esc(k.icon) + " " : ""}${esc(k.title)}</a></li>`).join("")}</ul></div>` : ""}
@@ -1350,10 +1362,28 @@
         range.collapse(true); range.insertNode(badge);
       }
     }
-    art.querySelectorAll("mark.cq, .cbadge").forEach((m) => m.addEventListener("click", () => {
+    /* Die Marken führen zum Kommentar – auch per Tastatur (UI/UX vor dem Merge C9: vorher nur mit der Maus): ein Tab-Stopp
+       je Marke mit dem Namen „Kommentar zu „…““, Eingabe oder Leertaste wie ein Klick; der Fokus springt dann zum Kommentar. */
+    const zumKommentar = (m, fokus) => {
       const el = commentsEl.querySelector(`.comment[data-cid="${m.dataset.cid}"]`);
-      if (el) { S.rollen(el, { block: "center" }); el.classList.add("flash"); setTimeout(() => el.classList.remove("flash"), 2000); }
-    }));
+      if (!el) return;
+      S.rollen(el, { block: "center" });
+      el.classList.add("flash"); setTimeout(() => el.classList.remove("flash"), 2000);
+      if (fokus) { el.tabIndex = -1; el.focus({ preventScroll: true }); }
+    };
+    art.querySelectorAll("mark.cq, .cbadge").forEach((m) => {
+      const c = state.comments.find((x) => String(x.id) === m.dataset.cid);
+      const zitat = c ? String(c.quote || "").replace(/\s+/g, " ").trim() : "";
+      m.tabIndex = 0;
+      m.setAttribute("role", "button");
+      m.setAttribute("aria-label", `Kommentar zu „${zitat.length > 60 ? zitat.slice(0, 59).trimEnd() + "…" : zitat}“${c && c.user_name ? ` von ${c.user_name}` : ""}`);
+      m.addEventListener("click", () => zumKommentar(m, false));
+      m.addEventListener("keydown", (e) => {
+        if (e.key !== "Enter" && e.key !== " ") return;
+        e.preventDefault();
+        zumKommentar(m, true);
+      });
+    });
   }
 
   /* Text im Artikel finden (Whitespace-tolerant) und auf Textknoten abbilden */
@@ -1465,7 +1495,9 @@
       });
   }
 
-  /* --- Teilen: Bearbeiter und öffentliche Freigabe ------------------------------ */
+  /* --- Teilen: Bearbeiter und öffentliche Freigabe ------------------------------
+     Wer eine eingeschränkte Seite noch sieht, steht als Satz unter „Lesen einschränken“ – ein Datenschutzhinweis gehört
+     nicht hinter ein „i“ (UI/UX vor dem Merge C8). */
   async function shareDialog(p) {
     if (!state.users) { try { state.users = (await api("/api/wiki/users")).users; } catch (e) { state.users = []; } }
     const editorIds = new Set((p.editors || []).map((u) => u.id));
@@ -1475,8 +1507,9 @@
       <input type="search" id="sh-filter" placeholder="Nutzer suchen …" aria-label="Nutzer suchen">
       <div class="user-pick" id="sh-users">${state.users.filter((u) => u.id !== p.created_by).map((u) => `
         <label class="inline"><input type="checkbox" value="${u.id}" ${editorIds.has(u.id) ? "checked" : ""}> ${esc(u.name || "Unbenannt")} <span class="muted small">${esc(u.gliederung || "")}</span></label>`).join("") || '<div class="muted small">Keine weiteren Nutzer.</div>'}</div>` : ""}
-      ${p.can_share ? `<h3 class="abgesetzt">Lesen einschränken${info("Lesen einschränken", `Normalerweise darf jeder Angemeldete jede Seite lesen. Eingeschränkt sehen die Seite
-      und ihre Unterseiten nur noch du, die Wiki-Verwaltung und die oben freigegebenen Nutzer.`)}</h3>
+      ${p.can_share ? `<h3 class="abgesetzt">Lesen einschränken</h3>
+      <p class="help">Normalerweise darf jeder Angemeldete jede Seite lesen. Eingeschränkt sehen die Seite und ihre Unterseiten
+        nur noch du, die Wiki-Verwaltung und die oben freigegebenen Nutzer.</p>
       <label class="inline"><input type="checkbox" id="sh-restrict" ${p.read_restricted ? "checked" : ""}
         ${p.effective_public ? "disabled" : ""}> Nur für freigegebene Nutzer lesbar</label>
       ${p.effective_public ? '<div class="help">Nicht möglich, solange die Seite öffentlich freigegeben ist.</div>' : ""}` : ""}
@@ -3233,14 +3266,14 @@
       } else if (b.kind === "callout") {
         const head = body[0].trim().split(/\s+/); let kind = head[0] in MD.CALLOUTS ? head[0] : "info";
         dialog(`<h2>Callout bearbeiten</h2><div class="block-edit">
-          <div class="callout-pick" id="ck">${["info", "tip", "warning", "success", "danger", "note"].map((k) => `<button type="button" class="btn ${k === kind ? "" : "secondary"}" data-k="${k}">${MD.CALLOUTS[k]} ${k}</button>`).join("")}</div>
-          <label for="em-input">Emoji</label><div class="em-row"><input type="text" id="em-input" maxlength="8" autocomplete="off"><span class="help">eintippen oder unten wählen</span></div><div class="em-grid" id="em-grid"></div>
+          ${calloutWahl(["info", "tip", "warning", "success", "danger", "note"], kind)}
+          <label for="em-input">Emoji</label><div class="em-row"><input type="text" id="em-input" maxlength="8" autocomplete="off"><span class="help">eintippen oder aus der Auswahl wählen</span></div><div class="em-grid" id="em-grid"></div>
           <label for="be-body">Inhalt (Markdown)</label><textarea id="be-body">${esc(body.slice(1).join("\n"))}</textarea></div>
           <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button><button class="btn" id="be-ok" type="button">Übernehmen</button></div>`,
           (dlg, box) => {
             dlg.classList.add("wide"); dlg.addEventListener("close", () => dlg.classList.remove("wide"), { once: true });
-            const getEmoji = emojiPicker(box, head.slice(1).join(" ") || MD.CALLOUTS[kind]);
-            box.querySelectorAll("#ck [data-k]").forEach((x) => x.onclick = () => { kind = x.dataset.k; box.querySelectorAll("#ck .btn").forEach((y) => y.classList.toggle("secondary", y !== x)); });
+            const getEmoji = emojiPicker(box, head.slice(1).join(" ") || MD.CALLOUTS[kind], { spaeter: true });
+            calloutWahlBinden(box, (k) => { kind = k; });
             box.querySelector("#be-ok").onclick = () => { const e = getEmoji(); const txt = box.querySelector("#be-body").value; dlg.close(); rewriteBlock(index, `$$callout\n${kind} ${e}\n${txt}\n$$`); };
           });
       } else {
@@ -4241,18 +4274,37 @@
     };
   }
 
-  /* Emoji-Auswahl in Dialogen: liefert eine Funktion, die das gewählte Emoji zurückgibt */
-  const emojiPicker = (body, initial) => {
+  /* Art eines Callouts wählen (Einfügen und Bearbeiten): eine Auswahl, keine Hauptaktion – die gewählte Art trägt Rand,
+     Häkchen und fette Schrift (aria-pressed), rot gefüllt bleibt allein „Einfügen“ bzw. „Übernehmen“ (UI/UX vor dem Merge
+     C2; vorher war die gewählte Art ein zweiter roter Knopf). */
+  const calloutWahl = (arten, kind) => `<div class="callout-pick callout-art" id="ck" role="group" aria-label="Art des Callouts">${arten.map((k) =>
+    `<button type="button" class="btn secondary" data-k="${k}" aria-pressed="${k === kind}">${MD.CALLOUTS[k]} ${k}</button>`).join("")}</div>`;
+  const calloutWahlBinden = (box, aufWahl) => box.querySelectorAll("#ck [data-k]").forEach((b) => b.addEventListener("click", () => {
+    box.querySelectorAll("#ck [data-k]").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
+    aufWahl(b.dataset.k);
+  }));
+
+  /* Emoji-Auswahl in Dialogen: liefert eine Funktion, die das gewählte Emoji zurückgibt. opt.spaeter: das Raster erst auf
+     Wunsch zeichnen (Callout-Dialoge, UI/UX vor dem Merge D15 – vorher 2 170 Knöpfe bei jedem Öffnen, obwohl meist das
+     vorgeschlagene Emoji bleibt). */
+  const emojiPicker = (body, initial, opt = {}) => {
     // Grid aller darstellbaren Unicode-Emojis plus Eingabefeld (dort auch der System-Emoji-Picker: Win+. / Ctrl+Cmd+Leertaste)
     const grid = body.querySelector("#em-grid");
     const input = body.querySelector("#em-input");
     input.value = initial;
-    const list = MD.allEmojis();
     /* Das Raster ist EIN Tab-Stopp (Roving Tabindex): Tab führt hinein und wieder hinaus zu „Einfügen“/„Abbrechen“,
        statt über hundert Emojis einzeln anzuspringen; darin wandern die Pfeiltasten, Pos1/Ende springen an die Enden. */
-    grid.setAttribute("role", "group");
-    grid.setAttribute("aria-label", "Emoji wählen");
-    grid.innerHTML = list.map((e, i) => `<button type="button" class="em" data-e="${MD.esc(e)}" tabindex="${i ? -1 : 0}">${e}</button>`).join("");
+    const zeichnen = () => {
+      grid.classList.remove("em-zu");
+      grid.setAttribute("role", "group");
+      grid.setAttribute("aria-label", "Emoji wählen");
+      grid.innerHTML = MD.allEmojis().map((e, i) => `<button type="button" class="em" data-e="${MD.esc(e)}" tabindex="${i ? -1 : 0}">${e}</button>`).join("");
+    };
+    if (opt.spaeter) {
+      grid.classList.add("em-zu");
+      grid.innerHTML = '<button type="button" class="btn secondary small em-zeigen">Emoji-Auswahl zeigen</button>';
+      grid.querySelector(".em-zeigen").addEventListener("click", () => { zeichnen(); if (grid.firstElementChild) grid.firstElementChild.focus(); });
+    } else zeichnen();
     const knoepfe = grid.children;
     const stopp = (b) => {
       grid.querySelectorAll('.em[tabindex="0"]').forEach((x) => { x.tabIndex = -1; });
@@ -4532,18 +4584,17 @@
         const kinds = ["info", "tip", "warning", "success", "danger", "note"];
         let kind = "info";
         dialog(`<h2>Callout einfügen</h2>
-          <div class="callout-pick" id="ck">${kinds.map((k) => `<button type="button" class="btn ${k === kind ? "" : "secondary"}" data-k="${k}">${MD.CALLOUTS[k]} ${k}</button>`).join("")}</div>
+          ${calloutWahl(kinds, kind)}
           <label for="em-input">Emoji oben links</label>
-          <div class="em-row"><input type="text" id="em-input" maxlength="8" autocomplete="off"><span class="help">Beliebiges Emoji eintippen oder unten wählen</span></div>
+          <div class="em-row"><input type="text" id="em-input" maxlength="8" autocomplete="off"><span class="help">Beliebiges Emoji eintippen oder aus der Auswahl wählen</span></div>
           <div class="em-grid" id="em-grid"></div>
           <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button><button class="btn" id="ck-ok" type="button">Einfügen</button></div>`,
           (dlg, body) => {
             dlg.classList.add("wide");
             dlg.addEventListener("close", () => dlg.classList.remove("wide"), { once: true });
-            const getEmoji = emojiPicker(body, MD.CALLOUTS[kind]);
-            body.querySelectorAll("#ck [data-k]").forEach((b) => b.onclick = () => {
-              kind = b.dataset.k;
-              body.querySelectorAll("#ck .btn").forEach((x) => x.classList.toggle("secondary", x !== b));
+            const getEmoji = emojiPicker(body, MD.CALLOUTS[kind], { spaeter: true });
+            calloutWahlBinden(body, (k) => {
+              kind = k;
               body.querySelector("#em-input").value = MD.CALLOUTS[kind];
             });
             body.querySelector("#ck-ok").onclick = () => {
@@ -4722,6 +4773,22 @@
       setupInlineTools(insert, calloutMenu, columnsMenu);
       // Zurück an die Stelle, an der gerade gelesen wurde (siehe modusScrollMerken).
       modusScrollAnwenden();
+      /* Steht nur der Titel da (neue Seite), zeigt app.css unter ihm eine gestrichelte Schreibfläche mit Hinweis (UI/UX vor
+         dem Merge C12 – vorher eine weiße Fläche ohne jedes Zeichen). Ein Tipp darauf legt die erste Textzeile an und setzt
+         den Cursor hinein; sonst landete das Getippte am Ende des Titels. */
+      const schreibflaeche = content.querySelector(".toastui-editor-ww-container .ProseMirror");
+      if (schreibflaeche) schreibflaeche.addEventListener("mousedown", (e) => {
+        if (e.target !== schreibflaeche) return;
+        let sicht;
+        try { sicht = meinEditor.wwEditor.view; } catch (x) { sicht = null; }
+        const st = sicht && sicht.state;
+        if (!st || st.doc.childCount !== 1 || !st.schema.nodes.paragraph) return;
+        e.preventDefault();
+        let tr = st.tr.insert(st.doc.content.size, st.schema.nodes.paragraph.create());
+        try { tr = tr.setSelection(st.selection.constructor.create(tr.doc, tr.doc.content.size - 1)); } catch (x) { /* Cursor bleibt */ }
+        sicht.dispatch(tr);
+        sicht.focus();
+      });
 
       // "Als Markdown kopieren" ist über das Seitenmenü erreichbar, Suchen und Ersetzen
       // über Strg+Umschalt+F – der Editorkopf bleibt frei.
@@ -5196,6 +5263,15 @@
      Start
      ====================================================================== */
   $("#btn-new-page").addEventListener("click", () => { side.classList.remove("open"); if (leaveEditor()) openEditor({ parent_id: state.current ? state.current.id : null }); });
+  /* „Neue Seite“ ist rot, solange in der Textspalte keine andere Hauptaktion steht. Im Editor („Anlegen“, „Entwurf
+     übernehmen“) und auf der leeren Übersicht („Erste Seite anlegen“) wird er grau – je Ansicht ein roter Knopf (UI/UX vor
+     dem Merge C2). Beobachtet werden nur die Klasse am <body> und der Wechsel des Inhalts, nicht jede Eingabe im Editor. */
+  const neueSeiteKnopf = $("#btn-new-page");
+  const neueSeiteFarbe = () => neueSeiteKnopf.classList.toggle("secondary",
+    document.body.classList.contains("editing") || !!content.querySelector("#h-new"));
+  new MutationObserver(neueSeiteFarbe).observe(document.body, { attributes: true, attributeFilter: ["class"] });
+  new MutationObserver(neueSeiteFarbe).observe(content, { childList: true });
+  neueSeiteFarbe();
   // Mit Wiki-Verwaltung „⋯“ (Papierkorb, Import); sonst bleibt nur der Papierkorb – eine Funktion steht als Knopf da
   // (Nutzer, 27.10.2026).
   const baumMehr = $("#btn-baum-mehr");

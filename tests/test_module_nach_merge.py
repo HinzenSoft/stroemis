@@ -227,7 +227,8 @@ def test_stylesheet_regeln():
     pcss = lies("app/static/css/pruefungen.css")
     assert ".vk input[type=checkbox] { width: 44px; height: 44px; }" in pcss
     assert ".vk-stempel { min-height: 44px; display: inline-flex; align-items: center; }" in pcss
-    assert ".pruef[data-ansicht=liste], .pruef[data-ansicht=kataloge] { max-width: 1280px; }" in pcss
+    # Seit UI/UX vor dem Merge A10 auch das Katalogdetail; der Lehrgang endet bei 1 600 px.
+    assert ".pruef[data-ansicht=liste], .pruef[data-ansicht=kataloge], .pruef[data-ansicht=katalog] { max-width: 1280px; }" in pcss
     assert ".pruef :is(.help, .notice) { max-width: 100ch; }" in pcss   # seit UI/UX D12 auch div.help und .notice
     assert "ghost" not in pcss
     admin = lies("app/templates/admin.html")

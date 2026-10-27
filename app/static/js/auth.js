@@ -43,7 +43,12 @@
       name: fReg.name.value, gliederung: fReg.gliederung.value, email: fReg.email.value, password: fReg.password.value,
       reason: fReg.reason.value,
     }, (d) => {
-      if (d.pending) fReg.innerHTML = `<p class="notice">${S.esc(d.message)}</p>`;
+      if (d.pending) {
+        fReg.innerHTML = `<p class="notice">${S.esc(d.message)}</p>`;
+        // Die Antwort sagt schon, dass man im Spam-Ordner nachsehen soll – der Satz darunter fiele doppelt.
+        const spam = document.getElementById("reg-spam");
+        if (spam) spam.hidden = true;
+      }
       else location.href = "/";
     });
   });

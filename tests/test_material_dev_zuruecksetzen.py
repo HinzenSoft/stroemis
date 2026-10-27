@@ -230,7 +230,7 @@ def test_zuruecksetzen():
             aus, code = aufrufen(app, "--ja-alles-loeschen")
         assert code == 0, (code, aus)
         assert "Materialablage zurückgesetzt. Sicherung:" in aus and "docker compose restart" in aus, aus
-        assert "demo-wart-a@example.invalid (DEMO-Materialwart Flussland)" in aus and "Nutzerverwaltung" in aus, aus
+        assert "demo-wart-a@example.invalid (DEMO-Materialwart Flussland)" in aus and "über die Leitstelle löschen" in aus, aus
         (ordner,) = sicherungen(app)
         sicherung = os.path.join(tmp, ordner)
         nachher = stand(app)
