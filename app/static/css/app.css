@@ -430,6 +430,14 @@ dialog h2 { margin-bottom: 4px; }
 /* Am Touchgerät trägt der Titel beim Öffnen den Fokus (common.js) – er ist kein Bedienelement, also ohne Ring. */
 dialog h2[autofocus]:focus { outline: none; box-shadow: none; }
 dialog .dlg-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 18px; }
+/* Eine dritte Aktion im Dialogfuß (Entfernen, Leeren, Verknüpfung entfernen) steht links außen, „Abbrechen“ und die
+   Hauptaktion rechts (UI/UX vor dem Merge, D2). Fehler am Feld (A2, S.feldFehler): Rahmen und Satz darunter. */
+dialog .dlg-actions > .dlg-neben { margin-right: auto; }
+:is(input, select, textarea)[aria-invalid="true"] { border-color: var(--rot); box-shadow: inset 0 0 0 1px var(--rot); }
+.feld-fehler { margin: 4px 0 0; }
+/* Knöpfe nur aus einem Bedienzeichen (↑ ↓ ✕, S.reihenfolgeKnoepfe/S.entfernenKnopf, D3): am Finger mindestens 44 px breit –
+   vorher standen dort Wörter („Hoch“, „Entfernen“), die den Knopf breit genug machten. */
+@media (pointer: coarse) { .zeichenknopf { min-width: 44px; min-height: 44px; } }
 dialog.wide { width: min(1100px, 96vw); }
 /* Tastatur offen (iOS: der sichtbare Ausschnitt schrumpft, 100dvh nicht): Der Dialog wird so hoch wie
    der sichtbare Bereich und hängt an dessen Oberkante – sein Inhalt rollt dann innen, statt dass iOS

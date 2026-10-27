@@ -114,14 +114,11 @@
         <td data-l="Gliederung">${S.esc(u.gliederung)}</td>
         ${MODULE.map((m) => `<td class="recht" data-l="${m.t}" data-modul="${m.k}">${rechtZelle(m, u)}</td>`).join("")}
         <td class="small" data-l="Zuletzt da">${letzterLogin(u)}</td>
-        <td class="small" data-l="Inhalte">${u.page_count} Artikel, ${u.album_count} Alben, ${u.photo_count} Bilder</td>
+        <td class="small" data-l="Inhalte">${u.page_count} Artikel, ${mehrzahl(u.album_count, "Album", "Alben")}, ${mehrzahl(u.photo_count, "Bild", "Bilder")}</td>
         <td class="tabelle-aktionen"><div class="btn-row">
           <button class="btn secondary small" data-act="edit">Bearbeiten</button>
-          <details class="zeilenmenue"><summary class="btn secondary small" aria-haspopup="true">Mehr</summary>
-            <div class="zeilenmenue-liste">
-              <button type="button" data-act="reset">Reset-Mail senden</button>
-              ${u.id !== STROEMIS.user.id ? '<button type="button" data-act="delete">Löschen</button>' : ""}
-            </div></details>
+          ${S.menue({ art: "zeilenmenue", eintraege: [{ text: "Reset-Mail senden", kurz: "Reset-Mail", attrs: 'data-act="reset"' },
+            u.id !== STROEMIS.user.id && { text: "Löschen", attrs: 'data-act="delete"' }] })}
         </div></td>
       </tr>`).join("");
   }
@@ -209,11 +206,11 @@
     const eigenes = !!u.id && u.id === STROEMIS.user.id;
     return `
       <div class="field-row">
-        <div><label>Name</label><input type="text" id="u-name" value="${S.esc(u.name)}"></div>
-        <div><label>Gliederung</label><input type="text" id="u-gl" value="${S.esc(u.gliederung)}"></div>
+        <div><label for="u-name">Name</label><input type="text" id="u-name" value="${S.esc(u.name)}"></div>
+        <div><label for="u-gl">Gliederung</label><input type="text" id="u-gl" value="${S.esc(u.gliederung)}"></div>
       </div>
-      <label>E-Mail-Adresse</label><input type="email" id="u-email" value="${S.esc(u.email)}" required>
-      <label>Telefon</label><input type="tel" id="u-phone" value="${S.esc(u.phone)}">
+      <label for="u-email">E-Mail-Adresse</label><input type="email" id="u-email" value="${S.esc(u.email)}" required>
+      <label for="u-phone">Telefon</label><input type="tel" id="u-phone" value="${S.esc(u.phone)}">
       <label>Rechte${S.info("Rechte", `„–“ kein Zugriff (in der Strömipedia: nur die öffentlichen Seiten lesen) · „Mitglied“ eigene Inhalte, bei den Riegenkarten:
         Prüfungen abnehmen, bei der Materialablage: sie nutzen (Bestand über Freigaben je Ordner) · „Verwaltung“ alles im Modul,
         bei der Materialablage auch Produktkatalog und alle Bestände. Verwaltung in der Leitstelle schließt alle Rechte ein.
@@ -233,7 +230,7 @@
       </fieldset>
       <details class="accordion" id="u-verlauf"><summary>Verlauf (Materialablage)${S.info("Verlauf", "Änderungen an Stufe, Häkchen „Prüfer“, Urkundennummer und Unterschrift (ohne Bild) – die letzten 50, neueste zuerst.")}</summary>
         <div class="accordion-body"><div id="u-verlauf-liste" aria-live="polite"><p class="help">Wird geladen …</p></div></div></details>` : ""}
-      <label>${u.id ? "Neues Passwort (leer lassen, um es zu behalten)" : "Passwort (leer lassen, um eines zu erzeugen)"}</label>
+      <label for="u-pw">${u.id ? "Neues Passwort (leer lassen, um es zu behalten)" : "Passwort (leer lassen, um eines zu erzeugen)"}</label>
       <input type="text" id="u-pw" autocomplete="off">
       ${u.id ? `<label class="inline"><input type="checkbox" id="u-active" ${u.active ? "checked" : ""}> Konto aktiv</label>`
              : `<label class="inline"><input type="checkbox" id="u-invite" checked> Einladung per E-Mail schicken (Link zum Passwort setzen)</label>`}`;
@@ -297,6 +294,12 @@
     });
   }
 
+  /* Fehler am Feld (UI/UX vor dem Merge, A2): Welche Meldung des Servers zu welchem Feld des Nutzerdialogs gehört – das
+     Feld bekommt sie samt Fokus; sonst steht sie als Toast da und der Fokus auf „Anlegen“/„Speichern“. */
+  const FEHLER_FELD = [[/E-Mail-Adresse/, "#u-email"], [/Passwort/, "#u-pw"], [/Namen/, "#u-name"]];
+  const fehlerFeld = (body, err) => { const t = FEHLER_FELD.find(([re]) => re.test(err.message || "")); return t ? body.querySelector(t[1]) : body; };
+  const EMAIL_FEHLT = "Bitte eine gültige E-Mail-Adresse angeben.";
+
   document.getElementById("btn-new-user").addEventListener("click", () => {
     S.dialog(`<h2>Nutzer anlegen</h2>${userForm()}
       <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button><button class="btn" id="u-save" type="button">Anlegen</button></div>`,
@@ -305,8 +308,9 @@
         body.querySelector("#u-save").onclick = async (ev) => {
           const knopf = ev.currentTarget;
           if (knopf.disabled) return;          // Doppelklick legte den Nutzer zweimal an
-          knopf.disabled = true;
           const d = read(body);
+          if (!d.email) return S.feldFehler(body.querySelector("#u-email"), EMAIL_FEHLT);
+          knopf.disabled = true;
           d.send_invite = body.querySelector("#u-invite").checked;
           try {
             const r = await S.api("/api/admin/users", { method: "POST", body: d });
@@ -316,7 +320,7 @@
               : "";
             const mail = d.send_invite ? (r.invite_sent ? "<p>Die Einladung wurde per E-Mail verschickt.</p>" : "<p class='notice'>Kein Mailserver eingerichtet – der Einladungslink steht im Protokoll des Servers.</p>") : "";
             S.dialog(`<h2>Nutzer angelegt</h2><p>${S.esc(d.email)}</p>${info}${mail}<div class="dlg-actions"><button class="btn secondary" data-close type="button">Schließen</button></div>`);
-          } catch (e) { S.toast(e.message, true); }
+          } catch (e) { S.fehlschlag(knopf, e, fehlerFeld(body, e)); }
           finally { knopf.disabled = false; }
         };
       });
@@ -371,7 +375,7 @@
               if (!(await materialwartBleibt(u, d.rechte.material, d.active))) return;
               await S.api(`/api/admin/users/${id}`, { method: "PUT", body: d }); dlg.close(); await load(); S.toast("Gespeichert");
             }
-            catch (err) { S.toast(err.message, true); }
+            catch (err) { S.fehlschlag(knopf, err, fehlerFeld(body, err)); }
             finally {
               knopf.disabled = false;
               // Gesperrt verliert „Speichern“ den Fokus, und die Rückfrage gibt ihn beim Schließen nicht zurück (der Knopf
@@ -384,7 +388,7 @@
     } else if (btn.dataset.act === "reset") {
       // Rückfrage: Ein Versehen im Zeilenmenü schickte sofort eine Passwort-Mail (Browserprüfung vor dem Merge,
       // Verbesserung 14).
-      if (!(await S.confirm(`Eine Mail zum Zurücksetzen des Passworts an ${u.email} senden?`, "Senden"))) return;
+      if (!(await S.confirm(`Eine Mail zum Zurücksetzen des Passworts an ${u.email} senden?`, "Senden", "", { endgueltig: false }))) return;
       try { const r = await S.api(`/api/admin/users/${id}/reset-mail`, { method: "POST", body: {} }); S.toast(r.message); }
       catch (err) { S.toast(err.message, true); }
     } else if (btn.dataset.act === "delete") {
@@ -396,7 +400,7 @@
   const RECHT = { lesen: "lesen", verwalten: "verwalten", pruefen: "prüfen" };
   // „2027-12-31“ → „31.12.2027“ – ohne Date-Objekt, damit keine Zeitzone den Tag verschiebt.
   const tag = (iso) => { const m = String(iso || "").match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? `${m[3]}.${m[2]}.${m[1]}` : ""; };
-  const mehrzahl = (n, eins, viele) => `${n} ${n === 1 ? eins : viele}`;
+  const mehrzahl = S.plural;              // „1 Bild“, „3 Bilder“ – app-weit in common.js (UI/UX vor dem Merge, A11)
 
   function zustand(f) {
     if (!f.gueltig) return `<span class="muted">abgelaufen am ${tag(f.bis)}</span>`;
@@ -440,7 +444,7 @@
       const haengt = !f.traegt_pruefen ? "" : f.traegt_pruefen === 1
         ? " Daran hängt eine dauerhafte Prüffreigabe – ohne dieses Grundrecht wirkt sie nicht mehr."
         : ` Daran hängen ${f.traegt_pruefen} dauerhafte Prüffreigaben – ohne dieses Grundrecht wirken sie nicht mehr.`;
-      if (!(await S.confirm(`Freigabe „${RECHT[f.recht] || f.recht}“ für ${f.ordner.pfad} entziehen?${haengt}`, "Entziehen"))) return;
+      if (!(await S.confirm(`Freigabe „${RECHT[f.recht] || f.recht}“ für ${f.ordner.pfad} entziehen?${haengt}`, "Entziehen", "", { endgueltig: false }))) return;
       b.disabled = true;
       try {
         const r = await S.api(`/api/material/freigaben/${f.id}`, { method: "DELETE" });
@@ -453,7 +457,7 @@
             des Kontos unter <a href="/materialablage/pruefungen">Materialablage → Prüfungen</a> → „Offene Prüfungen“ mit „Reservierung aufheben“.</p>`);
         }
         load();
-      } catch (e) { S.toast(e.message, true); b.disabled = false; }
+      } catch (e) { S.fehlschlag(b, e); }
     }));
   }
 
@@ -488,25 +492,10 @@
     return `${namen.length > 1 ? "der Gliederungen" : "der Gliederung"} ${liste}`;
   }
 
-  /* Rückfrage mit dem roten Hauptknopf – ein eigenes <dialog> wie S.confirm, damit „Bearbeiten“ darunter offen bleibt,
-     aber ohne dessen Knopf für Endgültiges: „Trotzdem speichern“ löscht nichts. Abbrechen steht vorn und hat den
-     Fokus, auch am Touchgerät; Esc bricht ab. */
-  function rueckfrage(titel, html, okLabel) {
-    return new Promise((resolve) => {
-      let ja = false;
-      const dlg = document.createElement("dialog");
-      dlg.setAttribute("aria-labelledby", "rf-titel");
-      dlg.innerHTML = `<div class="dlg-body"><h2 id="rf-titel">${S.esc(titel)}</h2>${html}
-        <div class="dlg-actions"><button class="btn secondary" id="rf-nein" type="button">Abbrechen</button>
-        <button class="btn" id="rf-ja" type="button">${S.esc(okLabel)}</button></div></div>`;
-      document.body.appendChild(dlg);
-      dlg.querySelector("#rf-ja").onclick = () => { ja = true; dlg.close(); };
-      dlg.querySelector("#rf-nein").onclick = () => dlg.close();
-      dlg.addEventListener("close", () => { dlg.remove(); resolve(ja); }, { once: true });
-      dlg.showModal();
-      dlg.querySelector("#rf-nein").focus();
-    });
-  }
+  /* Rückfrage mit dem roten Hauptknopf: S.confirm in der Form für Nicht-Endgültiges („Trotzdem speichern“ löscht nichts);
+     eigener Dialog, damit „Bearbeiten“ darunter offen bleibt. Abbrechen hat den Fokus, auch am Touchgerät; Esc bricht ab.
+     (Bis zum 27.10.2026 eine eigene Hilfe hier – UI/UX vor dem Merge, A4.) */
+  const rueckfrage = (titel, html, okLabel) => S.confirm("", okLabel, "", { titel, html, endgueltig: false, fokus: "nein" });
 
   /* Material von „Mitglied“ oder „Verwaltung“ auf „–“ oder das Konto deaktiviert: Ist es heute der einzige Materialwart
      einer Gliederung (letzter_materialwart aus GET …/material-folgen, gezählt wie die Regel „keine Gliederung ohne
@@ -553,7 +542,7 @@
         if (knopf.disabled) return;
         knopf.disabled = true;
         try { await S.api(`/api/admin/users/${u.id}`, { method: "DELETE" }); dlg.close(); await load(); S.toast("Nutzer gelöscht"); }
-        catch (err) { S.toast(err.message, true); knopf.disabled = false; }
+        catch (err) { S.fehlschlag(knopf, err); }
       };
       const el = body.querySelector("#u-folgen");
       try {
@@ -676,7 +665,7 @@
       const d = await S.api("/api/admin/einstellungen", { method: "PUT", body: { werte } });
       uebernehmen(d);
       S.toast("Einstellungen gespeichert");
-    } catch (err) { S.toast(err.message, true); }
+    } catch (err) { S.fehlschlag(knopf, err, form); }
     finally { knopf.disabled = false; }
   });
 

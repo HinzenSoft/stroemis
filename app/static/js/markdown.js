@@ -893,21 +893,29 @@ window.MD = (function () {
     nachbearbeiten(root);
   }
 
-  /* Bild im Vollbild – ein einziges Overlay für alle Seiten. */
+  /* Bild im Vollbild – ein einziges Overlay für alle Seiten. Zurück schließt es wie Esc (S.overlayVerlauf, nur wo
+     common.js geladen ist – nicht auf den öffentlichen Seiten). Schließen mit ✕ wie überall (UI/UX vor dem Merge, D3). */
   function openLightbox(src, alt) {
     if (!src) return;
     const box = document.createElement("div");
     box.className = "md-lightbox";
-    box.innerHTML = `<button type="button" class="md-lightbox-close" aria-label="Schließen">×</button>`;
+    box.innerHTML = `<button type="button" class="md-lightbox-close" aria-label="Schließen" title="Schließen">✕</button>`;
     const img = document.createElement("img");
     img.src = src.replace(/#w=[^#]*$/, "");
     img.alt = alt || "";
     box.appendChild(img);
-    const close = () => { box.remove(); document.removeEventListener("keydown", onKey); };
+    let verlauf = null;
+    const close = () => {
+      if (!box.isConnected) return;
+      box.remove();
+      document.removeEventListener("keydown", onKey);
+      if (verlauf) verlauf.zu();
+    };
     const onKey = (e) => { if (e.key === "Escape") close(); };
     box.addEventListener("click", (e) => { if (e.target !== img) close(); });
     document.addEventListener("keydown", onKey);
     document.body.appendChild(box);
+    if (window.S && S.overlayVerlauf) verlauf = S.overlayVerlauf(() => { verlauf = null; close(); });
   }
 
   /* Aktiven Abschnitt im Inhaltsverzeichnis mitführen. */

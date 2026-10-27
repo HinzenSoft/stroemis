@@ -45,7 +45,7 @@
   // Hilfe unter „Prüfen bis“, wenn „dauerhaft“ gewählt ist.
   const PRUEFEN_DAUERHAFT = "Gilt, solange die Person hier lesen oder verwalten hat – nur externe Prüfer brauchen ein Enddatum.";
 
-  const plural = (n, eins, viele) => `${n} ${n === 1 ? eins : viele}`;
+  const plural = S.plural;              // „1 Bild“, „3 Bilder“ – app-weit in common.js (UI/UX vor dem Merge, A11)
   const fokus = (el) => { if (el && !window.matchMedia("(pointer: coarse)").matches) el.focus(); };
   // „2027-12-31“ → „31.12.2027“ – ohne Date-Objekt, damit keine Zeitzone den Tag verschiebt.
   const fmtTag = (iso) => { const m = String(iso || "").match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? `${m[3]}.${m[2]}.${m[1]}` : ""; };
@@ -104,6 +104,7 @@
     }
     dlg.addEventListener("close", () => dlg.remove());
     dlg.showModal();
+    S.dialogVerlauf(dlg);
     if (onOpen) onOpen(dlg, body);
     return dlg;
   }
@@ -219,7 +220,7 @@
           <div class="help" id="mf-pruefen-hilfe"></div></div>
       </div>
       <details class="mf-notiz"><summary>Notiz</summary>
-        <input type="text" id="mf-notiz" maxlength="200" aria-describedby="mf-notiz-hilfe">
+        <input type="text" id="mf-notiz" maxlength="200" aria-label="Notiz" aria-describedby="mf-notiz-hilfe">
         <div class="help" id="mf-notiz-hilfe">Eine Zeile, höchstens 200 Zeichen – sehen nur Verwalter dieses Ordners und die
           Material-Verwaltung, die Person selbst also nur, wenn sie hier mitverwaltet. Keine sensiblen Angaben.</div></details>
       <div class="btn-row mf-erteilen-reihe"><button class="btn" type="button" id="mf-erteilen">Freigabe erteilen</button></div>
@@ -361,24 +362,28 @@
     feld("mf-erteilen").addEventListener("click", async (ev) => {
       const knopf = ev.currentTarget;
       if (knopf.disabled) return;
-      if (!person) { toast("Bitte zuerst eine Person wählen.", true); fokus(feld("mf-person")); return; }
-      if (!vorlage()) { toast("Bitte eine Vorlage wählen.", true); return; }
+      // Fehler am Feld (UI/UX vor dem Merge, A2): Satz darunter, Fokus darauf.
+      if (!person) { S.feldFehler(feld("mf-person"), "Bitte zuerst eine Person wählen."); return; }
+      if (!vorlage()) { S.feldFehler($('input[name="mf-vorlage"]', body), "Bitte eine Vorlage wählen."); return; }
       const w = wunsch();
-      if (!w.grund && !w.pruefen) { toast("Bitte ein Grundrecht, eine Prüffreigabe oder beides wählen.", true); return; }
+      if (!w.grund && !w.pruefen) { S.feldFehler(feld("mf-grund"), "Bitte ein Grundrecht, eine Prüffreigabe oder beides wählen."); return; }
       // pruefen: true mit pruefen_bis null heißt dauerhaft – ob das geht, entscheidet der Server (Grundrecht am Anker).
       const daten = { user_id: person.id, grundrecht: w.grund, grund_bis: null, pruefen: w.pruefen, pruefen_bis: null };
+      let datumFeld = null;
       try {
         if (w.grund && !feld("mf-dauerhaft").checked) {
-          daten.grund_bis = datumWert(feld("mf-grund-bis"), "Grundrecht bis");
+          datumFeld = feld("mf-grund-bis");
+          daten.grund_bis = datumWert(datumFeld, "Grundrecht bis");
           if (!daten.grund_bis) throw new Error("Bitte ein Enddatum für das Grundrecht angeben – oder „dauerhaft“.");
         }
         if (w.pruefen && !feld("mf-pruefen-dauerhaft").checked) {
-          daten.pruefen_bis = datumWert(feld("mf-pruefen-bis"), "Prüfen bis");
+          datumFeld = feld("mf-pruefen-bis");
+          daten.pruefen_bis = datumWert(datumFeld, "Prüfen bis");
           if (!daten.pruefen_bis) {
             throw new Error(`Bitte ein Enddatum für die Prüffreigabe angeben${feld("mf-pruefen-dauerhaft-wahl").hidden ? "" : " – oder „dauerhaft“"}.`);
           }
         }
-      } catch (e) { toast(e.message, true); return; }
+      } catch (e) { S.feldFehler(datumFeld, e.message); return; }
       const notiz = feld("mf-notiz").value.trim();
       if (notiz) daten.notiz = notiz;
       knopf.disabled = true;
@@ -390,7 +395,7 @@
         feld("mf-person").value = "";
         feld("mf-notiz").value = "";
         await nachher();
-      } catch (e) { toast(e.message, true); }
+      } catch (e) { S.fehlschlag(knopf, e, body); }
       finally { knopf.disabled = false; }
     });
 
@@ -452,7 +457,7 @@
         try {
           daten.bis = dauer && dauer.checked ? null : datumWert(bis, "bis") || null;
           if (daten.bis === null && !(dauer && dauer.checked)) throw new Error("Bitte ein Enddatum angeben.");
-        } catch (e) { toast(e.message, true); return; }
+        } catch (e) { S.feldFehler(bis, e.message); return; }
         if ($("#mfa-notiz", body)) daten.notiz = $("#mfa-notiz", body).value.trim();
         knopf.disabled = true;
         try {
@@ -460,7 +465,7 @@
           dlg.close();
           toast("Freigabe geändert");
           await nachher();
-        } catch (e) { toast(e.message, true); knopf.disabled = false; }
+        } catch (e) { S.fehlschlag(knopf, e, body); }
       };
     });
   }
@@ -468,7 +473,8 @@
   async function entziehen(f, stand, nachher) {
     const text = `Freigabe „${RECHT[f.recht] || f.recht}“ von ${f.konto.name} an ${f.ordner.pfad} entziehen?`
       + (f.eigen ? " Es ist deine eigene." : "") + (f.traegt_pruefen ? ` ${traegtText(f)}` : "");
-    if (!(await confirm(text, "Entziehen"))) return;
+    // Entziehen löscht nichts Unwiederbringliches – neu erteilen geht jederzeit (A4: Rückfrage ohne „Endgültig“).
+    if (!(await confirm(text, "Entziehen", "", { endgueltig: false }))) return;
     try {
       const r = await api(`${API}/freigaben/${f.id}`, { method: "DELETE" });
       stand.hinweis = r.offene_entwuerfe ? `${plural(r.offene_entwuerfe, "offene Prüfung", "offene Prüfungen")} von ${esc(f.konto.name)} – unter
@@ -496,7 +502,7 @@
         if (knopf.disabled) return;
         let bis;
         try { bis = datumWert($("#mfv-bis", body), "Neues Ende"); if (!bis) throw new Error("Bitte ein Enddatum angeben."); }
-        catch (e) { toast(e.message, true); return; }
+        catch (e) { S.feldFehler($("#mfv-bis", body), e.message); return; }
         knopf.disabled = true;
         try {
           const r = await api(`${API}/ordner/${d.ordner.id}/freigaben/verlaengern`, { method: "POST", body: { bis } });
@@ -505,7 +511,7 @@
               <span class="small muted">${esc(u.ordner)}</span> – ${esc(u.grund)}</li>`).join("")}</ul>` : ""}`;
           knopf.hidden = true;
           await nachher();
-        } catch (e) { toast(e.message, true); knopf.disabled = false; }
+        } catch (e) { S.fehlschlag(knopf, e, body); }
       };
     });
   }

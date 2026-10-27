@@ -47,6 +47,8 @@
 
   const shell = $(".wiki-shell");
   const side = $("#wiki-side");
+  // Zurück schließt die offene Schublade (UI/UX vor dem Merge, A1) – nur, solange der Baum eine Schublade ist.
+  S.klassenVerlauf(side, "open", () => side.classList.remove("open"), () => getComputedStyle(side).position === "fixed");
   /* Unter 1180 px hat das Raster keine dritte Spalte mehr. Die rechte Spur (Kommentare, Angaben
      zur Seite) wandert dann in die Textspalte unter den Artikel, statt zu verschwinden – auf
      Telefon und Tablet waren Kommentare sonst gar nicht zu lesen. Das Element bleibt dasselbe
@@ -201,25 +203,6 @@
     renderFavorites();
   }
 
-  /* Pfeiltasten, Pos1/Ende und Escape in einem aufgeklappten Menü. */
-  function wireMenuKeys(box, close) {
-    const items = () => Array.from(box.querySelectorAll("button:not([disabled])"));
-    const focusAt = (i) => { const list = items(); if (list.length) list[(i + list.length) % list.length].focus(); };
-    box.setAttribute("role", "menu");
-    items().forEach((b) => b.setAttribute("role", "menuitem"));
-    setTimeout(() => focusAt(0), 0);
-    box.addEventListener("keydown", (e) => {
-      const list = items();
-      const at = list.indexOf(document.activeElement);
-      if (e.key === "ArrowDown") { e.preventDefault(); focusAt(at + 1); }
-      else if (e.key === "ArrowUp") { e.preventDefault(); focusAt(at - 1); }
-      else if (e.key === "Home") { e.preventDefault(); focusAt(0); }
-      else if (e.key === "End") { e.preventDefault(); focusAt(list.length - 1); }
-      else if (e.key === "Escape") { e.preventDefault(); close(); }
-      else if (e.key === "Tab") { close(); }
-    });
-  }
-
   /* Menü „⋯“ neben „Neue Seite“ über dem Seitenbaum: Papierkorb und – nur mit Wiki-Verwaltung – der Import auf die oberste
      Ebene (der Dialog beginnt mit „– oberste Ebene –“). Seltene Aktionen gehören ins Menü; als drei Knöpfe brach die Zeile
      am Telefon und in der 260 px schmalen Seitenleiste des Tablets um (Auftrag „letzte offene Punkte“, 27.10.2026). */
@@ -229,14 +212,8 @@
     box.innerHTML = `
       <button type="button" data-a="trash">Papierkorb</button>
       ${darfImportieren() ? '<button type="button" data-a="import">Seiten aus ZIP importieren</button>' : ""}`;
-    document.body.appendChild(box);
-    const r = anchor.getBoundingClientRect();
-    box.style.left = `${Math.max(8, Math.min(window.innerWidth - box.offsetWidth - 8, r.left))}px`;
-    box.style.top = `${window.scrollY + r.bottom + 4}px`;
-    const close = () => { box.remove(); document.removeEventListener("pointerdown", onDoc, true); if (anchor && anchor.focus) anchor.focus(); };
-    const onDoc = (e) => { if (!box.contains(e.target)) close(); };
-    setTimeout(() => document.addEventListener("pointerdown", onDoc, true), 0);
-    wireMenuKeys(box, close);
+    // Verhalten wie jedes Menü (common.js: Esc, Pfeiltasten, daneben tippen, Fokus zurück auf „⋯“).
+    const close = S.menueSchwebend(anchor, box);
     box.addEventListener("click", (e) => {
       const b = e.target.closest("button[data-a]");
       if (!b) return;
@@ -262,14 +239,8 @@
       <button type="button" data-a="export">Als Markdown herunterladen</button>
       ${darfImportieren() ? '<button type="button" data-a="import">Seiten aus ZIP importieren</button>' : ""}
       <button type="button" data-a="del" class="danger">In den Papierkorb</button>`;
-    document.body.appendChild(box);
-    const r = anchor.getBoundingClientRect();
-    box.style.left = `${Math.min(window.innerWidth - box.offsetWidth - 8, r.left)}px`;
-    box.style.top = `${window.scrollY + r.bottom + 4}px`;
-    const close = () => { box.remove(); document.removeEventListener("pointerdown", onDoc, true); if (anchor && anchor.focus) anchor.focus(); };
-    const onDoc = (e) => { if (!box.contains(e.target)) close(); };
-    setTimeout(() => document.addEventListener("pointerdown", onDoc, true), 0);
-    wireMenuKeys(box, close);
+    // Verhalten wie jedes Menü (common.js: Esc, Pfeiltasten, daneben tippen, Fokus zurück auf „⋯“).
+    const close = S.menueSchwebend(anchor, box);
     box.addEventListener("click", async (e) => {
       const b = e.target.closest("button[data-a]");
       if (!b) return;
@@ -278,7 +249,7 @@
       if (a === "child") { if (leaveEditor()) openEditor({ parent_id: page.id }); return; }
       if (a === "fav") return toggleFavorite(page.id, !page.favorite);
       if (a === "icon") return iconDialog(page.id, page.icon || "");
-      if (a === "export") { window.location.href = `/api/wiki/pages/${page.id}/export`; return; }
+      if (a === "export") { window.location.href = `/api/wiki/pages/${page.id}/export?stand=${Date.now()}`; return; }
       if (a === "import") { side.classList.remove("open"); return importDialog(page); }
       if (a === "dup") {
         try { const r2 = await api(`/api/wiki/pages/${page.id}/duplicate`, { method: "POST", body: {} });
@@ -372,10 +343,10 @@
   /* Emoji für die Seite wählen */
   function iconDialog(pid, current) {
     dialog(`<h2>Symbol der Seite</h2>
-      <div class="em-row"><input type="text" id="em-input" maxlength="8" autocomplete="off"><span class="help">Emoji eintippen oder unten wählen</span></div>
+      <div class="em-row"><input type="text" id="em-input" maxlength="8" autocomplete="off" aria-label="Emoji"><span class="help">Emoji eintippen oder unten wählen</span></div>
       <div class="em-grid" id="em-grid"></div>
-      <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button>
-      <button class="btn secondary" id="ic-clear" type="button">Entfernen</button>
+      <div class="dlg-actions"><button class="btn secondary dlg-neben" id="ic-clear" type="button">Entfernen</button>
+      <button class="btn secondary" data-close type="button">Abbrechen</button>
       <button class="btn" id="ic-ok" type="button">Übernehmen</button></div>`,
       (dlg, body) => {
         dlg.classList.add("wide");
@@ -687,7 +658,7 @@
       return `<ul>${kids.map((k) => `<li>${eintrag(k)}${zweig(k.id, tiefe + 1)}</li>`).join("")}</ul>`;
     };
     content.innerHTML = `<div class="wiki-head"><h1>Strömipedia</h1></div>
-      <div class="wiki-meta">${state.pages.length} Seiten · Wissen für die Strömungsrettung und seiltechnische Rettung</div>
+      <div class="wiki-meta">${S.plural(state.pages.length, "Seite", "Seiten")} · Wissen für die Strömungsrettung und seiltechnische Rettung</div>
       <div class="wiki-content home-baum">${roots.map((r) =>
         `<h2>${eintrag(r)}</h2>${zweig(r.id, 1)}`).join("")}</div>
       <div class="home-cols" id="home-recent"></div>`;
@@ -770,7 +741,7 @@
         const ziel = document.getElementById(MD.entziffern(href.slice(1)));
         if (!ziel) return;
         e.preventDefault();
-        ziel.scrollIntoView({ behavior: "smooth", block: "start" });
+        S.rollen(ziel, { block: "start" });
         history.replaceState(history.state, "", href);
       });
     });
@@ -865,7 +836,7 @@
     dialog(`<h2>Ersteller ändern</h2>
       <p class="help">Der Name steht als „Von …“ unter dem Titel. Mit ihm wechseln auch seine Rechte an
         dieser Seite: löschen und Bearbeiter freigeben.${bisher ? ` Bisher: <strong>${esc(bisher.name || "unbekannt")}</strong>.` : ""}</p>
-      <input type="search" id="au-filter" placeholder="Nutzer suchen …">
+      <input type="search" id="au-filter" placeholder="Nutzer suchen …" aria-label="Nutzer suchen">
       <div class="user-pick" id="au-users">${liste || '<div class="muted small">Keine Nutzer gefunden.</div>'}</div>
       <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button><button class="btn" id="au-ok" type="button">Übernehmen</button></div>`,
       (dlg, body) => {
@@ -876,7 +847,7 @@
         });
         body.querySelector("#au-ok").onclick = async () => {
           const wahl = body.querySelector('input[name="au-wahl"]:checked');
-          if (!wahl) { toast("Bitte einen Nutzer wählen.", true); return; }
+          if (!wahl) { S.feldFehler(body.querySelector('input[name="au-wahl"]') || filter, "Bitte einen Nutzer wählen."); return; }
           try {
             const r = await api(`/api/wiki/pages/${p.id}/creator`, { method: "PUT", body: { user_id: +wahl.value } });
             Object.assign(p, r.page);
@@ -1027,14 +998,8 @@
       ${p.can_edit ? `<button type="button" data-a="template">${p.is_template ? "Nicht mehr als Vorlage" : "Als Vorlage anbieten"}</button>` : ""}
       <button type="button" data-a="dup">Duplizieren</button>
       ${p.can_delete ? '<button type="button" data-a="del" class="danger">In den Papierkorb</button>' : ""}`;
-    document.body.appendChild(box);
-    const r = anchor.getBoundingClientRect();
-    box.style.left = `${Math.max(8, Math.min(window.innerWidth - box.offsetWidth - 8, r.left))}px`;
-    box.style.top = `${window.scrollY + r.bottom + 4}px`;
-    const close = () => { box.remove(); document.removeEventListener("pointerdown", onDoc, true); if (anchor && anchor.focus) anchor.focus(); };
-    const onDoc = (e) => { if (!box.contains(e.target)) close(); };
-    setTimeout(() => document.addEventListener("pointerdown", onDoc, true), 0);
-    wireMenuKeys(box, close);
+    // Verhalten wie jedes Menü (common.js: Esc, Pfeiltasten, daneben tippen, Fokus zurück auf „⋯“).
+    const close = S.menueSchwebend(anchor, box);
     box.addEventListener("click", async (e) => {
       const b = e.target.closest("button[data-a]");
       if (!b) return;
@@ -1052,8 +1017,8 @@
         } catch (err) { toast(err.message, true); }
         return;
       }
-      if (a === "export") { window.location.href = `/api/wiki/pages/${p.id}/export`; return; }
-      if (a === "exportzip") { window.location.href = `/api/wiki/pages/${p.id}/export?children=1`; return; }
+      if (a === "export") { window.location.href = `/api/wiki/pages/${p.id}/export?stand=${Date.now()}`; return; }
+      if (a === "exportzip") { window.location.href = `/api/wiki/pages/${p.id}/export?children=1&stand=${Date.now()}`; return; }
       if (a === "print") { window.print(); return; }
       if (a === "del") return trashPage(p);
       try {
@@ -1119,7 +1084,7 @@
       $("#im-ok", body).onclick = async (ev) => {
         const knopf = ev.currentTarget;
         const datei = $("#im-datei", body).files[0];
-        if (!datei) { toast("Bitte eine ZIP-Datei wählen.", true); $("#im-datei", body).focus(); return; }
+        if (!datei) { S.feldFehler($("#im-datei", body), "Bitte eine ZIP-Datei wählen."); return; }
         const fd = new FormData();
         fd.append("file", datei);
         if (wahl.value) fd.append("parent_id", wahl.value);
@@ -1129,9 +1094,8 @@
         try {
           r = await api("/api/wiki/import", { method: "POST", body: fd });
         } catch (e) {
-          toast(e.message, true);
-          knopf.disabled = false;
           knopf.textContent = "Importieren";
+          S.fehlschlag(knopf, e, $("#im-datei", body));
           return;
         }
         const erste = r.seiten[0];
@@ -1191,7 +1155,7 @@
     tocEl.querySelectorAll("a").forEach((a) => a.addEventListener("click", (e) => {
       e.preventDefault();
       const t = document.getElementById(a.getAttribute("href").slice(1));
-      if (t) { t.scrollIntoView({ behavior: "smooth", block: "start" }); history.replaceState(null, "", a.getAttribute("href")); }
+      if (t) { S.rollen(t, { block: "start" }); history.replaceState(null, "", a.getAttribute("href")); }
     }));
     if (!state.current) commentsEl.innerHTML = "";
   }
@@ -1218,7 +1182,7 @@
     tocEl.querySelectorAll("a").forEach((a, i) => a.addEventListener("click", (e) => {
       e.preventDefault();
       const ziel = editorSprungziele[i];
-      if (ziel) ziel.scrollIntoView({ behavior: "smooth", block: "start" });
+      if (ziel) S.rollen(ziel, { block: "start" });
     }));
   }
 
@@ -1261,7 +1225,7 @@
       ["Lesezeit", (() => { const m = Math.max(1, Math.round(woerter / 200)); return `etwa ${m} ${m === 1 ? "Minute" : "Minuten"}`; })()],
       ["Kommentare", String(p.comment_count || 0)],
     ];
-    if (schmalesRaster.matches) setTimeout(() => box.scrollIntoView({ behavior: "smooth", block: "start" }), 0);
+    if (schmalesRaster.matches) setTimeout(() => S.rollen(box, { block: "start" }), 0);
     box.innerHTML = `<div class="rail-title">Angaben zur Seite</div>
       <dl class="info-liste">${zeilen.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join("")}</dl>
       <div class="info-verweise" id="info-verweise"><span class="muted small">Verweise werden geladen …</span></div>`;
@@ -1338,7 +1302,7 @@
         (dlg, body) => {
           body.querySelector("#ce-ok").onclick = async () => {
             const txt = body.querySelector("#ce-text").value.trim();
-            if (!txt) return toast("Der Kommentar ist leer.", true);
+            if (!txt) return S.feldFehler(body.querySelector("#ce-text"), "Der Kommentar ist leer.");
             try {
               await api(`/api/wiki/comments/${c.id}`, { method: "PUT", body: { body: txt } });
               dlg.close(); await loadComments(); toast("Kommentar geändert");
@@ -1358,7 +1322,7 @@
     commentsEl.querySelectorAll(".c-quote").forEach((q) => q.onclick = () => {
       const cid = q.closest(".comment").dataset.cid;
       const m = content.querySelector(`mark.cq[data-cid="${cid}"], .cbadge[data-cid="${cid}"]`);
-      if (m) { m.scrollIntoView({ behavior: "smooth", block: "center" }); m.classList.add("flash"); setTimeout(() => m.classList.remove("flash"), 2000); }
+      if (m) { S.rollen(m, { block: "center" }); m.classList.add("flash"); setTimeout(() => m.classList.remove("flash"), 2000); }
       else toast("Die Textstelle wurde im Artikel nicht mehr gefunden.");
     });
   }
@@ -1387,7 +1351,7 @@
     }
     art.querySelectorAll("mark.cq, .cbadge").forEach((m) => m.addEventListener("click", () => {
       const el = commentsEl.querySelector(`.comment[data-cid="${m.dataset.cid}"]`);
-      if (el) { el.scrollIntoView({ behavior: "smooth", block: "center" }); el.classList.add("flash"); setTimeout(() => el.classList.remove("flash"), 2000); }
+      if (el) { S.rollen(el, { block: "center" }); el.classList.add("flash"); setTimeout(() => el.classList.remove("flash"), 2000); }
     }));
   }
 
@@ -1489,7 +1453,7 @@
       (dlg, body) => {
         body.querySelector("#c-save").onclick = async () => {
           const text = body.querySelector("#c-text").value.trim();
-          if (!text) return toast("Der Kommentar ist leer.", true);
+          if (!text) return S.feldFehler(body.querySelector("#c-text"), "Der Kommentar ist leer.");
           try {
             await api(`/api/wiki/pages/${p.id}/comments`, { method: "POST", body: {
               body: text, quote: quote || "", parent_id: parentId || null,
@@ -1507,7 +1471,7 @@
     const publicLink = `${STROEMIS.publicUrl}/${p.slug}`;
     dialog(`<h2>Teilen: ${esc(p.title)}</h2>
       ${p.can_share ? `<h3>Bearbeiten erlauben${info("Bearbeiten erlauben", "Freigegebene Nutzer dürfen diese Seite und ihre Unterseiten bearbeiten, aber nicht löschen.")}</h3>
-      <input type="search" id="sh-filter" placeholder="Nutzer suchen …">
+      <input type="search" id="sh-filter" placeholder="Nutzer suchen …" aria-label="Nutzer suchen">
       <div class="user-pick" id="sh-users">${state.users.filter((u) => u.id !== p.created_by).map((u) => `
         <label class="inline"><input type="checkbox" value="${u.id}" ${editorIds.has(u.id) ? "checked" : ""}> ${esc(u.name || "Unbenannt")} <span class="muted small">${esc(u.gliederung || "")}</span></label>`).join("") || '<div class="muted small">Keine weiteren Nutzer.</div>'}</div>` : ""}
       ${p.can_share ? `<h3 style="margin-top:18px">Lesen einschränken${info("Lesen einschränken", `Normalerweise darf jeder Angemeldete jede Seite lesen. Eingeschränkt sehen die Seite
@@ -1519,9 +1483,9 @@
       <p class="help">Öffentliche Seiten sind ohne Anmeldung über den Link unten erreichbar – samt ihrer Bilder und Videos.</p>
       <label class="inline"><input type="checkbox" id="sh-public" ${p.is_public ? "checked" : ""}> Diese Seite öffentlich zeigen</label>
       <label class="inline"><input type="checkbox" id="sh-children" ${p.public_children ? "checked" : ""} ${p.is_public ? "" : "disabled"}> … einschließlich aller Unterseiten (ganzer Abschnitt)</label>
-      <div class="share-link ${p.is_public ? "" : "hidden"}" id="sh-link"><input type="text" readonly value="${esc(publicLink)}" id="sh-url"><button class="btn secondary small" id="sh-copy" type="button">Kopieren</button></div>`
+      <div class="share-link ${p.is_public ? "" : "hidden"}" id="sh-link"><input type="text" readonly value="${esc(publicLink)}" id="sh-url" aria-label="Öffentlicher Link"><button class="btn secondary small" id="sh-copy" type="button">Kopieren</button></div>`
       : (p.effective_public ? `<p class="notice">Diese Seite ist über einen freigegebenen Abschnitt öffentlich: <a href="${esc(publicLink)}" target="_blank" rel="noopener">${esc(publicLink)}</a></p>` : "")}
-      <div class="dlg-actions"><button class="btn secondary" data-close type="button">Schließen</button><button class="btn" id="sh-save" type="button">Speichern</button></div>`,
+      <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button><button class="btn" id="sh-save" type="button">Speichern</button></div>`,
       (dlg, body) => {
         const filter = body.querySelector("#sh-filter");
         if (filter) filter.addEventListener("input", () => {
@@ -1795,7 +1759,7 @@
         renderPages();
         body.querySelector("#lk-ok").onclick = () => {
           const url = urlEl.value.trim();
-          if (!url) return toast("Bitte eine Adresse angeben.", true);
+          if (!url) return S.feldFehler(urlEl, "Bitte eine Adresse angeben.");
           dlg.close();
           onSave({ url, text: textEl.value.trim() || url });
         };
@@ -2412,7 +2376,7 @@
           });
           body.querySelector("#bs-ok").onclick = () => {
             const k = alsKennung(feld.value);
-            if (!k) return toast("Bitte eine Kennung angeben.", true);
+            if (!k) return S.feldFehler(feld, "Bitte eine Kennung angeben.");
             if (vorhanden.includes(k)) {
               return toast(`Auf dieser Seite gibt es „${k}“ schon. Zwei gleiche Kennungen `
                            + `lassen sich nicht auseinanderhalten – eingebunden würde immer der obere.`, true);
@@ -2456,7 +2420,7 @@
               ? sicht.map((b) => {
                   const z = `${b.slug}#${b.kennung}`;
                   const wie = b.verwendungen === 1 ? "auf 1 Seite eingebunden"
-                    : b.verwendungen ? `auf ${b.verwendungen} Seiten eingebunden` : "noch nirgends eingebunden";
+                    : b.verwendungen ? `auf ${S.plural(b.verwendungen, "Seite", "Seiten")} eingebunden` : "noch nirgends eingebunden";
                   return `<li><button type="button" data-ziel="${esc(z)}" class="${z === ziel ? "sel" : ""}">`
                     + `<strong>${esc(b.kennung)}</strong><span class="bl-quelle">aus ${esc(b.title)} · ${esc(wie)}</span>`
                     + (b.auszug ? `<span class="bl-auszug">${esc(b.auszug)}</span>` : "")
@@ -2474,7 +2438,7 @@
           holeKatalog().then((k) => { alle = k; zeigen(); })
             .catch(() => { liste.innerHTML = '<li class="muted small">Die Liste lässt sich gerade nicht lesen.</li>'; });
           body.querySelector("#eb-ok").onclick = () => {
-            if (!ziel) return toast("Bitte einen Abschnitt wählen.", true);
+            if (!ziel) return S.feldFehler(suche, "Bitte einen Abschnitt wählen.");
             dlg.close();
             if (aufZiel) aufZiel(ziel);
             else insert(einbauMd(ziel.split("#")[0], ziel.split("#").slice(1).join("#")));
@@ -2645,7 +2609,7 @@
           body.querySelector("#fr-case").addEventListener("change", update);
           body.querySelector("#fr-go").onclick = () => {
             const r = rx();
-            if (!r) return toast("Bitte einen Suchbegriff angeben.", true);
+            if (!r) return S.feldFehler(find, "Bitte einen Suchbegriff angeben.");
             const md = ed.getMarkdown();
             const ersatz = body.querySelector("#fr-repl").value;
             const { text, n } = ersetzeGeschuetzt(md, r, ersatz);
@@ -3255,13 +3219,13 @@
       hideCtx();
       if (b.kind === "columns") {
         const cols = body.join("\n").split(/\n[ \t]*\|\|\|[ \t]*\n/);
-        dialog(`<h2>Spalten bearbeiten</h2><div class="block-edit"><div class="cols">${cols.map((c, i) => `<div><label>Spalte ${i + 1}</label><textarea data-col="${i}">${esc(c)}</textarea></div>`).join("")}</div>
+        dialog(`<h2>Spalten bearbeiten</h2><div class="block-edit"><div class="cols">${cols.map((c, i) => `<div><label for="be-col-${i}">Spalte ${i + 1}</label><textarea id="be-col-${i}" data-col="${i}">${esc(c)}</textarea></div>`).join("")}</div>
           <div class="btn-row" style="margin-top:10px"><button class="btn secondary small" id="be-add" type="button"><span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Spalte<span class="k-anlegen"> anlegen</span></span></button><button class="btn secondary small" id="be-del" type="button">– letzte Spalte</button></div></div>
           <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button><button class="btn" id="be-ok" type="button">Übernehmen</button></div>`,
           (dlg, box) => {
             dlg.classList.add("wide"); dlg.addEventListener("close", () => dlg.classList.remove("wide"), { once: true });
             const grid = box.querySelector(".cols");
-            box.querySelector("#be-add").onclick = () => { if (grid.children.length >= 5) return; const n = grid.children.length; grid.insertAdjacentHTML("beforeend", `<div><label>Spalte ${n + 1}</label><textarea data-col="${n}">Spalte ${n + 1}</textarea></div>`); };
+            box.querySelector("#be-add").onclick = () => { if (grid.children.length >= 5) return; const n = grid.children.length; grid.insertAdjacentHTML("beforeend", `<div><label for="be-col-${n}">Spalte ${n + 1}</label><textarea id="be-col-${n}" data-col="${n}">Spalte ${n + 1}</textarea></div>`); };
             box.querySelector("#be-del").onclick = () => { if (grid.children.length > 2) grid.lastElementChild.remove(); };
             box.querySelector("#be-ok").onclick = () => { const vals = Array.from(box.querySelectorAll("textarea")).map((t) => t.value); dlg.close(); rewriteBlock(index, "$$columns\n" + vals.join("\n|||\n") + "\n$$"); };
           });
@@ -3270,7 +3234,7 @@
         dialog(`<h2>Callout bearbeiten</h2><div class="block-edit">
           <div class="callout-pick" id="ck">${["info", "tip", "warning", "success", "danger", "note"].map((k) => `<button type="button" class="btn ${k === kind ? "" : "secondary"}" data-k="${k}">${MD.CALLOUTS[k]} ${k}</button>`).join("")}</div>
           <label for="em-input">Emoji</label><div class="em-row"><input type="text" id="em-input" maxlength="8" autocomplete="off"><span class="help">eintippen oder unten wählen</span></div><div class="em-grid" id="em-grid"></div>
-          <label>Inhalt (Markdown)</label><textarea id="be-body">${esc(body.slice(1).join("\n"))}</textarea></div>
+          <label for="be-body">Inhalt (Markdown)</label><textarea id="be-body">${esc(body.slice(1).join("\n"))}</textarea></div>
           <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button><button class="btn" id="be-ok" type="button">Übernehmen</button></div>`,
           (dlg, box) => {
             dlg.classList.add("wide"); dlg.addEventListener("close", () => dlg.classList.remove("wide"), { once: true });
@@ -3279,7 +3243,7 @@
             box.querySelector("#be-ok").onclick = () => { const e = getEmoji(); const txt = box.querySelector("#be-body").value; dlg.close(); rewriteBlock(index, `$$callout\n${kind} ${e}\n${txt}\n$$`); };
           });
       } else {
-        dialog(`<h2>Ausrichtung bearbeiten</h2><div class="block-edit"><label>Inhalt (Markdown)</label><textarea id="be-body">${esc(body.slice(1).join("\n"))}</textarea></div>
+        dialog(`<h2>Ausrichtung bearbeiten</h2><div class="block-edit"><label for="be-body">Inhalt (Markdown)</label><textarea id="be-body">${esc(body.slice(1).join("\n"))}</textarea></div>
           <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button><button class="btn" id="be-ok" type="button">Übernehmen</button></div>`,
           (dlg, box) => { box.querySelector("#be-ok").onclick = () => { const txt = box.querySelector("#be-body").value; dlg.close(); rewriteBlock(index, `$$align\n${body[0]}\n${txt}\n$$`); }; });
       }
@@ -3394,7 +3358,7 @@
           const v = verwendungVon(kennung);
           const wo = !v ? "" : v.anzahl === 0 ? " · noch nirgends eingebunden"
             : v.anzahl === 1 ? ` · eingebunden auf ${v.seiten[0] || "1 Seite"}`
-            : ` · eingebunden auf ${v.anzahl} Seiten`;
+            : ` · eingebunden auf ${S.plural(v.anzahl, "Seite", "Seiten")}`;
           html = `<span class="lbl" title="Synchronisierter Abschnitt „${esc(kennung)}“${esc(wo)}">⇄ ${esc(kennung)}${esc(wo)}</span>`
                + btn("data-act", "kennung", "Kennung ändern", I.stift)
                + `<span class="sep"></span>`;
@@ -3451,9 +3415,9 @@
               ? ` (${v.seiten.slice(0, 4).join(", ")}${v.seiten.length > 4 ? ", …" : ""})`
               : "";
             return S.confirm(
-              `„${bausteinKennung()}“ wird auf ${v.anzahl} ${v.anzahl === 1 ? "Seite" : "Seiten"}`
-              + `${wo} eingebunden. Dort steht der Text danach nicht mehr. Trotzdem ${was}?`,
-              "Trotzdem");
+              `„${bausteinKennung()}“ wird auf ${S.plural(v.anzahl, "Seite", "Seiten")}`
+              + `${wo} eingebunden. Dort steht der Text danach nicht mehr.`,
+              "Trotzdem", "", { titel: `Abschnitt „${bausteinKennung()}“ trotzdem ${was}?` });
           };
           const kenn = box.querySelector("[data-act=kennung]");
           if (kenn) kenn.onclick = async () => {
@@ -3994,7 +3958,7 @@
             (dlg, body) => { body.querySelector("#iw-ok").onclick = () => {
               const raw = body.querySelector("#iw-val").value.trim().replace(",", ".");
               const m = /^(\d{1,4})\s*(%|px)?$/.exec(raw);
-              if (raw && !m) return toast("Bitte eine Zahl angeben, wahlweise mit % dahinter.", true);
+              if (raw && !m) return S.feldFehler(body.querySelector("#iw-val"), "Bitte eine Zahl angeben, wahlweise mit % dahinter.");
               dlg.close();
               const w = !raw ? "" : (m[2] === "%" ? m[1] + "%" : m[1]);
               rewriteImage(img, (o) => imgMd(o.alt, o.url, w));
@@ -4095,8 +4059,8 @@
               const rawH = body.querySelector("#ih-val").value.trim();
               const mw = /^(\d{1,4})\s*(%|px)?$/.exec(rawW);
               const mh = /^(\d{1,4})\s*(px)?$/.exec(rawH);
-              if (rawW && !mw) return toast("Breite bitte als Zahl angeben, wahlweise mit % dahinter.", true);
-              if (rawH && !mh) return toast("Höhe bitte als Zahl in Bildpunkten angeben.", true);
+              if (rawW && !mw) return S.feldFehler(body.querySelector("#iw-val"), "Breite bitte als Zahl angeben, wahlweise mit % dahinter.");
+              if (rawH && !mh) return S.feldFehler(body.querySelector("#ih-val"), "Höhe bitte als Zahl in Bildpunkten angeben.");
               dlg.close();
               const neuW = !rawW ? "" : (mw[2] === "%" ? mw[1] + "%" : mw[1]);
               const neuH = !rawH ? null : +mh[1];
@@ -5058,14 +5022,7 @@
         <button type="button" data-a="klar">Formatierung entfernen <span class="muted small">Strg+\\</span></button>
         <button type="button" data-a="kopieren">Als Markdown kopieren <span class="muted small">Strg+Umschalt+C</span></button>
         ${isNew ? "" : '<button type="button" data-a="verlauf">Verlauf</button>'}`;
-      document.body.appendChild(box);
-      const r = mehr.getBoundingClientRect();
-      box.style.left = `${Math.max(8, Math.min(window.innerWidth - box.offsetWidth - 8, r.left))}px`;
-      box.style.top = `${window.scrollY + r.bottom + 4}px`;
-      const zu = () => { box.remove(); document.removeEventListener("pointerdown", aussen, true); mehr.focus(); };
-      const aussen = (e) => { if (!box.contains(e.target)) zu(); };
-      setTimeout(() => document.addEventListener("pointerdown", aussen, true), 0);
-      wireMenuKeys(box, zu);
+      const zu = S.menueSchwebend(mehr, box);
       box.addEventListener("click", (e) => {
         const b = e.target.closest("button[data-a]");
         if (!b) return;
@@ -5176,7 +5133,8 @@
           } catch (e) { toast(e.message, true); }
         });
         body.querySelectorAll("[data-restore]").forEach((b) => b.onclick = async () => {
-          if (!(await S.confirm("Diese Version wiederherstellen? Die aktuelle Fassung bleibt im Verlauf erhalten.", "Wiederherstellen"))) return;
+          if (!(await S.confirm("Diese Version wiederherstellen? Die aktuelle Fassung bleibt im Verlauf erhalten.", "Wiederherstellen", "",
+            { endgueltig: false }))) return;
           try {
             const r = await api(`/api/wiki/revisions/${b.dataset.restore}/restore`, { method: "POST", body: {} });
             dlg.close(); toast("Version wiederhergestellt"); await loadTree(); navigate(r.page.slug);

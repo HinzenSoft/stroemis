@@ -1,8 +1,11 @@
 {% extends "base.html" %}
-{% block title %}{{ code }} – strömis.de{% endblock %}
+{% set ueberschrift = titel or (fehler_titel or {}).get(code) or code %}
+{% block title %}{{ ueberschrift }} – strömis.de{% endblock %}
 {% block body %}
 <main class="page narrow">
-  <h1>{{ code }}</h1>
+  {# Die Überschrift sagt, was los ist; die Zahl steht klein dabei (UI/UX vor dem Merge, A13). #}
+  <h1>{{ ueberschrift }}</h1>
+  {% if ueberschrift != code %}<p class="muted small">Fehler {{ code }}</p>{% endif %}
   <p>{{ message }}</p>
   {# Ohne Stufe in der Strömipedia führt „Zur Strömipedia“ in den Lesemodus (/stroemipedia) – die Startseite wäre dort ein anderes Modul. Ein
      angemeldetes Konto ohne Lesemodus gibt es praktisch nicht; dort führte der Link wieder hierher, also zum Profil.

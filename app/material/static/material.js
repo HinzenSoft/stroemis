@@ -12,7 +12,7 @@
 
   /* --- Fokus zurück nach Esc oder „Abbrechen“ (Browserprüfung vor dem Merge, B2) ----------------------------------
      Wer einen Dialog öffnet, landet nach dem Schließen wieder dort, wo er war: auf dem Knopf, der ihn öffnete – aus
-     einem Untermenü (details.mat-menue) auf dessen Menüknopf. Gemerkt wird der zuletzt angeklickte Knopf außerhalb
+     einem Untermenü (details.menue) auf dessen Menüknopf. Gemerkt wird der zuletzt angeklickte Knopf außerhalb
      von Dialogen; so gilt es auch für Dialoge, die erst nach einem Laden öffnen (Ordner verschieben, Löschen,
      Katalog exportieren, Als Variante kopieren). Zurückgegeben wird der Fokus nur, wenn er sonst verloren wäre (auf
      der Seite oder im geschlossenen Dialog) und kein anderer Dialog offen ist. Folgedialoge im selben #dlg (Ergebnis
@@ -28,7 +28,7 @@
     const aktiv = document.activeElement;
     const el = k || (aktiv && aktiv !== document.body ? aktiv : null);
     if (!el || el.closest("dialog")) return null;
-    const menue = el.closest("details.mat-menue");
+    const menue = el.closest("details.menue");
     return menue ? menue.querySelector("summary") : el;
   }
   function fokusZurueckgeben(ziel) {
@@ -55,9 +55,9 @@
     if (dlgEl && !dlgEl.open && !dlgZiel) dlgZiel = fokusZiel();
     return S.dialog(html, onOpen);
   }
-  function confirm(text, okLabel, neinLabel) {
+  function confirm(text, okLabel, neinLabel, opt) {
     const ziel = document.querySelector("dialog[open]") ? null : fokusZiel();
-    return S.confirm(text, okLabel, neinLabel).then((ja) => {
+    return S.confirm(text, okLabel, neinLabel, opt).then((ja) => {
       setTimeout(() => fokusZurueckgeben(ziel), 0);
       return ja;
     });
@@ -170,7 +170,7 @@
     const box = document.createElement("dialog");
     box.className = "mat-lightbox";
     box.setAttribute("aria-label", "Foto");
-    box.innerHTML = `<button type="button" class="md-lightbox-close" aria-label="Schließen">×</button>
+    box.innerHTML = `${S.schliessenKnopf("", "md-lightbox-close")}
       ${liste.length > 1 ? `<button type="button" class="mat-lb-pfeil zurueck" aria-label="Vorheriges Foto">‹</button>
         <button type="button" class="mat-lb-pfeil weiter" aria-label="Nächstes Foto">›</button>` : ""}
       <figure><img alt=""><figcaption><span class="mat-lb-titel"></span>
@@ -230,6 +230,7 @@
     zeige();
     document.documentElement.classList.add("mat-lb-offen");
     box.showModal();
+    S.dialogVerlauf(box);                // Zurück schließt die Großansicht (UI/UX vor dem Merge, A1)
     $(".md-lightbox-close", box).focus();
   }
   document.addEventListener("click", (e) => {
@@ -479,7 +480,7 @@
     try { f.value = datumAnzeige(datumWert(f, ""), f.dataset.art); f.classList.remove("ungueltig"); }
     catch (err) { f.classList.add("ungueltig"); }
   }, true);
-  const plural = (n, eins, viele) => `${n} ${n === 1 ? eins : viele}`;
+  const plural = S.plural;              // „1 Bild“, „3 Bilder“ – app-weit in common.js (UI/UX vor dem Merge, A11)
   /* Ein Name oder eine Anmeldung (E-Mail) hinter „von“, „bei“ oder in einem Personenfeld als Einheit (Nachtrag 2 vom
      27.10.2026): rutscht als Ganzes in die nächste Zeile statt nach „demo-“ oder „@“ zu brechen – nur ein Name, der
      länger ist als die ganze Zeile, bricht in sich (material.css, .mat-name). Der Text bleibt unverändert kopierbar. */
@@ -663,7 +664,7 @@
     if (b.closest(".mat-anleitung")) return;
     if (b.tagName === "A" || b.tagName === "BUTTON") e.preventDefault();
     // Den Fokus nach Esc oder „Abbrechen“ gibt dialog() oben zurück (auf den Menüknopf, wenn der Eintrag in einem
-    // details.mat-menue stand) – auch wenn der Dialog erst nach einem Laden öffnet (B5 P4-L2, B2 vor dem Merge).
+    // details.menue stand) – auch wenn der Dialog erst nach einem Laden öffnet (B5 P4-L2, B2 vor dem Merge).
     aktionen[b.dataset.act](b, e);
   });
   // „…“ in gekürzten Brotkrumen (pfadHtml): den ganzen Pfad zeigen, der Fokus geht auf das erste Glied, das dazukam.
@@ -904,6 +905,8 @@
     zweiHaelften.addEventListener("change", umschalten);
     leisteWischen();
     leisteInert();
+    // Zurück schließt die offene Schublade („☰ Ordner“, Filter, Katalog „☰“) wie Esc (UI/UX vor dem Merge, A1).
+    S.klassenVerlauf(leiste, "open", () => leisteZu(true), alsSchublade);
   }
 
   async function zeigen(fn) {
@@ -1142,7 +1145,7 @@
         });
         $("#ow-ok", body).onclick = () => {
           const r = $('input[name="ziel"]:checked', body);
-          if (!r) { toast("Bitte einen Ordner wählen.", true); return; }
+          if (!r) { S.feldFehler($('input[name="ziel"]', body), "Bitte einen Ordner wählen."); return; }
           gewaehlt = +r.value;
           d.close();
         };
@@ -1364,8 +1367,7 @@
         <th>Empfänger</th><th>Fehler</th><th></th></tr></thead><tbody>${m.zeilen.map(mailZeile).join("")}</tbody></table>
       ${mailMehr(m.offen, m.zeilen.length)}` : "";
     return `<section class="section mat-mail-kasten" id="mat-mail" aria-labelledby="mat-mail-titel" data-offen="${Number(m.offen)}"><div class="mat-kastenkopf"><h2 id="mat-mail-titel" tabindex="-1">Mailversand</h2>
-        ${m.zeilen.length ? `<details class="mat-menue"><summary class="btn secondary small" aria-haspopup="true">Mehr</summary><div class="mat-menue-liste">
-          <a href="#mat-mail" role="button" data-act="mail-alle"><strong>Alle erledigt</strong><span>Alle offenen Zeilen abhaken – auch die nicht angezeigten (mit Rückfrage).</span></a></div></details>` : ""}</div>
+        ${m.zeilen.length ? S.menue({ art: "mat-menue", links: true, eintraege: [{ text: "Alle erledigt", attrs: 'id="mat-mail-alle" data-act="mail-alle"' }] }) : ""}</div>
       ${m.kein_mailserver ? '<p class="notice">Kein Mailserver eingerichtet – keine Modul-Mail geht hinaus (Erinnerungen, Mängel, Anträge, Produktmeldungen, Rückrufe).</p>' : ""}
       ${m.zeilen.length ? `<p class="help mat-mail-hilfe">Diese Mails hat der Mailserver nicht angenommen. Erinnerungen holt der nächste Lauf nach; alles andere sagst du den Betroffenen selbst – ein erneuter Versand ist nicht möglich.</p>${tabelle}` : ""}
     </section>`;
@@ -1403,7 +1405,7 @@
         $('[data-act="mail-erledigt"]', nachbar).focus();
       }
       toast("Erledigt");
-    } catch (e) { toast(e.message, true); b.disabled = false; }
+    } catch (e) { S.fehlschlag(b, e); }
   }
   // „Weitere anzeigen“: alle offenen Zeilen der Sicht (höchstens 200, neueste zuerst) statt der 20.
   async function mailMehrLaden(kasten) {
@@ -1429,8 +1431,6 @@
   // und hat den Fokus.
   function mailAlleErledigt() {
     const kasten = $("#mat-mail");
-    const menue = $("details.mat-menue", kasten);
-    if (menue) menue.open = false;
     const n = Number(kasten.dataset.offen || 0);
     dialog(`<h2>Alle erledigt?</h2>
       <p>${n === 1 ? "1 Zeile" : `${n} Zeilen`} als erledigt markieren? Sie verschwinden aus dem Kasten und lassen sich nicht wieder zeigen – auch die, die hier nicht angezeigt sind.</p>
@@ -1444,7 +1444,7 @@
           dlg.close();
           mailKastenLeeren(r.anzahl === 1 ? "1 Zeile erledigt." : `${r.anzahl} Zeilen erledigt.`);
           $("#mat-mail-stand").focus();
-        } catch (e) { toast(e.message, true); knopf.disabled = false; }
+        } catch (e) { S.fehlschlag(knopf, e, body); }
       };
     });
   }
@@ -1452,7 +1452,7 @@
   function mailKastenLeeren(meldung) {
     const kasten = $("#mat-mail");
     if (!kasten) return;
-    $$("table, p.help, #mat-mail-mehr, details.mat-menue, #mat-mail-stand", kasten).forEach((el) => el.remove());
+    $$("table, p.help, #mat-mail-mehr, #mat-mail-alle, #mat-mail-stand", kasten).forEach((el) => el.remove());
     kasten.dataset.offen = "0";
     kasten.insertAdjacentHTML("beforeend", `<p class="help" id="mat-mail-stand" tabindex="-1">${esc(meldung)}</p>`);
   }
@@ -1705,14 +1705,11 @@
     /* „Prüfdurchgänge“ (Wunsch vom 27.10.2026) statt des Knopfs „Prüfdurchgang anlegen“: ein Untermenü mit „Prüfdurchgang
        anlegen“ (wer irgendwo verwaltet oder prüft – wie bisher der Knopf) und „Abgeschlossene Prüfdurchgänge“ (jeder
        mit Sicht; aus der Übersicht mit dem Ordner der Liste als Filter). */
-    const rundenMenue = () => `<details class="mat-menue">
-        <summary class="btn secondary" aria-haspopup="true">Prüfdurchgänge</summary>
-        <div class="mat-menue-liste">
-          ${DARF.verwalten || DARF.pruefen ? `<a href="#" role="button" data-act="runde"><strong>Prüfdurchgang anlegen</strong>
-            <span>Alle Artikel eines Ordners auf eine gemeinsame Liste – mehrere Prüfer arbeiten sie gleichzeitig ab.</span></a>` : ""}
-          <a href="/materialablage/durchgaenge${DATEN.ordner ? `?ordner=${Number(DATEN.ordner)}` : ""}"><strong>Abgeschlossene Prüfdurchgänge</strong>
-            <span>Auch abgebrochene, nach Jahr des Abschlusses und Ordner – mit Sammelprotokoll.</span></a>
-        </div></details>`;
+    // Ohne Recht zum Anlegen bleibt ein Eintrag – dann ein Knopf (UI/UX vor dem Merge, A3 a).
+    const rundenMenue = () => S.menue({ text: "Prüfdurchgänge", klein: false, art: "mat-menue", links: true, eintraege: [
+      (DARF.verwalten || DARF.pruefen) && { text: "Prüfdurchgang anlegen", satz: "Mehrere Prüfer arbeiten eine Liste ab.", attrs: 'data-act="runde"' },
+      { text: "Abgeschlossene Prüfdurchgänge", satz: "Auch abgebrochene, mit Sammelprotokoll.",
+        href: `/materialablage/durchgaenge${DATEN.ordner ? `?ordner=${Number(DATEN.ordner)}` : ""}` }] });
     async function zeichnen() {
       seitenTitel("Prüfungen");
       inhalt.innerHTML = `<div class="page-head"><h1>Prüfungen</h1>
@@ -1774,7 +1771,7 @@
         try {
           const r = await api(`${API}/durchgaenge`, { method: "POST", body: { titel: $("#rd-titel", body).value, folder_id: +$("#rd-ordner", body).value } });
           location.href = `/materialablage/durchgang/${r.durchgang.id}`;
-        } catch (e) { toast(e.message, true); knopf.disabled = false; }
+        } catch (e) { S.fehlschlag(knopf, e, body); }
       };
     });
   }
@@ -2195,7 +2192,7 @@
           // Eine neue Gliederung braucht als Erstes ihren Materialwart: „Ordner bearbeiten“ öffnet dort im Reiter
           // „Freigaben“ mit dieser Vorlage.
           location.href = `/materialablage/ordner/${oid}${oben ? "?freigaben=materialwart" : ""}`;
-        } catch (e) { toast(e.message, true); knopf.disabled = false; }
+        } catch (e) { S.fehlschlag(knopf, e, body); }
       };
     });
   }
@@ -2215,7 +2212,7 @@
     const ungespeichert = () => felder() !== anfang || !!fotoWahl.datei || fotoWahl.entfernen;
     async function verlassenOk() {
       if (!ungespeichert()) return true;
-      if (await confirm("Im Reiter „Ordner“ stehen noch ungespeicherte Änderungen. Verwerfen?", "Verwerfen")) return true;
+      if (await confirm("Im Reiter „Ordner“ stehen noch ungespeicherte Änderungen.", "Verwerfen", "", { titel: "Änderungen verwerfen?" })) return true;
       zeigenReiter("ordner", true);
       return false;
     }
@@ -2607,74 +2604,47 @@
   // offen ist, „Nacharbeit (n offen)“ – seltene Funktionen gehören ins Untermenü, kein neuer Knopf in der Kopfzeile.
   // Seit Phase 4 · L1 steht hier auch „Jahresbericht exportieren“ (Ansicht bericht) – nicht an Systemordnern: Ein Bericht
   // über „Gesperrt“ oder „Ausgesondert“ wäre nach der Heimat-Logik leer, der Server antwortet dort 404.
-  const exportMenue = (d, importieren) => `<details class="mat-menue">
-      <summary class="btn secondary small" aria-haspopup="true">${importieren ? "Export / Import" : "Export"}</summary>
-      <div class="mat-menue-liste">
-        <a href="/materialablage/export/${d.id}.csv" data-frisch data-export="Die Artikelliste wird heruntergeladen …"><strong>Artikelliste exportieren (CSV)</strong>
-          <span>Alle Artikel hier und darunter, auch die von hier gesperrten und ausgesonderten, mit Status, Fälligkeiten und Stammdaten – für Excel.</span></a>
-        <a href="/materialablage/export/${d.id}-protokolle.zip" data-frisch data-export="Die Protokolle werden zusammengestellt – bei vielen dauert das einen Moment …"><strong>Protokolle exportieren (ZIP)</strong>
-          <span>Die Protokolle dieser Artikel, die Sammelprotokolle der Durchgänge und die Set-Protokolle der Sets hier, mit Verzeichnis und Prüfsummen.</span></a>
-        ${d.system_kind ? "" : `<a href="/materialablage/ordner/${d.id}/bericht"><strong>Jahresbericht exportieren</strong>
-          <span>Bestand, Prüfungen, Sperren, Aussonderungen, Mängel und Rückrufe dieses Zweigs für ein Kalenderjahr – als Seite, PDF und Prüfungsliste (CSV).</span></a>`}
-        ${importieren ? `<hr class="mat-menue-trenner">
-        <a href="/materialablage/ordner/${d.id}/import"><strong>Bestandsliste importieren</strong>
-          <span>Eine Liste aus Excel oder CSV in diesen Ordner übernehmen: erst ein Probelauf, dann übernehmen; was nicht passt, kommt in die Nacharbeit.</span></a>
-        ${d.nacharbeit ? `<a href="/materialablage/ordner/${d.id}/import#bi-nacharbeit"><strong>Nacharbeit (${d.nacharbeit} offen)</strong>
-          <span>Zeilen aus Bestandsimporten, die noch ein Produkt, eine Angabe oder eine Entscheidung brauchen.</span></a>` : ""}` : ""}
-      </div></details>`;
+  // Die Sätze unter den Einträgen nur so lang, dass ein Eintrag am Telefon höchstens zwei Zeilen hat (UI/UX vor dem
+  // Merge, A3 e) – was genau drinsteckt, sagt die Seite bzw. der Dialog dahinter.
+  const exportMenue = (d, importieren) => S.menue({ text: importieren ? "Export / Import" : "Export", art: "mat-menue", links: true, eintraege: [
+    { text: "Artikelliste exportieren (CSV)", satz: "Alle Artikel hier und darunter – für Excel.", href: `/materialablage/export/${d.id}.csv`,
+      attrs: 'data-frisch data-export="Die Artikelliste wird heruntergeladen …"' },
+    { text: "Protokolle exportieren (ZIP)", satz: "Mit Sammel- und Set-Protokollen, Prüfsummen.", href: `/materialablage/export/${d.id}-protokolle.zip`,
+      attrs: 'data-frisch data-export="Die Protokolle werden zusammengestellt – bei vielen dauert das einen Moment …"' },
+    !d.system_kind && { text: "Jahresbericht exportieren", satz: "Ein Kalenderjahr als Seite, PDF und CSV.", href: `/materialablage/ordner/${d.id}/bericht` },
+    importieren && { trenner: true },
+    importieren && { text: "Bestandsliste importieren", satz: "Aus Excel oder CSV – erst ein Probelauf.", href: `/materialablage/ordner/${d.id}/import` },
+    importieren && d.nacharbeit && { text: `Nacharbeit (${d.nacharbeit} offen)`, satz: "Was ein Import nicht übernehmen konnte.",
+      href: `/materialablage/ordner/${d.id}/import#bi-nacharbeit` }] });
   // Katalog-Export und -Import im Kopf des Katalogs: wie „Export / Import“ im Ordnerkopf ein Untermenü statt zweier
   // Knöpfe (Wunsch vom 20.10.2026). Die Einträge öffnen die Dialoge über data-act; ohne Skript führen sie zum Katalog.
-  const katalogMenue = `<details class="mat-menue">
-      <summary class="btn secondary" aria-haspopup="true">Export / Import</summary>
-      <div class="mat-menue-liste">
-        <a href="/materialablage/katalog" role="button" data-act="kat-export"><strong>Katalog exportieren</strong>
-          <span>Kategorien, Produkte und Prüfformulare samt Bildern und Herstellerdokumenten als ZIP – zum Sichern oder für eine andere Installation. Bestand, Prüfungen und DEMO bleiben draußen.</span></a>
-        <a href="/materialablage/katalog" role="button" data-act="kat-import"><strong>Katalog importieren</strong>
-          <span>Eine Katalogdatei (ZIP oder JSON) übernehmen: erst ein Probelauf, dann übernehmen. Gelöscht wird dabei nichts.</span></a>
-      </div></details>`;
+  const katalogMenue = S.menue({ text: "Export / Import", klein: false, art: "mat-menue", links: true, eintraege: [
+    { text: "Katalog exportieren", satz: "Zum Sichern oder für eine andere Installation", href: "/materialablage/katalog", attrs: 'data-act="kat-export"' },
+    { text: "Katalog importieren", satz: "ZIP oder JSON – erst ein Probelauf.", href: "/materialablage/katalog", attrs: 'data-act="kat-import"' }] });
   // „Bearbeiten“ im Kategoriekopf des Katalogs: wie im Ordnerkopf steht „Löschen“ im Untermenü statt als eigener Knopf
   // (Browserprüfung vor dem Merge, V1 – am Telefon schob die Knopfreihe samt Dokumenten die Produktliste weit hinunter).
-  const kategorieMenue = `<details class="mat-menue">
-      <summary class="btn secondary small" aria-haspopup="true">Bearbeiten</summary>
-      <div class="mat-menue-liste">
-        <a href="#" role="button" data-act="kat-bearbeiten"><strong>Kategorie bearbeiten</strong>
-          <span>Name, Oberkategorie, Norm und die Vorgaben für Materialart, Prüfintervall, Lebensdauer und Länge.</span></a>
-        <a href="#" role="button" data-act="kat-loeschen"><strong>Löschen</strong>
-          <span>Geht nur ohne Unterkategorien und Produkte; vorher wird nachgefragt.</span></a>
-      </div></details>`;
+  const kategorieMenue = S.menue({ text: "Bearbeiten", art: "mat-menue", links: true, eintraege: [
+    { text: "Kategorie bearbeiten", satz: "Name, Norm und Vorgaben.", attrs: 'data-act="kat-bearbeiten"' },
+    { text: "Löschen", satz: "Nur ohne Unterkategorien und Produkte.", attrs: 'data-act="kat-loeschen"' }] });
   // „Bearbeiten“ im Ordnerkopf: Verschieben und Löschen stehen im Untermenü statt als eigene Knöpfe (Wunsch vom
   // 20.10.2026). Wer den Ordner nur bearbeiten, aber nicht verschieben oder löschen darf, behält den einfachen Knopf.
-  const bearbeitenMenue = `<details class="mat-menue">
-      <summary class="btn secondary small" aria-haspopup="true">Bearbeiten</summary>
-      <div class="mat-menue-liste">
-        <a href="#" role="button" data-act="bearbeiten"><strong>Ordner bearbeiten</strong>
-          <span>Name, Art, Prüfintervall, Beschreibung, Foto, Erinnerungsmails und Freigaben.</span></a>
-        <a href="#" role="button" data-act="verschieben"><strong>Verschieben</strong>
-          <span>Den Ordner samt Unterordnern und Artikeln an eine andere Stelle im Bestand hängen.</span></a>
-        <a href="#" role="button" data-act="loeschen"><strong>Löschen</strong>
-          <span>Geht nur bei einem leeren Ordner – ohne Unterordner und Artikel, ohne Prüfdurchgänge und Set-Protokolle, ohne offene Nacharbeit eines Bestandsimports und ohne gesperrte Artikel, die hierher zurückkehren; vorher wird nachgefragt.</span></a>
-      </div></details>`;
+  const bearbeitenMenue = S.menue({ text: "Bearbeiten", art: "mat-menue", links: true, eintraege: [
+    { text: "Ordner bearbeiten", satz: "Name, Art, Erinnerungen, Freigaben.", attrs: 'data-act="bearbeiten"' },
+    { text: "Verschieben", satz: "Samt Inhalt an eine andere Stelle.", attrs: 'data-act="verschieben"' },
+    { text: "Löschen", satz: "Nur ein leerer Ordner.", attrs: 'data-act="loeschen"' }] });
   const LEBENSLAUF_TEXT = "Stammdaten, alle Prüfungen in zeitlicher Reihenfolge, Prüfdurchgänge und Ereignisse als PDF – zum Weitergeben oder als Aussonderungsnachweis. Stand jetzt, mit Kennung und Prüfsumme – prüfbar auf der Prüfseite.";
-  const lebenslaufKnopf = (a) => `<a class="btn secondary small" href="/materialablage/artikel/${a.id}/lebenslauf.pdf" target="_blank" rel="noopener" data-frisch
-    title="${LEBENSLAUF_TEXT}">Lebenslauf (PDF)</a>`;
   /* Artikelseite: neben „Bearbeiten“ die selteneren Funktionen im Menü „Mehr“ – Verschieben, Lebenslauf, Löschen –, je mit
      dem Satz, was sie tun (vorher bis zu vier gleichrangige Knöpfe und unter Touch ein Erklärabsatz zum Lebenslauf
      zwischen den Knopfreihen; Browserprüfung vor dem Merge, Verbesserung 5). Bleibt nur eine Funktion, steht sie als
      Knopf da. */
   function artikelMehr(a, eintraege) {
-    const knopf = { verschieben: '<button class="btn secondary small" data-act="verschieben">Verschieben</button>',
-                    lebenslauf: lebenslaufKnopf(a), loeschen: '<button class="btn secondary small" data-act="loeschen">Löschen</button>' };
     const zeile = {
-      verschieben: `<a href="#" role="button" data-act="verschieben"><strong>Verschieben</strong>
-        <span>In einen anderen Ordner legen – auch in eine andere Gliederung, wenn du dort verwaltest.</span></a>`,
-      lebenslauf: `<a href="/materialablage/artikel/${a.id}/lebenslauf.pdf" target="_blank" rel="noopener" data-frisch><strong>Lebenslauf (PDF)</strong>
-        <span>${LEBENSLAUF_TEXT}</span></a>`,
-      loeschen: `<a href="#" role="button" data-act="loeschen"><strong>Löschen</strong>
-        <span>Nur für falsch angelegte Artikel ohne Prüfung; vorher wird nachgefragt.</span></a>`,
+      verschieben: { text: "Verschieben", satz: "In einen anderen Ordner.", attrs: 'data-act="verschieben"' },
+      lebenslauf: { text: "Lebenslauf (PDF)", satz: "Prüfungen und Ereignisse, prüfbar.", href: `/materialablage/artikel/${a.id}/lebenslauf.pdf`,
+                    attrs: `target="_blank" rel="noopener" data-frisch title="${LEBENSLAUF_TEXT}"` },
+      loeschen: { text: "Löschen", satz: "Nur ohne Prüfung.", attrs: 'data-act="loeschen"' },
     };
-    if (eintraege.length < 2) return eintraege.map((e) => knopf[e]).join("");
-    return `<details class="mat-menue"><summary class="btn secondary small" aria-haspopup="true">Mehr</summary>
-      <div class="mat-menue-liste">${eintraege.map((e) => zeile[e]).join("")}</div></details>`;
+    return S.menue({ art: "mat-menue", links: true, eintraege: eintraege.map((e) => zeile[e]) });
   }
   // Auf Abruf gesetzte Dateien (Lebenslauf, Jahresbericht, Exporte, Nacharbeit, Katalog – data-frisch): Beim Antippen
   // bekommt die Adresse einen Zeitstempel (?stand=…, der Server übergeht ihn). Chrome auf Android legt PDFs als Download
@@ -2694,43 +2664,8 @@
     if (!l || e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
     toast(l.dataset.export);
   });
-  // Untermenüs (details.mat-menue): ein Klick daneben, auf einen Eintrag oder Escape schließt. Beim Öffnen steht die
-  // Liste rechtsbündig unter dem Knopf – ragte sie dabei aus dem Bild (am Telefon steht der Knopf irgendwo in der
-  // umgebrochenen Knopfzeile), rückt sie so weit, dass sie mit 8 px Abstand ganz hineinpasst.
-  document.addEventListener("click", (e) => {
-    $$("details.mat-menue[open]").forEach((m) => {
-      if (!m.contains(e.target) || e.target.closest(".mat-menue-liste a")) m.open = false;
-    });
-  });
-  document.addEventListener("keydown", (e) => {
-    if (e.key !== "Escape") return;
-    $$("details.mat-menue[open]").forEach((m) => { m.open = false; $("summary", m).focus(); });
-  });
-  function menueAusrichten(m) {
-    const liste = $(".mat-menue-liste", m);
-    const knopf = m.getBoundingClientRect();
-    const breite = liste.offsetWidth;
-    // Grenzen: das Fenster – auf einem Doppelbildschirm die Hälfte, in der der Knopf steht (sonst lag die Liste
-    // halb unter dem Scharnier).
-    let anfang = 0;
-    let ende = document.documentElement.clientWidth;
-    const haelften = window.viewport && window.viewport.segments;
-    if (haelften && haelften.length > 1) {
-      const h = Array.from(haelften).find((s) => knopf.left >= s.x - 1 && knopf.left < s.x + s.width);
-      if (h) { anfang = h.x; ende = Math.min(ende, h.x + h.width); }
-    }
-    const links = Math.max(anfang + 8, Math.min(knopf.right - breite, ende - 8 - breite));
-    liste.style.right = "auto";
-    liste.style.left = `${Math.round(links - knopf.left)}px`;
-  }
-  document.addEventListener("toggle", (e) => {
-    const m = e.target;
-    if (!(m instanceof HTMLDetailsElement) || !m.classList.contains("mat-menue") || !m.open) return;
-    menueAusrichten(m);
-  }, true);
-  // Ändert sich die Fensterbreite, während ein Menü offen ist (Fold auf- oder zugeklappt, Tablet gedreht), rückt es mit –
-  // vorher behielt es die Lage vom Öffnen und ragte nach dem Zuklappen 31 px links aus dem Bild.
-  window.addEventListener("resize", () => $$("details.mat-menue[open]").forEach(menueAusrichten));
+  // Untermenüs (details.menue): Öffnen, Schließen, Tasten und Lage regelt seit dem gemeinsamen Baustein common.js
+  // (UI/UX vor dem Merge, A3/D1) – für alle Module dieselbe Logik.
 
   /* --- Jahresbericht je Zweig (Phase 4 · Lieferung 1) --------------------------------------------------------------
      Seite /materialablage/ordner/<fid>/bericht (Ansicht „bericht“, DATEN = {id}); die Daten kommen fertig formatiert von
@@ -3174,7 +3109,7 @@
         const knopf = ev.currentTarget;
         knopf.disabled = true;
         try { await api(`${API}/artikel/${a.id}/sperren`, { method: "POST", body: { grund: $("#sd-grund", body).value, text: $("#sd-text", body).value } }); dlg.close(); toast("Gesperrt"); zeigen(artikel); }
-        catch (e) { toast(e.message, true); knopf.disabled = false; }
+        catch (e) { S.fehlschlag(knopf, e, body); }
       };
     });
   }
@@ -3244,7 +3179,7 @@
           // Der Knopf, auf dem der Fokus lag, ist mit dem alten Inhalt weg – sonst fiele er an den Seitenanfang.
           (d2, b2) => $("#au-weiter", b2).focus());
           zeigen(artikel);
-        } catch (e) { unterschriftWeg(e); toast(e.message, true); knopf.disabled = false; knopf.textContent = "Aussondern"; if (!DARF.unterschrift) usZeigen(); }
+        } catch (e) { unterschriftWeg(e); knopf.textContent = "Aussondern"; S.fehlschlag(knopf, e, body); if (!DARF.unterschrift) usZeigen(); }
       };
     });
   }
@@ -3451,7 +3386,7 @@
           dlg.close();
           toast(neuesProdukt ? `Gespeichert – Produkt jetzt ${produktName(neuesProdukt)}` : "Gespeichert");
           zeigen(artikel);
-        } catch (e) { toast(e.message, true); knopf.disabled = false; }
+        } catch (e) { S.fehlschlag(knopf, e, body); }
       };
     });
   }
@@ -3490,7 +3425,7 @@
   // Rückfrage, dann zurückziehen (nur der Antragsteller, nur offen – der Server prüft es). Keine Mail.
   async function antragZurueckziehen(x, danach) {
     if (!x) return;
-    if (!(await confirm(`Deinen Antrag (${x.felder_text}) zurückziehen? Niemand entscheidet dann mehr darüber; neu beantragen kannst du jederzeit.`, "Zurückziehen"))) return;
+    if (!(await confirm(`Deinen Antrag (${x.felder_text}) zurückziehen? Niemand entscheidet dann mehr darüber; neu beantragen kannst du jederzeit.`, "Zurückziehen", "", { endgueltig: false }))) return;
     try {
       await api(`${API}/antraege/${x.id}/zurueckziehen`, { method: "POST", body: {} });
       toast("Antrag zurückgezogen");
@@ -3592,7 +3527,7 @@
           }
         } catch (e) { toast(e.message, true); return; }
         if (Object.keys(daten).length === 1) { toast("Bitte mindestens ein Feld ändern.", true); return; }
-        if (!daten.begruendung.trim()) { toast("Bitte begründe die Änderung.", true); fokus($("#aa-grund", body)); return; }
+        if (!daten.begruendung.trim()) { S.feldFehler($("#aa-grund", body), "Bitte begründe die Änderung."); return; }
         knopf.disabled = true;
         try {
           const r = await api(`${API}/artikel/${a.id}/antrag`, { method: "POST", body: daten });
@@ -3602,7 +3537,7 @@
           toast(r.mail ? (ohne ? "Antrag gesendet – die Material-Verwaltung bekommt eine Mail." : "Antrag gesendet – die Materialwarte des Ordners bekommen eine Mail.")
             : ohne ? "Antrag gesendet – der Ordner hat zurzeit keinen Materialwart, der ihn entscheiden kann." : "Antrag gesendet – er wartet auf einen Materialwart des Ordners.");
           zeigen(artikel);
-        } catch (e) { toast(e.message, true); knopf.disabled = false; }
+        } catch (e) { S.fehlschlag(knopf, e, body); }
       };
     });
   }
@@ -3706,7 +3641,7 @@
       try { waehlen((await api(`${API}/produkte/${DATEN.produkt}`)).produkt); } catch (e) { /* Produkt gibt es nicht mehr */ }
     }
     async function anlegen(weiter) {
-      if (!produkt) { toast("Bitte zuerst ein Produkt wählen.", true); return; }
+      if (!produkt) { S.feldFehler($("#an-q"), "Bitte zuerst ein Produkt wählen."); return; }
       let daten;
       try {
         daten = { product_id: produkt.id, folder_id: +$("#an-ordner").value, serial_no: $("#an-sn").value,
@@ -3762,7 +3697,7 @@
                         folder_id: +$("#an-ordner").value || null }, meldungenZeigen);
       },
       "meldung-waehlen": async (b) => {
-        try { waehlen((await api(`${API}/produkte/${b.dataset.pid}`)).produkt); window.scrollTo({ top: 0, behavior: "smooth" }); }
+        try { waehlen((await api(`${API}/produkte/${b.dataset.pid}`)).produkt); window.scrollTo({ top: 0, behavior: S.weich() }); }
         catch (e) { toast(e.message, true); }
       },
     };
@@ -4298,9 +4233,8 @@
           zeigen(a);
           verfolgen(a.id);
         } catch (e) {
-          toast(e.message, true);
-          ok.disabled = false;
           ok.textContent = "Übernehmen";
+          S.fehlschlag(ok, e);
         }
       };
       if (kennung) verfolgen(kennung);
@@ -4539,7 +4473,7 @@
           dlg.close();
           if (opt.danach) await opt.danach(r.produkt);
           else location.href = `/materialablage/katalog/produkt/${pid}`;
-        } catch (e) { toast(e.message, true); knopf.disabled = false; }
+        } catch (e) { S.fehlschlag(knopf, e, body); }
       };
     });
   }
@@ -4602,7 +4536,7 @@
     function zeichnen(fokusSel) {
       teil.innerHTML = `<div class="mat-bt-liste">${pos.map((x, i) => `<fieldset class="mat-bt" data-i="${i}"><legend>Position ${i + 1}</legend>
           <div class="mat-bt-kopf"><span></span>
-            <div class="btn-row"><button class="btn secondary small" type="button" data-bt="hoch" data-i="${i}" aria-label="Position ${i + 1} nach oben" ${i ? "" : "disabled"}>↑</button><button class="btn secondary small" type="button" data-bt="runter" data-i="${i}" aria-label="Position ${i + 1} nach unten" ${i < pos.length - 1 ? "" : "disabled"}>↓</button><button class="btn secondary small" type="button" data-bt="weg" data-i="${i}" aria-label="Position ${i + 1} entfernen">Entfernen</button></div></div>
+            <div class="btn-row">${S.reihenfolgeKnoepfe(i, pos.length, `data-bt="hoch" data-i="${i}"`, `data-bt="runter" data-i="${i}"`, `Position ${i + 1}`)}${S.entfernenKnopf(`data-bt="weg" data-i="${i}"`, `Position ${i + 1} entfernen`)}</div></div>
           <div class="field-row mat-bt-felder nur-text"><div><label for="bt-${i}-bez">Bezeichnung</label><input type="text" id="bt-${i}-bez" class="bt-bez" maxlength="${g.bezeichnung}" value="${esc(x.bezeichnung || "")}" ${TASTATUR_NAME}></div>
             <div><label for="bt-${i}-anzahl">Anzahl</label><input type="number" id="bt-${i}-anzahl" class="bt-anzahl" min="1" max="${g.anzahl}" value="${esc(String(x.anzahl || 1))}"></div></div>
           <p class="error mat-bt-fehler" hidden></p></fieldset>`).join("")}</div>
@@ -4707,7 +4641,7 @@
       "dok-version": (b) => dokumentDialog(`${API}/dokumente/${b.dataset.id}/version`, docs().find((d) => d.id === +b.dataset.id), danach),
       "dok-zurueck": async (b) => {
         const d = docs().find((x) => x.id === +b.dataset.id);
-        if (!(await confirm(`„${d.title}“ ab heute zurückziehen? Es bleibt in der Liste und in alten Protokollen sichtbar.`, "Zurückziehen"))) return;
+        if (!(await confirm(`„${d.title}“ ab heute zurückziehen? Es bleibt in der Liste und in alten Protokollen sichtbar.`, "Zurückziehen", "", { endgueltig: false }))) return;
         try { await api(`${API}/dokumente/${d.id}/zurueckziehen`, { method: "POST", body: {} }); toast("Zurückgezogen"); await danach(); } catch (e) { toast(e.message, true); }
       },
       "dok-name": (b) => {
@@ -4725,7 +4659,7 @@
             const knopf = $("#dn-ok", body);
             knopf.disabled = true;
             try { await api(`${API}/dokumente/${d.id}`, { method: "PUT", body: { title: feld.value } }); dlg.close(); toast("Umbenannt"); await danach(); }
-            catch (e) { toast(e.message, true); knopf.disabled = false; }
+            catch (e) { S.fehlschlag(knopf, e, body); }
           };
           $("#dn-ok", body).onclick = () => speichern();
           feld.addEventListener("keydown", (e) => { if (e.key === "Enter") speichern(e); });
@@ -4763,16 +4697,10 @@
     const zusatz = produktZusatz(p);
     // Seltene Funktionen im Untermenü statt als weitere Knöpfe neben „Bearbeiten“ (Knopfregel; Prüfung Browser,
     // Verbesserung 4) – seit der Liste nach dem Merge auch „Löschen“ (selten und endgültig).
-    const produktMenue = `<details class="mat-menue">
-        <summary class="btn secondary small" aria-haspopup="true">Mehr</summary>
-        <div class="mat-menue-liste">
-          <a href="#" role="button" data-act="variante"><strong>Als Variante kopieren</strong>
-            <span>Ein neues Produkt mit diesen Stammdaten anlegen, etwa eine andere Länge – mit eigener Artikelnummer.</span></a>
-          <a href="#" role="button" data-act="rr-neu"><strong>Rückruf anlegen</strong>
-            <span>Eine Rückrufaktion des Herstellers für alle Artikel dieses Produkts oder bestimmte Seriennummern.</span></a>
-          ${p.loeschbar ? `<a href="#" role="button" data-act="loeschen"><strong>Löschen</strong>
-            <span>Geht nur, solange es keinen Artikel dieses Produkts gibt; vorher wird nachgefragt.</span></a>` : ""}
-        </div></details>`;
+    const produktMenue = S.menue({ art: "mat-menue", links: true, eintraege: [
+      { text: "Als Variante kopieren", satz: "Neues Produkt mit diesen Stammdaten.", attrs: 'data-act="variante"' },
+      { text: "Rückruf anlegen", satz: "Für alle oder bestimmte Seriennummern.", attrs: 'data-act="rr-neu"' },
+      p.loeschbar && { text: "Löschen", satz: "Nur ohne Artikel dieses Produkts.", attrs: 'data-act="loeschen"' }] });
     seitenTitel(produktName(p));
     inhalt.innerHTML = `${p.demo ? '<p class="mat-demo-banner">DEMO – nicht für echte Prüfungen.</p>' : ""}
       <div class="mat-pfad">${pfadHtml(['<a href="/materialablage/katalog">Katalog</a>', ...p.kategorie_pfad.map((x) => `<a href="/materialablage/katalog?kategorie=${x.id}">${esc(x.name)}</a>`)])}</div>
@@ -4866,7 +4794,7 @@
             <input type="text" class="dm-titel" maxlength="200" value="${esc(e.titel)}" placeholder="${e.datei ? "Titel" : "Titel (leer = Adresse)"}" aria-label="Titel">
             <select class="dm-art" aria-label="Art">${artWahl(e.art)}</select>
             <input type="text" class="dm-ver" maxlength="40" value="${esc(e.version)}" placeholder="Version" aria-label="Versionsstand" ${TASTATUR_NUMMER}>
-            <button type="button" class="lnk dm-weg" title="Entfernen" aria-label="Entfernen">✕</button>
+            ${S.entfernenKnopf("", "Entfernen", "lnk dm-weg")}
             ${e.fehler ? `<div class="dm-status">${esc(e.fehler)}</div>` : ""}</div>`).join("");
         $$(".dm-weg", liste).forEach((b) => { b.onclick = () => { merken(); eintraege.splice(+b.closest(".mat-dokzeile").dataset.i, 1); zeichnen(); }; });
       }
@@ -4966,7 +4894,7 @@
             await api(url, { method: "POST", body: Object.assign(felder, { url: $("#dd-url", body).value, valid_from: felder.valid_from || null }) });
           }
           dlg.close(); toast("Dokument gespeichert"); await (danach ? danach() : zeigen(produkt));
-        } catch (e) { toast(e.message, true); knopf.disabled = false; }
+        } catch (e) { S.fehlschlag(knopf, e, body); }
       };
     });
   }
@@ -4993,7 +4921,7 @@
             : p.art === "laenge" ? '<span class="muted" title="Das Soll ist die am Artikel hinterlegte Länge">Artikellänge</span>' : '<span class="muted">–</span>'}</td>
         <td><label class="inline"><input type="checkbox" class="fp-pflicht" ${p.pflicht ? "checked" : ""}> Pflicht</label>
           <label class="inline"><input type="checkbox" class="fp-kritisch" ${p.kritisch ? "checked" : ""} ${p.art === "yesno" ? "" : "disabled"}> kritisch</label>
-          <div class="btn-row"><button class="btn secondary small" data-act="hoch" data-i="${i}" aria-label="nach oben">↑</button><button class="btn secondary small" data-act="runter" data-i="${i}" aria-label="nach unten">↓</button><button class="btn secondary small" data-act="weg" data-i="${i}" aria-label="entfernen">✕</button></div></td></tr>`;
+          <div class="btn-row">${S.reihenfolgeKnoepfe(i, punkte.length, `data-act="hoch" data-i="${i}"`, `data-act="runter" data-i="${i}"`, `Prüfpunkt ${i + 1}`)}${S.entfernenKnopf(`data-act="weg" data-i="${i}"`, `Prüfpunkt ${i + 1} entfernen`)}</div></td></tr>`;
     }
     function einsammeln() {
       if (!bearbeitbar) return;
@@ -5107,8 +5035,8 @@
       <p class="help" id="ww-lesemodus" hidden>Du siehst nur öffentliche Seiten.</p>
       <div class="mat-wikiwahl" id="ww-liste"></div>
       <p class="help" id="ww-stand" aria-live="polite">Wird geladen …</p>
-      <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button>
-        ${aktuell ? '<button class="btn secondary" id="ww-weg" type="button">Verknüpfung entfernen</button>' : ""}
+      <div class="dlg-actions">${aktuell ? '<button class="btn secondary dlg-neben" id="ww-weg" type="button">Verknüpfung entfernen</button>' : ""}
+        <button class="btn secondary" data-close type="button">Abbrechen</button>
         <button class="btn" id="ww-ok" type="button" disabled>Verknüpfen</button></div>`,
     (dlg, body) => {
       let gewaehlt = null;
@@ -5155,7 +5083,7 @@
           dlg.close();
           toast(seite ? "Prüfanleitung verknüpft" : "Verknüpfung entfernt");
           danach(r.formular);
-        } catch (e) { toast(e.message, true); knopf.disabled = false; }
+        } catch (e) { S.fehlschlag(knopf, e, body); }
       }
       ok.onclick = () => { if (gewaehlt) speichern(gewaehlt, ok); };
       const weg = $("#ww-weg", body);
@@ -5243,7 +5171,7 @@
         const body = { art: wahl ? wahl.value : null };
         if (DATEN.durchgang) body.durchgang_id = DATEN.durchgang;
         try { const r = await api(`${API}/artikel/${a.id}/pruefungen`, { method: "POST", body }); location.href = `/materialablage/pruefung/${r.pruefung.id}`; }
-        catch (e) { toast(e.message, true); b.disabled = false; }
+        catch (e) { S.fehlschlag(b, e); }
       },
     };
   }
@@ -5867,7 +5795,8 @@
           <label class="mat-due" id="pr-due-feld" hidden>Nächste Prüfung ${datumFeld("pr-due", pr.vorschlag_naechste || "", "tag")}
             <span class="mat-due-hilfe">frühestens ${esc(fmtTag(isoHeute(1)))}${pr.vorschlag_naechste ? `, spätestens ${esc(fmtTag(pr.vorschlag_naechste))}` : ""}</span></label>
           <input type="text" id="pr-grund" maxlength="300" placeholder="Grund" aria-label="Grund" value="${esc(pr.grund || "")}" hidden>
-          <button type="button" class="btn" data-act="festschreiben" id="pr-ok" aria-describedby="pr-hinweis" disabled>Festschreiben</button></div></div>`;
+          <button type="button" class="btn" data-act="festschreiben" id="pr-ok" aria-describedby="pr-hinweis" disabled>Festschreiben</button></div>
+        <p class="error feld-fehler" id="pr-grund-fehler" hidden></p><p class="error feld-fehler" id="pr-due-fehler" hidden></p></div>`;
     }
 
     // In der einzeiligen Leiste (wenig Höhe, breite Touch-Geräte – material.css) ist das Feld für den Grund oft schmal: Passt
@@ -5900,6 +5829,9 @@
       });
       $("#pr-due-feld", box).hidden = ergebnis !== "einsatzbereit";
       $("#pr-grund", box).hidden = !ergebnis || ergebnis === "einsatzbereit";
+      // Ohne Mangel ist der Grund Pflicht – das steht sichtbar in der Hinweiszeile, nicht nur im Platzhalter (A2).
+      const grundPflicht = !!ergebnis && ergebnis !== "einsatzbereit" && !h.maengel.length;
+      $("#pr-grund", box).setAttribute("aria-required", String(grundPflicht));
       grundPlatzhalter();
       $("#pr-ok", box).disabled = !ergebnis;
       const teile = [];
@@ -5910,6 +5842,7 @@
       else if (pr.lebensdauer && pr.lebensdauer.erreicht) teile.push("Lebensende erreicht – nicht einsatzbereit");
       if (pr.freipruefung && ergebnis === "einsatzbereit") teile.push("Freiprüfung: Der Artikel kehrt in seinen Herkunftsordner zurück");
       if (ergebnis === "instandsetzen" && !pr.freipruefung) teile.push("„instandsetzen“ sperrt den Artikel");
+      if (grundPflicht) teile.push("Ohne Mangel ist ein Grund Pflicht");
       if (ergebnis === "aussondern_empfohlen") teile.push(pr.freipruefung ? "Der Artikel bleibt gesperrt – aussondern kann der Materialwart" : "„aussondern empfohlen“ sperrt den Artikel – aussondern kann der Materialwart");
       if (!DARF.unterschrift) teile.push("Deine Unterschrift fehlt noch – „Festschreiben“ fragt danach");
       $("#pr-hinweis", box).textContent = teile.join(" · ");
@@ -6225,7 +6158,6 @@
               toast(e.message, true);
               return;
             }
-            knopf.disabled = false;
             knopfFrei();
             knopf.textContent = "Festschreiben";
             if (!DARF.unterschrift) {
@@ -6233,7 +6165,10 @@
               abschlussAktualisieren();
               if (!erneut) { erneut = true; await festschreiben(); return; }
             }
-            toast(e.message, true);
+            // Ohne Feld: die Meldung als Toast; der Knopf bleibt gesperrt, solange nicht alles abgehakt ist (knopfFrei).
+            S.fehlschlag(null, e);
+            const ae = document.activeElement;
+            if (!knopf.disabled && (!ae || ae === document.body || ae === dlg)) knopf.focus();
           }
         }
         knopf.onclick = festschreiben;
@@ -6332,16 +6267,16 @@
           toast("Jeder Mangel braucht eine Bemerkung – sie fehlt bei: " + h.ohneNotiz.slice(0, 5).map((x) => x.text).join("; "), true);
           fokus($(`#pp-${h.ohneNotiz[0].id} .mat-pnotiz`)); return;
         }
-        if (ergebnis !== "einsatzbereit" && !h.maengel.length && !grund) { toast(`Ohne Mangel braucht „${ERGEBNIS[ergebnis]}“ einen Grund.`, true); fokus(imAbschluss("#pr-grund")); return; }
+        if (ergebnis !== "einsatzbereit" && !h.maengel.length && !grund) { S.feldFehler(imAbschluss("#pr-grund"), `Ohne Mangel braucht „${ERGEBNIS[ergebnis]}“ einen Grund.`); return; }
         // „Nächste Prüfung“: ein Tippfehler bricht ab (vorher wurde daraus still „spätestens“ – S20); die Grenzen
         // prüft der Server noch einmal.
         let due = null;
         if (ergebnis === "einsatzbereit") {
           try { due = datumWert(imAbschluss("#pr-due"), "Nächste Prüfung") || null; }
-          catch (e) { toast(e.message, true); fokus(imAbschluss("#pr-due")); return; }
+          catch (e) { S.feldFehler(imAbschluss("#pr-due"), e.message); return; }
           if (due && (due < isoHeute(1) || (pr.vorschlag_naechste && due > pr.vorschlag_naechste))) {
-            toast(`„Nächste Prüfung“: frühestens ${fmtTag(isoHeute(1))}${pr.vorschlag_naechste ? `, spätestens ${fmtTag(pr.vorschlag_naechste)}` : ""} – vorziehen geht, verschieben nicht.`, true);
-            fokus(imAbschluss("#pr-due")); return;
+            S.feldFehler(imAbschluss("#pr-due"), `„Nächste Prüfung“: frühestens ${fmtTag(isoHeute(1))}${pr.vorschlag_naechste ? `, spätestens ${fmtTag(pr.vorschlag_naechste)}` : ""} – vorziehen geht, verschieben nicht.`);
+            return;
           }
         }
         b.disabled = true;
@@ -6367,7 +6302,7 @@
           feld.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); $("#bg-ok", body).click(); } });
           $("#bg-ok", body).onclick = async (ev) => {
             const grund = feld.value.trim();
-            if (!grund) { toast("Bitte den Grund der Berichtigung angeben.", true); feld.focus(); return; }
+            if (!grund) { S.feldFehler(feld, "Bitte den Grund der Berichtigung angeben."); return; }
             const knopf = ev.currentTarget;
             knopf.disabled = true;
             try { const r = await api(`${API}/pruefungen/${pr.id}/berichtigen`, { method: "POST", body: { grund } }); location.href = `/materialablage/pruefung/${r.pruefung.id}`; }
@@ -6380,7 +6315,7 @@
                 toast(e.message, true);
                 return;
               }
-              toast(e.message, true); knopf.disabled = false;
+              S.fehlschlag(knopf, e, feld);
             }
           };
         });
@@ -6524,16 +6459,17 @@
       ausnehmen: (b) => {
         dialog(`<h2>${esc(b.dataset.nr)} ausnehmen</h2>
           <p class="help">Ein ausgenommener Artikel wird in diesem Durchgang nicht geprüft. Der Grund steht später im Sammelprotokoll.</p>
-          <label for="dn-grund">Grund</label><input type="text" id="dn-grund" maxlength="200" list="dn-vorschlaege" placeholder="z. B. nicht auffindbar">
+          <label for="dn-grund">Grund (Pflicht)</label><input type="text" id="dn-grund" maxlength="200" list="dn-vorschlaege" placeholder="z. B. nicht auffindbar" required>
           <datalist id="dn-vorschlaege"><option value="nicht auffindbar"><option value="beim Hersteller in Reparatur"><option value="kürzlich geprüft"></datalist>
           <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button><button class="btn" id="dn-ok" type="button">Ausnehmen</button></div>`,
         (dlg, body) => {
           fokus($("#dn-grund", body));
           $("#dn-ok", body).onclick = async (ev) => {
             const knopf = ev.currentTarget;
+            if (!$("#dn-grund", body).value.trim()) { S.feldFehler($("#dn-grund", body), "Bitte einen Grund angeben – er steht im Sammelprotokoll."); return; }
             knopf.disabled = true;
             try { await api(`${API}/durchgaenge/${d.id}/ausnehmen`, { method: "POST", body: { item_id: +b.dataset.id, grund: $("#dn-grund", body).value } }); dlg.close(); await neu(); }
-            catch (e) { toast(e.message, true); knopf.disabled = false; }
+            catch (e) { S.fehlschlag(knopf, e, body); }
           };
         });
       },
@@ -6547,7 +6483,7 @@
           const n = r.durchgang && r.durchgang.set_protokolle ? r.durchgang.set_protokolle.length : 0;
           toast(r.durchgang && r.durchgang.protokoll ? `Durchgang abgeschlossen – Sammelprotokoll ${r.durchgang.protokoll.id}${n ? ` und ${plural(n, "Set-Protokoll", "Set-Protokolle")}` : ""}` : "Durchgang abgeschlossen");
           await neu();
-        } catch (e) { toast(e.message, true); b.disabled = false; }
+        } catch (e) { S.fehlschlag(b, e); }
       },
       abbrechen: async (b) => {
         const z = d.zaehlung;
@@ -6564,7 +6500,7 @@
           if (!r.durchgang) { location.href = "/materialablage/pruefungen"; return; }
           filter = "";
           toast(r.durchgang.protokoll ? `Durchgang abgebrochen – Sammelprotokoll ${r.durchgang.protokoll.id}` : "Durchgang abgebrochen"); await neu();
-        } catch (e) { toast(e.message, true); b.disabled = false; }
+        } catch (e) { S.fehlschlag(b, e); }
       },
     };
     await neu();
@@ -6665,7 +6601,7 @@
         ablehnen: (b) => ablehnenDialog(meldung(b), zeichnen),
         treffer: async (b) => {
           const m = meldung(b);
-          if (!(await confirm(`„${meldungName(m)}“ dem Produkt „${produktName(m.treffer)}“ zuordnen? Der Melder bekommt Bescheid.`, "Zuordnen"))) return;
+          if (!(await confirm(`„${meldungName(m)}“ dem Produkt „${produktName(m.treffer)}“ zuordnen? Der Melder bekommt Bescheid.`, "Zuordnen", "", { endgueltig: false }))) return;
           try {
             await api(`${API}/meldungen/${m.id}/zuordnen`, { method: "POST", body: { product_id: m.treffer.id } });
             toast("Zugeordnet – der Melder bekommt Bescheid."); await zeichnen();
@@ -6763,7 +6699,7 @@
         try {
           await api(`${API}/antraege/${x.id}/bestaetigen`, { method: "POST", body: { antwort: $("#ba-antwort", body).value } });
           dlg.close(); toast(x.eigen ? "Bestätigt – die Änderung steht am Artikel." : "Bestätigt – der Antragsteller bekommt Bescheid."); await danach();
-        } catch (e) { toast(e.message, true); knopf.disabled = false; }
+        } catch (e) { S.fehlschlag(knopf, e, body); }
       };
     });
   }
@@ -6780,12 +6716,12 @@
       fokus($("#aa-antwort", body));
       $("#aa-ablehnen", body).onclick = async (ev) => {
         const knopf = ev.currentTarget;
-        if (!$("#aa-antwort", body).value.trim()) { toast("Bitte begründe die Ablehnung.", true); return; }
+        if (!$("#aa-antwort", body).value.trim()) { S.feldFehler($("#aa-antwort", body), "Bitte begründe die Ablehnung."); return; }
         knopf.disabled = true;
         try {
           await api(`${API}/antraege/${x.id}/ablehnen`, { method: "POST", body: { antwort: $("#aa-antwort", body).value } });
           dlg.close(); toast(x.eigen ? "Abgelehnt." : "Abgelehnt – der Antragsteller bekommt die Begründung."); await danach();
-        } catch (e) { toast(e.message, true); knopf.disabled = false; }
+        } catch (e) { S.fehlschlag(knopf, e, body); }
       };
     });
   }
@@ -6820,7 +6756,7 @@
         try {
           await api(`${API}/meldungen/${m.id}/zuordnen`, { method: "POST", body: { product_id: gewaehlt.id, antwort: $("#zu-antwort", body).value } });
           dlg.close(); toast("Zugeordnet – der Melder bekommt Bescheid."); await danach();
-        } catch (e) { toast(e.message, true); knopf.disabled = false; }
+        } catch (e) { S.fehlschlag(knopf, e, body); }
       };
     });
   }
@@ -6839,7 +6775,7 @@
         try {
           await api(`${API}/meldungen/${m.id}/ablehnen`, { method: "POST", body: { antwort: $("#ab-antwort", body).value } });
           dlg.close(); toast("Abgelehnt – der Melder bekommt die Begründung."); await danach();
-        } catch (e) { toast(e.message, true); knopf.disabled = false; }
+        } catch (e) { S.fehlschlag(knopf, e, body); }
       };
     });
   }
@@ -6908,7 +6844,7 @@
           dlg.close();
           toast("Gemeldet – du bekommst eine Mail, sobald du Artikel davon anlegen kannst.");
           if (danach) await danach();
-        } catch (e) { toast(e.message, true); knopf.disabled = false; }
+        } catch (e) { S.fehlschlag(knopf, e, body); }
       };
     });
   }
@@ -7042,7 +6978,7 @@
             serials: $("#rr-serien", body).value, mail: $("#rr-mail", body).checked } });
           rueckrufErgebnis(r, Boolean($("#rr-serien", body).value.trim()));
           zeigen(produkt);
-        } catch (e) { toast(e.message, true); knopf.disabled = false; }
+        } catch (e) { S.fehlschlag(knopf, e, body); }
       };
     });
   }
@@ -7066,7 +7002,7 @@
       <p>${mail}</p>
       ${mitSerien && !verwaltung ? '<p class="help">Ob jede Seriennummer einen Artikel trifft, sieht nur die Material-Verwaltung – bitte die Nummern selbst genau prüfen.</p>' : ""}
       ${nf.length ? `<p class="notice">Zu ${nf.length === 1 ? "dieser Seriennummer" : "diesen Seriennummern"} gibt es keinen Artikel im Bestand: ${nf.map(esc).join(", ")}</p>` : ""}
-      <div class="dlg-actions"><button class="btn" data-close type="button" id="rr-fertig">OK</button></div>`,
+      <div class="dlg-actions"><button class="btn secondary" data-close type="button" id="rr-fertig">Schließen</button></div>`,
     (d2, b2) => $("#rr-fertig", b2).focus());
   }
 
@@ -7085,7 +7021,7 @@
         try {
           await api(`${API}/rueckrufe/${r.id}/beenden`, { method: "POST", body: { vermerk: $("#rr-vermerk", body).value } });
           dlg.close(); toast("Rückruf beendet"); zeigen(produkt);
-        } catch (e) { toast(e.message, true); knopf.disabled = false; }
+        } catch (e) { S.fehlschlag(knopf, e, body); }
       };
     });
   }
@@ -7483,7 +7419,7 @@
         naSeite = d.seite;
         na.seiten = d.seiten;
         nacharbeitZeichnen();
-      } catch (e) { toast(e.message, true); knopf.disabled = false; }
+      } catch (e) { S.fehlschlag(knopf, e); }
     }
     const naAuswahl = () => (naAlle ? "alle" : Array.from(naWahl));
     const naAnzahl = () => (naAlle ? na.zahlen.offen : naWahl.size);
@@ -7537,8 +7473,8 @@
     function nacharbeitZeichnen() {
       const z = na.zahlen;
       const kopf = `<div class="mat-nacharbeit-kopf"><h2>Nacharbeit – ${z.offen} offen</h2>
-        ${z.offen ? `<details class="mat-menue"><summary class="btn secondary small" aria-haspopup="true">Mehr</summary><div class="mat-menue-liste">
-          <a href="/materialablage/ordner/${esc(fid)}/nacharbeit.csv" data-frisch data-export="Die Nacharbeit wird heruntergeladen …"><strong>Als CSV herunterladen</strong><span>${esc(IMPORT_CSV_SATZ)}</span></a></div></details>` : ""}</div>`;
+        ${z.offen ? S.menue({ art: "mat-menue", links: true, eintraege: [{ text: "Als CSV herunterladen", href: `/materialablage/ordner/${fid}/nacharbeit.csv`,
+          attrs: `data-frisch data-export="Die Nacharbeit wird heruntergeladen …" title="${esc(IMPORT_CSV_SATZ)}"` }] }) : ""}</div>`;
       if (!z.offen) {
         naBox.innerHTML = `${kopf}${leer("Nichts offen – was ein Import nicht übernehmen konnte, steht hier.")}${naErledigtHtml()}`;
         return;
@@ -7594,8 +7530,8 @@
         <label for="nz-q">Produkt suchen</label>
         <div class="mat-produktwahl"><input type="search" id="nz-q" autocomplete="off" ${TASTATUR_SUCHE}><div id="nz-treffer" class="mat-treffer"></div></div>
         <div id="nz-gewaehlt" class="mat-gewaehlt" hidden></div>
-        <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button>
-          ${aktuell ? '<button class="btn secondary" id="nz-weg" type="button">Zuordnung entfernen</button>' : ""}
+        <div class="dlg-actions">${aktuell ? '<button class="btn secondary dlg-neben" id="nz-weg" type="button">Zuordnung entfernen</button>' : ""}
+          <button class="btn secondary" data-close type="button">Abbrechen</button>
           <button class="btn" id="nz-ok" type="button" disabled>Zuordnen</button></div>`,
       (dlg, body) => {
         let gewaehlt = null;
@@ -7631,7 +7567,7 @@
             // Nach dem Zuordnen gleich die Prüfung dieser Zeilen mit „k Artikel übernehmen“ (Wunsch vom 25.10.2026, F1).
             if (pid) nachpruefen(ziel, r.gesetzt);
             else toast(`Zuordnung entfernt – ${plural(r.gesetzt, "Zeile", "Zeilen")}`);
-          } catch (e) { toast(e.message, true); knopf.disabled = false; }
+          } catch (e) { S.fehlschlag(knopf, e, body); }
         }
         $("#nz-ok", body).onclick = (ev) => { if (gewaehlt) setzen(gewaehlt, ev.currentTarget); };
         const weg = $("#nz-weg", body);
@@ -7671,7 +7607,7 @@
           ok.textContent = "Wird übernommen …";
           let e;
           try { e = await api(`${API}/ordner/${fid}/nacharbeit/pruefen`, { method: "POST", body: Object.assign({}, ziel, { uebernehmen: true }) }); }
-          catch (err) { toast(err.message, true); ok.disabled = false; ok.textContent = label; return; }
+          catch (err) { ok.textContent = label; S.fehlschlag(ok, err); return; }
           const angelegt = e.zeilen.filter((x) => x.status === "angelegt");
           toast(angelegt.length ? `${plural(angelegt.length, "Artikel", "Artikel")} angelegt` : "Erledigt");
           dialog(`<h2>Übernommen</h2>

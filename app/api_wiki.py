@@ -1450,6 +1450,16 @@ def _export_name(title):
     return name[:120]
 
 
+def _download_name(title, endung):
+    """Name der heruntergeladenen Datei: Titel, Datum und Uhrzeit („DEMO-Start_2026-10-27_1546.md“) – wie die Dateien
+    der Materialablage (zeitstempel, designsprache „Dateien auf Abruf“). Ohne Uhrzeit bot Chrome auf Android beim
+    zweiten Abruf die alte Datei an (UI/UX vor dem Merge, A12). Die Namen IM ZIP bleiben die Seitentitel – der Import
+    liest den Titel daraus."""
+    from .material.services import zeitstempel
+
+    return f"{_export_name(title)}_{zeitstempel()}.{endung}"
+
+
 def _export_inhalt(p):
     """Inhalt einer Seite für den Export. Fehlt die Titelzeile „# …“ (nie im Editor gespeicherte Seite, etwa per API
     angelegt), steht sie davor: Der Import nimmt den Titel aus der ersten Zeile, sonst aus dem Dateinamen – und der
@@ -1496,7 +1506,7 @@ def export_page(pid):
         # kyrillischen Buchstaben ließ gunicorn (latin-1) die Antwort abbrechen.
         body = _export_inhalt(p).encode("utf-8")
         return send_file(io.BytesIO(body), mimetype="text/markdown; charset=utf-8", as_attachment=True,
-                         download_name=f"{_export_name(p['title'])}.md")
+                         download_name=_download_name(p["title"], "md"))
 
     # Beschränkte Unterseiten gehören nicht in den Export.
     pages = [p, *[k for k in _descendants(pid) if can_read(_get_page(int(k["id"])) or k)]]
@@ -1557,7 +1567,7 @@ def export_page(pid):
                              "Unterseiten einzeln exportieren."), 413
     buf.seek(0)
     return send_file(buf, mimetype="application/zip", as_attachment=True,
-                     download_name=f"{_export_name(p['title'])}.zip")
+                     download_name=_download_name(p["title"], "zip"))
 
 
 # --- Import (Wunsch vom 25.10.2026) -------------------------------------------------------

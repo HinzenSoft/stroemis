@@ -100,7 +100,7 @@
   };
   const groesseText = (b) => (b >= 1048576 ? `${(b / 1048576).toFixed(1).replace(".", ",")} MB` : `${Math.max(1, Math.round(b / 1024))} kB`);
   const isVideo = (f) => /^video\//.test(f.type) || /\.(mp4|m4v|mov|webm)$/i.test(f.name || "");
-  const plural = (n, eins, viele) => `${n} ${n === 1 ? eins : viele}`;
+  const plural = S.plural;              // „1 Bild“, „3 Bilder“ – app-weit in common.js (UI/UX vor dem Merge, A11)
   // Ein Kommentar in einer Matrixzelle: ein Satz reicht, der Rest steht im Dialog.
   const kuerzen = (text, n) => { const t = String(text || "").replace(/\s+/g, " ").trim(); return t.length > n ? t.slice(0, n - 1).trimEnd() + "…" : t; };
 
@@ -113,11 +113,10 @@
   /* Knopfsprache (designsprache.md, nach_merge_liste Punkt 13): Seltene Zeilenaktionen stehen im Zeilenmenü „Mehr“
      (details.zeilenmenue wie in der Leitstelle, schließt über common.js), Verschieben als Textknöpfe statt ↑/↓. Die
      Einträge sind <button data-act …> – derselbe Klickverteiler wie vorher die einzelnen Knöpfe. */
-  const zeilenMenue = (eintraege) => `<details class="zeilenmenue"><summary class="btn secondary small" aria-haspopup="true">Mehr</summary>
-    <div class="zeilenmenue-liste">${eintraege}</div></details>`;
-  const sortierKnoepfe = (i, n, hoch, runter) =>
-    `<button type="button" class="btn secondary small" ${hoch} ${i === 0 ? "disabled" : ""} aria-label="Nach oben verschieben">Hoch</button>
-     <button type="button" class="btn secondary small" ${runter} ${i === n - 1 ? "disabled" : ""} aria-label="Nach unten verschieben">Runter</button>`;
+  // Seit dem gemeinsamen Menübaustein (UI/UX vor dem Merge, A3): S.menue – bleibt ein Eintrag, steht er als Knopf da.
+  // Einträge: [Text, Attribut-HTML]. Reihenfolge mit ↑/↓ und Entfernen mit ✕ wie in der Materialablage (D3).
+  const zeilenMenue = (eintraege) => S.menue({ art: "zeilenmenue", eintraege: eintraege.filter(Boolean).map(([text, attrs]) => ({ text, attrs })) });
+  const sortierKnoepfe = (i, n, hoch, runter) => S.reihenfolgeKnoepfe(i, n, hoch, runter);
   // Derselbe Text wie im Server (409) – damit die Oberfläche nicht anders erklärt als die Antwort.
   const EINGEFROREN = "Für diese Person ist das Lehrgangsergebnis vermerkt – die Prüfungsdaten sind eingefroren. Die Lehrgangsleitung kann das Ergebnis aufheben.";
   /* Erklärungen hinter einem „i“ (S.info, designsprache „Info-Symbol „i““): Zeitansatz und Kriterienliste stehen im
@@ -152,12 +151,12 @@
     if (!a) return;
     state.lb = null;
     lbBody.innerHTML = `<div class="lb-img lb-profil"><img src="${esc(a)}" alt="${esc(tnName(tn))}"></div>
-      <div class="lb-side"><button class="close" id="lb-close" aria-label="Schließen">×</button>
+      <div class="lb-side">${S.schliessenKnopf('id="lb-close"', "close")}
         <h2>${esc(tnName(tn))}</h2>
         <div class="lb-meta">${esc(tn.gliederung || "")}${tn.geburtsdatum ? `${tn.gliederung ? "<br>" : ""}geb. ${esc(fmtTag(tn.geburtsdatum))}` : ""}</div>
         ${ergebnisMarkeHtml(tn)}</div>`;
     $("#lb-close").onclick = () => lb.close();
-    if (!lb.open) lb.showModal();
+    if (!lb.open) { lb.showModal(); S.dialogVerlauf(lb); }
   }
   // Bilder in Dialogen liegen außerhalb der Seite (#pruef) – dort fängt der Seiten-Delegierer nicht.
   document.addEventListener("click", (e) => {
@@ -226,7 +225,7 @@
     return `<div class="medien-grid${opts.klein ? " klein" : ""}">${medien.map((m, i) => `
       <div class="medium-huelle"><button type="button" class="medium" data-mg="${key}" data-i="${i}" title="${esc(m.original_name || "")}">
         <img src="${esc(m.thumb)}" alt="${esc(m.original_name || "")}" loading="lazy">${m.kind === "video" ? '<span class="play" aria-hidden="true">▶</span>' : ""}</button>
-        ${opts.loeschbar ? `<button type="button" class="medium-weg" data-mg="${key}" data-i="${i}" aria-label="Medium löschen" title="Medium löschen">×</button>` : ""}</div>`).join("")}</div>`;
+        ${opts.loeschbar ? S.entfernenKnopf(`data-mg="${key}" data-i="${i}"`, "Medium löschen", "medium-weg") : ""}</div>`).join("")}</div>`;
   }
 
   /* --- Leuchtkasten (Bild/Video groß) ---------------------------------------------------- */
@@ -235,7 +234,7 @@
   function openLightbox(gruppe, i) {
     state.lb = { medien: gruppe.medien, i, onDelete: gruppe.onDelete };
     renderLightbox();
-    if (!lb.open) lb.showModal();
+    if (!lb.open) { lb.showModal(); S.dialogVerlauf(lb); }
   }
 
   function renderLightbox() {
@@ -249,7 +248,7 @@
           : `<img src="${esc(m.web)}" alt="${esc(m.original_name || "")}">`}
         ${medien.length > 1 ? '<button class="lb-nav prev" id="lb-prev" aria-label="Vorheriges">‹</button><button class="lb-nav next" id="lb-next" aria-label="Nächstes">›</button>' : ""}
       </div>
-      <div class="lb-side"><button class="close" id="lb-close" aria-label="Schließen">×</button>
+      <div class="lb-side">${S.schliessenKnopf('id="lb-close"', "close")}
         <h2>${m.kind === "video" ? "Video" : "Bild"} ${i + 1} von ${medien.length}</h2>
         <div class="lb-meta"><strong>${esc(m.original_name || "")}</strong>
           hochgeladen von ${esc(m.hochgeladen_von_name || "")} am ${esc(fmtDate(m.hochgeladen_am, true))}
@@ -392,7 +391,7 @@
       </div>
       <input type="text" class="ausb-funktion" list="ausb-funktionen" placeholder="Funktion (optional)" value="${esc(a.funktion || "")}" aria-label="Funktion">
       <label class="inline ausb-leit"><input type="checkbox" class="ausb-leitung" ${a.ist_leitung ? "checked" : ""}> Leitung</label>
-      <button type="button" class="btn secondary small" data-weg aria-label="Zeile entfernen">Entfernen</button>
+      ${S.entfernenKnopf("data-weg", "Zeile entfernen")}
     </div>`;
   }
 
@@ -474,8 +473,8 @@
             status: $("#lg-status", body).value, beschreibung: $("#lg-besch", body).value, ausbilder: ausbilderLesen(body),
           };
           if (neu && $("#lg-katalog", body)) d.katalog_id = $("#lg-katalog", body).value ? +$("#lg-katalog", body).value : null;
-          if (!d.titel) { $("#lg-titel", body).focus(); return toast("Bitte einen Titel angeben.", true); }
-          if (d.datum_von && d.datum_bis && d.datum_bis < d.datum_von) { $("#lg-bis", body).focus(); return toast("Das Enddatum liegt vor dem Anfang.", true); }
+          if (!d.titel) return S.feldFehler($("#lg-titel", body), "Bitte einen Titel angeben.");
+          if (d.datum_von && d.datum_bis && d.datum_bis < d.datum_von) return S.feldFehler($("#lg-bis", body), "Das Enddatum liegt vor dem Anfang.");
           knopf.disabled = true;
           try {
             const r = neu ? await api(`${API}/lehrgaenge`, { method: "POST", body: d })
@@ -483,7 +482,7 @@
             dlg.close();
             toast(neu ? "Lehrgang angelegt" : "Gespeichert");
             if (nachher) await nachher(r.lehrgang);
-          } catch (e) { toast(e.message, true); }
+          } catch (e) { S.fehlschlag(knopf, e, body); }
           finally { knopf.disabled = false; }
         };
       });
@@ -509,13 +508,13 @@
           const knopf = ev.currentTarget;
           if (knopf.disabled) return;
           const d = { titel: $("#kp-titel", body).value.trim(), datum_von: $("#kp-von", body).value || null, datum_bis: $("#kp-bis", body).value || null };
-          if (d.datum_von && d.datum_bis && d.datum_bis < d.datum_von) return toast("Das Enddatum liegt vor dem Anfang.", true);
+          if (d.datum_von && d.datum_bis && d.datum_bis < d.datum_von) return S.feldFehler($("#kp-bis", body), "Das Enddatum liegt vor dem Anfang.");
           knopf.disabled = true;
           try {
             const r = await api(`${API}/lehrgaenge/${lg.id}/kopieren`, { method: "POST", body: d });
             meldungMerken(`Kopie „${r.lehrgang.titel}“ angelegt`);
             location.href = `/riegenkarten/${r.lehrgang.id}#leistungen`;
-          } catch (e) { knopf.disabled = false; toast(e.message, true); }
+          } catch (e) { S.fehlschlag(knopf, e, body); }
         };
       });
   }
@@ -586,9 +585,8 @@
         <td data-l="Fortschritt">${fortschrittHtml(lg)}</td>
         <td class="tabelle-aktionen"><div class="btn-row">
           <a class="btn secondary small" href="/riegenkarten/${lg.id}">Öffnen</a>
-          ${lg.darf_leiten ? zeilenMenue(`<button type="button" data-act="lg-edit" data-id="${lg.id}">Bearbeiten</button>
-            <button type="button" data-act="lg-kopie" data-id="${lg.id}">Kopieren</button>
-            <button type="button" data-act="lg-del" data-id="${lg.id}">Löschen</button>`) : ""}
+          ${lg.darf_leiten ? zeilenMenue([["Bearbeiten", `data-act="lg-edit" data-id="${lg.id}"`],
+            ["Kopieren", `data-act="lg-kopie" data-id="${lg.id}"`], ["Löschen", `data-act="lg-del" data-id="${lg.id}"`]]) : ""}
         </div></td></tr>`).join("")}</tbody></table>`;
   }
 
@@ -628,8 +626,7 @@
         <td data-l="Leistungen">${k.leistungen_anzahl}</td>
         <td class="tabelle-aktionen"><div class="btn-row">
           <a class="btn secondary small" href="/riegenkarten/kataloge/${k.id}">Öffnen</a>
-          ${istAdmin() ? zeilenMenue(`<button type="button" data-act="kat-edit" data-id="${k.id}">Bearbeiten</button>
-            <button type="button" data-act="kat-del" data-id="${k.id}">Löschen</button>`) : ""}
+          ${istAdmin() ? zeilenMenue([["Bearbeiten", `data-act="kat-edit" data-id="${k.id}"`], ["Löschen", `data-act="kat-del" data-id="${k.id}"`]]) : ""}
         </div></td></tr>`).join("")}</tbody></table>`;
   }
 
@@ -649,7 +646,7 @@
           const knopf = ev.currentTarget;
           if (knopf.disabled) return;
           const titel = $("#kat-titel", body).value.trim();
-          if (!titel) { $("#kat-titel", body).focus(); return toast("Bitte einen Titel angeben.", true); }
+          if (!titel) return S.feldFehler($("#kat-titel", body), "Bitte einen Titel angeben.");
           const d = { titel, beschreibung: $("#kat-besch", body).value };
           knopf.disabled = true;
           try {
@@ -661,7 +658,7 @@
             toast("Gespeichert");
             if (ANSICHT === "kataloge") await renderKataloge();
             else { state.katalog = r.katalog; renderKatalogSeite(); }
-          } catch (e) { toast(e.message, true); }
+          } catch (e) { S.fehlschlag(knopf, e, body); }
           finally { knopf.disabled = false; }
         };
       });
@@ -788,9 +785,9 @@
           const knopf = ev.currentTarget;
           if (knopf.disabled) return;
           const bez = $("#kl-bez", body).value.trim();
-          if (!bez) { $("#kl-bez", body).focus(); return toast("Bitte eine Bezeichnung angeben.", true); }
+          if (!bez) return S.feldFehler($("#kl-bez", body), "Bitte eine Bezeichnung angeben.");
           const z = zeitLesen($("#kl-zeit", body).value);
-          if (!z.ok) { $("#kl-zeit", body).focus(); return toast("Zeitansatz bitte als mm:ss angeben, z. B. 03:00 – oder nur Ziffern: 300.", true); }
+          if (!z.ok) return S.feldFehler($("#kl-zeit", body), "Zeitansatz bitte als mm:ss angeben, z. B. 03:00 – oder nur Ziffern: 300.");
           const d = { bezeichnung: bez, beschreibung_md: holen(), zeitansatz_sekunden: z.wert };
           if (neu) d.kriterien = kritEntwurf.werte();
           knopf.disabled = true;
@@ -800,7 +797,7 @@
             dlg.close();
             toast(neu ? "Prüfungsleistung angelegt" : "Gespeichert");
             await loadKatalogDetail(); renderKatalogSeite();
-          } catch (e) { toast(e.message, true); }
+          } catch (e) { S.fehlschlag(knopf, e, body); }
           finally { knopf.disabled = false; }
         };
       }, ["wide"]);
@@ -1048,7 +1045,7 @@
       <label for="tn-email">E-Mail</label><input type="email" id="tn-email" value="${esc(tn.email)}" autocomplete="off">
       <div class="feld-kopf"><label for="tn-bem">Bemerkung</label>${diktatKnopf("tn-bem")}</div><textarea id="tn-bem" style="min-height:60px">${esc(tn.bemerkung)}</textarea>
       ${extra.length ? `<label>Weitere Angaben aus dem Import</label><dl class="kv">${extra.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join("")}</dl>` : ""}
-      <div class="dlg-actions">${neu ? "" : '<button class="btn secondary" id="tn-del" type="button" style="margin-right:auto">Löschen</button>'}
+      <div class="dlg-actions">${neu ? "" : '<button class="btn secondary dlg-neben" id="tn-del" type="button">Löschen</button>'}
         <button class="btn secondary" data-close type="button">Abbrechen</button>
         <button class="btn" id="tn-save" type="button">${neu ? "Anlegen" : "Speichern"}</button></div>`,
       (dlg, body) => {
@@ -1101,7 +1098,7 @@
             geburtsdatum: $("#tn-geb", body).value || null, gliederung: $("#tn-gl", body).value.trim(),
             email: $("#tn-email", body).value.trim(), bemerkung: $("#tn-bem", body).value,
           };
-          if (!d.name) { $("#tn-name", body).focus(); return toast("Bitte den Nachnamen angeben.", true); }
+          if (!d.name) return S.feldFehler($("#tn-name", body), "Bitte den Nachnamen angeben.");
           knopf.disabled = true;
           try {
             if (neu) await api(`${API}/lehrgaenge/${LEHRGANG_ID}/teilnehmer`, { method: "POST", body: d });
@@ -1109,7 +1106,7 @@
             dlg.close();
             toast(neu ? "Teilnehmende angelegt" : "Gespeichert");
             await loadDetail(); renderLehrgangSeite();
-          } catch (e) { toast(e.message, true); }
+          } catch (e) { S.fehlschlag(knopf, e, body); }
           finally { knopf.disabled = false; }
         };
         const del = $("#tn-del", body);
@@ -1120,7 +1117,7 @@
             dlg.close();
             toast("Teilnehmende gelöscht");
             await loadDetail(); renderLehrgangSeite();
-          } catch (e) { toast(e.message, true); }
+          } catch (e) { S.fehlschlag(del, e); }
         };
       });
   }
@@ -1136,7 +1133,7 @@
         <div class="vor-wrap">${vor.length ? `<ul class="vor-liste">${vor.map((v, i) => `<li data-vid="${v.id}">
           <input type="text" value="${esc(v.bezeichnung)}" data-bez aria-label="Bezeichnung">
           ${sortierKnoepfe(i, vor.length, "data-hoch", "data-runter")}
-          <button type="button" class="btn secondary small" data-del>Löschen</button></li>`).join("")}</ul>`
+          ${S.entfernenKnopf("data-del", `Voraussetzung „${v.bezeichnung}“ löschen`)}</li>`).join("")}</ul>`
           : '<p class="muted">Noch keine Voraussetzungen.</p>'}</div>
         <div class="vor-neu"><input type="text" id="vor-neu-text" placeholder="Neue Voraussetzung, z. B. DRSA Silber (nicht älter als 2 Jahre)" aria-label="Neue Voraussetzung">
           <button type="button" class="btn" id="vor-neu-go">Hinzufügen</button></div>
@@ -1216,9 +1213,8 @@
         ${l.kriterien && l.kriterien.length ? `<span class="badge grey" title="Kriterienliste">📋 ${l.kriterien.length}</span>` : ""}</div>
       ${editierbar ? `<div class="btn-row">
         <button class="btn secondary small" data-act="${praefix}-edit" data-lid="${l.id}">Bearbeiten</button>
-        ${zeilenMenue(`${i > 0 ? `<button type="button" data-act="${praefix}-hoch" data-lid="${l.id}">Nach oben</button>` : ""}
-          ${i < gesamt - 1 ? `<button type="button" data-act="${praefix}-runter" data-lid="${l.id}">Nach unten</button>` : ""}
-          <button type="button" data-act="${praefix}-del" data-lid="${l.id}">Löschen</button>`)}</div>` : '<div class="btn-row"></div>'}
+        ${gesamt > 1 ? sortierKnoepfe(i, gesamt, `data-act="${praefix}-hoch" data-lid="${l.id}"`, `data-act="${praefix}-runter" data-lid="${l.id}"`) : ""}
+        ${zeilenMenue([["Löschen", `data-act="${praefix}-del" data-lid="${l.id}"`]])}</div>` : '<div class="btn-row"></div>'}
       ${l.beschreibung_md ? `<div class="md-vorschau">${md(l.beschreibung_md)}</div>` : '<div class="md-vorschau muted">Keine Beschreibung.</div>'}
     </div>`;
   }
@@ -1260,13 +1256,14 @@
     dlg.querySelector("#lk-ok").onclick = () => {
       const urlFeld = dlg.querySelector("#lk-url");
       const url = urlFeld.value.trim();
-      if (!url) return urlFeld.focus();
+      if (!url) return S.feldFehler(urlFeld, "Bitte eine Adresse angeben.");
       const text = dlg.querySelector("#lk-text").value.trim() || url;
       dlg.close();
       aufOk({ url, text });
     };
     dlg.addEventListener("close", () => dlg.remove(), { once: true });
     dlg.showModal();
+    S.dialogVerlauf(dlg);
     fokus(dlg.querySelector(vorschlagText ? "#lk-url" : "#lk-text"));
   }
 
@@ -1426,7 +1423,7 @@
       ${liste.length ? `<ul class="vor-liste">${liste.map((bez, i) => `<li>
         <input type="text" value="${esc(bez)}" data-krit-entwurf aria-label="Kriterium">
         ${sortierKnoepfe(i, liste.length, "data-krit-hoch", "data-krit-runter")}
-        <button type="button" class="btn secondary small" data-krit-del>Entfernen</button></li>`).join("")}</ul>`
+        ${S.entfernenKnopf("data-krit-del", "Kriterium entfernen")}</li>`).join("")}</ul>`
         : '<p class="muted">Noch keine Kriterien.</p>'}
       <div class="vor-neu"><input type="text" id="krit-neu-text" placeholder="Neues Kriterium, z. B. Wurfsack sicher gegriffen" aria-label="Neues Kriterium">
         <button type="button" class="btn secondary small" id="krit-neu-go"><span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Kriterium<span class="k-anlegen"> anlegen</span></span></button></div>
@@ -1469,7 +1466,7 @@
       ${ks.length ? `<ul class="vor-liste">${ks.map((k, i) => `<li data-kid="${k.id}">
         <input type="text" value="${esc(k.bezeichnung)}" data-krit-bez aria-label="Kriterium">
         ${sortierKnoepfe(i, ks.length, "data-krit-hoch", "data-krit-runter")}
-        <button type="button" class="btn secondary small" data-krit-del>Löschen</button></li>`).join("")}</ul>`
+        ${S.entfernenKnopf("data-krit-del", `Kriterium „${k.bezeichnung}“ löschen`)}</li>`).join("")}</ul>`
         : '<p class="muted">Noch keine Kriterien.</p>'}
       <div class="vor-neu"><input type="text" id="krit-neu-text" placeholder="Neues Kriterium, z. B. Wurfsack sicher gegriffen" aria-label="Neues Kriterium">
         <button type="button" class="btn secondary small" id="krit-neu-go"><span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Kriterium<span class="k-anlegen"> anlegen</span></span></button></div>
@@ -1564,9 +1561,9 @@
           const knopf = ev.currentTarget;
           if (knopf.disabled) return;
           const bez = $("#pl-bez", body).value.trim();
-          if (!bez) { $("#pl-bez", body).focus(); return toast("Bitte eine Bezeichnung angeben.", true); }
+          if (!bez) return S.feldFehler($("#pl-bez", body), "Bitte eine Bezeichnung angeben.");
           const z = zeitLesen($("#pl-zeit", body).value);
-          if (!z.ok) { $("#pl-zeit", body).focus(); return toast("Zeitansatz bitte als mm:ss angeben, z. B. 03:00 – oder nur Ziffern: 300.", true); }
+          if (!z.ok) return S.feldFehler($("#pl-zeit", body), "Zeitansatz bitte als mm:ss angeben, z. B. 03:00 – oder nur Ziffern: 300.");
           const d = { bezeichnung: bez, beschreibung_md: holen(), zeitansatz_sekunden: z.wert };
           if (neu) d.kriterien = kritEntwurf.werte();
           knopf.disabled = true;
@@ -1576,7 +1573,7 @@
             dlg.close();
             toast(neu ? "Prüfungsleistung angelegt" : "Gespeichert");
             await loadDetail(); renderLehrgangSeite();
-          } catch (e) { toast(e.message, true); }
+          } catch (e) { S.fehlschlag(knopf, e, body); }
           finally { knopf.disabled = false; }
         };
       }, ["wide"]);
@@ -1679,7 +1676,7 @@
       const l = ls.find((x) => x.id === state.bewLeistung);
       inhalt = `${l.beschreibung_md ? `<details class="beschreibung-kopf"><summary>Prüfungsbeschreibung</summary><div class="md">${md(l.beschreibung_md)}</div></details>` : ""}
         <ul class="zellen-liste">${tns.map((tn) => `<li><button type="button" class="zelle-zeile ${tn.voraussetzungen_offen ? "offen-vor" : ""}${tn.eingefroren ? " gesperrt" : ""}" data-act="zelle" data-tid="${tn.id}" data-lid="${l.id}">
-          <span class="name">${tnKopfHtml(tn)}${ergebnisMarkeHtml(tn)}<small>${esc(tn.gliederung || "")}${tn.voraussetzungen_offen ? `${tn.gliederung ? " · " : ""}${tn.voraussetzungen_offen} Voraussetzungen offen` : ""}</small></span>
+          <span class="name">${tnKopfHtml(tn)}${ergebnisMarkeHtml(tn)}<small>${esc(tn.gliederung || "")}${tn.voraussetzungen_offen ? `${tn.gliederung ? " · " : ""}${S.plural(tn.voraussetzungen_offen, "Voraussetzung", "Voraussetzungen")} offen` : ""}</small></span>
           ${zelleHtml(tn, l, { tag: "span" })}
         </button></li>`).join("")}</ul>`;
     } else {
@@ -1692,7 +1689,7 @@
           <div><span class="feldname">Kommentar</span>${kommentarZelleHtml(tn, { laenge: 200 })}</div>
           <div><span class="feldname">Lehrgang</span>${ergebnisHtml(tn)}</div>
         </div></div>`;
-      inhalt = `${block}${tn.voraussetzungen_offen ? `<p class="notice">${tn.voraussetzungen_offen} Voraussetzungen sind noch nicht erfüllt.</p>` : ""}
+      inhalt = `${block}${tn.voraussetzungen_offen ? `<p class="notice">${tn.voraussetzungen_offen === 1 ? "1 Voraussetzung ist" : `${tn.voraussetzungen_offen} Voraussetzungen sind`} noch nicht erfüllt.</p>` : ""}
         <ul class="zellen-liste">${ls.map((l) => {
           // Zu jeder Leistung: gebrauchte Zeit (neben der Sollzeit) und der Kommentar des letzten
           // Versuchs – das ist die Ansicht fürs Feedbackgespräch mit der Person.
@@ -1756,7 +1753,8 @@
     const aufheben = tn.ergebnis === erg;
     const text = aufheben ? "Ergebnis aufheben? Danach lassen sich wieder Prüfungen erfassen."
       : `${tnName(tn)}: Lehrgang als „${ERGEBNIS[erg][0]}“ vermerken? Bewertungen, Häkchen und Kommentar dieser Person sind danach eingefroren, bis das Ergebnis aufgehoben wird.`;
-    if (!(await S.confirm(text, aufheben ? "Aufheben" : "Vermerken"))) return;
+    // Nichts geht verloren – Aufheben macht es rückgängig: die gewöhnliche Rückfrage, nicht die für Endgültiges (A4).
+    if (!(await S.confirm(text, aufheben ? "Aufheben" : "Vermerken", "", { endgueltig: false }))) return;
     if (knopf) knopf.disabled = true;
     try {
       const r = await api(`${API}/teilnehmer/${tid}/ergebnis`, { method: "PUT", body: { ergebnis: aufheben ? null : erg } });
@@ -1765,7 +1763,7 @@
       // Der Kopf zeigt die Zähler, die Matrix Schloss und Dämpfung – die ganze Seite neu.
       await loadDetail().catch(() => {});
       renderLehrgangSeite();
-    } catch (e) { if (knopf) knopf.disabled = false; toast(e.message, true); }
+    } catch (e) { S.fehlschlag(knopf, e); }
   }
 
   function bewertungBinden() {
@@ -1969,7 +1967,7 @@
       bannerZeichnen();
       // Direkt weiter zur Bewertung: die beiden großen Knöpfe in die Mitte holen.
       const wahl = $("#bw-wahl", body);
-      if (wahl) { wahl.scrollIntoView({ behavior: "smooth", block: "center" }); const b = wahl.querySelector("button"); if (b) b.focus({ preventScroll: true }); }
+      if (wahl) { S.rollen(wahl, { block: "center" }); const b = wahl.querySelector("button"); if (b) b.focus({ preventScroll: true }); }
     };
     bReset.onclick = () => {
       const su = suLesen();
@@ -2052,7 +2050,7 @@
             if (r.errors.length) toast(r.errors.join(" "), true);
             else toast(`${plural(r.medien.length, "Datei", "Dateien")} hochgeladen`);
             neuZeichnen();
-          } catch (e) { b.disabled = false; toast(e.message, true); }
+          } catch (e) { S.fehlschlag(b, e); }
         };
       });
       const np = $("#bw-np", body);
@@ -2094,7 +2092,7 @@
           let vorschau = '<span class="video-icon" aria-hidden="true">🎬</span>';
           if (!isVideo(f)) { const u = URL.createObjectURL(f); urls.push(u); vorschau = `<img src="${u}" alt="">`; }
           return `<li>${vorschau}<span class="name">${esc(f.name)}<small>${groesseText(f.size)}${isVideo(f) ? " · Video" : ""}</small></span>
-            <button type="button" class="btn secondary small" data-weg="${i}" aria-label="${esc(f.name)} entfernen">Entfernen</button></li>`;
+            ${S.entfernenKnopf(`data-weg="${i}"`, `${f.name} entfernen`)}</li>`;
         }).join("");
         $$("[data-weg]", liste).forEach((b) => b.onclick = () => { dateien.splice(+b.dataset.weg, 1); listeZeichnen(); });
       };
@@ -2114,10 +2112,10 @@
           zeitfeld.value = fmtZeit(Math.round((Date.now() - laufend.start) / 1000));
         }
         const z = zeitLesen(zeitfeld.value);
-        if (!z.ok) { zeitfeld.classList.add("fehler"); zeitfeld.focus(); return toast("Zeit bitte als mm:ss angeben, z. B. 02:30 – oder nur Ziffern: 230.", true); }
+        if (!z.ok) { zeitfeld.classList.add("fehler"); return S.feldFehler(zeitfeld, "Zeit bitte als mm:ss angeben, z. B. 02:30 – oder nur Ziffern: 230."); }
         const kommentar = komm.value.trim();
         // Pflichtkommentar schon hier – der Server prüft es ebenfalls (siehe catch unten).
-        if (erg === "mangelhaft" && !kommentar) { komm.classList.add("fehler"); komm.focus(); return toast("Bei „mangelhaft“ ist ein Kommentar Pflicht.", true); }
+        if (erg === "mangelhaft" && !kommentar) { komm.classList.add("fehler"); return S.feldFehler(komm, "Bei „mangelhaft“ ist ein Kommentar Pflicht."); }
         // Kriterien-Stand aus den Knöpfen lesen – ohne Kriterienliste liefert das ein leeres Objekt,
         // was der Server als „nichts zu ändern“ versteht.
         const kriterien = {};
@@ -2453,7 +2451,7 @@
               dlg.close();
               toast(meldung);
               await loadDetail(); renderLehrgangSeite();
-            } catch (e) { knopf.disabled = false; toast(e.message, true); }
+            } catch (e) { S.fehlschlag(knopf, e, body); }
           };
         }, ["wide", "import-dlg"]);
     };

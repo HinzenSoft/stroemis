@@ -50,7 +50,7 @@ window.MatUnterschrift = (function () {
           <span class="us-linie" aria-hidden="true"></span>
           <span class="us-platzhalter" aria-hidden="true">Hier unterschreiben</span></div>
         ${opts.bestehend ? `<p class="us-bisher small muted">Bisher: <img src="${esc(opts.bestehend)}" alt="bisherige Unterschrift"></p>` : ""}
-        <div class="dlg-actions us-aktionen"><button type="button" class="btn secondary" data-us="leeren" disabled>Leeren</button>
+        <div class="dlg-actions us-aktionen"><button type="button" class="btn secondary dlg-neben" data-us="leeren" disabled>Leeren</button>
           <button type="button" class="btn secondary" data-us="ab">Abbrechen</button>
           <button type="button" class="btn" data-us="ok" disabled>Übernehmen</button></div></div>`;
       document.body.appendChild(dlg);
@@ -119,7 +119,7 @@ window.MatUnterschrift = (function () {
           zustand();
           knopf("ok").textContent = "Wird gespeichert …";
           try { await opts.speichern(bild); }
-          catch (e) { S.toast(e.message, true); laeuft = false; knopf("ok").textContent = "Übernehmen"; zustand(); return; }
+          catch (e) { laeuft = false; knopf("ok").textContent = "Übernehmen"; zustand(); S.fehlschlag(knopf("ok"), e); return; }
         }
         ergebnis = bild;
         dlg.close();
@@ -144,6 +144,7 @@ window.MatUnterschrift = (function () {
       start.tabIndex = -1;
       start.autofocus = true;
       dlg.showModal();
+      S.dialogVerlauf(dlg);            // Zurück wie „Abbrechen“ – nicht, während das Bild unterwegs ist (cancel oben)
       anpassen();
       if (beobachter) beobachter.observe(canvas);
       zustand();

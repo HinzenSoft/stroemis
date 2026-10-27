@@ -5,6 +5,10 @@
   const esc = MD.esc;
   const $ = (s) => document.querySelector(s);
   const shell = $(".wiki-shell"), treeEl = $("#tree"), content = $("#wiki-content"), tocEl = $("#toc"), side = $("#wiki-side");
+  // Zurück schließt die offene Schublade (UI/UX vor dem Merge, A1) – im Lesemodus mit common.js, die öffentliche Seite hat es nicht.
+  if (window.S && S.klassenVerlauf && side) {
+    S.klassenVerlauf(side, "open", () => side.classList.remove("open"), () => getComputedStyle(side).position === "fixed");
+  }
   const lesemodus = shell.dataset.modus === "lesemodus";
   /* Seiten liegen unter prefix + slug, die Übersicht unter start. Im Lesemodus sind das /stroemipedia/… und
      /stroemipedia – eine Adresse /stroemipedia/ gibt es dort nicht, ein Neuladen der Übersicht endete sonst auf der 404-Seite. */

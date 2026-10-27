@@ -162,6 +162,8 @@
     if (location.hash.startsWith("#album=")) history.replaceState(null, "", location.pathname);
   }
   $("#panel-close").addEventListener("click", closePanel);
+  // Zurück schließt die Seitenleiste (Alben, Album) wie „✕“ (UI/UX vor dem Merge, A1).
+  S.klassenVerlauf(panel, "open", closePanel);
 
   $("#btn-albums").addEventListener("click", showAlbums);
   async function showAlbums() {
@@ -177,7 +179,7 @@
         <div>
           <div class="t">${esc(a.title)}</div>
           <div class="small"><span class="cat ${esc(a.category)}">${CAT[a.category] || esc(a.category)}</span>
-            ${a.photo_count} Bilder${a.unlocated_count ? ` <span class="badge" title="Bilder ohne Position">${a.unlocated_count} ohne Position</span>` : ""}</div>
+            ${S.plural(a.photo_count, "Bild", "Bilder")}${a.unlocated_count ? ` <span class="badge" title="Bilder ohne Position">${a.unlocated_count} ohne Position</span>` : ""}</div>
           <div class="meta">${esc(a.owner_name || "")}${a.contact_name ? " · Ansprechpartner: " + esc(a.contact_name) : ""}</div>
         </div>
       </li>`).join("")}</ul>`);
@@ -230,7 +232,7 @@
     const up = $("#a-upload"); if (up) up.onclick = () => { fileInput.value = ""; fileInput.click(); };
     const lo = $("#a-locate"); if (lo) lo.onclick = () => startLocate(a.photos.filter((p) => p.lat == null));
     const del = $("#a-delete"); if (del) del.onclick = async () => {
-      if (!(await S.confirm(`Album „${a.title}“ mit allen ${a.photos.length} Bildern endgültig löschen?`))) return;
+      if (!(await S.confirm(`Album „${a.title}“${a.photos.length === 1 ? " mit seinem Bild" : a.photos.length ? ` mit allen ${a.photos.length} Bildern` : ""} endgültig löschen?`))) return;
       try { await api(`/api/albums/${a.id}`, { method: "DELETE" }); toast("Album gelöscht"); closePanel(); loadMap(); }
       catch (e) { toast(e.message, true); }
     };
@@ -242,23 +244,23 @@
     const isNew = !a.id;
     dialog(`<h2>${isNew ? "Album anlegen" : "Album bearbeiten"}${S.info("Album", "Ein Album ist ein Übungsobjekt oder ein Übungsgewässer.")}</h2>
       <p class="help">Alle angemeldeten Nutzer können es sehen.</p>
-      <label>Titel</label><input type="text" id="al-title" value="${esc(a.title)}" placeholder="z. B. Wehr Musterstadt, Brücke B12" required>
-      <label>Art</label>
+      <label for="al-title">Titel</label><input type="text" id="al-title" value="${esc(a.title)}" placeholder="z. B. Wehr Musterstadt, Brücke B12" required>
+      <label for="al-cat">Art</label>
       <select id="al-cat">
         <option value="seil" ${a.category === "seil" ? "selected" : ""}>Übungsobjekt Seiltechnik</option>
         <option value="wasser" ${a.category === "wasser" ? "selected" : ""}>Übungsgewässer Strömungsrettung</option>
         <option value="sonstiges" ${a.category === "sonstiges" ? "selected" : ""}>Sonstiges</option>
       </select>
-      <label>Allgemeine Infos</label>
+      <label for="al-desc">Allgemeine Infos</label>
       <textarea id="al-desc" placeholder="Zufahrt, Parken, Besonderheiten, Genehmigungen, Gefahren …">${esc(a.description)}</textarea>
       <h3 style="margin-top:18px">Ansprechpartner für das Objekt</h3>
       <div class="field-row">
-        <div><label>Name</label><input type="text" id="al-cname" value="${esc(a.contact_name)}"></div>
-        <div><label>Gliederung / Organisation</label><input type="text" id="al-corg" value="${esc(a.contact_org)}"></div>
-        <div><label>Telefon</label><input type="tel" id="al-cphone" value="${esc(a.contact_phone)}"></div>
-        <div><label>E-Mail</label><input type="email" id="al-cemail" value="${esc(a.contact_email)}"></div>
+        <div><label for="al-cname">Name</label><input type="text" id="al-cname" value="${esc(a.contact_name)}"></div>
+        <div><label for="al-corg">Gliederung / Organisation</label><input type="text" id="al-corg" value="${esc(a.contact_org)}"></div>
+        <div><label for="al-cphone">Telefon</label><input type="tel" id="al-cphone" value="${esc(a.contact_phone)}"></div>
+        <div><label for="al-cemail">E-Mail</label><input type="email" id="al-cemail" value="${esc(a.contact_email)}"></div>
       </div>
-      <label>Hinweise zur Kontaktaufnahme</label>
+      <label for="al-cnotes">Hinweise zur Kontaktaufnahme</label>
       <textarea id="al-cnotes" style="min-height:60px" placeholder="z. B. Übungen bitte 2 Wochen vorher anmelden">${esc(a.contact_notes)}</textarea>
       ${isNew ? '<label class="inline" style="margin-top:14px"><input type="checkbox" id="al-upload" checked> Danach direkt Bilder hochladen</label>' : ""}
       <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button><button class="btn" id="al-save" type="button">${isNew ? "Album anlegen" : "Speichern"}</button></div>`,
@@ -266,6 +268,8 @@
         body.querySelector("#al-save").onclick = async (ev) => {
           const knopf = ev.currentTarget;
           if (knopf.disabled) return;          // zweiter Klick, während die Anfrage läuft
+          const titel = body.querySelector("#al-title");
+          if (!titel.value.trim()) return S.feldFehler(titel, "Bitte einen Titel für das Album angeben.");
           knopf.disabled = true;
           const d = {
             title: body.querySelector("#al-title").value, category: body.querySelector("#al-cat").value,
@@ -287,7 +291,7 @@
               if (window.matchMedia("(pointer: coarse)").matches) { const up = $("#a-upload"); if (up) up.focus(); toast("Jetzt über „Bilder / Videos hochladen“ Bilder hinzufügen."); }
               else fileInput.click();
             }
-          } catch (e) { toast(e.message, true); }
+          } catch (e) { S.fehlschlag(knopf, e, body); }
           finally { knopf.disabled = false; }
         };
       });
@@ -414,8 +418,8 @@
       <p class="help">Die Dateien werden hochgeladen und als neues Album abgelegt. Liegt in der Nähe
         (2 km) schon ein Album von dir, fragt die Anwendung danach, ob die Bilder dorthin gehören.</p>
       <ul class="upload-list">${files.map((f) => `<li><span>${esc(f.name)}</span><span class="muted">${(f.size / 1048576).toFixed(1)} MB</span></li>`).join("")}</ul>
-      <label>Titel</label><input type="text" id="ew-title" placeholder="z. B. Wehr Musterstadt, Brücke B12" required>
-      <label>Art</label>
+      <label for="ew-title">Titel</label><input type="text" id="ew-title" placeholder="z. B. Wehr Musterstadt, Brücke B12" required>
+      <label for="ew-cat">Art</label>
       <select id="ew-cat">
         <option value="seil">Übungsobjekt Seiltechnik</option>
         <option value="wasser">Übungsgewässer Strömungsrettung</option>
@@ -427,7 +431,7 @@
         titel.focus();
         const los = () => {
           const title = titel.value.trim();
-          if (!title) { titel.focus(); return toast("Bitte einen Titel für das Album angeben.", true); }
+          if (!title) return S.feldFehler(titel, "Bitte einen Titel für das Album angeben.");
           const category = body.querySelector("#ew-cat").value;
           dlg.close();
           uploadFiles(null, files, { title, category });
@@ -466,7 +470,7 @@
               toast(`${n} ${n === 1 ? "Bild" : "Bilder"} zu „${r.album.title}“ hinzugefügt`);
               await loadMap();
               dl.close();
-            } catch (e) { b.disabled = false; toast(e.message, true); }
+            } catch (e) { S.fehlschlag(b, e); }
           });
         });
       // Das Schließen entscheidet – gleich ob per Knopf, Zusammenlegen oder Escape.
@@ -619,7 +623,7 @@
   function openLightbox(i) {
     state.lbIndex = i;
     renderLightbox();
-    if (!lb.open) lb.showModal();
+    if (!lb.open) { lb.showModal(); S.dialogVerlauf(lb); }
   }
 
   function renderLightbox(editing) {
@@ -654,16 +658,16 @@
 
     const form = `
       <h2>Bild bearbeiten</h2>
-      <label>Titel</label><input type="text" id="p-title" value="${esc(p.title)}" placeholder="z. B. Ankerpunkt Nordseite">
-      <label>Notiz</label><textarea id="p-note" placeholder="Was ist hier zu sehen, worauf ist zu achten?">${esc(p.note)}</textarea>
+      <label for="p-title">Titel</label><input type="text" id="p-title" value="${esc(p.title)}" placeholder="z. B. Ankerpunkt Nordseite">
+      <label for="p-note">Notiz</label><textarea id="p-note" placeholder="Was ist hier zu sehen, worauf ist zu achten?">${esc(p.note)}</textarea>
       <div class="field-row">
-        <div><label>Objekthöhe (m)</label><input type="text" id="p-height" inputmode="decimal" value="${p.height_m ?? ""}"></div>
-        <div><label>Höhe ü. NN (m)</label><input type="text" id="p-alt" inputmode="decimal" value="${p.altitude != null ? Math.round(p.altitude * 10) / 10 : ""}"></div>
-        <div><label>Breite (°)</label><input type="text" id="p-lat" inputmode="decimal" value="${p.lat ?? ""}"></div>
-        <div><label>Länge (°)</label><input type="text" id="p-lon" inputmode="decimal" value="${p.lon ?? ""}"></div>
+        <div><label for="p-height">Objekthöhe (m)</label><input type="text" id="p-height" inputmode="decimal" value="${p.height_m ?? ""}"></div>
+        <div><label for="p-alt">Höhe ü. NN (m)</label><input type="text" id="p-alt" inputmode="decimal" value="${p.altitude != null ? Math.round(p.altitude * 10) / 10 : ""}"></div>
+        <div><label for="p-lat">Breite (°)</label><input type="text" id="p-lat" inputmode="decimal" value="${p.lat ?? ""}"></div>
+        <div><label for="p-lon">Länge (°)</label><input type="text" id="p-lon" inputmode="decimal" value="${p.lon ?? ""}"></div>
       </div>
-      <label>Aufnahmezeit</label><input type="datetime-local" id="p-taken" value="${p.taken_at ? p.taken_at.slice(0, 16) : ""}">
-      <label>Weitere Infos</label><textarea id="p-details" placeholder="Bruchlast, Zugang, Material, Genehmigung …">${esc(p.details)}</textarea>
+      <label for="p-taken">Aufnahmezeit</label><input type="datetime-local" id="p-taken" value="${p.taken_at ? p.taken_at.slice(0, 16) : ""}">
+      <label for="p-details">Weitere Infos</label><textarea id="p-details" placeholder="Bruchlast, Zugang, Material, Genehmigung …">${esc(p.details)}</textarea>
       <div class="dlg-actions"><button class="btn secondary" id="p-cancel">Abbrechen</button><button class="btn" id="p-save">Speichern</button></div>`;
 
     lbBody.innerHTML = `
@@ -671,7 +675,7 @@
         ${p.kind === "video" ? `<video controls playsinline preload="metadata" poster="${esc(p.web)}" src="${esc(p.orig)}"></video>` : `<img src="${esc(p.web)}" alt="${esc(p.title || p.original_name)}">`}
         ${a.photos.length > 1 ? '<button class="lb-nav prev" id="lb-prev" aria-label="Vorheriges">‹</button><button class="lb-nav next" id="lb-next" aria-label="Nächstes">›</button>' : ""}
       </div>
-      <div class="lb-side"><button class="close" id="lb-close" aria-label="Schließen">×</button>${editing ? form : view}</div>`;
+      <div class="lb-side">${S.schliessenKnopf('id="lb-close"', "close")}${editing ? form : view}</div>`;
     // Das zuvor fokussierte Element (ein Pfeilknopf) ist mit dem Neuzeichnen verschwunden; ohne
     // Fokus im Dialog kämen die Pfeiltasten nicht mehr an – Blättern ginge nur einmal.
     lb.tabIndex = -1;
@@ -709,7 +713,7 @@
           toast("Gespeichert");
           renderLightbox(false);
           loadMap();
-        } catch (e) { toast(e.message, true); }
+        } catch (e) { S.fehlschlag($("#p-save"), e, lbBody); }
       };
       return;
     }

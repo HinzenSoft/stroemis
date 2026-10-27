@@ -12,7 +12,7 @@ from urllib.parse import urlsplit
 from flask import (Blueprint, Flask, Request, abort, current_app, g, jsonify, redirect, render_template,
                    request, send_from_directory, url_for)
 from itsdangerous import BadSignature, URLSafeTimedSerializer
-from werkzeug.exceptions import Forbidden
+from werkzeug.exceptions import Forbidden, HTTPException, InternalServerError
 from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.security import safe_join
 
@@ -667,7 +667,9 @@ def create_app():
                 "material_zugang": material_zugang(),
                 # Sichtbare Modulnamen und Seitenadressen (app/module.py) für Reiter, Titel und Links.
                 "modul": {"name": module.NAME, "pfad": module.PFAD},
-                "csp_nonce": getattr(g, "csp_nonce", "")}
+                "csp_nonce": getattr(g, "csp_nonce", ""),
+                # Überschriften der Fehlerseiten – auch für error.html aus den Modulen, die nur Zahl und Satz geben.
+                "fehler_titel": FEHLER_TITEL}
 
     @app.errorhandler(413)
     def too_large(_e):
@@ -684,7 +686,7 @@ def create_app():
         # Fehlerseite als Antwort nur Ballast, einmal je Bild.
         if request.path.startswith("/media/"):
             return "", 404
-        return render_template("error.html", user=auth.current_user(), code=404, message="Diese Seite gibt es nicht."), 404
+        return fehlerseite(404, "Diese Seite gibt es nicht.")
 
     @app.errorhandler(403)
     def forbidden(_e):
@@ -694,7 +696,7 @@ def create_app():
         # description=…); sonst bleibt der allgemeine Satz (Werkzeugs englischer Vorgabetext kommt nie zur Anzeige).
         meldung = _e.description if getattr(_e, "description", None) not in (None, Forbidden.description) \
             else "Dafür fehlt die Berechtigung."
-        return render_template("error.html", user=auth.current_user(), code=403, message=meldung), 403
+        return fehlerseite(403, meldung)
 
     @app.errorhandler(401)
     def unauthorized(_e):
@@ -702,4 +704,49 @@ def create_app():
             return jsonify(error="Nicht angemeldet"), 401
         return redirect(url_for("pages.login", next=request.path))
 
+    # Alle übrigen Fehler (400, 405, 429, 500 …): eine deutsche Seite mit Kopfleiste und Weg zurück statt Werkzeugs
+    # englischer Standardseite; Schnittstellen antworten weiter mit JSON (UI/UX vor dem Merge, A13). Ein eigener Text
+    # (abort(400, description=…)) bleibt, Werkzeugs englischer Vorgabetext kommt nie zur Anzeige.
+    @app.errorhandler(HTTPException)
+    def http_fehler(e):
+        code = e.code or 500
+        eigen = e.description if getattr(e, "description", None) not in (None, type(e).description) else None
+        meldung = eigen or FEHLER_TEXT.get(code, FEHLER_TEXT[500 if code >= 500 else 400])
+        if request.path.startswith("/api/"):
+            return jsonify(error=meldung), code
+        return fehlerseite(code, meldung)
+
+    # Unbehandelte Ausnahmen kommen als InternalServerError hier an (außer im Testmodus, der sie durchreicht); das
+    # Protokoll hat den Traceback schon (Flask schreibt ihn vor dem Aufruf).
+    @app.errorhandler(InternalServerError)
+    def server_fehler(_e):
+        if request.path.startswith("/api/"):
+            return jsonify(error=FEHLER_TEXT[500]), 500
+        return fehlerseite(500, FEHLER_TEXT[500])
+
     return app
+
+
+# Überschrift und Satz der Fehlerseiten (error.html): Die Überschrift sagt, was los ist, die Zahl steht klein dabei.
+FEHLER_TITEL = {400: "Anfrage nicht verstanden", 403: "Kein Zugriff", 404: "Seite nicht gefunden", 405: "Nicht möglich",
+                413: "Zu groß", 429: "Zu viele Anfragen", 500: "Etwas ist schiefgegangen", 503: "Gerade nicht erreichbar"}
+FEHLER_TEXT = {400: "Die Anfrage war unvollständig oder fehlerhaft. Geh zurück und versuch es noch einmal.",
+               405: "Das geht auf dieser Seite nicht.",
+               429: "Zu viele Anfragen in kurzer Zeit. Warte einen Moment und versuch es dann noch einmal.",
+               500: "Hier ist etwas schiefgegangen. Versuch es gleich noch einmal; bleibt es dabei, sag der "
+                    "Plattform-Verwaltung Bescheid.",
+               503: "Der Dienst ist gerade nicht erreichbar. Versuch es gleich noch einmal."}
+
+
+def fehlerseite(code, meldung):
+    """Die Fehlerseite (error.html) mit Kopfleiste. Geht schon das Zeichnen schief (etwa weil die Datenbank der Grund des
+    Fehlers ist und die Kopfleiste sie fragt), kommt eine schlichte Seite ohne Kopfleiste – aber deutsch und mit Weg zur
+    Startseite, nie Werkzeugs englische Standardseite."""
+    titel = FEHLER_TITEL.get(code, "Fehler")
+    try:
+        return render_template("error.html", user=auth.current_user(), code=code, titel=titel, message=meldung), code
+    except Exception:  # pragma: no cover - nur, wenn die Seite selbst nicht zu zeichnen ist
+        current_app.logger.exception("Fehlerseite %s ließ sich nicht zeichnen", code)
+        from markupsafe import escape
+        return (f'<!doctype html><html lang="de"><meta charset="utf-8"><title>{escape(titel)} – strömis.de</title>'
+                f'<h1>{escape(titel)}</h1><p>{escape(meldung)}</p><p><a href="/">Zur Startseite</a></p></html>'), code
