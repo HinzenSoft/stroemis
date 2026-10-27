@@ -45,7 +45,7 @@ def test_mangeltext_weiterlesen():
     umschalten = _block(js, "  function mangelWeiterlesen(b) {")
     assert 'b.textContent = auf ? "Weniger anzeigen" : "Weiterlesen";' in umschalten and 'b.setAttribute("aria-expanded", String(auf));' in umschalten
     # Nur der Banner der Artikelseite kürzt; Hinweis in der Prüfung und erledigte Meldungen zeigen den Text ganz.
-    assert '${mangelTextKurz(m, "mat-text mat-mangel-text")}' in _block(js, "  function mangelBanner(m, sperre) {")
+    assert '${mangelTextKurz(m, "mat-text mat-mangel-text")}' in _block(js, "  function mangelBanner(m, sperre, verwaltet, zusatz) {")
     assert "mangelTextKurz" not in _block(js, "  function mangelHinweis(liste, berichtigung) {")
     assert "mangelTextKurz" not in _block(js, "  function mangelErledigt(liste) {")
     assert '"mangel-weiterlesen": (b) => mangelWeiterlesen(b),' in js

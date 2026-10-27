@@ -10,7 +10,7 @@
    Datei wird nicht gespeichert. Ablagefläche und „Prüfen“ stehen oben (am iPhone SE im ersten Bild); die Erklärung und
    das Nachrechnen von Hand sind zugeklappt – vorher standen zehn Zeilen Text vor der Ablagefläche. #}
 <main class="page narrow mat-pruefen" id="pruefen" data-angemeldet="{{ 'ja' if angemeldet else 'nein' }}">
-  {% if angemeldet %}<div class="mat-pfad"><span class="mat-pfad-glied"><a href="/materialablage">{{ modul.name.material }}</a></span> <span class="mat-pfad-glied">/ <a href="/materialablage/pruefungen">Prüfungen</a></span></div>{% endif %}
+  {% if angemeldet %}<div class="mat-pfad"><span class="mat-pfad-glied"><a href="/materialablage">Materialablage</a></span> <span class="mat-pfad-glied">/ <a href="/materialablage/pruefungen">Prüfungen</a></span></div>{% endif %}
   <h1>Echtheit prüfen</h1>
   <p>Ist ein Protokoll oder Lebenslauf von strömis.de unverändert? Wähle die PDF-Datei – sie wird nur verglichen, nicht gespeichert.</p>
   <form id="pr-form" class="mat-pruefen-form">

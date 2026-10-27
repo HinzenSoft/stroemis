@@ -87,9 +87,9 @@ def test_a2_fehler_am_feld():
     # Pflicht „Grund“ sichtbar: Ausnehmen mit „(Pflicht)“ in der Beschriftung, in der Prüfleiste als Satz.
     assert '<label for="dn-grund">Grund (Pflicht)</label>' in mat
     assert 'S.feldFehler($("#dn-grund", body), "Bitte einen Grund angeben – er steht im Sammelprotokoll.")' in mat
-    assert 'if (grundPflicht) teile.push("Ohne Mangel ist ein Grund Pflicht");' in mat
-    assert 'S.feldFehler(imAbschluss("#pr-grund"), `Ohne Mangel braucht „${ERGEBNIS[ergebnis]}“ einen Grund.`)' in mat
-    assert '<p class="error feld-fehler" id="pr-grund-fehler" hidden></p>' in mat
+    # Seit UI/UX vor dem Merge (B2) steht das Feld Grund im Dialog „Prüfung festschreiben“: Pflicht in der Beschriftung.
+    assert '${grundPflicht ? " (Pflicht – ohne Mangel)" : " (freiwillig – die Mängel stehen im Protokoll)"}' in mat
+    assert 'S.feldFehler(grundFeld, `Ohne Mangel braucht „${ERGEBNIS[daten.ergebnis]}“ einen Grund.`)' in mat
     # Pflichtfelder in Dialogen der anderen Module.
     for pfad, teil in (("app/static/js/pruefungen.js", 'S.feldFehler($("#lg-titel", body), "Bitte einen Titel angeben.")'),
                        ("app/static/js/pruefungen.js", 'S.feldFehler($("#tn-name", body), "Bitte den Nachnamen angeben.")'),

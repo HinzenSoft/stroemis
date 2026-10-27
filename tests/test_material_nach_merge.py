@@ -135,20 +135,20 @@ def test_head_und_bremse():
 
 
 def test_pruefseite_texte():
-    """Titel, Überschrift und Links „Protokoll oder Lebenslauf prüfen“; Hinweis auf Lebensläufe ohne Kennung; die
-    Fehlermeldung steht nur im Ergebniskasten (kein Toast dazu)."""
+    """Titel, Überschrift und Links – seit UI/UX vor dem Merge (B10) „Echtheit prüfen“; Hinweis auf Lebensläufe ohne
+    Kennung; die Fehlermeldung steht nur im Ergebniskasten (kein Toast dazu)."""
     with tempfile.TemporaryDirectory() as tmp:
         app, k, o, a = aufbau(tmp)
         r = app.test_client().get("/materialablage/pruefen")
         assert r.status_code == 200
-        assert "<title>Protokoll oder Lebenslauf prüfen – strömis.de</title>" in r.text
-        assert "<h1>Protokoll oder Lebenslauf prüfen</h1>" in r.text
+        assert "<title>Echtheit prüfen – Materialablage – strömis.de</title>" in r.text
+        assert "<h1>Echtheit prüfen</h1>" in r.text
         text = " ".join(r.text.split())
         assert "bevor sie eine Kennung (L-…) bekamen, tragen keine Prüfsumme – sie werden hier nicht erkannt." in text
     js = lies("app/material/static/pruefen.js")
     assert "toast" not in js and '<strong>Nicht geprüft</strong>' in js
     mjs = lies("app/material/static/material.js")
-    assert ">Protokoll oder Lebenslauf prüfen</a>" in mjs and ">Protokoll prüfen</a>" not in mjs
+    assert ">Echtheit prüfen</a>" in mjs and ">Protokoll prüfen</a>" not in mjs and ">Protokoll oder Lebenslauf prüfen</a>" not in mjs
     print("Prüfseite bestanden.")
 
 
@@ -401,7 +401,8 @@ def test_oberflaeche_statisch():
     # Prüfungen: laufende oben; die abgeschlossenen seit dem 27.10.2026 auf eigener Seite (Menü „Prüfdurchgänge“,
     # test_material_dg_archiv); ausgegrautes „Durchgang abschließen“ mit Grund
     assert 'rundenKasten($("#pr-runden"), true)' in js and "mat-runden-alt" not in js
-    assert "'disabled aria-describedby=\"dg-abschluss\"'" in js and '<p class="help" id="dg-abschluss">' in js
+    # (seit UI/UX vor dem Merge, B1: aria-disabled, der Grund als Satz direkt über der Knopfzeile)
+    assert 'data-act="schliessen"${knopfAus("dg-abschluss", abschlussGrund)}' in js and '${grundSatz("dg-abschluss", abschlussGrund)}' in js
     # Inventarnummer ohne Umbruch, Begriffe, Katalogimport lesbar
     assert '<h1><span class="mat-inv">${esc(a.inventory_no)}</span>' in js
     assert '<h1>Prüfung <span class="mat-inv">${esc(a.inventory_no)}</span>' in js

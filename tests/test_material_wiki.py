@@ -308,10 +308,11 @@ def test_oberflaeche_statisch():
     pr = js[js.index("  async function pruefungAnsicht() {"):js.index("  async function durchgangAnsicht() {")]
     for sel in ('$("#pr-grund")', '$("#pr-due")', '$("#pr-bem")', '$("#pr-abschluss")', '$$("#pr-abschluss'):
         assert sel not in pr, sel
-    assert 'grund = ergebnis === "einsatzbereit" ? "" : imAbschluss("#pr-grund").value.trim()' in pr
-    # Seit C2 (P4-L1) ist „Nächste Prüfung“ ein Textfeld TT.MM.JJJJ: datumWert mit Toast und Abbruch statt stillem „|| null“.
+    # Grund und „Nächste Prüfung“ stehen seit UI/UX vor dem Merge (B2) im Dialog „Prüfung festschreiben“.
+    assert 'daten.grund = grundFeld ? grundFeld.value.trim() : "";' in pr
+    # Seit C2 (P4-L1) ist „Nächste Prüfung“ ein Textfeld TT.MM.JJJJ: datumWert mit Abbruch statt stillem „|| null“.
     assert "bemerkung: bemFeld().value" in pr and "daten.next_due_on = due;" in pr
-    assert 'due = datumWert(imAbschluss("#pr-due"), "Nächste Prüfung") || null;' in pr and 'imAbschluss("#pr-due").value || null' not in pr
+    assert 'due = datumWert(dueFeld, "Nächste Prüfung") || null;' in pr and 'dueFeld.value || null' not in pr
     assert "anleitungEinsetzen();" in pr and '${pr.anleitung ? \'<div class="mat-anleitung-platz"></div>\' : ""}' in pr
     # Formularzeile und Seitenwahl
     assert 'f.wiki_aendern ? \'<button type="button" class="lnk" data-act="wiki-waehlen">Ändern</button>\'' in js
