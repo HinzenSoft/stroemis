@@ -4264,6 +4264,10 @@ Nachtrag (unten).
   nutzt); das gespeicherte Journal bleibt unverändert (Schritt 30). Weitere Stellen mit dem Artikel-Journal: Lebenslauf
   (hatte die Beschreibung schon), Ordner-Journal und Kontoverlauf der Leitstelle (enthalten keine Einträge
   „Mangel gemeldet“), Exporte (ohne Journal) – dort nichts zu tun.
+- **Tests:** `test_material_vor_merge.py` auf den Banner nach V7 angepasst. `test_material_rueckruf.py`
+  (`test_lebenslauf_und_pruefung`) war gelegentlich rot: Seit N-A1 (Runde 2) zählt der Beginn des Entwurfs, die Pause von
+  1,1 s stand aber erst nach dem Starten – Rückruf und Entwurf in derselben Sekunde gelten als „vorher“. Die Pause steht
+  jetzt vor dem Starten (nur der Test, keine Änderung an der Anwendung).
 - **Schnittstelle:** `GET /api/material/artikel/<id>`: Einträge `journal[]` mit `action == "mangel_gemeldet"` tragen in
   `nachher` zusätzlich `mangelbeschreibung` (Text), wenn das Konto den Inhalt der Meldung sehen darf; sonst fehlt das Feld.
 
