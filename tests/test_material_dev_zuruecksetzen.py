@@ -148,7 +148,10 @@ def bestand_aufbauen(tmp):
     gid, _ = gliederung(adm)
     lager = ordner_neu(w, gid, "Lager Platzhalter")
     for n in range(1, 3):
-        neuer_artikel(w, ids["hms"], lager, serial_no=f"PH-000{n}")
+        artikel = neuer_artikel(w, ids["hms"], lager, serial_no=f"PH-000{n}")
+    # Ein ausgegebener Lebenslauf (Schritt 31): Zeile in mat_lebenslauf, Zähler in mat_meta.
+    r = w.get(f"/materialablage/artikel/{artikel['id']}/lebenslauf.pdf")
+    assert r.status_code == 200 and r.data[:4] == b"%PDF", r.status_code
     ok(w.post("/api/material/durchgaenge", json={"folder_id": gid, "titel": "Platzhalter-Durchgang"}), 201)
     kopf = ["Hersteller", "Modell", "Seriennummer"]
     ok(uebernehmen(w, lager, csv_bytes([kopf, ["Testwerk", "HMS Beta", "PH-IMP-1"], ["Testwerk", "Unbekannt", "PH-IMP-2"]])),
@@ -220,7 +223,7 @@ def test_zuruecksetzen():
         medien_vorher = {rel: dateien(os.path.join(tmp, rel)) for rel in MEDIEN}
         modul = vorher["modul"]
         for t in ("mat_item", "mat_inspection", "mat_round", "mat_import", "mat_import_row", "mat_audit",
-                  "mat_product_document", "mat_folder_grant"):
+                  "mat_product_document", "mat_folder_grant", "mat_lebenslauf"):
             assert modul[t], t
         assert any(r for r in modul["mat_inspection"]) and medien_vorher["pdf"] and medien_vorher[MEDIEN[0]]
         with umwelt(app, **DEV):
@@ -237,6 +240,7 @@ def test_zuruecksetzen():
             neu = make_app(frisch)
             assert schema_modul(db_pfad) == schema_modul(neu.config["DB_PATH"])
         assert dict(nachher["modul"]["mat_meta"])["schema_version"] == endversion()
+        assert not any(k.startswith("lebenslauf_zaehler_") for k in dict(nachher["modul"]["mat_meta"]))
         # Außerhalb des Moduls byteidentisch: jede Zeile, jedes Schema-Objekt, jede Datei (Konten, Wiki, Spots,
         # Prüfungen, Einstellungen – auch die Modulstufe 2 der Material-Verwaltung ohne Plattform-Verwaltung).
         assert nachher["aussen"] == vorher["aussen"]

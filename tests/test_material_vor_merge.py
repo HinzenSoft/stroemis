@@ -297,12 +297,16 @@ def test_schritt_30_trigger():
     print("Schritt 30 (Trigger) bestanden.")
 
 
-def _zeilen_je_tabelle(pfad):
+def _zeilen_je_tabelle(pfad, ohne_leere=()):
+    """Zeilen je mat_-Tabelle; Tabellen aus ohne_leere fehlen, wenn sie leer sind (seit Schritt 31: mat_lebenslauf, die
+    ein Stand 29 noch nicht hat)."""
     c = sqlite3.connect(pfad)
     out = {}
     for (t,) in c.execute("SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE 'mat_%' AND name NOT LIKE "
                           "'%fts%' AND name <> 'mat_meta' ORDER BY name"):
         out[t] = c.execute(f"SELECT * FROM {t} ORDER BY rowid").fetchall()
+        if t in ohne_leere and not out[t]:
+            del out[t]
     c.close()
     return out
 
@@ -328,10 +332,10 @@ def test_schritt_30_migration():
         vorher = _zeilen_je_tabelle(pfad)
         assert vorher["mat_round_setprotokoll"] and vorher["mat_audit"] and vorher["mat_inspection"]
         app = make_app(tmp)
-        assert zeilen(app, "SELECT wert FROM mat_meta WHERE schluessel = 'schema_version'")[0]["wert"] == endversion() == "30"
+        assert zeilen(app, "SELECT wert FROM mat_meta WHERE schluessel = 'schema_version'")[0]["wert"] == endversion()
         schema = _schema(pfad)
         assert schema == schema_frisch, _unterschied(schema, schema_frisch)
-        assert _zeilen_je_tabelle(pfad) == vorher
+        assert _zeilen_je_tabelle(pfad, ("mat_lebenslauf",)) == vorher
         conn = sqlite3.connect(pfad)
         n = conn.total_changes
         for sql in models.SCHRITT_30:
@@ -339,7 +343,7 @@ def test_schritt_30_migration():
         assert conn.total_changes == n
         conn.close()
         make_app(tmp)                                        # zweiter Start: nichts ändert sich
-        assert _schema(pfad) == schema_frisch and _zeilen_je_tabelle(pfad) == vorher
+        assert _schema(pfad) == schema_frisch and _zeilen_je_tabelle(pfad, ("mat_lebenslauf",)) == vorher
     print("Schritt 30 (Migration) bestanden.")
 
 

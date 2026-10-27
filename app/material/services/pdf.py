@@ -1,6 +1,6 @@
 """PDF-Protokolle des Moduls Material: Prüf-, Aussonderungs- und Sammelprotokoll, dazu die Vorlage des
 Prüfsummen-Stempels (Konzept „PDF-Prüfprotokoll“) – und der Lebenslauf eines Artikels (lebenslauf.py), der auf
-Abruf entsteht und nicht festgeschrieben wird.
+Abruf entsteht (seit Schritt 31 mit Kennung und Stempel).
 
 WeasyPrint setzt die Jinja-Vorlagen unter templates/material/pdf/ als PDF/A-3b. Die Vorlagen bekommen alle
 Werte fertig formatiert (Datum, Ordnerpfad, Ergebnistext) und rechnen nichts mehr um; dieses Modul liefert
@@ -17,7 +17,7 @@ Durchgangs. Vor dem Setzen läuft jeder Text durch _sauber(): Zeichen, die keine
 würden als leeres Kästchen (.notdef) gesetzt und machten die Datei zu einem ungültigen PDF/A.
 
 Unten auf jeder Seite eines Protokolls bleiben 14 mm frei: Dort legt services/stempel.py nach dem Festschreiben
-den Stempel aus stempelvorlage() hin. Der Lebenslauf bekommt keinen Stempel und braucht den Platz nicht."""
+den Stempel aus stempelvorlage() hin – beim Lebenslauf gleich nach dem Setzen."""
 import base64
 import io
 import logging

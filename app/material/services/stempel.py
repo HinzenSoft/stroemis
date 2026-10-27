@@ -1,4 +1,5 @@
-"""Prüfsummen-Stempel für festgeschriebene Protokolle (Konzept „PDF-Prüfprotokoll“).
+"""Prüfsummen-Stempel für festgeschriebene Protokolle (Konzept „PDF-Prüfprotokoll“) und – seit Schritt 31 – für den
+Lebenslauf, der auf Abruf entsteht (lebenslauf.py).
 
 1. WeasyPrint erzeugt das Protokoll vollständig; angehängte PDFs kommen per inkrementellem Update dazu.
    Über diese N Bytes geht SHA-256.
@@ -25,9 +26,11 @@ from pypdf.generic import (ArrayObject, DecodedStreamObject, DictionaryObject, F
 
 STEMPEL_TEXT = "SHA-256 (erste {n} Bytes): {sha}"
 # Kennung als PDF-Kommentar am Anfang des Stempel-Nachtrags: unkomprimiert lesbar, auch wenn eine veränderte
-# Datei sich nicht mehr als PDF öffnen lässt – so ordnet die Prüfseite sie trotzdem ihrem Protokoll zu.
-KENNUNG = "%Stroemis-Protokoll {pid} N={n} SHA-256={sha}"
-KENNUNG_MUSTER = re.compile(rb"%Stroemis-Protokoll ([A-Z]-\d{4}-\d{6,}(?:-\d+)?) N=(\d+) SHA-256=([0-9a-f]{64})")
+# Datei sich nicht mehr als PDF öffnen lässt – so ordnet die Prüfseite sie trotzdem ihrem Protokoll zu. Seit Schritt 31
+# trägt auch der Lebenslauf (lebenslauf.py) einen Stempel, mit „%Stroemis-Lebenslauf L-<jahr>-<nr> …“.
+KENNUNG = "%Stroemis-{art} {pid} N={n} SHA-256={sha}"
+KENNUNG_MUSTER = re.compile(rb"%Stroemis-(?:Protokoll|Lebenslauf) ([A-Z]-\d{4}-\d{6,}(?:-\d+)?) N=(\d+) "
+                            rb"SHA-256=([0-9a-f]{64})")
 XOBJEKT_NAME = "/StroemisStempel"
 A4_BREITE = 595.276                  # Breite der Stempelvorlage (DIN A4 hochkant) in Punkt
 STREIFEN = 14 * 72 / 25.4            # unten so viel Platz (14 mm) braucht der Stempel
@@ -207,14 +210,15 @@ def _strom(schreiber, daten):
     return schreiber._add_object(s.flate_encode())
 
 
-def stempeln(basis, vorlage_pdf, protokoll_id=None, eigene_seiten=None):
+def stempeln(basis, vorlage_pdf, protokoll_id=None, eigene_seiten=None, art="Protokoll"):
     """Den Stempel (erste Seite von vorlage_pdf, DIN A4) auf jede Seite von basis legen. Liefert die fertige
     Datei; ihre ersten len(basis) Bytes sind basis. eigene_seiten: so viele Seiten am Anfang hat WeasyPrint gesetzt
-    (mit freiem Rand unten); die übrigen sind angefügte Anhänge und bekommen einen Streifen dazu."""
+    (mit freiem Rand unten); die übrigen sind angefügte Anhänge und bekommen einen Streifen dazu. art steht in der
+    Kennung („Protokoll“ oder „Lebenslauf“)."""
     vorlage = PdfReader(io.BytesIO(vorlage_pdf)).pages[0]
     schreiber = _Nachtrag(io.BytesIO(basis), incremental=True)
     if protokoll_id:
-        schreiber.kennung = KENNUNG.format(pid=protokoll_id, n=len(basis), sha=sha256(basis))
+        schreiber.kennung = KENNUNG.format(art=art, pid=protokoll_id, n=len(basis), sha=sha256(basis))
 
     inhalt = vorlage.get_contents()      # ein Strom ohne Wörterbucheinträge ist „falsy“ – daher „is None“
     form = DecodedStreamObject()
@@ -266,7 +270,7 @@ def stempeln(basis, vorlage_pdf, protokoll_id=None, eigene_seiten=None):
 
 
 def kennung_lesen(daten):
-    """(Protokoll-ID, N, Summe) aus dem Kommentar des Stempel-Nachtrags oder None."""
+    """(Protokoll-ID bzw. Kennung des Lebenslaufs, N, Summe) aus dem Kommentar des Stempel-Nachtrags oder None."""
     treffer = list(KENNUNG_MUSTER.finditer(daten))
     if not treffer:
         return None

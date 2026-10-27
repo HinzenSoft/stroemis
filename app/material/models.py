@@ -247,13 +247,19 @@ Feldnamen folgen dem Konzept vom 16.10.2026 (englisch, wie dort festgelegt). Abw
     recursive_triggers, etwa im sqlite3-Werkzeug, griffe der Lösch-Trigger dabei nicht). Rein additiv (keine Zeile, kein
     alter Trigger ändert sich), wiederholbar (IF NOT EXISTS). Rückweg: ein älterer Stand lässt die Trigger stehen – sie
     sperren nur, was er nie tut.
+  - Schritt 31 (Prüfsumme und Kennung für den Lebenslauf, Wunsch vom 27.10.2026): mat_lebenslauf – je ausgegebenem
+    Lebenslauf Kennung L-<jahr>-<nr>, Inventarnummer des Artikels, Stand und Prüfsummen wie bei den Protokollen (Inhalt,
+    Anzahl Bytes, gestempelte Datei); kein Konto, kein Inhalt, keine Datei. Unveränderlich (SCHRITT_31: kein UPDATE auch
+    über rowid, kein DELETE, kein INSERT OR REPLACE). Der Zähler je Jahr steht in mat_meta (lebenslauf_zaehler_<jahr>).
+    Rein additiv, wiederholbar (IF NOT EXISTS). Rückweg: ein älterer Stand ignoriert die Tabelle; seine Lebensläufe
+    tragen dann wieder keinen Stempel.
 """
 import json
 import re
 import sqlite3
 from datetime import datetime, timezone
 
-SCHEMA_VERSION = 30
+SCHEMA_VERSION = 31
 
 # --- Wertelisten -------------------------------------------------------------------------------
 # Was die Datenbank per CHECK erzwingt, steht hier ein zweites Mal – mit den Wörtern, die die
@@ -2747,6 +2753,34 @@ SCHRITT_30 = [
 ]
 
 
+# --- Schritt 31: Prüfsumme und Kennung für den Lebenslauf (Wunsch vom 27.10.2026) ----------------------------------------
+# Je ausgegebenem Lebenslauf eine Zeile: Kennung L-<jahr>-<nr> (fortlaufend je Jahr, Zähler in mat_meta – services/
+# lebenslauf.py), der Artikel als Inventarnummer (plattformweit eindeutig und nie wieder vergeben; ohne Fremdschlüssel,
+# damit ein falsch angelegter Artikel ohne Prüfung löschbar bleibt), der Zeitpunkt („Stand“, UTC) und die Prüfsummen wie
+# bei den Protokollen. Kein Konto (Entscheidung vom 27.10.2026: nicht speichern, wer abruft), kein Inhalt, keine Datei.
+# Unveränderlich: kein UPDATE (Trigger ohne Spaltenliste – greift auch bei „SET rowid“), kein DELETE, kein INSERT OR
+# REPLACE auf eine vorhandene Kennung oder Zeile (geprüft schon beim Einfügen – ohne recursive_triggers griffe der
+# Lösch-Trigger beim Ersetzen nicht).
+LEBENSLAUF_FEST = "'Ein ausgegebener Lebenslauf ist verzeichnet und bleibt, wie er ist.'"
+SCHRITT_31 = [
+    """CREATE TABLE IF NOT EXISTS mat_lebenslauf (
+      id               INTEGER PRIMARY KEY AUTOINCREMENT,
+      kennung          TEXT NOT NULL UNIQUE CHECK (kennung GLOB 'L-[0-9][0-9][0-9][0-9]-[0-9][0-9][0-9][0-9][0-9][0-9]*'),
+      inventory_no     TEXT NOT NULL,
+      stand            TEXT NOT NULL,
+      pdf_sha256       TEXT NOT NULL,
+      pdf_hashed_bytes INTEGER NOT NULL CHECK (pdf_hashed_bytes > 0),
+      file_sha256      TEXT NOT NULL
+    )""",
+    "CREATE INDEX IF NOT EXISTS idx_mat_lebenslauf_datei ON mat_lebenslauf(file_sha256)",
+    "CREATE INDEX IF NOT EXISTS idx_mat_lebenslauf_inhalt ON mat_lebenslauf(pdf_sha256)",
+    _trigger("mat_lebenslauf_neu", "BEFORE INSERT ON mat_lebenslauf",
+             "EXISTS (SELECT 1 FROM mat_lebenslauf l WHERE l.id = NEW.id OR l.kennung = NEW.kennung)", LEBENSLAUF_FEST),
+    _trigger("mat_lebenslauf_aendern", "BEFORE UPDATE ON mat_lebenslauf", "1", LEBENSLAUF_FEST),
+    _trigger("mat_lebenslauf_loeschen", "BEFORE DELETE ON mat_lebenslauf", "1", LEBENSLAUF_FEST),
+]
+
+
 # Je Version die Schritte, die von der Vorversion dorthin führen: eine Liste von SQL-Befehlen (für sich
 # wiederholbar, IF NOT EXISTS) oder eine Funktion. Alle Schritte eines Starts laufen in EINER
 # Transaktion – bricht einer ab, bleibt die Datenbank, wie sie war, und der nächste Start versucht es neu.
@@ -2754,7 +2788,8 @@ SCHRITTE = {1: SCHRITT_1, 2: _schritt_2, 3: _schritt_3, 4: SCHRITT_4, 5: _schrit
             8: _schritt_8, 9: _schritt_9, 10: _schritt_10, 11: _schritt_11, 12: _schritt_12, 13: _schritt_13,
             14: _schritt_14, 15: _schritt_15, 16: _schritt_16, 17: _schritt_17, 18: SCHRITT_18, 19: SCHRITT_19,
             20: _schritt_20, 21: _schritt_21, 22: _schritt_22, 23: _schritt_23, 24: _schritt_24,
-            25: _schritt_25, 26: _schritt_26, 27: _schritt_27, 28: _schritt_28, 29: SCHRITT_29, 30: SCHRITT_30}
+            25: _schritt_25, 26: _schritt_26, 27: _schritt_27, 28: _schritt_28, 29: SCHRITT_29, 30: SCHRITT_30,
+            31: SCHRITT_31}
 
 
 def _meta(conn, schluessel, vorgabe=None):

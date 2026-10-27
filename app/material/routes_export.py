@@ -100,19 +100,19 @@ def durchgang_protokolle(rid):
 
 @seiten.get("/materialablage/artikel/<int:iid>/lebenslauf.pdf")
 def lebenslauf_pdf(iid):
-    """Lebenslauf eines Artikels als PDF – im Browser geöffnet wie die Protokolle, aber auf Abruf gesetzt und nicht
-    festgeschrieben (services/lebenslauf.py)."""
+    """Lebenslauf eines Artikels als PDF – im Browser geöffnet wie die Protokolle, auf Abruf gesetzt, mit Kennung und
+    Prüfsummen-Stempel; jeder Abruf ist in mat_lebenslauf verzeichnet, ohne das Konto (services/lebenslauf.py)."""
     nein = _zugang("iid", iid)
     if nein:
         return nein
     try:
-        daten, inventarnummer = lebenslauf.rendern(iid)
+        daten, inventarnummer, kennung = lebenslauf.rendern(iid)
     except Abgelehnt as exc:
         return _fehler(exc)
-    # Name mit Uhrzeit, die Adresse trägt vom Knopf einen Zeitstempel (?stand=…, hier übergangen): Chrome auf Android
-    # legt das PDF als Download ab und öffnete beim nächsten Tippen die alte Datei (Meldung vom 26.10.2026).
+    # Name mit Uhrzeit und Kennung, die Adresse trägt vom Knopf einen Zeitstempel (?stand=…, hier übergangen): Chrome auf
+    # Android legt das PDF als Download ab und öffnete beim nächsten Tippen die alte Datei (Meldung vom 26.10.2026).
     resp = send_file(io.BytesIO(daten), mimetype="application/pdf",
-                     download_name=f"Lebenslauf_{export.dateiname(inventarnummer)}_{zeitstempel()}.pdf")
+                     download_name=f"Lebenslauf_{export.dateiname(inventarnummer)}_{zeitstempel()}_{kennung}.pdf")
     # Wie bei _protokoll_senden ohne „sandbox“ – sonst zeigt der PDF-Betrachter von Chrome die Datei nicht an.
     resp.headers["Content-Security-Policy"] = "default-src 'none'; object-src 'self'; img-src 'self' data:"
     return _privat(resp)

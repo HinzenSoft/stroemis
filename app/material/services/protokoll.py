@@ -989,6 +989,9 @@ def dateiname(row, inventarnummer=None):
 # --- Prüfseite -----------------------------------------------------------------------------------------
 
 _PROTOKOLL_TABELLEN = ("mat_inspection", "mat_round", "mat_round_setprotokoll")
+# Seit Schritt 31 erkennt die Prüfseite auch ausgegebene Lebensläufe (mat_lebenslauf, Kennung L-<jahr>-<nr>) – in der
+# Antwort mit ihrer Kennung als protokoll_id und dem Stand, ohne Inventarnummer.
+_LEBENSLAUF_SQL = "SELECT kennung AS protocol_id, pdf_hashed_bytes, pdf_sha256, stand FROM mat_lebenslauf WHERE "
 
 
 def _per_summe(spalte, summe):
@@ -997,10 +1000,12 @@ def _per_summe(spalte, summe):
                      "AND locked_at IS NOT NULL", (summe,), one=True)
         if r:
             return r
-    return None
+    return db.query(_LEBENSLAUF_SQL + f"{spalte} = ?", (summe,), one=True)
 
 
 def _per_id(pid):
+    if pid[:1] == "L":
+        return db.query(_LEBENSLAUF_SQL + "kennung = ?", (pid,), one=True)
     tabelle = {"S": "mat_round", "T": "mat_round_setprotokoll"}.get(pid[:1], "mat_inspection")
     return db.query(f"SELECT protocol_id, pdf_hashed_bytes, pdf_sha256 FROM {tabelle} WHERE protocol_id = ? "
                     "AND locked_at IS NOT NULL", (pid,), one=True)
@@ -1008,7 +1013,37 @@ def _per_id(pid):
 
 def _art(pid):
     return {"P": "Prüfprotokoll", "A": "Aussonderungsprotokoll", "S": "Sammelprotokoll",
-            "T": "Set-Protokoll"}.get(pid[:1], "Protokoll")
+            "T": "Set-Protokoll", "L": "Lebenslauf"}.get(pid[:1], "Protokoll")
+
+
+# Die Sätze der Prüfseite je Art der Datei: Protokoll (festgeschrieben) oder Lebenslauf (ausgegeben).
+_SAETZE = {
+    "protokoll": {
+        "unveraendert": "Die Datei ist Byte für Byte das festgeschriebene Protokoll.",
+        "ohne_stempel": "Der Inhalt entspricht dem Protokoll, aber der Prüfsummen-Stempel fehlt – das ist nicht die "
+                        "ausgegebene Datei.",
+        "danach": "Die ersten {n} Bytes (das Protokoll selbst) sind unverändert; geändert wurde danach – am Stempel oder "
+                  "durch Anhängen. Das ist nicht die ausgegebene Datei.",
+        "inhalt": "Der Inhalt des Protokolls wurde verändert – die Prüfsumme stimmt nicht mehr.",
+    },
+    "lebenslauf": {
+        "unveraendert": "Die Datei ist Byte für Byte der Lebenslauf, den strömis.de ausgegeben hat.",
+        "ohne_stempel": "Der Inhalt entspricht dem Lebenslauf, aber der Prüfsummen-Stempel fehlt – das ist nicht die "
+                        "ausgegebene Datei.",
+        "danach": "Die ersten {n} Bytes (der Lebenslauf selbst) sind unverändert; geändert wurde danach – am Stempel oder "
+                  "durch Anhängen. Das ist nicht die ausgegebene Datei.",
+        "inhalt": "Der Inhalt des Lebenslaufs wurde verändert – die Prüfsumme stimmt nicht mehr.",
+    },
+}
+
+
+def _antwort(r, ergebnis, satz):
+    lebenslauf = r["protocol_id"].startswith("L-")
+    out = {"ergebnis": ergebnis, "protokoll_id": r["protocol_id"], "art": _art(r["protocol_id"]),
+           "hinweis": _SAETZE["lebenslauf" if lebenslauf else "protokoll"][satz].format(n=r["pdf_hashed_bytes"])}
+    if lebenslauf:
+        out["stand"] = zeit_text(r["stand"])
+    return out
 
 
 def _kopf_summe(fh, n):
@@ -1050,8 +1085,9 @@ def _kopf_kandidaten(fh, hoechstens=12):
 
 
 def pruefen(fh):
-    """Ein hochgeladenes PDF gegen die gespeicherten Prüfsummen. Liefert {ergebnis, protokoll_id, art, hinweis}
-    mit ergebnis „unveraendert“, „veraendert“ oder „unbekannt“ – ohne Personendaten."""
+    """Ein hochgeladenes PDF gegen die gespeicherten Prüfsummen der Protokolle und – seit Schritt 31 – der ausgegebenen
+    Lebensläufe. Liefert {ergebnis, protokoll_id, art, hinweis} mit ergebnis „unveraendert“, „veraendert“ oder
+    „unbekannt“, beim Lebenslauf dazu stand (sein Zeitpunkt) – ohne Personendaten und ohne Inventarnummer."""
     fh.seek(0)
     h, groesse = hashlib.sha256(), 0
     while stueck := fh.read(1 << 20):
@@ -1060,13 +1096,10 @@ def pruefen(fh):
     voll = h.hexdigest()
     r = _per_summe("file_sha256", voll)
     if r:
-        return {"ergebnis": "unveraendert", "protokoll_id": r["protocol_id"], "art": _art(r["protocol_id"]),
-                "hinweis": "Die Datei ist Byte für Byte das festgeschriebene Protokoll."}
+        return _antwort(r, "unveraendert", "unveraendert")
     r = _per_summe("pdf_sha256", voll)
     if r:
-        return {"ergebnis": "veraendert", "protokoll_id": r["protocol_id"], "art": _art(r["protocol_id"]),
-                "hinweis": "Der Inhalt entspricht dem Protokoll, aber der Prüfsummen-Stempel fehlt – das ist nicht "
-                           "die ausgegebene Datei."}
+        return _antwort(r, "veraendert", "ohne_stempel")
     # Zugeordnet wird nur über die Kennung im Stempel-Nachtrag – ein unkomprimierter Kommentar am Dateiende. Den
     # Text der Datei liest die Prüfseite bewusst nicht: Ein PDF zu zerlegen kostet bei präparierten Dateien
     # Minuten und Gigabytes, und jeder kann hier hochladen. Die Kennung gilt nur, wenn N und Prüfsumme zum
@@ -1087,12 +1120,7 @@ def pruefen(fh):
             r = None
     if not r:
         return {"ergebnis": "unbekannt", "protokoll_id": None, "art": None,
-                "hinweis": "Diese Datei ist kein Protokoll von strömis.de – oder so verändert, dass sie sich keinem "
-                           "Protokoll mehr zuordnen lässt."}
+                "hinweis": "Diese Datei ist kein Protokoll und kein Lebenslauf von strömis.de – oder so verändert, dass "
+                           "sie sich keinem mehr zuordnen lässt."}
     kopf = _kopf_summe(fh, r["pdf_hashed_bytes"])
-    if kopf == r["pdf_sha256"]:
-        hinweis = (f"Die ersten {r['pdf_hashed_bytes']} Bytes (das Protokoll selbst) sind unverändert; geändert wurde "
-                   "danach – am Stempel oder durch Anhängen. Das ist nicht die ausgegebene Datei.")
-    else:
-        hinweis = "Der Inhalt des Protokolls wurde verändert – die Prüfsumme stimmt nicht mehr."
-    return {"ergebnis": "veraendert", "protokoll_id": r["protocol_id"], "art": _art(r["protocol_id"]), "hinweis": hinweis}
+    return _antwort(r, "veraendert", "danach" if kopf == r["pdf_sha256"] else "inhalt")

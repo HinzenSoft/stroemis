@@ -10,9 +10,9 @@
    Die Makros unten (felder, produkt_mit_zusatz, artikel_block, unterschrift_block, festschreibung) benutzen die
    abgeleiteten Vorlagen; sie stehen vor dem Block „inhalt“ und sind deshalb dort sichtbar.
    Der Lebenslauf (lebenslauf.html) ist kein Protokoll: Er überschreibt Titel, Stichwörter, Kopf rechts, Fuß,
-   Kennungskasten und Demo-Hinweis (Blöcke titel, keywords, kopf_rechts, fuss_links, kopf_id, demo_hinweis) und
-   braucht unten keinen Platz für den Stempel (rand_unten). Die Vorgaben der Blöcke sind genau der Text der
-   Protokolle – die drei Protokollvorlagen setzen damit unverändert. #}
+   Kennungskasten und Demo-Hinweis (Blöcke titel, keywords, kopf_rechts, fuss_links, kopf_id, demo_hinweis); seit
+   Schritt 31 trägt auch er den Stempel und behält den Rand unten (rand_unten). Die Vorgaben der Blöcke sind genau der
+   Text der Protokolle – die Protokollvorlagen setzen damit unverändert. #}
 {%- macro felder(paare, spalten=3) -%}
   {# paare: Liste von (Beschriftung, Wert); leere Werte fallen weg, der Rest füllt Zeilen zu je „spalten“ Feldern. #}
   {%- set voll = paare | selectattr(1) | list -%}
