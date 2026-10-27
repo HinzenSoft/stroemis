@@ -2003,3 +2003,5 @@ dialog .mat-knopfgrund { margin: 10px 0 0; }
 .mat-sprung:not(:focus) { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 .mat-sprung:focus { display: inline-block; margin: 0 0 8px; padding: 8px 12px; border: 2px solid var(--anthrazit); background: var(--weiss);
   color: var(--anthrazit); font-weight: 700; text-decoration: none; }
+/* Hinweiszeile der Prüfung beim Klick auf das ausgegraute „Festschreiben“ (B1): hervorgehoben wie ein Grundsatz. */
+.mat-abschluss-hinweis.betont { color: var(--rot-auf-flaeche); font-weight: 700; }

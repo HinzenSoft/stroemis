@@ -205,9 +205,10 @@ def test_nebenbefunde():
     teil = mat[mat.index('<fieldset class="mat-arten"><legend>Art der Prüfung</legend>'):]
     assert teil.index('<p class="help" id="pa-folge">Mit dem Beginn reservierst du') < teil.index('<div class="btn-row mat-knoepfe">')
     assert '<button class="btn" data-act="beginnen" aria-describedby="pa-folge">Prüfung beginnen</button>' in teil
-    # „Anlegen und nächsten“: keine Zeile am Telefon mehr unter den Knöpfen, das title bleibt.
+    # „Anlegen und nächsten Artikel“ (seit UI/UX vor dem Merge, B13): keine Zeile am Telefon mehr unter den Knöpfen,
+    # das title bleibt.
     assert "„Anlegen und nächsten“: Produkt und Ordner" not in mat
-    assert 'title="Produkt und Ordner bleiben für den nächsten Artikel stehen">Anlegen und nächsten</button>' in mat
+    assert 'title="Produkt und Ordner bleiben für den nächsten Artikel stehen">Anlegen und nächsten Artikel</button>' in mat
     print("Nebenbefunde bestanden.")
 
 

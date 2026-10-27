@@ -303,7 +303,7 @@ def test_info_symbol_und_namen():
                    '<span class="info-text" role="tooltip" id="${id}" hidden>${html}</span>'):
         assert stelle in info, stelle
     assert ("const PRUEFSUMME_INFO = 'Die Prüfsumme steht im Fuß jeder Seite des PDFs. Ob eine Datei unverändert ist, "
-            "zeigt die <a href=\"/materialablage/pruefen\">Prüfseite</a>.';") in js
+            "zeigt die Seite <a href=\"/materialablage/pruefen\">„Echtheit prüfen“</a>.';") in js   # Name seit UI/UX B10
     assert '<dt>Prüfsumme${infoKnopf("Prüfsumme", PRUEFSUMME_INFO)}</dt>' in js
     assert '<p class="help">Die Prüfsumme steht im Fuß jeder Seite des PDFs.' not in js
     assert "auf der Prüfseite prüfen</a>" not in js

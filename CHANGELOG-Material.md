@@ -53,6 +53,7 @@ Geschichte stehen. Schemaversion nach der Nachbesserung vor dem Merge: 30; mit d
 | Info-„i“ app-weit | Erklärsätze unter Überschriften und Feldern hinter ein „i“ am Begriff (55 Stellen in allen Modulen), `S.info` und Jinja-Makro, ein „i“ je Liste für Marken; „Seiten aus ZIP importieren“ im Seitenbaum der Strömipedia | gebaut 27.10.2026 (kein Schemaschritt, Schema bleibt 32), zur Freigabe |
 | Letzte offene Punkte | Datenschutzsätze an einem „i“ auf eine Zeile; Strömipedia: „Neue Seite“ und „⋯“ (Papierkorb, Import) über dem Baum, Blatt-Symbol statt kursivem „i“ für „Angaben zur Seite“, Fehlerart beim Ablegen von Dateien; eine Abschnittsaktion neben der Überschrift (Protokoll, Sammelprotokoll, Prüfformular, Herstellerdokumente); Leitstelle: Marken in der Hilfe-Box statt im „i“ | gebaut 27.10.2026 (kein Schemaschritt, Schema bleibt 32), zur Freigabe |
 | UI/UX vor dem Merge – U1a Verhalten | Zurück schließt Dialoge, Schubladen und Großansichten; Fehler am Feld; ein Menübaustein (ein Eintrag → Knopf, kurze Einträge, im Bild); Rückfragen mit Gegenstand, Nicht-Endgültiges ohne „danger“; Mehrzahl; Export mit Uhrzeit; deutsche Fehlerseiten; Bewegung reduzieren; Beschriftungen; Dialogfuß; Bedienzeichen ✕ ↑ ↓ app-weit | gebaut 27.10.2026 (kein Schemaschritt), Zweig uiux-1a |
+| UI/UX vor dem Merge – U2 Materialablage | Ultrawide als Gruppe; ausgegraute Hauptknöpfe fokussierbar mit Grund darüber; Abschlussleiste niedrig (Grund und nächste Prüfung im Festschreib-Dialog); Mangel je Rolle; weniger Knöpfe (Dokumente, Formular, Prüfer); Empfehlung im Banner; Journal gekürzt; „Echtheit prüfen“; Radiogruppen; Fehlerzustand mit „Neu laden“; Kleinigkeiten | gebaut 27.10.2026 (kein Schemaschritt), Zweig uiux-2 |
 
 ## Abgleich mit dem Bestand (vor Lieferung 1)
 
@@ -9832,3 +9833,76 @@ Grundlage: `planung/material-phase4/uiux_liste.md` (vier UI/UX-Prüfungen vor de
   als Linie mit Zahl; „Unterschreiben“ im Profil neben der Überschrift.
 - Tests: `tests/test_module_uiux_u1b.py` (neu); angepasst: test_material_antrag, test_module_letzte_offene,
   test_material_vor_merge_3, test_material_dg_archiv, test_material_l5, test_module_nach_merge, test_module_info_i.
+
+### Teil U2 – Materialablage (B1–B14, A10 Materialablage)
+
+Nur `app/material/**` (material.js, material.css, pruefen.js, unterschrift.js, pruefen.html, Prüfprotokoll-Vorlage,
+export.py). Kein Schemaschritt; festgeschriebene PDFs bleiben unverändert, nur neue Prüfprotokolle tragen einen Satz neu.
+
+- **A10 Ultrawide:** Ordnerleiste und Inhalt sind eine Gruppe, höchstens 2100 px breit und mittig im Fenster (vorher klebte
+  die Leiste links, der Inhalt stand mittig – bei 5120 px 1513 px Lücke dazwischen, gemessen jetzt 0). Der Inhalt beginnt
+  immer direkt neben der Leiste; seine Breite hängt von der Seitenart ab: Listen und Übersichten 1800 px (Spalten),
+  Formularseiten (Prüfung, Artikel anlegen, Formular-Editor) 1180 px (Prüfpunkte über die ganze Breite liest niemand),
+  „Echtheit prüfen“ 520 px (eine Ablagefläche, ohne Leiste mittig). Leiste und linker Rand springen beim Seitenwechsel
+  nicht mehr. Steht links Fenster frei, hat die Leiste dort eine Linie. Die Kopfleiste (app-weit) bleibt, wie sie ist.
+- **B1 Ausgegraute Hauptknöpfe:** `aria-disabled` statt `disabled` – fokussierbar, der Grund steht als Satz direkt über
+  der Knopfzeile (`aria-describedby`), ein Klick hebt ihn hervor und lässt ihn erneut vorlesen (Bausteine `grundSatz`,
+  `knopfAus`, `knopfGrund` in material.js). „Durchgang abschließen“ („Noch 8 Artikel offen oder in Prüfung.“ über dem
+  Knopf statt 440 px tiefer hinter den Kacheln), „Festschreiben“ ohne Ergebnis („Wähle ein Ergebnis.“ in der Hinweiszeile),
+  „Zuordnen“ (Person, Produktmeldung, Nacharbeit), „Verknüpfen“ (Prüfanleitung), „Übernehmen“ im Unterschrift-Pad
+  („Unterschreibe zuerst im Feld.“), „Prüfen“ auf „Echtheit prüfen“ („Wähle zuerst eine PDF-Datei.“), dazu
+  „Festschreiben“ im Dialog bei nicht abgehakten Meldungen und „Berichtigen“ (Grund vorher nur im title).
+- **B2 Abschlussleiste der Prüfung:** Grund und „Nächste Prüfung“ stehen im Dialog „Prüfung festschreiben“ (Pflicht ohne
+  Mangel am Feld, Datumsgrenzen am Feld); die Leiste trägt nur Hinweiszeile, Ergebnis und „Festschreiben“. Gemessen: iPhone
+  SE 133 px ohne Ergebnis, 110 px mit (20 bzw. 16 %, vorher bis 243 px = 36 %), 344×882 110 px (12 %, vorher 287),
+  360×780 110 px (14 %), quer 844×390 70 px (18 %, vorher 97). Was ein Ergebnis bewirkt (sperrt, Freiprüfung, Empfehlung),
+  sagt jetzt der Dialog; die Hinweiszeile nennt, was fehlt. „einsatz­bereit“/„instand­setzen“ mit weichem Trennstrich,
+  damit alle drei Ergebnisse auch bei 344–360 px in einer Reihe bleiben. Gewählt (Ergebnis und Befund) = farbiger Rand
+  und fett, die übrigen normal – nicht mehr rot gefüllt neben dem roten „Festschreiben“.
+- **B3** Ordnerleiste: Namen brechen auch mit der Maus am Rechner um („DEMO-Strömungsrettungsgruppe 1/2/3“ unterscheidbar).
+- **B4** Katalogliste: in der engen Tabelle (601–820 px Inhalt) steht die Kategorie klein unter dem Produkt; Sweep 600–700 px
+  in 2-px-Schritten ohne waagerechten Bildlauf (vorher +1…+7 px bei 656–662).
+- **B5 Mangel melden:** Die Quittung steht nur oben auf der Seite (kein Toast daneben). Wer den Artikel selbst verwaltet,
+  liest im Dialog, in der Quittung und im Banner „beiseitelegen“ statt „gib ihn deinem Materialwart“.
+- **B6 Knöpfe:** Herstellerdokumente – „Neue Version“ als Knopf, „Umbenennen“/„Zurückziehen“ im Menü „Mehr zu <Dokument>“
+  (abgelöste und zurückgezogene: nur „Umbenennen“, als Knopf). Prüfformular-Kopf – eine Hauptaktion („Aktivieren“ am
+  Entwurf, sonst „Neue Version“; rot nur, wenn unten kein rotes „Speichern“ steht), der Rest im Menü. Artikelkopf des
+  Prüfers – „Prüfung starten“, „Bearbeiten“, „Mehr“ (darin „Sperren“, „Mangel melden“, Lebenslauf …) statt fünf
+  gleichrangiger Knöpfe; ohne Prüfrecht bleibt „Mangel melden“ ein Knopf. „Berichtigen“ und „Durchgang abbrechen“ bleiben
+  graue Knöpfe: jeweils die einzige weitere Aktion – ein Menü mit nur ihr wäre wieder ein Knopf (Konfliktregel).
+- **B7 „Aussonderung empfohlen“:** von wem, wann, Protokoll und Grund als zweite Zeile im roten Banner; der gelbe Kasten
+  und die Marke am Titel entfallen (in Listen bleibt die Marke).
+- **B8 Journal der Artikelseite:** die letzten fünf Einträge, darunter „Alle n Einträge anzeigen“ (aria-expanded).
+- **B9 Prüfhinweis auf „Prüfungen“:** nur für Konten mit Prüfer-Häkchen oder Urkundennummer; wer Ordner verwaltet, liest
+  „Prüffreigaben für deine Ordner vergibst du unter Ordner → Bearbeiten → Freigaben.“; wer nur liest, nichts.
+- **B10 „Echtheit prüfen“** (Entscheidung des Nutzers; Adresse bleibt `/materialablage/pruefen`): Ablagefläche und „Prüfen“
+  oben (am iPhone SE im ersten Bild), ein Satz davor mit dem Datenschutzhinweis („wird nur verglichen, nicht
+  gespeichert“), „Wie funktioniert das?“ und „Selbst nachrechnen“ zugeklappt. Seitentitel „Echtheit prüfen –
+  Materialablage – strömis.de“, Knopf auf „Prüfungen“ und alle Infos („Prüfsumme“, Lebenslauf) sagen „Echtheit prüfen“.
+  PDFs nennen die Seite nicht beim Namen („Prüfen: <Adresse>“) – unverändert.
+- **B11 Tastatur in der Prüfung:** Befund- und Ergebniswahl sind Radiogruppen (ein Tab-Stopp je Gruppe, Pfeiltasten und
+  Pos1/Ende wählen); Sprunglink „Zum Abschluss“ (erscheint mit dem Fokus). Gemessen bei 15 Prüfpunkten (1280 px): vom
+  ersten Punkt bis zur Leiste 55 statt 85 Tab-Stopps, je Punkt 3,7 statt 5,7.
+- **B12 Fehlerzustand:** Kein Netz oder Serverfehler – die Überschrift bleibt (sonst der Name der Ansicht), darunter EIN
+  Kasten mit dem Satz und „Neu laden“ (Übersicht, Prüfungen, Ordner, Artikel, Änderungsanträge geprüft; vorher ohne
+  Überschrift bzw. zweimal der Satz).
+- **B13 Kleinigkeiten:** „Anlegen und nächsten Artikel“; Seitentitel „Prüfformular <Produkt bzw. Kategorie> v<n>“;
+  „(Urkundennummer …)“ als Einheit; Sätze ohne „Sie/Ihre“ am Anfang (Rückfragen, Unterschrift-Hinweise, neue
+  Prüfprotokolle: „Die Seiten der Anhänge zählen nicht …“); Aussonderung ohne Ergebnis-Marke im Titel; ZIP „Alle
+  Protokolle“ `Protokolle_<Titel>_<S-…>_<JJJJ-MM-TT_HHMM>.zip` ohne Leerzeichen, Adresse je Abruf eindeutig; „Protokoll
+  (PDF)“ bzw. „Bericht (PDF)“ statt nur „PDF“ in Set-/Sammelprotokoll-Listen und am Jahresbericht; „SHA-256“ bricht nicht
+  um; Abstand unter „Erinnerungsmails: …“; Prüfanleitung ohne Wiki-Stufe nennt den Weg (Plattform-Verwaltung,
+  Leitstelle); Prüfdurchgang am Telefon: Zahlen als kompakte Zeilen in drei Spalten, Spalte „Ablage“ und Set-Protokolle nur
+  mit dem letzten Ordner (ganzer Pfad im title); Bestandsbaum am Telefon: Zähler rechts neben dem Namen statt in eigener
+  Zeile; Produktmeldungen: „Artikel anlegen“ nur in der eigenen Liste des Materialwarts; Einleitung des Katalog-Imports
+  zwei Sätze; „Prüfdurchgang“ statt „Durchgang“ in Titeln, Rückfragen, Meldungen und im Jahresbericht (Knöpfe
+  „Durchgang abschließen/abbrechen“ und Journal-Beschriftungen bleiben).
+- **B14:** Klappknöpfe der Ordnerleiste heißen „Unterordner von <Ordner>“ (im Katalog „Unterkategorien von …“, wie die
+  Übersicht) und sagen `aria-expanded`; Blätter ohne Knopfnamen. Mangel melden an einem schon gesperrten Artikel: „Der
+  Artikel ist schon gesperrt. Deine Meldung kommt dazu …“ und Knopf „Melden“.
+- Strömipedia-relevant (Artikel „Materialablage“): „Echtheit prüfen“; Grund/nächste Prüfung im Festschreib-Dialog;
+  Pfeiltasten in der Prüfung; Menü „Mehr“ an Dokumenten und am Artikel des Prüfers; Journal „Alle n Einträge anzeigen“.
+- Bedarf an gemeinsamen Bausteinen (nicht in U2 geändert): `.btn[aria-disabled="true"]`-Aussehen nach app.css (die
+  Profilseite lädt material.css nicht – dort sieht „Übernehmen“ im Pad aktiv aus, erklärt sich aber beim Klick);
+  profil.html „Sie steht auf jedem Prüfprotokoll“ → „Die Nummer steht …“ (Datei von U3).
+- Tests: `tests/test_material_uiux_u2.py` (neu, je Punkt); angepasst: siehe Bericht.
