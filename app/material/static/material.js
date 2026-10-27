@@ -488,7 +488,7 @@
   /* Info zu einem Begriff: das gekringelte „i“ hinter dem Begriff statt eines Erklärsatzes darunter – seit 27.10.2026
      app-weit in common.js (S.info, Verhalten und Aussehen dort bzw. in app.css, .info). */
   const infoKnopf = S.info;
-  const PRUEFSUMME_INFO = 'Die Prüfsumme steht im Fuß jeder Seite des PDFs. Ob eine Datei unverändert ist, zeigt die <a href="/materialablage/pruefen">Prüfseite</a>.';
+  const PRUEFSUMME_INFO = 'Die Prüfsumme steht im Fuß jeder Seite des PDFs. Ob eine Datei unverändert ist, zeigt die Seite <a href="/materialablage/pruefen">„Echtheit prüfen“</a>.';
   const statusMarke = (s, gross) => `<span class="mat-status s-${esc(s)}${gross ? " gross" : ""}">${esc(STATUS[s] || s)}</span>`;
   const demoMarke = (x) => (x ? '<span class="mat-demo" title="DEMO – nicht für echte Prüfungen">DEMO</span>' : "");
   // Das Schloss vor „Gesperrt“ und „Ausgesondert“: grau wie die Klapp-Dreiecke daneben und ohne Leerzeichen, das im
@@ -498,6 +498,42 @@
   // (bestand.demo_sql) – auch ein echtes Katalogprodukt im Beispielbestand.
   const DEMO_ARTIKEL = "DEMO – nicht für echte Prüfungen. Dieser Artikel gehört zu den Demodaten.";
   const leer = (text) => `<p class="leerzustand">${esc(text)}</p>`;
+  // Aus einem Ordnerpfad „A / B / C“ nur „C“ – Spalte „Ablage“ im Durchgang und Set-Protokolle (B13; am Laptop brach die
+  // Spalte vorher in bis zu sieben Zeilen); der ganze Pfad steht dann im title.
+  const letztesGlied = (pfad) => String(pfad || "").split(" / ").pop();
+  /* Ausgegraute Hauptknöpfe (UI/UX vor dem Merge, B1): aria-disabled statt disabled. Der Knopf bleibt mit Tab
+     erreichbar und nennt per aria-describedby seinen Grund – einen Satz direkt über der Knopfzeile (grundSatz; vorher
+     war der Knopf nicht fokussierbar, der Grund leer oder am Telefon 440 px entfernt hinter den Kacheln). Ein Klick tut
+     nichts, außer den Satz hervorzuheben und erneut vorlesen zu lassen (Klick-Abfang unten). knopfGrund(knopf, grund):
+     grund leer gibt frei; satz: das Element des Satzes (Vorgabe: das erste aus aria-describedby). Ein eigener Satz
+     (.mat-knopfgrund) verschwindet beim Freigeben, eine Hinweiszeile (Prüfung: #pr-hinweis) füllt der Aufrufer selbst. */
+  const grundSatz = (id, grund) => `<p class="mat-knopfgrund" id="${id}" aria-live="polite"${grund ? "" : " hidden"}>${esc(grund || "")}</p>`;
+  const knopfAus = (id, grund) => (grund ? ` aria-disabled="true" aria-describedby="${id}"` : ` aria-describedby="${id}"`);
+  function knopfGrund(knopf, grund, satz) {
+    if (!knopf) return;
+    const el = satz || document.getElementById((knopf.getAttribute("aria-describedby") || "").split(/\s+/)[0] || "");
+    if (grund) knopf.setAttribute("aria-disabled", "true");
+    else knopf.removeAttribute("aria-disabled");
+    if (el && el.classList.contains("mat-knopfgrund")) {
+      el.textContent = grund || "";
+      el.hidden = !grund;
+      el.classList.remove("betont");
+    }
+  }
+  document.addEventListener("click", (e) => {
+    const k = e.target.closest && e.target.closest('.btn[aria-disabled="true"]');
+    if (!k) return;
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    const el = document.getElementById((k.getAttribute("aria-describedby") || "").split(/\s+/)[0] || "");
+    if (!el || !el.textContent.trim()) return;
+    const text = el.textContent;
+    el.hidden = false;
+    el.classList.add("betont");
+    // Derselbe Text noch einmal: erst leeren, dann setzen – sonst liest die Vorlesehilfe ihn nicht erneut.
+    el.textContent = "";
+    setTimeout(() => { el.textContent = text; }, 50);
+  }, true);
   // Produktfoto in der Produktwahl (Artikel anlegen: gewähltes Produkt und Treffer der Produktsuche): die Vorschau,
   // antippbar – sie öffnet die Webfassung groß (bildZeigen), dort führt „Original“ zur hochgeladenen Datei. Die Lupe
   // unten rechts zeigt auch am Telefon, wo es keinen Mauszeiger gibt, dass es größer geht. Ohne Bild: nichts.
@@ -729,7 +765,10 @@
     const summe = (id) => (nachId[id].produkte || 0) + (kinder[id] || []).reduce((n, c) => n + summe(c.id), 0);
     const zeile = (o, hat, auf) => {
       const aktiv = o.id === leisteAktiv;
-      const knopf = `<button class="tg" type="button" data-klapp="${o.id}" aria-label="${auf ? "zuklappen" : "aufklappen"}" ${hat ? "" : 'tabindex="-1"'}></button>`;
+      // Der Klappknopf nennt seinen Ordner und sagt mit aria-expanded, ob er offen ist (wie die Übersicht, „Unterordner
+      // von …“; Rollenläufe vor dem Merge N3 – vorher hießen alle nur „aufklappen“). Ohne Unterordner: nur Platzhalter.
+      const knopf = hat ? `<button class="tg" type="button" data-klapp="${o.id}" aria-expanded="${auf}" aria-label="${LEISTE_KATALOG ? "Unterkategorien" : "Unterordner"} von ${esc(o.name)}"></button>`
+        : `<button class="tg" type="button" data-klapp="${o.id}" tabindex="-1" aria-hidden="true"></button>`;
       const markiert = `class="${aktiv ? "active" : ""}" ${aktiv ? 'aria-current="page"' : ""}`;
       if (LEISTE_KATALOG) {
         return `${knopf}<a href="/materialablage/katalog?kategorie=${o.id}" data-kat="${o.id}" ${markiert} title="${esc(o.name)}${o.norm ? ` · ${esc(o.norm)}` : ""}">${esc(o.name)}</a>
@@ -875,7 +914,7 @@
       if (li.classList.contains("leaf")) return;
       const auf = li.classList.contains("collapsed");
       li.classList.toggle("collapsed", !auf);
-      b.setAttribute("aria-label", auf ? "zuklappen" : "aufklappen");
+      b.setAttribute("aria-expanded", String(auf));
       const klapp = klappLesen();
       klapp[b.dataset.klapp] = auf;
       klappMerken(klapp);
@@ -909,9 +948,35 @@
     S.klassenVerlauf(leiste, "open", () => leisteZu(true), alsSchublade);
   }
 
+  /* Kein Netz oder Serverfehler (Status 0 oder ab 500; UI/UX vor dem Merge, B12): Die Überschrift der Ansicht bleibt
+     stehen (schon gezeichnet, sonst ihr Name wie im Seitentitel), darunter EIN Kasten mit dem Satz und „Neu laden“ –
+     vorher stand nur „Keine Verbindung zum Server.“ ohne Ausweg, auf der Übersicht ohne Überschrift und auf „Prüfungen“
+     zweimal. Teile einer Seite (zeigenIn) leeren sich dann und melden sich in demselben Kasten. */
+  const ANSICHT_NAME = { dashboard: "Materialablage", pruefungen: "Prüfungen", bestand: "Bestand", antraege: "Änderungsanträge",
+    ordner: "Ordner", artikel: "Artikel", artikel_neu: "Artikel anlegen", pruefung_neu: "Prüfung", pruefung: "Prüfung",
+    durchgang: "Prüfdurchgang", durchgaenge: "Abgeschlossene Prüfdurchgänge", katalog: "Katalog", produkt: "Produkt",
+    formular: "Prüfformular", meldungen: "Produktmeldungen", suche: "Suche", bestandsimport: "Bestandsliste importieren",
+    bericht: "Jahresbericht", meine_psa: "Meine PSA" };
+  const keinServer = (e) => !e || !e.status || e.status >= 500;
+  function fehlerKasten(e) {
+    let k = $("#mat-fehlerzustand", inhalt);
+    if (!k) {
+      if (!$("h1", inhalt)) inhalt.innerHTML = `<div class="page-head"><h1>${esc(ANSICHT_NAME[ANSICHT] || "Materialablage")}</h1></div>`;
+      const kopf = $(".page-head", inhalt);
+      k = document.createElement("div");
+      k.id = "mat-fehlerzustand";
+      k.className = "notice mat-fehlerzustand";
+      k.setAttribute("role", "alert");
+      if (kopf) kopf.after(k); else inhalt.prepend(k);
+    }
+    k.innerHTML = `<p>${esc((e && e.message) || "Keine Verbindung zum Server.")}</p>
+      <button type="button" class="btn secondary" data-neu-laden>Neu laden</button>`;
+    $("[data-neu-laden]", k).addEventListener("click", () => location.reload());
+  }
   async function zeigen(fn) {
     try { await fn(); }
     catch (e) {
+      if (keinServer(e)) { fehlerKasten(e); return; }
       // Fremdes oder nicht (mehr) Erlaubtes (404, 403): die Meldung des Servers im Klartext und ein Weg zurück.
       inhalt.innerHTML = e.status === 403 || e.status === 404
         ? `<p class="notice">${esc(e.message)}</p><p><a class="btn secondary" href="/materialablage">Zur Übersicht</a></p>`
@@ -964,9 +1029,14 @@
     if (typeof v === "object") return esc(JSON.stringify(v));
     return esc(v);
   }
-  function journalHtml(eintraege, mitEntitaet) {
+  /* kurz: so viele Einträge offen, der Rest hinter „Alle n Einträge anzeigen“ (Artikelseite, UI/UX vor dem Merge B8 – am
+     Telefon war das Journal eines zwei Jahre alten Artikels 1 815 von 4 679 px lang). Der Knopf (data-act
+     "journal-alle", journalUmschalten) sagt mit aria-expanded, ob alle offen sind. */
+  const JOURNAL_KURZ = 5;
+  function journalHtml(eintraege, mitEntitaet, kurz) {
     if (!eintraege || !eintraege.length) return leer("Noch keine Einträge.");
-    return `<ol class="mat-journal">${eintraege.map((j) => {
+    const mehr = kurz && eintraege.length > kurz;
+    return `<ol class="mat-journal"${mehr ? ' id="mat-journal"' : ""}>${eintraege.map((j, i) => {
       const alle = Object.assign({}, j.vorher || {}, j.nachher || {});
       const felder = j.action === "angelegt" || j.action === "geloescht"
         ? [] : Object.keys(alle).filter((f) => !(f === "folder_id" && "ordner" in alle) && !(f === "origin_folder_id" && "herkunft" in alle)
@@ -978,11 +1048,18 @@
       // Eintrag keins, auch die Beschriftung „nachher:“.
       const ohneVorher = !j.vorher || !Object.keys(j.vorher).length;
       const zeilen = felder.map((f) => `<tr><th>${esc(feldName(f, j))}</th><td class="mat-j-vorher${j.vorher && f in j.vorher ? "" : " leer"}" data-l="vorher">${seite(j.vorher, f)}</td><td data-l="nachher"${f === "mangelbeschreibung" ? ' class="mat-j-text"' : ""}>${seite(j.nachher, f)}</td></tr>`).join("");
-      return `<li><div class="mat-j-kopf"><span class="mat-j-zeit">${esc(fmtZeit(j.created_at))}</span>
+      return `<li${mehr && i >= kurz ? ' class="mat-j-alt" hidden' : ""}><div class="mat-j-kopf"><span class="mat-j-zeit">${esc(fmtZeit(j.created_at))}</span>
         <strong>${mitEntitaet ? esc(ENTITAET[j.entity] || j.entity) + " " : ""}${esc(AKTION[j.action] || j.action)}</strong>
         <span class="muted">von ${person(j.user_name || "–")}</span></div>
         ${zeilen ? `<table class="mat-diff${ohneVorher ? " ohne-vorher" : ""}"><thead><tr><th>Feld</th><th>vorher</th><th>nachher</th></tr></thead><tbody>${zeilen}</tbody></table>` : ""}</li>`;
-    }).join("")}</ol>`;
+    }).join("")}</ol>${mehr ? `<p class="mat-journal-mehr"><button type="button" class="btn secondary small" data-act="journal-alle" data-n="${eintraege.length}"
+      aria-expanded="false" aria-controls="mat-journal">Alle ${eintraege.length} Einträge anzeigen</button></p>` : ""}`;
+  }
+  function journalUmschalten(b) {
+    const auf = b.getAttribute("aria-expanded") !== "true";
+    $$("#mat-journal > li.mat-j-alt").forEach((li) => { li.hidden = !auf; });
+    b.setAttribute("aria-expanded", String(auf));
+    b.textContent = auf ? `Nur die letzten ${JOURNAL_KURZ} anzeigen` : `Alle ${b.dataset.n} Einträge anzeigen`;
   }
 
   /* --- Unterschrift und Protokoll ------------------------------------------------------------------
@@ -1058,9 +1135,11 @@
     if (o.nur_pfad) {
       return `${pfadKnoten(o.name)} ${o.system_kind ? "" : `<span class="mat-art">${esc(ORDNERART[o.kind] || o.kind)}</span>`}`;
     }
-    return `<a href="/materialablage/ordner/${o.id}">${schloss(o)}${esc(o.name)}</a>
-        ${o.system_kind ? "" : `<span class="mat-art">${esc(ORDNERART[o.kind] || o.kind)}</span>`}${o.teilweise ? ' <span class="small muted">nur deine Artikel</span>' : ""}${demoMarke(o.demo)}
-        <span class="mat-baum-zahl">${o.system_kind ? Object.values(o.zaehlung || {}).reduce((a, b) => a + b, 0) : o.bestand}</span>${o.system_kind ? "" : zahlen(o.zaehlung)}`;
+    // Name mit Marken und die Zähler als zwei Teile: Am Telefon stehen die Zähler rechts neben dem Namen, statt allein in
+    // einer eigenen Zeile zu landen (UI/UX vor dem Merge, B13; material.css .mat-knoten).
+    return `<span class="mat-knoten"><span class="mat-knoten-name"><a href="/materialablage/ordner/${o.id}">${schloss(o)}${esc(o.name)}</a>
+        ${o.system_kind ? "" : `<span class="mat-art">${esc(ORDNERART[o.kind] || o.kind)}</span>`}${o.teilweise ? ' <span class="small muted">nur deine Artikel</span>' : ""}${demoMarke(o.demo)}</span>
+        <span class="mat-knoten-zahlen"><span class="mat-baum-zahl">${o.system_kind ? Object.values(o.zaehlung || {}).reduce((a, b) => a + b, 0) : o.bestand}</span>${o.system_kind ? "" : zahlen(o.zaehlung)}</span></span>`;
   }
   const knotenKlasse = (o) => (o.nur_pfad ? "pfad" : o.system_kind ? "system" : "");
   function baumHtml(liste, start) {
@@ -1433,7 +1512,7 @@
     const kasten = $("#mat-mail");
     const n = Number(kasten.dataset.offen || 0);
     dialog(`<h2>Alle erledigt?</h2>
-      <p>${n === 1 ? "1 Zeile" : `${n} Zeilen`} als erledigt markieren? Sie verschwinden aus dem Kasten und lassen sich nicht wieder zeigen – auch die, die hier nicht angezeigt sind.</p>
+      <p>${n === 1 ? "1 Zeile" : `${n} Zeilen`} als erledigt markieren? Die Zeilen verschwinden aus dem Kasten und lassen sich nicht wieder zeigen – auch die, die hier nicht angezeigt sind.</p>
       <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button><button class="btn danger" id="mf-alle-ok" type="button">Alle erledigt</button></div>`,
     (dlg, body) => {
       $("#mf-alle-ok", body).onclick = async (ev) => {
@@ -1520,9 +1599,10 @@
   /* Set-Protokolle eines Durchgangs (Schritt 27): je Set der Pfad (Link nur, wenn das Konto den Ordner sieht), Zahl der
      Artikel, Protokoll-ID und „PDF“ – als Liste wie die Durchgänge, am Telefon untereinander. */
   function setProtokolleHtml(liste) {
-    return `<ul class="mat-runden mat-setprotokolle">${liste.map((t) => `<li>${t.ordner_sichtbar ? `<a href="/materialablage/ordner/${t.folder_id}"><strong>${esc(t.ordner)}</strong></a>` : `<strong>${esc(t.ordner)}</strong>`}
+    // Der Set-Name ohne seinen Pfad (der steht im title) und „Protokoll (PDF)“ statt nur „PDF“ (B13).
+    return `<ul class="mat-runden mat-setprotokolle">${liste.map((t) => `<li>${t.ordner_sichtbar ? `<a href="/materialablage/ordner/${t.folder_id}" title="${esc(t.ordner)}"><strong>${esc(letztesGlied(t.ordner))}</strong></a>` : `<strong title="${esc(t.ordner)}">${esc(letztesGlied(t.ordner))}</strong>`}
       <span class="muted">${plural(t.artikel, "Artikel", "Artikel")} · <span class="mat-hash">${esc(t.protokoll.id)}</span></span>
-      <a class="mat-pdf" href="${esc(t.protokoll.url)}" target="_blank" rel="noopener" aria-label="Set-Protokoll ${esc(t.protokoll.id)} (PDF)" title="Set-Protokoll ${esc(t.protokoll.id)} öffnen">PDF</a></li>`).join("")}</ul>`;
+      <a class="mat-pdf" href="${esc(t.protokoll.url)}" target="_blank" rel="noopener" aria-label="Set-Protokoll ${esc(t.protokoll.id)} (PDF)" title="Set-Protokoll ${esc(t.protokoll.id)} öffnen">Protokoll (PDF)</a></li>`).join("")}</ul>`;
   }
   /* Ordnerseite eines Sets: seine Set-Protokolle und die Sammelprotokolle der Durchgänge, die für ihn eröffnet wurden –
      der Durchgang als Link nur, wenn das Konto ihn sieht. Die Überschrift nennt, was darin steht. */
@@ -1534,7 +1614,7 @@
   function sammelprotokolleHtml(liste) {
     return `<ul class="mat-runden mat-setprotokolle">${liste.map((x) => `<li>${x.durchgang.sichtbar ? `<a href="/materialablage/durchgang/${x.durchgang.id}"><strong>${esc(x.durchgang.titel)}</strong></a>` : `<strong>${esc(x.durchgang.titel)}</strong>`}
       <span class="muted">${protokollArt(x)} · ${esc(fmtTag(x.geschlossen_am))} · <span class="mat-hash">${esc(x.protokoll.id)}</span></span>
-      <a class="mat-pdf" href="${esc(x.protokoll.url)}" target="_blank" rel="noopener" aria-label="${protokollArt(x)} ${esc(x.protokoll.id)} (PDF)" title="${protokollArt(x)} ${esc(x.protokoll.id)} öffnen">PDF</a></li>`).join("")}</ul>`;
+      <a class="mat-pdf" href="${esc(x.protokoll.url)}" target="_blank" rel="noopener" aria-label="${protokollArt(x)} ${esc(x.protokoll.id)} (PDF)" title="${protokollArt(x)} ${esc(x.protokoll.id)} öffnen">Protokoll (PDF)</a></li>`).join("")}</ul>`;
   }
 
   /* Laufende Prüfdurchgänge: auf der Übersicht nur, wenn einer läuft; auf „Prüfungen“ immer (mitLeer) – dort ohne die
@@ -1710,12 +1790,18 @@
       (DARF.verwalten || DARF.pruefen) && { text: "Prüfdurchgang anlegen", satz: "Mehrere Prüfer arbeiten eine Liste ab.", attrs: 'data-act="runde"' },
       { text: "Abgeschlossene Prüfdurchgänge", satz: "Auch abgebrochene, mit Sammelprotokoll.",
         href: `/materialablage/durchgaenge${DATEN.ordner ? `?ordner=${Number(DATEN.ordner)}` : ""}` }] });
+    /* Warum hier (noch) nicht geprüft werden kann – nur für wen es etwas zu tun gibt (UI/UX vor dem Merge, B9; wie die
+       Artikelseite): Prüfer mit Häkchen oder Urkundennummer bekommen den fehlenden Schritt; wer Ordner verwaltet
+       (Materialwart, Material-Verwaltung), den Weg zu den Prüffreigaben; wer nur liest, nichts. */
+    const prueferHinweisSeite = () => (DARF.pruefen ? ""
+      : DARF.qualifiziert || DARF.pruefer_haekchen ? `<p class="notice">${pruefHinweis()}</p>`
+        : DARF.verwalten ? '<p class="help">Prüffreigaben für deine Ordner vergibst du unter Ordner → Bearbeiten → Freigaben.</p>' : "");
     async function zeichnen() {
       seitenTitel("Prüfungen");
       inhalt.innerHTML = `<div class="page-head"><h1>Prüfungen</h1>
-          <div class="btn-row"><a class="btn secondary" href="/materialablage/pruefen" title="Ist ein Protokoll oder Lebenslauf (PDF) unverändert?">Protokoll oder Lebenslauf prüfen</a>
+          <div class="btn-row"><a class="btn secondary" href="/materialablage/pruefen" title="Ist ein Protokoll oder Lebenslauf (PDF) unverändert?">Echtheit prüfen</a>
             ${rundenMenue()}</div></div>
-        ${!DARF.pruefen ? `<p class="notice">${pruefHinweis()}</p>` : ""}
+        ${prueferHinweisSeite()}
         <div id="pr-runden"></div><div id="pr-offen"></div>
         <section class="section"><h2>Zu prüfen<span id="pr-zu-info"></span></h2><div id="pr-liste"><p class="help">Wird geladen …</p></div></section>`;
       await Promise.all([zeigenIn(liste, "#pr-liste"), zeigenIn(offene, "#pr-offen"), rundenKasten($("#pr-runden"), true)]);
@@ -1739,11 +1825,15 @@
 
   // Wie zeigen(), aber nur für einen Teil der Seite.
   async function zeigenIn(fn, sel) {
-    try { await fn(); } catch (e) { const el = $(sel); if (el) el.innerHTML = `<p class="error">${esc(e.message)}</p>`; }
+    try { await fn(); } catch (e) {
+      const el = $(sel);
+      if (keinServer(e)) { if (el) el.innerHTML = ""; fehlerKasten(e); return; }
+      if (el) el.innerHTML = `<p class="error">${esc(e.message)}</p>`;
+    }
   }
 
   async function reservierungFreigeben(pid, wer, danach) {
-    if (!(await confirm(`Die offene Prüfung von ${wer} verwerfen und die Reservierung aufheben? Ihre Befunde, Fotos und Anhänge gehen dabei verloren.`, "Reservierung aufheben"))) return;
+    if (!(await confirm(`Die offene Prüfung von ${wer} verwerfen und die Reservierung aufheben? Befunde, Fotos und Anhänge dieser Prüfung gehen dabei verloren.`, "Reservierung aufheben"))) return;
     try { await api(`${API}/pruefungen/${pid}`, { method: "DELETE" }); toast("Reservierung aufgehoben"); await danach(); }
     catch (e) { toast(e.message, true); }
   }
@@ -2272,8 +2362,8 @@
 
   // Hinweise der Verschieben-Dialoge (Bauentwurf 1.7): was mit Freigaben, Systemordnern und Durchgängen geschieht.
   const ORDNER_VERSCHIEBEN = "Freigaben an diesem Ordner wandern mit; was vom alten Oberordner geerbt war, gilt hier nicht mehr, was am neuen Ort gilt, kommt dazu.";
-  const ORDNER_WECHSEL = "Gesperrte und ausgesonderte Artikel aus diesem Ordner wandern in die Systemordner der neuen Gliederung; offene Durchgänge der alten Gliederung nehmen die Artikel mit Grund aus.";
-  const GLIEDERUNG_WECHSEL = "Die Gliederung behält ihre Systemordner; offene Durchgänge der alten Gliederung nehmen ihre Artikel mit Grund aus.";
+  const ORDNER_WECHSEL = "Gesperrte und ausgesonderte Artikel aus diesem Ordner wandern in die Systemordner der neuen Gliederung; offene Prüfdurchgänge der alten Gliederung nehmen die Artikel mit Grund aus.";
+  const GLIEDERUNG_WECHSEL = "Die Gliederung behält ihre Systemordner; offene Prüfdurchgänge der alten Gliederung nehmen ihre Artikel mit Grund aus.";
   const ARTIKEL_VERSCHIEBEN = "Am neuen Ort gelten die Freigaben des Zielordners. Steht ein Artikel in einem offenen Prüfdurchgang, dessen Bereich er verlässt, nimmt ihn der Durchgang mit Grund aus.";
   const ARTIKEL_WECHSEL = "Das Ziel liegt in einer anderen Gliederung: Wer nur dort eine Freigabe hat, wo der Artikel jetzt liegt, sieht ihn danach nicht mehr.";
   // Nach einem Verschieben: Die Leiste zeigt den neuen Baum (der Inhalt lädt ohnehin neu).
@@ -2632,13 +2722,16 @@
     { text: "Ordner bearbeiten", satz: "Name, Art, Erinnerungen, Freigaben.", attrs: 'data-act="bearbeiten"' },
     { text: "Verschieben", satz: "Samt Inhalt an eine andere Stelle.", attrs: 'data-act="verschieben"' },
     { text: "Löschen", satz: "Nur ein leerer Ordner.", attrs: 'data-act="loeschen"' }] });
-  const LEBENSLAUF_TEXT = "Stammdaten, alle Prüfungen in zeitlicher Reihenfolge, Prüfdurchgänge und Ereignisse als PDF – zum Weitergeben oder als Aussonderungsnachweis. Stand jetzt, mit Kennung und Prüfsumme – prüfbar auf der Prüfseite.";
+  const LEBENSLAUF_TEXT = "Stammdaten, alle Prüfungen in zeitlicher Reihenfolge, Prüfdurchgänge und Ereignisse als PDF – zum Weitergeben oder als Aussonderungsnachweis. Stand jetzt, mit Kennung und Prüfsumme – prüfbar unter „Echtheit prüfen“.";
   /* Artikelseite: neben „Bearbeiten“ die selteneren Funktionen im Menü „Mehr“ – Verschieben, Lebenslauf, Löschen –, je mit
      dem Satz, was sie tun (vorher bis zu vier gleichrangige Knöpfe und unter Touch ein Erklärabsatz zum Lebenslauf
      zwischen den Knopfreihen; Browserprüfung vor dem Merge, Verbesserung 5). Bleibt nur eine Funktion, steht sie als
      Knopf da. */
   function artikelMehr(a, eintraege) {
     const zeile = {
+      sperren: { text: "Sperren", satz: "Ohne Prüfung, mit Grund.", attrs: 'data-act="sperren"' },
+      mangel: { text: "Mangel melden", satz: "Sperrt den Artikel.", attrs: 'data-act="mangel"' },
+      trenner: { trenner: true },
       verschieben: { text: "Verschieben", satz: "In einen anderen Ordner.", attrs: 'data-act="verschieben"' },
       lebenslauf: { text: "Lebenslauf (PDF)", satz: "Prüfungen und Ereignisse, prüfbar.", href: `/materialablage/artikel/${a.id}/lebenslauf.pdf`,
                     attrs: `target="_blank" rel="noopener" data-frisch title="${LEBENSLAUF_TEXT}"` },
@@ -2698,7 +2791,7 @@
     const td = (l, inhalt, klasse) => `<td data-l="${esc(l)}"${klasse ? ` class="${klasse}"` : ""}>${inhalt}</td>`;
     // Sprungmarken zu den Blöcken (feste ids, nichts aus Daten); „Prüfer“ nur mit Haken.
     const BLOECKE = [["be-bestand", "Bestand"], ["be-bewegungen", "Bewegungen"], ["be-pruefungen", "Prüfungen"],
-                     ["be-durchgaenge", "Durchgänge"], ["be-pruefer", "Prüfer"], ["be-sperren", "Sperren"],
+                     ["be-durchgaenge", "Prüfdurchgänge"], ["be-pruefer", "Prüfer"], ["be-sperren", "Sperren"],
                      ["be-aussonderungen", "Aussonderungen"], ["be-maengel", "Mängel"], ["be-rueckrufe", "Rückrufe"],
                      ["be-ausblick", "Ausblick"]];
     const NICHT_GEPRUEFT_OFFEN = 25;          // so viele „nicht geprüft“ stehen aufgeklappt, mehr zugeklappt
@@ -2738,8 +2831,8 @@
           pr.nicht_geprueft.map((x) => `<tr>${td("Inventarnummer", `${mono(x.inventarnummer)}${demoMarke(x.demo)}`)}${td("Produkt", esc(x.produkt))}${td("letzte Prüfung", esc(x.letzte))}</tr>`))}${kappung(pr.nicht_geprueft.length, "Artikel")}</details>` : ""}
         </section>`;
       const durchgaenge = `<section class="section" id="be-durchgaenge"><h2>Prüfdurchgänge</h2>
-        ${b.durchgaenge.length ? liste([["Durchgang"], ["Zeitraum"], ["Stand"], ["Artikel", "mat-be-zahl"], ["erledigt", "mat-be-zahl"], ["ausgenommen", "mat-be-zahl"], ["nicht geprüft", "mat-be-zahl"]],
-          b.durchgaenge.map((r) => `<tr>${td("Durchgang", `<strong>${esc(r.titel)}</strong>${demoMarke(r.demo)}${r.ausnahmen.length ? `<div class="small muted">Ausnahmen: ${r.ausnahmen.map((a) => `${mono(a.inventarnummer)} (${esc(a.grund)})`).join("; ")}</div>` : ""}`)}
+        ${b.durchgaenge.length ? liste([["Prüfdurchgang"], ["Zeitraum"], ["Stand"], ["Artikel", "mat-be-zahl"], ["erledigt", "mat-be-zahl"], ["ausgenommen", "mat-be-zahl"], ["nicht geprüft", "mat-be-zahl"]],
+          b.durchgaenge.map((r) => `<tr>${td("Prüfdurchgang", `<strong>${esc(r.titel)}</strong>${demoMarke(r.demo)}${r.ausnahmen.length ? `<div class="small muted">Ausnahmen: ${r.ausnahmen.map((a) => `${mono(a.inventarnummer)} (${esc(a.grund)})`).join("; ")}</div>` : ""}`)}
             ${td("Zeitraum", esc(r.zeitraum))}${td("Stand", `${esc(r.stand)}${r.protokoll_id ? ` · ${mono(r.protokoll_id)}` : ""}`)}
             ${td("Artikel", String(r.gesamt), "mat-be-zahl")}${td("erledigt", String(r.erledigt), "mat-be-zahl")}${td("ausgenommen", String(r.ausgenommen), "mat-be-zahl")}
             ${td("nicht geprüft", r.stand === "offen" ? `${r.offen} offen` : String(r.nicht_geprueft), "mat-be-zahl")}</tr>`), "mat-bericht-breit") : leer("Im Jahr kein Prüfdurchgang im Zweig.")}</section>`;
@@ -2779,7 +2872,7 @@
       const k = b.kopf;
       const mit = k.pruefer_nennen ? "-mit-pruefern" : "";
       return `<a class="btn secondary small" href="/materialablage/ordner/${fid}/bericht-${Number(k.jahr)}${mit}.pdf" target="_blank" rel="noopener" data-frisch
-          data-export="Das PDF wird erzeugt – bei vielen Artikeln dauert das einige Sekunden …" title="Dieser Bericht als PDF/A – Listen gekürzt (${BERICHT_KAPPUNG} Zeilen je Liste, 1 500 insgesamt, 50 Artikel je Rückruf). Stand jetzt, nicht festgeschrieben.">PDF</a>
+          data-export="Das PDF wird erzeugt – bei vielen Artikeln dauert das einige Sekunden …" title="Dieser Bericht als PDF/A – Listen gekürzt (${BERICHT_KAPPUNG} Zeilen je Liste, 1 500 insgesamt, 50 Artikel je Rückruf). Stand jetzt, nicht festgeschrieben.">Bericht (PDF)</a>
         <a class="btn secondary small" href="/materialablage/export/${fid}-pruefungen-${Number(k.jahr)}${mit}.csv" data-frisch data-export="Die Prüfungsliste wird heruntergeladen …"
           title="Alle Prüfungen und Aussonderungen des Jahres im Zweig als CSV für Excel${k.pruefer_nennen ? " – mit Prüfer und Urkundennummer" : " – ohne Prüfernamen"}.">Prüfungen (CSV)</a>`;
     }
@@ -2887,6 +2980,10 @@
     // Wer den Artikel selbst verwaltet, bekommt den Satz „an den Materialwart“ nicht.
     const schonGemeldet = darfMelden && a.mangel_eigen_offen;
     const sperrKnopf = frei && darf.pruefen && !a.entwurf;
+    /* Wer hier prüfen kann, hat „Prüfung starten“ als Hauptaktion; „Sperren“ (ohne Prüfung) und „Mangel melden“ sind für
+       ihn selten und stehen im Menü „Mehr“ – vorher fünf gleichrangige Knöpfe im Kopf (UI/UX vor dem Merge, B6). Für
+       alle anderen bleibt „Mangel melden“ der Knopf: Es ist ihr Weg, einen Schaden zu melden. */
+    const pruefKnopf = !aus && darf.pruefen && !fremderEntwurf;
     const aussonderKnopf = gesperrt && darf.verwalten && !a.entwurf;
     // Designsprache: keine Erklärzeilen unter Knöpfen – was ein Knopf gerade nicht kann (ausgegraut, mit
     // aria-describedby) oder warum er fehlt, steht als Satz über seiner Knopfzeile (Nutzer, 25.10.2026).
@@ -2904,14 +3001,20 @@
     // Kästen steht nur der Mangel-Banner, der Sperrgrund als Zeile darin – im ersten, wenn es mehrere gibt (Entscheidung
     // des Nutzers, Nachtrag V7 vor dem Merge: „zusammenlegen“).
     const sperreImMangel = a.status === "gesperrt" && !sperreDurchMangel && offeneMaengel.length > 0;
+    const gesperrtBanner = a.status === "gesperrt" && !sperreDurchMangel && !sperreImMangel;
+    // „Aussonderung empfohlen“ (UI/UX vor dem Merge, B7): von wem, wann, Protokoll und Grund als zweite Zeile IM roten
+    // Banner – vorher stand derselbe Grund im Banner, in einem gelben Kasten darunter und in zwei Marken am Titel, und am
+    // Telefon begann der Artikel erst bei 56 % der Höhe. Die Marke „Aussonderung empfohlen“ am Titel entfällt hier (der
+    // Banner sagt es); in Listen bleibt sie.
+    const empfZeile = empf ? `<p class="mat-banner-zeile">Empfohlen von ${person(empf.pruefer || "Prüfer")} am ${esc(fmtTag(empf.datum))} (<a href="/materialablage/pruefung/${Number(empf.pruefung)}">${empf.protokoll_id ? `Protokoll ${esc(empf.protokoll_id)}` : "Prüfung ansehen"}</a>)${empf.grund ? `: ${esc(empf.grund)}` : ""}. Aussondern kann der Materialwart.</p>` : "";
     const zuordnung = darf.grund ? zeile("Zugeordnet an", `${zu ? `${esc(zu.name)}${zu.gliederung ? ` <span class="muted">· ${esc(zu.gliederung)}</span>` : ""}${zu.aktiv ? "" : ' <span class="muted">(deaktiviert)</span>'}`
       : '<span class="muted">–</span>'}${zuKnoepfe}`) : "";
     seitenTitel(a.inventory_no);
     inhalt.innerHTML = `${quittungHtml()}${a.demo ? `<p class="mat-demo-banner">${DEMO_ARTIKEL}</p>` : ""}
       ${a.status === "ausgesondert" ? `<p class="mat-banner s-ausgesondert">AUSGESONDERT – dieser Artikel ist außer Dienst und darf nicht mehr verwendet werden.</p>` : ""}
-      ${a.status === "gesperrt" && !sperreDurchMangel && !sperreImMangel ? `<p class="mat-banner s-gesperrt">GESPERRT${sperrText ? ` – ${esc(sperrText)}` : ""}. Nicht verwenden, bis eine Freiprüfung ihn freigibt.</p>` : ""}
-      ${empf ? `<p class="notice mat-empfehlung"><strong>Aussonderung empfohlen</strong> – ${person(empf.pruefer || "Prüfer")} am ${esc(fmtTag(empf.datum))} (<a href="/materialablage/pruefung/${Number(empf.pruefung)}">${empf.protokoll_id ? `Protokoll ${esc(empf.protokoll_id)}` : "Prüfung ansehen"}</a>)${empf.grund ? `: ${esc(empf.grund)}` : ""}. Aussondern kann der Materialwart.</p>` : ""}
-      ${offeneMaengel.map((m, i) => mangelBanner(m, sperreImMangel && i === 0 ? sperrText || "" : null)).join("")}
+      ${gesperrtBanner ? `<div class="mat-banner s-gesperrt" role="note"><p>GESPERRT${sperrText ? ` – ${esc(sperrText)}` : ""}. Nicht verwenden, bis eine Freiprüfung ihn freigibt.</p>${empfZeile}</div>` : ""}
+      ${empf && !gesperrtBanner && !sperreImMangel ? `<div class="mat-banner s-gesperrt" role="note"><p>AUSSONDERUNG EMPFOHLEN</p>${empfZeile}</div>` : ""}
+      ${offeneMaengel.map((m, i) => mangelBanner(m, sperreImMangel && i === 0 ? sperrText || "" : null, darf.verwalten, sperreImMangel && i === 0 ? empfZeile : "")).join("")}
       ${a.status === "lebensdauer" ? `<p class="mat-banner s-lebensdauer">LEBENSDAUER ERREICHT – nicht mehr verwenden, prüfen lassen und aussondern.</p>` : ""}
       ${a.status === "neu" ? '<p class="mat-banner s-neu">NEU – die Eingangsprüfung steht aus. Bis dahin nicht einsetzen.</p>' : ""}
       ${rueckrufBanner(a)}
@@ -2919,21 +3022,22 @@
       <div class="mat-artikelkopf">
         ${p.bild ? bildLink(p.bild, p.original, `Produktbild ${produktName(p)}`, null, `<img class="mat-produktbild" src="${esc(p.bild)}" alt="Produktbild ${esc(produktName(p))}">`) : '<div class="mat-produktbild leer" aria-hidden="true">kein Produktbild</div>'}
         <div class="mat-artikeltitel">
-          <h1><span class="mat-inv">${esc(a.inventory_no)}</span> ${statusMarke(a.status, true)}${empfohlenMarke(empf)}</h1>
+          <h1><span class="mat-inv">${esc(a.inventory_no)}</span> ${statusMarke(a.status, true)}</h1>
           <p class="mat-produktzeile"><a href="/materialablage/katalog/produkt/${p.id}">${nameHtml(p)}</a>${zusatzHtml(p)}${artNrHtml(p.article_no)}</p>
           <p>Seriennummer <strong>${esc(a.serial_no)}</strong>${a.serial_generated ? ' <span class="badge grey">vom System vergeben</span><span class="help mat-sn-hinweis">Der Hersteller vergibt keine Seriennummer – diese Nummer bitte dauerhaft am Artikel anbringen.</span>' : ""}</p>
           ${aus || darf.pruefen ? "" : DARF.qualifiziert || DARF.pruefer_haekchen ? `<p class="notice small">${pruefHinweis(a)}</p>` : ""}
           ${schonGemeldet ? `<p class="help mat-schon-gemeldet" id="mat-schon-gemeldet">Du hast am ${esc(S.fmtDate(a.mangel_eigen_offen))} schon gemeldet – ein Prüfer sieht es sich an.${darf.verwalten ? "" : " Ergänzungen bitte direkt an den Materialwart."}</p>` : ""}
           ${aussondernNein ? `<p class="help mat-aussondern-hilfe" id="mat-aussondern-hilfe">${esc(aussondernNein)}</p>` : ""}
-          <div class="btn-row mat-pruefknoepfe">${!aus && darf.pruefen && !fremderEntwurf ? `<button class="btn" data-act="pruefen">${eigenerEntwurf ? "Prüfung fortsetzen" : a.status === "neu" ? "Eingangsprüfung starten" : "Prüfung starten"}</button>` : ""}
-            ${sperrKnopf ? '<button class="btn secondary small" data-act="sperren">Sperren</button>' : ""}
-            ${darfMelden ? `<button class="btn secondary small" type="button"${schonGemeldet ? ' disabled aria-describedby="mat-schon-gemeldet"' : ' data-act="mangel"'}>Mangel melden</button>` : ""}
+          <div class="btn-row mat-pruefknoepfe">${pruefKnopf ? `<button class="btn" data-act="pruefen">${eigenerEntwurf ? "Prüfung fortsetzen" : a.status === "neu" ? "Eingangsprüfung starten" : "Prüfung starten"}</button>` : ""}
+            ${sperrKnopf && !pruefKnopf ? '<button class="btn secondary small" data-act="sperren">Sperren</button>' : ""}
+            ${darfMelden && !pruefKnopf ? `<button class="btn secondary small" type="button"${schonGemeldet ? ' disabled aria-describedby="mat-schon-gemeldet"' : ' data-act="mangel"'}>Mangel melden</button>` : ""}
             ${aussonderKnopf ? `<button class="btn secondary small" type="button"${aussondernNein ? ' disabled aria-describedby="mat-aussondern-hilfe"' : ' data-act="aussondern"'}>Aussondern</button>` : ""}</div>
           ${a.entwurf ? `<p class="small">In Prüfung bei <strong>${person(a.entwurf.pruefer)}</strong> seit ${esc(fmtZeit(a.entwurf.seit))}
             ${fremderEntwurf ? ` <span class="mat-nowrap">· <a href="/materialablage/pruefung/${a.entwurf.id}">ansehen</a></span>` : ""}
             ${fremderEntwurf && darf.verwalten ? ' <span class="mat-nowrap">· <button class="lnk" type="button" data-act="freigeben">Reservierung aufheben</button></span>' : ""}</p>` : ""}
           ${a.durchgang ? `<p class="small">Steht im Prüfdurchgang ${a.durchgang.sichtbar ? `<a href="/materialablage/durchgang/${a.durchgang.id}">${esc(a.durchgang.titel)}</a>` : `„${esc(a.durchgang.titel)}“`}.</p>` : ""}
           <div class="btn-row">${darfDirekt ? '<button class="btn secondary small" data-act="bearbeiten">Bearbeiten</button>' : ""}${artikelMehr(a, [
+            pruefKnopf && sperrKnopf ? "sperren" : "", pruefKnopf && darfMelden && !schonGemeldet ? "mangel" : "", "trenner",
             darfPflegen && frei ? "verschieben" : "", darf.grund ? "lebenslauf" : "", darfPflegen && a.darf_loeschen ? "loeschen" : ""].filter(Boolean))}</div>
         </div>
       </div>
@@ -2970,7 +3074,7 @@
       </div>
       <section class="section"><h2>Prüfungen</h2>${pruefListe(a.pruefungen)}</section>
       ${mangelErledigt(maengel.filter((m) => !m.offen))}
-      ${darf.grund ? `<section class="section"><h2>Journal${infoKnopf("Journal", "Änderungen am Artikel und an seinem Produkt, neueste zuerst.")}</h2>${journalHtml(a.journal, true)}</section>` : ""}`;
+      ${darf.grund ? `<section class="section"><h2>Journal${infoKnopf("Journal", "Änderungen am Artikel und an seinem Produkt, neueste zuerst.")}</h2>${journalHtml(a.journal, true, JOURNAL_KURZ)}</section>` : ""}`;
     aktionen = {
       "qr-kopieren": async () => {
         const feld = $("#mat-qr");
@@ -2982,8 +3086,9 @@
       "antrag-zurueck": (b) => antragZurueckziehen((a.antraege || []).find((x) => x.id === +b.dataset.id), () => zeigen(artikel)),
       pruefen: () => { location.href = eigenerEntwurf ? `/materialablage/pruefung/${a.entwurf.id}` : `/materialablage/artikel/${a.id}/pruefung/neu`; },
       sperren: () => sperrDialog(a),
-      mangel: () => mangelDialog(a, (r, q) => { quittung = q; return zeigen(artikel); }),
+      mangel: () => mangelDialog(a, (r, q) => { quittung = q; return zeigen(artikel); }, { verwaltet: Boolean(darf.verwalten), gesperrt: a.lock_state !== "frei" }),
       "mangel-weiterlesen": (b) => mangelWeiterlesen(b),
+      "journal-alle": (b) => journalUmschalten(b),
       "rr-sperren": (b) => sperrDialog(a, { grund: "rueckruf", text: ((a.rueckrufe || []).find((r) => r.id === +b.dataset.id) || {}).title }),
       aussondern: () => aussonderDialog(a),
       freigeben: () => reservierungFreigeben(a.entwurf.id, a.entwurf.pruefer, () => zeigen(artikel)),
@@ -3036,8 +3141,9 @@
         <div class="mat-produktwahl"><input type="search" id="zp-q" placeholder="Name, mindestens 3 Zeichen" autocomplete="off" ${TASTATUR_NAME}>
           <div id="zp-treffer" class="mat-treffer" aria-live="polite"></div></div>
         <div id="zp-gewaehlt" class="mat-gewaehlt" hidden></div>
+        ${grundSatz("zp-grund", "Wähle zuerst eine Person aus der Trefferliste.")}
         <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button>
-          <button class="btn" id="zp-ok" type="button" disabled>Zuordnen</button></div>`,
+          <button class="btn" id="zp-ok" type="button"${knopfAus("zp-grund", true)}>Zuordnen</button></div>`,
       (d, body) => {
         const feld = $("#zp-q", body);
         const treffer = $("#zp-treffer", body);
@@ -3068,7 +3174,7 @@
           anzeige.hidden = false;
           anzeige.innerHTML = `<strong>${esc(gewaehlt.name)}</strong>${gewaehlt.gliederung ? ` <span class="muted">${esc(gewaehlt.gliederung)}</span>` : ""}`;
           treffer.innerHTML = "";
-          $("#zp-ok", body).disabled = false;
+          knopfGrund($("#zp-ok", body), "");
           fokus($("#zp-ok", body));
         });
         $("#zp-ok", body).onclick = () => { if (gewaehlt) { ja = true; d.close(); } };
@@ -3123,7 +3229,7 @@
     const herst = a.manufactured_on ? (a.manufactured_on.length === 7 ? `${a.manufactured_on}-01` : a.manufactured_on) : "";
     const grenzen = [[a.last_inspected_on, "letzte Prüfung"], [herst, "Herstellung"], [(a.created_at || "").slice(0, 10), "Erfassung"]].filter(([d]) => d);
     const fruehestens = grenzen.length ? grenzen.reduce((x, y) => (y[0] > x[0] ? y : x)) : null;
-    const HINWEIS = "Die Aussonderung wird mit deiner Unterschrift festgeschrieben. Sie wird in deinem Profil gespeichert und als Kopie ins Aussonderungsprotokoll übernommen.";
+    const HINWEIS = "Die Aussonderung wird mit deiner Unterschrift festgeschrieben. Die Unterschrift wird in deinem Profil gespeichert und als Kopie ins Aussonderungsprotokoll übernommen.";
     // Die Empfehlung des Prüfers (Schritt 28) steht im Dialog; der Grund ist vorbelegt: verloren → Verlust, Lebensende
     // erreicht → Lebensdauer, sonst irreparabel.
     const empf = a.aussonderung_empfohlen;
@@ -3572,7 +3678,7 @@
         <div id="an-bestandteile" hidden></div>
         <label for="an-notes">Bemerkung</label><textarea id="an-notes" rows="2" maxlength="4000"></textarea>
         <div class="btn-row mat-knoepfe"><button class="btn" data-act="anlegen">Anlegen</button>
-          <button class="btn secondary" data-act="anlegen-weiter" title="Produkt und Ordner bleiben für den nächsten Artikel stehen">Anlegen und nächsten</button></div>
+          <button class="btn secondary" data-act="anlegen-weiter" title="Produkt und Ordner bleiben für den nächsten Artikel stehen">Anlegen und nächsten Artikel</button></div>
       </div>
       <div id="an-meldungen"></div>`;
     let vorschlagLos = null;
@@ -3747,10 +3853,12 @@
     };
     window.addEventListener("pagehide", merken);
     inhalt.addEventListener("click", (e) => { if (e.target.closest && e.target.closest("a[href]")) merken(); }, true);
-    // Enge Tabelle und Karte (Lieferung 5): der Hersteller klein über dem Produkt, die kurzen Angaben zu zweit.
+    // Enge Tabelle und Karte (Lieferung 5): der Hersteller klein über dem Produkt, die kurzen Angaben zu zweit. In der
+    // engen Tabelle (601–820 px Inhalt) steht auch die Kategorie klein unter dem Produkt – mit eigener Spalte brauchte
+    // die Liste gut 628 px und rollte bei 601–627 px Inhalt waagerecht (UI/UX vor dem Merge, B4).
     const produktZeile = (x) => `<tr><td data-l="Hersteller" class="mat-schmal-weg">${esc(x.manufacturer || "")}</td>
-          <td data-l="Produkt" class="mat-k-titel">${x.manufacturer ? `<div class="mat-schmal-zusatz small muted">${esc(x.manufacturer)}</div>` : ""}${x.vorschau ? `<img class="mat-mini" src="${esc(x.vorschau)}" alt="" loading="lazy">` : ""}<a href="/materialablage/katalog/produkt/${x.id}"><strong>${nameHtml(x, true)}</strong></a>${zusatzHtml(x)}${artNrKurz(x.article_no)}${demoMarke(x.demo)}</td>
-          <td data-l="Kategorie">${esc(x.category_name || "")}</td><td data-l="Materialart" class="mat-k-halb">${esc(MATERIALART[x.material_kind])}</td>
+          <td data-l="Produkt" class="mat-k-titel">${x.manufacturer ? `<div class="mat-schmal-zusatz small muted">${esc(x.manufacturer)}</div>` : ""}${x.vorschau ? `<img class="mat-mini" src="${esc(x.vorschau)}" alt="" loading="lazy">` : ""}<a href="/materialablage/katalog/produkt/${x.id}"><strong>${nameHtml(x, true)}</strong></a>${zusatzHtml(x)}${artNrKurz(x.article_no)}${demoMarke(x.demo)}${x.category_name ? `<div class="mat-eng-zusatz small muted">${esc(x.category_name)}</div>` : ""}</td>
+          <td data-l="Kategorie" class="mat-eng-weg">${esc(x.category_name || "")}</td><td data-l="Materialart" class="mat-k-halb">${esc(MATERIALART[x.material_kind])}</td>
           <td data-l="Intervall" class="mat-k-halb">${x.intervall.monate ? `${x.intervall.monate} Mon.` : "–"}</td>
           <td data-l="Lebensdauer" class="mat-k-halb">${x.lifetime_years ? `${x.lifetime_years} J.` : "–"}</td><td data-l="Bestand" class="mat-k-halb">${x.bestand}</td></tr>`;
     async function liste(springen) {
@@ -3765,7 +3873,7 @@
       if (meinLauf !== lauf) return;
       const s = sort;
       const ziel = $("#kat-liste");
-      ziel.innerHTML = d.produkte.length ? `${kartenKopf(KATALOG_SORT, s)}<table class="list mat-tabelle mat-karten mat-katalogliste"><thead><tr>${sortKopf("Hersteller", "hersteller", s, { klasse: "mat-schmal-weg" })}${sortKopf("Produkt", "produkt", s, { vor: kopfZusatz("Hersteller", "hersteller", s, "schmal") })}${sortKopf("Kategorie", "kategorie", s)}${sortKopf("Materialart", "materialart", s)}${sortKopf("Intervall", "intervall", s)}${sortKopf("Lebensdauer", "lebensdauer", s)}${sortKopf("Bestand", "bestand", s)}</tr></thead>
+      ziel.innerHTML = d.produkte.length ? `${kartenKopf(KATALOG_SORT, s)}<table class="list mat-tabelle mat-karten mat-katalogliste"><thead><tr>${sortKopf("Hersteller", "hersteller", s, { klasse: "mat-schmal-weg" })}${sortKopf("Produkt", "produkt", s, { vor: kopfZusatz("Hersteller", "hersteller", s, "schmal"), nach: kopfZusatz("Kategorie", "kategorie", s, "eng") })}${sortKopf("Kategorie", "kategorie", s, { klasse: "mat-eng-weg" })}${sortKopf("Materialart", "materialart", s)}${sortKopf("Intervall", "intervall", s)}${sortKopf("Lebensdauer", "lebensdauer", s)}${sortKopf("Bestand", "bestand", s)}</tr></thead>
         <tbody>${d.produkte.map(produktZeile).join("")}</tbody></table><p class="help mat-endlos" id="kat-mehr"></p>`
         : leer(q || kategorie ? "Kein Produkt in dieser Auswahl." : "Der Katalog ist noch leer.");
       const such = $(".mat-suchzeile");
@@ -3970,7 +4078,7 @@
         ${zeile("Kategorien", e.kategorien, a.kategorien)}${zeile("Produkte", e.produkte, a.produkte)}
         ${zeile("davon mit Bild", e.bilder, null)}${zeile("Formulare", e.formulare, a.formulare)}${zeile("Dokumente", e.dokumente, a.dokumente)}
       </tbody></table>
-      ${a.ohne_kennzeichen ? `<p class="help">${plural(a.ohne_kennzeichen, "Eintrag", "Einträge")} ohne eigenes DEMO-Kennzeichen fallen mit heraus: Sie stehen in einer DEMO-Kategorie bzw. gehören zu einem DEMO-Ziel.</p>` : ""}
+      ${a.ohne_kennzeichen ? `<p class="help">${plural(a.ohne_kennzeichen, "Eintrag", "Einträge")} ohne eigenes DEMO-Kennzeichen fallen mit heraus – sie stehen in einer DEMO-Kategorie bzw. gehören zu einem DEMO-Ziel.</p>` : ""}
       ${a.namen.length ? `<details class="mat-auf"><summary>DEMO-Einträge (oberste Ebene)</summary><ul class="mat-austausch-aenderungen">${a.namen.map((n) => `<li>${esc(n)}</li>`).join("")}</ul></details>` : ""}
       ${austauschListe("Nicht im Export, weil die Datei hier fehlt", v.fehlende_dateien, "warnung")}
       ${austauschListe("Nicht im Export, weil der Import die Datei nicht annähme (zu groß)", v.zu_gross, "warnung")}
@@ -4080,9 +4188,8 @@
 
   function katalogImportDialog(kennung) {
     dialog(`<h2>Katalog importieren</h2>
-      <p>Ein Katalog-Export (ZIP) oder eine Katalogdatei (JSON). Zuerst läuft ein Probelauf: Er zeigt, was neu ist und was
-        sich ändert, und speichert nichts. Übernommen wird erst mit „Übernehmen“. Gelöscht wird beim Import nie etwas.
-        Der Import läuft auf dem Server weiter, auch wenn du diesen Dialog schließt.</p>
+      <p>Erst ein Probelauf (speichert nichts), übernommen wird mit „Übernehmen“. Gelöscht wird nie etwas; der Import läuft
+        auf dem Server weiter, auch wenn du den Dialog schließt.</p>
       <div class="mat-ablage" id="ki-ablage">
         <p><strong>Datei hierher ziehen</strong> oder <label class="btn secondary small">Datei wählen<input type="file" id="ki-datei" class="mat-datei" accept=".zip,.json,application/zip,application/json"></label></p>
         <p class="help" id="ki-name">ZIP oder JSON, bis 2 GB.</p>
@@ -4600,13 +4707,24 @@
   }
 
   /* --- Dokumente: am Produkt oder an einer Kategorie (gelten dann für alle Produkte darin) ------------ */
+  /* Je Dokument: „Neue Version“ (häufig) als Knopf, „Umbenennen“ und „Zurückziehen“ (selten) im Menü „Mehr“ – vorher drei
+     Knöpfe je Zeile, 18 bei sechs Dokumenten (UI/UX vor dem Merge, B6). Abgelöstes und Zurückgezogenes kann nur noch
+     umbenannt werden: ein Eintrag, also ein Knopf (Konfliktregel). Das Menü nennt sein Dokument fürs Vorlesen. */
+  function dokKnoepfe(d) {
+    const aktiv = !d.abgeloest_durch && !d.withdrawn_on;
+    const menue = S.menue({ art: "mat-menue", eintraege: [
+      { text: "Umbenennen", attrs: `data-act="dok-name" data-id="${d.id}"` },
+      aktiv && { text: "Zurückziehen", attrs: `data-act="dok-zurueck" data-id="${d.id}"` }] })
+      .replace('<summary class="btn secondary small" aria-haspopup="menu">', `<summary class="btn secondary small" aria-haspopup="menu" aria-label="Mehr zu ${esc(d.title)}">`);
+    return `<div class="btn-row">${aktiv ? `<button class="btn secondary small" data-act="dok-version" data-id="${d.id}">Neue Version</button>` : ""}${menue}</div>`;
+  }
   function dokZeile(d, k) {
     return `<tr class="${d.gilt ? "" : "mat-alt"}"><td data-l="Dokument" class="mat-k-titel"><a href="${esc(d.datei || d.url)}" target="_blank" rel="noopener">${esc(d.title)}</a>
         <div class="small muted">${esc(DOKART[d.kind] || d.kind)}${d.datei ? ` · ${esc(groesse(d.size))}` : " · Link"}</div></td>
       <td data-l="Version" class="mat-k-halb">${esc(d.version || "–")}</td><td data-l="Gültig ab" class="mat-k-halb">${esc(fmtTag(d.valid_from))}</td>
       <td data-l="Stand" class="mat-k-marke">${d.gilt ? '<span class="mat-status s-einsatzbereit">gilt</span>' : d.withdrawn_on ? `zurückgezogen ${esc(fmtTag(d.withdrawn_on))}` : d.abgeloest_durch ? "abgelöst" : "noch nicht gültig"}
         ${d.sha256 ? `<div class="small muted mat-hash" title="SHA-256 ${esc(d.sha256)}">${esc(d.sha256.slice(0, 12))}…</div>` : ""}</td>
-      <td class="tabelle-aktionen">${k ? `<div class="btn-row"><button class="btn secondary small" data-act="dok-name" data-id="${d.id}">Umbenennen</button>${!d.abgeloest_durch && !d.withdrawn_on ? `<button class="btn secondary small" data-act="dok-version" data-id="${d.id}">Neue Version</button><button class="btn secondary small" data-act="dok-zurueck" data-id="${d.id}">Zurückziehen</button>` : ""}</div>` : ""}</td></tr>`;
+      <td class="tabelle-aktionen">${k ? dokKnoepfe(d) : ""}</td></tr>`;
   }
   // Herstellerdokumente als Liste: erst die des Produkts, dann unter einer kleinen Zwischenzeile die seiner
   // Kategorien (Artikel: herkunft; Prüfung: kategorie, der Name vom Prüftag). verlinkt: Titel als Link.
@@ -4951,13 +5069,28 @@
         ${warnung ? `<p class="small mat-warn-leise">${esc(warnung)}</p>` : ""}
         ${f.wiki_aendern ? "" : '<p class="help">Verknüpfen kann, wer in der Strömipedia mindestens Mitglied ist.</p>'}</div>`;
     }
+    /* Kopf des Formulars (UI/UX vor dem Merge, B6): EINE Hauptaktion als Knopf, der Rest im Menü „Mehr“ – vorher standen
+       „Deaktivieren“, „Neue Version“ und „Löschen“ gleichrangig im Kopf. Ein Entwurf (nie benutzt, inaktiv) wird
+       aktiviert; sonst ist die Hauptaktion „Neue Version“ – Änderungen an einer benutzten oder aktiven Version gehen nur
+       so. Rot ist sie nur, wenn unten kein rotes „Speichern“ steht. Bleibt im Menü ein Eintrag, wird er ein Knopf. */
+    function formularKnoepfe() {
+      const entwurf = !f.aktiv && !f.benutzt;
+      const klasse = bearbeitbar ? "btn secondary small" : "btn small";
+      const haupt = entwurf ? `<button class="${klasse}" data-act="aktivieren">Aktivieren</button>`
+        : `<button class="${klasse}" data-act="neue-version">Neue Version</button>`;
+      return haupt + S.menue({ art: "mat-menue", links: true, eintraege: entwurf
+        ? [{ text: "Neue Version", satz: "Kopie als neuer Entwurf.", attrs: 'data-act="neue-version"' },
+          { text: "Löschen", satz: "Nur nie benutzte Entwürfe.", attrs: 'data-act="loeschen"' }]
+        : [f.aktiv ? { text: "Deaktivieren", satz: "Neue Prüfungen nehmen es nicht mehr.", attrs: 'data-act="deaktivieren"' }
+          : { text: "Aktivieren", satz: "Diese Version gilt wieder.", attrs: 'data-act="aktivieren"' }] });
+    }
     function zeichnen() {
-      seitenTitel(f.titel || "Prüfformular");
+      // Im Reiter auch, wofür das Formular gilt (B13) – „Prüfformular“ allein stand vorher in jedem Tab.
+      seitenTitel(`Prüfformular ${f.ziel.art === "kategorie" ? (f.ziel.pfad.length ? f.ziel.pfad[f.ziel.pfad.length - 1].name : "") : f.ziel.name} v${f.version}`.replace(/\s+/g, " "));
       inhalt.innerHTML = `${f.demo ? '<p class="mat-demo-banner">DEMO – nicht für echte Prüfungen.</p>' : ""}
         <div class="mat-pfad">${pfadHtml(['<a href="/materialablage/katalog">Katalog</a>', `<a href="${zielLink}">${esc(zielText)}</a>`])}</div>
         <div class="page-head"><h1>${esc(f.titel || "Prüfformular")} <span class="badge grey">Version ${f.version}</span> ${f.aktiv ? '<span class="mat-status s-einsatzbereit">aktiv</span>' : '<span class="badge grey">inaktiv</span>'} ${demoMarke(f.demo)}</h1>
-          <div class="btn-row">${DARF.katalog ? `${f.aktiv ? '<button class="btn secondary small" data-act="deaktivieren">Deaktivieren</button>' : '<button class="btn secondary small" data-act="aktivieren">Aktivieren</button>'}
-            <button class="btn secondary small" data-act="neue-version">Neue Version</button>${!f.aktiv && !f.benutzt ? '<button class="btn secondary small" data-act="loeschen">Löschen</button>' : ""}` : ""}</div></div>
+          ${DARF.katalog ? `<div class="btn-row">${formularKnoepfe()}</div>` : ""}</div>
         ${wikiZeile()}
         <p class="help">${esc(zielText)}. ${f.gueltig_ab ? `Gültig ab ${esc(fmtTag(f.gueltig_ab))}.` : "Noch nie aktiviert."}
           ${f.benutzt ? " Diese Version wurde schon für Prüfungen benutzt und bleibt unverändert – Änderungen gehen über eine neue Version." : ""}</p>
@@ -5035,9 +5168,10 @@
       <p class="help" id="ww-lesemodus" hidden>Du siehst nur öffentliche Seiten.</p>
       <div class="mat-wikiwahl" id="ww-liste"></div>
       <p class="help" id="ww-stand" aria-live="polite">Wird geladen …</p>
+      ${grundSatz("ww-grund", aktuell ? "Wähle eine andere Seite als die verknüpfte." : "Wähle zuerst eine Seite aus der Liste.")}
       <div class="dlg-actions">${aktuell ? '<button class="btn secondary dlg-neben" id="ww-weg" type="button">Verknüpfung entfernen</button>' : ""}
         <button class="btn secondary" data-close type="button">Abbrechen</button>
-        <button class="btn" id="ww-ok" type="button" disabled>Verknüpfen</button></div>`,
+        <button class="btn" id="ww-ok" type="button"${knopfAus("ww-grund", true)}>Verknüpfen</button></div>`,
     (dlg, body) => {
       let gewaehlt = null;
       let los = null;
@@ -5070,7 +5204,7 @@
         const b = ev.target.closest("button[data-i]");
         if (!b) return;
         gewaehlt = seiten[+b.dataset.i].id;
-        ok.disabled = gewaehlt === aktuell;
+        knopfGrund(ok, gewaehlt === aktuell ? "Diese Seite ist schon verknüpft – wähle eine andere." : "");
         zeichnen();
         const neu = $(`button[data-i="${b.dataset.i}"]`, liste);      // neu gezeichnet – sonst stünde der Fokus auf <body>
         if (neu) neu.focus();
@@ -5207,7 +5341,7 @@
                   "data", "object", "embed", "base", "meta", "link"],
     FORBID_ATTR: ["style", "id", "name", "for", "form", "formaction", "target"],
     ALLOW_DATA_ATTR: false };
-  const ANLEITUNG_KEIN_ZUGANG = "Zu diesem Formular gibt es eine Prüfanleitung in der Strömipedia, die du nicht lesen darfst.";
+  const ANLEITUNG_KEIN_ZUGANG = "Zu diesem Formular gibt es eine Prüfanleitung in der Strömipedia, die du nicht lesen darfst. Den Zugang zur Strömipedia vergibt die Plattform-Verwaltung in der Leitstelle.";
   const ANLEITUNG_OHNE_ABSCHNITT = "Die Seite hat keinen Abschnitt „Prüfung“ – bitte in der Strömipedia lesen.";
   const ANLEITUNG_ALT = "Diese Seite lässt sich hier nicht einblenden – bitte in der Strömipedia lesen.";
   const ANLEITUNG_FEHLER = "Die Anleitung ließ sich nicht laden.";
@@ -5323,9 +5457,40 @@
     stand.replaceWith(wirt);
   }
 
+  /* Befund- und Ergebniswahl als Radiogruppe (UI/UX vor dem Merge, B11): ein Tab-Stopp je Gruppe (der gewählte
+     Knopf, sonst der erste), Pfeiltasten sowie Pos1/Ende wählen den nächsten – wie ein Klick. Vorher drei Tab-Stopps je
+     Prüfpunkt, 91 bis „Festschreiben“ bei 15 Punkten. Ein Klick auf den gewählten Knopf wirkt wie bisher (n. z. und
+     Ergebnis nehmen sich zurück); die Pfeiltaste markiert ihren Klick mit data-pfeil, damit er nur wählt. */
+  const radioAttrs = (an, stopp) => ` role="radio" aria-checked="${an}" tabindex="${an || stopp ? 0 : -1}"`;
+  function radioStopp(gruppe) {
+    if (!gruppe) return;
+    const knoepfe = $$('[role="radio"]', gruppe);
+    const ziel = knoepfe.find((k) => k.getAttribute("aria-checked") === "true" && !k.disabled) || knoepfe.find((k) => !k.disabled);
+    knoepfe.forEach((k) => { k.tabIndex = k === ziel ? 0 : -1; });
+  }
+  inhalt.addEventListener("keydown", (e) => {
+    const k = e.target.closest && e.target.closest('.mat-wahl3 [role="radio"], .mat-ergebnis [role="radio"]');
+    if (!k || e.altKey || e.ctrlKey || e.metaKey) return;
+    const knoepfe = $$('[role="radio"]', k.parentElement).filter((x) => !x.disabled);
+    const i = knoepfe.indexOf(k);
+    const n = knoepfe.length;
+    const ziel = { ArrowRight: i + 1, ArrowDown: i + 1, ArrowLeft: i - 1, ArrowUp: i - 1, Home: 0, End: n - 1 }[e.key];
+    if (ziel === undefined || !n) return;
+    e.preventDefault();
+    const neu = knoepfe[(ziel + n) % n];
+    if (neu === k) return;
+    neu.dataset.pfeil = "1";
+    neu.focus();
+    neu.click();
+  });
+
   async function pruefungAnsicht() {
     let pr = (await Promise.all([api(`${API}/pruefungen/${DATEN.id}`), ordnerBaum().catch(() => null)]))[0].pruefung;
     let ergebnis = null;
+    // Grund und „Nächste Prüfung“ fragt seit UI/UX vor dem Merge (B2) der Dialog „Prüfung festschreiben“ – die Leiste
+    // wuchs mit ihnen am iPhone SE auf ein Drittel des Bildschirms. Bis zum Festschreiben stehen sie hier (faellig ISO)
+    // und im Fenster (abschlussMerken).
+    const abschlussEntwurf = { grund: pr.grund || "", faellig: "" };
     let seiten = [];                 // Dateien für den nächsten Anhang (Scan: eine Seite je Foto)
     let hochladen = false;           // ein Anhang ist unterwegs – der Knopf bleibt so lange gesperrt
     let gebunden = false;
@@ -5344,7 +5509,6 @@
        wenn sich eins davon einmal ändert (Bauentwurf L3 3.5.2 Nr. 7). */
     const echt = (sel) => $$(sel, inhalt).find((el) => !el.closest(".mat-anleitung")) || null;
     const abschlussBox = () => echt("#pr-abschluss");
-    const imAbschluss = (sel) => { const a = abschlussBox(); return a ? $(sel, a) : null; };
     const bemFeld = () => echt("#pr-bem");
     let anleitungEl = null;          // die Prüfanleitung: einmal gebaut, bei jedem Zeichnen wieder eingesetzt (bleibt offen)
 
@@ -5519,8 +5683,7 @@
       try { return datumWert(due, "Nächste Prüfung"); } catch (e) { return ""; }
     }
     function abschlussStand() {
-      const grund = imAbschluss("#pr-grund"), due = imAbschluss("#pr-due");
-      return { ergebnis, grund: grund ? grund.value : "", faellig: due ? dueIso(due) : "", leer: !ergebnis };
+      return { ergebnis, grund: abschlussEntwurf.grund, faellig: abschlussEntwurf.faellig, leer: !ergebnis };
     }
     function abschlussMerken() {
       const d = abschlussStand();
@@ -5535,10 +5698,9 @@
       try { alt = JSON.parse(sessionStorage.getItem(ABSCHLUSS) || "null"); } catch (err) { alt = null; }
       if (alt && typeof alt === "object") {
         if (WAEHLBAR.includes(alt.ergebnis)) ergebnis = alt.ergebnis;
-        const grund = imAbschluss("#pr-grund"), due = imAbschluss("#pr-due");
-        if (grund && typeof alt.grund === "string") grund.value = alt.grund.slice(0, 300);
-        if (due && typeof alt.faellig === "string" && /^\d{4}-\d{2}-\d{2}$/.test(alt.faellig)
-          && alt.faellig >= isoHeute(1) && (!pr.vorschlag_naechste || alt.faellig <= pr.vorschlag_naechste)) due.value = datumAnzeige(alt.faellig, "tag");
+        if (typeof alt.grund === "string") abschlussEntwurf.grund = alt.grund.slice(0, 300);
+        if (typeof alt.faellig === "string" && /^\d{4}-\d{2}-\d{2}$/.test(alt.faellig)
+          && alt.faellig >= isoHeute(1) && (!pr.vorschlag_naechste || alt.faellig <= pr.vorschlag_naechste)) abschlussEntwurf.faellig = alt.faellig;
         abschlussAktualisieren();
       }
       abschlussMerken();             // was nicht mehr gilt (etwa „einsatzbereit“ nach einem kritischen Mangel), fällt weg
@@ -5617,19 +5779,22 @@
       const a = pr.artikel;
       const knoepfe = [];
       if (pr.entwurf && !pr.eigen && darfHier("verwalten")) knoepfe.push('<button class="btn secondary small" data-act="freigeben">Reservierung aufheben</button>');
-      if (darfBerichtigen()) {
-        knoepfe.push(pr.berichtigbar.ok ? '<button class="btn secondary small" data-act="berichtigen">Berichtigen</button>'
-          : `<button class="btn secondary small" type="button" disabled title="${esc(pr.berichtigbar.grund)}">Berichtigen</button>`);
-      }
+      /* „Berichtigen“ bleibt ein grauer Knopf im Kopf: Es ist die einzige Aktion einer festgeschriebenen Prüfung, ein
+         Menü mit nur ihr wäre wieder ein Knopf (Konfliktregel, UI/UX vor dem Merge B6). Geht es gerade nicht, steht der
+         Grund als Satz darüber (B1) – vorher nur im title, am Finger unsichtbar. */
+      const berGrund = darfBerichtigen() && !pr.berichtigbar.ok ? pr.berichtigbar.grund || "Diese Prüfung lässt sich nicht berichtigen." : "";
+      if (darfBerichtigen()) knoepfe.push(`<button class="btn secondary small" type="button" data-act="berichtigen"${berGrund ? knopfAus("pr-ber-grund", berGrund) : ""}>Berichtigen</button>`);
+      // Eine Aussonderung trägt ihr Ergebnis schon im Titel – die Marke steht nur unter „Ergebnis“ (B13; vorher
+      // „Aussonderung M-… aussondern (ausgesondert)“ und dieselbe Marke darunter noch einmal).
       return `${pr.artikel.demo ? `<p class="mat-demo-banner">${DEMO_ARTIKEL}</p>` : ""}
         <div class="mat-pfad">${pfadHtml([...a.pfad.map(pfadGlied), `<a href="/materialablage/artikel/${a.id}">${esc(a.inventory_no)}</a>`])}</div>
-        <div class="page-head"><h1>${esc(PRUEFART[pr.art] || pr.art)} <span class="mat-h1-zusatz mat-inv">${esc(a.inventory_no)}</span> ${pr.entwurf ? '<span class="badge">Entwurf</span>' : ergebnisMarke(pr.ergebnis)}</h1>
-          ${knoepfe.length ? `<div class="btn-row">${knoepfe.join("")}</div>` : ""}</div>
+        <div class="page-head"><h1>${esc(PRUEFART[pr.art] || pr.art)} <span class="mat-h1-zusatz mat-inv">${esc(a.inventory_no)}</span> ${pr.entwurf ? '<span class="badge">Entwurf</span>' : pr.art === "aussonderung" ? "" : ergebnisMarke(pr.ergebnis)}</h1>
+          ${knoepfe.length ? `<div class="mat-kopfaktion">${berGrund ? grundSatz("pr-ber-grund", berGrund) : ""}<div class="btn-row">${knoepfe.join("")}</div></div>` : ""}</div>
         ${berichtigungHinweis()}
         <p class="mat-produktzeile"><strong>${nameHtml(pr.produkt)}</strong>${zusatzHtml(pr.produkt)}${artNrHtml(pr.produkt.article_no)} · ${nummerHtml("Seriennummer", a.serial_no)} ${statusMarke(a.status)}</p>
-        <p class="small muted">${pr.formular ? `Formular ${esc(pr.formular.titel || "ohne Titel")}, Version ${pr.formular.version} · ` : ""}${pr.art === "aussonderung" ? "Ausgeführt von" : "Prüfer"} ${person(pr.pruefer || "–")}${pr.urkunde ? ` (<span class="mat-ganz">Urkundennummer ${esc(pr.urkunde)}</span>)` : ""}
+        <p class="small muted">${pr.formular ? `Formular ${esc(pr.formular.titel || "ohne Titel")}, Version ${pr.formular.version} · ` : ""}${pr.art === "aussonderung" ? "Ausgeführt von" : "Prüfer"} ${person(pr.pruefer || "–")}${pr.urkunde ? ` <span class="mat-ganz">(Urkundennummer ${esc(pr.urkunde)})</span>` : ""}
           · ${pr.entwurf && !pr.berichtigt ? `begonnen ${esc(fmtZeit(pr.begonnen_am))}` : `Prüftag ${esc(fmtTag(pr.datum))}`}
-          ${pr.durchgang ? ` · Durchgang ${pr.durchgang.sichtbar ? `<a href="/materialablage/durchgang/${pr.durchgang.id}">${esc(pr.durchgang.titel)}</a>` : `„${esc(pr.durchgang.titel)}“`}` : ""}</p>
+          ${pr.durchgang ? ` · Prüfdurchgang ${pr.durchgang.sichtbar ? `<a href="/materialablage/durchgang/${pr.durchgang.id}">${esc(pr.durchgang.titel)}</a>` : `„${esc(pr.durchgang.titel)}“`}` : ""}</p>
         ${pr.anleitung ? '<div class="mat-anleitung-platz"></div>' : ""}`;
     }
     // Die Prüfanleitung aus dem Wiki (nur offene Prüfungen, Phase 2 · L3) an ihren Platz im Kopf – dasselbe Element wie
@@ -5680,9 +5845,11 @@
         // Bestandteil-Liste (Schritt 25; alte Prüfungen früherer Set-Artikel ebenso): „vorhanden“/„fehlt“ statt Ja/Nein –
         // gespeichert bleibt ja/nein.
         const wort = istBestandteil(x) ? { ja: "vorhanden", nein: "fehlt" } : { ja: "Ja", nein: "Nein" };
-        steuer = `<div class="mat-wahl3" role="group" aria-label="Befund zu ${esc(x.text)}">
-          ${["ja", "nein"].map((w) => `<button type="button" data-act="pwert" data-rid="${x.id}" data-wert="${w}" class="${w === x.soll ? "soll" : "abw"}" aria-pressed="${!nz && x.wert === w}">${wort[w]}</button>`).join("")}
-          <button type="button" data-act="pbefund" data-rid="${x.id}" data-befund="nicht_zutreffend" aria-pressed="${nz}" title="nicht zutreffend">n. z.</button></div>`;
+        const gewaehlt = (w) => (w === "nz" ? nz : !nz && x.wert === w);
+        const keiner = !["ja", "nein", "nz"].some(gewaehlt);
+        steuer = `<div class="mat-wahl3" role="radiogroup" aria-label="Befund zu ${esc(x.text)}">
+          ${["ja", "nein"].map((w, i) => `<button type="button" data-act="pwert" data-rid="${x.id}" data-wert="${w}" class="${w === x.soll ? "soll" : "abw"}"${radioAttrs(gewaehlt(w), keiner && !i)}>${wort[w]}</button>`).join("")}
+          <button type="button" data-act="pbefund" data-rid="${x.id}" data-befund="nicht_zutreffend"${radioAttrs(nz, false)} title="nicht zutreffend">n. z.</button></div>`;
       } else if (x.art === "signature") {
         // Unterschriftsfeld: gezeichnet im Pad (unterschrift.js); „n. z.“ nimmt es heraus. Kein Foto.
         steuer = `<div class="mat-us-feld">
@@ -5699,9 +5866,11 @@
             ? `<input type="text" inputmode="decimal" class="mat-pwert mat-laenge-feld" data-rid="${x.id}" value="${esc(x.wert || "")}" placeholder="Länge in m" autocomplete="off" maxlength="10" aria-label="${esc(x.text)}">`
             : `<p class="help mat-laenge-hinweis">Für Artikel dieser Kategorie ist keine Länge vorgesehen – der Punkt gilt als nicht zutreffend.</p>`)
           : `<textarea class="mat-pwert" data-rid="${x.id}" rows="2" maxlength="1000" aria-label="${esc(x.text)}" placeholder="${esc(x.soll || "")}">${esc(x.wert || "")}</textarea>`;
-        steuer = `${feld}<div class="mat-wahl3" role="group" aria-label="Befund zu ${esc(x.text)}">
-          ${[["ok", "in Ordnung", "soll"], ["mangel", "Mangel", "abw"], ["nicht_zutreffend", "n. z.", ""]]
-            .filter(([b]) => x.art !== "laenge" || laengeMoeglich || b === "nicht_zutreffend").map(([b, t, k]) => `<button type="button" data-act="pbefund" data-rid="${x.id}" data-befund="${b}" class="${k}" aria-pressed="${x.befund === b}"${b === "nicht_zutreffend" ? ' title="nicht zutreffend"' : ""}>${t}</button>`).join("")}</div>`;
+        const wahl = [["ok", "in Ordnung", "soll"], ["mangel", "Mangel", "abw"], ["nicht_zutreffend", "n. z.", ""]]
+          .filter(([b]) => x.art !== "laenge" || laengeMoeglich || b === "nicht_zutreffend");
+        const keiner = !wahl.some(([b]) => x.befund === b);
+        steuer = `${feld}<div class="mat-wahl3" role="radiogroup" aria-label="Befund zu ${esc(x.text)}">
+          ${wahl.map(([b, t, k], i) => `<button type="button" data-act="pbefund" data-rid="${x.id}" data-befund="${b}" class="${k}"${radioAttrs(x.befund === b, keiner && !i)}${b === "nicht_zutreffend" ? ' title="nicht zutreffend"' : ""}>${t}</button>`).join("")}</div>`;
       }
       const fotoPflicht = mangel || (x.art === "photo" && x.pflicht && !nz);
       // Zwei Wege zum Foto: „Foto“ öffnet am Telefon gleich die Kamera (capture), „Galerie“ nimmt ein schon
@@ -5749,7 +5918,7 @@
     function anhaengeListe() {
       if (!pr.anhaenge.length) return leer("Keine Anhänge.");
       return `<ul class="mat-anhaenge">${pr.anhaenge.map((x) => `<li><a href="${esc(x.datei)}" target="_blank" rel="noopener">${esc(x.titel)}</a>
-        <span class="muted small">${esc(x.art_text)} · ${plural(x.seiten || 0, "Seite", "Seiten")} · SHA-256 <span class="mat-hash" title="${esc(x.sha256)}">${esc(x.sha256.slice(0, 12))}…</span>${x.im_protokoll ? " · ans Protokoll" : ""}</span>
+        <span class="muted small">${esc(x.art_text)} · ${plural(x.seiten || 0, "Seite", "Seiten")} · <span class="mat-nowrap">SHA-256</span> <span class="mat-hash" title="${esc(x.sha256)}">${esc(x.sha256.slice(0, 12))}…</span>${x.im_protokoll ? " · ans Protokoll" : ""}</span>
         ${bearbeitbar() ? `<button type="button" class="lnk small" data-act="anhang-weg" data-id="${x.id}">entfernen</button>` : ""}</li>`).join("")}</ul>`;
     }
 
@@ -5785,66 +5954,41 @@
       return { offen, ohneFoto, ohneNotiz, kritisch, einsatzSperre: kritisch.length || ldErreicht, maengel: pr.punkte.filter((x) => x.befund === "mangel") };
     }
 
+    // Mit weichem Trennstrich: Am schmalen Telefon (bis 360 px) brechen „einsatzbereit“ und „instandsetzen“ in zwei
+    // Zeilen wie „aussondern empfohlen“, statt den dritten Knopf in eine eigene Reihe zu schieben (B2).
+    const ERGEBNIS_TRENNBAR = { einsatzbereit: "einsatz&shy;bereit", instandsetzen: "instand&shy;setzen", aussondern_empfohlen: "aussondern empfohlen" };
     function abschlussHtml() {
       // Die Statuszeile steht über Ergebnis und „Festschreiben“, nicht darunter (Designsprache, Nutzer 25.10.2026).
       return `<div class="mat-abschluss" id="pr-abschluss" role="region" aria-label="Ergebnis und Abschluss">
         <div class="mat-abschluss-hinweis" id="pr-hinweis" aria-live="polite" data-act="hinweis-ganz"></div>
-        <div class="mat-ergebnis" role="group" aria-label="Ergebnis" aria-describedby="pr-hinweis">
-          ${WAEHLBAR.map((e) => `<button type="button" data-act="ergebnis" data-e="${e}" class="e-${e}" aria-pressed="false">${esc(ERGEBNIS[e])}</button>`).join("")}</div>
+        <div class="mat-ergebnis" role="radiogroup" aria-label="Ergebnis" aria-describedby="pr-hinweis">
+          ${WAEHLBAR.map((e, i) => `<button type="button" role="radio" data-act="ergebnis" data-e="${e}" class="e-${e}" aria-checked="false" tabindex="${i ? -1 : 0}">${ERGEBNIS_TRENNBAR[e]}</button>`).join("")}</div>
         <div class="mat-abschluss-zeile">
-          <label class="mat-due" id="pr-due-feld" hidden>Nächste Prüfung ${datumFeld("pr-due", pr.vorschlag_naechste || "", "tag")}
-            <span class="mat-due-hilfe">frühestens ${esc(fmtTag(isoHeute(1)))}${pr.vorschlag_naechste ? `, spätestens ${esc(fmtTag(pr.vorschlag_naechste))}` : ""}</span></label>
-          <input type="text" id="pr-grund" maxlength="300" placeholder="Grund" aria-label="Grund" value="${esc(pr.grund || "")}" hidden>
-          <button type="button" class="btn" data-act="festschreiben" id="pr-ok" aria-describedby="pr-hinweis" disabled>Festschreiben</button></div>
-        <p class="error feld-fehler" id="pr-grund-fehler" hidden></p><p class="error feld-fehler" id="pr-due-fehler" hidden></p></div>`;
-    }
-
-    // In der einzeiligen Leiste (wenig Höhe, breite Touch-Geräte – material.css) ist das Feld für den Grund oft schmal: Passt
-    // die Langform dort nicht hinein, steht nur „Grund“ darin und die Langform im title. Am Rechner bleibt sie.
-    const EINZEILIG = window.matchMedia("(max-height: 500px) and (min-width: 561px), (pointer: coarse) and (min-width: 600px)");
-    const textMass = document.createElement("canvas").getContext("2d");
-    function grundPlatzhalter() {
-      const g = imAbschluss("#pr-grund");
-      if (!g) return;
-      const lang = offeneHinweise().maengel.length ? "Grund (freiwillig – die Mängel stehen oben)" : "Grund (Pflicht ohne Mangel)";
-      let kurz = false;
-      if (EINZEILIG.matches && !g.hidden) {
-        const s = getComputedStyle(g);
-        textMass.font = `${s.fontSize} ${s.fontFamily}`;
-        kurz = textMass.measureText(lang).width > g.clientWidth - parseFloat(s.paddingLeft) - parseFloat(s.paddingRight);
-      }
-      g.placeholder = kurz ? "Grund" : lang;
-      g.title = kurz ? lang : "";
+          <button type="button" class="btn" data-act="festschreiben" id="pr-ok" aria-describedby="pr-hinweis" aria-disabled="true">Festschreiben</button></div></div>`;
     }
     function abschlussAktualisieren() {
       const h = offeneHinweise();
       if (ergebnis === "einsatzbereit" && h.einsatzSperre) { ergebnis = null; abschlussMerken(); }
       const box = abschlussBox();
       $$("[data-act=ergebnis]", box).forEach((b) => {
-        b.setAttribute("aria-pressed", String(b.dataset.e === ergebnis));
+        b.setAttribute("aria-checked", String(b.dataset.e === ergebnis));
         if (b.dataset.e === "einsatzbereit") {
           b.disabled = !!h.einsatzSperre;
           b.title = h.einsatzSperre ? (pr.einsatzbereit_gesperrt.concat(h.kritisch.length ? ["kritischer Mangel"] : [])).join("; ") : "";
         }
       });
-      $("#pr-due-feld", box).hidden = ergebnis !== "einsatzbereit";
-      $("#pr-grund", box).hidden = !ergebnis || ergebnis === "einsatzbereit";
-      // Ohne Mangel ist der Grund Pflicht – das steht sichtbar in der Hinweiszeile, nicht nur im Platzhalter (A2).
-      const grundPflicht = !!ergebnis && ergebnis !== "einsatzbereit" && !h.maengel.length;
-      $("#pr-grund", box).setAttribute("aria-required", String(grundPflicht));
-      grundPlatzhalter();
-      $("#pr-ok", box).disabled = !ergebnis;
+      radioStopp($(".mat-ergebnis", box));
+      // Ohne Ergebnis bleibt „Festschreiben“ fokussierbar; der Grund steht in der Hinweiszeile darüber (B1). Was ein
+      // Ergebnis bewirkt (sperrt, Grund Pflicht, Freiprüfung, Unterschrift), sagt der Dialog „Prüfung festschreiben“ –
+      // die Zeile hier nennt nur, was noch fehlt (B2: die Leiste bleibt am Telefon niedrig).
+      knopfGrund($("#pr-ok", box), ergebnis ? "" : "Wähle ein Ergebnis.");
       const teile = [];
+      if (!ergebnis) teile.push("Wähle ein Ergebnis.");
       if (h.offen.length) teile.push(`${plural(h.offen.length, "Pflichtpunkt", "Pflichtpunkte")} ohne Befund`);
       if (h.ohneFoto.length) teile.push(`${plural(h.ohneFoto.length, "Mangel", "Mängel")} ohne Foto`);
       if (h.ohneNotiz.length) teile.push(`${plural(h.ohneNotiz.length, "Mangel", "Mängel")} ohne Bemerkung`);
       if (h.kritisch.length) teile.push("kritischer Mangel – nicht einsatzbereit");
       else if (pr.lebensdauer && pr.lebensdauer.erreicht) teile.push("Lebensende erreicht – nicht einsatzbereit");
-      if (pr.freipruefung && ergebnis === "einsatzbereit") teile.push("Freiprüfung: Der Artikel kehrt in seinen Herkunftsordner zurück");
-      if (ergebnis === "instandsetzen" && !pr.freipruefung) teile.push("„instandsetzen“ sperrt den Artikel");
-      if (grundPflicht) teile.push("Ohne Mangel ist ein Grund Pflicht");
-      if (ergebnis === "aussondern_empfohlen") teile.push(pr.freipruefung ? "Der Artikel bleibt gesperrt – aussondern kann der Materialwart" : "„aussondern empfohlen“ sperrt den Artikel – aussondern kann der Materialwart");
-      if (!DARF.unterschrift) teile.push("Deine Unterschrift fehlt noch – „Festschreiben“ fragt danach");
       $("#pr-hinweis", box).textContent = teile.join(" · ");
       $("#pr-hinweis", box).classList.toggle("warn", !!(h.offen.length || h.ohneFoto.length || h.ohneNotiz.length || h.kritisch.length));
     }
@@ -5906,14 +6050,16 @@
         <div class="mat-protokoll-kopf"><span class="mat-protokoll-id mat-hash">${esc(p.id)}</span></div>
         <dl class="mat-daten">
           <dt>Festgeschrieben</dt><dd>${esc(fmtZeit(p.festgeschrieben))}${p.anmeldung ? ` von ${person(p.anmeldung)}` : ""}</dd>
-          <dt>Prüfsumme${infoKnopf("Prüfsumme", PRUEFSUMME_INFO)}</dt><dd><span class="small muted">SHA-256 (erste ${esc(p.bytes)} Bytes)</span><br>${summeKnopf(p.sha256)}</dd>
+          <dt>Prüfsumme${infoKnopf("Prüfsumme", PRUEFSUMME_INFO)}</dt><dd><span class="small muted"><span class="mat-nowrap">SHA-256</span> (erste ${esc(p.bytes)} Bytes)</span><br>${summeKnopf(p.sha256)}</dd>
           ${pr.unterschrift ? `<dt>Unterschrift</dt><dd><img class="mat-us-bild" src="${esc(pr.unterschrift)}" alt="Unterschrift von ${esc(pr.pruefer || "")}"></dd>` : ""}
           ${aussonderungHtml()}
         </dl>${nein}</section>`;
     }
 
     function bearbeitenHtml() {
-      return `${pr.freipruefung ? `<p class="mat-banner s-gesperrt">GESPERRT – mit „einsatzbereit“ ist diese Prüfung die Freiprüfung.</p>` : ""}
+      // Sprunglink über die Prüfpunkte zur Ergebnisleiste (B11) – erscheint erst mit dem Tastaturfokus.
+      return `<a class="mat-sprung" href="#pr-abschluss" data-act="zum-abschluss">Zum Abschluss</a>
+        ${pr.freipruefung ? `<p class="mat-banner s-gesperrt">GESPERRT – mit „einsatzbereit“ ist diese Prüfung die Freiprüfung.</p>` : ""}
         ${mangelHinweis(pr.maengel, Boolean(pr.berichtigt))}
         ${rueckrufHinweis(pr.artikel.rueckruf ? [pr.artikel.rueckruf] : [], pr.artikel.id, Boolean(pr.berichtigt))}
         ${lebensdauerHinweis(pr.lebensdauer)}
@@ -6012,9 +6158,7 @@
       // ist noch kein Datum).
       inhalt.addEventListener("input", (e) => {
         if (bearbeitbar() && e.target.matches(TEXT) && !e.target.classList.contains("mat-datum")) vormerken(schluessel(e.target), e.target.value);
-        if (bearbeitbar() && (e.target.id === "pr-grund" || e.target.id === "pr-due")) abschlussMerken();
       });
-      window.addEventListener("resize", () => { if (bearbeitbar()) grundPlatzhalter(); });
       inhalt.addEventListener("focusout", (e) => {
         const el = e.target;
         setTimeout(() => tipptPruefen(true), 0);
@@ -6078,7 +6222,7 @@
       });
     }
 
-    const HINWEIS_FEST = "Zum Festschreiben brauchst du deine Unterschrift. Sie wird in deinem Profil gespeichert und als Kopie in jedes Protokoll übernommen, das du festschreibst – ändern kannst du sie dort jederzeit.";
+    const HINWEIS_FEST = "Zum Festschreiben brauchst du deine Unterschrift. Die Unterschrift wird in deinem Profil gespeichert und als Kopie in jedes Protokoll übernommen, das du festschreibst – ändern kannst du sie dort jederzeit.";
     const HINWEIS_WEG = "Deine Unterschrift ist nicht mehr in deinem Profil hinterlegt – vielleicht in einem anderen Fenster entfernt. Zum Festschreiben unterschreibe bitte neu; sie wird wieder im Profil gespeichert und als Kopie ins Protokoll übernommen.";
     const usZeile = (bild) => (!DARF.unterschrift ? '<span class="small muted">fehlt – „Festschreiben“ fragt danach</span>'
       : `${bild ? `<img class="mat-us-bild" src="${esc(bild)}" alt="Deine Unterschrift">` : ""}<span class="small muted">aus deinem Profil – sie kommt als Kopie ins Protokoll</span>`);
@@ -6101,22 +6245,30 @@
          Meldung ohnehin nicht frei (der Server sagt es); „instandsetzen“ und „aussondern empfohlen“ brauchen kein Häkchen. */
       const zuHaken = daten.ergebnis === "einsatzbereit" && !pr.berichtigt ? (pr.maengel || []) : [];
       delete daten.maengel_gesehen;
+      const grundPflicht = daten.ergebnis !== "einsatzbereit" && !maengel;
+      // Was das gewählte Ergebnis bewirkt – stand bis UI/UX vor dem Merge (B2) in der Hinweiszeile der Leiste.
+      const folge = daten.ergebnis === "einsatzbereit" ? (pr.freipruefung ? "Freiprüfung: Der Artikel kehrt in seinen Herkunftsordner zurück." : "")
+        : daten.ergebnis === "instandsetzen" ? (pr.freipruefung ? "Der Artikel bleibt gesperrt." : "„instandsetzen“ sperrt den Artikel.")
+          : pr.freipruefung ? "Der Artikel bleibt gesperrt – aussondern kann der Materialwart."
+            : "Der Artikel wird gesperrt und wandert nach „Gesperrt“. Deine Empfehlung steht im Protokoll und am Artikel – aussondern kann danach der Materialwart.";
       dialog(`<h2>Prüfung festschreiben</h2>
         <dl class="mat-daten mat-fs-daten">
           <dt>Artikel</dt><dd><strong>${esc(a.inventory_no)}</strong> · ${nameHtml(pr.produkt)}${zusatzHtml(pr.produkt)}</dd>
           <dt>Prüfung</dt><dd>${esc(PRUEFART[pr.art] || pr.art)} am ${esc(fmtTag(pr.prueftag || isoHeute()))}</dd>
           <dt>Ergebnis</dt><dd>${ergebnisMarke(daten.ergebnis)}${maengel ? ` <span class="small">mit ${plural(maengel, "Mangel", "Mängeln")}</span>` : ""}</dd>
-          ${daten.ergebnis === "einsatzbereit" ? `<dt>Nächste Prüfung</dt><dd><strong>${esc(fmtTag(daten.next_due_on || pr.vorschlag_naechste))}</strong></dd>` : ""}
-          ${daten.grund ? `<dt>Grund</dt><dd>${esc(daten.grund)}</dd>` : ""}
           <dt>Prüfer</dt><dd>${person(pr.pruefer || "–")}${pr.urkunde ? ` · <span class="mat-ganz">Urkundennummer ${esc(pr.urkunde)}</span>` : ""}</dd>
           <dt>Unterschrift</dt><dd id="fs-us">${usZeile(bild)}</dd>
         </dl>
+        ${daten.ergebnis === "einsatzbereit" ? `<label for="fs-due">Nächste Prüfung</label>${datumFeld("fs-due", abschlussEntwurf.faellig || pr.vorschlag_naechste || "", "tag")}
+          <p class="help" id="fs-due-hilfe">Frühestens ${esc(fmtTag(isoHeute(1)))}${pr.vorschlag_naechste ? `, spätestens ${esc(fmtTag(pr.vorschlag_naechste))}` : ""} – vorziehen geht, verschieben nicht.</p>`
+          : `<label for="fs-grund">Grund${grundPflicht ? " (Pflicht – ohne Mangel)" : " (freiwillig – die Mängel stehen im Protokoll)"}</label>
+          <input type="text" id="fs-grund" maxlength="300" value="${esc(abschlussEntwurf.grund)}"${grundPflicht ? ' aria-required="true"' : ""}>`}
+        ${folge ? `<p>${esc(folge)}</p>` : ""}
         ${zuHaken.length ? `<fieldset class="mat-fs-maengel"><legend>Gemeldete Mängel</legend>
           ${zuHaken.map((m) => `<div class="mat-fs-mangel"><label class="inline"><input type="checkbox" data-mangel="${Number(m.id)}">
             Gemeldeten Mangel vom ${esc(S.fmtDate(m.created_at))} geprüft</label>
             ${m.description ? `<p class="small mat-text">${esc(m.description.length > 300 ? `${m.description.slice(0, 299)}…` : m.description)}</p>` : ""}</div>`).join("")}
           <p class="help" id="fs-maengel-hilfe">Freigeben kannst du erst, wenn du jeden gemeldeten Mangel geprüft hast.</p></fieldset>` : ""}
-        ${daten.ergebnis === "aussondern_empfohlen" ? "<p>Der Artikel wird gesperrt und wandert nach „Gesperrt“. Deine Empfehlung steht im Protokoll und am Artikel – aussondern kann danach der Materialwart.</p>" : ""}
         ${pr.berichtigt ? `<p>Diese Berichtigung ersetzt ${pr.berichtigt.protokoll_id ? `Protokoll ${esc(pr.berichtigt.protokoll_id)}` : "die ursprüngliche Prüfung"}; das Original bleibt unverändert erhalten.</p>` : ""}
         <p class="help">Danach ist die Prüfung unveränderlich; eine Korrektur geht nur als Berichtigung. Das Protokoll entsteht mit Prüfsumme.</p>
         <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button><button class="btn" id="fs-ok" type="button">Festschreiben</button></div>`,
@@ -6124,10 +6276,18 @@
         const knopf = $("#fs-ok", body);
         const haken = $$("input[data-mangel]", body);
         const alleAbgehakt = () => haken.every((h) => h.checked);
-        const knopfFrei = () => { knopf.disabled = !alleAbgehakt(); };
+        // Fokussierbar ausgegraut mit dem Satz darüber (B1); der Satz steht im Kasten der gemeldeten Mängel.
+        const knopfFrei = () => {
+          if (alleAbgehakt()) knopf.removeAttribute("aria-disabled"); else knopf.setAttribute("aria-disabled", "true");
+          knopf.disabled = false;
+        };
+        if (haken.length) knopf.setAttribute("aria-describedby", "fs-maengel-hilfe");
         haken.forEach((h) => h.addEventListener("change", knopfFrei));
         knopfFrei();
-        fokus(haken.length ? haken[0] : knopf);
+        const grundFeld = $("#fs-grund", body), dueFeld = $("#fs-due", body);
+        if (grundFeld) grundFeld.addEventListener("input", () => { abschlussEntwurf.grund = grundFeld.value; abschlussMerken(); });
+        if (dueFeld) dueFeld.addEventListener("change", () => { abschlussEntwurf.faellig = dueIso(dueFeld); abschlussMerken(); });
+        fokus(grundFeld && grundPflicht && !grundFeld.value.trim() ? grundFeld : haken.length ? haken[0] : knopf);
         let erneut = false;          // nach einem 403 wegen fehlender Unterschrift genau einmal von selbst weiter
         async function festschreiben() {
           if (!DARF.unterschrift) {
@@ -6136,6 +6296,20 @@
             abschlussAktualisieren();
           }
           if (!alleAbgehakt()) { toast("Freigeben kannst du erst, wenn du jeden gemeldeten Mangel geprüft hast.", true); return; }
+          // Grund bzw. „Nächste Prüfung“ (vorher in der Leiste): ein Tippfehler im Datum bricht ab (vorher wurde daraus
+          // still „spätestens“ – S20); die Grenzen prüft der Server noch einmal.
+          daten.grund = grundFeld ? grundFeld.value.trim() : "";
+          if (grundFeld && grundPflicht && !daten.grund) { S.feldFehler(grundFeld, `Ohne Mangel braucht „${ERGEBNIS[daten.ergebnis]}“ einen Grund.`); return; }
+          if (dueFeld) {
+            let due;
+            try { due = datumWert(dueFeld, "Nächste Prüfung") || null; }
+            catch (e) { S.feldFehler(dueFeld, e.message); return; }
+            if (due && (due < isoHeute(1) || (pr.vorschlag_naechste && due > pr.vorschlag_naechste))) {
+              S.feldFehler(dueFeld, `„Nächste Prüfung“: frühestens ${fmtTag(isoHeute(1))}${pr.vorschlag_naechste ? `, spätestens ${fmtTag(pr.vorschlag_naechste)}` : ""} – vorziehen geht, verschieben nicht.`);
+              return;
+            }
+            daten.next_due_on = due;
+          }
           if (haken.length) daten.maengel_gesehen = haken.filter((h) => h.checked).map((h) => +h.dataset.mangel);
           knopf.disabled = true;
           knopf.textContent = "Wird festgeschrieben …";
@@ -6211,6 +6385,7 @@
       },
       // Wenig Höhe: Der Hinweis in der Leiste steht in einer Zeile – antippen zeigt ihn ganz.
       "hinweis-ganz": (h) => { h.classList.toggle("ganz"); },
+      "zum-abschluss": () => { const r = $('.mat-ergebnis [role="radio"][tabindex="0"]', abschlussBox()); if (r) r.focus(); },
       "seite-weg": (b) => { seiten.splice(+b.dataset.i, 1); seitenZeichnen(); },
       "anhang-hoch": async () => {
         if (!seiten.length || hochladen) return;
@@ -6244,9 +6419,10 @@
       },
       ergebnis: (b) => {
         if (b.disabled) return;
-        ergebnis = ergebnis === b.dataset.e ? null : b.dataset.e;
+        // Pfeiltasten wählen (radioWahl), ein Klick auf das gewählte Ergebnis nimmt es wie bisher zurück.
+        ergebnis = ergebnis === b.dataset.e && !b.dataset.pfeil ? null : b.dataset.e;
+        delete b.dataset.pfeil;
         abschlussAktualisieren(); abschlussMerken();
-        if (ergebnis && ergebnis !== "einsatzbereit") fokus(imAbschluss("#pr-grund"));
       },
       festschreiben: async (b) => {
         if (!ergebnis) return;
@@ -6260,34 +6436,19 @@
           return;
         }
         const h = offeneHinweise();
-        const grund = ergebnis === "einsatzbereit" ? "" : imAbschluss("#pr-grund").value.trim();
         if (h.offen.length) { toast("Noch ohne Befund: " + h.offen.slice(0, 5).map((x) => x.text).join("; "), true); return; }
         if (h.ohneFoto.length) { toast("Jeder Mangel braucht ein Foto – es fehlt bei: " + h.ohneFoto.slice(0, 5).map((x) => x.text).join("; "), true); return; }
         if (h.ohneNotiz.length) {
           toast("Jeder Mangel braucht eine Bemerkung – sie fehlt bei: " + h.ohneNotiz.slice(0, 5).map((x) => x.text).join("; "), true);
           fokus($(`#pp-${h.ohneNotiz[0].id} .mat-pnotiz`)); return;
         }
-        if (ergebnis !== "einsatzbereit" && !h.maengel.length && !grund) { S.feldFehler(imAbschluss("#pr-grund"), `Ohne Mangel braucht „${ERGEBNIS[ergebnis]}“ einen Grund.`); return; }
-        // „Nächste Prüfung“: ein Tippfehler bricht ab (vorher wurde daraus still „spätestens“ – S20); die Grenzen
-        // prüft der Server noch einmal.
-        let due = null;
-        if (ergebnis === "einsatzbereit") {
-          try { due = datumWert(imAbschluss("#pr-due"), "Nächste Prüfung") || null; }
-          catch (e) { S.feldFehler(imAbschluss("#pr-due"), e.message); return; }
-          if (due && (due < isoHeute(1) || (pr.vorschlag_naechste && due > pr.vorschlag_naechste))) {
-            S.feldFehler(imAbschluss("#pr-due"), `„Nächste Prüfung“: frühestens ${fmtTag(isoHeute(1))}${pr.vorschlag_naechste ? `, spätestens ${fmtTag(pr.vorschlag_naechste)}` : ""} – vorziehen geht, verschieben nicht.`);
-            return;
-          }
-        }
         b.disabled = true;
         try {
           if (!(await eigeneUnterschrift(HINWEIS_FEST))) return;
           abschlussAktualisieren();
           await laufend.catch(() => {});
-          const daten = { ergebnis, grund, bemerkung: bemFeld().value };
-          if (ergebnis === "einsatzbereit") daten.next_due_on = due;
-          await festschreibDialog(daten);
-        } finally { if (b.isConnected) b.disabled = !ergebnis; }
+          await festschreibDialog({ ergebnis, bemerkung: bemFeld().value });
+        } finally { if (b.isConnected) b.disabled = false; }
       },
       berichtigen: () => {
         dialog(`<h2>Prüfung berichtigen</h2>
@@ -6406,17 +6567,21 @@
       return `<tr class="z-${a.zustand}${sichtbar ? "" : " mat-fremd"}"><td data-l="Inventar-Nr." class="mat-k-titel">${nummer}</td>
         <td data-l="Hersteller" class="mat-schmal-weg">${esc(a.manufacturer || "")}</td>
         <td data-l="Produkt" class="mat-k-ohne">${a.manufacturer ? `<div class="mat-schmal-zusatz small muted">${esc(a.manufacturer)}</div>` : ""}${produktZelle(a, sichtbar)}${a.serial_no ? `<div class="small muted">SN ${esc(a.serial_no)}</div>` : ""}
-          <div class="mat-eng-zusatz small muted">${esc(a.pfad)}</div></td>
-        <td data-l="Ablage" class="mat-eng-weg">${esc(a.pfad)}</td><td data-l="Stand">${zustand}</td><td data-l="Status" class="mat-k-marke">${a.status ? statusMarke(a.status) : '<span class="muted">–</span>'}${empfohlenMarke(a.aussonderung_empfohlen)}</td>
+          <div class="mat-eng-zusatz small muted" title="${esc(a.pfad)}">${esc(letztesGlied(a.pfad))}</div></td>
+        <td data-l="Ablage" class="mat-eng-weg" title="${esc(a.pfad)}">${esc(letztesGlied(a.pfad))}</td><td data-l="Stand">${zustand}</td><td data-l="Status" class="mat-k-marke">${a.status ? statusMarke(a.status) : '<span class="muted">–</span>'}${empfohlenMarke(a.aussonderung_empfohlen)}</td>
         <td class="tabelle-aktionen">${knopf}</td></tr>`;
     }
     function zeichnen() {
       leisteMarkieren(d.folder_id);
       const z = d.zaehlung;
       const darf = Boolean(d.darf && (d.darf.verwalten || d.darf.pruefen));
-      // Ausgegrautes „Durchgang abschließen“: der Grund mit Zahl im Satz über der Liste, am Knopf per aria-describedby
-      // (Browserprüfung vor dem Merge, Verbesserung 4).
+      // Ausgegrautes „Durchgang abschließen“: der Grund mit Zahl direkt über der Knopfzeile, am Knopf per aria-describedby,
+      // der Knopf bleibt fokussierbar (UI/UX vor dem Merge, B1 – vorher stand der Satz am Telefon 440 px tiefer hinter den
+      // Kacheln). „Durchgang abbrechen“ bleibt daneben ein grauer Knopf: Es ist die einzige weitere Aktion des Kopfs, ein
+      // Menü mit nur ihr wäre wieder ein Knopf (Konfliktregel, B6).
       const rest = (z.offen || 0) + (z.in_pruefung || 0);
+      const abschlussGrund = d.abschliessbar ? "" : rest ? `Noch ${plural(rest, "Artikel", "Artikel")} offen oder in Prüfung.`
+        : "Abschließen geht, sobald jeder Artikel geprüft oder mit Grund ausgenommen ist.";
       const liste = sortiert(d.artikel.filter((a) => !filter || a.zustand === filter));
       const s = sort;
       // Laufend: offen, in Prüfung, erledigt, ausgenommen. Vorbei: erledigt, ausgenommen – nach einem Abbruch
@@ -6427,24 +6592,25 @@
       // Ein beendeter Durchgang steht unter „Abgeschlossene Prüfdurchgänge“ – die Brotkrume führt dorthin zurück.
       inhalt.innerHTML = `<div class="mat-pfad">${pfadHtml(['<a href="/materialablage/pruefungen">Prüfungen</a>', d.offen ? "" : '<a href="/materialablage/durchgaenge">Abgeschlossene Prüfdurchgänge</a>', "<span>Prüfdurchgang</span>"])}</div>
         <div class="page-head"><h1>${esc(d.titel)} ${d.offen ? '<span class="badge">offen</span>' : `<span class="badge grey">${d.abgebrochen ? "abgebrochen" : "abgeschlossen"}</span>`}</h1>
-          <div class="btn-row">${d.offen && darf ? `<button class="btn secondary" data-act="abbrechen">Durchgang abbrechen</button>
-            <button class="btn" data-act="schliessen" ${d.abschliessbar ? "" : 'disabled aria-describedby="dg-abschluss"'}>Durchgang abschließen</button>` : ""}
-            ${!d.offen && (d.set_protokolle || []).length ? `<a class="btn secondary" href="/materialablage/durchgang/${d.id}/protokolle.zip">Alle Protokolle (ZIP)</a>` : ""}</div></div>
+          ${d.offen && darf ? `<div class="mat-kopfaktion">${grundSatz("dg-abschluss", abschlussGrund)}
+            <div class="btn-row"><button class="btn secondary" data-act="abbrechen">Durchgang abbrechen</button>
+            <button class="btn" data-act="schliessen"${knopfAus("dg-abschluss", abschlussGrund)}>Durchgang abschließen</button></div></div>` : ""}
+            ${!d.offen && (d.set_protokolle || []).length ? `<div class="btn-row"><a class="btn secondary" href="/materialablage/durchgang/${d.id}/protokolle.zip" data-frisch>Alle Protokolle (ZIP)</a></div>` : ""}</div>
         <p>Ordner <a href="/materialablage/ordner/${d.folder_id}">${esc(d.ordner)}</a> · eröffnet ${esc(fmtTag(d.eroeffnet_am))} von ${person(d.eroeffnet_von || "–")}
           ${d.offen ? "" : ` · ${d.abgebrochen ? "abgebrochen" : "abgeschlossen"} ${esc(fmtTag(d.geschlossen_am))} von ${person(d.geschlossen_von || "–")}`}</p>
         ${d.protokoll ? `<section class="section mat-protokoll"><div class="abschnittskopf"><h2>Sammelprotokoll</h2>
           ${d.offen ? "" : `<a class="btn secondary small" href="${esc(d.protokoll.url)}" target="_blank" rel="noopener" title="Sammelprotokoll ${esc(d.protokoll.id)} öffnen">Protokoll (PDF)</a>`}</div>
           <p class="mat-protokoll-zeile"><strong class="mat-hash">${esc(d.protokoll.id)}</strong> · festgeschrieben ${esc(fmtZeit(d.protokoll.festgeschrieben))}
-          · Prüfsumme${infoKnopf("Prüfsumme", (d.set_protokolle || []).length ? 'Die Prüfsumme steht im Fuß jeder Seite des PDFs, ebenso in jedem Set-Protokoll. Ob eine Datei unverändert ist, zeigt die <a href="/materialablage/pruefen">Prüfseite</a>.' : PRUEFSUMME_INFO)}
-          <span class="small muted">SHA-256 (erste ${esc(d.protokoll.bytes)} Bytes)</span> ${summeKnopf(d.protokoll.sha256)}</p></section>`
+          · Prüfsumme${infoKnopf("Prüfsumme", (d.set_protokolle || []).length ? 'Die Prüfsumme steht im Fuß jeder Seite des PDFs, ebenso in jedem Set-Protokoll. Ob eine Datei unverändert ist, zeigt die Seite <a href="/materialablage/pruefen">„Echtheit prüfen“</a>.' : PRUEFSUMME_INFO)}
+          <span class="small muted"><span class="mat-nowrap">SHA-256</span> (erste ${esc(d.protokoll.bytes)} Bytes)</span> ${summeKnopf(d.protokoll.sha256)}</p></section>`
           : d.offen ? "" : '<p class="small muted">Vor Einführung des Festschreibens geschlossen – ohne Sammelprotokoll.</p>'}
         ${(d.set_protokolle || []).length ? `<section class="section"><h2>Set-Protokolle</h2>${setProtokolleHtml(d.set_protokolle)}</section>` : ""}
         <div class="mat-kachelrahmen"><div class="mat-kacheln mat-rundenzahlen">${zustaende.map(([k, t]) => `<div class="mat-kachel z-${k || "gesamt"}"><strong>${z[k || "gesamt"]}</strong><span>${k ? t : "Artikel"}</span></div>`).join("")}</div></div>
         <p>${fortschritt(z)}</p>
-        ${d.offen ? `<p class="help" id="dg-abschluss">${d.abschliessbar || !rest ? "" : `<strong>Noch ${plural(rest, "Artikel", "Artikel")} offen oder in Prüfung.</strong> `}Jeder öffnet seinen Artikel mit „Prüfen“ und reserviert ihn damit – die anderen sehen „in Prüfung bei …“. Abschließen geht, sobald jeder Artikel geprüft oder mit Grund ausgenommen ist. Beim Abschließen entsteht das Sammelprotokoll mit allen Prüfern${d.set_ordner && d.set_ordner.anzahl ? ` – dazu für jedes Set mit geprüften Artikeln ein eigenes Set-Protokoll (hier bis zu ${d.set_ordner.anzahl}; Sets mit Geprüftem bisher: ${d.set_ordner.mit_pruefung})` : ""}.</p>` : ""}
+        ${d.offen ? `<p class="help">Jeder öffnet seinen Artikel mit „Prüfen“ und reserviert ihn damit – die anderen sehen „in Prüfung bei …“. Abschließen geht, sobald jeder Artikel geprüft oder mit Grund ausgenommen ist. Beim Abschließen entsteht das Sammelprotokoll mit allen Prüfern${d.set_ordner && d.set_ordner.anzahl ? ` – dazu für jedes Set mit geprüften Artikeln ein eigenes Set-Protokoll (hier bis zu ${d.set_ordner.anzahl}; Sets mit Geprüftem bisher: ${d.set_ordner.mit_pruefung})` : ""}.</p>` : ""}
         <div class="c-tabs mat-filter">${zustaende.map(([f, t]) => `<button type="button" data-act="filter" data-f="${f}" class="${f === filter ? "sel" : ""}">${esc(t)}${f ? ` (${z[f]})` : ""}</button>`).join("")}</div>
         ${liste.length ? `${kartenKopf(DURCHGANG_SORT, s)}<table class="list mat-tabelle mat-karten mat-runde"><thead><tr>${sortKopf("Inventar-Nr.", "inventar", s)}${sortKopf("Hersteller", "hersteller", s, { klasse: "mat-schmal-weg" })}${sortKopf("Produkt", "produkt", s, { vor: kopfZusatz("Hersteller", "hersteller", s, "schmal"), nach: kopfZusatz("Ablage", "ablage", s, "eng") })}${sortKopf("Ablage", "ablage", s, { klasse: "mat-eng-weg" })}${sortKopf("Stand", "stand", s)}${sortKopf("Status", "status", s)}<th></th></tr></thead><tbody>${liste.map(zeile).join("")}</tbody></table>` : leer("Keine Artikel in dieser Auswahl.")}
-        ${d.pruefer.length ? `<section class="section"><h2>Prüfer in diesem Durchgang</h2><ul>${d.pruefer.map((x) => `<li>${person(x.name)}${x.urkunde ? ` · <span class="mat-ganz">Urkundennummer ${esc(x.urkunde)}</span>` : ""} – ${plural(x.anzahl, "Prüfung", "Prüfungen")}</li>`).join("")}</ul></section>` : ""}`;
+        ${d.pruefer.length ? `<section class="section"><h2>Prüfer in diesem Prüfdurchgang</h2><ul>${d.pruefer.map((x) => `<li>${person(x.name)}${x.urkunde ? ` · <span class="mat-ganz">Urkundennummer ${esc(x.urkunde)}</span>` : ""} – ${plural(x.anzahl, "Prüfung", "Prüfungen")}</li>`).join("")}</ul></section>` : ""}`;
     }
     async function neu() { await laden(); zeichnen(); }
     aktionen = {
@@ -6458,7 +6624,7 @@
       },
       ausnehmen: (b) => {
         dialog(`<h2>${esc(b.dataset.nr)} ausnehmen</h2>
-          <p class="help">Ein ausgenommener Artikel wird in diesem Durchgang nicht geprüft. Der Grund steht später im Sammelprotokoll.</p>
+          <p class="help">Ein ausgenommener Artikel wird in diesem Prüfdurchgang nicht geprüft. Der Grund steht später im Sammelprotokoll.</p>
           <label for="dn-grund">Grund (Pflicht)</label><input type="text" id="dn-grund" maxlength="200" list="dn-vorschlaege" placeholder="z. B. nicht auffindbar" required>
           <datalist id="dn-vorschlaege"><option value="nicht auffindbar"><option value="beim Hersteller in Reparatur"><option value="kürzlich geprüft"></datalist>
           <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button><button class="btn" id="dn-ok" type="button">Ausnehmen</button></div>`,
@@ -6476,12 +6642,12 @@
       schliessen: async (b) => {
         const sets = d.set_ordner ? d.set_ordner.mit_pruefung : 0;
         const fest = sets ? `Das Sammelprotokoll mit allen Prüfern und ${plural(sets, "Set-Protokoll", "Set-Protokolle")} werden festgeschrieben.` : "Das Sammelprotokoll mit allen Prüfern wird festgeschrieben.";
-        if (!(await confirm(`Den Durchgang „${d.titel}“ abschließen? Danach lässt sich darin nichts mehr prüfen oder ausnehmen. ${fest}`, "Abschließen"))) return;
+        if (!(await confirm(`Den Prüfdurchgang „${d.titel}“ abschließen? Danach lässt sich darin nichts mehr prüfen oder ausnehmen. ${fest}`, "Abschließen"))) return;
         b.disabled = true;
         try {
           const r = await api(`${API}/durchgaenge/${d.id}/abschliessen`, { method: "POST", body: {} });
           const n = r.durchgang && r.durchgang.set_protokolle ? r.durchgang.set_protokolle.length : 0;
-          toast(r.durchgang && r.durchgang.protokoll ? `Durchgang abgeschlossen – Sammelprotokoll ${r.durchgang.protokoll.id}${n ? ` und ${plural(n, "Set-Protokoll", "Set-Protokolle")}` : ""}` : "Durchgang abgeschlossen");
+          toast(r.durchgang && r.durchgang.protokoll ? `Prüfdurchgang abgeschlossen – Sammelprotokoll ${r.durchgang.protokoll.id}${n ? ` und ${plural(n, "Set-Protokoll", "Set-Protokolle")}` : ""}` : "Prüfdurchgang abgeschlossen");
           await neu();
         } catch (e) { S.fehlschlag(b, e); }
       },
@@ -6491,15 +6657,15 @@
         // Set-Protokolle entstehen nur beim Abschluss (F2 b) – das sagt die Rückfrage, sobald Sets im Durchgang sind.
         const sets = z.erledigt && d.set_ordner && d.set_ordner.anzahl ? " Set-Protokolle entstehen dabei keine – nur beim Abschließen." : "";
         const text = z.erledigt
-          ? `Den Durchgang „${d.titel}“ abbrechen? Er endet ohne Abschluss: ${z.erledigt} geprüft, ${z.ausgenommen} ausgenommen, ${z.offen + z.in_pruefung} nicht geprüft. Was geprüft ist, bleibt dokumentiert – das Sammelprotokoll wird mit diesem Stand festgeschrieben.${sets}`
-          : `Den Durchgang „${d.titel}“ abbrechen? Darin ist noch nichts geprüft – er wird ganz entfernt.`;
+          ? `Den Prüfdurchgang „${d.titel}“ abbrechen? Er endet ohne Abschluss: ${z.erledigt} geprüft, ${z.ausgenommen} ausgenommen, ${z.offen + z.in_pruefung} nicht geprüft. Was geprüft ist, bleibt dokumentiert – das Sammelprotokoll wird mit diesem Stand festgeschrieben.${sets}`
+          : `Den Prüfdurchgang „${d.titel}“ abbrechen? Darin ist noch nichts geprüft – er wird ganz entfernt.`;
         if (!(await confirm(text + weiter, "Durchgang abbrechen", "Zurück"))) return;
         b.disabled = true;
         try {
           const r = await api(`${API}/durchgaenge/${d.id}/abbrechen`, { method: "POST", body: {} });
           if (!r.durchgang) { location.href = "/materialablage/pruefungen"; return; }
           filter = "";
-          toast(r.durchgang.protokoll ? `Durchgang abgebrochen – Sammelprotokoll ${r.durchgang.protokoll.id}` : "Durchgang abgebrochen"); await neu();
+          toast(r.durchgang.protokoll ? `Prüfdurchgang abgebrochen – Sammelprotokoll ${r.durchgang.protokoll.id}` : "Prüfdurchgang abgebrochen"); await neu();
         } catch (e) { S.fehlschlag(b, e); }
       },
     };
@@ -6576,12 +6742,15 @@
       const liste = d.meldungen;
       const meldung = (b) => liste.find((m) => m.id === +b.dataset.id);
       // Lesende (Führungskraft, Materialwart in „alle“) sehen dieselben Karten ohne Knöpfe zum Abarbeiten.
+      // „Artikel anlegen“ nur in der eigenen Liste des Materialwarts: Steht ein gemeldetes Produkt im Katalog, legt er dort
+      // den Artikel an (der Ordner wird im Formular gewählt). Für die Material-Verwaltung, die Meldungen abarbeitet, und
+      // in „alle“ gehörte der Knopf nicht zur Seite (UI/UX vor dem Merge, B13).
       const hilfe = d.bearbeiten ? "Materialwarte melden hier Produkte, die ihnen beim Anlegen von Artikeln im Katalog fehlen. „Produkt anlegen“ übernimmt ihre Angaben in den Produktdialog. Der Melder bekommt eine Mail, sobald das Produkt im Katalog ist – oder deine Begründung, wenn du ablehnst."
         : d.alle ? "Materialwarte melden hier Produkte, die ihnen beim Anlegen von Artikeln im Katalog fehlen; die Material-Verwaltung nimmt sie auf oder lehnt sie mit Begründung ab."
           : "Produkte, die du beim Anlegen von Artikeln als fehlend gemeldet hast. Du bekommst eine Mail, sobald die Material-Verwaltung sie bearbeitet hat.";
       seitenTitel(d.alle ? "Produktmeldungen" : "Deine Produktmeldungen");
       inhalt.innerHTML = `<div class="page-head"><h1>${d.alle ? "Produktmeldungen" : "Deine Produktmeldungen"}</h1>
-          <div class="btn-row"><a class="btn secondary" href="/materialablage/katalog">Katalog</a>${DARF.verwalten ? '<a class="btn secondary" href="/materialablage/artikel/neu"><span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Artikel<span class="k-anlegen"> anlegen</span></span></a>' : ""}</div></div>
+          <div class="btn-row"><a class="btn secondary" href="/materialablage/katalog">Katalog</a>${DARF.verwalten && !d.alle && !d.bearbeiten ? '<a class="btn secondary" href="/materialablage/artikel/neu"><span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Artikel<span class="k-anlegen"> anlegen</span></span></a>' : ""}</div></div>
         <p class="help">${hilfe}${DARF.verwalten && !DARF.katalog ? ` <button type="button" class="lnk" data-act="eigene">${d.alle ? "Nur deine zeigen" : "Alle Meldungen zeigen"}</button>` : ""}</p>
         <div class="c-tabs mat-filter" role="group" aria-label="Status">${[["offen", "offen"], ["erledigt", "erledigt"], ["alle", "alle"]].map(([w, t]) => `<button type="button" class="${w === filter ? "sel" : ""}" data-act="filter" data-f="${w}" aria-pressed="${w === filter}">${t}${w === "offen" && d.offen ? ` (${d.offen})` : ""}</button>`).join("")}</div>
         ${liste.length ? liste.map((m) => meldeKarte(m, d.bearbeiten)).join("") : leer(filter === "offen" ? "Keine offenen Meldungen." : "Keine Meldungen.")}`;
@@ -6609,7 +6778,7 @@
         },
         loeschen: async (b) => {
           const m = meldung(b);
-          const folge = m.status === "offen" ? " Sie verschwindet damit auch bei der Material-Verwaltung."
+          const folge = m.status === "offen" ? " Die Meldung verschwindet damit auch bei der Material-Verwaltung."
             : m.status === "eingepflegt" ? " Das Produkt bleibt im Katalog." : "";
           if (!(await confirm(`Deine Meldung „${meldungName(m)}“ löschen?${folge}`, "Löschen"))) return;
           try { await api(`${API}/meldungen/${m.id}`, { method: "DELETE" }); toast("Meldung gelöscht"); await zeichnen(); }
@@ -6733,7 +6902,8 @@
       <div class="mat-produktwahl"><input type="search" id="zu-q" autocomplete="off" ${TASTATUR_SUCHE} value="${esc(m.manufacturer)}"><div id="zu-treffer" class="mat-treffer"></div></div>
       <div id="zu-gewaehlt" class="mat-gewaehlt" hidden></div>
       <label for="zu-antwort">Anmerkung für den Melder (optional, steht in seiner Mail)</label><textarea id="zu-antwort" rows="2" maxlength="1000"></textarea>
-      <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button><button class="btn" id="zu-ok" type="button" disabled>Zuordnen</button></div>`,
+      ${grundSatz("zu-grund", "Wähle zuerst ein Produkt aus der Trefferliste.")}
+      <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button><button class="btn" id="zu-ok" type="button"${knopfAus("zu-grund", true)}>Zuordnen</button></div>`,
     (dlg, body) => {
       let gewaehlt = null;
       let los = null;
@@ -6745,7 +6915,7 @@
           $("#zu-gewaehlt", body).hidden = false;
           $("#zu-gewaehlt", body).innerHTML = `<strong>${nameHtml(gewaehlt)}</strong>${zusatzHtml(gewaehlt)}${artNrKurz(gewaehlt.article_no)}`;
           trefferLeeren($("#zu-treffer", body));
-          $("#zu-ok", body).disabled = false;
+          knopfGrund($("#zu-ok", body), "");
         }, '<p class="help">Kein Produkt gefunden.</p>');
       }
       $("#zu-q", body).addEventListener("input", () => { clearTimeout(los); los = setTimeout(suchen, 200); });
@@ -7530,9 +7700,10 @@
         <label for="nz-q">Produkt suchen</label>
         <div class="mat-produktwahl"><input type="search" id="nz-q" autocomplete="off" ${TASTATUR_SUCHE}><div id="nz-treffer" class="mat-treffer"></div></div>
         <div id="nz-gewaehlt" class="mat-gewaehlt" hidden></div>
+        ${grundSatz("nz-grund", vorschlaege.length ? "Wähle zuerst einen Vorschlag oder ein Produkt aus der Suche." : "Wähle zuerst ein Produkt aus der Suche.")}
         <div class="dlg-actions">${aktuell ? '<button class="btn secondary dlg-neben" id="nz-weg" type="button">Zuordnung entfernen</button>' : ""}
           <button class="btn secondary" data-close type="button">Abbrechen</button>
-          <button class="btn" id="nz-ok" type="button" disabled>Zuordnen</button></div>`,
+          <button class="btn" id="nz-ok" type="button"${knopfAus("nz-grund", true)}>Zuordnen</button></div>`,
       (dlg, body) => {
         let gewaehlt = null;
         let los = null;
@@ -7541,7 +7712,7 @@
           const el = $("#nz-gewaehlt", body);
           el.hidden = false;
           el.innerHTML = `<span>Gewählt: ${html}</span>`;
-          $("#nz-ok", body).disabled = false;
+          knopfGrund($("#nz-ok", body), "");
         };
         const vor = $(".mat-na-vorschlaege", body);
         if (vor) vor.addEventListener("click", (ev) => { const b = ev.target.closest("[data-v]"); if (b) { const p = vorschlaege[+b.dataset.v]; zeigeWahl(p.id, produktKurz(p)); } });
@@ -7632,7 +7803,7 @@
       const zeilen = naAuswahl();
       const n = naAnzahl();
       if (!n) return;
-      if (!(await confirm(`${plural(n, "Zeile", "Zeilen")} verwerfen? Sie verschwinden aus der Nacharbeit; ihre Werte werden gelöscht.`, "Verwerfen"))) return;
+      if (!(await confirm(`${plural(n, "Zeile", "Zeilen")} verwerfen? Die Zeilen verschwinden aus der Nacharbeit, ihre Werte werden gelöscht.`, "Verwerfen"))) return;
       try {
         const r = await api(`${API}/ordner/${fid}/nacharbeit/verwerfen`, { method: "POST", body: { zeilen } });
         toast(`${plural(r.verworfen, "Zeile", "Zeilen")} verworfen`);
@@ -7724,9 +7895,14 @@
   // Nach dem Melden steht oben, was geschah – der Toast allein ist am Telefon schnell weg.
   let quittung = "";
   const quittungHtml = () => { const q = quittung; quittung = ""; return q ? `<p class="notice mat-mangel-quittung" role="status" tabindex="-1">${esc(q)}</p>` : ""; };
-  function mangelQuittung(r) {
+  // verwaltet: Wer meldet, verwaltet den Artikel selbst (Materialwart, Material-Verwaltung) – dann kein „gib ihn deinem
+  // Materialwart“ (UI/UX vor dem Merge, B5).
+  function mangelQuittung(r, verwaltet) {
     const was = r.gesperrt ? "der Artikel ist gesperrt" : "der Artikel war schon gesperrt";
     // „unterwegs“: Die Mail geht im Hintergrund hinaus – ob der Mailserver sie annimmt, steht erst im Log.
+    if (verwaltet) {
+      return `Gemeldet – ${was}. ${r.mail ? "Die Mail an Materialwarte und Prüfer ist unterwegs." : "Es ging keine Mail hinaus."} Leg ihn beiseite, bis ein Prüfer ihn ansieht.`;
+    }
     return r.mail ? `Gemeldet – ${was}. Die Mail an Materialwart und Prüfer ist unterwegs. Leg ihn beiseite und gib ihn deinem Materialwart.`
       : `Gemeldet – ${was}. Es ging keine Mail hinaus – sag deinem Materialwart Bescheid und gib ihm den Artikel.`;
   }
@@ -7735,11 +7911,18 @@
      Fotos ohne capture: Das Telefon bietet Kamera oder Galerie an, am Rechner öffnet sich die Dateiauswahl. Jede Wahl
      hängt an die Liste an, die Eingabe wird danach geleert – so lassen sich drei Fotos nacheinander aufnehmen; mehr als
      drei nimmt die Liste nicht. „Auswahl entfernen“ leert sie. Rot gefüllt ist nur „Melden und sperren“ – die eine
-     Hauptaktion (btn, nicht btn danger: Die Sperre hebt eine Freiprüfung wieder auf; Entscheidung vom 23.10.2026, L2b). */
-  function mangelDialog(a, danach) {
+     Hauptaktion (btn, nicht btn danger: Die Sperre hebt eine Freiprüfung wieder auf; Entscheidung vom 23.10.2026, L2b).
+     opt.gesperrt: Der Artikel ist schon gesperrt (Mangel, Prüfung, Verlust) – dann sperrt das Melden nichts mehr, der
+     Dialog sagt das und der Knopf heißt nur „Melden“ (Rollenläufe vor dem Merge, B14). opt.verwaltet: Wer meldet,
+     verwaltet den Artikel selbst – kein „gib ihn deinem Materialwart“ (B5). Die Quittung steht danach nur oben auf der
+     Seite (danach), kein Toast daneben. */
+  function mangelDialog(a, danach, opt = {}) {
     const fotos = [];
+    const knopfText = opt.gesperrt ? "Melden" : "Melden und sperren";
+    const warnung = opt.gesperrt ? "<strong>Der Artikel ist schon gesperrt.</strong> Deine Meldung kommt dazu – freigeben kann ihn nur ein Prüfer nach einer Prüfung."
+      : `<strong>Mit dem Melden wird der Artikel sofort gesperrt.</strong> ${opt.verwaltet ? "Leg ihn sofort beiseite (aus Fahrzeug oder Lager)." : BEISEITE} Freigeben kann ihn nur ein Prüfer nach einer Prüfung.`;
     dialog(`<h2>Mangel melden – ${esc(a.inventory_no)}</h2>
-      <p class="mat-mangel-warnung"><strong>Mit dem Melden wird der Artikel sofort gesperrt.</strong> ${BEISEITE} Freigeben kann ihn nur ein Prüfer nach einer Prüfung.</p>
+      <p class="mat-mangel-warnung">${warnung}</p>
       <label for="mg-text">Was ist dir aufgefallen? <span class="mat-pflicht" aria-hidden="true">*</span></label>
       <textarea id="mg-text" rows="5" maxlength="${MANGEL_TEXT_MAX}" required aria-required="true" aria-describedby="mg-text-fehler mg-text-hilfe"
         placeholder="Was ist passiert, was siehst du – und wo liegt er jetzt?"></textarea>
@@ -7754,7 +7937,7 @@
         <ol class="mat-fotoliste" id="mg-fotos-liste" hidden></ol>
       </div>
       <p class="help">Dein Name steht bei der Meldung.</p>
-      <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button><button class="btn" id="mg-ok" type="button">Melden und sperren</button></div>`,
+      <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button><button class="btn" id="mg-ok" type="button">${knopfText}</button></div>`,
     (dlg, body) => {
       const text = $("#mg-text", body);
       const fehler = $("#mg-text-fehler", body);
@@ -7805,16 +7988,16 @@
         try {
           const r = await api(`${API}/artikel/${a.id}/mangel`, { method: "POST", body: fd });
           dlg.close();
-          const q = mangelQuittung(r);
-          toast(q);
+          const q = mangelQuittung(r, opt.verwaltet);
           if (danach) await danach(r, q);
+          else toast(q);
           // Nach dem Neuzeichnen stünde der Fokus auf body – die Quittung oben bekommt ihn (Tastatur, Vorlesehilfe).
           const qEl = $(".mat-mangel-quittung");
           if (qEl) qEl.focus();
         } catch (e) {
           toast(e.status === 413 ? "Die Fotos sind zusammen zu groß – bitte weniger oder kleinere wählen." : e.message, true);
           knopf.disabled = false;
-          knopf.textContent = "Melden und sperren";
+          knopf.textContent = knopfText;
         }
       };
     });
@@ -7855,14 +8038,16 @@
   }
 
   // sperre: Sperrgrund aus einem anderen Grund als dem Mangel (Text, auch leer) – dann steht er als Zeile darin; null: nichts.
-  function mangelBanner(m, sperre) {
+  // verwaltet: Das Konto verwaltet den Artikel selbst – „beim Materialwart abgeben“ entfällt (B5).
+  // zusatz: fertiges HTML unter der Sperrzeile (die Zeile „Empfohlen von …“, wenn die Empfehlung gesperrt hat).
+  function mangelBanner(m, sperre, verwaltet, zusatz) {
     return `<div class="mat-banner mat-mangel-banner" role="note">
       <p class="mat-mangel-titel">MANGEL GEMELDET am ${esc(tagZeit(m.created_at))}${m.melder ? ` · von ${person(m.melder)}` : ""}</p>
-      ${sperre === null || sperre === undefined ? "" : `<p class="mat-mangel-sperre"><strong>Außerdem gesperrt</strong>${sperre ? `: ${esc(sperre)}` : ""}.</p>`}
+      ${sperre === null || sperre === undefined ? "" : `<p class="mat-mangel-sperre"><strong>Außerdem gesperrt</strong>${sperre ? `: ${esc(sperre)}` : ""}.</p>`}${zusatz || ""}
       ${mangelTextKurz(m, "mat-text mat-mangel-text")}
       ${mangelFotos(m, `Mangel vom ${S.fmtDate(m.created_at)}`)}
       ${wiederOffen(m)}
-      <p class="mat-mangel-zeile">Nicht verwenden – beiseitelegen und beim Materialwart abgeben. Freigeben kann ihn nur ein Prüfer mit einer Prüfung („einsatzbereit“).</p></div>`;
+      <p class="mat-mangel-zeile">Nicht verwenden – ${verwaltet ? "beiseitelegen" : "beiseitelegen und beim Materialwart abgeben"}. Freigeben kann ihn nur ein Prüfer mit einer Prüfung („einsatzbereit“).</p></div>`;
   }
 
   // Erledigte Meldungen am Artikel: eingeklappt unter „Prüfungen“ – wann, wer (wenn sichtbar), was, und wodurch erledigt.
@@ -7980,7 +8165,7 @@
       mangel: (b) => {
         const k = d.artikel.find((x) => x.id === +b.dataset.id);
         if (!k || b.disabled) return;
-        mangelDialog(k, (r, q) => { quittung = q; return zeigen(meinePsa); });
+        mangelDialog(k, (r, q) => { quittung = q; return zeigen(meinePsa); }, { gesperrt: Boolean(k.gesperrt || k.mangel) });
       },
     };
   }

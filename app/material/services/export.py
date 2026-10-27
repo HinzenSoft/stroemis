@@ -266,7 +266,10 @@ def durchgang_zip(rid):
         if pfad:
             dateien.append((pfad, name))
         zeilen.append(_sammel_zeile(row, name, zustand) if art == "sammel" else _set_zeile(row, name, zustand))
-    return _zip_schreiben(zeilen, dateien), f"Protokolle_{dateiname(r['title'])}_{r['protocol_id']}.zip"
+    # Mit Datum und Uhrzeit des Abrufs wie jede Datei auf Abruf, ohne Leerzeichen (UI/UX vor dem Merge, B13) – die
+    # Kennung des Sammelprotokolls bleibt im Namen, die Protokolle darin sind festgeschrieben.
+    titel = re.sub(r"\s+", "_", dateiname(r["title"]))
+    return _zip_schreiben(zeilen, dateien), f"Protokolle_{titel}_{r['protocol_id']}_{zeitstempel()}.zip"
 
 
 def protokolle_zip(fid):
