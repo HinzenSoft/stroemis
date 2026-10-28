@@ -626,8 +626,9 @@
      einzeilig (.eng): Die Reiter rollen seitlich (der Rand blendet aus, solange dort noch einer steht, der aktive
      wird ins Bild gerollt), die Nummernsuche wartet hinter der Lupe und öffnet als eigene Zeile darunter – auch auf der
      Übersicht und im Bestand (Entscheidung des Nutzers, Nachtrag V4 vor dem Merge: „am Telefon zu, hinter der Lupe“;
-     bis dahin stand sie dort gleich offen; für Übersicht und Prüfungen seit dem 28.10.2026 abgelöst: dort steht sie mit
-     „☰“ offen in der Suchzeile, siehe leisteKnopfSetzen). Offen steht sie nur, wenn sie schon einen Begriff trägt – auf der
+     bis dahin stand sie dort gleich offen; seit dem 28.10.2026 abgelöst: Solange die Leiste eine Schublade ist, steht sie
+     mit „☰“ offen in der Suchzeile, siehe leisteKnopfSetzen – hinter der Lupe nur noch auf dem Doppelbildschirm und in
+     der Prüfung auf dem Tablet). Offen steht sie nur, wenn sie schon einen Begriff trägt – auf der
      Trefferseite sähe man sonst nicht, wonach gesucht wurde. Am Rechner (eine Zeile) steht das Feld immer da. Reicht der
      Platz auch so nicht, zeigt „☰“ nur noch das Zeichen, und die Reiter bekommen eine eigene Zeile (.enger, material.css). */
   const matNav = $(".mat-nav");
@@ -824,11 +825,13 @@
      unten war, kam sonst nicht mehr an die Kategorien. Derselbe Knopf, kein zweiter (Handler, aria-expanded und die
      Fokus-Rückkehr bleiben); dort nur „☰“, der Name „Kategorien“ bleibt zum Vorlesen (material.css). Breiter (Leiste
      daneben) kehrt er in die Navigation zurück. Der Katalog ruft das nach jedem Zeichnen der Suchzeile. */
-  /* Übersicht und Prüfungen (Wunsch vom 28.10.2026: „genauso wie im Katalog, nur als Artikelsuche“): Dort wandern
-     „☰ Ordner“ UND die Nummernsuche in die Suchzeile oben im Inhalt (#mat-suchzeile, seite.html) – dasselbe Formular,
-     kein zweites (suche.js hängt seine Vorschläge daran), offen statt hinter der Lupe, mit eigenem Platzhalter als
-     Artikelsuche; die Lupe entfällt dort. Löst für diese beiden Seiten die Entscheidung V4 („am Telefon zu, hinter der
-     Lupe“) ab. Breiter kehrt beides mit dem alten Platzhalter in die Navigation zurück. */
+  /* Alle übrigen Seiten mit Nummernsuche (Wunsch vom 28.10.2026: zuerst Übersicht und Prüfungen – „genauso wie im
+     Katalog, nur als Artikelsuche“ –, dann „beim Bestand das gleiche“): Dort wandern „☰ Ordner“ UND die Nummernsuche in
+     die Suchzeile oben im Inhalt (#mat-suchzeile, seite.html liefert sie überall außer Katalog und Prüfung) – dasselbe
+     Formular, kein zweites (suche.js hängt seine Vorschläge daran), offen statt hinter der Lupe, mit eigenem Platzhalter
+     als Artikelsuche; die Lupe entfällt dort. Löst die Entscheidung V4 („am Telefon zu, hinter der Lupe“) ab. Auf
+     „Bestand“ (Baum als Inhalt) und „fremd“ gibt es kein „☰“ – dort steht nur das Feld in der Zeile. Breiter kehrt
+     beides mit dem alten Platzhalter in die Navigation zurück. */
   const knopfInSuchzeile = () => Boolean(leisteAuf && leisteAuf.closest(".mat-suchzeile"));
   const sucheZeileOben = $("#mat-suchzeile");
   const sucheFeld = sucheForm && $("input", sucheForm);
@@ -977,7 +980,7 @@
     // Zurück schließt die offene Schublade („☰ Ordner“, Filter, Katalog „☰“) wie Esc (UI/UX vor dem Merge, A1).
     S.klassenVerlauf(leiste, "open", () => leisteZu(true), alsSchublade);
   }
-  if (sucheZeileOben) leisteKnopfSetzen();           // Übersicht, Prüfungen: gleich in die Suchzeile (Telefon, Tablet)
+  if (sucheZeileOben) leisteKnopfSetzen();           // gleich in die Suchzeile (Telefon, Tablet; nicht Katalog/Prüfung)
 
   /* Kein Netz oder Serverfehler (Status 0 oder ab 500; UI/UX vor dem Merge, B12): Die Überschrift der Ansicht bleibt
      stehen (schon gezeichnet, sonst ihr Name wie im Seitentitel), darunter EIN Kasten mit dem Satz und „Neu laden“ –

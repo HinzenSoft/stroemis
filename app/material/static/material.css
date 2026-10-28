@@ -308,9 +308,10 @@ table.list.mat-artikel th.mat-wahlspalte, table.list.mat-artikel td.mat-wahlspal
 .mat-suchzeile:has(> .mat-side-auf) { display: flex; align-items: stretch; }
 .mat-suchzeile:has(> .mat-side-auf) input { flex: 1 1 auto; min-width: 0; }
 .mat-suchzeile > .mat-side-auf { flex: none; min-width: 44px; justify-content: center; align-items: center; margin-bottom: 10px; }
-/* Übersicht und Prüfungen (Wunsch vom 28.10.2026): dieselbe Zeile oben im Inhalt mit „☰ Ordner“ und der Nummernsuche
-   als Artikelsuche (seite.html, material.js leisteKnopfSetzen). Das Feld füllt die Zeile; gesucht wird wie im Katalog
-   mit Enter bzw. „Suchen“ der Bildschirmtastatur – der Knopf „Suchen“ bleibt nur in der Navigation sichtbar. */
+/* Alle Seiten mit Nummernsuche außer der Prüfung (Wunsch vom 28.10.2026, Übersicht und Prüfungen, dann auch der
+   Bestand): dieselbe Zeile oben im Inhalt mit „☰ Ordner“ und der Nummernsuche als Artikelsuche (seite.html, material.js
+   leisteKnopfSetzen). Das Feld füllt die Zeile; gesucht wird wie im Katalog mit Enter bzw. „Suchen“ der
+   Bildschirmtastatur – der Knopf „Suchen“ bleibt nur in der Navigation sichtbar. */
 .mat-suchzeile-oben { display: flex; align-items: stretch; margin: -8px 0 10px; }
 .mat-suchzeile-oben[hidden] { display: none; }
 .mat-suchzeile > .mat-suche { flex: 1 1 auto; align-self: flex-start; max-width: none; min-width: 0; margin: 0 0 10px; }

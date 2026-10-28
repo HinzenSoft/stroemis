@@ -56,6 +56,7 @@ Geschichte stehen. Schemaversion nach der Nachbesserung vor dem Merge: 30; mit d
 | UI/UX vor dem Merge – U3 übrige Module | Hinweis „Entwicklungsserver“ nach jeder Anmeldung auf dev; Anmeldung am Telefon Formular zuerst; Leitstelle: Überschrift „Leitstelle“, Einstellungen gegliedert und ohne Entwicklersprache; 403 führt in den eigenen Bereich; Riegenkarten breitenbegrenzt, Reiter ohne Verlaufseintrag, Knöpfe mit Wort; Ankerplätze und Strömipedia: eine rote Hauptaktion, Löschen in Dialog/Menü, Tastatur, benannte Knöpfe; Listen und Schublade nach der Inhaltsbreite, Doppelbildschirm | gebaut 27.10.2026 (kein Schemaschritt), Zweig uiux-3 |
 | UI/UX vor dem Merge – U2 Materialablage | Ultrawide als Gruppe; ausgegraute Hauptknöpfe fokussierbar mit Grund darüber; Abschlussleiste niedrig (Grund und nächste Prüfung im Festschreib-Dialog); Mangel je Rolle; weniger Knöpfe (Dokumente, Formular, Prüfer); Empfehlung im Banner; Journal gekürzt; „Echtheit prüfen“; Radiogruppen; Fehlerzustand mit „Neu laden“; Kleinigkeiten | gebaut 27.10.2026 (kein Schemaschritt), Zweig uiux-2 |
 | Suchzeile auf Übersicht und Prüfungen | Am Telefon und Tablet hochkant „☰“ und die Nummernsuche als Artikelsuche in einer klebenden Suchzeile oben im Inhalt wie im Katalog, ohne Lupe; Entscheidung V4 für diese beiden Seiten abgelöst | gebaut 28.10.2026 (kein Schemaschritt), zur Freigabe |
+| Suchzeile auf allen Seiten | Dieselbe Suchzeile auch im Bestand (Bestand, Ordner, Artikel, Artikel anlegen, Anträge, Jahresbericht, Bestandsimport) und auf den übrigen Seiten der Prüfungen (Prüfdurchgang, Abgeschlossene Prüfdurchgänge, Prüfung beginnen) sowie auf der Trefferseite – nirgends mehr „☰ + Lupe“ am Telefon; Entscheidung V4 ganz abgelöst; Prüfung und Katalog unverändert | gebaut 28.10.2026 (kein Schemaschritt), zur Freigabe |
 
 ## Abgleich mit dem Bestand (vor Lieferung 1)
 
@@ -4215,6 +4216,31 @@ genauso verhalten wie im Katalog. Nur entsprechend dort als Artikelsuche und nic
   Navigation bleibt, Katalog und übrige Seiten unverändert, Stellen in Skript und Stil); `test_material_l5.py` an die
   neue Zeile in `leisteKnopfSetzen` angepasst.
 
+### Nachtrag: auf alle Seiten ausgeweitet (Wunsch des Nutzers, 28.10.2026)
+
+Wunsch des Nutzers, wörtlich, zu einem Telefon-Foto der Ordnerseite (oben „☰“ und Lupe als einzelne Knöpfe, über der
+Liste „Filter“): „Beim Bestand das gleiche“.
+
+- **Wo:** Die Zeile steht jetzt auf allen Seiten mit Nummernsuche außer der Prüfung selbst – Übersicht, Prüfungen,
+  Bestand, Ordner, Artikel, Artikel anlegen, Änderungsanträge, Jahresbericht, Bestandsliste importieren, Prüfdurchgang,
+  Abgeschlossene Prüfdurchgänge, Prüfung beginnen, Trefferseite (und der Hinweis „Artikel aus einem anderen Bereich“ nach
+  einem QR-Scan). Statt einer Liste je Seite liefert seite.html sie überall außer der Katalog-Gruppe (Katalog, Produkt,
+  Prüfformular, Produktmeldungen – eigene Suchzeile, keine Nummernsuche) und der Prüfung; material.js hängt um, wo es
+  sie gibt. Bedienung, Platzhalter, Kleben und „breiter unverändert“ wie oben.
+- **Bestand** (Baumseite): Dort gab es auch bisher kein „☰“ – der Ordnerbaum ist der Inhalt der Seite. Die Zeile trägt
+  dort nur das Suchfeld (volle Breite), die Lupe entfällt.
+- **Ordner:** „Filter (n)“ bleibt über der Artikelliste, wo er ist – er filtert die Liste, die Suchzeile sucht Artikel
+  überall. Beide öffnen dieselbe Schublade (Ordner bzw. gerollt zu den Filtern); Zurück, Esc und Tippen daneben schließen
+  sie, der Fokus kehrt zu dem Knopf zurück, der sie geöffnet hat. Die Schublade liegt über der klebenden Zeile.
+- **Trefferseite:** Das Feld steht mit dem Suchbegriff in der Zeile – man sieht weiter, wonach gesucht wurde (dafür
+  stand es bisher hinter der Lupe offen), und kann gleich neu suchen.
+- **Prüfung** (`/pruefung/<id>`): unverändert – am Telefon (bis 640 px) gehört der Platz der Prüfung, dort weder Suche
+  noch Lupe; auf dem Tablet hochkant wie bisher „☰“ und Lupe in der Navigation.
+- **Entscheidung V4 damit ganz abgelöst:** „Hinter der Lupe“ gibt es nur noch auf dem Tablet in der Prüfung und, falls
+  die Navigation dort eng wird, auf dem Doppelbildschirm.
+- Tests: `tests/test_material_suchzeile.py` – je Ansicht Zeile ja/nein (17 Seiten, drei Konten), Prüfung und Katalog wie
+  bisher, Bedingung statt Liste in seite.html.
+
 ## Letzte offene Punkte (Auftrag des Nutzers, 27.10.2026)
 
 Auftrag `planung/material-phase4/auftrag_letzte_offene.md` mit den Nachträgen 6 und 7. Wunsch (wörtlich): „Zwei kleinere
@@ -4901,8 +4927,8 @@ Nachtrag (unten).
 
 ### Nachtrag: Entscheidungen des Nutzers zu V4, V7 und V10 (26./27.10.2026)
 
-- **V4 „Am Telefon zu, hinter der Lupe“** (für Übersicht und Prüfungen am 28.10.2026 abgelöst, siehe „Suchzeile auf
-  Übersicht und Prüfungen“): Die Nummernsuche steht, wo die Modulnavigation eng wird (Telefon, Fold,
+- **V4 „Am Telefon zu, hinter der Lupe“** (am 28.10.2026 abgelöst – erst für Übersicht und Prüfungen, dann für alle
+  Seiten außer der Prüfung, siehe „Suchzeile auf Übersicht und Prüfungen“ samt Nachtrag): Die Nummernsuche steht, wo die Modulnavigation eng wird (Telefon, Fold,
   Tablet hochkant – nach der Breite, nicht nach Touch), auch auf Übersicht und Bestand zu; die Lupe öffnet sie. Offen
   steht sie nur, wenn das Feld schon einen Begriff trägt – auf der Trefferseite, damit man sieht, wonach gesucht wurde
   (sonst stünde dort nur die Liste ohne den Suchbegriff). Am Rechner steht das Feld wie bisher in der Zeile. Weil die
