@@ -626,7 +626,8 @@
      einzeilig (.eng): Die Reiter rollen seitlich (der Rand blendet aus, solange dort noch einer steht, der aktive
      wird ins Bild gerollt), die Nummernsuche wartet hinter der Lupe und öffnet als eigene Zeile darunter – auch auf der
      Übersicht und im Bestand (Entscheidung des Nutzers, Nachtrag V4 vor dem Merge: „am Telefon zu, hinter der Lupe“;
-     bis dahin stand sie dort gleich offen). Offen steht sie nur, wenn sie schon einen Begriff trägt – auf der
+     bis dahin stand sie dort gleich offen; für Übersicht und Prüfungen seit dem 28.10.2026 abgelöst: dort steht sie mit
+     „☰“ offen in der Suchzeile, siehe leisteKnopfSetzen). Offen steht sie nur, wenn sie schon einen Begriff trägt – auf der
      Trefferseite sähe man sonst nicht, wonach gesucht wurde. Am Rechner (eine Zeile) steht das Feld immer da. Reicht der
      Platz auch so nicht, zeigt „☰“ nur noch das Zeichen, und die Reiter bekommen eine eigene Zeile (.enger, material.css). */
   const matNav = $(".mat-nav");
@@ -656,7 +657,7 @@
     if (lupe) lupe.hidden = true;
     if (!einzeilig()) {
       matNav.classList.add("eng");
-      if (lupe) lupe.hidden = false;
+      if (lupe && !sucheInZeile()) lupe.hidden = false;      // in der Suchzeile steht das Feld offen da
       if (reiter.scrollWidth > reiter.clientWidth + 1) matNav.classList.add("enger");
     }
     if (lupe) lupe.setAttribute("aria-expanded", String(matNav.classList.contains("suche-offen")));
@@ -679,7 +680,7 @@
     });
     // Escape im Feld (ohne offene Vorschläge – die schließt suche.js zuerst) klappt die Suche wieder ein.
     if (sucheForm) sucheForm.addEventListener("keydown", (e) => {
-      if (e.key !== "Escape" || e.defaultPrevented || !matNav.classList.contains("eng") || !lupe) return;
+      if (e.key !== "Escape" || e.defaultPrevented || !matNav.classList.contains("eng") || !lupe || sucheInZeile()) return;
       matNav.classList.remove("suche-offen");
       lupe.setAttribute("aria-expanded", "false");
       lupe.focus();
@@ -823,17 +824,46 @@
      unten war, kam sonst nicht mehr an die Kategorien. Derselbe Knopf, kein zweiter (Handler, aria-expanded und die
      Fokus-Rückkehr bleiben); dort nur „☰“, der Name „Kategorien“ bleibt zum Vorlesen (material.css). Breiter (Leiste
      daneben) kehrt er in die Navigation zurück. Der Katalog ruft das nach jedem Zeichnen der Suchzeile. */
+  /* Übersicht und Prüfungen (Wunsch vom 28.10.2026: „genauso wie im Katalog, nur als Artikelsuche“): Dort wandern
+     „☰ Ordner“ UND die Nummernsuche in die Suchzeile oben im Inhalt (#mat-suchzeile, seite.html) – dasselbe Formular,
+     kein zweites (suche.js hängt seine Vorschläge daran), offen statt hinter der Lupe, mit eigenem Platzhalter als
+     Artikelsuche; die Lupe entfällt dort. Löst für diese beiden Seiten die Entscheidung V4 („am Telefon zu, hinter der
+     Lupe“) ab. Breiter kehrt beides mit dem alten Platzhalter in die Navigation zurück. */
   const knopfInSuchzeile = () => Boolean(leisteAuf && leisteAuf.closest(".mat-suchzeile"));
+  const sucheZeileOben = $("#mat-suchzeile");
+  const sucheFeld = sucheForm && $("input", sucheForm);
+  const ARTIKEL_SUCHE = "Artikel suchen: Inventar-, Serien- oder Herstellernummer";
+  // Wie im Katalog (katPlatzhalter): Am Telefon passte der volle Platzhalter nicht ins Feld – dort ein kürzerer.
+  const SUCHE_SCHMAL = window.matchMedia("(max-width: 640px)");
+  const artikelPlatzhalter = () => (SUCHE_SCHMAL.matches ? "Artikel: Inv.-, Serien-, Herst.-Nr." : "Artikel suchen: Inventar-, Serien-, Herstellernr.");
+  const NAV_SUCHE = sucheFeld ? { platzhalter: sucheFeld.placeholder, name: sucheFeld.getAttribute("aria-label"), titel: sucheFeld.title } : null;
+  function sucheInZeile() { return Boolean(sucheForm && sucheForm.closest(".mat-suchzeile")); }
+  function sucheBeschriften() {
+    if (!sucheFeld) return;
+    const zeile = sucheInZeile();
+    sucheFeld.placeholder = zeile ? artikelPlatzhalter() : NAV_SUCHE.platzhalter;
+    sucheFeld.setAttribute("aria-label", zeile ? ARTIKEL_SUCHE : NAV_SUCHE.name);
+    sucheFeld.title = zeile ? ARTIKEL_SUCHE : NAV_SUCHE.titel;
+  }
+  SUCHE_SCHMAL.addEventListener("change", sucheBeschriften);
+  // el nach ziel umhängen (vorn oder hinten), ohne den Fokus zu verlieren – auch nicht aus dem Suchfeld.
+  function umhaengen(el, ziel, vorn) {
+    if (!el || el.parentNode === ziel) return;
+    const fokus = el.contains(document.activeElement) ? document.activeElement : null;
+    if (vorn) ziel.prepend(el); else ziel.append(el);
+    if (fokus) fokus.focus({ preventScroll: true });
+  }
   function leisteKnopfSetzen() {
-    if (!leisteAuf || !matNav || !leiste) return;
-    const zeile = ANSICHT === "katalog" && alsSchublade() ? $(".mat-suchzeile", inhalt) : null;
-    const ziel = zeile || matNav;
-    if (leisteAuf.parentNode !== ziel) {
-      const fokus = document.activeElement === leisteAuf;
-      ziel.prepend(leisteAuf);
-      if (fokus) leisteAuf.focus({ preventScroll: true });
+    if (!matNav) return;
+    const schmal = alsSchublade();
+    const zeile = !schmal ? null : ANSICHT === "katalog" ? $(".mat-suchzeile", inhalt) : sucheZeileOben;
+    if (leiste) umhaengen(leisteAuf, zeile || matNav, true);
+    if (sucheZeileOben) {
+      umhaengen(sucheForm, zeile || matNav, false);
+      sucheZeileOben.hidden = !zeile;
+      sucheBeschriften();
     }
-    navAnordnen();                     // ohne den Knopf hat die Navigation mehr Platz
+    navAnordnen();                     // ohne Knopf und Feld hat die Navigation mehr Platz
   }
   // Als Schublade ist die geschlossene Leiste nur aus dem Bild geschoben – „inert“ nimmt sie auch aus der
   // Tab-Reihenfolge und dem Vorlesen. Neben dem Inhalt (breiter Bildschirm) ist sie immer bedienbar.
@@ -947,6 +977,7 @@
     // Zurück schließt die offene Schublade („☰ Ordner“, Filter, Katalog „☰“) wie Esc (UI/UX vor dem Merge, A1).
     S.klassenVerlauf(leiste, "open", () => leisteZu(true), alsSchublade);
   }
+  if (sucheZeileOben) leisteKnopfSetzen();           // Übersicht, Prüfungen: gleich in die Suchzeile (Telefon, Tablet)
 
   /* Kein Netz oder Serverfehler (Status 0 oder ab 500; UI/UX vor dem Merge, B12): Die Überschrift der Ansicht bleibt
      stehen (schon gezeichnet, sonst ihr Name wie im Seitentitel), darunter EIN Kasten mit dem Satz und „Neu laden“ –

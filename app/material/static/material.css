@@ -308,6 +308,13 @@ table.list.mat-artikel th.mat-wahlspalte, table.list.mat-artikel td.mat-wahlspal
 .mat-suchzeile:has(> .mat-side-auf) { display: flex; align-items: stretch; }
 .mat-suchzeile:has(> .mat-side-auf) input { flex: 1 1 auto; min-width: 0; }
 .mat-suchzeile > .mat-side-auf { flex: none; min-width: 44px; justify-content: center; align-items: center; margin-bottom: 10px; }
+/* Übersicht und Prüfungen (Wunsch vom 28.10.2026): dieselbe Zeile oben im Inhalt mit „☰ Ordner“ und der Nummernsuche
+   als Artikelsuche (seite.html, material.js leisteKnopfSetzen). Das Feld füllt die Zeile; gesucht wird wie im Katalog
+   mit Enter bzw. „Suchen“ der Bildschirmtastatur – der Knopf „Suchen“ bleibt nur in der Navigation sichtbar. */
+.mat-suchzeile-oben { display: flex; align-items: stretch; margin: -8px 0 10px; }
+.mat-suchzeile-oben[hidden] { display: none; }
+.mat-suchzeile > .mat-suche { flex: 1 1 auto; align-self: flex-start; max-width: none; min-width: 0; margin: 0 0 10px; }
+.mat-suchzeile > .mat-suche > button[type="submit"] { display: none; }
 .mat-endlos { text-align: center; padding: 10px 0 4px; }
 .mat-katdoks { margin-top: 12px; border-top: 1px solid var(--linie); padding-top: 8px; }
 .mat-unter { font-size: var(--fs-mittel); text-transform: uppercase; letter-spacing: .04em; color: var(--grau); margin: 14px 0 6px; }
@@ -953,10 +960,10 @@ table.list.mat-tabelle :is(td.mat-kategorie, .mat-kat-zusatz) { overflow-wrap: b
 /* Wer mit der Tastatur rückwärts geht, landete hinter der klebenden Kopfleiste (im Katalog hinter Kopfleiste und
    Suchzeile) – der Fokus war nicht zu sehen. Gerollt wird jetzt so, dass das Ziel darunter steht. */
 html:has(.mat-shell) { scroll-padding-top: calc(var(--topbar) + 12px); }
-html:has(.mat-suchzeile) { scroll-padding-top: calc(var(--topbar) + 74px); }
+html:has(.mat-suchzeile:not([hidden])) { scroll-padding-top: calc(var(--topbar) + 74px); }
 @media (max-height: 500px) and (pointer: coarse) {
   html:has(.mat-shell) { scroll-padding-top: 12px; }
-  html:has(.mat-suchzeile) { scroll-padding-top: 68px; }
+  html:has(.mat-suchzeile:not([hidden])) { scroll-padding-top: 68px; }
 }
 
 /* Feste und klebende Leisten halten Kerbe und Wischleiste frei (Variablen aus app.css :root; die Pfeile der

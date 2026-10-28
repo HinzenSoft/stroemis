@@ -165,7 +165,9 @@ def test_katalog_ohne_nummernsuche_knopf_in_suchzeile():
     js = open(os.path.join(wurzel, "app/material/static/material.js"), encoding="utf-8").read()
     css = open(os.path.join(wurzel, "app/material/static/material.css"), encoding="utf-8").read()
     # Derselbe Knopf wandert (kein zweiter), nur in der Ansicht „katalog“ und nur als Schublade; zurück beim Umschalten.
-    assert js.count('id="mat-side-auf"') == 0 and 'ANSICHT === "katalog" && alsSchublade() ? $(".mat-suchzeile", inhalt)' in js
+    # (seit dem 28.10.2026 mit Übersicht und Prüfungen: test_material_suchzeile.py)
+    assert js.count('id="mat-side-auf"') == 0
+    assert 'const zeile = !schmal ? null : ANSICHT === "katalog" ? $(".mat-suchzeile", inhalt) : sucheZeileOben;' in js
     assert "const umschalten = () => { leisteZu(); leisteInert(); leisteKnopfSetzen(); };" in js
     assert js.index('<div id="kat-liste"></div>`;') < js.index("leisteKnopfSetzen();             //")
     assert "leisteZu(knopfInSuchzeile())" in js

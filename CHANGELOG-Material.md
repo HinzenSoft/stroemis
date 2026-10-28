@@ -55,6 +55,7 @@ Geschichte stehen. Schemaversion nach der Nachbesserung vor dem Merge: 30; mit d
 | UI/UX vor dem Merge – U1a Verhalten | Zurück schließt Dialoge, Schubladen und Großansichten; Fehler am Feld; ein Menübaustein (ein Eintrag → Knopf, kurze Einträge, im Bild); Rückfragen mit Gegenstand, Nicht-Endgültiges ohne „danger“; Mehrzahl; Export mit Uhrzeit; deutsche Fehlerseiten; Bewegung reduzieren; Beschriftungen; Dialogfuß; Bedienzeichen ✕ ↑ ↓ app-weit | gebaut 27.10.2026 (kein Schemaschritt), Zweig uiux-1a |
 | UI/UX vor dem Merge – U3 übrige Module | Hinweis „Entwicklungsserver“ nach jeder Anmeldung auf dev; Anmeldung am Telefon Formular zuerst; Leitstelle: Überschrift „Leitstelle“, Einstellungen gegliedert und ohne Entwicklersprache; 403 führt in den eigenen Bereich; Riegenkarten breitenbegrenzt, Reiter ohne Verlaufseintrag, Knöpfe mit Wort; Ankerplätze und Strömipedia: eine rote Hauptaktion, Löschen in Dialog/Menü, Tastatur, benannte Knöpfe; Listen und Schublade nach der Inhaltsbreite, Doppelbildschirm | gebaut 27.10.2026 (kein Schemaschritt), Zweig uiux-3 |
 | UI/UX vor dem Merge – U2 Materialablage | Ultrawide als Gruppe; ausgegraute Hauptknöpfe fokussierbar mit Grund darüber; Abschlussleiste niedrig (Grund und nächste Prüfung im Festschreib-Dialog); Mangel je Rolle; weniger Knöpfe (Dokumente, Formular, Prüfer); Empfehlung im Banner; Journal gekürzt; „Echtheit prüfen“; Radiogruppen; Fehlerzustand mit „Neu laden“; Kleinigkeiten | gebaut 27.10.2026 (kein Schemaschritt), Zweig uiux-2 |
+| Suchzeile auf Übersicht und Prüfungen | Am Telefon und Tablet hochkant „☰“ und die Nummernsuche als Artikelsuche in einer klebenden Suchzeile oben im Inhalt wie im Katalog, ohne Lupe; Entscheidung V4 für diese beiden Seiten abgelöst | gebaut 28.10.2026 (kein Schemaschritt), zur Freigabe |
 
 ## Abgleich mit dem Bestand (vor Lieferung 1)
 
@@ -4188,6 +4189,32 @@ Danach liefen die ganze Suite (`st-test`) grün, `st-py`, `st-js` und `st-css` o
     Antwort), bei 360 px umbrochen etwa 170 px hoch; die Antwort des Mailservers ließe sich noch hinter „Technische
     Antwort“ einklappen – bitte am Gerät ansehen.
 
+## Suchzeile auf Übersicht und Prüfungen (Wunsch des Nutzers, 28.10.2026)
+
+Wunsch des Nutzers, wörtlich: „Bei der Übersicht und den Prüfungen soll der Suchbalken und das linke Burgermenü sich
+genauso verhalten wie im Katalog. Nur entsprechend dort als Artikelsuche und nicht Produktsuche logischerweise.“
+
+- **Suchzeile oben im Inhalt** (seite.html `#mat-suchzeile`, material.js `leisteKnopfSetzen`, material.css): Auf
+  Übersicht und Prüfungen stehen, solange die Ordnerleiste eine Schublade ist (unter 1024 px, kein Doppelbildschirm –
+  dieselbe Bedingung wie im Katalog), „☰“ und die Nummernsuche in einer Zeile direkt unter den Reitern. Sie klebt beim
+  Scrollen unter der Kopfleiste (Telefon quer: am oberen Rand) wie die Suchzeile des Katalogs; der Bildlauf-Abstand für
+  Fokus und Sprungmarken rechnet sie nur mit, solange sie sichtbar ist. Die Navigation zeigt dort nur noch die Reiter.
+- **Dieselben Elemente, kein zweites Formular:** „☰ Ordner“ (nur das Zeichen, der Name „Ordner“ bleibt zum Vorlesen;
+  Handler, `aria-expanded`, Fokus-Rückkehr, Zurück schließt die Schublade) und das Formular der Nummernsuche werden aus
+  der Navigation umgehängt; die Vorschläge (suche.js), Enter bzw. „Suchen“ der Bildschirmtastatur (Trefferseite) und
+  Esc (schließt zuerst die Vorschläge) bleiben. Der Knopf „Suchen“ ist in der Zeile verborgen – wie im Katalog sucht
+  Enter. Das Feld steht offen da, die **Lupe entfällt** auf diesen beiden Seiten. Platzhalter als Artikelsuche:
+  „Artikel suchen: Inventar-, Serien-, Herstellernr.“, bis 640 px „Artikel: Inv.-, Serien-, Herst.-Nr.“ (passt bei
+  344 px ins Feld); Name zum Vorlesen „Artikel suchen: Inventar-, Serien- oder Herstellernummer“.
+- **Breiter** (Leiste daneben ab 1024 px, Doppelbildschirm): unverändert – Knopf und Feld kehren mit dem alten
+  Platzhalter „Nummer suchen“ in die Navigation zurück, auch beim Drehen des Tablets; die Zeile ist dann verborgen.
+- **Entscheidung V4 abgelöst** – für Übersicht und Prüfungen: Dort steht die Nummernsuche am Telefon nicht mehr „zu,
+  hinter der Lupe“, sondern offen in der Suchzeile. Bestand, Ordner, Artikel, Trefferseite, Durchgänge, Prüfung und die
+  übrigen Seiten bleiben wie bisher („☰“ und Lupe in der Navigation); Katalog unverändert.
+- Tests: `tests/test_material_suchzeile.py` (neu – Markup je Ansicht und Konto, Lupe nur dort, wo die Suche in der
+  Navigation bleibt, Katalog und übrige Seiten unverändert, Stellen in Skript und Stil); `test_material_l5.py` an die
+  neue Zeile in `leisteKnopfSetzen` angepasst.
+
 ## Letzte offene Punkte (Auftrag des Nutzers, 27.10.2026)
 
 Auftrag `planung/material-phase4/auftrag_letzte_offene.md` mit den Nachträgen 6 und 7. Wunsch (wörtlich): „Zwei kleinere
@@ -4874,7 +4901,8 @@ Nachtrag (unten).
 
 ### Nachtrag: Entscheidungen des Nutzers zu V4, V7 und V10 (26./27.10.2026)
 
-- **V4 „Am Telefon zu, hinter der Lupe“:** Die Nummernsuche steht, wo die Modulnavigation eng wird (Telefon, Fold,
+- **V4 „Am Telefon zu, hinter der Lupe“** (für Übersicht und Prüfungen am 28.10.2026 abgelöst, siehe „Suchzeile auf
+  Übersicht und Prüfungen“): Die Nummernsuche steht, wo die Modulnavigation eng wird (Telefon, Fold,
   Tablet hochkant – nach der Breite, nicht nach Touch), auch auf Übersicht und Bestand zu; die Lupe öffnet sie. Offen
   steht sie nur, wenn das Feld schon einen Begriff trägt – auf der Trefferseite, damit man sieht, wonach gesucht wurde
   (sonst stünde dort nur die Liste ohne den Suchbegriff). Am Rechner steht das Feld wie bisher in der Zeile. Weil die

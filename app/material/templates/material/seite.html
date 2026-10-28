@@ -33,7 +33,8 @@
 </aside>{% endif %}
 <main class="page breit mat" id="mat" data-ansicht="{{ ansicht }}" data-daten="{{ daten }}" data-darf="{{ darf }}">
   {# Passt die Zeile nicht (Telefon, Fold, Tablet hochkant), ordnet material.js sie um (navAnordnen): Die Reiter rollen
-     seitlich in einer Zeile, die Nummernsuche wartet hinter der Lupe und öffnet als eigene Zeile darunter. #}
+     seitlich in einer Zeile, die Nummernsuche wartet hinter der Lupe und öffnet als eigene Zeile darunter – außer auf
+     Übersicht und Prüfungen: Dort stehen „☰“ und die Suche als Schublade in der Suchzeile darunter (#mat-suchzeile). #}
   {% if not nur_psa %}<nav class="mat-nav" aria-label="Materialablage">
     <button class="btn secondary small mat-side-auf" type="button" id="mat-side-auf" aria-controls="mat-side"
             aria-expanded="false"><span aria-hidden="true">☰</span><span class="mat-side-auf-text"> Ordner</span></button>
@@ -54,7 +55,11 @@
              autocomplete="off" autocapitalize="characters" autocorrect="off" spellcheck="false" enterkeyhint="search">
       <button class="btn secondary small" type="submit">Suchen</button>
     </form>{% endif %}
-  </nav>{% endif %}
+  </nav>
+  {# Übersicht und Prüfungen (Wunsch vom 28.10.2026, wie der Katalog): Solange die Leiste eine Schublade ist, stehen „☰“
+     und die Nummernsuche als Artikelsuche hier in einer Zeile, die unter der Kopfleiste klebt – dieselben Elemente aus
+     der Navigation, kein zweites Formular (material.js, leisteKnopfSetzen). Breiter bleibt die Zeile leer und verborgen. #}
+  {% if ansicht in ("dashboard", "pruefungen") %}<div class="mat-suchzeile mat-suchzeile-oben" id="mat-suchzeile" hidden></div>{% endif %}{% endif %}
   {# Ausgesondert, gesperrt, Lebensdauer erreicht: steht nach einem QR-Scan schon im HTML; material.js ersetzt den
      Inhalt beim Zeichnen durch die Ansicht mit ihrem eigenen Banner. #}
   <div id="mat-inhalt">{% if warnung %}<p class="mat-banner s-{{ warnung.status }}" role="alert">{{ warnung.text }}</p>{% endif %}<p class="help">Wird geladen …</p></div>
