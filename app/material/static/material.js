@@ -498,9 +498,9 @@
   // (bestand.demo_sql) – auch ein echtes Katalogprodukt im Beispielbestand.
   const DEMO_ARTIKEL = "DEMO – nicht für echte Prüfungen. Dieser Artikel gehört zu den Demodaten.";
   const leer = (text) => `<p class="leerzustand">${esc(text)}</p>`;
-  // Aus einem Ordnerpfad „A / B / C“ nur „C“ – Spalte „Ablage“ im Durchgang und Set-Protokolle (B13; am Laptop brach die
-  // Spalte vorher in bis zu sieben Zeilen); der ganze Pfad steht dann im title.
-  const letztesGlied = (pfad) => String(pfad || "").split(" / ").pop();
+  // Aus einem Ordnerpfad „A / B / C“ bzw. „A › B › C“ (Set-Protokolle, protokoll.py) nur „C“ – Spalte „Ablage“ im Durchgang
+  // und Set-Protokolle (B13; am Laptop brach die Spalte vorher in bis zu sieben Zeilen); der ganze Pfad steht dann im title.
+  const letztesGlied = (pfad) => String(pfad || "").split(/ [/›] /).pop();
   /* Ausgegraute Hauptknöpfe (UI/UX vor dem Merge, B1): aria-disabled statt disabled. Der Knopf bleibt mit Tab
      erreichbar und nennt per aria-describedby seinen Grund – einen Satz direkt über der Knopfzeile (grundSatz; vorher
      war der Knopf nicht fokussierbar, der Grund leer oder am Telefon 440 px entfernt hinter den Kacheln). Ein Klick tut
@@ -3195,7 +3195,7 @@
         <td data-l="Ergebnis" class="mat-k-marke">${x.entwurf ? '<span class="muted">in Prüfung</span>' : ergebnisMarke(x.ergebnis)}${x.grund ? `<div class="small muted">${esc(x.grund)}</div>` : ""}</td>
         <td data-l="Prüfer" class="mat-k-halb">${x.pruefer ? person(x.pruefer) : ""}${x.urkunde ? ` <span class="muted small">(${esc(x.urkunde)})</span>` : ""}</td>
         <td data-l="Nächste Prüfung">${x.naechste ? esc(fmtTag(x.naechste)) : '<span class="muted">–</span>'}</td>
-        <td data-l="Protokoll" class="mat-k-ohne">${x.protokoll ? `<a class="mat-pdf" href="${esc(x.protokoll.url)}" target="_blank" rel="noopener" title="Protokoll ${esc(x.protokoll.id)} öffnen (PDF)">PDF</a> <span class="muted small mat-hash">${esc(x.protokoll.id)}</span>` : '<span class="muted">–</span>'}</td></tr>`;
+        <td data-l="Protokoll" class="mat-k-ohne">${x.protokoll ? `<a class="mat-pdf" href="${esc(x.protokoll.url)}" target="_blank" rel="noopener" aria-label="Protokoll ${esc(x.protokoll.id)} (PDF)" title="Protokoll ${esc(x.protokoll.id)} öffnen (PDF)">PDF</a> <span class="muted small mat-hash">${esc(x.protokoll.id)}</span>` : '<span class="muted">–</span>'}</td></tr>`;
       }).join("")}</tbody></table>`;
   }
   const ergebnisMarke = (e) => (e ? `<span class="mat-ergebnis-marke e-${esc(e)}">${esc(ERGEBNIS[e] || e)}</span>` : "");
@@ -6034,7 +6034,7 @@
       const a = aussonderung;
       if (!a) return "";
       return `<dt>Aussonderung</dt><dd><a href="/materialablage/pruefung/${a.id}">${a.protokoll ? `Protokoll ${esc(a.protokoll.id)}` : "Aussonderung ansehen"}</a>
-        ${a.protokoll ? ` · <a class="mat-pdf" href="${esc(a.protokoll.url)}" target="_blank" rel="noopener" title="Aussonderungsprotokoll ${esc(a.protokoll.id)} öffnen">PDF</a>` : ""}</dd>`;
+        ${a.protokoll ? ` · <a class="mat-pdf" href="${esc(a.protokoll.url)}" target="_blank" rel="noopener" aria-label="Aussonderungsprotokoll ${esc(a.protokoll.id)} (PDF)" title="Aussonderungsprotokoll ${esc(a.protokoll.id)} öffnen">PDF</a>` : ""}</dd>`;
     }
 
     /* Das festgeschriebene Protokoll: ID, PDF, wann und mit welcher Anmeldung, Prüfsumme, Unterschrift. */
@@ -7650,7 +7650,7 @@
         return;
       }
       const filter = NA_GRUPPEN.filter(([g]) => !g || z[g] || g === naGruppe).map(([g, t]) => `<button type="button" data-act="na-filter" data-g="${g}" class="${g === naGruppe ? "sel" : ""}" aria-pressed="${g === naGruppe}">${esc(t)} (${g ? z[g] : z.offen})</button>`).join("");
-      naBox.innerHTML = `${kopf}<p class="help">${esc(na.frist)} Werte lassen sich hier nicht bearbeiten: „Mehr → Als CSV herunterladen“, korrigieren und oben als neue Liste hochladen.</p>
+      naBox.innerHTML = `${kopf}<p class="help">${esc(na.frist)} Werte lassen sich hier nicht bearbeiten: „Als CSV herunterladen“, korrigieren und oben als neue Liste hochladen.</p>
         ${naGruppenHtml()}
         <h3 class="mat-unter">Offene Zeilen</h3>
         <div class="c-tabs mat-filter" role="group" aria-label="Offene Zeilen nach Grund">${filter}</div>

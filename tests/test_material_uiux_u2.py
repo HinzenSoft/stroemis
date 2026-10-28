@@ -198,6 +198,9 @@ def test_b13_kleinigkeiten():
     assert ".mat-erinnerungen { margin: 24px 0 20px;" in lies(CSS)
     assert "Den Zugang zur Strömipedia vergibt die Plattform-Verwaltung in der Leitstelle." in js
     assert "const letztesGlied = (pfad) =>" in js and '${esc(letztesGlied(a.pfad))}</td>' in js
+    # Set-Protokolle tragen Pfade mit „ › “ (protokoll.py) – letztesGlied trennt an beiden Zeichen (Faktenprüfung 28.10.2026).
+    assert 'const letztesGlied = (pfad) => String(pfad || "").split(/ [/›] /).pop();' in js
+    assert "„Mehr → Als CSV herunterladen“" not in js and 'aria-label="Aussonderungsprotokoll ${esc(a.protokoll.id)} (PDF)"' in js
     assert '<span class="mat-knoten-zahlen">' in js and ".mat-knoten-zahlen { flex: none; white-space: nowrap; }" in lies(CSS)
     assert "DARF.verwalten && !d.alle && !d.bearbeiten ?" in js
     assert "Erst ein Probelauf (speichert nichts)" in js

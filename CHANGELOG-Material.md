@@ -9689,6 +9689,10 @@ Zusammenführung (27.10.2026): `.btn[aria-disabled]` (ausgegraute Hauptknöpfe m
 damit er auch im Profil (Unterschrift-Pad) wirkt; Profil „Die Nummer steht auf jedem Prüfprotokoll …“ (statt „Sie“, U2/B13);
 `erinnerung.dev_umgebung` ruft `module.dev_umgebung` (eine Regel für Erinnerungssperre, dev-zuruecksetzen und Hinweis
 „Entwicklungsserver“); test_material_nach_merge ohne das zufällige Sitzungscookie (Set-Cookie enthielt gelegentlich „L-“).
+Nach der Faktenprüfung des Strömipedia-Artikels (28.10.2026): Set-Protokolle im Durchgang zeigen nur den Set-Namen
+(`letztesGlied` trennt auch an „ › “ – die Pfade aus protokoll.py); Nacharbeit-Hilfesatz „„Als CSV herunterladen““
+(einzelner Knopf statt „Mehr →“); PDF-Links der Prüfungsliste am Artikel und des Aussonderungsprotokolls mit
+zugänglichem Namen „Protokoll P-… (PDF)“ wie im Archiv.
 
 ### Teil U1a – Verhalten (gemeinsame Bausteine in common.js, alle Module)
 
@@ -9716,9 +9720,9 @@ damit er auch im Profil (Unterschrift-Pad) wirkt; Profil „Die Nummer steht auf
   und Knopf frei“ und an den Pflichtfeldern der Dialoge aller Module (Prüfdurchgang anlegen, Ausnehmen, Grund in der
   Prüfleiste, Nächste Prüfung, Berichtigung, Antrag, Ordnerwahl, Freigabe erteilen/ändern/verlängern, Lehrgang, Kopie,
   Katalog, Prüfungsleistung, Teilnehmende, Bewertung, Link, Album, Einwurf, Nutzer anlegen/bearbeiten, Kommentar,
-  Ersteller, ZIP-Import, Link, Abschnitt, Suchen, Bildbreite …). Pflicht sichtbar: Ausnehmen heißt „Grund (Pflicht)“; in
-  der Prüfleiste steht bei „instandsetzen“/„aussondern empfohlen“ ohne Mangel „Ohne Mangel ist ein Grund Pflicht“ in der
-  Hinweiszeile (nicht nur im Platzhalter).
+  Ersteller, ZIP-Import, Link, Abschnitt, Suchen, Bildbreite …). Pflicht sichtbar: Ausnehmen heißt „Grund (Pflicht)“; den
+  Grund bei „instandsetzen“/„aussondern empfohlen“ ohne Mangel verlangt seit Teil U2 (B2) der Dialog „Prüfung festschreiben“
+  am Feld (nicht nur im Platzhalter).
 - **A3/D1 Ein Menübaustein.** `details.mat-menue`, `details.zeilenmenue` und die schwebenden Menüs der Strömipedia
   haben eine Logik in common.js: nur ein Menü offen, Klick daneben oder auf einen Eintrag schließt, Esc schließt (Fokus
   zurück auf den Menüknopf; in einem Dialog schließt Esc nur das Menü), Tab hinaus schließt (focusout), ↑/↓, Pos1/Ende
