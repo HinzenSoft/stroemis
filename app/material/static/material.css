@@ -409,6 +409,11 @@ table.list.mat-artikel th.mat-wahlspalte, table.list.mat-artikel td.mat-wahlspal
   text-transform: uppercase; letter-spacing: .05em; }
 .mat-side-zu { display: none; font-size: 1.1rem; }
 .mat-tree .row { gap: 4px; }
+/* Hier ist die Liste selbst .tree (im Seitenbaum der Strömipedia steht darin noch eine <ul>): Einzug und Führungslinie
+   wie dort (.tree ul ul in app.css) schon ab der zweiten Ebene – seit dem Seitenbaum standen Unterordner und
+   Unterkategorien sonst bündig unter ihrem Oberordner (Nachtrag zum Sammelstand, 01.11.2026). */
+.mat-tree ul { margin-left: calc(var(--baum-spalte) / 2 - 1px); padding-left: calc(var(--baum-einzug) - var(--baum-spalte) / 2);
+  border-left: 1px solid var(--linie); }
 .mat-tree .mat-zahl { margin-left: 0; flex: none; }
 .mat-tree li.system > .row a { color: var(--grau); }
 .mat-side-anzahl { flex: none; font-size: var(--fs-marke); color: var(--grau); padding: 0 4px; }
@@ -940,7 +945,7 @@ table.list.mat-tabelle :is(td.mat-kategorie, .mat-kat-zusatz) { overflow-wrap: b
    und nach Silben (hyphens, lang="de"), mitten im Wort nur, wenn ein Wort allein nicht in die Zeile passt – vorher
    stand in der schmalen festen Leiste „DEMO-Seilrucksa|ck“. Seit UI/UX vor dem Merge (B3) auch mit der Maus am Rechner:
    Dort endeten „DEMO-Strömungsrettungsgruppe 1/2/3“ alle gleich auf „DEMO-Strömungsrettung…“. */
-.mat-tree a { white-space: normal; overflow-wrap: break-word; -webkit-hyphens: auto; hyphens: auto; text-overflow: clip; }
+.mat-tree a { display: block; white-space: normal; overflow-wrap: break-word; -webkit-hyphens: auto; hyphens: auto; text-overflow: clip; }
 @media (pointer: coarse) {
   .mat-tree a { padding-top: 11px; padding-bottom: 11px; min-height: 44px; }
   .mat-tree .tg { width: 44px; height: auto; min-height: 44px; align-self: stretch; }
@@ -1773,10 +1778,17 @@ table.list.mat-na-zeilen tr:has(.mat-na-wahl:checked) { background: var(--co-inf
    8 px ein statt 21; der 44 px breite Klappknopf reicht nach links in die leere Einrückung (dort liegt in seiner Zeile
    nichts Antippbares), sein Dreieck steht rechts darin. Namen brechen nur an Wortgrenzen um; ein Wort, das allein
    nicht in die Zeile passt, endet mit „…“ – der volle Name steht im title. Vorher brach „Fach Persönliche
-   Schutzausrüstung“ Zeichen für Zeichen in 14 Zeilen. */
+   Schutzausrüstung“ Zeichen für Zeichen in 14 Zeilen.
+   Die Fingerregeln des Seitenbaums (app.css, Auftrag Seitenbaum) gelten hier nicht (Nachtrag zum Sammelstand,
+   01.11.2026): Der Klappknopf ragt nicht über den Namen (dort stünde sein Zeichen rechts im Knopf auf dem Namen),
+   Zähler stehen mittig in der Zeile statt oben, und der Baum reicht nicht in den rechten Innenrand – die Leiste hat
+   nur 10 px davon, sie rollte sonst 2 px seitlich und schnitt die Zähler an. */
 @media (pointer: coarse) {
+  .mat-tree { margin-right: 0; }
+  .mat-tree .row { align-items: center; }
+  .mat-tree a { padding-left: 6px; }
   .mat-tree ul ul ul { margin-left: 0; padding-left: 7px; }
-  .mat-tree .tg { margin-left: -14px; padding: 0 3px 0 0; text-align: right; }
+  .mat-tree .tg { margin-left: -14px; margin-right: 0; padding: 0 3px 0 0; justify-content: flex-end; }
   .mat-tree > li > .row > .tg { margin-left: -8px; }
   .mat-tree a, .mat-tree .row > .mat-pfadknoten { overflow-wrap: normal; -webkit-hyphens: manual; hyphens: manual; overflow: hidden;
     text-overflow: ellipsis; }

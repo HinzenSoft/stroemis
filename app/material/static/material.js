@@ -803,6 +803,10 @@
   const klappLesen = () => { try { return JSON.parse(localStorage.getItem(KLAPP) || "{}") || {}; } catch (e) { return {}; } };
   const klappMerken = (z) => { try { localStorage.setItem(KLAPP, JSON.stringify(z)); } catch (e) { /* privat: dann eben nicht */ } };
 
+  /* Klappzeichen wie im Seitenbaum der Strömipedia (wiki.js, public.js): ein gezeichneter Winkel, der beim Aufklappen
+     nach unten dreht (app.css, .tree .tg). Seit dem Seitenbaum zeichnet app.css kein „▸/▾“ mehr – ohne das SVG standen
+     die Klappknöpfe leer da (Nachtrag zum Sammelstand, 01.11.2026). */
+  const KLAPPZEICHEN = '<svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M6 3.5L10.5 8 6 12.5"/></svg>';
   function leisteZeichnen() {
     if (!leisteDaten) return;
     const ziel = $("#mat-baumnav");
@@ -819,7 +823,7 @@
       const aktiv = o.id === leisteAktiv;
       // Der Klappknopf nennt seinen Ordner und sagt mit aria-expanded, ob er offen ist (wie die Übersicht, „Unterordner
       // von …“; Rollenläufe vor dem Merge N3 – vorher hießen alle nur „aufklappen“). Ohne Unterordner: nur Platzhalter.
-      const knopf = hat ? `<button class="tg" type="button" data-klapp="${o.id}" aria-expanded="${auf}" aria-label="${LEISTE_KATALOG ? "Unterkategorien" : "Unterordner"} von ${esc(o.name)}"></button>`
+      const knopf = hat ? `<button class="tg" type="button" data-klapp="${o.id}" aria-expanded="${auf}" aria-label="${LEISTE_KATALOG ? "Unterkategorien" : "Unterordner"} von ${esc(o.name)}">${KLAPPZEICHEN}</button>`
         : `<button class="tg" type="button" data-klapp="${o.id}" tabindex="-1" aria-hidden="true"></button>`;
       const markiert = `class="${aktiv ? "active" : ""}" ${aktiv ? 'aria-current="page"' : ""}`;
       if (LEISTE_KATALOG) {
