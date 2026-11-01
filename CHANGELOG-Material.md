@@ -4278,6 +4278,41 @@ Feldtexte `PUBLIC_URL`/`PUBLIC_HOST` in den Einstellungen („Strömipedia-Einst
 README (Fuß ohne „öffentliche Strömipedia“, PWA-Absatz zur früheren Wiki-Subdomain), Kommentar in base.html; der neue
 Test tests/test_rechte_redakteur.py läuft in der Standardliste von st-test mit (tests/test_rechte*.py).
 
+## Nachträge zum Sammelstand aus der Faktenprüfung des Strömipedia-Artikels (01.11.2026)
+
+Quelle: offene Fragen der Faktenprüfung zum Artikel „Materialablage“ (wiki-material/bericht.md, Punkte 1–3 und 5;
+werkzeug/bericht-5bf9fbf.md, Punkt 2).
+
+- **Fehler seit dem Seitenbaum: Klappzeichen im Materialbaum fehlten.** Der Seitenbaum hat in app.css das Schriftzeichen
+  „▸/▾“ (`.tree .tg::before`) durch ein SVG ersetzt, das nur wiki.js und public.js einsetzen – die Klappknöpfe der
+  Ordnerleiste und des Kategorienbaums (material.js `leisteZeichnen`) standen leer da. Jetzt tragen sie dasselbe
+  Zeichen (`KLAPPZEICHEN`, gezeichneter Winkel, nach rechts zu, nach unten offen, 14 px, `--grau`, beim Überfahren
+  `--anthrazit` auf `--linie`); Name „Unterordner/Unterkategorien von …“ und `aria-expanded` wie bisher, ohne
+  Unterordner ein leerer, unsichtbarer Platzhalter.
+- **Übrige Folgen der Seitenbaum-Regeln für `.mat-tree`** (gemessen gegen 0e0c60c, Fotos im Bericht): Die Liste ist hier
+  selbst `.tree`, der Einzug `.tree ul ul` griff deshalb erst ab der dritten Ebene – Unterordner und alle
+  Unterkategorien standen bündig unter ihrem Oberordner. Jetzt `.mat-tree ul` mit denselben Spalten wie der Seitenbaum
+  (Rechner 20 px je Ebene, Führungslinie unter dem Klappzeichen der Elternebene; Finger 18 px, ab Tiefe 3 weiter 8 px).
+  Namen wieder als Block (`display: block`; der Seitenbaum macht Links zu Flex-Zeilen – am Finger endete ein zu langes
+  Wort dann abgeschnitten statt mit „…“). Am Finger gelten die neuen Seitenbaum-Regeln hier nicht: kein Überstand in den
+  rechten Innenrand (die Leiste hat nur 10 px – sie rollte 2 px seitlich und schnitt die Zähler an), der Klappknopf
+  ragt nicht über den Namen (das Zeichen steht rechts im 44-px-Knopf), Zähler mittig statt oben in mehrzeiligen Zeilen,
+  Name 6 px nach dem Rand wie vorher. Unverändert wie vor dem Seitenbaum (gewollt): oberste Ebene normal (nicht fett),
+  kein Zusatzabstand zwischen den Gliederungen. Andere `.tree`/`.tg` außerhalb der Strömipedia gibt es nicht (die
+  Klappknöpfe der Übersicht sind `.mat-ue-klapp` mit eigenem „▸/▾“, nicht betroffen).
+- **CHANGELOG „Suchzeile“, Nachtrag**: Der Satz zur Fokus-Rückkehr folgt jetzt dem Code (`leisteZu`): nach Zurück, Esc
+  und „✕“ zum Knopf, der die Schublade geöffnet hat; nach Tippen daneben nicht.
+- **Prüfung am Telefon quer (gemessen, nichts geändert)**: In 640–932 × 360–430 px (Touch, drei Konten, Grundschrift
+  16–24 px) steht die Navigation immer in einer Zeile (bei 641 px 453 von 601 px belegt) – keine Lupe, also auch keine
+  wirkungslose.
+- **README, Nacharbeit**: „Knopf „Als CSV herunterladen““ statt „Mehr → Als CSV herunterladen“ (seit A3 ein Knopf; der
+  Hilfesatz in material.js war schon berichtigt).
+- **Strömipedia-Editor und mailto (geprüft, nichts geändert)**: `[…](mailto:…)` (auch mit `?subject=`) und `<adresse>`
+  überstehen Bearbeiten und automatisches Speichern (die Spitzklammer-Form wird zu `[adresse](mailto:adresse)`), im Leser
+  und im Lesemodus (Konto ohne Stufe) bleiben sie klickbare `mailto:`-Links; `tel:` ebenso.
+- Tests: `tests/test_material_nachtrag_sammel.py` (neu – Klappzeichen gleich in wiki.js/public.js/material.js, mit Node.js
+  gerendert sichtbar im Ordner- und Kategorienbaum, CSS-Regeln samt Media-Block, CHANGELOG- und README-Satz).
+
 ## Seitenbaum der Strömipedia (Wunsch des Nutzers, 28.10.2026)
 
 Wünsche des Nutzers zu einem Telefon-Foto (Seitenbaum als Schublade, „⋯“ der Seite „Allgemein“ offen), wörtlich:
@@ -4407,8 +4442,9 @@ Liste „Filter“): „Beim Bestand das gleiche“.
 - **Bestand** (Baumseite): Dort gab es auch bisher kein „☰“ – der Ordnerbaum ist der Inhalt der Seite. Die Zeile trägt
   dort nur das Suchfeld (volle Breite), die Lupe entfällt.
 - **Ordner:** „Filter (n)“ bleibt über der Artikelliste, wo er ist – er filtert die Liste, die Suchzeile sucht Artikel
-  überall. Beide öffnen dieselbe Schublade (Ordner bzw. gerollt zu den Filtern); Zurück, Esc und Tippen daneben schließen
-  sie, der Fokus kehrt zu dem Knopf zurück, der sie geöffnet hat. Die Schublade liegt über der klebenden Zeile.
+  überall. Beide öffnen dieselbe Schublade (Ordner bzw. gerollt zu den Filtern); Zurück, Esc, „✕“ und Tippen daneben
+  schließen sie. Nach Zurück, Esc und „✕“ kehrt der Fokus zu dem Knopf zurück, der sie geöffnet hat, nach Tippen daneben
+  nicht (berichtigt am 01.11.2026, material.js `leisteZu`). Die Schublade liegt über der klebenden Zeile.
 - **Trefferseite:** Das Feld steht mit dem Suchbegriff in der Zeile – man sieht weiter, wonach gesucht wurde (dafür
   stand es bisher hinter der Lupe offen), und kann gleich neu suchen.
 - **Prüfung** (`/pruefung/<id>`): unverändert – am Telefon (bis 640 px) gehört der Platz der Prüfung, dort weder Suche
