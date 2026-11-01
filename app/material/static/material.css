@@ -413,7 +413,7 @@ table.list.mat-artikel th.mat-wahlspalte, table.list.mat-artikel td.mat-wahlspal
   position: sticky; top: var(--topbar); height: calc(100vh - var(--topbar)); overflow: auto; overscroll-behavior: contain; }
 .mat-side[hidden] { display: none; }
 .mat-side-kopf { display: flex; justify-content: space-between; align-items: center; margin: 0 6px 8px; }
-.mat-side-kopf a { font-weight: 700; color: var(--anthrazit); text-decoration: none; font-size: var(--fs-marke);
+.mat-side-kopf a { font-weight: 700; color: var(--anthrazit); text-decoration: none; font-size: var(--fs-klein);
   text-transform: uppercase; letter-spacing: .05em; }
 .mat-side-zu { display: none; font-size: 1.1rem; }
 .mat-tree .row { gap: 4px; }
@@ -912,7 +912,7 @@ button.mat-ue-klapp:focus-visible { outline: 3px solid var(--gelb); outline-offs
    der Baum, die gewählte markiert wie der aktive Ordner (weiß mit roter Kante, aria-pressed), die Zahl grau rechts.
    Über der Liste ein Satz „Gefiltert: …“; „Filter (n)“ davor nur, solange die Leiste eine Schublade ist. */
 .mat-side-filter { margin-top: 18px; padding-top: 12px; border-top: 1px solid var(--linie); }
-.mat-side-filter .mat-side-kopf h2 { margin: 0; font-weight: 700; color: var(--anthrazit); font-size: var(--fs-marke);
+.mat-side-filter .mat-side-kopf h2 { margin: 0; font-weight: 700; color: var(--anthrazit); font-size: var(--fs-klein);
   text-transform: uppercase; letter-spacing: .05em; }
 .mat-filtergruppe { margin: 0 0 12px; }
 .mat-filtergruppe h3, .mat-filter-person label { margin: 6px 6px 4px; font-size: var(--fs-klein); font-weight: 600; color: var(--grau); }

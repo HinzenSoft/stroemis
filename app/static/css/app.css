@@ -67,9 +67,10 @@
   --schatten-karte: 0 1px 4px rgba(0, 0, 0, .35);
   --schatten-leiste: 0 8px 24px rgba(0, 0, 0, .22);
   /* Drei Stufen für Hilfstexte und Beschriftungen – vorher lagen zwischen .72 und .95 rem
-     sechzehn verschiedene Werte, die nebeneinander unruhig wirkten. */
-  --fs-marke: .74rem;     /* Marken, Abschnittsbeschriftungen in Versalien */
-  --fs-klein: .82rem;     /* Hilfstexte, Nebenangaben */
+     sechzehn verschiedene Werte, die nebeneinander unruhig wirkten. Hilfe- und Nebentexte mindestens 14 px (Gerätetest
+     01.11.2026, B12: 13,1 px waren draußen bei Sonne zu klein); kleiner sind nur Marken und Plaketten. */
+  --fs-marke: .74rem;     /* Marken, Plaketten, Zähler */
+  --fs-klein: .875rem;    /* Hilfstexte, Nebenangaben, Meta-Zeilen, Zwischentitel in Versalien – 14 px */
   --fs-mittel: .9rem;     /* Listen, Formularbeschriftungen, Tabellen */
   /* Hinweiskisten: Fläche und Kante einmal gepflegt. Leseansicht und Editor greifen beide
      hierauf zu – vorher standen die Werte doppelt im Blatt, und die Warnkiste hatte in den
@@ -205,7 +206,7 @@ h3.abgesetzt { margin-top: 18px; }
   .brand { padding: 0 12px; gap: 9px; }
   .wortmarke { font-size: 1.25rem; }
   .maskottchen img { height: 34px; }
-  .nav a, .nav button { padding: 0 9px; font-size: var(--fs-mittel); }
+  .nav a, .nav button { padding: 0 9px; }
   .nav .user { display: none; }
 }
 /* Ganz schmale Geräte: Der Zusatz neben der Wortmarke weicht, damit Nutzer, Profil und
@@ -235,7 +236,7 @@ h3.abgesetzt { margin-top: 18px; }
 .nav .nav-mehr-liste a, .nav .nav-mehr-liste button {
   display: flex; align-items: center; width: 100%; padding: 10px 18px; margin: 0;
   background: none; border: 0; border-left: 4px solid transparent; color: var(--anthrazit); text-align: left;
-  font: inherit; font-size: var(--fs-mittel); font-weight: 600; text-decoration: none; cursor: pointer; }
+  font: inherit; font-weight: 600; text-decoration: none; cursor: pointer; }
 @media (pointer: coarse) { .nav .nav-mehr-liste a, .nav .nav-mehr-liste button { min-height: 44px; } }   /* UI/UX A15 */
 @media (hover: hover) and (pointer: fine) { .nav .nav-mehr-liste a:hover, .nav .nav-mehr-liste button:hover { background: var(--grau-hell); color: var(--rot-auf-flaeche); } }
 .nav .nav-mehr-liste a.active { border-left-color: var(--rot); color: var(--rot); }
@@ -1107,7 +1108,7 @@ progress { width: 100%; height: 10px; accent-color: var(--rot); }
 /* Zwischentitel in Leisten und Tafeln: „Inhalt“, „Kommentare“, „Beschreibung“, „Mitwirkende“,
    „Merkliste“. Vorher fünf Stile mit vier Schriftgrößen – jetzt einer. */
 .rail-title, .panel-body h3, .side-title, .autor-tafel .autor-titel, .lb-side h3 {
-  font-weight: 700; color: var(--grau); font-size: var(--fs-marke); letter-spacing: .06em;
+  font-weight: 700; color: var(--grau); font-size: var(--fs-klein); letter-spacing: .06em;
   text-transform: uppercase; margin: 18px 0 6px; border-bottom: 1px solid var(--linie); padding-bottom: 3px;
 }
 .rail-title, .panel-body h3:first-child, .side-title:first-child,
@@ -2580,10 +2581,10 @@ dialog.us-dlg { width: min(640px, 96vw); }
                     background: rgba(0, 0, 0, .55); color: var(--weiss); border-radius: 50%; }
   .lb.editing .lb-side .close { background: var(--grau-hell); color: var(--anthrazit); }
 }
-/* Ganz schmale Telefone: die Navigation der Bauchbinde rückt zusammen, der Rand deutet an,
-   dass sie weiterrollt. */
+/* Ganz schmale Telefone: die Navigation der Bauchbinde rückt zusammen. Die Schrift bleibt 15 px (Gerätetest B12) –
+   was nicht passt, wandert in „Mehr“ (common.js, kopfleiste). */
 @media (max-width: 480px) {
-  .nav a, .nav button { padding: 0 6px; font-size: var(--fs-klein); }
+  .nav a, .nav button { padding: 0 6px; }
 }
 /* Geräte mit Kerbe und Wischleiste: Ränder freihalten. env() ist am Rechner null. */
 @supports (padding: env(safe-area-inset-left)) {
