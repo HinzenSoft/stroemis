@@ -268,13 +268,17 @@ def test_riegenkarten_a10_c6_c7_c11_d13_d14_d15():
     # C7: Katalogdetail „Bearbeiten“/„Löschen“ im Menü wie die Liste.
     teil = rk[rk.index("function renderKatalogSeite() {"):rk.index("function katalogLeistungDialog(")]
     assert 'S.menue({ art: "zeilenmenue", klein: false, eintraege: [' in teil and 'class="btn secondary small" data-act="kat-del"' not in teil
-    # D15: Kopfknöpfe des Lehrgangs normal groß.
-    assert 'class="btn secondary small" data-act="lg-edit"' not in rk and 'class="btn secondary" data-act="lg-edit"' in rk
+    # D15: Kopfknöpfe des Lehrgangs normal groß – seit dem Gerätetest (B3) im Menü „Mehr“ der Seite, normal groß wie auf
+    # der Katalogseite.
+    kopf = rk[rk.index("function renderLehrgangSeite() {"):rk.index("function renderReiter() {")]
+    assert 'class="btn secondary small" data-act="lg-edit"' not in rk and "S.menue({ klein: false, eintraege: [" in kopf
+    assert 'data-act="lg-edit" data-id="${lg.id}"' in kopf and 'data-act="lg-import-in" data-id="${lg.id}"' in kopf
     # D14: Knöpfe mit Wort, Marken ohne ⏱/📋, kein Emoji in Toast und „i“.
     assert "⏱" not in rk and "📋" not in rk
     assert '<span class="sym" aria-hidden="true">${sym}</span> ${wort}</button>' in rk
     assert 'knopf("nicht_bestanden", "👎", "nicht bestanden", "nein")' in rk
-    assert 'toast("Bitte „bestanden“ oder „mangelhaft“ wählen.", true)' in rk
+    # Seit dem Gerätetest (FT7) als Fehler an der Wahl statt als Toast.
+    assert 'S.feldFehler(wahl, "Bitte „bestanden“ oder „mangelhaft“ wählen.")' in rk
     assert "`🔒 eingefroren" not in rk
     # D13: Listen nach der Inhaltsbreite; C11: Duo – Inhalt in der rechten Hälfte.
     assert "main.leitstelle, main.pruef { container: liste / inline-size; }" in css
