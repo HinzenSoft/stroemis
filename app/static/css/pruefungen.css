@@ -611,6 +611,9 @@ body:has(.pruef.druck) #toast { top: 12px; }
   /* Haken und Stempel mindestens 44 px (nach_merge_liste Punkt 12; vorher 40 und 24 px). */
   .vk input[type=checkbox] { width: 44px; height: 44px; }
   .vk-stempel { min-height: 44px; display: inline-flex; align-items: center; }
+  /* Die Beschriftung neben dem Kasten der Karte ist die Tippfläche – auch ohne Zuschreibung darunter 44 px hoch (seit die
+     Karten mit offenen Voraussetzungen aufgeklappt stehen, Gerätetest B2; vorher 37 px). */
+  .vk-zeile .vk-text { min-height: 44px; display: flex; flex-direction: column; justify-content: center; }
   .zelle { min-height: 56px; }
   .linkbtn { min-height: 44px; display: inline-flex; align-items: center; }
   .vor-liste .btn, .ausb-zeile [data-weg] { min-width: 44px; min-height: 44px; justify-content: center; }

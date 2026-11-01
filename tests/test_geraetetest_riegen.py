@@ -44,6 +44,8 @@ def test_b2_voraussetzungen_aufklapper():
     zeile = abschnitt(css, ".tn-karte details.vor-klapp > summary {", "}")
     assert "border: 1px solid var(--linie)" in zeile and "display: flex" in zeile and "min-height" not in zeile
     assert ".vor-klapp-zahl.offen { color: var(--rot-auf-flaeche); font-weight: 700; }" in css
+    # Am Finger ist die Beschriftung neben dem Kasten mindestens 44 px hoch (nur unter pointer: coarse).
+    assert "  .vk-zeile .vk-text { min-height: 44px; display: flex; flex-direction: column; justify-content: center; }" in css
 
 
 def test_b3_q3_kopf_und_reiter():
