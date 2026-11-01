@@ -83,7 +83,8 @@ def test_markup_je_ansicht():
                 if oben:
                     # Zwischen Navigation und Inhalt – oben im Inhalt, unter den Reitern.
                     assert html.index("</nav>") < html.index(ZEILE) < html.index('<div id="mat-inhalt">'), (konto, pfad)
-                    assert 'placeholder="Nummer suchen"' in mnav, (konto, pfad)    # breit unverändert
+                    # Ein Wortlaut in Zeile und Navigation (Gerätetest T2, 01.11.2026) – vorher „Nummer suchen“ breit.
+                    assert 'placeholder="Inventar-, Serien-, Herstellernr."' in mnav, (konto, pfad)
         # Jede Seite ist mindestens einmal wirklich gezeichnet worden (die Prüfung als Prüfer, der sie begonnen hat).
         assert len(gesehen) == len(_seiten(k, ids, gid, a["id"], pruefung, durchgang)), gesehen
     print("Markup je Ansicht bestanden.")
@@ -99,10 +100,8 @@ def test_skript_haengt_um():
     assert "umhaengen(sucheForm, zeile || matNav, false);" in JS and "sucheZeileOben.hidden = !zeile;" in JS
     # Kein zweites Formular, kein zweites Feld: Das Skript baut keine Nummernsuche nach.
     assert 'class="mat-suche"' not in JS and 'name="q"' not in JS
-    assert 'const ARTIKEL_SUCHE = "Artikel suchen: Inventar-, Serien- oder Herstellernummer";' in JS
-    assert '"Artikel: Inv.-, Serien-, Herst.-Nr." : "Artikel suchen: Inventar-, Serien-, Herstellernr."' in JS
-    assert 'sucheFeld.placeholder = zeile ? artikelPlatzhalter() : NAV_SUCHE.platzhalter;' in JS
-    assert 'SUCHE_SCHMAL.addEventListener("change", sucheBeschriften);' in JS
+    # Gerätetest T2 (01.11.2026): kein Umbeschriften mehr – Platzhalter, Name und title stehen in seite.html.
+    assert "sucheBeschriften" not in JS and "NAV_SUCHE" not in JS and "artikelPlatzhalter" not in JS
     assert "if (lupe && !sucheInZeile()) lupe.hidden = false;" in JS
     assert "if (lupe) lupe.hidden = false;" not in JS
     assert '!matNav.classList.contains("eng") || !lupe || sucheInZeile()) return;' in JS

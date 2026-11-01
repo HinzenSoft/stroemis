@@ -471,8 +471,9 @@ def test_geraete_nachbesserung_zwei():
     # V8: Brotkrumen als umbrechende Reihe, kein 44-px-Zeilenabstand.
     assert ".mat-pfad { line-height: 44px; }" not in css
     assert ".mat-pfad { display: flex; flex-wrap: wrap; align-items: center; gap: 0 6px; }" in css
-    # V9: kurzer Platzhalter der Nummernsuche, Katalogsuche folgt dem Drehen.
-    assert 'placeholder="Nummer suchen"' in seite and 'aria-label="Nummer suchen: ' in seite
+    # V9: kurzer Platzhalter der Nummernsuche (seit dem Gerätetest T2 derselbe in Zeile und Navigation), Katalogsuche
+    # folgt dem Drehen.
+    assert 'placeholder="Inventar-, Serien-, Herstellernr."' in seite and 'aria-label="Artikel suchen: ' in seite
     assert 'KAT_SCHMAL.addEventListener("change"' in js and 'placeholder="${katPlatzhalter()}"' in js
     print("Zweite Geräte-Nachbesserung bestanden.")
 
