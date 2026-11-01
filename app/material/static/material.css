@@ -414,6 +414,9 @@ table.list.mat-artikel th.mat-wahlspalte, table.list.mat-artikel td.mat-wahlspal
    Unterkategorien sonst bündig unter ihrem Oberordner (Nachtrag zum Sammelstand, 01.11.2026). */
 .mat-tree ul { margin-left: calc(var(--baum-spalte) / 2 - 1px); padding-left: calc(var(--baum-einzug) - var(--baum-spalte) / 2);
   border-left: 1px solid var(--linie); }
+/* Namen als Block wie vor dem Seitenbaum (dort sind Links Flex-Zeilen): sonst endet ein zu langes Wort am Finger nicht
+   mit „…“, sondern wird nur abgeschnitten. */
+.mat-tree a { display: block; }
 .mat-tree .mat-zahl { margin-left: 0; flex: none; }
 .mat-tree li.system > .row a { color: var(--grau); }
 .mat-side-anzahl { flex: none; font-size: var(--fs-marke); color: var(--grau); padding: 0 4px; }
@@ -945,7 +948,7 @@ table.list.mat-tabelle :is(td.mat-kategorie, .mat-kat-zusatz) { overflow-wrap: b
    und nach Silben (hyphens, lang="de"), mitten im Wort nur, wenn ein Wort allein nicht in die Zeile passt – vorher
    stand in der schmalen festen Leiste „DEMO-Seilrucksa|ck“. Seit UI/UX vor dem Merge (B3) auch mit der Maus am Rechner:
    Dort endeten „DEMO-Strömungsrettungsgruppe 1/2/3“ alle gleich auf „DEMO-Strömungsrettung…“. */
-.mat-tree a { display: block; white-space: normal; overflow-wrap: break-word; -webkit-hyphens: auto; hyphens: auto; text-overflow: clip; }
+.mat-tree a { white-space: normal; overflow-wrap: break-word; -webkit-hyphens: auto; hyphens: auto; text-overflow: clip; }
 @media (pointer: coarse) {
   .mat-tree a { padding-top: 11px; padding-bottom: 11px; min-height: 44px; }
   .mat-tree .tg { width: 44px; height: auto; min-height: 44px; align-self: stretch; }

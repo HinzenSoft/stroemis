@@ -123,7 +123,7 @@ def test_folgen_der_seitenbaum_regeln_auf_den_materialbaum():
               "var(--baum-spalte) / 2);\n  border-left: 1px solid var(--linie); }")
     assert einzug in css and umgebung(css, einzug) == ""
     # Namen als Block wie vor dem Seitenbaum (sonst kein … am Finger, sondern abgeschnittener Text).
-    block = ".mat-tree a { display: block; white-space: normal;"
+    block = "\n.mat-tree a { display: block; }\n"
     assert block in css and umgebung(css, block) == ""
     # Am Finger: kein Überstand in den Innenrand, Zähler mittig, Klappknopf nicht über dem Namen, Zeichen rechts im Knopf.
     for regel in (".mat-tree { margin-right: 0; }", ".mat-tree .row { align-items: center; }",
