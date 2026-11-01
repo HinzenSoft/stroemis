@@ -89,6 +89,11 @@ li.system > .mat-knoten .mat-knoten-name > a { font-weight: 400; color: var(--gr
   .mat-knoten-name { flex: 1 1 auto; min-width: 0; overflow-wrap: break-word; }
   .mat-knoten-zahlen { flex: none; white-space: nowrap; }
   .mat-knoten-zahlen > .mat-baum-zahl:first-child { margin-left: 0; }
+  /* Gerätetest B13: Im Bestandsbaum am Telefon hinter dem Bestand nur „überfällig“ (die Legende im „i“ sagt es, der
+     Ordner zeigt alle Zahlen), und keine Marken, die unter den Namen rutschen: die Ordnerart steht im Ordner selbst,
+     „DEMO“ nur am obersten DEMO-Ordner eines Zweigs. */
+  .mat-baum .mat-knoten-zahlen > .mat-zahl:not(.s-ueberfaellig), .mat-baum .mat-art { display: none; }
+  .mat-baum li:has(> .mat-knoten .mat-demo) li .mat-demo { display: none; }
 }
 .mat-unterordner li { border-bottom: 1px solid var(--linie); padding: 8px 0; }
 .mat-art { display: inline-block; font-size: var(--fs-marke); color: var(--grau); border: 1px solid var(--linie);
@@ -441,6 +446,11 @@ tr.mat-entwurf a:not(.btn) { color: var(--rot-auf-flaeche); }
 .mat-fortschritt { display: inline-block; width: 120px; height: 8px; background: var(--grau-hell); border: 1px solid var(--linie);
   vertical-align: middle; margin-right: 6px; }
 .mat-fortschritt > span { display: block; height: 100%; background: var(--ok); }
+/* Suche im Prüfdurchgang (Gerätetest W3): Feld und „QR-Code scannen“ in einer Zeile über den Filtern. */
+.mat-dg-suche { display: flex; flex-wrap: wrap; align-items: stretch; gap: 8px; margin: 16px 0 0; }
+.mat-dg-suche input { flex: 1 1 220px; min-width: 0; margin: 0; }
+.mat-dg-suche .mat-dg-scan { flex: none; margin: 0; }
+.mat-dg-treffer { margin: 6px 0 10px; min-height: 1.4em; }
 .mat-rundenzahlen .mat-kachel.z-offen { border-top-color: var(--grau); }
 .mat-rundenzahlen .mat-kachel.z-in_pruefung { border-top-color: var(--wasser); }
 .mat-rundenzahlen .mat-kachel.z-erledigt { border-top-color: var(--ok); }
@@ -556,6 +566,19 @@ html:has(.mat-mit-leiste) { scroll-padding-bottom: 210px; }
 .mat-abschluss-zeile .btn { margin-left: auto; min-height: 44px; padding-left: 22px; padding-right: 22px; }
 .mat-abschluss-hinweis { font-size: var(--fs-klein); color: var(--grau); margin-bottom: 6px; }   /* über den Knöpfen */
 .mat-abschluss-hinweis:empty { display: none; }
+/* Eingeklappt (Gerätetest M1, material.js leisteMessen): Die Leiste klebt um ihre unteren Zeilen tiefer, nur die erste
+   schaut heraus – der Hinweis in einer Zeile (bzw. das gewählte Ergebnis) und „Zum Abschluss“. Mit offener Tastatur
+   (.tippt) steht die Leiste ohnehin an ihrem Platz. */
+.mat-abschluss-kopf { display: flex; align-items: center; gap: 4px 10px; }
+.mat-abschluss-kopf > .mat-abschluss-hinweis { flex: 1 1 auto; min-width: 0; }
+.mat-abschluss-stand, .mat-abschluss-auf { display: none; }
+.mat-pruefung:not(.tippt) .mat-abschluss.kompakt { bottom: calc(-1 * var(--mat-leiste-weg, 0px)); }
+.mat-pruefung:not(.tippt) .mat-abschluss.kompakt .mat-abschluss-kopf { padding-bottom: 8px; }
+.mat-pruefung:not(.tippt) .mat-abschluss.kompakt .mat-abschluss-hinweis { margin-bottom: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mat-pruefung:not(.tippt) .mat-abschluss.kompakt .mat-abschluss-hinweis:empty + .mat-abschluss-stand { display: block; flex: 1 1 auto; min-width: 0;
+  font-size: var(--fs-klein); font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mat-pruefung:not(.tippt) .mat-abschluss.kompakt .mat-abschluss-auf { display: inline-flex; flex: none; margin: 0 0 0 auto; }
+.mat-abschluss-ende { height: 1px; }
 .mat-abschluss-hinweis.warn { color: var(--rot); font-weight: 600; }
 /* Am Rechner auch die Leiste niedriger – nach den Grundregeln, damit sie gilt (siehe Prüfpunkte oben). */
 @media (hover: hover) and (pointer: fine) and (min-width: 700px) {
@@ -1018,7 +1041,9 @@ html:has(.mat-pruefung.tippt) { scroll-padding-top: 8px; scroll-padding-bottom: 
   .mat-abschluss { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
   .mat-ergebnis { flex: 1 1 330px; }
   .mat-abschluss-zeile { flex: 1 1 auto; margin-top: 0; }
-  .mat-abschluss-hinweis { flex: 1 1 100%; margin-bottom: 0; }
+  .mat-abschluss-kopf { flex: 1 1 100%; }
+  .mat-abschluss-hinweis { margin-bottom: 0; }
+  .mat-abschluss:not(.kompakt) .mat-abschluss-kopf:has(> .mat-abschluss-hinweis:empty) { display: none; }
 }
 
 /* Prüfpunkte dichter auf breiten Touch-Geräten (Faltgerät offen, Tablet, Telefon quer) – wie am Rechner, nur mit
@@ -2011,6 +2036,9 @@ dialog .mat-knopfgrund { margin: 10px 0 0; }
 .mat-sprung:not(:focus) { position: fixed; top: -100px; left: 8px; }
 /* Hinweiszeile der Prüfung beim Klick auf das ausgegraute „Festschreiben“ (B1): hervorgehoben wie ein Grundsatz. */
 .mat-abschluss-hinweis.betont { color: var(--rot-auf-flaeche); font-weight: 700; }
+/* … ebenso der Satz unter den gemeldeten Mängeln im Dialog „Prüfung festschreiben“ (Gerätetest FT10; über die id, weil
+   die Liste der hellen Flächen in app.css Nebentext dort mit hoher Spezifität anthrazit setzt). */
+#fs-maengel-hilfe.betont { color: var(--rot-auf-flaeche); font-weight: 700; }
 /* Anleitung in der Strömipedia (Wunsch vom 28.10.2026, material.js anleitungKopf/anleitungHinweis): der Textlink
    „Anleitung“ direkt hinter der Überschrift – die Knöpfe des Kopfs bleiben rechts; an Artikel und Produkt neben der
    Nummer bzw. dem Namen. Auf der Übersicht dauerhaft der Hinweis: blau wie eine Info (kein Rot – das bleibt der

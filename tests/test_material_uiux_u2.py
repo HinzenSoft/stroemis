@@ -60,7 +60,7 @@ def test_b1_ausgegraute_hauptknoepfe():
         zeile = next(z for z in js.splitlines() if knopf in z and "<button" in z)
         assert "disabled>" not in zeile and ("knopfAus(" in zeile or 'aria-disabled="true"' in zeile), zeile
     assert 'data-act="schliessen"${knopfAus("dg-abschluss", abschlussGrund)}>Durchgang abschließen' in js
-    assert '${grundSatz("dg-abschluss", abschlussGrund)}' in js and 'Noch ${plural(rest, "Artikel", "Artikel")} offen oder in Prüfung.' in js
+    assert '${grundSatz("dg-abschluss", abschlussGrund)}' in js and '`Noch ${rest}.`' in js   # Gerätetest M3: zählt wie die Filter
     assert 'knopfGrund($("#pr-ok", box), ergebnis ? "" : "Wähle ein Ergebnis.");' in js
     assert 'if (!ergebnis) teile.push("Wähle ein Ergebnis.");' in js
     us = lies("app/material/static/unterschrift.js")
