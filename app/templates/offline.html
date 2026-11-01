@@ -1,0 +1,63 @@
+<!doctype html>
+{# Hinweisseite ohne Netz (app/pwa.py, Service Worker app/static/js/sw.js). Der Worker zeigt sie, wenn eine Seite nicht
+   geladen werden kann – deshalb lädt sie selbst nichts nach: Stil und Zeichen stehen hier drin, „Erneut versuchen“ ist
+   ein Link auf die Adresse, die gerade nicht kam (leeres href = dieselbe Seite), kein Skript. Die Farben und Größen sind
+   die Tokens aus app.css (:root) mit denselben Werten – ein Test hält beide gleich. Schrift: Arial/Helvetica (die
+   Hausschrift wäre eine weitere Datei). #}
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#e30613">
+  <meta name="robots" content="noindex">
+  <title>Keine Verbindung – strömis.de</title>
+  <style>
+    :root {
+      --rot: #e30613;
+      --rot-dunkel: #b3000e;
+      --gelb: #ffed00;
+      --anthrazit: #575756;
+      --grau: #6d6d6c;
+      --weiss: #ffffff;
+      --font: Univers, "Univers Next", "Univers LT Std", Arial, Helvetica, sans-serif;
+      --topbar: 52px;
+      --radius: 2px;
+      --fs-klein: .82rem;
+      --fokus-hof: rgba(255, 237, 0, .6);
+      --sicher-oben: env(safe-area-inset-top, 0px);
+      --sicher-links: env(safe-area-inset-left, 0px);
+      --sicher-rechts: env(safe-area-inset-right, 0px);
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: var(--font); font-size: 15px; line-height: 1.45; color: var(--anthrazit); background: var(--weiss); }
+    .bauchbinde { height: calc(var(--topbar) + var(--sicher-oben)); padding: var(--sicher-oben) calc(16px + var(--sicher-rechts)) 0 calc(16px + var(--sicher-links));
+      background: var(--rot); color: var(--weiss); display: flex; align-items: center; gap: 12px; }
+    .bauchbinde img { height: 44px; width: auto; display: block; }
+    .bauchbinde .trenner { width: 2px; height: 30px; background: var(--gelb); opacity: .9; }
+    .bauchbinde .name { font-weight: 600; line-height: 1.15; }
+    .bauchbinde .name small { display: block; font-weight: 400; font-size: .74rem; opacity: .9; }
+    main { max-width: 560px; margin: 0 auto; padding: 32px calc(16px + var(--sicher-rechts)) 40px calc(16px + var(--sicher-links)); }
+    h1 { font-size: 1.7rem; font-weight: 700; color: var(--rot); line-height: 1.2; margin: 0 0 .5em; }
+    p { margin: 0 0 .9em; }
+    .btn { display: inline-flex; align-items: center; justify-content: center; min-height: 40px; padding: 8px 18px; margin-top: 6px;
+      border-radius: var(--radius); background: var(--rot); color: var(--weiss); font-weight: 700; text-decoration: none; }
+    .btn:hover { background: var(--rot-dunkel); }
+    :focus-visible { outline: 2px solid var(--anthrazit); outline-offset: 2px; box-shadow: 0 0 0 5px var(--fokus-hof); }
+    .muted { color: var(--grau); font-size: var(--fs-klein); }
+    @media (pointer: coarse) { .btn { min-height: 44px; } }
+  </style>
+</head>
+<body>
+<header class="bauchbinde">
+  {% if maskottchen %}<img src="{{ maskottchen }}" alt="">{% endif %}
+  <span class="trenner" aria-hidden="true"></span>
+  <span class="name">Strömungsrettung<small>{{ 'strömis.de dev' if dev else 'strömis.de' }}</small></span>
+</header>
+<main>
+  <h1>Keine Verbindung</h1>
+  <p>strömis.de braucht das Netz. Versuch es gleich noch einmal.</p>
+  <p><a class="btn" href="">Erneut versuchen</a></p>
+  <p class="muted">Gespeicherte Seiten gibt es ohne Netz bewusst nicht – so bleiben keine Daten auf dem Gerät liegen.</p>
+</main>
+</body>
+</html>

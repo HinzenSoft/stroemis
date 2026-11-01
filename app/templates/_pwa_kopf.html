@@ -1,0 +1,9 @@
+{# Als App installierbar (Wunsch vom 28.10.2026, Punkt 1; app/pwa.py): Manifest, Symbol für den Startbildschirm von iPhone
+   und iPad (dort ohne Manifest-Symbole) und die Angaben, mit denen iOS die App ohne Browserleisten öffnet. Auf dev eigener
+   Name und Symbol mit der Marke „dev“. Den Service Worker meldet common.js an. #}
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="apple-touch-icon" href="{{ url_for('static', filename='img/pwa/apple-touch-icon' ~ ('-dev' if dev_umgebung else '') ~ '.png') }}">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="{{ 'strömis.de dev' if dev_umgebung else 'strömis.de' }}">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">

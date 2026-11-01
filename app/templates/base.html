@@ -8,6 +8,7 @@
   <title>{% block title %}strömis.de{% endblock %}</title>
   <meta name="robots" content="noindex">
   <link rel="icon" href="{{ url_for('static', filename='img/favicon.svg') }}" type="image/svg+xml">
+  {% include "_pwa_kopf.html" %}
   <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
   {% block head %}{% endblock %}
 </head>
@@ -44,6 +45,7 @@
 </header>
 <span id="inhalt" class="sprungziel" tabindex="-1"></span>
 {% block body %}{% endblock %}
+{% include "_fuss.html" %}
 {# Hinweis „Entwicklungsserver“ (UI/UX vor dem Merge C10, Nutzer 27.10.2026): nur auf dev, einmal nach jeder Anmeldung auf der
    ersten Seite mit Kopfleiste – common.js öffnet ihn als Dialog in der Mitte. #}
 {% if user and dev_hinweis_einmal() %}
@@ -55,13 +57,14 @@
     <li>Daten können sich jederzeit ändern, verschwinden oder neu auftauchen.</li>
     <li>Es kann und wird zu Fehlern und Problemen kommen.</li>
   </ul>
-  <p>Fehler und Verbesserungsvorschläge bitte mit Screenshot und/oder Beschreibung an
-    <a href="mailto:bugs@stroemis.de?subject=str%C3%B6mis.de%20dev%3A%20">bugs@stroemis.de</a> schicken.</p>
+  {# Die Adresse aus Leitstelle → Einstellungen („Adresse für Fehlermeldungen“); leer: Der Satz entfällt. #}
+  {% if cfg.FEHLER_EMAIL %}<p>Fehler und Verbesserungsvorschläge bitte mit Screenshot und/oder Beschreibung an
+    <a href="{{ cfg.FEHLER_EMAIL | mailto('strömis.de dev: ') }}">{{ cfg.FEHLER_EMAIL }}</a> schicken.</p>{% endif %}
   <div class="dlg-actions"><button class="btn" type="button" id="dev-hinweis-ok">Verstanden</button></div>
 </div></dialog>
 {% endif %}
 <div id="toast" role="status" aria-live="polite"></div>
-<script nonce="{{ csp_nonce }}">window.STROEMIS = { user: {{ (user and {'id': user.id, 'name': user.name, 'email': user.email, 'rechte': rechte}) | tojson }}, mapCenter: {{ cfg.MAP_CENTER | tojson }}, mapZoom: {{ cfg.MAP_ZOOM }}, tileUrl: {{ cfg.TILE_URL | tojson }}, tileAttribution: {{ cfg.TILE_ATTRIBUTION | tojson }}, topoUrl: {{ cfg.TOPO_URL | tojson }}, topoAttribution: {{ cfg.TOPO_ATTRIBUTION | tojson }}, satUrl: {{ cfg.SAT_URL | tojson }}, satAttribution: {{ cfg.SAT_ATTRIBUTION | tojson }}, satLabelsUrl: {{ cfg.SAT_LABELS_URL | tojson }}, publicUrl: {{ cfg.PUBLIC_URL | tojson }}, maxUploadMb: {{ cfg.MAX_CONTENT_LENGTH // 1048576 }}, spracheingabe: {{ cfg.SPRACHEINGABE | tojson }}, module: {{ modul | tojson }} };</script>
+<script nonce="{{ csp_nonce }}">window.STROEMIS = { user: {{ (user and {'id': user.id, 'name': user.name, 'email': user.email, 'rechte': rechte}) | tojson }}, mapCenter: {{ cfg.MAP_CENTER | tojson }}, mapZoom: {{ cfg.MAP_ZOOM }}, tileUrl: {{ cfg.TILE_URL | tojson }}, tileAttribution: {{ cfg.TILE_ATTRIBUTION | tojson }}, topoUrl: {{ cfg.TOPO_URL | tojson }}, topoAttribution: {{ cfg.TOPO_ATTRIBUTION | tojson }}, satUrl: {{ cfg.SAT_URL | tojson }}, satAttribution: {{ cfg.SAT_ATTRIBUTION | tojson }}, satLabelsUrl: {{ cfg.SAT_LABELS_URL | tojson }}, publicUrl: {{ cfg.PUBLIC_URL | tojson }}, maxUploadMb: {{ cfg.MAX_CONTENT_LENGTH // 1048576 }}, spracheingabe: {{ cfg.SPRACHEINGABE | tojson }}, module: {{ modul | tojson }}, kontakt: {{ cfg.KONTAKT_EMAIL | tojson }} };</script>
 <script src="{{ url_for('static', filename='js/common.js') }}"></script>
 {% block scripts %}{% endblock %}
 </body>

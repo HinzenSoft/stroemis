@@ -7,7 +7,7 @@ import base64
 import tempfile
 import time
 from datetime import date, timedelta
-from urllib.parse import urlsplit
+from urllib.parse import quote, urlsplit
 
 from flask import (Blueprint, Flask, Request, abort, current_app, g, jsonify, redirect, render_template,
                    request, send_from_directory, url_for)
@@ -16,7 +16,8 @@ from werkzeug.exceptions import Forbidden, HTTPException, InternalServerError
 from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.security import safe_join
 
-from . import api_admin, api_albums, api_pruefungen, api_wiki, auth, db, einstellungen, material, medienpflege, module
+from . import (api_admin, api_albums, api_pruefungen, api_wiki, auth, db, einstellungen, material, medienpflege, module,
+               pwa)
 from .images import AVATAR_MAX_BYTES, EMBED_EXT, VIDEO_EXT
 
 
@@ -44,6 +45,27 @@ def _env_ganzzahl(name, vorgabe, kleinster, groesster):
                                             "Vorgabe %s.", name, roh, kleinster, groesster, vorgabe)
         return vorgabe
     return zahl
+
+
+def _env_adresse(name, vorgabe):
+    """Eine Kontaktadresse aus der Umgebung (KONTAKT_EMAIL, FEHLER_EMAIL). Fehlt sie, gilt die Vorgabe; leer gesetzt heißt
+    „keine Angabe“ (die Zeile entfällt); unbrauchbar – Warnung im Log und die Vorgabe, wie bei _env_ganzzahl."""
+    roh = os.environ.get(name)
+    if roh is None:
+        return vorgabe
+    wert = einstellungen.NACH_SCHLUESSEL[name].wert(roh)
+    if wert is None:
+        logging.getLogger(__name__).warning("%s=%r in der Umgebung ist keine gültige E-Mail-Adresse – es gilt die "
+                                            "Vorgabe %s.", name, roh, vorgabe)
+        return vorgabe
+    return wert
+
+
+def mailto(adresse, betreff=""):
+    """href eines mailto-Links: die Adresse kodiert (ein „@“ bleibt), dazu ein Betreff. Die Adresse ist bei der Eingabe
+    geprüft (einstellungen._adresse) – hier steht sie trotzdem nie roh im Attribut."""
+    href = "mailto:" + quote(adresse or "", safe="@")
+    return href + ("?subject=" + quote(betreff, safe="") if betreff else "")
 
 
 def _idna(host):
@@ -459,6 +481,10 @@ def create_app():
         # Umschlag und From auf derselben Domain, wie DMARC es verlangt.
         SMTP_ENVELOPE_FROM=os.environ.get("SMTP_ENVELOPE_FROM", ""),
         ADMIN_NOTIFY_EMAIL=os.environ.get("ADMIN_NOTIFY_EMAIL", ""),
+        # Kontaktadressen im Fuß jeder Seite, im Hinweis „Entwicklungsserver“ und beim Bestandsimport (Wunsch vom
+        # 28.10.2026, Punkt 4) – auch unter Leitstelle → Einstellungen, Gruppe „Seite“; leer = die Angabe entfällt.
+        KONTAKT_EMAIL=_env_adresse("KONTAKT_EMAIL", "verwalter@stroemis.de"),
+        FEHLER_EMAIL=_env_adresse("FEHLER_EMAIL", "bugs@stroemis.de"),
         LOGIN_SLIDESHOW=_env_bool("LOGIN_SLIDESHOW", True),
         SPRACHEINGABE=_env_bool("SPRACHEINGABE", True),     # Diktat an den Kommentarfeldern der Prüfungen
         # Materialablage: Ab wie vielen Tagen vor der Fälligkeit ein Artikel „bald fällig“ heißt – 0 bis 365 wie unter
@@ -541,6 +567,8 @@ def create_app():
     app.register_blueprint(api_admin.bp)
     app.register_blueprint(api_pruefungen.bp)
     app.register_blueprint(pages)
+    app.register_blueprint(pwa.bp)
+    app.add_template_filter(mailto, "mailto")
 
     # Bestandsvideos, die noch nicht jeder Browser abspielt, werden im Hintergrund gewandelt.
     medienpflege.starten(app)
@@ -553,6 +581,8 @@ def create_app():
     app.config["MASKOTTCHEN"] = next(
         (f"img/{n}" for n in ("maskottchen.webp", "maskottchen.png", "maskottchen.jpg", "maskottchen.svg")
          if os.path.exists(os.path.join(app.static_folder, "img", n))), "")
+    # Versionsstempel des Service Workers (app/pwa.py) – einmal beim Start, nach dem Maskottchen.
+    app.config["PWA_STAND"] = pwa.stand(app)
 
     # Was jede Route höchstens entgegennimmt. Nicht aufgeführt heißt: die enge Grenze für
     # gewöhnliche Aufrufe. Das Profilbild braucht mehr als die – eine Aufnahme vom Telefon hat
@@ -671,7 +701,9 @@ def create_app():
                 # Überschriften der Fehlerseiten – auch für error.html aus den Modulen, die nur Zahl und Satz geben.
                 "fehler_titel": FEHLER_TITEL,
                 # Hinweis „Entwicklungsserver“ nach der Anmeldung (C10): erst base.html ruft es – und holt den Merker ab.
-                "dev_hinweis_einmal": auth.dev_hinweis_einmal}
+                "dev_hinweis_einmal": auth.dev_hinweis_einmal,
+                # Entwicklungsumgebung: eigener App-Name und Symbol mit Marke „dev“ (_pwa_kopf.html, app/pwa.py).
+                "dev_umgebung": module.dev_umgebung()}
 
     @app.errorhandler(413)
     def too_large(_e):
@@ -750,5 +782,10 @@ def fehlerseite(code, meldung):
     except Exception:  # pragma: no cover - nur, wenn die Seite selbst nicht zu zeichnen ist
         current_app.logger.exception("Fehlerseite %s ließ sich nicht zeichnen", code)
         from markupsafe import escape
+        # Der Fuß mit den Kontaktadressen auch hier (Wunsch vom 28.10.2026, Punkt 4) – aus der Konfiguration, ohne Vorlage.
+        teile = [f'{wort}: <a href="{escape(mailto(adr))}">{escape(adr)}</a>' for wort, adr in
+                 (("Fragen", current_app.config.get("KONTAKT_EMAIL")), ("Fehler", current_app.config.get("FEHLER_EMAIL")))
+                 if adr]
+        fuss = f'<footer><p><small>{" · ".join(teile)}</small></p></footer>' if teile else ""
         return (f'<!doctype html><html lang="de"><meta charset="utf-8"><title>{escape(titel)} – strömis.de</title>'
-                f'<h1>{escape(titel)}</h1><p>{escape(meldung)}</p><p><a href="/">Zur Startseite</a></p></html>'), code
+                f'<h1>{escape(titel)}</h1><p>{escape(meldung)}</p><p><a href="/">Zur Startseite</a></p>{fuss}</html>'), code
