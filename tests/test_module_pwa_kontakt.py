@@ -99,8 +99,8 @@ def test_manifest():
         assert [(s["name"], s["url"]) for s in m["shortcuts"]] == [
             ("Strömipedia", "/"), ("Ankerplätze", "/ankerplaetze"), ("Riegenkarten", "/riegenkarten"),
             ("Materialablage", "/materialablage"), ("Leitstelle", "/leitstelle")]
-        # Ohne Anmeldung, ohne Datenbank (ist_statisch), einen Tag im Zwischenspeicher.
-        assert r.headers["Cache-Control"] == "public, max-age=86400"
+        # Ohne Anmeldung, ohne Datenbank (ist_statisch), nach jedem Deploy sofort neu.
+        assert r.headers["Cache-Control"] == "no-cache"
         from app import einstellungen
         assert einstellungen.ist_statisch("/manifest.webmanifest") and einstellungen.ist_statisch("/sw.js")
         assert not einstellungen.ist_statisch("/offline")
@@ -192,7 +192,8 @@ def test_offline_seite():
         assert "<p>strömis.de braucht das Netz. Versuch es gleich noch einmal.</p>" in html
         assert '<a class="btn" href="">Erneut versuchen</a>' in html
         # Keine Mittel von außen: kein Skript, kein Stylesheet, Bilder nur als data:-Adresse.
-        assert "<script" not in html and "<link" not in html
+        assert "<script" not in html and html.count("<link") == 1
+        assert re.search(r'<link rel="icon" href="data:image/svg\+xml;base64,[A-Za-z0-9+/=]+" type="image/svg\+xml">', html)
         assert re.findall(r'src="([^"]*)"', html) and all(s.startswith("data:image/") for s in re.findall(r'src="([^"]*)"', html))
         assert "url(" not in html
         # Tokens mit denselben Werten wie app.css.
@@ -371,7 +372,7 @@ def test_bestandsimport_satz_und_profil():
     assert 'const adresse = (window.STROEMIS && STROEMIS.kontakt) || "";' in teil
     assert 'if (!adresse) return "";' in teil
     assert "Übernimmst du einen bestehenden Bestand? Stimm dich vorher mit der\n      Plattform-Verwaltung ab:" in teil
-    assert '<span class="kurz">Bestand übernehmen? Vorher abstimmen:</span> <a href="${esc(href)}">${esc(adresse)}</a>' in teil
+    assert '<span class="kurz">Übernahme abstimmen:</span> <a href="${esc(href)}">${esc(adresse)}</a>' in teil
     assert "info" not in teil.lower().replace("infoknopf", "")       # kein „i“: sichtbarer Satz
     mc = lies("app/material/static/material.css")
     assert ".mat-import-kontakt .kurz { display: none; }\n@container mat-seite (max-width: 600px) {" in mc

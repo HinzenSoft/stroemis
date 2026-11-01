@@ -7398,7 +7398,7 @@
     if (!adresse) return "";
     const href = "mailto:" + encodeURIComponent(adresse).replace(/%40/g, "@");
     return `<p class="help mat-import-kontakt"><span class="lang">Übernimmst du einen bestehenden Bestand? Stimm dich vorher mit der
-      Plattform-Verwaltung ab:</span><span class="kurz">Bestand übernehmen? Vorher abstimmen:</span> <a href="${esc(href)}">${esc(adresse)}</a></p>`;
+      Plattform-Verwaltung ab:</span><span class="kurz">Übernahme abstimmen:</span> <a href="${esc(href)}">${esc(adresse)}</a></p>`;
   }
 
   async function bestandsimport() {

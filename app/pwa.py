@@ -49,12 +49,13 @@ def _maskottchen_daten():
 
 
 def stand(app):
-    """Versionsstempel des Workers: Prüfsumme über seine Quelle, die Hinweisseite und das Zeichen darin. Ändert sich
+    """Versionsstempel des Workers: Prüfsumme über seine Quelle, die Hinweisseite und die Bilder darin. Ändert sich
     eins davon (Deploy), ist /sw.js ein anderes Byte-Muster – der Browser holt den neuen Worker, legt die neue
     Hinweisseite ab und räumt die alte weg. Ändert sich nichts, bleibt der installierte Worker, wie er ist."""
     h = hashlib.sha256()
     h.update(_lesen(SW_QUELLE, binaer=True))
     h.update(_lesen(OFFLINE_VORLAGE, binaer=True))
+    h.update(_lesen(os.path.join(app.static_folder, "img", "favicon.svg"), binaer=True))
     datei = app.config.get("MASKOTTCHEN") or ""
     if datei:
         h.update(_lesen(os.path.join(app.static_folder, datei), binaer=True))
@@ -102,9 +103,9 @@ def manifest_daten():
 
 @bp.get("/manifest.webmanifest")
 def manifest():
-    # Einen Tag im Zwischenspeicher: Der Browser fragt es ohnehin selten neu ab; der Name ändert sich nie im Betrieb.
-    return _antwort(json.dumps(manifest_daten(), ensure_ascii=False, indent=1), "application/manifest+json",
-                    "public, max-age=86400")
+    # „no-cache“ wie der Worker: Der Browser fragt selten, und ein geänderter Name oder neue Symbole gelten nach dem
+    # Deploy sofort (mit einem Tag Zwischenspeicher bliebe das alte Manifest bis zu einen Tag stehen – gemessen).
+    return _antwort(json.dumps(manifest_daten(), ensure_ascii=False, indent=1), "application/manifest+json")
 
 
 @bp.get("/sw.js")
@@ -123,5 +124,8 @@ def service_worker():
 def offline():
     """Die Hinweisseite ohne Netz. Der Worker legt sie bei der Installation ab und zeigt sie, wenn eine Seite nicht
     geladen werden kann. Ohne Anmeldung, ohne Kopfleiste mit Konto – sie steht für jeden Ursprung gleich im Speicher."""
-    html = render_template("offline.html", maskottchen=_maskottchen_daten(), dev=module.dev_umgebung())
+    # Das Favicon als data:-Adresse – sonst fragte der Browser ohne Netz vergeblich nach /favicon.ico.
+    favicon = "data:image/svg+xml;base64," + base64.b64encode(
+        _lesen(os.path.join(current_app.static_folder, "img", "favicon.svg"), binaer=True)).decode()
+    html = render_template("offline.html", maskottchen=_maskottchen_daten(), favicon=favicon, dev=module.dev_umgebung())
     return _antwort(html, "text/html")
