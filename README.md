@@ -16,6 +16,12 @@
 
 Die Weiterleitung (301, erster `before_request`-Haken, ohne Anmeldung und ohne Datenbankabfrage) gilt für GET und HEAD, behält die Abfrage (`?status=…`, `?freigaben=…`) – den Anker behält der Browser – und führt nur auf einen eigenen Pfad (festes Präfix plus der kodierte Rest, kein Host, kein Schema). Ein Schrägstrich am Ende einer Startseite (`/stroemipedia/`, `/ankerplaetze/`, `/riegenkarten/`, `/materialablage/`, `/leitstelle/`, auch `/wiki/` usw.) führt ebenso per 301 auf die Adresse ohne – nur diese fünf festen Pfade, Unterseiten mit Schrägstrich bleiben 404. `Cache-Control: max-age=86400`: Browser merken sich die 301 einen Tag, nicht unbegrenzt. Unverändert bleiben `/m/<token>` (QR- und NFC-Etiketten), `/api/…`, `/media/…`, `/static/…`, `/oeffentlich/…` und die öffentlichen Adressen `wiki.strömis.de/<slug>`. Gespeicherte Links in Wiki-Seiten (`](/wiki/<slug>)`) werden nicht umgeschrieben: Beide Schreibweisen gelten als interner Link (Rückverweise, Klick ohne Neuladen, Umschreiben im öffentlichen Teil); neue Links schreibt der Editor als `/stroemipedia/<slug>`. Festgeschriebene Protokolle bleiben, wie sie sind (sie tragen `strömis.de/material/pruefen`); neue Protokolle und Lebensläufe drucken `strömis.de/materialablage/pruefen` und „Materialablage · …“ im Kopf.
 
+**Als App und Kontakt** (01.11.2026, Wünsche vom 28.10.2026): strömis.de lässt sich als App auf den Startbildschirm
+legen (eigenes Fenster ohne Adressleiste, Maskottchen auf Rot als Symbol; ohne Netz nur eine Hinweisseite, nichts
+Angemeldetes im Speicher – siehe „Als App installieren (PWA)“). Ganz unten auf jeder Seite stehen klein die
+Kontaktadressen „Fragen: verwalter@stroemis.de · Fehler: bugs@stroemis.de“ (einstellbar unter Leitstelle →
+Einstellungen, Gruppe „Seite“).
+
 **Ankerplätze (Karte)**
 - Bilder erscheinen als Thumbnail-Marker (rote Umrandung = Seiltechnik, blaue = Gewässer). Beim Herauszoomen werden sie zu einem Stapel mit Zähler zusammengefasst; ein Klick zoomt hinein, auf der letzten Stufe fächern sie sich auf.
 - Klick auf ein Bild öffnet das Album mit allen Bildern, allgemeinen Infos und dem Ansprechpartner (Name, Gliederung, Telefon, E-Mail, Hinweise).
@@ -523,6 +529,8 @@ an die Plattform-Verwaltung.
 | `MAX_REQUEST_MB` | Obergrenze einer gewöhnlichen Anfrage ohne Upload (Standard 1) – begrenzt auch die Länge einer Wiki-Seite. Gilt auch am Datenstrom; Anfragen ohne `Content-Length` (chunked) werden mit 411 abgewiesen |
 | `SITE_NAME` | Name der Anwendung in Betreffzeilen und Absendern |
 | `PUBLIC_HOST`, `PUBLIC_URL` | Subdomain und Adresse der öffentlichen Strömipedia |
+| `KONTAKT_EMAIL` | Kontaktadresse für Fragen und Anliegen (Vorgabe `verwalter@stroemis.de`): im Fuß jeder Seite – angemeldet, Anmeldung, Fehlerseiten, öffentliche Strömipedia – und im Satz vor dem Bestandsimport der Materialablage. Leer gesetzt: Die Angabe entfällt; keine gültige Adresse: Warnung im Log, es gilt die Vorgabe. Auch unter „Leitstelle → Einstellungen“ (Gruppe „Seite“, „Kontaktadresse“) – dort lehnt Speichern eine ungültige Adresse ab |
+| `FEHLER_EMAIL` | Adresse für Fehler und Verbesserungsvorschläge (Vorgabe `bugs@stroemis.de`): im Fuß jeder Seite und im Hinweis „Entwicklungsserver“ auf dev (Betreff „strömis.de dev: “). Leer: Die Angabe entfällt, der Hinweis bleibt ohne den Satz. Sonst wie `KONTAKT_EMAIL` („Adresse für Fehlermeldungen“) |
 | `ADMIN_NOTIFY_EMAIL` | Empfänger für Kontoanfragen (leer = das dienstälteste Konto mit Plattform-Verwaltung; es geht bewusst genau eine Mail hinaus, damit die Antwortzeit nicht verrät, ob eine Adresse schon ein Konto hat – die übrigen sehen die Anfrage unter „Leitstelle → Nutzer“) |
 | `LOGIN_SLIDESHOW` | Slideshow auf der Anmeldeseite (`true`/`false`) |
 | `SMTP_*`, `MAIL_FROM` | Mailversand für Passwort-Reset; ohne `SMTP_HOST` steht der Link im Container-Log (`docker compose logs`) |
@@ -748,6 +756,53 @@ Rechte-Matrix. Es geht keine Mail von selbst hinaus (Erinnerungsmails sind aus).
 7. **Erinnerungsmails zuletzt:** erst wenn Gliederungen, Freigaben und Bestand stehen – Materialablage → Übersicht →
    „Probelauf ansehen“, dann Leitstelle → Einstellungen → Materialablage → „Erinnerungsmails verschicken“ an. In der
    `.env` der Produktion weder `MATERIAL_ERINNERUNGEN_SPERRE` noch `STROEMIS_NAME=…-dev`.
+
+## Als App installieren (PWA)
+
+Seit dem 01.11.2026 ist strömis.de eine installierbare Web-App (Wunsch des Nutzers vom 28.10.2026; Entscheidungen vom
+01.11.2026: Symbol „Maskottchen auf Rot“, ohne Netz nur eine Hinweisseite). Alles dafür steht in `app/pwa.py`:
+
+| Adresse | Inhalt |
+| --- | --- |
+| `/manifest.webmanifest` | `application/manifest+json`, ohne Anmeldung: Name „strömis.de“, `start_url` und `scope` „/“, `display: standalone`, Farben aus den Tokens (`--rot` als Leiste, `--weiss` als Hintergrund beim Start), Symbole 192/512 als „any“ und „maskable“, Kurzbefehle zu allen fünf Modulen (lange auf das Symbol drücken; wer ein Modul nicht hat, landet auf der Fehlerseite mit seinem Bereich). `no-cache`: Änderungen gelten nach dem Deploy sofort |
+| `/sw.js` | der Service Worker (Quelle `app/static/js/sw.js`) mit Versionsstempel; `no-cache`, liegt am Ursprung und gilt damit für „/“ |
+| `/offline` | die Hinweisseite „Keine Verbindung – strömis.de braucht das Netz. Versuch es gleich noch einmal.“ – ohne Mittel von außen (Stil, Zeichen als `data:`-Bild, „Erneut versuchen“ als Link auf dieselbe Adresse) |
+
+Jede Seite mit Kopfleiste (auch Anmeldung und Fehlerseiten) verweist auf das Manifest und das Symbol für iPhone/iPad
+(`apple-touch-icon`, iOS liest die Manifest-Symbole nicht) und meldet den Worker an (`common.js`, nur über HTTPS oder
+localhost). **Was der Worker tut:** nur zweierlei – die Seite installierbar machen und die Hinweisseite zeigen, wenn eine
+Seite nicht geladen werden kann (Netz weg). **Zwischengespeichert wird nur `/offline`** – keine Seite, keine Antwort der
+Schnittstelle, kein Bild, nichts Angemeldetes. Jede Seite kommt wie ohne Worker vom Server, Fehlerseiten (403, 404, 500,
+auch 502 des Proxys während eines Deploys) gehen unverändert durch. Gar nicht angefasst werden: alles außer dem Aufruf
+einer Seite per GET (Skripte, Bilder, `fetch`, Formulare, Uploads), `/api/…`, `/media/…`, `/static/…`, die QR-Adressen
+`/m/…` und Downloads (Adressen mit Dateiendung wie `…/lebenslauf.pdf`, `…/protokolle.zip`, `…/export/12.csv`, dazu
+`…/pdf` und `…/sammelprotokoll`).
+
+**Hinweis „App installieren“:** unauffällig im Profil, Abschnitt „App“ – mit Knopf, wo der Browser die Installation
+anbietet (Chrome, Edge, Samsung Internet), mit der Anleitung „Teilen → Zum Home-Bildschirm“ auf iPhone und iPad; nicht,
+wenn die Seite schon als App läuft. Chrome am Telefon zeigt keine eigene Leiste mehr; die Installation bleibt auch im
+Browsermenü. Auf iPhone/iPad hat die App eine eigene Anmeldung (iOS trennt ihre Cookies von Safari) – einmal anmelden,
+dann gilt sie wie im Browser 30 Tage.
+
+**dev und Produktion** sind getrennte Apps (eigener Ursprung). Auf dev (`STROEMIS_NAME` endet auf `-dev`) heißt die App
+„strömis.de dev“, und ihre Symbole tragen eine gelbe Marke „dev“. Die öffentliche Strömipedia (`wiki.strömis.de`)
+verweist nicht auf das Manifest: Dort leitet die Anwendung jede Adresse nach `/oeffentlich/`, eine eigene Installation
+der öffentlichen Seiten ist nicht vorgesehen (für „Zum Home-Bildschirm“ gilt dort trotzdem das Symbol).
+
+**Symbole** liegen fertig unter `app/static/img/pwa/` (je 192/512 „any“ und „maskable“, 96 für die Kurzbefehle, 180 für
+iOS, jeweils auch mit `-dev`). Erzeugt aus `app/static/img/maskottchen.png` mit `python3 scripts/pwa_symbole.py` (Pillow;
+Maskottchen auf `--rot`, „maskable“ kleiner mit Schutzrand – alles Wichtige im inneren Kreis von 40 % –, die dev-Marke in
+der Hausschrift). Nur nötig, wenn sich das Maskottchen ändert; die Dateien werden eingecheckt.
+
+**Betrieb – Worker-Aktualisierung beim Deploy:** Der Versionsstempel ist eine Prüfsumme über `sw.js`, die Hinweisseite, das Favicon
+und das Maskottchen (beim Start berechnet). Ändert sich eins davon, ist `/sw.js` nach dem Deploy ein anderes Byte-Muster:
+Der Browser holt den neuen Worker beim nächsten Seitenaufruf, er legt die neue Hinweisseite ab, übernimmt sofort
+(`skipWaiting`, `clients.claim` – unbedenklich, weil er nichts außer der Hinweisseite aus einem Speicher liefert) und
+räumt den alten Speicher weg. Ändert sich nichts davon, bleibt der installierte Worker; Seiten, Skripte und Stile kommen
+ohnehin frisch vom Server. Nichts davon braucht einen Schritt beim Deploy. **Notausgang**, falls der Worker je stören
+sollte: `app/static/js/sw.js` durch einen Worker ersetzen, der sich bei `activate` selbst abmeldet
+(`self.registration.unregister()`) und keinen `fetch`-Haken hat, und ausrollen – die Browser holen ihn beim nächsten
+Aufruf, danach läuft alles wie ohne Worker.
 
 ## DLRG-Wortmarke einsetzen
 

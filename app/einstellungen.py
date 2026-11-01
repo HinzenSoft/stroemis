@@ -10,6 +10,7 @@ sich bei jedem zweiten Aufruf anders. Die Werte stehen deshalb in der Datenbank 
 Beginn jeder Anfrage über die Konfiguration gelegt.
 """
 import os
+import re
 
 from flask import current_app, request
 
@@ -33,7 +34,7 @@ class Feld:
         self.schluessel = schluessel
         self.gruppe = gruppe
         self.titel = titel
-        self.art = art                 # text | mehrzeilig | zahl | schalter | passwort
+        self.art = art                 # text | mehrzeilig | zahl | schalter | passwort | email
         self.hilfe = hilfe
         self.config = config or schluessel
         self._wandeln = wandeln
@@ -55,7 +56,25 @@ class Feld:
             if self.bereich and not self.bereich[0] <= zahl <= self.bereich[1]:
                 return None            # außerhalb gilt nichts davon – speichern lässt es gar nicht erst zu
             return zahl
+        if self.art == "email":
+            return _adresse(roh)
         return roh
+
+
+# Eine Mailadresse, wie sie im Fuß jeder Seite und im Hinweis „Entwicklungsserver“ als mailto-Link steht: ein „@“,
+# davor und danach nichts, was einen Link oder eine Kopfzeile aufbräche (Leerraum, Spitzklammern, Anführungszeichen,
+# „?“, „&“, „#“, „%“, Komma, Semikolon), hinten ein Punkt in der Domain. Umlaute in der Domain sind erlaubt
+# (verwalter@strömis.de).
+_ADRESSE_RE = re.compile(r"^[^@\s<>\"'(),;:?&#%\\]+@[^@\s<>\"'(),;:?&#%\\/]+\.[^@\s<>\"'(),;:?&#%\\/.]{2,}$")
+
+
+def _adresse(roh):
+    """Leer heißt: die Zeile bzw. der Satz mit dieser Adresse entfällt. Sonst eine gültige Adresse – oder None (gilt
+    nicht, siehe Feld.wert)."""
+    text = str(roh or "").strip()
+    if not text:
+        return ""
+    return text if len(text) <= 254 and _ADRESSE_RE.match(text) else None
 
 
 def _mb(roh):
@@ -91,6 +110,15 @@ FELDER = [
          hilfe="Aus heißt: Konten legt nur die Plattform-Verwaltung an."),
     Feld("LOGIN_SLIDESHOW", "Seite", "Bilder auf der Anmeldeseite", art="schalter",
          hilfe="Zeigt zufällige Bilder aus den Ankerplätzen hinter dem Anmeldeformular."),
+    # Kontaktadressen (Wunsch vom 28.10.2026, Punkt 4): Fuß jeder Seite, Hinweis „Entwicklungsserver“, Bestandsimport.
+    Feld("KONTAKT_EMAIL", "Seite", "Kontaktadresse", art="email",
+         hilfe="Für Fragen und Anliegen, etwa vor der Übernahme eines bestehenden Bestands. Steht im Fuß jeder Seite und "
+               "beim Bestandsimport der Materialablage. Leer: Die Angabe entfällt.",
+         platzhalter="verwalter@stroemis.de"),
+    Feld("FEHLER_EMAIL", "Seite", "Adresse für Fehlermeldungen", art="email",
+         hilfe="Für Fehler und Verbesserungsvorschläge. Steht im Fuß jeder Seite und im Hinweis auf dem "
+               "Entwicklungsserver. Leer: Die Angabe entfällt.",
+         platzhalter="bugs@stroemis.de"),
 
     # --- Riegenkarten (Modul pruefungen) ----------------------------------------------------
     Feld("SPRACHEINGABE", "Riegenkarten", "Diktieren per Mikrofon", art="schalter",
@@ -353,6 +381,8 @@ def speichern(eingaben, uid):
                 if f.bereich and not f.bereich[0] <= zahl <= f.bereich[1]:
                     raise ValueError(f"„{f.titel}“ braucht eine Zahl zwischen {f.bereich[0]} und {f.bereich[1]}.")
                 text = str(zahl)       # gespeichert wie angezeigt wie wirksam: „007“ wird „7“
+            if f.art == "email" and _adresse(text) is None:
+                raise ValueError(f"„{f.titel}“ braucht eine gültige E-Mail-Adresse (oder bleibt leer).")
             db.execute(
                 "INSERT INTO einstellungen (schluessel, wert, geaendert_am, geaendert_von) "
                 "VALUES (?,?,?,?) ON CONFLICT(schluessel) DO UPDATE SET "
@@ -381,4 +411,6 @@ def ist_statisch(pfad=None):
     """Statische Dateien und Medien brauchen die Einstellungen nicht – und jede Bilddatei
     sollte keine Datenbankabfrage kosten."""
     p = pfad if pfad is not None else request.path
-    return p.startswith(("/static/", "/media/", "/favicon"))
+    # Manifest und Service Worker (app/pwa.py) lesen keine Einstellung – der Browser fragt den Worker bei jedem
+    # Seitenwechsel ab, das soll nichts kosten.
+    return p.startswith(("/static/", "/media/", "/favicon")) or p in ("/manifest.webmanifest", "/sw.js")

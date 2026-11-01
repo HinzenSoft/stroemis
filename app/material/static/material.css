@@ -2031,3 +2031,11 @@ dialog .mat-knopfgrund { margin: 10px 0 0; }
   .mat-anleitung-zusatz { display: none; }
   .notice.mat-anleitung-hinweis { padding: 10px 12px; }
 }
+
+/* Bestandsimport: Satz zur Kontaktadresse (material.js importKontakt, Wunsch vom 28.10.2026 Punkt 4) – am Telefon die kurze
+   Fassung in einer Zeile. */
+.mat-import-kontakt .kurz { display: none; }
+@container mat-seite (max-width: 600px) {
+  .mat-import-kontakt .lang { display: none; }
+  .mat-import-kontakt .kurz { display: inline; }
+}

@@ -922,6 +922,48 @@ window.S = (function () {
     ok.focus();
   })();
 
+  /* Als App installieren (Wunsch vom 28.10.2026, Punkt 1; app/pwa.py, Quelle des Workers app/static/js/sw.js).
+     Der Worker wird auf jeder Seite mit Kopfleiste angemeldet (auch Anmeldung und Fehlerseiten) – der Browser holt ihn
+     nur neu, wenn sich /sw.js geändert hat. Nur in einem sicheren Kontext (HTTPS oder localhost), sonst gibt es ihn nicht.
+     Hinweis „App installieren“ unauffällig im Profil (#app-installieren): Chrome, Edge, Samsung Internet bieten die
+     Installation über „beforeinstallprompt“ an – dann ein grauer Knopf; iPhone und iPad kennen das nicht – dann die
+     kurze Anleitung über „Teilen“. Läuft die Seite schon als App (display-mode: standalone), bleibt der Abschnitt weg.
+     preventDefault: Chrome am Telefon zeigt dann keine eigene Leiste unten – die Installation bleibt im Browsermenü. */
+  (function appInstallieren() {
+    if ("serviceWorker" in navigator && window.isSecureContext) {
+      const anmelden = () => navigator.serviceWorker.register("/sw.js").catch(() => { /* ohne Worker geht alles wie bisher */ });
+      if (document.readyState === "complete") anmelden(); else window.addEventListener("load", anmelden);
+    }
+    const box = document.getElementById("app-installieren");
+    const knopf = box && box.querySelector("#app-installieren-knopf");
+    const anleitung = box && box.querySelector("#app-ios");
+    const ios = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+    const alsApp = () => window.matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
+    let angebot = null;
+    function zeigen() {
+      if (!box) return;
+      box.classList.toggle("hidden", alsApp() || !(angebot || ios));
+      knopf.classList.toggle("hidden", !angebot);
+      anleitung.classList.toggle("hidden", !(ios && !angebot));
+    }
+    window.addEventListener("beforeinstallprompt", (e) => { e.preventDefault(); angebot = e; zeigen(); });
+    window.addEventListener("appinstalled", () => {
+      angebot = null;
+      zeigen();
+      if (box) toast("strömis.de ist als App installiert.");
+    });
+    if (!box) return;
+    knopf.addEventListener("click", async () => {
+      const a = angebot;
+      if (!a) return;
+      angebot = null;                 // ein Angebot gilt nur einmal; lehnt man ab, kommt später ein neues
+      a.prompt();
+      try { await a.userChoice; } catch (e) { /* abgebrochen */ }
+      zeigen();
+    });
+    zeigen();
+  })();
+
   return { esc, api, toast, dialog, confirm, fmtDate, fmtCoord, CAT, titel, info, overlayVerlauf, dialogVerlauf, klassenVerlauf,
            feldFehler, feldOk, fehlschlag, menue, menueSchwebend, plural, rollen, weich, schliessenKnopf, entfernenKnopf,
            reihenfolgeKnoepfe };

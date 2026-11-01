@@ -88,6 +88,14 @@
       <div class="btn-row abgesetzt"><button class="btn secondary" type="submit">Passwort ändern</button></div>
     </form>
   </section>
+  {# Hinweis „App installieren“ (Wunsch vom 28.10.2026, Punkt 1), unauffällig als letzter Abschnitt: erscheint nur, wo
+     der Browser die Installation anbietet (Knopf) oder auf iPhone/iPad (Anleitung) – und nicht, wenn die Seite schon als
+     App läuft. common.js schaltet ihn. #}
+  <section class="section hidden" id="app-installieren" aria-labelledby="app-titel">
+    <div class="abschnittskopf"><h2 id="app-titel">App</h2><button class="btn secondary hidden" type="button" id="app-installieren-knopf">App installieren</button></div>
+    <p class="help">strömis.de lässt sich wie eine App auf den Startbildschirm legen: eigenes Fenster, ohne Adressleiste. Ohne Netz zeigt sie nur einen Hinweis.</p>
+    <p class="help hidden" id="app-ios">Auf iPhone und iPad: in Safari „Teilen“ antippen, dann „Zum Home-Bildschirm“.</p>
+  </section>
 </main>
 {% endblock %}
 {% block scripts %}<script src="{{ url_for('static', filename='js/profile.js') }}"></script>

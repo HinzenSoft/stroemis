@@ -1,0 +1,10 @@
+{# Fuß jeder Seite (Wunsch vom 28.10.2026, Punkt 4): die Kontaktadressen aus Leitstelle → Einstellungen, klein und grau ganz
+   unten – im Fluss hinter dem Inhalt, nie über klebenden Leisten oder Schubladen; im Druck nicht (app.css). Leere Adresse:
+   Ihre Angabe entfällt, beide leer: kein Fuß. Auf der Vollbild-Karte der Ankerplätze steht er unten im Panel (map.js). #}
+{% if cfg.KONTAKT_EMAIL or cfg.FEHLER_EMAIL %}
+<footer class="seitenfuss">
+  {%- if cfg.KONTAKT_EMAIL %}<span class="fuss-teil">Fragen: <a href="{{ cfg.KONTAKT_EMAIL | mailto }}">{{ cfg.KONTAKT_EMAIL }}</a></span>{% endif %}
+  {%- if cfg.KONTAKT_EMAIL and cfg.FEHLER_EMAIL %}<span class="fuss-punkt" aria-hidden="true">·</span>{% endif %}
+  {%- if cfg.FEHLER_EMAIL %}<span class="fuss-teil">Fehler: <a href="{{ cfg.FEHLER_EMAIL | mailto }}">{{ cfg.FEHLER_EMAIL }}</a></span>{% endif -%}
+</footer>
+{% endif %}

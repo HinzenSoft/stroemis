@@ -59,6 +59,7 @@ Geschichte stehen. Schemaversion nach der Nachbesserung vor dem Merge: 30; mit d
 | Suchzeile auf allen Seiten | Dieselbe Suchzeile auch im Bestand (Bestand, Ordner, Artikel, Artikel anlegen, Anträge, Jahresbericht, Bestandsimport) und auf den übrigen Seiten der Prüfungen (Prüfdurchgang, Abgeschlossene Prüfdurchgänge, Prüfung beginnen) sowie auf der Trefferseite – nirgends mehr „☰ + Lupe“ am Telefon; Entscheidung V4 ganz abgelöst; Prüfung und Katalog unverändert | gebaut 28.10.2026 (kein Schemaschritt), zur Freigabe |
 | Seitenbaum der Strömipedia | „Seiten aus ZIP importieren“ nur noch im „⋯“ über dem Baum; Klappzeichen als gezeichneter Winkel in fester Spalte, gleichmäßiger Einzug mit Führungslinien, oberste Ebene fett, Titel mit hängendem Umbruch, am Finger 44-px-Tippfläche ohne Platzverlust, Schublade bis 360 px | gebaut 28.10./01.11.2026 (kein Schemaschritt), zur Freigabe |
 | Verweise auf die Anleitung | „Mehr dazu in der Strömipedia“ in 28 Infos (drei neu), „Anleitung“ hinter der Überschrift der übrigen Seiten, Hinweis oben auf der Übersicht, „Willkommen in der Materialablage“ beim ersten Besuch – alles nur für Konten, die die Zielseite lesen dürfen | gebaut 01.11.2026 (kein Schemaschritt), Zweig wikiverweise, zur Freigabe |
+| PWA und Kontaktadressen | strömis.de als App installierbar (Manifest, Service Worker, Maskottchen auf Rot, ohne Netz nur eine Hinweisseite, „App installieren“ im Profil); Kontaktadressen als Einstellung (Leitstelle → Einstellungen, Gruppe „Seite“) im Fuß jeder Seite, im Hinweis „Entwicklungsserver“ und vor dem Bestandsimport | gebaut 01.11.2026 (kein Schemaschritt), Zweig pwakontakt, zur Freigabe |
 
 ## Abgleich mit dem Bestand (vor Lieferung 1)
 
@@ -4191,6 +4192,82 @@ Danach liefen die ganze Suite (`st-test`) grün, `st-py`, `st-js` und `st-css` o
 14. **Kasten „Mailversand“ am Telefon**: Eine Karte hat vier Inhaltszeilen (Mail mit Betreff, Empfänger, Fehler mit
     Antwort), bei 360 px umbrochen etwa 170 px hoch; die Antwort des Mailservers ließe sich noch hinter „Technische
     Antwort“ einklappen – bitte am Gerät ansehen.
+
+## PWA und Kontaktadressen (Wünsche des Nutzers, 28.10.2026; gebaut 01.11.2026)
+
+Wünsche des Nutzers, wörtlich: „Füge zur Aufgabenliste die Möglichkeit hinzu, die Webseite als PWA zu installieren“ und
+„dass in den Anleitungen verwalter@stroemis.de hinterlegt wird als Kontaktinformation für alle möglichen Anfragen, gerade
+bei Migration. Ggf. kann das als unauffälliger Hinweis immer ganz unten auf der Webseite ebenfalls hinterlegt werden,
+zusammen mit bugs@stroemis.de bei Fehlern“. Entscheidungen vom 01.11.2026: Symbol „Maskottchen auf Rot“, ohne Netz nur
+eine Hinweisseite (nichts Angemeldetes zwischenspeichern); Adressen als Einstellungen in der Leitstelle. Betrifft alle
+Module (app/pwa.py, Vorlagen, common.js, app.css); kein Schemaschritt (die Einstellungen liegen in der vorhandenen
+Tabelle `einstellungen`).
+
+### PWA
+
+- **Manifest** `/manifest.webmanifest` (`application/manifest+json`, `no-cache`, ohne Anmeldung und ohne
+  Datenbankabfrage): Name und Kurzname „strömis.de“, `id`, `start_url` und `scope` „/“, `display: standalone`,
+  `theme_color` `--rot`, `background_color` `--weiss`, Symbole 192/512 „any“ und „maskable“, Kurzbefehle zu allen fünf
+  Modulen (Strömipedia „/“, `/ankerplaetze`, `/riegenkarten`, `/materialablage`, `/leitstelle`). Auf dev („-dev“,
+  `module.dev_umgebung`) Name „strömis.de dev“ und Symbole mit gelber Marke „dev“.
+- **Symbole** unter `app/static/img/pwa/` (192, 512, maskable 192/512, 96 für die Kurzbefehle, `apple-touch-icon` 180;
+  je auch `-dev`), erzeugt mit `scripts/pwa_symbole.py` aus `maskottchen.png`: Maskottchen auf `--rot`, „any“ 90 %
+  hoch und unten angeschnitten wie in der Kopfleiste, „maskable“ 70 % hoch, Kopf und dev-Marke im inneren Kreis (40 %).
+- **Kopf jeder Seite mit Kopfleiste** (`_pwa_kopf.html` in base.html – alle angemeldeten Seiten, Anmeldung, Kontoanfrage,
+  Passwort, Fehlerseiten): Manifest-Verweis, `apple-touch-icon`, `mobile-web-app-capable`,
+  `apple-mobile-web-app-capable`, `-title`, `-status-bar-style` „default“. Die öffentliche Strömipedia (public.html)
+  bekommt nur das `apple-touch-icon` – kein Manifest, kein Worker (auf `wiki.strömis.de` leitet die Anwendung jede Adresse
+  nach `/oeffentlich/`; eine eigene Installation der öffentlichen Seiten ist nicht vorgesehen).
+- **Service Worker** `/sw.js` (Quelle `app/static/js/sw.js`, `text/javascript`, `no-cache`, am Ursprung – kein
+  `Service-Worker-Allowed` nötig; die CSP `default-src 'self'` deckt Manifest und Worker): Versionsstempel = Prüfsumme
+  über Worker, Hinweisseite, Favicon und Maskottchen (beim Start); bei der Installation legt er NUR `/offline` ab
+  (`cache: "reload"`, ohne Cookies), übernimmt sofort (`skipWaiting`, `clients.claim`) und räumt ältere Stände weg.
+  Er fasst nur den Aufruf einer Seite per GET an: Antwort vom Server unverändert (auch 403/404/500/502), nur wenn das
+  Netz ausbleibt, die Hinweisseite. Nicht angefasst: alle übrigen Anfragen (Skripte, Bilder, `fetch`, Formulare,
+  Uploads), `/api/…`, `/media/…`, `/static/…`, die QR-Adressen `/m/…`, Adressen mit Dateiendung (PDF, CSV, ZIP …) und
+  `…/pdf`, `…/sammelprotokoll`. common.js meldet ihn auf jeder Seite an (nur im sicheren Kontext).
+- **Hinweisseite** `/offline` („Keine Verbindung“, „strömis.de braucht das Netz. Versuch es gleich noch einmal.“, roter
+  Knopf „Erneut versuchen“ als Link auf dieselbe Adresse, Satz „Gespeicherte Seiten gibt es ohne Netz bewusst nicht – so
+  bleiben keine Daten auf dem Gerät liegen.“): ohne jedes nachgeladene Mittel – Stil mit den Tokens aus app.css (ein Test
+  hält die Werte gleich), Maskottchen und Favicon als `data:`-Bilder, kein Skript.
+- **„App installieren“** im Profil als letzter Abschnitt „App“ (verborgen, bis common.js etwas zu zeigen hat): grauer
+  Knopf, wenn der Browser die Installation anbietet (`beforeinstallprompt`, Chrome/Edge/Samsung Internet –
+  `preventDefault`: Chrome am Telefon zeigt keine eigene Leiste); auf iPhone/iPad die Anleitung „in Safari „Teilen“
+  antippen, dann „Zum Home-Bildschirm““; weg, wenn die Seite schon als App läuft (`display-mode: standalone` bzw.
+  `navigator.standalone`) und nach `appinstalled` (Meldung „strömis.de ist als App installiert.“).
+
+### Kontaktadressen
+
+- **Einstellungen** (einstellungen.py, Gruppe „Seite“, neue Art `email` – in der Leitstelle ein Feld vom Typ E-Mail):
+  „Kontaktadresse“ (`KONTAKT_EMAIL`, Vorgabe `verwalter@stroemis.de`) und „Adresse für Fehlermeldungen“
+  (`FEHLER_EMAIL`, Vorgabe `bugs@stroemis.de`). Speichern prüft die Adresse (ein „@“, Punkt in der Domain, nichts, was
+  einen mailto-Link aufbräche; Umlaute in der Domain erlaubt) – sonst 400 „„Kontaktadresse“ braucht eine gültige
+  E-Mail-Adresse (oder bleibt leer).“ am Feld. Leer = die Angabe entfällt. Aus der `.env` gilt eine gültige Adresse,
+  leer heißt ebenfalls „keine Angabe“, eine ungültige gibt eine Warnung im Log und die Vorgabe.
+- **Fuß jeder Seite** (`_fuss.html` in base.html und public.html, dazu die Ersatz-Fehlerseite ohne Vorlage):
+  „Fragen: <Kontaktadresse> · Fehler: <Fehleradresse>“ als mailto-Links, `--fs-klein`, `--grau` (5,3 : 1), Links grau
+  unterstrichen, Linie darüber, mittig; im Fluss hinter dem Inhalt (nie fest oder klebend, nie über Leisten oder
+  Schubladen); schmal (bis 420 px) brechen die beiden Angaben um und der Punkt entfällt; unter Touch 44 px hohe Links bei
+  2 px Innenabstand; im Druck nicht. Fehlt eine Adresse, entfällt ihre Angabe samt Punkt; fehlen beide, gibt es keinen Fuß.
+- **Ankerplätze**: Unter der Vollbild-Karte hätte der Fuß keinen Platz (die Karte füllt das Fenster; darunter läge er
+  außerhalb des Bilds und die Seite bekäme einen Bildlauf, darüber verdeckte er die Karte und die Rechtehinweise). Dort
+  ist er ausgeblendet und steht stattdessen am Ende des Panels (Alben, Album), das man ohnehin liest (map.js `openPanel`).
+- **Hinweis „Entwicklungsserver“** (base.html): Adresse und Link aus „Adresse für Fehlermeldungen“, Betreff wie bisher
+  („strömis.de dev: “); leer entfällt der Satz, der Hinweis bleibt.
+- **Bestandsimport** (material.js `importKontakt`): unter „Zielordner …“ der sichtbare Satz „Übernimmst du einen
+  bestehenden Bestand? Stimm dich vorher mit der Plattform-Verwaltung ab: <Kontaktadresse>“ (mailto, kein „i“), am
+  Telefon (Inhalt ≤ 600 px) kurz „Übernahme abstimmen: <Kontaktadresse>“ in einer Zeile; leer: kein Satz. Die Adresse
+  kommt über `STROEMIS.kontakt` (base.html).
+- Nicht hier: die Anleitungen der Strömipedia (Artikel „Materialablage“, Abschnitt „Kontakt“ und die Kästen zur
+  Migration) – das ist Sache des Strömipedia-Artikels (wiki-autor), siehe Punkt 4 der gesammelten Wünsche.
+
+### Tests
+
+`tests/test_module_pwa_kontakt.py` (neu): Manifest (Felder, Content-Type, Symbole als Dateien mit passender Größe, dev),
+Service Worker (Stempel, nur `/offline` im Speicher, ausgenommene Bereiche, Ablösen), Hinweisseite (keine Mittel von
+außen, Tokens wie app.css), Einstellungen (Gruppe, Prüfung, leer, Zurücksetzen, `.env`), Fuß auf allen Vorlagen (anonym,
+angemeldet, 403, 404, öffentliche Strömipedia, Ersatz-Fehlerseite), dev-Hinweis aus der Einstellung, Bestandsimport-Satz,
+Profil-Abschnitt „App“, CSS (Druck, Karte, Touch).
 
 ## Seitenbaum der Strömipedia (Wunsch des Nutzers, 28.10.2026)
 

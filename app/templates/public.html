@@ -7,6 +7,9 @@
   <meta name="theme-color" content="#e30613">
   <title>Strömipedia – strömis.de</title>
   <link rel="icon" href="{{ url_for('static', filename='img/favicon.svg') }}" type="image/svg+xml">
+  {# Kein Manifest und kein Worker: Auf wiki.strömis.de leitet PublicHostMiddleware jede Adresse nach /oeffentlich/ – die
+     öffentliche Strömipedia wird nicht eigens installiert (app/pwa.py). Das Symbol für „Zum Home-Bildschirm“ gilt trotzdem. #}
+  <link rel="apple-touch-icon" href="{{ url_for('static', filename='img/pwa/apple-touch-icon.png') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
 </head>
 <body class="public">
@@ -32,6 +35,7 @@
   </main>
   <aside class="wiki-rail" id="wiki-rail"><nav class="toc" id="toc" aria-label="Inhalt"></nav></aside>
 </div>
+{% include "_fuss.html" %}
 <div id="toast" role="status" aria-live="polite"></div>
 <script nonce="{{ csp_nonce }}">window.STROEMIS = { baseUrl: {{ cfg.BASE_URL | tojson }}, publicUrl: {{ cfg.PUBLIC_URL | tojson }} };</script>
 <script src="{{ url_for('static', filename='vendor/marked/marked.min.js') }}"></script>
