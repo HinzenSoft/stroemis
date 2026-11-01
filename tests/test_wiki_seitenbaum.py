@@ -98,16 +98,18 @@ def test_css_regeln():
         "width: var(--baum-spalte); height: 28px;",
         "width: 14px; height: 14px; display: block; pointer-events: none; transition: transform .15s;",
         ".tree li:not(.collapsed) > .row .tg svg { transform: rotate(90deg); }",
-        ".tree button.tg:hover { background: var(--linie); color: var(--anthrazit); }",
         ".tree li.leaf > .row .tg { visibility: hidden; }",
         ".tree .row:has(:focus-visible) :is(.row-add, .row-menu) { opacity: 1; }",
     ]
     for r in grund:
         assert r in css, r
         assert umgebung(css, r) == "", (r, umgebung(css, r))
-    # „⋯“ am Rechner erst bei Hover (unverändert), ohne Maus immer.
-    assert ".tree .row:hover .row-add, .tree .row:hover .row-menu," in css
-    assert umgebung(css, ".tree .row-add, .tree .row-menu, .code-copy { opacity: 1; }") == "@media (hover: none)"
+    # „⋯“ am Rechner erst bei Hover (unverändert), ohne Maus immer. Seit dem Gerätetest (B4) steht jedes Überfahren in
+    # (hover: hover) and (pointer: fine), das Gegenstück „ohne Maus“ heißt (hover: none), (pointer: coarse).
+    maus = "@media (hover: hover) and (pointer: fine)"
+    assert umgebung(css, ".tree button.tg:hover { background: var(--linie); color: var(--anthrazit); }") == maus
+    assert umgebung(css, ".tree .row:hover .row-add, .tree .row:hover .row-menu { opacity: 1; }") == maus
+    assert umgebung(css, ".tree .row-add, .tree .row-menu, .code-copy { opacity: 1; }") == "@media (hover: none), (pointer: coarse)"
     finger = [
         ".tree { --baum-spalte: 24px; --baum-einzug: 18px; }",
         ".tree .row { align-items: flex-start; }",

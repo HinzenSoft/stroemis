@@ -20,7 +20,8 @@
 .mf-treffer li + li { border-top: 1px solid var(--linie); }
 .mf-person { display: block; width: 100%; text-align: left; background: var(--weiss); border: 0; padding: 8px 10px; font: inherit;
   color: var(--anthrazit); cursor: pointer; overflow-wrap: anywhere; }
-.mf-person:hover, .mf-person:focus-visible { background: var(--grau-hell); }
+.mf-person:focus-visible { background: var(--grau-hell); }
+@media (hover: hover) and (pointer: fine) { .mf-person:hover { background: var(--grau-hell); } }
 .mf-person:focus-visible { outline: 3px solid var(--gelb); outline-offset: -3px; }
 .mf-treffer-leer { padding: 8px 10px; color: var(--grau); font-size: var(--fs-klein); }
 .mf-gewaehlt { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; padding: 8px 10px; border: 1px solid var(--linie);
