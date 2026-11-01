@@ -2024,6 +2024,8 @@ dialog .mat-knopfgrund { margin: 10px 0 0; }
   margin: 0 0 20px; padding: 14px 16px; background: var(--co-info-fl); border: 2px solid var(--wasser); border-left-width: 8px; }
 .mat-anleitung-hinweis p { flex: 1 1 32ch; margin: 0; }
 .mat-anleitung-hinweis strong { color: var(--wasser); font-size: 1.15rem; }
+/* Der Knopf darf umbrechen: „Anleitung in der Strömipedia öffnen“ ist am Fold (344 px) breiter als der Kasten. */
+.mat-anleitung-hinweis .btn { max-width: 100%; white-space: normal; }
 @container mat-seite (max-width: 600px) {
   .mat-anleitung-zusatz { display: none; }
   .notice.mat-anleitung-hinweis { padding: 10px 12px; }
