@@ -361,8 +361,7 @@ def test_riegenkarten():
         # Redakteur legt an und wird Leitung; er trägt ein Mitglied als Leitung ein (Entscheidung a) und eines als Prüfer.
         r = r1.post(f"{api}/lehrgaenge", json={"titel": "SR1 Frühjahr", "ausbilder": [
             {"user_id": leit_id, "funktion": "Lehrgangsleitung", "ist_leitung": True},
-            {"user_id": pruef_id, "funktion": "Prüfer"},
-            {"user_id": None, "name": "Erika Extern", "funktion": "Referentin"}]})
+            {"user_id": pruef_id, "funktion": "Prüfer"}]})
         assert r.status_code == 201, r.get_json()
         lg = r.json["lehrgang"]
         lid = lg["id"]
@@ -462,10 +461,13 @@ def test_riegenkarten():
         assert r2.get(f"{api}/lehrgaenge/{lid}").status_code == 404 and r2.get(medium["thumb"]).status_code == 404
         assert v.get(f"{api}/lehrgaenge/{lid}").json["lehrgang"]["darf_leiten"] is True
         assert v.get(medium["thumb"]).status_code == 200 and v.get("/media/pruefung/orig/gibtesnicht.jpg").status_code == 404
-        # Ein Lehrgang nur mit Freitext-Ausbildern (Excel-Import, Verwaltung ohne Eintrag) sieht nur die Verwaltung.
-        frei = v.post(f"{api}/lehrgaenge", json={"titel": "Nur Freitext", "ausbilder": [
-            {"user_id": None, "name": "Lena Leitung", "funktion": "Lehrgangsleitung", "ist_leitung": True}]}).json["lehrgang"]
-        assert frei["ausbilder"][0]["user_id"] is None
+        # Freitext-Ausbilder gibt es nicht mehr (01.11.2026); ein Lehrgang der Verwaltung ohne Ausbilder-Eintrag sieht
+        # nur die Verwaltung.
+        r = v.post(f"{api}/lehrgaenge", json={"titel": "Nur Freitext", "ausbilder": [
+            {"user_id": None, "name": "Lena Leitung", "funktion": "Lehrgangsleitung", "ist_leitung": True}]})
+        assert r.status_code == 400 and "nur mit Konto" in r.json["error"], r.get_json()
+        frei = v.post(f"{api}/lehrgaenge", json={"titel": "Ohne Eintrag"}).json["lehrgang"]
+        assert frei["ausbilder"] == []
         assert leit.get(f"{api}/lehrgaenge/{frei['id']}").status_code == 404
         assert frei["id"] not in {x["id"] for x in r1.get(f"{api}/lehrgaenge").json["lehrgaenge"]}
         assert frei["id"] in {x["id"] for x in v.get(f"{api}/lehrgaenge").json["lehrgaenge"]}
@@ -538,7 +540,7 @@ def test_migration():
         from app import db
         from app.material import models
         with app.app_context():
-            assert db.query("SELECT wert FROM mat_meta WHERE schluessel = 'schema_version'", one=True)["wert"] == "33"
+            assert db.query("SELECT wert FROM mat_meta WHERE schluessel = 'schema_version'", one=True)["wert"] == "34"
             assert db.query("SELECT recht_wiki, recht_verwaltung FROM users", one=True) == {"recht_wiki": 3,
                                                                                              "recht_verwaltung": 3}
         pfad = os.path.join(tmp, "stroemis.db")
@@ -582,7 +584,7 @@ def test_migration():
         assert stand() == vorher and vorher[1] == "32", stand()
         make_app(tmp)                                       # Neustart: Schritt 33 läuft
         nachher, version = stand()
-        assert version == "33"
+        assert version == "34"
         assert nachher["admin@example.org"] == (3, 3, 3, 3, 3), nachher
         assert nachher["m@example.org"] == (1, 1, 1, 1, 0) and nachher["n@example.org"] == (0, 0, 0, 0, 0)
         assert nachher["v@example.org"] == (3, 3, 3, 3, 0) and nachher["g@example.org"] == (3, 1, 0, 3, 0), nachher

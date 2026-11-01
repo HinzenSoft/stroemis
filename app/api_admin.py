@@ -330,6 +330,10 @@ def delete_user(uid):
         # Riegenkarten: Kataloge gehören ihrem Ersteller (Redakteur pflegt nur eigene) – ohne die Übernahme fiele der
         # Katalog still an die Verwaltung (created_by NULL), wie Seiten und Alben gehen auch sie an dich.
         db.execute("UPDATE pruef_kataloge SET created_by = ? WHERE created_by = ?", (me, uid))
+        # Ausbilder ist nur ein Konto (01.11.2026): Mit dem Konto gehen seine Einträge als Ausbilder – sonst blieben sie
+        # über ON DELETE SET NULL als Freitext-Ausbilder stehen, die es nicht mehr gibt. Was es geprüft hat, steht mit
+        # Namen an den Bewertungen und bleibt.
+        db.execute("DELETE FROM pruef_ausbilder WHERE user_id = ?", (uid,))
         db.execute("DELETE FROM users WHERE id = ?", (uid,))
     # Erst nach dem Festschreiben: Bricht die Umschreibung ab, bleibt das Konto samt Bild stehen.
     delete_avatar(current_app.config["MEDIA_DIR"], bild)

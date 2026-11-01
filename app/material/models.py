@@ -267,13 +267,24 @@ Feldnamen folgen dem Konzept vom 16.10.2026 (englisch, wie dort festgelegt). Abw
     frei wiederholbar – ein zweiter Lauf machte spätere Redakteure zu Verwaltung –, deshalb nur über den Versionsvermerk
     (wie jeder Schritt einmal je Stand, in derselben Transaktion) und nie in db.NACHARBEITEN. Rückweg auf einen Stand vor
     Schritt 33: die SQL aus README „Stufe Redakteur – Rückweg“ (sonst läse der ältere Code Redakteure als Verwaltung).
+  - Schritt 34 (Riegenkarten: Ausbilder nur mit Konto, Wunsch vom 01.11.2026): Jeder Freitext-Ausbilder (pruef_ausbilder
+    ohne user_id) wird dem Konto zugeordnet, dessen Name eindeutig passt – unter den aktiven Konten mit Stufe in den
+    Riegenkarten (oder Plattform-Verwaltung); Funktion und Leitung bleiben. Steht das Konto im Lehrgang schon, fallen
+    beide Zeilen zu einer zusammen (Leitung, wenn eine es war; die Funktion der Kontozeile, sonst die des Freitexts). Wer
+    nicht eindeutig passt, wird entfernt – ohne Text in der Lehrgangsbeschreibung (Entscheidung des Nutzers); nur das
+    Startprotokoll nennt je Lehrgang die Entfernten. Verknüpfte Konten ohne Stufe bleiben (die Oberfläche markiert sie).
+    Kein Journal (die Riegenkarten führen keines). Einmal je Stand über den Versionsvermerk; ein zweiter Lauf fände
+    ohnehin keinen Freitext mehr. Rückweg: Ein älterer Stand liest die verknüpften Zeilen wie immer; entfernte
+    Freitext-Ausbilder gibt es nur in der Sicherung vor dem Deploy.
 """
 import json
+import logging
 import re
 import sqlite3
+import unicodedata
 from datetime import datetime, timezone
 
-SCHEMA_VERSION = 33
+SCHEMA_VERSION = 34
 
 # --- Wertelisten -------------------------------------------------------------------------------
 # Was die Datenbank per CHECK erzwingt, steht hier ein zweites Mal – mit den Wörtern, die die
@@ -2859,6 +2870,65 @@ def _schritt_33(conn):
             conn.execute(f"UPDATE users SET {spalte} = 3 WHERE {spalte} = 2")
 
 
+def _namensschluessel_34(text):
+    """Vergleichsform eines Namens, wie sie beim Schreiben von Schritt 34 galt (api_pruefungen._namensschluessel): NFKC,
+    klein, Leerraum auf ein Leerzeichen, „Nachname, Vorname“ wie „Vorname Nachname“. Fest hier – ein Schritt bleibt, wie
+    er war."""
+    t = unicodedata.normalize("NFKC", str(text or ""))
+    if t.count(",") == 1:
+        nach, vor = t.split(",")
+        t = f"{vor} {nach}"
+    return " ".join(t.casefold().split())
+
+
+def _schritt_34(conn):
+    """Freitext-Ausbilder der Riegenkarten: eindeutig passendes Konto → verknüpfen, sonst entfernen (siehe Kopf). Die
+    Namen der Entfernten gehen nach dem Festschreiben ins Startprotokoll (_NACH_DEM_FESTSCHREIBEN) – bräche die Migration
+    danach ab, stünde sonst im Protokoll, was gar nicht geschehen ist."""
+    if "pruef_ausbilder" not in {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}:
+        return
+    spalten = _spalten(conn, "users")
+    if not {"active", "status", "recht_pruefungen", "recht_verwaltung"} <= set(spalten):
+        return
+    # Mitglied = 1, Verwaltung = 3 (Skala seit Schritt 33, auth.py) – fest hier wie die Spalten in Schritt 33.
+    je_name = {}
+    for uid, name in conn.execute("SELECT id, name FROM users WHERE active = 1 AND status = 'active' "
+                                  "AND (recht_pruefungen >= 1 OR recht_verwaltung >= 3) AND trim(name) <> ''"):
+        je_name.setdefault(_namensschluessel_34(name), []).append(uid)
+    entfernt = {}
+    verknuepft = 0
+    for aid, lid, name, funktion, leit in conn.execute(
+            "SELECT id, lehrgang_id, name, funktion, ist_leitung FROM pruef_ausbilder WHERE user_id IS NULL "
+            "ORDER BY lehrgang_id, sortierung, id").fetchall():
+        treffer = je_name.get(_namensschluessel_34(name), [])
+        if len(treffer) != 1:
+            conn.execute("DELETE FROM pruef_ausbilder WHERE id = ?", (aid,))
+            entfernt.setdefault(lid, []).append(f"{name} ({funktion})" if funktion else name)
+            continue
+        uid = treffer[0]
+        vorhanden = conn.execute("SELECT id, funktion FROM pruef_ausbilder WHERE lehrgang_id = ? AND user_id = ? "
+                                 "ORDER BY sortierung, id LIMIT 1", (lid, uid)).fetchone()
+        if vorhanden:
+            conn.execute("UPDATE pruef_ausbilder SET ist_leitung = max(ist_leitung, ?), "
+                         "funktion = CASE WHEN trim(funktion) = '' THEN ? ELSE funktion END WHERE id = ?",
+                         (leit, funktion, vorhanden[0]))
+            conn.execute("DELETE FROM pruef_ausbilder WHERE id = ?", (aid,))
+        else:
+            conn.execute("UPDATE pruef_ausbilder SET user_id = ? WHERE id = ?", (uid, aid))
+        verknuepft += 1
+    titel = dict(conn.execute("SELECT id, titel FROM pruef_lehrgaenge")) if entfernt else {}
+    for lid, namen in entfernt.items():
+        _NACH_DEM_FESTSCHREIBEN.append(f"Schritt 34 (Riegenkarten): Lehrgang {lid} „{titel.get(lid, '')}“ – Ausbilder "
+                                       f"ohne passendes Konto entfernt: {', '.join(namen)}")
+    if verknuepft or entfernt:
+        _NACH_DEM_FESTSCHREIBEN.append(f"Schritt 34 (Riegenkarten): {verknuepft} Freitext-Ausbilder mit Konten "
+                                       f"verknüpft, {sum(len(n) for n in entfernt.values())} entfernt.")
+
+
+# Meldungen für das Startprotokoll, die ein Schritt sammelt – migrieren() schreibt sie erst nach dem Festschreiben.
+_NACH_DEM_FESTSCHREIBEN = []
+
+
 # Je Version die Schritte, die von der Vorversion dorthin führen: eine Liste von SQL-Befehlen (für sich
 # wiederholbar, IF NOT EXISTS) oder eine Funktion. Alle Schritte eines Starts laufen in EINER
 # Transaktion – bricht einer ab, bleibt die Datenbank, wie sie war, und der nächste Start versucht es neu.
@@ -2867,7 +2937,7 @@ SCHRITTE = {1: SCHRITT_1, 2: _schritt_2, 3: _schritt_3, 4: SCHRITT_4, 5: _schrit
             14: _schritt_14, 15: _schritt_15, 16: _schritt_16, 17: _schritt_17, 18: SCHRITT_18, 19: SCHRITT_19,
             20: _schritt_20, 21: _schritt_21, 22: _schritt_22, 23: _schritt_23, 24: _schritt_24,
             25: _schritt_25, 26: _schritt_26, 27: _schritt_27, 28: _schritt_28, 29: SCHRITT_29, 30: SCHRITT_30,
-            31: SCHRITT_31, 32: _schritt_32, 33: _schritt_33}
+            31: SCHRITT_31, 32: _schritt_32, 33: _schritt_33, 34: _schritt_34}
 
 
 def _meta(conn, schluessel, vorgabe=None):
@@ -2909,6 +2979,7 @@ def migrieren(conn):
     fremdschluessel = conn.execute("PRAGMA foreign_keys").fetchone()[0]
     conn.execute("PRAGMA foreign_keys = OFF")
     conn.execute("BEGIN IMMEDIATE")
+    _NACH_DEM_FESTSCHREIBEN.clear()
     try:
         stand = int(_meta(conn, "schema_version", 0))      # unter der Sperre noch einmal lesen
         for version in range(stand + 1, SCHEMA_VERSION + 1):
@@ -2926,7 +2997,11 @@ def migrieren(conn):
         conn.commit()
     except BaseException:
         conn.rollback()
+        _NACH_DEM_FESTSCHREIBEN.clear()
         raise
     finally:
         conn.execute(f"PRAGMA foreign_keys = {1 if fremdschluessel else 0}")
+    for meldung in _NACH_DEM_FESTSCHREIBEN:
+        logging.getLogger(__name__).warning(meldung)
+    _NACH_DEM_FESTSCHREIBEN.clear()
     return int(_meta(conn, "schema_version"))

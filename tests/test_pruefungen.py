@@ -84,6 +84,15 @@ def umgebung(tmp):
     return app, adm, pr, pr_id, nix, nix_id
 
 
+def ausbilder_konto(adm, mail, name, stufe=1):
+    """Ein Konto, das Ausbilder sein kann (Stufe in den Riegenkarten; seit 01.11.2026 gibt es keine Freitext-Ausbilder
+    mehr) – oder mit stufe=0 eines, das es nicht kann. Liefert die Kennung."""
+    r = adm.post("/api/admin/users", json={"email": mail, "password": "passwort1", "name": name,
+                                           "rechte": {"pruefungen": stufe}})
+    assert r.status_code == 201, r.get_json()
+    return r.json["user"]["id"]
+
+
 def medien_dateien(tmp, medium):
     """Die drei Dateien eines Mediums auf dem Datenträger – abgeleitet aus den URLs der Antwort,
     damit der Test den Dateinamen nicht raten muss."""
@@ -160,14 +169,24 @@ def test_pruefungen():
         assert nix.get("/api/me").json["user"]["rechte"]["pruefungen"] == 0
         assert nix.get("/api/me").json["user"]["rechte"]["wiki"] == 3
 
-        # --- 4.1 Nutzerliste für die Ausbilder-Auswahl ------------------------------------------
-        r = pr.get("/api/pruefungen/nutzer")
+        # --- 4.1 Kontosuche für die Ausbilder-Auswahl (nur Konten mit Stufe, seit 01.11.2026) --------------
+        # Weitere Ausbilder brauchen ein Konto mit Stufe in den Riegenkarten; Frieda hat keine.
+        erwin_id = ausbilder_konto(adm, "erwin@example.org", "Erwin Extern")
+        einer_id = ausbilder_konto(adm, "einer@example.org", "Nur Einer")
+        frieda_id = ausbilder_konto(adm, "frieda@example.org", "Frieda Fremd", 0)
+        assert pr.get("/api/pruefungen/nutzer").status_code == 400          # ohne Suchtext
+        r = pr.get("/api/pruefungen/nutzer?q=e")
+        assert r.status_code == 400 and "2 Zeichen" in r.json["error"], r.get_json()
+        r = pr.get("/api/pruefungen/nutzer?q=ER")
         assert r.status_code == 200
         nutzer = r.json["nutzer"]
         for n in nutzer:
             hat_felder(n, "id", "name", "gliederung")
+            assert "email" not in n, n
         namen = [n["name"] for n in nutzer]
-        assert "Petra Prüferin" in namen and namen == sorted(namen, key=str.lower), namen
+        assert "Petra Prüferin" in namen and "Erwin Extern" in namen and namen == sorted(namen, key=str.lower), namen
+        assert "Frieda Fremd" not in namen and "Rainer Redakteur" not in namen, namen   # ohne Stufe
+        assert [n["name"] for n in pr.get("/api/pruefungen/nutzer?q=einer@exam").json["nutzer"]] == ["Nur Einer"]
 
         # --- 3. Lehrgang anlegen: Validierung ---------------------------------------------------
         r = pr.post("/api/pruefungen/lehrgaenge", json={"nummer": "2026-0001"})
@@ -181,14 +200,22 @@ def test_pruefungen():
         assert pr.post("/api/pruefungen/lehrgaenge", json={"titel": 12}).status_code == 400
         assert pr.get("/api/pruefungen/lehrgaenge/999999").status_code == 404
 
-        # Anlegen mit Ausbildern: einer aus den Nutzern (Name kommt aus `users`), einer als Freitext,
-        # einer mit erfundener user_id (wird Freitext).
+        # Ausbilder nur mit Konto: Freitext, eine erfundene Kennung und ein Konto ohne Stufe weist der Server ab – mit
+        # der Zeile für den Dialog – und legt nichts an.
+        for falsch, text in (({"user_id": None, "name": "Erwin Extern", "funktion": "Ausbilder"}, "nur mit Konto"),
+                             ({"user_id": 999999, "name": "Frieda Fremd", "funktion": "Referentin"}, "nur mit Konto"),
+                             ({"user_id": frieda_id, "funktion": "Referentin"}, "„Frieda Fremd“ hat keine Stufe")):
+            r = pr.post("/api/pruefungen/lehrgaenge", json={"titel": "Abgewiesen", "ausbilder": [
+                {"user_id": pr_id, "funktion": "Lehrgangsleitung"}, falsch]})
+            assert r.status_code == 400 and text in r.json["error"] and r.json["zeile"] == 1, r.get_json()
+        assert pr.get("/api/pruefungen/lehrgaenge").json["lehrgaenge"] == []
+        # Anlegen mit Ausbildern aus den Konten (der Name kommt aus `users`, nicht aus dem Aufruf).
         r = pr.post("/api/pruefungen/lehrgaenge", json={
             "titel": "Strömungsretter 2", "nummer": "2026-0011", "datum_von": "2026-05-01", "datum_bis": "2026-05-03",
             "ort": "Musterstadt", "beschreibung": "Aufbaulehrgang", "status": "laufend",
             "ausbilder": [{"user_id": pr_id, "funktion": "Lehrgangsleitung"},
-                          {"user_id": None, "name": "Erwin Extern", "funktion": "Ausbilder"},
-                          {"user_id": 999999, "name": "Frieda Fremd", "funktion": "Referentin"}]})
+                          {"user_id": erwin_id, "name": "Falscher Name", "funktion": "Ausbilder"},
+                          {"user_id": str(einer_id), "funktion": "Referentin"}]})
         assert r.status_code == 201, (r.status_code, r.get_json())
         lg = r.json["lehrgang"]
         hat_felder(lg, *LEHRGANG_DETAIL)
@@ -201,12 +228,13 @@ def test_pruefungen():
         ausb = lg["ausbilder"]
         assert len(ausb) == 3, ausb
         for a in ausb:
-            hat_felder(a, "id", "user_id", "name", "funktion", "ist_leitung")
+            hat_felder(a, "id", "user_id", "name", "funktion", "ist_leitung", "zugriff", "ohne_zugriff")
+            assert a["zugriff"] is True and a["ohne_zugriff"] is None, a
         assert ausb[0]["user_id"] == pr_id and ausb[0]["name"] == "Petra Prüferin" and ausb[0]["funktion"] == "Lehrgangsleitung", ausb
         # Ohne Kennzeichen im Aufruf zählt wie früher das Wort in der Funktion.
         assert ausb[0]["ist_leitung"] is True and ausb[1]["ist_leitung"] is False and ausb[2]["ist_leitung"] is False, ausb
-        assert ausb[1]["user_id"] is None and ausb[1]["name"] == "Erwin Extern", ausb
-        assert ausb[2]["user_id"] is None and ausb[2]["name"] == "Frieda Fremd", ausb
+        assert ausb[1]["user_id"] == erwin_id and ausb[1]["name"] == "Erwin Extern", ausb
+        assert ausb[2]["user_id"] == einer_id and ausb[2]["name"] == "Nur Einer", ausb
         # Ein unbekannter Status wird zu „geplant“.
         r = pr.post("/api/pruefungen/lehrgaenge", json={"titel": "Ohne Datum", "status": "irgendwas"})
         assert r.status_code == 201 and r.json["lehrgang"]["status"] == "geplant", r.get_json()
@@ -215,7 +243,7 @@ def test_pruefungen():
 
         # Bearbeiten: nur mitgeschickte Felder ändern, Ausbilder-Liste wird komplett ersetzt.
         r = pr.put(f"/api/pruefungen/lehrgaenge/{lid}", json={"status": "geplant", "ort": "Neustadt",
-                                                              "ausbilder": [{"name": "Nur Einer", "funktion": ""}]})
+                                                              "ausbilder": [{"user_id": einer_id, "funktion": ""}]})
         assert r.status_code == 200, (r.status_code, r.get_json())
         lg = r.json["lehrgang"]
         assert lg["status"] == "geplant" and lg["ort"] == "Neustadt" and lg["titel"] == "Strömungsretter 2"
@@ -765,6 +793,11 @@ def test_import():
     with tempfile.TemporaryDirectory() as tmp:
         app, adm, pr, pr_id, nix, nix_id = umgebung(tmp)
         assert adm.put(f"/api/admin/users/{pr_id}", json={"rechte": {"pruefungen": 2}}).status_code == 200
+        # Die Leitung aus der Datei hat ein Konto mit Stufe – nur so wird sie übernommen (seit 01.11.2026).
+        r = adm.post("/api/admin/users", json={"email": "lena@example.org", "password": "passwort1",
+                                               "name": "Lena Leitung", "rechte": {"pruefungen": 1}})
+        assert r.status_code == 201, r.get_json()
+        lena_id = r.json["user"]["id"]
 
         def vorschau(client=pr, **felder):
             data = {"file": (excel_bauen(), "2026-0042 - Strömungsretter 1.xlsx")}
@@ -843,9 +876,10 @@ def test_import():
         assert clara_v[idx["Bestätigung TN"]] is True and clara_v[idx["Kostenübernahme"]] is False
         assert all(clara_v[idx[t.replace("\n", " ")]] is False for t in VORAUSSETZUNGEN)
         assert len(v["ausbilder"]) == 1, v["ausbilder"]
-        hat_felder(v["ausbilder"][0], "name", "funktion", "zeile")
+        hat_felder(v["ausbilder"][0], "name", "funktion", "zeile", "konto")
         assert v["ausbilder"][0]["name"] == "Lena Leitung" and v["ausbilder"][0]["funktion"] == "Lehrgangsleitung"
-        assert v["ausbilder"][0]["zeile"] == 14
+        assert v["ausbilder"][0]["zeile"] == 14 and v["ausbilder"][0]["konto"] == {"id": lena_id, "name": "Lena Leitung"}
+        assert "email" not in v["ausbilder"][0] and v["ausbilder_nicht_uebernommen"] == [], v
         warn = " | ".join(v["warnungen"]).lower()
         assert len(v["warnungen"]) >= 2, v["warnungen"]
         assert "anna" in warn or "duplikat" in warn or "doppelt" in warn, v["warnungen"]   # das Duplikat
@@ -879,11 +913,11 @@ def test_import():
         assert lg["titel"] == "Strömungsretter 1 (SR1)" and lg["nummer"] == "2026-0042" and lg["ort"] == "Rheinisch-Bergischer Kreis"
         assert lg["datum_von"] == "2026-12-04" and lg["datum_bis"] == "2026-12-13" and lg["status"] == "geplant"
         assert lg["created_by_name"] == "Petra Prüferin"
-        # Wer importiert, wird Lehrgangsleitung; die Leitung aus der Datei steht als Freitext dahinter.
+        # Wer importiert, wird Lehrgangsleitung; die Leitung aus der Datei steht mit ihrem Konto dahinter.
         assert [a["name"] for a in lg["ausbilder"]] == ["Petra Prüferin", "Lena Leitung"], lg["ausbilder"]
         assert lg["ausbilder"][0]["ist_leitung"] is True and lg["ausbilder"][1]["ist_leitung"] is True
         assert lg["ausbilder"][1]["funktion"] == "Lehrgangsleitung"
-        assert lg["ausbilder"][1]["user_id"] is None
+        assert lg["ausbilder"][1]["user_id"] == lena_id and e["ausbilder_nicht_uebernommen"] == []
         assert lg["ausbilder"][0]["user_id"] == pr_id
         assert [v["bezeichnung"] for v in lg["voraussetzungen"]] == [t.replace("\n", " ") for t in VORAUSSETZUNGEN]
         assert [v["sortierung"] for v in lg["voraussetzungen"]] == list(range(15))
@@ -1304,11 +1338,12 @@ def test_rechte_und_ergebnis():
         assert lg["darf_leiten"] is True and lg["ergebnis_bestanden"] == 0 and lg["ergebnis_nicht_bestanden"] == 0, lg
         eintrag = leitung_von(lg, pr_id)
         assert len(eintrag) == 1 and eintrag[0]["ist_leitung"] is True and eintrag[0]["name"] == "Petra Prüferin", lg["ausbilder"]
-        # Steht der Anleger schon als Leitung in der Liste, wird er nicht verdoppelt; Externe bleiben erhalten.
+        # Steht der Anleger schon als Leitung in der Liste, wird er nicht verdoppelt; weitere Ausbilder bleiben erhalten.
+        erwin_id = ausbilder_konto(adm, "erwin@example.org", "Erwin Extern")
         r = pr.post("/api/pruefungen/lehrgaenge", json={
             "titel": "Schon Leitung",
             "ausbilder": [{"user_id": pr_id, "funktion": "Leitung"},
-                          {"user_id": None, "name": "Erwin Extern", "funktion": "Referierende:r"}]})
+                          {"user_id": erwin_id, "funktion": "Referierende:r"}]})
         assert r.status_code == 201, r.get_json()
         assert len(leitung_von(r.json["lehrgang"], pr_id)) == 1 and len(r.json["lehrgang"]["ausbilder"]) == 2, r.json["lehrgang"]["ausbilder"]
         assert r.json["lehrgang"]["darf_leiten"] is True
@@ -1478,11 +1513,14 @@ def test_rechte_und_ergebnis():
         assert any(a["user_id"] == zweit_id and a["funktion"] == "Referierende:r" for a in r.json["lehrgang"]["ausbilder"])
         assert zweit.get(f"/api/pruefungen/lehrgaenge/{lid}").json["lehrgang"]["darf_leiten"] is False
         leitung_noetig(zweit.put(f"/api/pruefungen/lehrgaenge/{lid}", json={"beschreibung": "geht nicht mehr"}))
-        # Ein externer Eintrag mit gleichem Namen, aber ohne user_id, verleiht keine Leitung.
+        # Ein Eintrag mit gleichem Namen, aber ohne user_id, gibt es nicht mehr (Ausbilder nur mit Konto) – abgewiesen.
         r = pr.put(f"/api/pruefungen/lehrgaenge/{lid}", json={"ausbilder": [
             {"user_id": pr_id, "funktion": "Lehrgangsleitung"}, {"user_id": None, "name": "Zacharias Zweitprüfer", "funktion": "Lehrgangsleitung"}]})
+        assert r.status_code == 400 and r.json["zeile"] == 1, r.get_json()
+        r = pr.put(f"/api/pruefungen/lehrgaenge/{lid}", json={"ausbilder": [
+            {"user_id": pr_id, "funktion": "Lehrgangsleitung"}]})
         assert r.status_code == 200, r.get_json()
-        # … und auch keine Sicht: Ohne Eintrag mit Konto sieht der zweite Prüfer den Lehrgang nicht mehr.
+        # Ohne Eintrag mit Konto sieht der zweite Prüfer den Lehrgang nicht mehr.
         assert zweit.get(f"/api/pruefungen/lehrgaenge/{lid}").status_code == 404
         # Eine leere Liste sperrt die einzige Leitung nicht aus; die Administration braucht keinen Eintrag.
         r = pr.put(f"/api/pruefungen/lehrgaenge/{nur_ref}", json={"ausbilder": []})
@@ -1696,10 +1734,12 @@ def test_sicherheit():
         assert zweit.post("/api/auth/login", json={"email": "zweit@example.org", "password": "passwort1"}).status_code == 200
 
         # --- M3: Ohne Kennzeichen entscheidet das ganze Wort, nicht der Teilstring „leit“ --------------------
+        konten = {name: ausbilder_konto(adm, f"k{i}@example.org", name) for i, name in enumerate(
+            ("Berta Begleitung", "Anton Anleitung", "Lena Leitung", "Berta Begleit", "Lena Leit"))}
         r = pr.post("/api/pruefungen/lehrgaenge", json={"titel": "Wortliste", "ausbilder": [
-            {"user_id": None, "name": "Berta Begleitung", "funktion": "Begleitung"},
-            {"user_id": None, "name": "Anton Anleitung", "funktion": "Anleitung Knoten"},
-            {"user_id": None, "name": "Lena Leitung", "funktion": "Leitung und Prüferin"},
+            {"user_id": konten["Berta Begleitung"], "funktion": "Begleitung"},
+            {"user_id": konten["Anton Anleitung"], "funktion": "Anleitung Knoten"},
+            {"user_id": konten["Lena Leitung"], "funktion": "Leitung und Prüferin"},
             {"user_id": zweit_id, "funktion": "Begleitung", "ist_leitung": True}]})      # das Kennzeichen schlägt das Wort
         assert r.status_code == 201, r.get_json()
         assert [(a["name"], a["ist_leitung"]) for a in r.json["lehrgang"]["ausbilder"]] == [
@@ -1875,7 +1915,7 @@ if __name__ == "__main__":
 
 def test_mehrere_leitungen():
     """Nachtrag: Beliebig viele Personen können Lehrgangsleitung sein – das Kennzeichen ist_leitung zählt,
-    nicht der Wortlaut der Funktion. Externe Einträge tragen es nur für die Anzeige."""
+    nicht der Wortlaut der Funktion. Jede Leitung ist ein Konto (Freitext-Ausbilder gibt es seit 01.11.2026 nicht mehr)."""
     with tempfile.TemporaryDirectory() as tmp:
         app, adm, pr, pr_id, nix, nix_id = umgebung(tmp)
         assert adm.put(f"/api/admin/users/{pr_id}", json={"rechte": {"pruefungen": 2}}).status_code == 200
@@ -1887,13 +1927,15 @@ def test_mehrere_leitungen():
         zweit = app.test_client()
         assert zweit.post("/api/auth/login", json={"email": "zweit@example.org", "password": "passwort1"}).status_code == 200
 
-        # Zwei Leitungen mit Konto, eine externe Leitung, eine Referentin – die Funktion ist freier Text.
+        # Drei Leitungen und eine Referentin, alle mit Konto – die Funktion ist freier Text.
+        ilse_id = ausbilder_konto(adm, "ilse@example.org", "Ilse ISC-Leitung")
+        renate_id = ausbilder_konto(adm, "renate@example.org", "Renate Referierend")
         r = pr.post("/api/pruefungen/lehrgaenge", json={
             "titel": "Doppelt geleitet", "datum_von": "2026-07-01",
             "ausbilder": [{"user_id": pr_id, "ist_leitung": True},
                           {"user_id": zweit_id, "funktion": "Seiltechnik", "ist_leitung": True},
-                          {"user_id": None, "name": "Ilse ISC-Leitung", "funktion": "Lehrgangsleitung", "ist_leitung": True},
-                          {"user_id": None, "name": "Renate Referierend", "funktion": "Wasser", "ist_leitung": False}]})
+                          {"user_id": ilse_id, "funktion": "Lehrgangsleitung", "ist_leitung": True},
+                          {"user_id": renate_id, "funktion": "Wasser", "ist_leitung": False}]})
         assert r.status_code == 201, (r.status_code, r.get_json())
         lg = r.json["lehrgang"]
         lid = lg["id"]
@@ -1917,10 +1959,12 @@ def test_mehrere_leitungen():
         assert [a["ist_leitung"] for a in r.json["lehrgang"]["ausbilder"]] == [True, False], r.json["lehrgang"]["ausbilder"]
         assert zweit.get(f"/api/pruefungen/lehrgaenge/{lid}").json["lehrgang"]["darf_leiten"] is False
         assert zweit.put(f"/api/pruefungen/lehrgaenge/{lid}", json={"ort": "verboten"}).status_code == 403
-        # Ein Freitext-Eintrag mit Kennzeichen verleiht keine Rechte – Zacharias steht nur als Text drin.
+        # Einen Freitext-Eintrag gibt es nicht mehr (01.11.2026) – auch nicht mit Kennzeichen. Ohne Zacharias' Konto:
         r = pr.put(f"/api/pruefungen/lehrgaenge/{lid}", json={
             "ausbilder": [{"user_id": None, "name": "Zacharias Zweitleitung", "ist_leitung": True}]})
-        assert r.status_code == 200 and r.json["lehrgang"]["ausbilder"][1]["user_id"] is None, r.get_json()
+        assert r.status_code == 400 and r.json["zeile"] == 0, r.get_json()
+        r = pr.put(f"/api/pruefungen/lehrgaenge/{lid}", json={"ausbilder": []})
+        assert r.status_code == 200 and [a["user_id"] for a in r.json["lehrgang"]["ausbilder"]] == [pr_id], r.get_json()
         # Ohne Eintrag mit Konto sieht Zacharias den Lehrgang gar nicht mehr (Stufe Redakteur).
         assert zweit.get(f"/api/pruefungen/lehrgaenge/{lid}").status_code == 404
         # Der Wert muss ein Ja/Nein sein.
@@ -1930,7 +1974,7 @@ def test_mehrere_leitungen():
         # Kopieren nimmt die Kennzeichen mit.
         r = pr.put(f"/api/pruefungen/lehrgaenge/{lid}", json={
             "ausbilder": [{"user_id": pr_id, "ist_leitung": True}, {"user_id": zweit_id, "ist_leitung": True},
-                          {"user_id": None, "name": "Renate Referierend", "funktion": "Wasser"}]})
+                          {"user_id": renate_id, "funktion": "Wasser"}]})
         assert r.status_code == 200, r.get_json()
         r = pr.post(f"/api/pruefungen/lehrgaenge/{lid}/kopieren", json={"titel": "Kopie", "datum_von": "2027-01-01"})
         assert r.status_code == 201, (r.status_code, r.get_json())
@@ -1945,8 +1989,8 @@ def test_mehrere_leitungen():
         r = adm.post("/api/pruefungen/lehrgaenge", json={
             "titel": "Dreifach besetzt",
             "ausbilder": [{"user_id": adm_id, "ist_leitung": True},
-                          {"user_id": None, "name": "Renate Referierend", "funktion": "Wasser"},
-                          {"user_id": None, "name": "Konstantin Ko-Leitung", "ist_leitung": True}]})
+                          {"user_id": renate_id, "funktion": "Wasser"},
+                          {"user_id": ausbilder_konto(adm, "ko@example.org", "Konstantin Ko-Leitung"), "ist_leitung": True}]})
         assert r.status_code == 201, (r.status_code, r.get_json())
         assert [a["ist_leitung"] for a in r.json["lehrgang"]["ausbilder"]] == [True, False, True], r.json["lehrgang"]["ausbilder"]
 
@@ -1958,8 +2002,9 @@ def test_migration_leitung():
         app, adm, pr, pr_id, nix, nix_id = umgebung(tmp)
         assert adm.put(f"/api/admin/users/{pr_id}", json={"rechte": {"pruefungen": 2}}).status_code == 200
         r = pr.post("/api/pruefungen/lehrgaenge", json={"titel": "Alt", "ausbilder": [
-            {"user_id": pr_id, "funktion": "Lehrgangsleitung"}, {"user_id": nix_id, "funktion": "Leiter"},
-            {"user_id": None, "name": "Erwin Extern", "funktion": "Referierende:r"}]})
+            {"user_id": pr_id, "funktion": "Lehrgangsleitung"},
+            {"user_id": ausbilder_konto(adm, "leo@example.org", "Leo Leiter"), "funktion": "Leiter"},
+            {"user_id": ausbilder_konto(adm, "erwin@example.org", "Erwin Extern"), "funktion": "Referierende:r"}]})
         assert r.status_code == 201, r.get_json()
         lid = r.json["lehrgang"]["id"]
         # Alten Stand nachstellen: Spalte weg, damit init_db sie neu anlegt und die Nacharbeit läuft.

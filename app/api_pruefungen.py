@@ -4,19 +4,23 @@ Medien, Mängelübersicht und Excel-Import.
 Jede Route verlangt eine Stufe in den Riegenkarten – der Bereich enthält personenbezogene Daten von
 Teilnehmenden, und ein ausgeblendeter Reiter ist kein Schutz. Ohne Verwaltung sieht ein Konto nur die Lehrgänge, in
 denen es mit seinem Konto als Ausbilder steht (_sichtbar, jeder Nachschlag-Helfer prüft es – fremd heißt 404); Lehrgänge
-und Kataloge anlegen ab Redakteur (Stufe Redakteur, 01.11.2026). Wer etwas setzt, prüft oder hochlädt,
+und Kataloge anlegen ab Redakteur (Stufe Redakteur, 01.11.2026). Ausbilder ist nur ein Konto mit Stufe in den
+Riegenkarten – Freitext-Ausbilder gibt es seit dem 01.11.2026 nicht mehr (_ausbilder_liste, Import, Schritt 34 der
+Materialablage). Wer etwas setzt, prüft oder hochlädt,
 steht mit Kennung UND Namens-Schnappschuss in der Zeile: Die Nachvollziehbarkeit einer Prüfung darf
 nicht daran hängen, dass das Konto des Prüfers noch besteht."""
 import json
 import os
 import re
 import sqlite3
+import unicodedata
 from datetime import date
 
 from flask import Blueprint, current_app, jsonify, request
 
 from . import db
-from .auth import current_user, eingabefehler_abfangen, json_body, pruefer_required, schreibt, sfield, verwaltet
+from .auth import (MITGLIED, VERWALTUNG, current_user, eingabefehler_abfangen, json_body, pruefer_required, schreibt,
+                   sfield, verwaltet)
 from .images import BildFehler, delete_avatar, delete_photo_files, store_avatar, store_upload
 
 bp = Blueprint("pruefungen", __name__, url_prefix="/api/pruefungen")
@@ -48,6 +52,17 @@ EINGEFROREN_DEFINITION = ("Dazu gibt es Bewertungen oder Haken von Personen mit 
                           "Prüfungsdaten sind eingefroren, deshalb lässt sich das weder ändern noch löschen. Die "
                           "Lehrgangsleitung kann das Ergebnis aufheben.")
 BILD_GEAENDERT = "Das Profilbild wurde zwischenzeitlich anderswo geändert. Bitte die Seite neu laden."
+# Ausbilder nur mit Konto (Wunsch des Nutzers, 01.11.2026: „entweder Personen haben einen Account und mindestens das
+# Recht Mitglied, oder machen keine Lehrgänge“). Passend ist ein aktives Konto mit Stufe in den Riegenkarten (oder der
+# Plattform-Verwaltung, die sie überall hat) – dieselbe Bedingung in der Suche, beim Speichern und im Import.
+OHNE_KONTO = "Ausbilder gibt es nur mit Konto – bitte die Person über ihren Namen oder ihre E-Mail-Adresse suchen."
+OHNE_STUFE = ("„{name}“ hat keine Stufe in den Riegenkarten und kann nicht Ausbilder sein – die Stufe vergibt die "
+              "Plattform-Verwaltung in der Leitstelle.")
+NUR_AUSBILDER_WAEHLEN = "Ausbilder wählen darf, wer einen Lehrgang leitet oder anlegt."
+_PASSEND = (f"u.active = 1 AND u.status = 'active' "
+            f"AND (u.recht_pruefungen >= {MITGLIED} OR u.recht_verwaltung >= {VERWALTUNG})")
+KONTOSUCHE_MIN, KONTOSUCHE_MAX = 2, 20
+_NICHT_UEBERNOMMEN = "Nicht übernommen – kein Konto mit Riegenkarten-Stufe: "
 
 
 class Abgelehnt(Exception):
@@ -58,14 +73,16 @@ class Abgelehnt(Exception):
     der Blueprint-Handler unten macht daraus die übliche JSON-Antwort. Bewusst KEIN ValueError:
     den fängt eingabefehler_abfangen und ersetzte den Klartext durch „Unbrauchbare Eingabe.“."""
 
-    def __init__(self, meldung, code=400):
+    def __init__(self, meldung, code=400, **zusatz):
         super().__init__(meldung)
         self.code = code
+        # Weitere Felder der Antwort – etwa „zeile“: welche Ausbilderzeile des Dialogs der Fehler meint.
+        self.zusatz = zusatz
 
 
 @bp.errorhandler(Abgelehnt)
 def _abgelehnt(exc):
-    return jsonify(error=str(exc)), exc.code
+    return jsonify(error=str(exc), **exc.zusatz), exc.code
 
 
 @bp.errorhandler(sqlite3.IntegrityError)
@@ -636,15 +653,47 @@ def _lehrgang_detail(lid):
         raise Abgelehnt("Lehrgang nicht gefunden", 404)
     out = _lehrgang_kurz(r)
     out["beschreibung"] = r["beschreibung"]
-    out["ausbilder"] = [dict(a, ist_leitung=bool(a["ist_leitung"])) for a in db.query(
-        "SELECT id, user_id, name, funktion, ist_leitung FROM pruef_ausbilder WHERE lehrgang_id = ? "
-        "ORDER BY sortierung, id", (lid,))]
+    out["ausbilder"] = _ausbilder_json(lid)
     out["voraussetzungen"] = [_voraussetzung_json(v) for v in db.query(
         "SELECT * FROM pruef_voraussetzungen WHERE lehrgang_id = ? ORDER BY sortierung, id", (lid,))]
     out["leistungen"] = [_leistung_json_voll(p) for p in db.query(
         "SELECT * FROM pruef_leistungen WHERE lehrgang_id = ? ORDER BY sortierung, id", (lid,))]
     out["teilnehmer"] = _teilnehmer_liste(lid)
     return out
+
+
+def _ausbilder_json(lid):
+    """Die Ausbilder eines Lehrgangs mit dem Namen ihres Kontos (der Schnappschuss in pruef_ausbilder.name gilt nur, wenn
+    das Konto keinen hat). „zugriff“: ob das Konto den Lehrgang sieht – ein verknüpftes Konto ohne Stufe in den
+    Riegenkarten oder deaktiviert bleibt eingetragen, die Oberfläche markiert es („ohne Zugriff“, grund „stufe“ bzw.
+    „deaktiviert“). Eine Zeile ohne Konto gibt es seit Schritt 34 nicht mehr; käme doch eine vor, stünde sie ohne Zugriff
+    da (grund „konto“)."""
+    out = []
+    for a in db.query(
+            "SELECT a.id, a.user_id, a.name AS schnappschuss, a.funktion, a.ist_leitung, u.id AS konto, u.name, u.email, "
+            "u.gliederung, u.active, u.status, u.recht_pruefungen, u.recht_verwaltung "
+            "FROM pruef_ausbilder a LEFT JOIN users u ON u.id = a.user_id WHERE a.lehrgang_id = ? "
+            "ORDER BY a.sortierung, a.id", (lid,)):
+        grund = _ohne_zugriff(a) if a["konto"] else "konto"
+        out.append({"id": a["id"], "user_id": a["user_id"], "name": _kontoname(a) if a["konto"] else a["schnappschuss"],
+                    "gliederung": (a["gliederung"] or "") if a["konto"] else "", "funktion": a["funktion"],
+                    "ist_leitung": bool(a["ist_leitung"]), "zugriff": grund is None, "ohne_zugriff": grund})
+    return out
+
+
+def _kontoname(u):
+    """Anzeigename eines Kontos – wie _ich(): der Name, ohne ihn die E-Mail-Adresse."""
+    return ((u.get("name") or "").strip() or u.get("email") or "").strip()
+
+
+def _ohne_zugriff(u):
+    """Warum ein Konto nicht Ausbilder sein kann: None (passt), „deaktiviert“ oder „stufe“ (keine Stufe in den
+    Riegenkarten). Dieselbe Bedingung wie _PASSEND, hier für eine schon gelesene Zeile."""
+    if not u["active"] or (u.get("status") or "active") != "active":
+        return "deaktiviert"
+    if int(u["recht_pruefungen"] or 0) < MITGLIED and int(u["recht_verwaltung"] or 0) < VERWALTUNG:
+        return "stufe"
+    return None
 
 
 def _medien_dateien(where, args):
@@ -679,9 +728,32 @@ def _dateien_loeschen(dateien):
 @bp.get("/nutzer")
 @pruefer_required
 def nutzer():
-    rows = db.query("SELECT id, name, gliederung FROM users WHERE active = 1 AND status = 'active' "
-                    "ORDER BY name COLLATE NOCASE, id")
-    return jsonify(nutzer=rows)
+    """?q= – Konten, die Ausbilder sein können (_PASSEND: aktiv, Stufe in den Riegenkarten), deren Name oder E-Mail-Adresse
+    q enthält (ab KONTOSUCHE_MIN Zeichen, Groß/klein egal, auch bei Umlauten), höchstens KONTOSUCHE_MAX. Nur Kennung,
+    Name und Gliederung – die E-Mail-Adresse geht nicht hinaus (sie ist nur Anzeigename eines Kontos ohne Namen, wie
+    überall). Suchen darf, wer Ausbilder einträgt: ab Redakteur (Lehrgang anlegen) oder als Leitung eines Lehrgangs."""
+    if not schreibt("pruefungen") and not db.query(
+            "SELECT 1 FROM pruef_ausbilder WHERE user_id = ? AND ist_leitung = 1", (current_user()["id"],), one=True):
+        raise Abgelehnt(NUR_AUSBILDER_WAEHLEN, 403)
+    q = (request.args.get("q") or "").strip()[:80]
+    if len(q) < KONTOSUCHE_MIN:
+        raise Abgelehnt(f"Bitte mindestens {KONTOSUCHE_MIN} Zeichen des Namens oder der E-Mail-Adresse eingeben.")
+    such = _namensschluessel(q)
+    treffer = [u for u in db.query(f"SELECT u.id, u.name, u.email, u.gliederung FROM users u WHERE {_PASSEND} "
+                                   "ORDER BY u.name COLLATE NOCASE, u.id")
+               if such in _namensschluessel(u["name"]) or such in (u["email"] or "").casefold()]
+    return jsonify(nutzer=[{"id": u["id"], "name": _kontoname(u), "gliederung": u["gliederung"] or ""}
+                           for u in treffer[:KONTOSUCHE_MAX]], mehr=len(treffer) > KONTOSUCHE_MAX)
+
+
+def _namensschluessel(text):
+    """Vergleichsform eines Namens für Suche und Import: Unicode vereinheitlicht (NFKC – „ü“ aus zwei Zeichen ist „ü“),
+    klein, Leerraum auf ein Leerzeichen. „Mustermann, Max“ (genau ein Komma) zählt wie „Max Mustermann“."""
+    t = unicodedata.normalize("NFKC", str(text or ""))
+    if t.count(",") == 1:
+        nach, vor = t.split(",")
+        t = f"{vor} {nach}"
+    return " ".join(t.casefold().split())
 
 
 # --- 4.2 Lehrgänge -----------------------------------------------------------
@@ -710,38 +782,46 @@ def _zeitraum_pruefen(von, bis):
         raise Abgelehnt("„Datum bis“ liegt vor „Datum von“.")
 
 
-def _ausbilder_liste(roh):
-    """Ausbilder aus dem Body: (user_id|None, name, funktion, ist_leitung). Ein Verweis auf ein Nutzerkonto
-    zieht dessen Namen, wenn keiner mitkommt; ein unbekanntes Konto wird zum Freitext –
-    so bleibt der Eintrag erhalten, auch wenn die Kennung nicht (mehr) stimmt."""
+def _ausbilder_liste(roh, bisher=()):
+    """Ausbilder aus dem Body: (user_id, name, funktion, ist_leitung). Jede Zeile braucht ein Konto (user_id) – ein freier
+    Name ist kein Ausbilder mehr (OHNE_KONTO, 01.11.2026). Neu eingetragen werden nur passende Konten (aktiv, Stufe in den
+    Riegenkarten, sonst OHNE_STUFE); wer schon im Lehrgang steht (bisher: Kennungen), bleibt auch ohne Stufe eingetragen
+    – sonst ließe sich ein Lehrgang nicht mehr speichern, sobald einem Ausbilder die Stufe fehlt. Der Name ist der des
+    Kontos (Schnappschuss für die Nachvollziehbarkeit). Ein Fehler nennt die Zeile („zeile“, ab 0) für den Dialog."""
     if roh is None:
         return []
     if not isinstance(roh, list) or len(roh) > 100:
         raise Abgelehnt("„ausbilder“ muss eine Liste sein.")
     out = []
-    for e in roh:
+    for i, e in enumerate(roh):
         if not isinstance(e, dict):
             continue
-        name = sfield(e, "name").strip()[:120]
         funktion = sfield(e, "funktion").strip()[:80]
         # Das Kennzeichen kommt aus dem Dialog. Fehlt es (ältere Aufrufe), zählt wie bisher ein „leit“
         # in der Funktion – so bleibt ein Aufruf mit funktion="Lehrgangsleitung" weiter gültig.
         leit = _bool(e, "ist_leitung") if "ist_leitung" in e else _ist_leitungsfunktion(funktion)
         uid, user = e.get("user_id"), None
+        if uid in (None, "") and not sfield(e, "name").strip() and not funktion:
+            continue                                    # leere Zeile aus dem Dialog
         if uid not in (None, "") and not isinstance(uid, bool):
             try:
                 uid = int(uid)
             except (TypeError, ValueError, OverflowError):
                 uid = None
             else:
-                user = db.query("SELECT name, email FROM users WHERE id = ?", (uid,), one=True)
-        if user:
-            name = name or user["name"] or user["email"]
-        else:
-            uid = None
-        if name:
-            out.append((uid, name, funktion, int(leit)))
+                user = db.query("SELECT id, name, email, active, status, recht_pruefungen, recht_verwaltung "
+                                "FROM users WHERE id = ?", (uid,), one=True)
+        if not user:
+            raise Abgelehnt(OHNE_KONTO, zeile=i)
+        if uid not in bisher and _ohne_zugriff(user):
+            raise Abgelehnt(OHNE_STUFE.format(name=_kontoname(user)), zeile=i)
+        out.append((uid, _kontoname(user), funktion, int(leit)))
     return out
+
+
+def _ausbilder_bisher(lid):
+    return {a["user_id"] for a in db.query("SELECT user_id FROM pruef_ausbilder WHERE lehrgang_id = ? "
+                                           "AND user_id IS NOT NULL", (lid,))}
 
 
 def _ausbilder_schreiben(lid, ausbilder):
@@ -833,7 +913,8 @@ def update_lehrgang(lid):
     _zeitraum_pruefen(vals.get("datum_von", alt["datum_von"]), vals.get("datum_bis", alt["datum_bis"]))
     # Die Liste wird komplett ersetzt: So ist „Zeile entfernt“ im Dialog eindeutig. Die bearbeitende
     # Leitung bleibt dabei eingetragen – wer sich selbst vergisst, stünde sonst sofort ohne Rechte da.
-    ausbilder = _leitung_ergaenzen(_ausbilder_liste(d.get("ausbilder"))) if "ausbilder" in d else None
+    ausbilder = (_leitung_ergaenzen(_ausbilder_liste(d.get("ausbilder"), _ausbilder_bisher(lid)))
+                 if "ausbilder" in d else None)
     with db.transaction():
         if vals:
             sets = ", ".join(f"{k} = ?" for k in vals) + ", updated_at = ?"
@@ -1761,6 +1842,50 @@ def _zeitraum_aus_datei(kopf, warnungen, alt_von=None, alt_bis=None):
     return von, bis
 
 
+def _ausbilder_zuordnen(ausbilder):
+    """Je Ausbilder aus der Datei das Konto, das er ist – oder None (dann wird er nicht übernommen; Wunsch des Nutzers vom
+    01.11.2026). Zuerst die E-Mail-Adresse der Zeile: Gehört sie zu einem Konto, entscheidet allein dieses (passt es
+    nicht – ohne Stufe, deaktiviert –, wird die Person nicht übernommen; ein Namensvetter mit Stufe wäre die falsche).
+    Ohne E-Mail-Adresse oder ohne Konto dazu der Name, wenn er unter den passenden Konten genau einmal vorkommt
+    (_namensschluessel, „Nachname, Vorname“ wie „Vorname Nachname“). Geraten wird nie."""
+    konten = db.query("SELECT u.id, u.name, u.email, u.active, u.status, u.recht_pruefungen, u.recht_verwaltung "
+                      "FROM users u")
+    je_mail = {(u["email"] or "").strip().casefold(): u for u in konten if (u["email"] or "").strip()}
+    je_name = {}
+    for u in konten:
+        if not _ohne_zugriff(u) and (u["name"] or "").strip():
+            je_name.setdefault(_namensschluessel(u["name"]), []).append(u)
+    out = []
+    for a in ausbilder:
+        mail = (a.get("email") or "").strip().casefold()
+        if mail and mail in je_mail:
+            u = je_mail[mail]
+            out.append(None if _ohne_zugriff(u) else u)
+            continue
+        treffer = je_name.get(_namensschluessel(a.get("name")), [])
+        out.append(treffer[0] if len(treffer) == 1 else None)
+    return out
+
+
+def _ausbilder_aus_datei(ergebnis, bisher):
+    """Die Ausbilder der Datei zugeordnet: (übernehmen, nicht_uebernommen). übernehmen: [(Konto, Funktion, Leitung)] ohne
+    Konten, die schon im Lehrgang stehen (bisher) oder in der Datei zweimal vorkommen; nicht_uebernommen: [{name,
+    funktion}] – kein passendes Konto, für Vorschau und Ergebnis. Schreibt dazu je Ausbilder „konto“ ({id, name} oder
+    None) in das Ergebnis der Analyse (Vorschau)."""
+    uebernehmen, nicht, gesehen = [], [], set(bisher)
+    ausbilder = ergebnis.get("ausbilder") or []
+    for a, u in zip(ausbilder, _ausbilder_zuordnen(ausbilder)):
+        funktion = (a.get("funktion") or "").strip()[:80]
+        a["konto"] = {"id": u["id"], "name": _kontoname(u)} if u else None
+        a.pop("email", None)                         # bleibt in der Datei, geht nicht zurück
+        if not u:
+            nicht.append({"name": (a.get("name") or "").strip()[:120], "funktion": funktion})
+        elif u["id"] not in gesehen:
+            gesehen.add(u["id"])
+            uebernehmen.append((u, funktion, int(_ist_leitungsfunktion(funktion))))
+    return uebernehmen, nicht
+
+
 @bp.post("/import/vorschau")
 @pruefer_required
 def import_vorschau():
@@ -1778,6 +1903,9 @@ def import_vorschau():
         tn["mehrdeutig"] = treffer == "mehrdeutig"
     for v in ergebnis["voraussetzungen"]:
         v["vorhanden"] = imp.normalisiert(v["bezeichnung"]) in vorhandene
+    # Für einen neuen Lehrgang steht die importierende Person schon als Leitung darin (_leitung_ergaenzen).
+    bisher = _ausbilder_bisher(lehrgang["id"]) if lehrgang else {a[0] for a in _leitung_ergaenzen([])}
+    _, ergebnis["ausbilder_nicht_uebernommen"] = _ausbilder_aus_datei(ergebnis, bisher)
     return jsonify(**ergebnis)
 
 
@@ -1792,8 +1920,11 @@ def import_uebernehmen():
     ergebnis = _analysieren(f, zuordnung)
     kopf = dict(ergebnis.get("lehrgang") or {})
     warnungen = list(ergebnis.get("warnungen") or [])
-    if not ergebnis.get("teilnehmer") and not ergebnis.get("ausbilder"):
-        raise Abgelehnt("Es gibt nichts zu übernehmen. " + " ".join(warnungen))
+    bisher = _ausbilder_bisher(lehrgang["id"]) if lehrgang else {a[0] for a in _leitung_ergaenzen([])}
+    neue_ausbilder, nicht_uebernommen = _ausbilder_aus_datei(ergebnis, bisher)
+    if not ergebnis.get("teilnehmer") and not neue_ausbilder:
+        raise Abgelehnt(" ".join(["Es gibt nichts zu übernehmen."] + warnungen + (
+            [_NICHT_UEBERNOMMEN + ", ".join(a["name"] for a in nicht_uebernommen) + "."] if nicht_uebernommen else [])))
     uid, name = _ich()
     ts = db.now()
     angelegt = aktualisiert = voraussetzungen_neu = ausbilder_neu = 0
@@ -1838,19 +1969,13 @@ def import_uebernehmen():
                 voraussetzungen_neu += 1
             spalte_zu_vid[str(v["spaltenindex"])] = defs[norm]
 
-        # Ausbilder: gleichnamige nicht doppelt.
-        vorhandene_ausbilder = {imp.normalisiert(a["name"]) for a in db.query(
-            "SELECT name FROM pruef_ausbilder WHERE lehrgang_id = ?", (lid,))}
-        for a in ergebnis.get("ausbilder") or []:
-            a_name = (a.get("name") or "").strip()[:120]
-            if not a_name or imp.normalisiert(a_name) in vorhandene_ausbilder:
-                continue
-            funktion = (a.get("funktion") or "").strip()[:80]
-            # Aus der ISC-Liste kommt die Leitung als Freitext ohne Konto – sichtbar, aber ohne Rechte.
+        # Ausbilder: nur, wer einem passenden Konto zugeordnet ist (_ausbilder_aus_datei) und noch nicht im Lehrgang
+        # steht – mit der Leitung aus der Funktion der Datei (aus der ISC-Liste „Lehrgangsleitung“). Wer nicht passt,
+        # steht in nicht_uebernommen.
+        for u, funktion, leit in neue_ausbilder:
             db.execute("INSERT INTO pruef_ausbilder (lehrgang_id, user_id, name, funktion, ist_leitung, sortierung) "
-                       "VALUES (?,?,?,?,?,?)", (lid, None, a_name, funktion, int(_ist_leitungsfunktion(funktion)),
+                       "VALUES (?,?,?,?,?,?)", (lid, u["id"], _kontoname(u), funktion, leit,
                                                _naechste_sortierung("pruef_ausbilder", lid)))
-            vorhandene_ausbilder.add(imp.normalisiert(a_name))
             ausbilder_neu += 1
 
         # Teilnehmende. Der Abgleich mit dem Bestand läuft vorab über alle Zeilen (_treffer_im_bestand);
@@ -1912,7 +2037,7 @@ def import_uebernehmen():
     current_app.logger.info("Excel-Import in Lehrgang %s durch %s: %s neu, %s aktualisiert", lid, name, angelegt, aktualisiert)
     return jsonify(lehrgang=_lehrgang_detail(lid), angelegt=angelegt, aktualisiert=aktualisiert,
                    voraussetzungen_neu=voraussetzungen_neu, ausbilder_neu=ausbilder_neu,
-                   warnungen=warnungen), 201
+                   ausbilder_nicht_uebernommen=nicht_uebernommen, warnungen=warnungen), 201
 
 
 # --- 4.9 Prüfungsleistungskataloge --------------------------------------------

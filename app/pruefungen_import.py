@@ -644,7 +644,7 @@ def analysieren(datei, zuordnung=None, dateiname=""):
      "teilnehmer": [{"vorname", "name", "geburtsdatum", "gliederung", "email", "bemerkung", "extra": {titel: text},
                      "voraussetzungen": {"<index>": bool},   # Schlüssel = str(Spaltenindex) der Voraussetzungsspalte
                      "zeile": int}],
-     "ausbilder": [{"name": str, "funktion": str, "ist_leitung": bool, "zeile": int}],
+     "ausbilder": [{"name": str, "funktion": str, "ist_leitung": bool, "email": str, "zeile": int}],
      "voraussetzungen": [{"spaltenindex": int, "bezeichnung": str}],   # Reihenfolge wie in der Datei; Titel mit Umbruch → Leerzeichen
      "warnungen": [str]}
     Wirft ImportFehler bei unlesbarer Datei / keiner Kopfzeile / keiner Datenzeile."""
@@ -725,7 +725,9 @@ def analysieren(datei, zuordnung=None, dateiname=""):
                 warnungen.append(f"Zeile {nr}: „{voller_name}“ ({rolle}) steht schon in Zeile {ausbilder_gesehen[k]} – übersprungen.")
             else:
                 ausbilder_gesehen[k] = nr
-                ausbilder.append({"name": voller_name, "funktion": rolle, "ist_leitung": ist_leitungsrolle(rolle), "zeile": nr})
+                # Die E-Mail-Adresse ordnet den Ausbilder einem Konto zu (api_pruefungen._ausbilder_zuordnen).
+                ausbilder.append({"name": voller_name, "funktion": rolle, "ist_leitung": ist_leitungsrolle(rolle),
+                                  "email": _text(zeile, feld_idx.get("email")), "zeile": nr})
             continue
 
         k = schluessel(vorname, name, geburtsdatum)
