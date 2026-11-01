@@ -58,6 +58,14 @@
   </details>
   <p class="help">Änderungen in der Tabelle greifen sofort. Beim Löschen eines Nutzers gehen seine Inhalte auf dich über.</p>
   <p class="help hidden" id="videopflege"></p>
+  {# Suche und Filter (Gerätetest 01.11.2026, B6): Die Liste blieb ohne beides 24 000 px lang. Gefiltert wird im Browser –
+     alle Konten bleiben geladen, nichts wird seitenweise nachgeladen. Am Telefon sind die Karten zugeklappt (admin.js). #}
+  <div class="nutzer-filter" role="search">
+    <input type="search" id="u-suche" placeholder="Name, E-Mail oder Gliederung" aria-label="Nutzer suchen: Name, E-Mail oder Gliederung"
+           autocomplete="off" enterkeyhint="search">
+    <select id="u-rolle" aria-label="Nach Rolle filtern"><option value="">Alle Rollen</option></select>
+  </div>
+  <p class="meta" id="u-zahl" role="status"></p>
   <table class="list" id="users">
     <!-- Feste Spaltenbreiten (table-layout: fixed in app.css): So passt die Tabelle in jeder
          Fensterbreite in die Seite, statt sie über den Rand zu schieben. Die fünf Rechte-Spalten
@@ -67,8 +75,13 @@
     {# Name, E-Mail und Gliederung breiter (nach_merge_liste Punkt 10: bei 1280 px brach „Kreisverband“ mitten im Wort),
        die Rechte-Felder schmaler – „Verwaltung“ passt in der kleinen Schrift der Matrix auch so. #}
     <colgroup><col style="width:11%"><col style="width:12%"><col style="width:12%"><col style="width:8.6%"><col style="width:8.6%"><col style="width:8.6%"><col style="width:8.6%"><col style="width:8.6%"><col style="width:6%"><col style="width:7%"><col class="col-aktionen"></colgroup>
-    <thead><tr><th>Name</th><th>E-Mail</th><th>Gliederung</th><th>{{ modul.name.wiki }}</th><th>{{ modul.name.karte }}</th><th>{{ modul.name.pruefungen }}</th><th>{{ modul.name.material }}</th><th>{{ modul.name.verwaltung }}</th><th>Zuletzt da</th><th>Inhalte</th><th></th></tr></thead><tbody></tbody>
+    {# Q2 (Gerätetest 01.11.2026): Zwischen 861 und 1100 px liefen „Riegenkarten“ und „Materialablage“ in die Nachbarspalte.
+       Weiche Trennstellen lassen die Modulnamen dort zweizeilig stehen („Material-/ablage“) – ganz, ohne Kürzel. #}
+    {% set trenn = {"Strömipedia": "Strömi&shy;pedia", "Ankerplätze": "Anker&shy;plätze", "Riegenkarten": "Riegen&shy;karten",
+                    "Materialablage": "Material&shy;ablage", "Leitstelle": "Leit&shy;stelle"} %}
+    <thead><tr><th>Name</th><th>E-Mail</th><th>Gliederung</th>{% for m in ("wiki", "karte", "pruefungen", "material", "verwaltung") %}<th>{% if modul.name[m] in trenn %}{{ trenn[modul.name[m]]|safe }}{% else %}{{ modul.name[m] }}{% endif %}</th>{% endfor %}<th>Zuletzt da</th><th>Inhalte</th><th></th></tr></thead><tbody></tbody>
   </table>
+  <p class="leerzustand hidden" id="u-leer"><strong>Kein Konto passt</strong>Ändere den Suchbegriff oder wähle „Alle Rollen“.</p>
   {# Protokoll der Blicke über den eigenen Bereich hinaus (Materialablage, Phase 2): selten gebraucht, daher
      zugeklappt; admin_globalsuche.js lädt es erst beim Aufklappen. #}
   <details class="accordion" id="mat-globalsuche">

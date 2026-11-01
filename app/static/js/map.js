@@ -9,6 +9,9 @@
   const state = {
     map: null, cluster: null, photos: [], markers: new Map(), filter: "",
     album: null, lbIndex: 0, locateQueue: [], locating: null, tempMarker: null, meMarker: null,
+    // Suche und Liste (Gerätetest 01.11.2026, B8): alben = zuletzt geladene Albenliste (null: beim nächsten Bedarf neu
+    // laden), suche = Suchbegriff, standort = eigener Standort (L.LatLng) für „in der Nähe“, liste = Leiste zeigt die Liste.
+    alben: null, suche: "", standort: null, liste: false,
   };
 
   const $ = (sel) => document.querySelector(sel);
@@ -62,17 +65,20 @@
         a.setAttribute("aria-label", "Meinen Standort anzeigen");
         L.DomEvent.on(a, "click", (e) => {
           L.DomEvent.preventDefault(e);
-          state.map.locate({ setView: true, maxZoom: 17, enableHighAccuracy: true });
+          standortSuchen(true);
         });
         return div;
       },
     });
     new LocateCtl({ position: "bottomright" }).addTo(state.map);
-    state.map.on("locationerror", () => toast("Standort konnte nicht ermittelt werden.", true));
+    state.map.on("locationerror", ortungFehler);
     state.map.on("locationfound", (e) => {
+      ortungEnde();
+      state.standort = e.latlng;
       if (state.meMarker) state.map.removeLayer(state.meMarker);
       state.meMarker = L.circleMarker(e.latlng, { radius: 7, color: "#fff", weight: 2, fillColor: "#0069b4", fillOpacity: .95 }).addTo(state.map);
       if (state.locating) onMapClick({ latlng: e.latlng });
+      if (state.liste) listeZeichnen();          // „in der Nähe“ sortiert jetzt nach Entfernung
     });
     state.cluster = L.markerClusterGroup({
       maxClusterRadius: 72,
@@ -125,14 +131,20 @@
     state.photos = d.photos;
     state.markers.clear();
     for (const p of state.photos) state.markers.set(p.id, photoMarker(p));
+    // Die Karte wird nach jeder Änderung neu gelesen (Hochladen, Position, Löschen) – Suche und Liste mit ihr (B8, FT8).
+    await albenAuffrischen();
     applyFilter();
+    if (state.liste) listeZeichnen();
   }
 
   function applyFilter() {
     state.cluster.clearLayers();
+    // Mit Suchbegriff nur die Bilder der passenden Alben (B8) – dieselbe Auswahl wie die Liste.
+    const treffer = state.suche && state.alben ? new Set(passendeAlben().map((a) => a.id)) : null;
     const list = [];
     for (const [, m] of state.markers) {
-      if (!state.filter || m.options.photo.category === state.filter) list.push(m);
+      const p = m.options.photo;
+      if ((!state.filter || p.category === state.filter) && (!treffer || treffer.has(p.album_id))) list.push(m);
     }
     state.cluster.addLayers(list);
   }
@@ -142,6 +154,7 @@
     b.classList.add("active");
     state.filter = b.dataset.cat;
     applyFilter();
+    if (state.liste) listeZeichnen();
   }));
 
   function fitAlbum(album) {
@@ -152,7 +165,7 @@
   }
 
   /* --- Seitenleiste ------------------------------------------------------ */
-  function openPanel(title, html) {
+  function openPanel(title, html, liste) {
     panelTitle.textContent = title;
     panelBody.innerHTML = html;
     // Fuß mit den Kontaktadressen (_fuss.html): Unter der Vollbild-Karte hätte er keinen Platz – er stünde außerhalb des
@@ -160,39 +173,174 @@
     const fuss = document.querySelector("body > .seitenfuss");
     if (fuss) { const kopie = fuss.cloneNode(true); kopie.classList.add("im-panel"); panelBody.append(kopie); }
     panel.classList.add("open");
+    state.liste = !!liste;
+    listeKnopf.setAttribute("aria-expanded", String(state.liste));
     S.titel(title, "karte");          // Reiter des Browsers: „Album … – Ankerplätze – strömis.de“ (V2)
   }
   function closePanel() {
     panel.classList.remove("open");
     S.titel([], "karte");
     state.album = null;
+    state.liste = false;
+    listeKnopf.setAttribute("aria-expanded", "false");
     if (location.hash.startsWith("#album=")) history.replaceState(null, "", location.pathname);
   }
   $("#panel-close").addEventListener("click", closePanel);
   // Zurück schließt die Seitenleiste (Alben, Album) wie „✕“ (UI/UX vor dem Merge, A1).
   S.klassenVerlauf(panel, "open", closePanel);
 
-  $("#btn-albums").addEventListener("click", showAlbums);
+  /* --- Suche und Liste „in der Nähe“ (Gerätetest 01.11.2026, B8) ----------------------------------------------------
+     Ein bestimmtes Objekt fand man am Telefon nur durch Zoomen und Tippen. Das Suchfeld über der Karte sucht in den
+     Angaben der Alben (Titel, Beschreibung, Gliederung des Ansprechpartners – einen eigenen Ort hat ein Album nicht,
+     er steht meist im Titel oder in der Beschreibung); die Karte zeigt dann nur die Bilder der Treffer. „Alben“ schaltet
+     die Liste auf und zu: mit bekanntem Standort nach Entfernung sortiert, sonst alphabetisch mit dem Angebot, den
+     Standort zu verwenden. Alle Alben bleiben in der Liste – kein seitenweises Laden. */
+  const listeKnopf = $("#btn-albums"), sucheFeld = $("#alben-suche");
+  // Groß/klein, Akzente und ß spielen beim Suchen keine Rolle („Muhle“ findet „Mühle“, „strasse“ findet „Straße“).
+  const grund = (s) => String(s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/ß/g, "ss");
+  const nachName = (x, y) => String(x.title).localeCompare(String(y.title), "de", { sensitivity: "base", numeric: true });
+
+  function passendeAlben() {
+    const woerter = grund(state.suche).split(/\s+/).filter(Boolean);
+    return (state.alben || []).filter((a) => {
+      if (state.filter && a.category !== state.filter) return false;
+      const text = grund([a.title, a.description, a.contact_org].join(" "));
+      return woerter.every((w) => text.includes(w));
+    });
+  }
+
+  async function albenLaden() {
+    try { state.alben = (await api("/api/albums")).albums; }
+    catch (e) { toast("Die Alben ließen sich nicht laden: " + e.message, true); return false; }
+    return true;
+  }
+  // Nach einer Änderung: Mit Suche oder offener Liste gleich neu laden, sonst erst beim nächsten Bedarf.
+  async function albenAuffrischen() {
+    if (state.suche || state.liste) await albenLaden();
+    else state.alben = null;
+  }
+
+  listeKnopf.addEventListener("click", () => {
+    // Zweiter Tipp auf „Alben“ bei offener Liste: zurück zur Karte.
+    if (state.liste && panel.classList.contains("open")) closePanel();
+    else showAlbums();
+  });
   async function showAlbums() {
-    let d;
-    try { d = await api("/api/albums"); } catch (e) { return toast("Die Alben ließen sich nicht laden: " + e.message, true); }
+    if (!(await albenLaden())) return;
     state.album = null;
-    if (!d.albums.length) {
+    if (location.hash.startsWith("#album=")) history.replaceState(null, "", location.pathname);
+    if (!state.alben.length) {
       return openPanel("Alben", `<div class="leerzustand"><strong>Noch keine Alben</strong>${darfAnlegen
         ? "Lege ein Album an und lade Bilder hoch – Bilder mit Geotag erscheinen sofort auf der Karte."
-        : "Sobald jemand ein Album anlegt, steht es hier."}</div>`);
+        : "Sobald jemand ein Album anlegt, steht es hier."}</div>`, true);
     }
-    openPanel("Alben", `<ul class="album-list">${d.albums.map((a) => `
-      <li data-id="${a.id}">
-        ${a.cover ? `<img src="${esc(a.cover)}" alt="">` : '<div class="noimg"></div>'}
-        <div>
-          <div class="t">${esc(a.title)}</div>
-          <div class="small"><span class="cat ${esc(a.category)}">${CAT[a.category] || esc(a.category)}</span>
-            ${S.plural(a.photo_count, "Bild", "Bilder")}${a.unlocated_count ? ` <span class="badge" title="Bilder ohne Position">${a.unlocated_count} ohne Position</span>` : ""}</div>
-          <div class="meta">${esc(a.owner_name || "")}${a.contact_name ? " · Ansprechpartner: " + esc(a.contact_name) : ""}</div>
-        </div>
-      </li>`).join("")}</ul>`);
-    panelBody.querySelectorAll("li").forEach((li) => li.addEventListener("click", () => openAlbum(+li.dataset.id)));
+    // Die Zahl der Treffer ist die einzige Ansage (role=status); die Liste selbst liest die Leiste nicht bei jedem
+    // Tastendruck vor (aria-live="off" in der Leiste, die sonst „polite“ ist).
+    openPanel("Alben", `<p class="help alben-sortierung" id="al-sortierung"></p>
+      <p class="meta" id="al-zahl" role="status"></p>
+      <ul class="album-list" id="al-liste" aria-live="off"></ul>`, true);
+    listeZeichnen();
+    // Hat der Browser den Standort schon freigegeben, sortiert die Liste gleich nach Entfernung – ohne Rückfrage.
+    if (!state.standort && (await ortungsRecht()) === "granted") standortSuchen(false);
+  }
+
+  function listeZeichnen() {
+    const ziel = $("#al-liste");
+    if (!state.liste || !ziel) return;
+    const treffer = passendeAlben();
+    const ort = state.standort;
+    const zeilen = treffer.map((a) => ({ a, m: ort && a.lat != null ? ort.distanceTo([a.lat, a.lon]) : null }));
+    // Mit Standort: nächstes zuerst, Alben ohne Position am Ende; ohne: nach dem Namen.
+    zeilen.sort((x, y) => (ort ? (x.m == null) - (y.m == null) || (x.m || 0) - (y.m || 0) : 0) || nachName(x.a, y.a));
+    $("#al-sortierung").innerHTML = ort ? "In der Nähe: nach Entfernung zu deinem Standort sortiert."
+      : ortungLaeuft ? "Dein Standort wird ermittelt …"
+      : 'Ohne deinen Standort alphabetisch sortiert. <button type="button" class="lnk" id="al-standort">Standort verwenden</button>';
+    const knopf = $("#al-standort");
+    if (knopf) knopf.onclick = () => standortSuchen(false);
+    const gesamt = state.alben.length;
+    $("#al-zahl").textContent = treffer.length === gesamt ? S.plural(gesamt, "Album", "Alben")
+      : `${treffer.length} von ${S.plural(gesamt, "Album", "Alben")}${state.suche ? ` für „${state.suche}“` : ""}`;
+    ziel.innerHTML = zeilen.length ? zeilen.map(({ a, m }) => `
+      <li><button type="button" class="album-wahl" data-id="${a.id}">
+        ${a.cover ? `<img src="${esc(a.cover)}" alt="">` : '<span class="noimg"></span>'}
+        <span class="album-text">
+          <span class="t">${esc(a.title)}</span>
+          <span class="small"><span class="cat ${esc(a.category)}">${CAT[a.category] || esc(a.category)}</span>
+            ${S.plural(a.photo_count, "Bild", "Bilder")}${a.unlocated_count ? ` <span class="badge" title="Bilder ohne Position">${a.unlocated_count} ohne Position</span>` : ""}</span>
+          <span class="meta">${m != null ? `${abstandText(m)} entfernt · ` : a.lat == null ? "noch nicht auf der Karte · " : ""}${esc(a.owner_name || "")}${a.contact_name ? " · Ansprechpartner: " + esc(a.contact_name) : ""}</span>
+        </span>
+      </button></li>`).join("")
+      : `<li class="leerzustand"><strong>Kein Album passt${state.suche ? ` zu „${esc(state.suche)}“` : ""}</strong>Ändere den Suchbegriff${state.filter ? " oder wähle oben „Alle“" : ""}.</li>`;
+    ziel.querySelectorAll(".album-wahl").forEach((b) => b.addEventListener("click", () => openAlbum(+b.dataset.id)));
+  }
+
+  let sucheTakt;
+  async function suchen() {
+    state.suche = sucheFeld.value.trim();
+    if (!state.alben && !(await albenLaden())) return;
+    applyFilter();
+    if (state.liste) listeZeichnen();
+    else if (state.suche) showAlbums();          // die Treffer stehen in der Liste
+  }
+  sucheFeld.addEventListener("input", () => { clearTimeout(sucheTakt); sucheTakt = setTimeout(suchen, 200); });
+  // Enter: ein Treffer öffnet sein Album und zeigt es auf der Karte; mehrere rückt die Karte ins Bild.
+  $("#karten-suche").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    clearTimeout(sucheTakt);
+    await suchen();
+    const treffer = state.suche ? passendeAlben() : [];
+    const orte = treffer.filter((a) => a.lat != null).map((a) => [a.lat, a.lon]);
+    if (treffer.length === 1) {
+      sucheFeld.blur();                            // Tastatur zu, das Album ist zu sehen
+      await openAlbum(treffer[0].id);
+      if (orte.length) state.map.setView(orte[0], Math.max(state.map.getZoom(), 15));
+    } else if (orte.length) {
+      state.map.fitBounds(L.latLngBounds(orte), { padding: [60, 60], maxZoom: 15 });
+    }
+  });
+
+  /* --- Eigener Standort (Gerätetest 01.11.2026, FT2) ------------------------------------------------------------------
+     Die Meldung kommt erst mit der Antwort der Ortung und sagt, woran es liegt: verweigert, Zeitüberschreitung (draußen
+     braucht GPS einen Moment – 20 s statt der 10 s von Leaflet), nicht verfügbar. Ist der Standort für die Seite schon
+     blockiert, sagt es ein Hinweis sofort, statt dass nichts geschieht. Kommt gar keine Antwort (der Browser fragt
+     nicht nach, weil er die Rückfrage still unterdrückt), meldet sich die Seite nach einer Weile selbst. */
+  const ORTUNG_MS = 20000;
+  let ortungLaeuft = false, ortungWache = null;
+  const BLOCKIERT = "Der Standort ist für diese Seite blockiert – erlaube ihn in den Einstellungen des Browsers (Website-Einstellungen → Standort).";
+  async function ortungsRecht() {
+    try { return (await navigator.permissions.query({ name: "geolocation" })).state; } catch (e) { return ""; }
+  }
+  function ortungEnde() {
+    ortungLaeuft = false;
+    clearTimeout(ortungWache);
+    const k = document.querySelector(".locate-me");
+    if (k) { k.classList.remove("sucht"); k.removeAttribute("aria-busy"); }
+  }
+  async function standortSuchen(hinfahren) {
+    if (!navigator.geolocation) return toast("Dieser Browser gibt keinen Standort heraus.", true);
+    if ((await ortungsRecht()) === "denied") return toast(BLOCKIERT, true);
+    ortungLaeuft = true;
+    const k = document.querySelector(".locate-me");
+    if (k) { k.classList.add("sucht"); k.setAttribute("aria-busy", "true"); }
+    if (state.liste) listeZeichnen();
+    clearTimeout(ortungWache);
+    ortungWache = setTimeout(() => {
+      if (!ortungLaeuft) return;
+      ortungEnde();
+      if (state.liste) listeZeichnen();
+      toast("Keine Antwort zum Standort – hat der Browser die Freigabe blockiert? Sieh in den Website-Einstellungen nach.", true);
+    }, ORTUNG_MS + 10000);
+    state.map.locate({ setView: hinfahren, maxZoom: 17, enableHighAccuracy: true, timeout: ORTUNG_MS, maximumAge: 60000 });
+  }
+  function ortungFehler(e) {
+    const lief = ortungLaeuft;
+    ortungEnde();
+    if (state.liste) listeZeichnen();
+    if (!lief) return;                           // schon gemeldet (keine Antwort) – kein zweiter Hinweis
+    toast(e.code === 1 ? "Standort nicht freigegeben. Du kannst ihn in den Einstellungen des Browsers für diese Seite erlauben."
+      : e.code === 3 ? "Kein Standort nach 20 Sekunden – draußen braucht GPS manchmal einen Moment. Versuch es gleich noch einmal."
+      : e.code === 2 ? "Standort gerade nicht verfügbar – ist die Ortung am Gerät eingeschaltet?"
+      : "Dieser Browser gibt keinen Standort heraus.", true);
   }
 
   async function openAlbum(id, highlightId, openBig) {
@@ -214,6 +362,9 @@
         ${a.photos.some((p) => p.lat != null) ? '<button class="btn secondary small" id="a-fit">Auf Karte zeigen</button>' : ""}
         ${a.can_edit ? '<button class="btn secondary small" id="a-edit">Bearbeiten</button>' : ""}
       </div>
+      ${a.lat == null ? `<p class="help">${a.can_edit
+        ? "Noch nicht auf der Karte – lade ein Bild mit Standort (GPS) hoch oder setze die Position eines Bildes mit „Auf Karte platzieren“."
+        : "Noch nicht auf der Karte – das Album hat noch kein Bild mit Position."}</p>` : ""}
       ${a.description ? `<h3>Beschreibung</h3><div class="text-zeilen">${esc(a.description)}</div>` : ""}
       <h3>Ansprechpartner</h3>
       ${contact.length ? `<dl class="contact">${contact.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join("")}</dl>`
@@ -222,8 +373,8 @@
       ${a.can_edit ? `<div class="btn-row"><button class="btn secondary small" id="a-upload">Bilder / Videos hochladen</button>
         ${a.unlocated_count ? '<button class="btn secondary small" id="a-locate">Bilder ohne Position lokalisieren</button>' : ""}</div>` : ""}
       ${a.photos.length ? `<div class="photo-grid">${a.photos.map((p, i) => `
-        <button data-i="${i}" ${p.id === highlightId ? 'class="hi"' : ""} title="${esc(p.title || p.original_name)}">
-          <img src="${esc(p.thumb)}" alt="${esc(p.title || p.original_name)}" loading="lazy">
+        <button data-i="${i}" ${p.id === highlightId ? 'class="hi"' : ""} title="${esc(bildName(p, i, a.photos.length))}">
+          <img src="${esc(p.thumb)}" alt="${esc(bildName(p, i, a.photos.length))}" loading="lazy">
           ${p.kind === "video" ? '<span class="play" aria-hidden="true">▶</span>' : ""}
           ${p.lat == null ? '<span class="badge nogeo" title="Keine Position">ohne Ort</span>' : ""}
           ${p.title ? `<span class="cap">${esc(p.title)}</span>` : ""}
@@ -250,7 +401,9 @@
       await api(`/api/albums/${a.id}`, { method: "DELETE" });
       if (dlg) dlg.close();
       toast("Album gelöscht");
-      closePanel();
+      // Danach steht die frisch geladene Liste da – ohne das gelöschte Album (Gerätetest 01.11.2026, FT8).
+      state.alben = null;
+      await showAlbums();
       loadMap();
     } catch (e) { toast(e.message, true); }
   }
@@ -302,6 +455,8 @@
             const wantUpload = isNew && body.querySelector("#al-upload").checked;
             dlg.close();
             toast(isNew ? "Album angelegt" : "Gespeichert");
+            await albenAuffrischen();
+            applyFilter();
             await openAlbum(r.album.id);
             if (wantUpload) {
               fileInput.value = "";
@@ -399,22 +554,30 @@
       loslassen();
       if (xhr.status === 401) { location.href = "/login"; return; }
       if (xhr.status >= 400) return toast(d.error || "Hochladen fehlgeschlagen", true);
-      if (d.errors && d.errors.length) toast(d.errors.join(" "), true);
-      else toast(`${d.photos.length} ${d.photos.length === 1 ? "Bild" : "Bilder"} hochgeladen`);
+      /* Das Ergebnis meldet ein Toast – folgt aber eine Rückfrage (Album in der Nähe, Bilder ohne Geotag), läge er unter
+         ihrem Dialog: Dann kommt er nach der Frage bzw. steht im Dialog selbst (Gerätetest 01.11.2026, FT4). */
+      const fehler = !!(d.errors && d.errors.length);
+      const meldung = fehler ? d.errors.join(" ") : `${S.plural(d.photos.length, "Bild", "Bilder")} hochgeladen`;
+      let gemeldet = false;
       await loadMap();
       if (neu) {
         albumId = d.album.id;
         // Liegt in der Nähe schon ein Album, das man selbst führt, gehören die Bilder womöglich
         // dorthin. Die Frage kommt erst jetzt: Vorher kannte niemand die Geotags.
-        if (d.nahe.some((n) => n.can_edit)) albumId = await naheFrage(d);
+        if (d.nahe.some((n) => n.can_edit)) {
+          albumId = await naheFrage(d);
+          gemeldet = albumId !== d.album.id && !fehler;     // „… zu „X“ hinzugefügt“ sagt es schon
+        }
         // Nach dem Zusammenlegen tragen die Bilder das Zielalbum – das Lokalisieren unten
         // kehrt am Ende dorthin zurück, nicht in das aufgelöste Album.
         d.photos.forEach((p) => { p.album_id = albumId; });
       }
       await openAlbum(albumId);
+      if (!d.unlocated.length && !gemeldet) toast(meldung, fehler);
       if (d.unlocated.length) {
         const unl = d.photos.filter((p) => d.unlocated.includes(p.id));
         dialog(`<h2>${unl.length === 1 ? "Ein Bild ohne Geotag" : unl.length + " Bilder ohne Geotag"}</h2>
+          ${fehler ? `<p class="notice">${esc(meldung)}</p>` : `<p><strong>${esc(meldung)}.</strong></p>`}
           <p>${unl.length === 1 ? "Dieses Bild enthält" : "Diese Bilder enthalten"} keine Positionsdaten. Möchtest du ${unl.length === 1 ? "es" : "sie"} jetzt auf der Karte platzieren?</p>
           <div class="photo-grid">${unl.map((p) => `<button type="button" disabled><img src="${esc(p.thumb)}" alt=""></button>`).join("")}</div>
           <div class="dlg-actions"><button class="btn secondary" data-close type="button">Später</button><button class="btn" id="loc-start" type="button">Jetzt auf der Karte platzieren</button></div>`,
@@ -555,10 +718,11 @@
     state.locating = p;
     const albumPos = !!state.letztePos || (state.album && state.album.lat != null);
     const rest = state.locateQueue.length;
+    const nr = state.album ? state.album.photos.findIndex((x) => x.id === p.id) : -1;
     banner.classList.remove("hidden");
     banner.innerHTML = `<img src="${esc(p.thumb)}" alt="">
       <div><strong>Auf die Karte tippen, um die Position zu setzen</strong>
-        <span class="small">${esc(p.title || p.original_name)}${rest ? ` · danach noch ${rest}` : ""}</span></div>
+        <span class="small">${esc(bildName(p, nr, state.album ? state.album.photos.length : 0))}${rest ? ` · danach noch ${rest}` : ""}</span></div>
       <form class="loc-suche" id="loc-form">
         <input type="search" id="loc-q" placeholder="Adresse oder Ort" aria-label="Adresse oder Ort suchen"
                autocomplete="off" enterkeyhint="search">
@@ -594,7 +758,7 @@
       }
     };
     if (albumPos) $("#loc-album").onclick = () => setLocation(p, state.album.lat, state.album.lon);
-    $("#loc-me").onclick = () => state.map.locate({ setView: true, maxZoom: 17, enableHighAccuracy: true });
+    $("#loc-me").onclick = () => standortSuchen(true);
     $("#loc-skip").onclick = nextLocate;
     $("#loc-cancel").onclick = () => { state.locateQueue = []; finishLocate(); };
     if (albumPos && !state.map.getBounds().contains([state.album.lat, state.album.lon])) {
@@ -646,6 +810,17 @@
   /* --- Bild-Detail ------------------------------------------------------- */
   const lb = $("#lightbox"), lbBody = $("#lb-body");
 
+  /* Wie ein Bild heißt: sein Titel, sonst der Dateiname – aber nicht, wenn der nur aus Ziffern besteht. Die Fotoauswahl von
+     Android liefert Dateien unter Zufallsnummern („48698.jpg“); im Löschdialog und als Überschrift sagte das nichts
+     (Gerätetest 01.11.2026, FT5). Dann: „Bild 3 von 3“. i ist die Stelle im Album (-1: unbekannt). */
+  const nurZiffern = (name) => /^[\d\s_-]+(\.[a-z0-9]{1,5})?$/i.test(String(name || "").trim());
+  function bildName(p, i, n) {
+    if (p.title) return p.title;
+    if (p.original_name && !nurZiffern(p.original_name)) return p.original_name;
+    const art = p.kind === "video" ? "Video" : "Bild";
+    return i >= 0 && n ? `${art} ${i + 1} von ${n}` : `${art} ohne Titel`;
+  }
+
   function openLightbox(i) {
     state.lbIndex = i;
     renderLightbox();
@@ -656,6 +831,7 @@
     const a = state.album;
     const p = a.photos[state.lbIndex];
     if (!p) return lb.close();
+    const name = bildName(p, state.lbIndex, a.photos.length);
     // Wie api_albums.can_edit_photo: wer das Album bearbeiten darf, dazu der Hochlader ab Redakteur.
     const canEdit = a.can_edit || (darfAnlegen && p.owner_id === me.id);
     const kv = [];
@@ -669,7 +845,7 @@
     // Knöpfe der Großansicht: was man oft braucht, als Knopf; „Als Deckblatt“ und „Löschen“ sind selten und stehen im Menü
     // „Mehr“ (UI/UX vor dem Merge C7 – vorher fünf Knöpfe). Bleibt nur einer von beiden, steht er als Knopf da (S.menue).
     const view = `
-      <h2>${esc(p.title || p.original_name)}</h2>
+      <h2>${esc(name)}</h2>
       <div class="meta">Bild ${state.lbIndex + 1} von ${a.photos.length} · ${esc(a.title)}</div>
       ${p.note ? `<div class="note-box">${esc(p.note)}</div>` : ""}
       <dl class="kv">${kv.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join("")}</dl>
@@ -702,7 +878,7 @@
 
     lbBody.innerHTML = `
       <div class="lb-img">
-        ${p.kind === "video" ? `<video controls playsinline preload="metadata" poster="${esc(p.web)}" src="${esc(p.orig)}"></video>` : `<img src="${esc(p.web)}" alt="${esc(p.title || p.original_name)}">`}
+        ${p.kind === "video" ? `<video controls playsinline preload="metadata" poster="${esc(p.web)}" src="${esc(p.orig)}"></video>` : `<img src="${esc(p.web)}" alt="${esc(name)}">`}
         ${a.photos.length > 1 ? '<button class="lb-nav prev" id="lb-prev" aria-label="Vorheriges">‹</button><button class="lb-nav next" id="lb-next" aria-label="Nächstes">›</button>' : ""}
       </div>
       <div class="lb-side">${S.schliessenKnopf('id="lb-close"', "close")}${editing ? form : view}</div>`;
@@ -769,11 +945,13 @@
       } catch (e) { toast(e.message, true); }
     };
     const del = $("#lb-del"); if (del) del.onclick = async () => {
-      if (!(await S.confirm(`Bild „${p.title || p.original_name}“ endgültig löschen?`))) return;
+      if (!(await S.confirm(`${/^(Bild|Video) \d/.test(name) ? name : `Bild „${name}“`} endgültig löschen?`))) return;
       try {
         await api(`/api/photos/${p.id}`, { method: "DELETE" });
-        toast("Bild gelöscht");
+        // Erst die Großansicht schließen, dann melden: Sonst stand die Meldung an ihrem oberen Rand – nach dem Schließen
+        // mitten in der Kopfleiste (FT4).
         lb.close();
+        toast("Bild gelöscht");
         await loadMap();
         openAlbum(a.id);
       } catch (e) { toast(e.message, true); }
