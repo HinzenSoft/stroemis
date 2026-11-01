@@ -49,6 +49,11 @@ AVATAR_MAX_BYTES = 8 * 1024 * 1024
 # binden. 4096×4096 deckt jede Kamera ab, deren Bild jemand als Profilbild nimmt.
 AVATAR_MAX_PIXEL = 4096 * 4096
 WEB_MAX = 1800        # längste Kante der Web-Variante
+# Bilder der Anmeldeseite (Gerätetest 01.11.2026, B1): Die Web-Variante (1800 px JPEG, ein paar hundert Kilobyte) war für
+# die Slideshow viel zu schwer – wer sich am Gewässer über Mobilfunk anmeldet, wartete auf Bilder hinter einem roten
+# Schleier. Die Slideshow bekommt eine eigene, kleine WebP-Fassung; sie entsteht beim ersten Abruf aus der Web-Variante.
+SLIDE_MAX = 1000      # längste Kante der Slideshow-Fassung
+SLIDE_QUALITAET = 72
 # Ein 2,6-MB-JPEG mit 13000×13000 Pixeln belegt beim Drehen und Kopieren rund 1,4 GB – acht davon
 # gleichzeitig und der Arbeiter ist tot. Über der Grenze wird gar nicht erst dekodiert. 60 MP
 # reicht für jede Kamera, die ein Mitglied in die Hand nimmt.
@@ -691,4 +696,35 @@ def rotate_wiki_image(media_dir, name, grad):
 def delete_photo_files(media_dir, file):
     key = os.path.splitext(file)[0]
     _rm(*(os.path.join(media_dir, sub, fn)
-          for sub, fn in (("orig", file), ("web", key + ".jpg"), ("thumb", key + ".jpg"))))
+          for sub, fn in (("orig", file), ("web", key + ".jpg"), ("thumb", key + ".jpg"), ("slide", key + ".webp"))))
+
+
+def slide_variante(media_dir, web_name):
+    """Die Slideshow-Fassung (WebP, längste Kante SLIDE_MAX) zur Web-Variante web_name („<key>.jpg“) – angelegt beim
+    ersten Abruf und neu, wenn die Web-Variante jünger ist (nach einer Reparatur). Liefert (Ordner, Dateiname) der
+    auszuliefernden Datei; geht das Umwandeln nicht, die Web-Variante selbst. Gleichzeitige Abrufe schreiben je eine
+    eigene Zwischendatei und ersetzen das Ergebnis in einem Zug."""
+    web_dir = os.path.join(media_dir, "web")
+    if not web_name or "/" in web_name or "\\" in web_name or web_name.startswith("."):
+        return web_dir, web_name
+    quelle = os.path.join(web_dir, web_name)
+    slide_dir = os.path.join(media_dir, "slide")
+    name = os.path.splitext(web_name)[0] + ".webp"
+    ziel = os.path.join(slide_dir, name)
+    try:
+        if os.path.exists(ziel) and os.path.getmtime(ziel) >= os.path.getmtime(quelle):
+            return slide_dir, name
+        os.makedirs(slide_dir, exist_ok=True)
+        neu = os.path.join(slide_dir, f"{name}.{secrets.token_hex(4)}.neu")
+        try:
+            with Image.open(quelle) as img:
+                _pixel_pruefen(img, web_name)
+                klein = _ohne_alpha(img)
+                klein.thumbnail((SLIDE_MAX, SLIDE_MAX), Image.Resampling.LANCZOS)
+                klein.save(neu, "WEBP", quality=SLIDE_QUALITAET, method=4)
+            os.replace(neu, ziel)
+        finally:
+            _rm(neu)
+    except (OSError, ValueError):
+        return web_dir, web_name
+    return slide_dir, name
