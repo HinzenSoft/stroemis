@@ -49,6 +49,8 @@
   const side = $("#wiki-side");
   // Zurück schließt die offene Schublade (UI/UX vor dem Merge, A1) – nur, solange der Baum eine Schublade ist.
   S.klassenVerlauf(side, "open", () => side.classList.remove("open"), () => getComputedStyle(side).position === "fixed");
+  // Zugeklappt inert und aria-hidden, die Knöpfe sagen mit aria-expanded, ob der Baum offen ist (Gerätetest B14).
+  S.schubladeZustand(side, "#wiki-menu, #pg-baum");
   /* Unter 1180 px hat das Raster keine dritte Spalte mehr. Die rechte Spur (Kommentare, Angaben
      zur Seite) wandert dann in die Textspalte unter den Artikel, statt zu verschwinden – auf
      Telefon und Tablet waren Kommentare sonst gar nicht zu lesen. Das Element bleibt dasselbe
@@ -912,7 +914,7 @@
     const pubBadge = p.effective_public ? '<span class="badge pubbadge" title="Lesen auch Angemeldete ohne Freischaltung für die Strömipedia">für alle Angemeldeten</span>' : "";
     content.innerHTML = `
       <div class="wiki-head">
-        <button class="btn secondary small kopfknopf baum-knopf" id="pg-baum" type="button" title="Seiten" aria-label="Seitenbaum öffnen">☰</button>
+        <button class="btn secondary small kopfknopf baum-knopf" id="pg-baum" type="button" title="Seiten" aria-label="Seitenbaum" aria-controls="wiki-side" aria-expanded="${side.classList.contains("open")}">☰</button>
         ${krumenPfad(crumbs, p)}
         <div class="btn-row">
           ${p.can_edit ? `<div class="mode-toggle" role="group" aria-label="Ansicht wechseln">
@@ -4545,7 +4547,7 @@
     const crumbs = isNew ? [] : ancestors(p);
     content.innerHTML = `
       <div class="wiki-head editing-head">
-        <button class="btn secondary small kopfknopf baum-knopf" id="pg-baum" type="button" title="Seiten" aria-label="Seitenbaum öffnen">☰</button>
+        <button class="btn secondary small kopfknopf baum-knopf" id="pg-baum" type="button" title="Seiten" aria-label="Seitenbaum" aria-controls="wiki-side" aria-expanded="${side.classList.contains("open")}">☰</button>
         ${krumenPfad(crumbs, p, isNew)}
         <div class="btn-row">
           <span class="muted small" id="ed-status"></span>

@@ -8,6 +8,8 @@
   // Zurück schließt die offene Schublade (UI/UX vor dem Merge, A1) – im Lesemodus mit common.js, die öffentliche Seite hat es nicht.
   if (window.S && S.klassenVerlauf && side) {
     S.klassenVerlauf(side, "open", () => side.classList.remove("open"), () => getComputedStyle(side).position === "fixed");
+    // Zugeklappt inert und aria-hidden, „☰ Seiten“ mit aria-expanded (Gerätetest B14).
+    if (S.schubladeZustand) S.schubladeZustand(side, "#wiki-menu");
   }
   const lesemodus = shell.dataset.modus === "lesemodus";
   /* Seiten liegen unter prefix + slug, die Übersicht unter start. Im Lesemodus sind das /stroemipedia/… und

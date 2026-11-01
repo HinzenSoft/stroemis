@@ -920,7 +920,12 @@
   }
   // Als Schublade ist die geschlossene Leiste nur aus dem Bild geschoben – „inert“ nimmt sie auch aus der
   // Tab-Reihenfolge und dem Vorlesen. Neben dem Inhalt (breiter Bildschirm) ist sie immer bedienbar.
-  function leisteInert() { if (leiste) leiste.inert = alsSchublade() && !leiste.classList.contains("open"); }
+  // Zugeklappte Schublade: inert und aria-hidden (Gerätetest 01.11.2026, B14).
+  function leisteInert() {
+    if (!leiste) return;
+    leiste.inert = alsSchublade() && !leiste.classList.contains("open");
+    if (leiste.inert) leiste.setAttribute("aria-hidden", "true"); else leiste.removeAttribute("aria-hidden");
+  }
   let leisteAufVon = null;             // der Knopf, der die Schublade geöffnet hat: „☰ Ordner“ oder „Filter (n)“
   function leisteZu(fokusZurueck) {
     if (!leiste) return;
