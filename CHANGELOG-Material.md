@@ -65,6 +65,7 @@ Geschichte stehen. Schemaversion nach der Nachbesserung vor dem Merge: 30; mit d
 | Gerätetest 01.11.2026 – Teil 5 (Ankerplätze, Leitstelle, Profil) | Ankerplätze: Suchfeld über der Karte und Liste „in der Nähe“ (B8), Standortmeldungen je Fall (FT2), Liste nach dem Löschen frisch und Satz für Alben ohne Position (FT8), keine Ziffern-Dateinamen als Bildname (FT5), Hochlade-Ergebnis sichtbar (FT4); Leitstelle: Suche, Rollenfilter und zugeklappte Karten (B6), Spaltenköpfe mit Trennstellen (Q2), Satz zur Prüffreigabe am Häkchen „Prüfer“ (M4) | gebaut 01.11.2026 (kein Schemaschritt), Zweig gt-karte-leit, nicht auf dev |
 | Gerätetest 01.11.2026 – Teil 2 (Strömipedia) | Speicherstand sofort („Ungespeichert“, „Speichert …“, „Gespeichert 13:02“, Live-Region); „/“-Menü im sichtbaren Bereich (höchstens 40 %, über dem Cursor); Artikel-Leiste einzeilig (Pfad kürzt sich, „Teilen“/„Inhaltsverzeichnis“ am Finger in „⋯“), unter 500 px Höhe nicht klebend, Cursor nicht unter den Leisten; Inhaltsverzeichnis in „⋯“ als Dialog; Aufgabenlisten-Kästchen 24 px mit Namen; Kommentar als Blatt über dem Artikel; numerische Dateinamen nicht als Alternativtext; Erfolgsmeldungen für Hochladen und Kommentare | gebaut 01.11.2026 (kein Schemaschritt), Zweig gt-wiki, nicht auf dev |
 | Gerätetest 01.11.2026 – Teil 4 (Materialablage) | Prüfdurchgang: Suche nach Nummer/Name und „QR-Code scannen“ über der Liste, Vorgabe „offen“, eine Zählweise in Kopf, Filtern und Grund, Meldung nach Ausnehmen/Einbeziehen; Abschlussleiste der Prüfung beim Scrollen eingeklappt; ausgegrautes „Festschreiben“ führt zum fehlenden Schritt; Filter der Prüfungen mit aria-pressed, Links der Übersicht springen zur Liste; Bestandsbaum am Telefon nur „überfällig“; ein Platzhalter der Nummernsuche | gebaut 01.11.2026 (kein Schemaschritt), zur Freigabe |
+| Hinweiskästen über die ganze Breite | Hinweiskästen (`.notice`, Zeile zur Prüfanleitung) laufen in allen Modulen über die volle Breite ihrer Spalte, ihr Inhalt – Text und Knöpfe – bleibt höchstens 100ch (rund 120 Zeichen) breit, der Knopf neben seinem Text; ersetzt V10 „der Kasten darf schmaler sein“ | gebaut 01.11.2026 (kein Schemaschritt), Zweig kaesten, zur Freigabe |
 
 ## Abgleich mit dem Bestand (vor Lieferung 1)
 
@@ -4385,6 +4386,43 @@ werkzeug/bericht-5bf9fbf.md, Punkt 2).
   und im Lesemodus (Konto ohne Stufe) bleiben sie klickbare `mailto:`-Links; `tel:` ebenso.
 - Tests: `tests/test_material_nachtrag_sammel.py` (neu – Klappzeichen gleich in wiki.js/public.js/material.js, mit Node.js
   gerendert sichtbar im Ordner- und Kategorienbaum, CSS-Regeln samt Media-Block, CHANGELOG- und README-Satz).
+
+## Hinweiskästen über die ganze Breite (01.11.2026)
+
+Entscheidung des Nutzers vom 01.11.2026: „Kästen über die ganze Breite“ – ersetzt aus V10 (27.10.2026) „der Kasten darf
+schmaler sein als Felder und Tabellen“. Anlass: Auf der Übersicht (Fenster rund 1780 px) endeten „Anleitung zur
+Materialablage“ und „1 offener Änderungsantrag“ etwa in der Mitte, während Kopfzeile, Linie und Suchfeld bis rechts
+reichten.
+
+- **Eine Regel für alle Kästen** (app.css, direkt hinter `.notice`):
+  `:is(.notice, .mat-wikizeile):not(dialog *) { padding-right: max(var(--kasten-rand, 12px), calc(100% - 100ch)); }`.
+  Der Kasten hat keine Höchstbreite mehr und nimmt die volle Breite seiner Spalte; der Innenabstand rechts nimmt auf,
+  was über 100ch hinausgeht (Prozent von der Breite der Spalte, ch in der Schrift des Kastens). Text und Knöpfe stehen
+  damit zusammen in höchstens 100ch (rund 120 Zeichen je Zeile, wie bisher gemessen) – auch Text direkt im Kasten
+  (`p.notice`), und ein Knopf bleibt neben seinem Text: Beim Anleitungshinweis steht „Anleitung in der Strömipedia
+  öffnen“ direkt rechts neben dem Satz, rechts davon ist die Fläche leer; „Verlängern“ im Ordnerkopf und „Ändern“ in der
+  Zeile zur Prüfanleitung ebenso. Gewählt statt einer Begrenzung der Kinder (`.notice > *`), weil die Text direkt im
+  Kasten nicht erreicht, und statt eines Rasters (`grid-template-columns: minmax(0, 100ch)`), das Links und Text eines
+  Satzes in eigene Zellen risse; keine Änderung am Markup.
+- **Wo es gilt:** in allen Modulen (Materialablage, Riegenkarten, Leitstelle, Profil, Ankerplätze, Strömipedia-Editor);
+  wo die Spalte schmaler als 100ch ist, bleibt der eigene Abstand – Telefon und Tablet hochkant (gemessen 360, 390 und
+  768 px: Lage, Höhe und Innenabstand aller Kästen auf 16 Seiten gleich wie vorher), die Lesespalte der Strömipedia.
+  Dialoge bleiben, wie sie sind (`:not(dialog *)`). Kästen mit eigenem Innenabstand setzen rechts nur ihr Mindestmaß
+  (`--kasten-rand`): der Anleitungshinweis 16 px (am Telefon 12 px), die Zeile zur Prüfanleitung hat ihren Abstand jetzt
+  als `padding-block`/`padding-left`.
+- **Text ohne Kasten unverändert:** `.help`, `p.small`, `p.muted` und die Fußsätze des Jahresberichts bleiben bei
+  `max-width: 100ch` (material.css, jetzt mit `:not(.notice)`, damit „notice small“ ein Kasten bleibt); in den
+  Riegenkarten `.pruef .help` statt `.pruef :is(.help, .notice)`. Banner und die Hilfe der Leitstelle waren schon so
+  gebaut (ganz breit, Text begrenzt) und bleiben.
+- **Gemessen** (Chromium, vorher → nachher, 1280/1440/1780/1920/2560 px): Abstand der rechten Kastenkante zur Spalte auf
+  der Übersicht 111/271/611/751/926 px → 0, in der Zeile zur Prüfanleitung (Prüfformular) 111/271/306/306/306 → 0, im
+  Ordner „Gesperrt“ wie auf der Übersicht → 0, in den Riegenkarten (je Teilnehmende) 391/551/726/726/726 → 0; Zeichen je
+  Zeile unverändert (höchstens 123), Inhalt höchstens 97 ch; Abstand Knopf → Satzende im Anleitungshinweis 25 → 41 px,
+  rechts daneben leer.
+- Tests: `tests/test_material_textbreite.py` (neue Regel für Hilfetexte; neu `test_kaesten_ganze_breite_inhalt_100ch` – die
+  eine Kastenregel, kein Kasten mit Höchstbreite oder eigener Breite, kein späterer Innenabstand rechts an einem Kasten
+  in app.css, pruefungen.css, material.css, freigaben.css und global.css), angepasst `tests/test_module_nach_merge.py` und
+  `tests/test_module_uiux_u1b.py` (Riegenkarten-Regel).
 
 ## Seitenbaum der Strömipedia (Wunsch des Nutzers, 28.10.2026)
 

@@ -1259,16 +1259,17 @@ table.list.mat-artikel tr:has(.mat-wahl-art:checked) { background: var(--co-info
   .mat-kachelrahmen > .mat-rundenzahlen > .mat-kachel:first-child { grid-column: auto; }
 }
 
-/* Hilfe- und Erklärtexte (.help, p.small, p.muted), Hinweiskästen (.notice, die Zeile zur Prüfanleitung) und die
-   Fußsätze des Jahresberichts: höchstens rund 120 Zeichen je Zeile (Entscheidung des Nutzers vom 27.10.2026, Nachtrag
-   V10 vor dem Merge – löst „volle Inhaltsbreite“ vom 25.10.2026 ab; am Ultrawide standen bis 171 Zeichen in einer
-   Zeile). Der Kasten darf damit schmaler sein als Felder und Tabellen darunter; auf Telefon und Tablet ändert sich
-   nichts, dort ist die Spalte ohnehin schmaler. 100ch statt der im Auftrag genannten 120ch: ch ist die Breite der Ziffer
-   „0“, deutscher Text ist im Schnitt schmaler – 120ch ergaben gemessen rund 145 Zeichen je Zeile, 100ch rund 120. ch
-   zählt in der Schrift des Elements (.help ist kleiner – trotzdem rund 120 Zeichen). Die Stammdatenwerte bleiben am
-   breiten Bildschirm schmaler (--mat-lesemass). */
+/* Hilfe- und Erklärtexte ohne Kasten (.help, p.small, p.muted) und die Fußsätze des Jahresberichts: höchstens rund 120
+   Zeichen je Zeile (Entscheidung des Nutzers vom 27.10.2026, V10 – am Ultrawide standen bis 171 Zeichen in einer Zeile);
+   auf Telefon und Tablet ändert sich nichts, dort ist die Spalte ohnehin schmaler. 100ch statt der damals genannten
+   120ch: ch ist die Breite der Ziffer „0“, deutscher Text ist im Schnitt schmaler – 120ch ergaben gemessen rund 145
+   Zeichen je Zeile, 100ch rund 120. ch zählt in der Schrift des Elements (.help ist kleiner – trotzdem rund 120 Zeichen).
+   Hinweiskästen (.notice, auch „notice small“, und die Zeile zur Prüfanleitung) laufen seit dem 01.11.2026 über die ganze
+   Breite, nur ihr Inhalt bleibt bei 100ch (Entscheidung des Nutzers, ersetzt „der Kasten darf schmaler sein als Felder
+   und Tabellen“ aus V10) – die Regel dafür steht in app.css bei .notice. Die Stammdatenwerte bleiben am breiten
+   Bildschirm schmaler (--mat-lesemass). */
 #mat-inhalt .mat-daten dd { max-width: var(--mat-lesemass); }
-:where(#mat-inhalt, #mat-side) :is(.help, .notice, p.small, p.muted, .mat-wikizeile, .mat-bericht-fuss) { max-width: 100ch; }
+:where(#mat-inhalt, #mat-side) :is(.help, p.small, p.muted, .mat-bericht-fuss):not(.notice) { max-width: 100ch; }
 
 /* Ordnerwahl (Dialog „verschieben nach …“): Ein langer Name bricht um, die Art-Marke daneben bleibt ganz. */
 .mat-wahl label .mat-art { flex: none; }
@@ -1508,8 +1509,9 @@ table.list.mat-na-zeilen tr:has(.mat-na-wahl:checked) { background: var(--co-inf
 .mat-na-offen { margin: 6px 0 0; padding-left: 18px; max-height: 40vh; overflow-y: auto; }
 .mat-na-offen li { margin: 4px 0; overflow-wrap: anywhere; }
 .mat-na-vorschlaege { border-top: 1px solid var(--linie); margin-bottom: 10px; }
-/* Formular: die Zeile „Prüfanleitung im Wiki“ (nur Material-Verwaltung) und die Seitenwahl. */
-.mat-wikizeile { margin: 4px 0 12px; padding: 8px 12px; border-left: 4px solid var(--linie); background: var(--grau-hell); }
+/* Formular: die Zeile „Prüfanleitung im Wiki“ (nur Material-Verwaltung) und die Seitenwahl. Ein Kasten über die ganze
+   Breite: den Innenabstand rechts gibt die Regel bei .notice in app.css (Inhalt höchstens 100ch). */
+.mat-wikizeile { margin: 4px 0 12px; padding-block: 8px; padding-left: 12px; border-left: 4px solid var(--linie); background: var(--grau-hell); }
 .mat-wikizeile p { margin: 2px 0; overflow-wrap: anywhere; }
 .mat-wikizeile .badge { vertical-align: middle; }
 .mat-warn-leise { color: var(--anthrazit); font-weight: 600; }
@@ -2078,15 +2080,18 @@ dialog .mat-knopfgrund { margin: 10px 0 0; }
 .page-head > .mat-kopf-anleitung { margin-right: auto; }
 .mat-artikeltitel > h1:has(+ .mat-kopf-anleitung) { display: inline-block; margin-right: 12px; }
 .mat-artikeltitel .mat-kopf-anleitung + .btn-row { margin-top: 12px; }
+/* Über die ganze Breite wie jeder Hinweiskasten (app.css): den Innenabstand rechts gibt die Regel dort, hier nur sein
+   Mindestmaß (--kasten-rand). Text und Knopf bleiben zusammen höchstens 100ch breit, der Knopf direkt neben dem Satz. */
 .notice.mat-anleitung-hinweis { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px;
-  margin: 0 0 20px; padding: 14px 16px; background: var(--co-info-fl); border: 2px solid var(--wasser); border-left-width: 8px; }
+  margin: 0 0 20px; padding-block: 14px; padding-left: 16px; --kasten-rand: 16px;
+  background: var(--co-info-fl); border: 2px solid var(--wasser); border-left-width: 8px; }
 .mat-anleitung-hinweis p { flex: 1 1 32ch; margin: 0; }
 .mat-anleitung-hinweis strong { color: var(--wasser); font-size: 1.15rem; }
 /* Der Knopf darf umbrechen: „Anleitung in der Strömipedia öffnen“ ist am Fold (344 px) breiter als der Kasten. */
 .mat-anleitung-hinweis .btn { max-width: 100%; white-space: normal; }
 @container mat-seite (max-width: 600px) {
   .mat-anleitung-zusatz { display: none; }
-  .notice.mat-anleitung-hinweis { padding: 10px 12px; }
+  .notice.mat-anleitung-hinweis { padding-block: 10px; padding-left: 12px; --kasten-rand: 12px; }
 }
 
 /* Bestandsimport: Satz zur Kontaktadresse (material.js importKontakt, Wunsch vom 28.10.2026 Punkt 4) – am Telefon die kurze
