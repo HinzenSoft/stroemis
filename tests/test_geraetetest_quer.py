@@ -119,7 +119,7 @@ def test_q3_matrix_bei_wenig_hoehe():
     rk = lies(RK)
     teil = rk[rk.index("/* Matrix bei wenig Höhe (Gerätetest Q3, Teil X)"):]
     assert "@media (max-height: 500px) {" in teil
-    assert ".bew-matrix .zelle { min-height: 44px;" in teil
+    assert "@media (max-height: 500px) and (pointer: coarse) {\n  .bew-matrix .zelle { min-height: 44px; }" in teil
     assert ".pruef .bew-matrix .tn-sub, .bew-matrix .zelle .sub { display: none; }" in teil
     assert '.bew-matrix .linkbtn::after { content: ""; position: absolute; inset: -12px -4px; }' in teil
 

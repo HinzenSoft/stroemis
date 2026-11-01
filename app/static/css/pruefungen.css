@@ -706,7 +706,10 @@ body:has(.pruef.druck) #toast { top: 12px; }
 @media (max-height: 500px) {
   .pruef .bew-matrix td { padding-top: 2px; padding-bottom: 2px; }
   .pruef .bew-matrix .tn-sub, .bew-matrix .zelle .sub { display: none; }
-  .bew-matrix .zelle { min-height: 44px; padding-top: 2px; padding-bottom: 2px; }
+  .bew-matrix .zelle { padding-top: 2px; padding-bottom: 2px; }
+}
+@media (max-height: 500px) and (pointer: coarse) {
+  .bew-matrix .zelle { min-height: 44px; }
   .bew-matrix .linkbtn { min-height: 0; position: relative; }
   .bew-matrix .linkbtn::after { content: ""; position: absolute; inset: -12px -4px; }
 }
