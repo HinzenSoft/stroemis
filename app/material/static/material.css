@@ -607,7 +607,12 @@ html:has(.mat-mit-leiste) { scroll-padding-bottom: 210px; }
 @media (max-width: 560px) {
   .mat-ergebnis button { font-size: var(--fs-mittel); line-height: 1.15; }
   .mat-abschluss-zeile .btn { flex: 1 1 100%; margin-left: 0; }
-  .mat-abschluss { margin-left: -12px; margin-right: -12px; padding-top: 6px; padding-bottom: calc(6px + env(safe-area-inset-bottom)); }
+  /* Randlos bis an den Fensterrand: früher mit margin -12px – das schob den Inhalt der Prüfung 12 px über ihren Kasten
+     (st-geraete „U“, Gerätetest Teil X). Jetzt bleibt die Leiste in ihrem Kasten; Fläche und Linie reichen nur als
+     Zeichnung 12 px weiter (Schatten links/rechts, border-image-outset), ohne die Breite des Inhalts zu ändern. */
+  .mat-abschluss { padding-left: 0; padding-right: 0; padding-top: 6px; padding-bottom: calc(6px + env(safe-area-inset-bottom));
+    border-image: linear-gradient(var(--anthrazit), var(--anthrazit)) 1 / 2px 0 0 / 0 12px;
+    box-shadow: -12px 0 0 var(--weiss), 12px 0 0 var(--weiss), var(--schatten-leiste); }
   .mat-abschluss-zeile { margin-top: 6px; }
   .mat-abschluss-hinweis { margin-bottom: 4px; }
 }
