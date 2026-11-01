@@ -56,6 +56,7 @@ Geschichte stehen. Schemaversion nach der Nachbesserung vor dem Merge: 30; mit d
 | UI/UX vor dem Merge – U3 übrige Module | Hinweis „Entwicklungsserver“ nach jeder Anmeldung auf dev; Anmeldung am Telefon Formular zuerst; Leitstelle: Überschrift „Leitstelle“, Einstellungen gegliedert und ohne Entwicklersprache; 403 führt in den eigenen Bereich; Riegenkarten breitenbegrenzt, Reiter ohne Verlaufseintrag, Knöpfe mit Wort; Ankerplätze und Strömipedia: eine rote Hauptaktion, Löschen in Dialog/Menü, Tastatur, benannte Knöpfe; Listen und Schublade nach der Inhaltsbreite, Doppelbildschirm | gebaut 27.10.2026 (kein Schemaschritt), Zweig uiux-3 |
 | UI/UX vor dem Merge – U2 Materialablage | Ultrawide als Gruppe; ausgegraute Hauptknöpfe fokussierbar mit Grund darüber; Abschlussleiste niedrig (Grund und nächste Prüfung im Festschreib-Dialog); Mangel je Rolle; weniger Knöpfe (Dokumente, Formular, Prüfer); Empfehlung im Banner; Journal gekürzt; „Echtheit prüfen“; Radiogruppen; Fehlerzustand mit „Neu laden“; Kleinigkeiten | gebaut 27.10.2026 (kein Schemaschritt), Zweig uiux-2 |
 | Suchzeile auf Übersicht und Prüfungen | Am Telefon und Tablet hochkant „☰“ und die Nummernsuche als Artikelsuche in einer klebenden Suchzeile oben im Inhalt wie im Katalog, ohne Lupe; Entscheidung V4 für diese beiden Seiten abgelöst | gebaut 28.10.2026 (kein Schemaschritt), zur Freigabe |
+| Seitenbaum der Strömipedia | „Seiten aus ZIP importieren“ nur noch im „⋯“ über dem Baum; Klappzeichen als gezeichneter Winkel in fester Spalte, gleichmäßiger Einzug mit Führungslinien, oberste Ebene fett, Titel mit hängendem Umbruch, am Finger 44-px-Tippfläche ohne Platzverlust, Schublade bis 360 px | gebaut 28.10./01.11.2026 (kein Schemaschritt), zur Freigabe |
 
 ## Abgleich mit dem Bestand (vor Lieferung 1)
 
@@ -4188,6 +4189,47 @@ Danach liefen die ganze Suite (`st-test`) grün, `st-py`, `st-js` und `st-css` o
 14. **Kasten „Mailversand“ am Telefon**: Eine Karte hat vier Inhaltszeilen (Mail mit Betreff, Empfänger, Fehler mit
     Antwort), bei 360 px umbrochen etwa 170 px hoch; die Antwort des Mailservers ließe sich noch hinter „Technische
     Antwort“ einklappen – bitte am Gerät ansehen.
+
+## Seitenbaum der Strömipedia (Wunsch des Nutzers, 28.10.2026)
+
+Wünsche des Nutzers zu einem Telefon-Foto (Seitenbaum als Schublade, „⋯“ der Seite „Allgemein“ offen), wörtlich:
+„Der Punkt Seiten aus Zip importieren reicht am oberen zentralen ⋯ aus und muss nicht in jedem Seitenmenü stehen.“ und
+„Prüfe, ob du das Seitenmenü insgesamt aus UI/UX-Sicht noch optimieren kannst, was die Abstände und Erkennbarkeit der
+Einträge und verschiedenen Ebenen angeht, vor allem auch dem Ausklappsymbol.“
+
+- **Import nur oben** (wiki.js `treeRowMenu`, `baumMenu`, `importDialog`): „Seiten aus ZIP importieren“ steht nicht mehr
+  im „⋯“ jeder Seite im Baum, sondern nur im Menü „⋯“ neben „Neue Seite“ über dem Baum (mit dem Papierkorb, nur mit
+  Wiki-Verwaltung – dasselbe Rechte-Flag wie bisher). Der Dialog beginnt mit „– oberste Ebene –“, unter „Einsortieren
+  unter“ steht jede Seite zur Wahl. Die Entscheidung vom 27.10.2026 („Import im ⋯ jeder Seite“) ist damit abgelöst. Das
+  Menü einer Seite hat jetzt sechs Einträge: Unterseite anlegen, Zur Merkliste, Symbol ändern, Duplizieren, Als Markdown
+  herunterladen, In den Papierkorb.
+- **Klappzeichen**: statt des Schriftzeichens „▸/▾“ (12 px, an der Grundlinie, 20 × 22 px Fläche) ein gezeichneter Winkel
+  im 16er-Raster wie die Kopfsymbole (Inline-SVG `KLAPPZEICHEN`, 14 px, Strich 2 px, `--grau`, beim Überfahren
+  `--anthrazit` auf `--linie`), zeigt nach rechts und dreht sich beim Aufklappen nach unten (0,15 s; „Bewegung
+  reduzieren“ schaltet es ab). Name „<Seite> aufklappen/zuklappen“ und `aria-expanded` wie seit C12; ohne Unterseiten bleibt
+  der Knopf leer, unsichtbar und nicht erreichbar, hält aber die Spalte frei – alle Titel einer Ebene stehen bündig. Der
+  öffentliche Baum (public.js, auch Lesemodus) zeigt dasselbe Zeichen, immer aufgeklappt.
+- **Ebenen**: feste Spalte für das Klappzeichen (`--baum-spalte`, Rechner 20 px, Finger 24 px), jede Ebene rückt gleich
+  weit ein (`--baum-einzug`, 20 bzw. 18 px; vorher 21 px), die Führungslinie einer Ebene läuft unter dem Klappzeichen der
+  Elternseite. Die oberste Ebene rückt nicht mehr ein (vorher am Rechner 21 px mit Linie), steht fett in `--schwarz` und
+  hat 6 px Luft zum nächsten Abschnitt; tiefere Ebenen normal. Aktive Seite wie bisher: roter Balken, fett, weiß.
+- **Zeilen und Titel**: Symbol und Titel stehen nebeneinander (`.baum-titel`), ein umbrochener Titel läuft unter seiner
+  ersten Zeile weiter (hängender Einzug). Am Rechner Zeilen 29 px, lange Titel mit „…“ und Tooltip; „+“ und „⋯“ wie
+  bisher erst beim Überfahren, neu auch, sobald die Zeile den Tastaturfokus hat. Am Finger Zeilen ab 44 px, Klappzeichen
+  und „⋯“ auf Höhe der ersten Titelzeile; der Klappknopf hat 44 × 44 px Tippfläche, belegt aber nur 24 px Breite (je 10 px
+  ragen in die Einrückung und, darübergelegt, über den Rand des Titels – der Titel beginnt 8 px nach dem Rand), „⋯“ ragt
+  in den rechten Innenrand der Leiste. Vorher kostete das Klappzeichen 44 px je Zeile: Der Text der vierten Ebene begann
+  bei 130 px, jetzt bei 103 px.
+- **Schublade** (unter 1024 px): bis 360 px breit (vorher 320) – bei 390 px Fenster 351 px, daneben bleibt ein Streifen
+  der Seite, der sie schließt; Zurück schließt sie wie bisher.
+- Gemessen (Chromium, DEMO-Baum mit 4 Ebenen und langen Titeln, gleicher Zustand): Telefon 390 px mehrzeilige Zeilen
+  13 → 7 von 31, höchste Zeile 149 → 87 px; 344 px 13 → 11; Tablet 1024 px mit Touch (feste 260-px-Leiste) 21 → 16,
+  höchste Zeile 275 → 170 px; Rechner 1280/1024 px mit „…“ gekürzt 12 → 11 bzw. 24 → 20 von 31. Alle Tippflächen in
+  offener Schublade und offenem „⋯“ (1024, 768, 390, 360, 344 px, quer 844 × 390) mindestens 44 px, die Mitte trifft
+  jeweils das Element, ein Tipp 2 px rechts vom Titelanfang den Titel.
+- Tests: `tests/test_wiki_seitenbaum.py` (neu – Menüeinträge ohne Import, Klappknopf mit SVG und aria, Titelspanne,
+  CSS-Regeln samt Media-Block, Knopfzeile je Recht); `test_wiki_import.py` (Import nur im Menü über dem Baum, Dialog
+  ohne Vorwahl).
 
 ## Suchzeile auf Übersicht und Prüfungen (Wunsch des Nutzers, 28.10.2026)
 
