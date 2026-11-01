@@ -698,3 +698,15 @@ body:has(.pruef.druck) #toast { top: 12px; }
     .tn-mobil { display: block; }
   }
 }
+/* Matrix bei wenig Höhe (Gerätetest Q3, Teil X): Telefon quer (947 × 364) zeigte nur drei Zeilen – die Namensspalte
+   war mit Bild, Name (44 px Tippfläche), Gliederung und „Vorauss. offen“ 91 px hoch. Bis 500 px Höhe (dieselbe Grenze
+   wie die Kopfleiste) ohne Gliederung und ohne „wer/wann“ in den Zellen (beides steht in „je Teilnehmende“ bzw. „je
+   Leistung“); die Fläche des Namens bleibt 45 px hoch, aber unsichtbar über der Zeile (Muster der Listentitel), die
+   Zellen behalten 44 px. */
+@media (max-height: 500px) {
+  .pruef .bew-matrix td { padding-top: 2px; padding-bottom: 2px; }
+  .pruef .bew-matrix .tn-sub, .bew-matrix .zelle .sub { display: none; }
+  .bew-matrix .zelle { min-height: 44px; padding-top: 2px; padding-bottom: 2px; }
+  .bew-matrix .linkbtn { min-height: 0; position: relative; }
+  .bew-matrix .linkbtn::after { content: ""; position: absolute; inset: -12px -4px; }
+}
