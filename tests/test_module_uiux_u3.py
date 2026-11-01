@@ -166,7 +166,7 @@ def test_c1_c5_anmeldung_und_texte():
         # Probemail nennt die Leitstelle (ohne Mailserver wird nichts verschickt, der Text steht im Code).
         assert "in der Leitstelle von {cfg['SITE_NAME']}" in lies("app/api_admin.py")
         # 403: der Weg führt in den eigenen Bereich.
-        matv, _ = _konto(app, adm, "matv@example.org", "Material Platzhalter", {"material": 2, "wiki": 0})
+        matv, _ = _konto(app, adm, "matv@example.org", "Material Platzhalter", {"material": 3, "wiki": 0})
         r = matv.get("/ankerplaetze")
         assert r.status_code == 403 and '<a href="/materialablage">Zur Materialablage</a>' in r.get_data(as_text=True)
         mitglied, _ = _konto(app, adm, "mit@example.org", "Mitglied Platzhalter", {"wiki": 1, "material": 0})
@@ -181,7 +181,7 @@ def test_c1_c5_anmeldung_und_texte():
                       (ADM, '"Nutzerverwaltung"')):
         assert alt not in lies(pfad), (pfad, alt)
     pub = lies("app/static/js/public.js")
-    assert 'const titel = lesemodus ? "Öffentliche Seiten" : "Öffentliche Strömipedia";' in pub
+    assert 'const titel = lesemodus ? "Freigegebene Seiten" : "Öffentliche Strömipedia";' in pub
     assert 'placeholder="Titel, Ort oder Nummer"' in lies(RK)
     print("C1/C5 Anmeldung und Texte bestanden.")
 
@@ -220,7 +220,8 @@ def test_stroemipedia_c2_c3_c9_c12_d13_d14_d15():
     assert '.callout-art .btn[aria-pressed="true"]::before { content: "✓"; }' in css
     assert 'neueSeiteKnopf.classList.toggle("secondary",\n    document.body.classList.contains("editing") || !!content.querySelector("#h-new"));' in wiki
     # C3: Seitensymbol mit Namen, außerhalb der Überschrift.
-    assert ('<div class="seitentitel-zeile"><button class="page-icon" id="pg-icon" type="button" title="Symbol der Seite ändern"\n'
+    # Seit der Stufe Redakteur (01.11.2026) nur, wer die Seite bearbeiten darf – sonst steht das Symbol als Text da.
+    assert ('<div class="seitentitel-zeile">${p.can_edit ? `<button class="page-icon" id="pg-icon" type="button" title="Symbol der Seite ändern"\n'
             '        aria-label="Symbol der Seite ändern">') in wiki
     assert '<h1 class="seitentitel"><button' not in wiki
     # C9: Kommentarmarken per Tastatur.
@@ -237,7 +238,8 @@ def test_stroemipedia_c2_c3_c9_c12_d13_d14_d15():
     assert "@media (max-width: 1023px) {\n  /* minmax(0, 1fr) statt 1fr" in css
     assert "800px" not in css and "801px" not in css
     # D14: „öffentlich“ ohne Emoji.  D15: Emoji-Raster der Callout-Dialoge erst auf Wunsch.
-    assert '>öffentlich</span>' in wiki and "🌐 öffentlich</span>" not in wiki
+    # Seit dem 01.11.2026 (kein Wiki ohne Anmeldung) heißt die Marke „für alle Angemeldeten“.
+    assert '>für alle Angemeldeten</span>' in wiki and "🌐 öffentlich</span>" not in wiki
     assert wiki.count("{ spaeter: true }") == 2 and "Emoji-Auswahl zeigen" in wiki
     lese = lies("app/static/js/public.js")
     assert '<div class="wiki-head"><nav class="krumen" aria-label="Pfad"><span class="krume" aria-current="page">${titel}</span>' not in lese

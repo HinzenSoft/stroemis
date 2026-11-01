@@ -391,7 +391,7 @@ def test_loeschkonzept():
     with post_der_meldungen(), tempfile.TemporaryDirectory() as tmp:
         app, k, ids, gid, system, lager, art, p = aufbau(tmp)
         adm, w = k["adm"], k["wart"]
-        geht, uid = neues_konto(app, "geht@example.org", name="Person Geht", mat_pruefer=True, rechte={"material": 2},
+        geht, uid = neues_konto(app, "geht@example.org", name="Person Geht", mat_pruefer=True, rechte={"material": 3},
                                 urkundennummer="1012-0999")
         fach = ordner_neu(w, lager, "Fach")
         g_lesen = freigeben(adm, gid, uid, "lesen")

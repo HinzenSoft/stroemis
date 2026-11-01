@@ -721,7 +721,9 @@ class Beispielbestand:
         """Die DEMO-Konten mit den bekannten Postfächern: Materialwart je Gliederung, zwei Prüfer und ein Prüfer der
         Nachbarstadt (dauerhaft), ein externer Prüfer (befristet im Zentrallager), ein Mitglied (lesen), die
         DEMO-Material-Verwaltung (Stufe Verwaltung) und die Einsatzkräfte – die ersten von Beginn an, einige treten später
-        ein (sie übernehmen die Ausrüstung Ausgeschiedener)."""
+        ein (sie übernehmen die Ausrüstung Ausgeschiedener). Die Stufe ist die Zahl aus app/auth.py (seit Schritt 33:
+        Verwaltung = 3)."""
+        from app.auth import VERWALTUNG
         konten = [
             {"rolle": "wart", "mail": f"demo-wart-a@{POSTFACH}", "name": "DEMO-Materialwart Flussland", "stufe": 1},
             {"rolle": "wart_ns", "mail": f"demo-wart-b@{POSTFACH}", "name": "DEMO-Materialwart Nachbarstadt", "stufe": 1},
@@ -734,7 +736,7 @@ class Beispielbestand:
             {"rolle": "extern", "mail": f"demo-extern@{POSTFACH}", "name": "DEMO-Prüfer extern", "stufe": 1,
              "urkunde": "DEMO-2024"},
             {"rolle": "mitglied", "mail": f"demo-mitglied@{POSTFACH}", "name": "DEMO-Mitglied", "stufe": 1},
-            {"rolle": "mv", "mail": f"demo-mv@{POSTFACH}", "name": "DEMO-Material-Verwaltung", "stufe": 2},
+            {"rolle": "mv", "mail": f"demo-mv@{POSTFACH}", "name": "DEMO-Material-Verwaltung", "stufe": VERWALTUNG},
         ]
         p = self._personen_zahl()
         neu = max(1, p // 12)

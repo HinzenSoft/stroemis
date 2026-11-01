@@ -38,7 +38,7 @@ def aufbau(tmp):
     drei Karabinern; aktive Formulare aus pruef_formulare."""
     app, k = umgebung(tmp)
     adm = k["adm"]
-    mvw, mvw_id = neues_konto(app, "mvwiki@example.org", name="MV Wiki", rechte={"material": 2, "wiki": 1})
+    mvw, mvw_id = neues_konto(app, "mvwiki@example.org", name="MV Wiki", rechte={"material": 3, "wiki": 1})
     pw, pw_id = neues_konto(app, "pruefer3@example.org", "lesen", name="Prüfer Drei", mat_pruefer=True,
                             urkundennummer="1012-4720", rechte={"material": 1, "wiki": 1})
     extern, extern_id = neues_konto(app, "extern@example.org", name="Extern Platzhalter", mat_pruefer=True,

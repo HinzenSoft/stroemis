@@ -10,7 +10,6 @@ in irgendeiner Antwort. Mitglied, Verwaltung, wartende und deaktivierte Konten b
 Alle Seiten, Namen und Dateien hier sind Platzhalter."""
 import json
 import os
-import re
 import sys
 import tempfile
 
@@ -137,7 +136,7 @@ def test_lesen():
             r = leser.get(adresse)
             assert r.status_code == 200, adresse
             assert 'id="logout"' in r.text and '<a href="/stroemipedia" class="active">Strömipedia</a>' in r.text, adresse
-            assert "Du siehst die öffentlichen Seiten der Strömipedia." in r.text and 'data-modus="lesemodus"' in r.text
+            assert "Du siehst die Seiten der Strömipedia, die für alle Angemeldeten freigegeben sind." in r.text and 'data-modus="lesemodus"' in r.text
             assert "js/public.js" in r.text and "js/wiki.js" not in r.text and "toastui" not in r.text
             ohne_merkmal(r.text, w["merkmale"], adresse)
         # Startseite ohne jedes Modul: der Lesemodus statt der Sackgasse; mit Spots führt sie wie bisher dorthin.
@@ -153,10 +152,11 @@ def test_lesen():
         # Der Reiter steht auch auf anderen Seiten und führt nach /stroemipedia (nicht auf die Startseite).
         assert '<a href="/stroemipedia" class="">Strömipedia</a>' in leser.get("/profil").text
 
-        # Lesen: dieselbe Antwort wie ohne Anmeldung – selbst freigegeben, geerbt, unter interner Elternseite.
+        # Lesen: selbst freigegeben, geerbt, unter interner Elternseite. Ohne Anmeldung gibt es seit dem 01.11.2026 keine
+        # Seite mehr (401) – früher kam dort dieselbe Antwort.
         for name, p in oeff.items():
             a, b = leser.get(f"/api/public/pages/{p['slug']}"), anon.get(f"/api/public/pages/{p['slug']}")
-            assert a.status_code == 200 and a.get_data() == b.get_data(), name
+            assert a.status_code == 200 and b.status_code == 401 and p["title"] not in b.get_data(as_text=True), name
             assert a.json["page"]["title"] == p["title"]
             ohne_merkmal(a, w["merkmale"], name)
         # Der Baum der geerbten Seite zeigt den Abschnitt, nicht mehr.
@@ -166,15 +166,18 @@ def test_lesen():
         baum = leser.get(f"/api/public/pages/{oeff['unter_intern']['slug']}").json["tree"]
         assert [t["title"] for t in baum] == ["Platzhalter Unter Intern"] and baum[0]["parent_id"] is None
 
-        # Nicht öffentlich, beschränkt, beschränkt trotz Freigabe, im Papierkorb, unbekannt: wie ohne Anmeldung.
+        # Nicht freigegeben, beschränkt, beschränkt trotz Freigabe, im Papierkorb, unbekannt: gleich lautend 404.
+        texte = set()
         for name, p in [*nicht.items(), ("unbekannt", {"slug": "gibt-es-nicht"})]:
             a, b = leser.get(f"/api/public/pages/{p['slug']}"), anon.get(f"/api/public/pages/{p['slug']}")
-            assert a.status_code == 404 and a.get_data() == b.get_data(), name
+            assert a.status_code == 404 and b.status_code == 401, name
+            texte.add(a.get_data())
             ohne_merkmal(a, w["merkmale"], name)
+        assert len(texte) == 1, texte
 
-        # Dateien: die der öffentlichen Seite ja (wie ohne Anmeldung), die anderen wie bisher 403 (ohne Anmeldung zur Anmeldung).
+        # Dateien: die der freigegebenen Seite ja, die anderen wie bisher 403; ohne Anmeldung keine (zur Anmeldung).
         a, b = leser.get(w["datei_offen"]), anon.get(w["datei_offen"])
-        assert a.status_code == 200 and b.status_code == 200 and a.get_data() == b.get_data()
+        assert a.status_code == 200 and b.status_code == 302
         for d in (w["datei_intern"], w["datei_weg"]):
             assert leser.get(d).status_code == 403 and anon.get(d).status_code == 302, d
         # Die internen Schnittstellen bleiben zu – auch für die öffentliche Seite.
@@ -193,7 +196,7 @@ def test_suche_und_baum():
         anon = app.test_client()
         for q in ("Platzhalter", "MARKE", "INTERN-MARKE", "GEHEIM-MARKE", "Text", "Intern", "Weg"):
             a, b = leser.get(f"/api/public/search?q={q}"), anon.get(f"/api/public/search?q={q}")
-            assert a.status_code == 200 and a.get_data() == b.get_data(), q
+            assert a.status_code == 200 and b.status_code == 401, q
             ohne_merkmal(a, w["merkmale"], q)
         treffer = {r["slug"] for r in leser.get("/api/public/search?q=Platzhalter").json["results"]}
         assert treffer == {p["slug"] for p in oeff.values()}, treffer
@@ -204,7 +207,7 @@ def test_suche_und_baum():
             "Platzhalter Offen", "Platzhalter Unter Intern"]
         # Einstiegsseiten: nur, was selbst freigegeben ist – ohne Papierkorb und ohne den beschränkten Altbestand.
         a, b = leser.get("/api/public/index"), anon.get("/api/public/index")
-        assert a.get_data() == b.get_data()
+        assert a.status_code == 200 and b.status_code == 401
         assert {p["slug"] for p in a.json["pages"]} == {oeff[k]["slug"] for k in ("offen", "abschnitt", "unter_intern")}
         ohne_merkmal(a, w["merkmale"], "index")
     print("Suche und Baum bestanden.")
@@ -224,10 +227,6 @@ def _werte(w):
 ABFRAGEN = {"wiki.search": ["?q=Platzhalter", "?q=INTERN-MARKE"], "wiki_public.public_search": [
     "?q=Platzhalter", "?q=INTERN-MARKE", "?q=Intern", "?q=GEHEIM-MARKE", "?q=WEG-MARKE"],
     "wiki.export_page": ["", "?children=1"], "wiki.get_page": ["", "?leise=1"]}
-
-
-def _ohne_nonce(text):
-    return re.sub(r'nonce="[^"]*"', "", text)
 
 
 def test_rundum():
@@ -267,11 +266,14 @@ def test_rundum():
                             assert a.status_code == 403 and a.json == {"error": KEIN_ZUGANG}, (methode, url, a.status_code)
                             assert b.status_code == 401, (methode, url, b.status_code)
                         elif ep.startswith("wiki_public."):
-                            # Öffentlich: Byte für Byte, was auch ohne Anmeldung kommt.
-                            assert (a.status_code, a.get_data()) == (b.status_code, b.get_data()), (methode, url)
+                            # Freigegeben für alle Angemeldeten: nur mit Anmeldung (seit dem 01.11.2026), ohne 401.
+                            assert b.status_code == 401 and b.json == {"error": "Nicht angemeldet"}, (methode, url)
+                            assert a.status_code in (200, 404, 405), (methode, url, a.status_code)
                         elif ep in ("pages.public_index", "pages.public_page"):
-                            assert a.status_code == b.status_code == 200
-                            assert _ohne_nonce(text) == _ohne_nonce(b.get_data(as_text=True)), url
+                            # Alte öffentliche Adressen: zur Strömipedia, ohne Anmeldung über die Anmeldung dorthin.
+                            assert a.status_code == b.status_code == 302, url
+                            assert a.headers["Location"].startswith("/stroemipedia"), url
+                            assert b.headers["Location"].startswith("/login?next=/stroemipedia"), url
                         else:
                             # /stroemipedia und /stroemipedia/<slug>: die Hülle des Lesemodus – der Inhalt kommt über /api/public.
                             assert a.status_code == 200 and 'data-modus="lesemodus"' in text, url
@@ -286,7 +288,7 @@ def test_rundum():
         assert mitglied.get(f"/api/wiki/pages/{w['nicht']['intern']['slug']}").status_code == 200
         assert mitglied.get(f"/api/wiki/pages/{w['nicht']['intern']['id']}/revisions").status_code == 200
 
-        # Dateien: öffentlich wie ohne Anmeldung, alles andere wie bisher (403 angemeldet, ohne Anmeldung zur Anmeldung).
+        # Dateien: freigegeben lesbar, alles andere wie bisher 403; ohne Anmeldung keine (zur Anmeldung).
         from app import db
         with app.app_context():
             dateien = [r["file"] for r in db.query("SELECT file FROM wiki_files")]
@@ -295,7 +297,7 @@ def test_rundum():
         for datei in dateien:
             a, b = leser.get(f"/media/wiki/{datei}"), anon.get(f"/media/wiki/{datei}")
             if datei in oeffentliche:
-                assert a.status_code == b.status_code == 200 and a.get_data() == b.get_data(), datei
+                assert a.status_code == 200 and b.status_code == 302, datei
             else:
                 assert (a.status_code, b.status_code) == (403, 302), datei
     print(f"Rundumtest bestanden ({anzahl} Aufrufe).")
@@ -309,13 +311,14 @@ def test_unveraendert():
         for c, name in ((mitglied, "Mitglied"), (adm, "Verwaltung")):
             r = c.get("/stroemipedia")
             assert r.status_code == 200 and "js/wiki.js" in r.text and 'data-modus="lesemodus"' not in r.text, name
-            assert "Du siehst die öffentlichen Seiten" not in r.text, name
+            assert "für alle Angemeldeten freigegeben sind" not in r.text, name
             assert '<a href="/" class="active">Strömipedia</a>' in r.text, name
             assert c.get("/").status_code == 200, name
             assert intern["slug"] in {p["slug"] for p in c.get("/api/wiki/tree").json["pages"]}, name
             assert c.get(f"/api/wiki/pages/{intern['slug']}").status_code == 200, name
             assert c.get("/api/wiki/search?q=INTERN-MARKE").json["results"], name
-        assert mitglied.post("/api/wiki/pages", json={"title": "Platzhalter Mitglied"}).status_code == 201
+        # Anlegen erst ab Redakteur (Stufe Redakteur, 01.11.2026) – das Mitglied liest und kommentiert.
+        assert mitglied.post("/api/wiki/pages", json={"title": "Platzhalter Mitglied"}).status_code == 403
 
         # Wartend: keine Anmeldung, keine Sitzung – /stroemipedia führt zur Anmeldung, die Schnittstelle sagt 401.
         c = app.test_client()
@@ -334,11 +337,12 @@ def test_unveraendert():
         assert r.status_code == 302 and r.headers["Location"].startswith("/login"), r.status_code
         assert leser.get("/api/wiki/tree").status_code == 401
 
-        # Ohne Anmeldung: wie bisher zur Anmeldung, der öffentliche Teil bleibt offen.
+        # Ohne Anmeldung: zur Anmeldung – seit dem 01.11.2026 auch der frühere öffentliche Teil.
         anon = app.test_client()
         assert anon.get("/stroemipedia").status_code == 302 and anon.get("/").status_code == 302
-        assert anon.get(f"/api/public/pages/{w['oeffentlich']['offen']['slug']}").status_code == 200
-        assert anon.get("/oeffentlich/").status_code == 200
+        assert anon.get(f"/api/public/pages/{w['oeffentlich']['offen']['slug']}").status_code == 401
+        r = anon.get("/oeffentlich/")
+        assert r.status_code == 302 and r.headers["Location"] == "/login?next=/stroemipedia", r.headers
     print("Unverändert bestanden.")
 
 

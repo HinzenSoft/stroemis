@@ -61,7 +61,8 @@ def test_baumknoepfe_einzeilig():
     # Zwei Knöpfe: die Hauptaktion rot, daneben grau – mit Wiki-Verwaltung „⋯“ (Papierkorb, Import), sonst der Knopf
     # „Papierkorb“ (eine Funktion steht als Knopf da, Nutzer 27.10.2026); am Finger je mindestens 44 px.
     assert re.findall(r'<button class="([^"]+)"', zeile) == ["btn small", "btn secondary small", "btn secondary small"]
-    assert '{% if rechte.wiki == 2 %}<button class="btn secondary small" id="btn-baum-mehr"' in zeile
+    # Seit der Stufe Redakteur (01.11.2026) die Zeile nur ab Redakteur, das „⋯“ nur mit Wiki-Verwaltung.
+    assert '{% if rechte.wiki >= stufe.verwaltung %}<button class="btn secondary small" id="btn-baum-mehr"' in zeile
     assert '{% else %}<button class="btn secondary small" id="btn-papierkorb" type="button">Papierkorb</button>{% endif %}' in zeile
     js = lies("app/static/js/wiki.js")
     assert 'if (baumMehr) baumMehr.addEventListener' in js and 'if (papierkorbKnopf) papierkorbKnopf.addEventListener' in js

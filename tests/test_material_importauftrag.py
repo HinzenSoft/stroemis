@@ -595,12 +595,12 @@ def test_konto_geloescht():
     from app.material.services import importauftrag
     with tempfile.TemporaryDirectory() as tmp:
         app, k = umgebung(tmp)
-        c1, uid = neues_konto(app, "starter@example.org", rechte={"material": 2})
+        c1, uid = neues_konto(app, "starter@example.org", rechte={"material": 3})
         a = import_abwarten(c1, hoch(c1, katalog_zip(1, mit_dateien=False)))
         assert a["uebernehmbar"] and a["eigener"] and a["von"] == "starter", a
         assert lesen(k["adm"], a["id"])["von"] == "starter"
         assert k["adm"].delete(f"/api/admin/users/{uid}", headers=H).status_code == 200
-        c2, uid2 = neues_konto(app, "nachfolger@example.org", rechte={"material": 2})
+        c2, uid2 = neues_konto(app, "nachfolger@example.org", rechte={"material": 3})
         assert uid2 == uid, (uid, uid2)               # ohne AUTOINCREMENT vergibt SQLite die Kennung neu
         b = lesen(c2, a["id"])
         assert b["von"] == "(gelöschtes Konto)" and not b["eigener"] and not b["uebernehmbar"], b

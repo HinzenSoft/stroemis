@@ -1,8 +1,10 @@
 """Prüfungen: Lehrgänge, Teilnehmende, Voraussetzungen, Prüfungsleistungen, Bewertungen (Versuche),
 Medien, Mängelübersicht und Excel-Import.
 
-Jede Route verlangt das Zusatzrecht „Prüfer“ – der Bereich enthält personenbezogene Daten von
-Teilnehmenden, und ein ausgeblendeter Reiter ist kein Schutz. Wer etwas setzt, prüft oder hochlädt,
+Jede Route verlangt eine Stufe in den Riegenkarten – der Bereich enthält personenbezogene Daten von
+Teilnehmenden, und ein ausgeblendeter Reiter ist kein Schutz. Ohne Verwaltung sieht ein Konto nur die Lehrgänge, in
+denen es mit seinem Konto als Ausbilder steht (_sichtbar, jeder Nachschlag-Helfer prüft es – fremd heißt 404); Lehrgänge
+und Kataloge anlegen ab Redakteur (Stufe Redakteur, 01.11.2026). Wer etwas setzt, prüft oder hochlädt,
 steht mit Kennung UND Namens-Schnappschuss in der Zeile: Die Nachvollziehbarkeit einer Prüfung darf
 nicht daran hängen, dass das Konto des Prüfers noch besteht."""
 import json
@@ -14,7 +16,7 @@ from datetime import date
 from flask import Blueprint, current_app, jsonify, request
 
 from . import db
-from .auth import current_user, eingabefehler_abfangen, json_body, pruefer_required, sfield, verwaltet
+from .auth import current_user, eingabefehler_abfangen, json_body, pruefer_required, schreibt, sfield, verwaltet
 from .images import BildFehler, delete_avatar, delete_photo_files, store_avatar, store_upload
 
 bp = Blueprint("pruefungen", __name__, url_prefix="/api/pruefungen")
@@ -33,6 +35,11 @@ ERGEBNISSE_LEHRGANG = ("bestanden", "nicht_bestanden")
 EINGEFROREN = ("Für diese Person ist das Lehrgangsergebnis vermerkt – die Prüfungsdaten sind eingefroren. "
                "Die Lehrgangsleitung kann das Ergebnis aufheben.")
 NUR_LEITUNG = "Nur die Lehrgangsleitung oder die Verwaltung der Riegenkarten darf das."
+# Stufe Redakteur (01.11.2026): Lehrgänge anlegen (auch per Kopie oder Import als neuer Lehrgang) und Kataloge sehen,
+# anlegen und die eigenen pflegen – ab Redakteur; ein Mitglied arbeitet nur in den Lehrgängen, in denen es steht.
+NUR_REDAKTION = "Lehrgänge anlegen dürfen Redakteure und die Verwaltung der Riegenkarten."
+NUR_REDAKTION_KATALOG = "Kataloge sehen und anlegen dürfen Redakteure und die Verwaltung der Riegenkarten."
+NUR_EIGENER_KATALOG = "Diesen Katalog pflegt sein Ersteller oder die Verwaltung der Riegenkarten."
 GERADE_GELOESCHT = ("Die Person, die Leistung oder der Lehrgang wurde inzwischen von jemand anderem gelöscht – "
                     "bitte die Seite neu laden.")
 EINGEFROREN_LOESCHEN = ("Für diese Person ist das Lehrgangsergebnis vermerkt – die Prüfungsdaten sind eingefroren. "
@@ -113,8 +120,30 @@ def _darf_leiten(lid):
 
 
 def _leitung(lid):
+    _sichtbar_pruefen(lid)
     if not _darf_leiten(lid):
         raise Abgelehnt(NUR_LEITUNG, 403)
+
+
+def _sichtbar(lid):
+    """Sieht der Angemeldete diesen Lehrgang? Die Verwaltung alle; sonst nur, wer darin mit seinem Konto als Ausbilder
+    steht – Leitung oder nicht (Stufe Redakteur, 01.11.2026). Ein Freitext-Ausbilder ohne Konto sieht nichts."""
+    if verwaltet("pruefungen"):
+        return True
+    return bool(db.query("SELECT 1 FROM pruef_ausbilder WHERE lehrgang_id = ? AND user_id = ?",
+                         (lid, current_user()["id"]), one=True))
+
+
+def _sichtbar_pruefen(lid):
+    """Ein fremder Lehrgang ist „nicht gefunden“ – dieselbe 404 wie einer, den es nicht gibt, samt allem darin
+    (Teilnehmende, Leistungen, Bewertungen, Medien). Sonst verriete die Antwort, welche Kennungen vergeben sind."""
+    if not _sichtbar(lid):
+        raise Abgelehnt("Lehrgang nicht gefunden", 404)
+
+
+def _redaktion(meldung=NUR_REDAKTION):
+    if not schreibt("pruefungen"):
+        raise Abgelehnt(meldung, 403)
 
 
 def _leitung_ergaenzen(ausbilder):
@@ -265,35 +294,38 @@ def _extra(text):
 
 # --- Nachschlagen (404 aus dem Helfer heraus) ------------------------------------------
 
+# Jeder Helfer prüft auch die Sichtbarkeit (_sichtbar): Was zu einem fremden Lehrgang gehört, ist „nicht gefunden“.
+
 def _lehrgang(lid):
     row = db.query("SELECT * FROM pruef_lehrgaenge WHERE id = ?", (lid,), one=True)
-    if not row:
+    if not row or not _sichtbar(lid):
         raise Abgelehnt("Lehrgang nicht gefunden", 404)
     return row
 
 
 def _tn(tid):
     row = db.query("SELECT * FROM pruef_teilnehmer WHERE id = ?", (tid,), one=True)
-    if not row:
+    if not row or not _sichtbar(row["lehrgang_id"]):
         raise Abgelehnt("Teilnehmende nicht gefunden", 404)
     return row
 
 
 def _voraussetzung(vid):
     row = db.query("SELECT * FROM pruef_voraussetzungen WHERE id = ?", (vid,), one=True)
-    if not row:
+    if not row or not _sichtbar(row["lehrgang_id"]):
         raise Abgelehnt("Voraussetzung nicht gefunden", 404)
     return row
 
 
 def _leistung(lid):
     row = db.query("SELECT * FROM pruef_leistungen WHERE id = ?", (lid,), one=True)
-    if not row:
+    if not row or not _sichtbar(row["lehrgang_id"]):
         raise Abgelehnt("Prüfungsleistung nicht gefunden", 404)
     return row
 
 
 def _katalog(kid):
+    _katalog_lesen()            # vor dem Nachschlagen: Ein Mitglied erfährt nicht, welche Kennungen es gibt
     row = db.query("SELECT * FROM pruef_kataloge WHERE id = ?", (kid,), one=True)
     if not row:
         raise Abgelehnt("Katalog nicht gefunden", 404)
@@ -301,18 +333,35 @@ def _katalog(kid):
 
 
 def _katalog_leistung(lid):
+    _katalog_lesen()
     row = db.query("SELECT * FROM pruef_katalog_leistungen WHERE id = ?", (lid,), one=True)
     if not row:
         raise Abgelehnt("Katalogeintrag nicht gefunden", 404)
     return row
 
 
-def _katalog_admin():
-    """Kataloge sind lehrgangsübergreifend – es gibt keine Leitung, die sie verwalten könnte.
-    Deshalb bleibt das Anlegen, Ändern und Löschen der Administration vorbehalten; jede:r Prüfer:in
-    darf sie lesen und beim Anlegen eines Lehrgangs als Vorlage wählen."""
-    if not verwaltet("pruefungen"):
-        raise Abgelehnt("Kataloge pflegt nur die Verwaltung der Riegenkarten.", 403)
+def _katalog_lesen():
+    """Kataloge sehen und als Vorlage nutzen: ab Redakteur (Entscheidung vom 28.10.2026) – ein Mitglied legt keine
+    Lehrgänge an und braucht keine Vorlage."""
+    _redaktion(NUR_REDAKTION_KATALOG)
+
+
+def _darf_katalog_pflegen(k):
+    """Kataloge sind lehrgangsübergreifend – es gibt keine Leitung, die sie verwalten könnte. Ändern und löschen darf
+    sie die Verwaltung der Riegenkarten, einen eigenen auch sein Ersteller ab Redakteur; fremde und solche ohne
+    Ersteller (Konto gelöscht, created_by NULL) nur die Verwaltung."""
+    if verwaltet("pruefungen"):
+        return True
+    return bool(schreibt("pruefungen") and k["created_by"] is not None and k["created_by"] == current_user()["id"])
+
+
+def _katalog_pflegen(kid):
+    """Den Katalog nachschlagen (404 ohne Leserecht wie ohne Katalog) und das Pflegerecht prüfen."""
+    _katalog_lesen()
+    k = _katalog(kid)
+    if not _darf_katalog_pflegen(k):
+        raise Abgelehnt(NUR_EIGENER_KATALOG, 403)
+    return k
 
 
 # Ein Versuch samt dem, was zur Anzeige immer dazugehört: Leistung und Teilnehmende:r.
@@ -327,16 +376,37 @@ _VERSUCH_SQL = (
 
 def _versuch(vid):
     row = db.query(_VERSUCH_SQL + "WHERE v.id = ?", (vid,), one=True)
-    if not row:
+    if not row or not _sichtbar(row["lehrgang_id"]):
         raise Abgelehnt("Bewertung nicht gefunden", 404)
     return row
 
 
 def _medium(mid):
-    row = db.query("SELECT * FROM pruef_medien WHERE id = ?", (mid,), one=True)
-    if not row:
+    row = db.query("SELECT m.*, t.lehrgang_id FROM pruef_medien m JOIN pruef_versuche v ON v.id = m.versuch_id "
+                   "JOIN pruef_teilnehmer t ON t.id = v.teilnehmer_id WHERE m.id = ?", (mid,), one=True)
+    if not row or not _sichtbar(row["lehrgang_id"]):
         raise Abgelehnt("Medium nicht gefunden", 404)
     return row
+
+
+def medium_sichtbar(kind, datei):
+    """Für /media/pruefung/<kind>/<datei> (app/__init__.py): Gehört die Datei zu einem Lehrgang, den der Angemeldete
+    sieht? Profilbilder über pruef_teilnehmer.bild, Fotos und Videos über pruef_medien.file – orig unter dem vollen
+    Namen, web und thumb unter „<Schlüssel>.jpg“ (store_upload). Unbekannte Dateien sieht nur die Verwaltung (sonst
+    ließe sich mit geratenen Namen prüfen, was es gibt)."""
+    if verwaltet("pruefungen"):
+        return True
+    if kind == "avatar":
+        rows = db.query("SELECT lehrgang_id FROM pruef_teilnehmer WHERE bild = ?", (datei,))
+    else:
+        schluessel = datei.split(".", 1)[0]
+        if not re.fullmatch(r"[A-Za-z0-9_-]+", schluessel):
+            return False
+        # Bereich statt LIKE: „<Schlüssel>.“ bis vor „<Schlüssel>/“ – so greift der Index auf file.
+        rows = db.query("SELECT t.lehrgang_id FROM pruef_medien m JOIN pruef_versuche v ON v.id = m.versuch_id "
+                        "JOIN pruef_teilnehmer t ON t.id = v.teilnehmer_id WHERE m.file >= ? AND m.file < ?",
+                        (schluessel + ".", schluessel + "/"))
+    return any(_sichtbar(r["lehrgang_id"]) for r in rows)
 
 
 # --- JSON-Formen -------------------------------------------------------------
@@ -441,8 +511,12 @@ _KATALOG_SQL = ("SELECT k.*, (SELECT COUNT(*) FROM pruef_katalog_leistungen kl W
 
 
 def _katalog_kurz(r):
-    return {k: r[k] for k in ("id", "titel", "beschreibung", "created_by_name", "created_at",
-                              "updated_at", "leistungen_anzahl")}
+    out = {k: r[k] for k in ("id", "titel", "beschreibung", "created_by_name", "created_at",
+                             "updated_at", "leistungen_anzahl")}
+    # Die Oberfläche zeigt Bearbeiten und Löschen nur, wo es geht (eigene Kataloge ab Redakteur, alle für die
+    # Verwaltung).
+    out["darf_bearbeiten"] = _darf_katalog_pflegen(r)
+    return out
 
 
 def _katalog_detail(kid):
@@ -551,12 +625,14 @@ def _lehrgang_kurz(r, darf_leiten=None):
                              "offene_maengel", "voraussetzungen_offen", "ergebnis_bestanden", "ergebnis_nicht_bestanden")}
     out["zellen_gesamt"] = r["tn_anzahl"] * r["leistungen_anzahl"]
     out["darf_leiten"] = _darf_leiten(r["id"]) if darf_leiten is None else darf_leiten
+    # Kopieren ist ein Anlegen: nur die Leitung ab Redakteur (eine Mitglied-Leitung pflegt, legt aber nichts an).
+    out["darf_kopieren"] = bool(out["darf_leiten"] and schreibt("pruefungen"))
     return out
 
 
 def _lehrgang_detail(lid):
     r = db.query(_LEHRGANG_SQL + "WHERE l.id = ?", (lid,), one=True)
-    if not r:
+    if not r or not _sichtbar(lid):
         raise Abgelehnt("Lehrgang nicht gefunden", 404)
     out = _lehrgang_kurz(r)
     out["beschreibung"] = r["beschreibung"]
@@ -678,15 +754,21 @@ def _ausbilder_schreiben(lid, ausbilder):
 @bp.get("/lehrgaenge")
 @pruefer_required
 def list_lehrgaenge():
-    """Alle Lehrgänge, neueste zuerst (ohne Datum ganz hinten). Das Jahr filtert die Datenbank;
-    die Textsuche läuft in Python: SQLites lower() kennt nur ASCII, „Köln“ fände „köln“ nicht."""
+    """Alle Lehrgänge, die das Konto sieht (_sichtbar: die Verwaltung alle, sonst die, in denen es als Ausbilder steht),
+    neueste zuerst (ohne Datum ganz hinten). Das Jahr filtert die Datenbank; die Textsuche läuft in Python: SQLites
+    lower() kennt nur ASCII, „Köln“ fände „köln“ nicht."""
     jahr = (request.args.get("jahr") or "").strip()
     q = (request.args.get("q") or "").strip().casefold()
-    where, args = "", []
+    bedingungen, args = [], []
     if jahr:
         if not re.fullmatch(r"\d{4}", jahr):
             raise Abgelehnt("„jahr“ muss vierstellig sein.")
-        where, args = "WHERE substr(l.datum_von, 1, 4) = ? ", [jahr]
+        bedingungen.append("substr(l.datum_von, 1, 4) = ?")
+        args.append(jahr)
+    if not verwaltet("pruefungen"):
+        bedingungen.append("l.id IN (SELECT lehrgang_id FROM pruef_ausbilder WHERE user_id = ?)")
+        args.append(current_user()["id"])
+    where = ("WHERE " + " AND ".join(bedingungen) + " ") if bedingungen else ""
     rows = db.query(_LEHRGANG_SQL + where + "ORDER BY (l.datum_von IS NULL), l.datum_von DESC, l.id DESC", args)
     if q:
         rows = [r for r in rows if q in f"{r['titel']} {r['nummer']} {r['ort']}".casefold()]
@@ -702,6 +784,7 @@ def list_lehrgaenge():
 @bp.post("/lehrgaenge")
 @pruefer_required
 def create_lehrgang():
+    _redaktion()
     d = json_body()
     vals = _lehrgang_felder(d, neu=True)
     _zeitraum_pruefen(vals["datum_von"], vals["datum_bis"])
@@ -784,6 +867,7 @@ def kopieren(lid):
     wird geleert: Sie bezeichnet eine Durchführung, nicht den Lehrgangstyp."""
     alt = _lehrgang(lid)
     _leitung(lid)
+    _redaktion()
     d = json_body()
     titel = (sfield(d, "titel").strip() or f"{alt['titel'][:200 - len(' (Kopie)')]} (Kopie)")[:200]
     von, bis = _datum(d.get("datum_von"), "Datum von"), _datum(d.get("datum_bis"), "Datum bis")
@@ -975,6 +1059,7 @@ def set_tn_ergebnis(tid):
 def tn_versuche(tid):
     """Alle Bewertungen einer Person – auch die bestandenen mit ihren Kommentaren, für das
     Abschlussgespräch."""
+    _tn(tid)
     rows = db.query(_VERSUCH_SQL + "WHERE v.teilnehmer_id = ? ORDER BY p.sortierung, p.id, v.versuch_nr", (tid,))
     return jsonify(teilnehmer=_tn_json(tid), versuche=_versuche_json(rows))
 
@@ -1158,8 +1243,9 @@ def reihenfolge_leistungen(lid):
 # über den Lehrgang, ändern nur die Leitung.
 
 def _kriterium(kid):
-    row = db.query("SELECT * FROM pruef_kriterien WHERE id = ?", (kid,), one=True)
-    if not row:
+    row = db.query("SELECT k.*, p.lehrgang_id FROM pruef_kriterien k JOIN pruef_leistungen p ON p.id = k.leistung_id "
+                   "WHERE k.id = ?", (kid,), one=True)
+    if not row or not _sichtbar(row["lehrgang_id"]):
         raise Abgelehnt("Kriterium nicht gefunden", 404)
     return row
 
@@ -1560,15 +1646,16 @@ def _import_modul():
 def _import_eingaben():
     """Datei, Zielkurs und Spaltenzuordnung aus dem Multipart-Formular lesen (für Vorschau und
     Übernahme gleich). Liefert (FileStorage, lehrgang|None, zuordnung|None)."""
-    f = request.files.get("file")
-    if not f or not f.filename:
-        raise Abgelehnt("Bitte eine Excel-Datei (.xlsx) auswählen.")
-    if not f.filename.lower().endswith(".xlsx"):
-        raise Abgelehnt("Nur Excel-Dateien im Format .xlsx lassen sich einlesen.")
     lehrgang = None
     lid = (request.form.get("lehrgang_id") or "").strip()
     if lid:
         lehrgang = _lehrgang(_ganzzahl(lid, "lehrgang_id"))
+    # Vorschau und Übernahme: in einen bestehenden Lehrgang nur seine Leitung (auch eine Mitglied-Leitung), als neuer
+    # Lehrgang nur ab Redakteur – geprüft, bevor die Datei gelesen wird (Entscheidung des Nutzers, 01.11.2026).
+    if lehrgang is not None:
+        _leitung(lehrgang["id"])
+    else:
+        _redaktion()
     zuordnung = None
     roh = (request.form.get("zuordnung") or "").strip()
     if roh:
@@ -1580,6 +1667,11 @@ def _import_eingaben():
             raise Abgelehnt("Die Spaltenzuordnung ist kein gültiges JSON.")
         if not isinstance(zuordnung, dict) or not all(isinstance(v, str) for v in zuordnung.values()):
             raise Abgelehnt("Die Spaltenzuordnung muss ein Objekt {Spaltenindex: Zuordnung} sein.")
+    f = request.files.get("file")
+    if not f or not f.filename:
+        raise Abgelehnt("Bitte eine Excel-Datei (.xlsx) auswählen.")
+    if not f.filename.lower().endswith(".xlsx"):
+        raise Abgelehnt("Nur Excel-Dateien im Format .xlsx lassen sich einlesen.")
     return f, lehrgang, zuordnung
 
 
@@ -1695,9 +1787,7 @@ def import_uebernehmen():
     """Datei in die Datenbank übernehmen – als eine Transaktion, damit ein Fehler in Zeile 40
     nicht 39 halbe Teilnehmende hinterlässt. Bestehende Teilnehmende (gleicher Schlüssel) werden
     ergänzt statt verdoppelt; ein Haken aus der Datei setzt einen manuell gesetzten nie zurück."""
-    f, lehrgang, zuordnung = _import_eingaben()
-    if lehrgang is not None:
-        _leitung(lehrgang["id"])
+    f, lehrgang, zuordnung = _import_eingaben()     # prüft Leitung bzw. Redaktion
     imp = _import_modul()
     ergebnis = _analysieren(f, zuordnung)
     kopf = dict(ergebnis.get("lehrgang") or {})
@@ -1827,14 +1917,15 @@ def import_uebernehmen():
 
 # --- 4.9 Prüfungsleistungskataloge --------------------------------------------
 # Vorlagen für die Prüfungsleistungen eines Lehrgangs, unabhängig von einer einzelnen
-# Durchführung. Jede:r Prüfer:in darf sie lesen und beim Anlegen eines Lehrgangs wählen; ändern
-# und löschen darf sie nur die Administration (_katalog_admin) – es gibt anders als beim Lehrgang
-# keine Leitung, die dafür geradestünde. Eine Änderung am Katalog wirkt sich nie auf einen schon
-# angelegten Lehrgang aus: create_lehrgang() kopiert die Zeilen nur einmal hinein (wie kopieren()).
+# Durchführung. Lesen und beim Anlegen eines Lehrgangs wählen dürfen Redakteure und die Verwaltung (_katalog_lesen),
+# anlegen ebenso; ändern und löschen ein Redakteur nur seine eigenen, die Verwaltung alle (_katalog_pflegen) – es
+# gibt anders als beim Lehrgang keine Leitung, die dafür geradestünde. Eine Änderung am Katalog wirkt sich nie auf einen
+# schon angelegten Lehrgang aus: create_lehrgang() kopiert die Zeilen nur einmal hinein (wie kopieren()).
 
 @bp.get("/kataloge")
 @pruefer_required
 def list_kataloge():
+    _katalog_lesen()
     rows = db.query(_KATALOG_SQL + "ORDER BY titel COLLATE NOCASE")
     return jsonify(kataloge=[_katalog_kurz(r) for r in rows])
 
@@ -1853,7 +1944,7 @@ def _katalog_felder(d, neu):
 @bp.post("/kataloge")
 @pruefer_required
 def create_katalog():
-    _katalog_admin()
+    _redaktion(NUR_REDAKTION_KATALOG)
     vals = _katalog_felder(json_body(), neu=True)
     uid, name = _ich()
     ts = db.now()
@@ -1866,14 +1957,14 @@ def create_katalog():
 @bp.get("/kataloge/<int:kid>")
 @pruefer_required
 def get_katalog(kid):
+    _katalog_lesen()
     return jsonify(katalog=_katalog_detail(kid))
 
 
 @bp.put("/kataloge/<int:kid>")
 @pruefer_required
 def update_katalog(kid):
-    _katalog(kid)
-    _katalog_admin()
+    _katalog_pflegen(kid)
     vals = _katalog_felder(json_body(), neu=False)
     if vals:
         sets = ", ".join(f"{k} = ?" for k in vals) + ", updated_at = ?"
@@ -1884,8 +1975,7 @@ def update_katalog(kid):
 @bp.delete("/kataloge/<int:kid>")
 @pruefer_required
 def delete_katalog(kid):
-    _katalog(kid)
-    _katalog_admin()
+    _katalog_pflegen(kid)
     db.execute("DELETE FROM pruef_kataloge WHERE id = ?", (kid,))
     return jsonify(ok=True)
 
@@ -1898,8 +1988,7 @@ def _katalog_naechste_sortierung(kid):
 @bp.post("/kataloge/<int:kid>/leistungen")
 @pruefer_required
 def create_katalog_leistung(kid):
-    _katalog(kid)
-    _katalog_admin()
+    _katalog_pflegen(kid)
     # Dieselben Felder und Grenzen wie bei einer Prüfungsleistung im Lehrgang – _leistung_felder
     # kennt nur den Body, keine Tabelle.
     d = json_body()
@@ -1919,8 +2008,7 @@ def create_katalog_leistung(kid):
 @bp.put("/katalog-leistungen/<int:lid>")
 @pruefer_required
 def update_katalog_leistung(lid):
-    _katalog_leistung(lid)
-    _katalog_admin()
+    _katalog_pflegen(_katalog_leistung(lid)["katalog_id"])
     vals = _leistung_felder(json_body(), neu=False)
     if vals:
         sets = ", ".join(f"{k} = ?" for k in vals)
@@ -1931,8 +2019,7 @@ def update_katalog_leistung(lid):
 @bp.delete("/katalog-leistungen/<int:lid>")
 @pruefer_required
 def delete_katalog_leistung(lid):
-    _katalog_leistung(lid)
-    _katalog_admin()
+    _katalog_pflegen(_katalog_leistung(lid)["katalog_id"])
     db.execute("DELETE FROM pruef_katalog_leistungen WHERE id = ?", (lid,))
     return jsonify(ok=True)
 
@@ -1940,8 +2027,7 @@ def delete_katalog_leistung(lid):
 @bp.put("/kataloge/<int:kid>/leistungen/reihenfolge")
 @pruefer_required
 def reihenfolge_katalog_leistungen(kid):
-    _katalog(kid)
-    _katalog_admin()
+    _katalog_pflegen(kid)
     ids = _id_liste(json_body().get("ids"))
     with db.transaction():
         for i, lid in enumerate(ids):
@@ -1953,9 +2039,11 @@ def reihenfolge_katalog_leistungen(kid):
 # --- 4.9b Kriterien je Katalog-Leistung ----------------------------------------
 # Dieselbe Idee wie bei den Kriterien im Lehrgang (4.5b), aber als reine Vorlage: pruef_katalog_
 # kriterien kennt kein "erfüllt" – das gibt es erst am Versuch, und Kataloge haben keine Versuche.
-# Rechte wie bei den Katalog-Leistungen selbst: lesen jede:r Prüfer:in, ändern nur die Administration.
+# Rechte wie bei den Katalog-Leistungen selbst: lesen ab Redakteur, ändern der Ersteller des Katalogs (ab Redakteur)
+# und die Verwaltung.
 
 def _katalog_kriterium(kid):
+    _katalog_lesen()
     row = db.query("SELECT * FROM pruef_katalog_kriterien WHERE id = ?", (kid,), one=True)
     if not row:
         raise Abgelehnt("Kriterium nicht gefunden", 404)
@@ -1970,8 +2058,7 @@ def _katalog_kriterien_naechste_sortierung(lid):
 @bp.post("/katalog-leistungen/<int:lid>/kriterien")
 @pruefer_required
 def create_katalog_kriterium(lid):
-    _katalog_leistung(lid)
-    _katalog_admin()
+    _katalog_pflegen(_katalog_leistung(lid)["katalog_id"])
     bez = sfield(json_body(), "bezeichnung").strip()[:300]
     if not bez:
         raise Abgelehnt("Bitte eine Bezeichnung angeben.")
@@ -1983,8 +2070,7 @@ def create_katalog_kriterium(lid):
 @bp.put("/katalog-kriterien/<int:kid>")
 @pruefer_required
 def update_katalog_kriterium(kid):
-    _katalog_kriterium(kid)
-    _katalog_admin()
+    _katalog_pflegen(_katalog_leistung(_katalog_kriterium(kid)["katalog_leistung_id"])["katalog_id"])
     bez = sfield(json_body(), "bezeichnung").strip()[:300]
     if not bez:
         raise Abgelehnt("Bitte eine Bezeichnung angeben.")
@@ -1995,8 +2081,7 @@ def update_katalog_kriterium(kid):
 @bp.delete("/katalog-kriterien/<int:kid>")
 @pruefer_required
 def delete_katalog_kriterium(kid):
-    _katalog_kriterium(kid)
-    _katalog_admin()
+    _katalog_pflegen(_katalog_leistung(_katalog_kriterium(kid)["katalog_leistung_id"])["katalog_id"])
     db.execute("DELETE FROM pruef_katalog_kriterien WHERE id = ?", (kid,))
     return jsonify(ok=True)
 
@@ -2004,8 +2089,7 @@ def delete_katalog_kriterium(kid):
 @bp.put("/katalog-leistungen/<int:lid>/kriterien/reihenfolge")
 @pruefer_required
 def reihenfolge_katalog_kriterien(lid):
-    _katalog_leistung(lid)
-    _katalog_admin()
+    _katalog_pflegen(_katalog_leistung(lid)["katalog_id"])
     ids = _id_liste(json_body().get("ids"))
     with db.transaction():
         for i, kid in enumerate(ids):

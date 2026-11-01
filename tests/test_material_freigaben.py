@@ -901,29 +901,29 @@ def test_nutzerverwaltung():
         assert adm.get("/api/material/freigaben", query_string={"user_id": k["nutzer_id"]}).json["freigaben"][0][
             "vergeben_von"] == "Migration"
 
-        # list_users: Zahl gültiger Freigaben; Material ist die gespeicherte Stufe (die Plattform-Verwaltung hat 2).
+        # list_users: Zahl gültiger Freigaben; Material ist die gespeicherte Stufe (die Plattform-Verwaltung hat 3).
         sql(app, "UPDATE mat_folder_grant SET valid_until = ? WHERE id = ?", (tag(-1), z))
         nutzer = {u["id"]: u for u in adm.get("/api/admin/users").json["users"]}
         assert (nutzer[k["nutzer_id"]]["mat_freigaben"], nutzer[k["nutzer_id"]]["rechte"]["material"]) == (0, 1)
         assert (nutzer[k["pruefer_id"]]["mat_freigaben"], nutzer[k["pruefer_id"]]["rechte"]["material"]) == (2, 1)
         assert (nutzer[k["wart_id"]]["mat_freigaben"], nutzer[k["wart_id"]]["rechte"]["material"]) == (1, 1)
-        assert nutzer[k["katalog_id"]]["rechte"]["material"] == 2 and nutzer[adm_id(adm)]["rechte"]["material"] == 2
+        assert nutzer[k["katalog_id"]]["rechte"]["material"] == 3 and nutzer[adm_id(adm)]["rechte"]["material"] == 3
         assert all("mat_stufe_alt" not in u and "mat_katalog" not in u for u in nutzer.values())
 
-        # Material wie jedes Modul: 0/1/2 wird gespeichert und gelesen – beim Anlegen wie beim Ändern; Unsinn 400;
-        # Verwaltung zieht auf 2.
+        # Material wie jedes Modul: 0/1/3 wird gespeichert und gelesen – beim Anlegen wie beim Ändern; Unsinn und die
+        # Stufe Redakteur (2, gibt es hier nicht) 400; Verwaltung zieht auf 3 (Schritt 33).
         r = adm.post("/api/admin/users", json={"email": "neu@example.org", "password": "passwort1", "name": "Neu Test",
-                                               "rechte": {"material": 2, "wiki": 2}})
-        assert r.status_code == 201 and r.json["user"]["rechte"]["material"] == 2 and r.json["user"]["rechte"]["wiki"] == 2
+                                               "rechte": {"material": 3, "wiki": 3}})
+        assert r.status_code == 201 and r.json["user"]["rechte"]["material"] == 3 and r.json["user"]["rechte"]["wiki"] == 3
         neu = r.json["user"]["id"]
         stufe = lambda: zeilen(app, "SELECT recht_material FROM users WHERE id = ?", (neu,))[0]["recht_material"]  # noqa: E731
-        assert stufe() == 2
+        assert stufe() == 3
         assert adm.put(f"/api/admin/users/{neu}", json={"rechte": {"material": 1}}).status_code == 200 and stufe() == 1
         assert adm.put(f"/api/admin/users/{neu}", json={"rechte": {"material": "Unsinn"}}).status_code == 400
-        assert adm.put(f"/api/admin/users/{neu}", json={"rechte": {"material": 3}}).status_code == 400 and stufe() == 1
-        assert adm.put(f"/api/admin/users/{neu}", json={"rechte": {"verwaltung": 2}}).status_code == 200 and stufe() == 2
+        assert adm.put(f"/api/admin/users/{neu}", json={"rechte": {"material": 2}}).status_code == 400 and stufe() == 1
+        assert adm.put(f"/api/admin/users/{neu}", json={"rechte": {"verwaltung": 3}}).status_code == 200 and stufe() == 3
         # Die Plattform-Verwaltung wieder weg: Material bleibt auf Verwaltung, bis es jemand einzeln senkt.
-        assert adm.put(f"/api/admin/users/{neu}", json={"rechte": {"verwaltung": 0}}).status_code == 200 and stufe() == 2
+        assert adm.put(f"/api/admin/users/{neu}", json={"rechte": {"verwaltung": 0}}).status_code == 200 and stufe() == 3
         assert adm.put(f"/api/admin/users/{neu}", json={"rechte": {"material": 1}}).status_code == 200 and stufe() == 1
 
         # Der Rolleneintrag beim Anlegen trägt keine E-Mail – und die Stufe.
@@ -935,7 +935,7 @@ def test_nutzerverwaltung():
         assert json.loads(e[0]["after_json"]) == {"mat_pruefer": 1, "recht_material": 1}
         # Stufe und Häkchen nur mit Namen – beim Anlegen und wenn eines dazukommt oder der Name verschwindet.
         for wunsch in ({"mat_pruefer": True, "rechte": {"material": 0}}, {"rechte": {"material": 1}},
-                       {"rechte": {"material": 2}}, {}):
+                       {"rechte": {"material": 3}}, {}):
             r = adm.post("/api/admin/users", json=dict({"email": "x@example.org", "password": "passwort1"}, **wunsch))
             assert r.status_code == 400 and "Erst einen Namen eintragen" in r.json["error"], (wunsch, r.get_json())
         # Das Häkchen „Produktkatalogpfleger“ gibt es nicht mehr – auch nicht beim Anlegen.
@@ -952,21 +952,21 @@ def test_nutzerverwaltung():
         assert r.status_code == 400 and "Erst einen Namen eintragen" in r.json["error"], r.get_json()
         # Plattform-Verwaltung ohne Namen geht (sie hat Material von selbst, die Stufe bringt dort nichts Neues).
         assert adm.put(f"/api/admin/users/{ohne}", json={"name": "", "rechte": {"material": 0}}).status_code == 200
-        assert adm.put(f"/api/admin/users/{ohne}", json={"rechte": {"verwaltung": 2}}).status_code == 200
+        assert adm.put(f"/api/admin/users/{ohne}", json={"rechte": {"verwaltung": 3}}).status_code == 200
         assert adm.put(f"/api/admin/users/{ohne}", json={"rechte": {"verwaltung": 0}}).status_code == 200
         # Ein namenloses Konto mit Stufe und Häkchen aus der Zeit davor bleibt bearbeitbar – etwa um beides zu nehmen.
         sql(app, "UPDATE users SET name = '', mat_pruefer = 1, recht_material = 1 WHERE id = ?", (neu,))
         assert adm.put(f"/api/admin/users/{neu}", json={"phone": "0000"}).status_code == 200
         assert adm.put(f"/api/admin/users/{neu}", json={"name": "", "mat_pruefer": True,
                                                         "rechte": {"material": 1}}).status_code == 200   # wie der Dialog
-        assert adm.put(f"/api/admin/users/{neu}", json={"rechte": {"material": 2}}).status_code == 400
+        assert adm.put(f"/api/admin/users/{neu}", json={"rechte": {"material": 3}}).status_code == 400
         assert adm.put(f"/api/admin/users/{neu}", json={"mat_pruefer": False, "rechte": {"material": 0}}).status_code == 200
     print("Nutzerverwaltung bestanden.")
 
 
 def test_list_users_abfragen():
     """list_users: die Zahl der Abfragen hängt nicht an der Zahl der Konten (gruppierte Abfrage für die Freigaben), und
-    die Stufe Material ist die gespeicherte (die Plattform-Verwaltung hat 2)."""
+    die Stufe Material ist die gespeicherte (die Plattform-Verwaltung hat 3)."""
     from app import db as db_mod
     with tempfile.TemporaryDirectory() as tmp:
         app, k = umgebung(tmp)
@@ -993,7 +993,7 @@ def test_list_users_abfragen():
         def konten(von, bis):
             for n in range(von, bis):
                 uid = adm.post("/api/admin/users", json={"email": f"k{n}@example.org", "password": "passwort1",
-                                                         "name": f"Konto {n}", "rechte": {"material": n % 3}}).json["user"]["id"]
+                                                         "name": f"Konto {n}", "rechte": {"material": (0, 1, 3)[n % 3]}}).json["user"]["id"]
                 if n % 2:
                     freigeben(adm, gid, uid, "verwalten" if n % 4 == 1 else "lesen")
         konten(0, 10)
@@ -1005,7 +1005,7 @@ def test_list_users_abfragen():
             from app import db
             for u in users:
                 r = db.query("SELECT recht_material, recht_verwaltung FROM users WHERE id = ?", (u["id"],), one=True)
-                assert u["rechte"]["material"] == (2 if r["recht_verwaltung"] == 2 else r["recht_material"]), u
+                assert u["rechte"]["material"] == (3 if r["recht_verwaltung"] == 3 else r["recht_material"]), u
     print("list_users: Abfragezahl bestanden.")
 
 

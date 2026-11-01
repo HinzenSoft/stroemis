@@ -115,7 +115,9 @@ def test_weiterleitungen():
         host = app.config["PUBLIC_HOST"]
         r = anon.get("/wiki/platzhalter", headers={"Host": host})
         assert r.status_code != 301, r.status_code
-        assert anon.get("/", headers={"Host": host}).status_code == 200
+        # Seit dem 01.11.2026 ohne Anmeldung kein Wiki mehr: die Subdomain führt zur Anmeldung auf der Hauptadresse.
+        r = anon.get("/", headers={"Host": host})
+        assert r.status_code == 302 and r.headers["Location"].endswith("/login?next=/stroemipedia"), r.headers
     print("Weiterleitungen bestanden.")
 
 
@@ -170,7 +172,7 @@ def test_namen_in_der_oberflaeche():
     with tempfile.TemporaryDirectory() as tmp:
         app, k = _app(tmp)
         voll, _ = neues_konto(app, "voll@example.org", name="Voll Platzhalter",
-                              rechte={"verwaltung": 2, "material": 2, "wiki": 2, "karte": 2, "pruefungen": 2})
+                              rechte={"verwaltung": 3, "material": 3, "wiki": 3, "karte": 3, "pruefungen": 3})
         nav = _nav(voll.get("/profil").text)
         for name, pfad in (("Strömipedia", "/"), ("Ankerplätze", "/ankerplaetze"), ("Riegenkarten", "/riegenkarten"),
                            ("Materialablage", "/materialablage"), ("Leitstelle", "/leitstelle")):
@@ -192,12 +194,12 @@ def test_namen_in_der_oberflaeche():
             assert f"<th>{spalte}</th>" in html, spalte
         assert "Globale Suchen (Materialablage)" in html and '"module": {' not in html
         assert '"name": {' in html or "module: {" in html                      # STROEMIS.module für admin.js
-        # Öffentliche Strömipedia (ohne Anmeldung) und Lesemodus.
-        oeff = app.test_client().get("/oeffentlich/").text
-        assert "<title>Strömipedia – strömis.de</title>" in oeff and "öffentliche Strömipedia" in oeff
-        assert "Strömipedia durchsuchen" in oeff and "Wiki" not in oeff.split("</header>")[0]
+        # Frühere öffentliche Strömipedia: seit dem 01.11.2026 nur noch die Weiterleitung zur Anmeldung; die Anmeldeseite
+        # verweist nicht mehr auf sie.
+        r = app.test_client().get("/oeffentlich/")
+        assert r.status_code == 302 and r.headers["Location"] == "/login?next=/stroemipedia", r.headers
         login = app.test_client().get("/login").text
-        assert "öffentlichen Strömipedia" in login and "Wiki" not in login
+        assert "öffentlichen Strömipedia" not in login and "Wiki" not in login
         # Fehlerseite der Materialablage und ohne Recht.
         r = k["wart"].get("/materialablage/artikel/999999")
         assert "Zur Übersicht der Materialablage" in r.text

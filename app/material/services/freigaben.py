@@ -40,7 +40,7 @@ import json
 from datetime import date, timedelta
 
 from ... import db
-from ...auth import current_user
+from ...auth import MITGLIED, VERWALTUNG, current_user
 from .. import services as dienste
 from ..models import FREIGABEN, MIGRATION_8
 from . import Abgelehnt, auswahl, datum, journal, kennung, text, wahr
@@ -480,7 +480,7 @@ def _grundlage(rows, verwaltung=None):
     rechte.grundrecht_an). verwaltung: diese Konten sind es (sonst aus u_stufe und u_verwaltung der Zeilen)."""
     uids = sorted({r["user_id"] for r in rows})
     if verwaltung is None:
-        verwaltung = {r["user_id"] for r in rows if _stufe(r) >= 2}
+        verwaltung = {r["user_id"] for r in rows if _stufe(r) >= VERWALTUNG}
     out = {uid: {"grund": {}, "dauer": [], "alles": uid in verwaltung} for uid in uids}
     if uids:
         for x in db.query("SELECT id, user_id, folder_id, permission FROM mat_folder_grant WHERE user_id IN "
@@ -528,8 +528,9 @@ def _von_system(rows):
 
 
 def _stufe(r):
-    """Stufe in der Materialablage eines Kontos aus einer Zeile von _ZEILEN_SQL (die Plattform-Verwaltung hat 2)."""
-    return 2 if int(r["u_verwaltung"] or 0) >= 2 else int(r["u_stufe"] or 0)
+    """Stufe in der Materialablage eines Kontos aus einer Zeile von _ZEILEN_SQL (die Plattform-Verwaltung hat
+    Verwaltung)."""
+    return VERWALTUNG if int(r["u_verwaltung"] or 0) >= VERWALTUNG else int(r["u_stufe"] or 0)
 
 
 def _wirkt_nicht(gueltig, aktiv, mit_namen, zugang, quali_fehlt, pruefen_wirkt):
@@ -711,7 +712,7 @@ def nutzer_suchen(q, zweck=None):
     if len(q) < SUCHE_MIN:
         raise Abgelehnt(SUCHE_KURZ)
     such = q.casefold()
-    stufe = " AND (recht_material >= 1 OR recht_verwaltung >= 2)" if zweck == "freigabe" else ""
+    stufe = f" AND (recht_material >= {MITGLIED} OR recht_verwaltung >= {VERWALTUNG})" if zweck == "freigabe" else ""
     treffer = [u for u in db.query("SELECT id, name, gliederung, mat_pruefer, urkundennummer, recht_material, "
                                    "recht_verwaltung FROM users WHERE active = 1 AND status = 'active' "
                                    f"AND trim(name) <> ''{stufe} ORDER BY name COLLATE NOCASE, id")

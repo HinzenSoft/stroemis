@@ -62,6 +62,7 @@ from datetime import date, datetime, time, timedelta, timezone
 from flask import current_app, g
 
 from ... import db
+from ...auth import VERWALTUNG
 from .. import services as dienste
 from . import bestand, globalprotokoll, journal, katalog, mailprotokoll, rechte
 from .interval import plus_monate
@@ -435,9 +436,10 @@ def _verwaltung(zwischen, ohne=None):
     (Konten, "material" | "plattform")."""
     if "verwaltung" not in zwischen:
         mv = db.query("SELECT * FROM users WHERE active = 1 AND status = 'active' AND trim(name) <> '' "
-                      "AND recht_material >= 2 AND recht_verwaltung < 2 ORDER BY name COLLATE NOCASE, id")
-        pv = db.query("SELECT * FROM users WHERE active = 1 AND status = 'active' AND recht_verwaltung >= 2 "
-                      "ORDER BY name COLLATE NOCASE, id")
+                      "AND recht_material >= ? AND recht_verwaltung < ? ORDER BY name COLLATE NOCASE, id",
+                      (VERWALTUNG, VERWALTUNG))
+        pv = db.query("SELECT * FROM users WHERE active = 1 AND status = 'active' AND recht_verwaltung >= ? "
+                      "ORDER BY name COLLATE NOCASE, id", (VERWALTUNG,))
         demo = zwischen.get("demo", False)
         zwischen["verwaltung"] = ([u for u in mv if _zulaessig(u, demo)], [u for u in pv if _zulaessig(u, demo)])
     mv, pv = zwischen["verwaltung"]

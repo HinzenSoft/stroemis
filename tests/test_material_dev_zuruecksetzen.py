@@ -242,12 +242,12 @@ def test_zuruecksetzen():
         assert dict(nachher["modul"]["mat_meta"])["schema_version"] == endversion()
         assert not any(k.startswith("lebenslauf_zaehler_") for k in dict(nachher["modul"]["mat_meta"]))
         # Außerhalb des Moduls byteidentisch: jede Zeile, jedes Schema-Objekt, jede Datei (Konten, Wiki, Spots,
-        # Prüfungen, Einstellungen – auch die Modulstufe 2 der Material-Verwaltung ohne Plattform-Verwaltung).
+        # Prüfungen, Einstellungen – auch die Modulstufe 3 der Material-Verwaltung ohne Plattform-Verwaltung).
         assert nachher["aussen"] == vorher["aussen"]
         with app.app_context():
             from app import db
             assert db.query("SELECT recht_material FROM users WHERE email = 'demo-mv@example.invalid'",
-                            one=True)["recht_material"] == 2
+                            one=True)["recht_material"] == 3
         assert {p: s for p, s in nachher["dateien"].items() if not p.startswith(ordner)} == {
             p: s for p, s in vorher["dateien"].items() if not p.startswith(MEDIEN)}
         # Sicherung: die alte Datenbank Zeile für Zeile (gewöhnliches Journal, quick_check), die Medien verschoben.

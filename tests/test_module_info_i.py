@@ -76,12 +76,12 @@ STELLEN = [
     ("R7", RK, '${info("Kriterienliste", `${KRITERIEN_INFO} Im Bewertungsdialog', "!Zusätzlich zur Beschreibung: einzeln abhakbare Punkte. Im"),
     ("R8", RK, 'Datei (.xlsx)${info("Datei", "Kopfzeilen über der Tabelle', "Kopfzeilen über der Tabelle"),
     ("W1", WIKI, '<h2>Papierkorb${rows.length ? info("Papierkorb", `Wiederhergestellte Seiten', "Wiederhergestellte Seiten kommen"),
-    ("W2", WIKI, '<h3>Bearbeiten erlauben${info("Bearbeiten erlauben", "Freigegebene Nutzer', "Freigegebene Nutzer dürfen"),
+    ("W2", WIKI, '<h3>Bearbeiten erlauben${info("Bearbeiten erlauben", "Freigegebene Redakteure', "Freigegebene Redakteure bearbeiten"),
     ("W4", WIKI, '<h2>Textfarbe${info("Textfarbe", `Nach dem Handbuch CD', "Nach dem Handbuch CD"),
     ("W5", WIKI, '<h2>Abschnitt einbinden${info("Abschnitt einbinden", `Zeigt einen synchronisierten', "Zeigt einen synchronisierten Abschnitt"),
     ("W6", WIKI, '<h2>Spalten einfügen${info("Spalten einfügen", "Die Spalten stehen im Editor', "Die Spalten stehen im Editor"),
     ("A1", MAP, '${S.info("Album", "Ein Album ist ein Übungsobjekt oder ein Übungsgewässer.")}</h2>', "!Ein Album ist ein Übungsobjekt oder ein Übungsgewässer. Alle"),
-    ("L1", ADM, '<label>Rechte${S.info("Rechte", `„–“ kein Zugriff', "kein Zugriff (in der Strömipedia: nur die öffentlichen Seiten lesen) · „Mitglied“"),
+    ("L1", ADM, '<label>Rechte${S.info("Rechte", `„–“ kein Zugriff', "kein Zugriff (in der Strömipedia: nur die für alle Angemeldeten freigegebenen Seiten lesen) · „Mitglied“"),
     ("L2", ADM, 'Prüfer (Sachkundiger)${S.info("Prüfer", `Das Häkchen wirkt nur', "Das Häkchen wirkt nur mit Stufe"),
     ("L3", ADM, '<legend>Freigaben in der Materialablage${S.info("Freigaben in der Materialablage", "Angelegt wird', "Angelegt wird eine Freigabe am Ordner (Bestand"),
     ("L4", ADM, '<summary>Verlauf (Materialablage)${S.info("Verlauf", "Änderungen an Stufe', "!Änderungen an Stufe, Häkchen „Prüfer“, Urkundennummer und Unterschrift (ohne Bild) –\n"),
@@ -234,12 +234,12 @@ def test_vorlagen_gerendert():
         assert ".menue-schwebend, .tree-menu) > :is(a, button) { min-height: 44px; }" in css
         # Ohne Wiki-Verwaltung kein Knopf „Importieren“ (der Server lehnt den Import ohnehin ab).
         r = c.post("/api/admin/users", json={"email": "mitglied-info@example.org", "name": "Mitglied Platzhalter",
-                                             "password": "geheim123", "rechte": {"wiki": 1}})
+                                             "password": "geheim123", "rechte": {"wiki": 2}})   # Redakteur
         assert r.status_code in (200, 201), r.json
         m = app.test_client()
         assert m.post("/api/auth/login", json={"email": "mitglied-info@example.org", "password": "geheim123"}).status_code == 200
         mw = m.get("/stroemipedia").get_data(as_text=True)
-        # Ohne Wiki-Verwaltung nur der Papierkorb – als Knopf, kein Menü „⋯“ (Nutzer 27.10.2026).
+        # Ohne Wiki-Verwaltung (Redakteur) nur der Papierkorb – als Knopf, kein Menü „⋯“ (Nutzer 27.10.2026).
         assert 'id="btn-baum-mehr"' not in mw and 'id="btn-papierkorb" type="button">Papierkorb</button>' in mw
         assert "Seiten aus ZIP importieren" not in mw
     print("Vorlagen gerendert bestanden.")

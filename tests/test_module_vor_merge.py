@@ -72,7 +72,8 @@ def test_rollennamen_in_meldungen():
     with tempfile.TemporaryDirectory() as tmp:
         app = make_app(tmp)
         adm = _anmelden(app)
-        mitglied, _ = konto(app, adm, "mitglied@example.org", "Mitglied Platzhalter", {"wiki": 1, "pruefungen": 1})
+        # Redakteur (Stufe seit dem 01.11.2026): darf anlegen, aber weder veröffentlichen noch fremde Seiten löschen.
+        mitglied, _ = konto(app, adm, "mitglied@example.org", "Mitglied Platzhalter", {"wiki": 2, "pruefungen": 1})
         p = adm.post("/api/wiki/pages", json={"title": "Platzhalter", "content": "# Platzhalter\n"}).json["page"]
         r = mitglied.put(f"/api/wiki/pages/{p['id']}/share", json={"is_public": True})
         assert r.status_code == 403 and r.json["error"] == "Veröffentlichen darf nur die Wiki-Verwaltung.", r.json
@@ -80,9 +81,11 @@ def test_rollennamen_in_meldungen():
         assert r.status_code == 403 and r.json["error"] == ("Nur der Ersteller oder die Wiki-Verwaltung kann diese "
                                                            "Seite löschen."), r.json
         r = mitglied.post("/api/pruefungen/kataloge", json={"titel": "Platzhalter"})
-        assert r.status_code == 403 and r.json["error"] == "Kataloge pflegt nur die Verwaltung der Riegenkarten.", r.json
+        assert r.status_code == 403 and r.json["error"] == ("Kataloge sehen und anlegen dürfen Redakteure und die "
+                                                           "Verwaltung der Riegenkarten."), r.json
     # Keine sichtbare Meldung nennt noch die alten Rollen (Kommentare und Docstrings dürfen die Geschichte erzählen).
-    alt = re.compile(r"Redakteur|Administrator|Administration|\bAdmin\b")
+    # „Redakteur“ ist seit dem 01.11.2026 wieder ein Begriff – als Stufe zwischen Mitglied und Verwaltung.
+    alt = re.compile(r"Administrator|Administration|\bAdmin\b")
     for pfad in ("app/api_wiki.py", "app/api_pruefungen.py", "app/auth.py", "app/einstellungen.py"):
         for zeile in lies(pfad).splitlines():
             code = zeile.split("#", 1)[0]

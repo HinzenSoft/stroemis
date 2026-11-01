@@ -69,7 +69,7 @@ def test_klappknopf_markup():
     assert '`aria-label="${esc(p.title)} ${collapsed ? "aufklappen" : "zuklappen"}" aria-expanded="${!collapsed}"`' in zweig
     assert ": 'aria-hidden=\"true\" tabindex=\"-1\"';" in zweig
     # Titel in eigener Spanne (Ellipse bzw. hängender Umbruch), Symbol davor, Zusätze darin; Text immer mit esc.
-    assert ('<span class="baum-titel">${esc(p.title)}${p.is_public ? \' <span class="pub" title="öffentlich freigegeben">🌐</span>\' : ""}'
+    assert ('<span class="baum-titel">${esc(p.title)}${p.is_public ? \' <span class="pub" title="für alle Angemeldeten freigegeben">🌐</span>\' : ""}'
             '${p.favorite ? \' <span class="fav" title="auf der Merkliste">★</span>\' : ""}</span></a>') in zweig
     assert 'title="${esc(p.title)}"' in zweig
     # Aufklappen schreibt Zustand und Namen nach.
@@ -145,8 +145,15 @@ def knopfzeile_pruefen(app):
     m = app.test_client()
     assert m.post("/api/auth/login", json={"email": "mitglied-baum@example.org", "password": "geheim123"}).status_code == 200
     mh = m.get("/stroemipedia").get_data(as_text=True)
-    assert 'id="btn-baum-mehr"' not in mh and 'id="btn-papierkorb" type="button">Papierkorb</button>' in mh
+    # Seit der Stufe Redakteur (01.11.2026): Ein Mitglied legt nichts an – die Knopfzeile entfällt ganz; ein Redakteur
+    # bekommt „Neue Seite“ und den Knopf „Papierkorb“.
+    assert 'id="btn-baum-mehr"' not in mh and 'id="btn-papierkorb"' not in mh and 'id="btn-new-page"' not in mh
     assert "Seiten aus ZIP importieren" not in mh
+    uid = r.json["user"]["id"]
+    assert c.put(f"/api/admin/users/{uid}", json={"rechte": {"wiki": 2}}).status_code == 200
+    rh = m.get("/stroemipedia").get_data(as_text=True)
+    assert 'id="btn-baum-mehr"' not in rh and 'id="btn-papierkorb" type="button">Papierkorb</button>' in rh
+    assert "Seiten aus ZIP importieren" not in rh
 
 
 if __name__ == "__main__":

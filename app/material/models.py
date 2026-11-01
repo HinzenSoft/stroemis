@@ -259,13 +259,21 @@ Feldnamen folgen dem Konzept vom 16.10.2026 (englisch, wie dort festgelegt). Abw
     das Inventarnummer, QR-Kennung oder Produkt + Seriennummer eines geprüften Artikels träfe. Dazu mat_recall.mail_still
     (warum beim Versand keine Mail hinausging). Rein additiv, wiederholbar. Rückweg: ein älterer Stand lässt Trigger
     und Spalte stehen.
+  - Schritt 33 (Stufe „Redakteur“, 01.11.2026): Die Rechte-Matrix bekommt in Strömipedia, Ankerplätzen und Riegenkarten
+    die Stufe Redakteur zwischen Mitglied und Verwaltung – in allen fünf Spalten users.recht_* gilt dieselbe Skala 0 kein
+    Zugriff, 1 Mitglied, 2 Redakteur, 3 Verwaltung (auth.py). Der Schritt hebt die bisherige Verwaltung 2 auf 3; 0 und 1
+    bleiben (bestehende Mitglieder bleiben Mitglied, niemand wird von selbst Redakteur – Entscheidung vom 28.10.2026).
+    Kein Journal: Die Bedeutung bleibt, nur die Zahl ist neu (die Beschriftung zeigt 2 und 3 als „Verwaltung“). NICHT
+    frei wiederholbar – ein zweiter Lauf machte spätere Redakteure zu Verwaltung –, deshalb nur über den Versionsvermerk
+    (wie jeder Schritt einmal je Stand, in derselben Transaktion) und nie in db.NACHARBEITEN. Rückweg auf einen Stand vor
+    Schritt 33: die SQL aus README „Stufe Redakteur – Rückweg“ (sonst läse der ältere Code Redakteure als Verwaltung).
 """
 import json
 import re
 import sqlite3
 from datetime import datetime, timezone
 
-SCHEMA_VERSION = 32
+SCHEMA_VERSION = 33
 
 # --- Wertelisten -------------------------------------------------------------------------------
 # Was die Datenbank per CHECK erzwingt, steht hier ein zweites Mal – mit den Wörtern, die die
@@ -2835,6 +2843,22 @@ def _schritt_32(conn):
         conn.execute("ALTER TABLE mat_recall ADD COLUMN mail_still TEXT")
 
 
+# Die Spalten der Rechte-Matrix (auth.MODULE), die Schritt 33 umnummeriert – fest hier, nicht aus auth gelesen: Ein
+# Schritt bleibt, wie er beim Schreiben war.
+STUFEN_SPALTEN_33 = ("recht_karte", "recht_wiki", "recht_pruefungen", "recht_material", "recht_verwaltung")
+
+
+def _schritt_33(conn):
+    """Stufe „Redakteur“: Verwaltung 2 → 3 in jeder vorhandenen Spalte der Rechte-Matrix, Mitglied (1) und kein Zugriff
+    (0) bleiben. Danach heißt 2 Redakteur – das gibt es erst ab hier, also hebt der Schritt nur, was Verwaltung war. Eine
+    sehr alte Datenbank bekommt ihre Spalten schon vor diesem Schritt (db.NACHARBEITEN schreibt dort noch 2, Schritt 10
+    ebenso) – beides läuft vorher und wird hier mitgehoben."""
+    vorhanden = _spalten(conn, "users")
+    for spalte in STUFEN_SPALTEN_33:
+        if spalte in vorhanden:
+            conn.execute(f"UPDATE users SET {spalte} = 3 WHERE {spalte} = 2")
+
+
 # Je Version die Schritte, die von der Vorversion dorthin führen: eine Liste von SQL-Befehlen (für sich
 # wiederholbar, IF NOT EXISTS) oder eine Funktion. Alle Schritte eines Starts laufen in EINER
 # Transaktion – bricht einer ab, bleibt die Datenbank, wie sie war, und der nächste Start versucht es neu.
@@ -2843,7 +2867,7 @@ SCHRITTE = {1: SCHRITT_1, 2: _schritt_2, 3: _schritt_3, 4: SCHRITT_4, 5: _schrit
             14: _schritt_14, 15: _schritt_15, 16: _schritt_16, 17: _schritt_17, 18: SCHRITT_18, 19: SCHRITT_19,
             20: _schritt_20, 21: _schritt_21, 22: _schritt_22, 23: _schritt_23, 24: _schritt_24,
             25: _schritt_25, 26: _schritt_26, 27: _schritt_27, 28: _schritt_28, 29: SCHRITT_29, 30: SCHRITT_30,
-            31: SCHRITT_31, 32: _schritt_32}
+            31: SCHRITT_31, 32: _schritt_32, 33: _schritt_33}
 
 
 def _meta(conn, schluessel, vorgabe=None):

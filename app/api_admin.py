@@ -4,7 +4,7 @@ import secrets
 from flask import Blueprint, current_app, jsonify
 
 from . import db, einstellungen, medienpflege
-from .auth import (EMAIL_RE, MIN_PW, MODULE, STUFEN, VERWALTUNG, VORGABE_NEU, admin_required, can_reset,
+from .auth import (EMAIL_RE, MIN_PW, MODULE, STUFEN_JE_MODUL, VERWALTUNG, VORGABE_NEU, admin_required, can_reset,
                    clear_attempts, current_user, eingabefehler_abfangen, json_body, public_user, send_reset_mail)
 from .images import delete_avatar
 from .mailer import send_mail, versand
@@ -31,10 +31,11 @@ OHNE_NAMEN = ("Erst einen Namen eintragen – in der Materialablage steht jeder 
 
 
 def _rechte_lesen(d, basis):
-    """Stufen aus der Anfrage über den Bestand legen. Nur bekannte Module, nur 0/1/2 – ein Tippfehler
-    verteilt keine Rechte. Verwaltung kennt kein Mitglied, und Verwaltung in der Leitstelle zieht
-    alle anderen Module auf Verwaltung: So steht in der Matrix, was gilt. Die Materialablage ist seit Schritt 10
-    wieder ein Modul wie die anderen (Mitglied: Modulzugang, Bestand über Freigaben; Verwaltung: Material-Verwaltung)."""
+    """Stufen aus der Anfrage über den Bestand legen. Nur bekannte Module, nur die Stufen, die es im Modul gibt
+    (auth.STUFEN_JE_MODUL) – ein Tippfehler verteilt keine Rechte. Redakteur (2) gibt es nur in Strömipedia,
+    Ankerplätzen und Riegenkarten; die Leitstelle kennt nur „kein Zugriff“ und Verwaltung, und Verwaltung dort zieht
+    alle anderen Module auf Verwaltung: So steht in der Matrix, was gilt. Die Materialablage ist seit Schritt 10 wieder
+    ein Modul wie die anderen (Mitglied: Modulzugang, Bestand über Freigaben; Verwaltung: Material-Verwaltung)."""
     neu = dict(basis)
     angaben = d.get("rechte")
     if not isinstance(angaben, dict):
@@ -42,10 +43,13 @@ def _rechte_lesen(d, basis):
     for modul, wert in angaben.items():
         if modul not in MODULE:
             raise ValueError(f"Unbekanntes Modul „{modul}“.")
-        if isinstance(wert, bool) or wert not in STUFEN:
-            raise ValueError("Eine Stufe ist 0 (kein Zugriff), 1 (Mitglied) oder 2 (Verwaltung).")
-        if modul == "verwaltung" and wert == 1:
-            raise ValueError("In der Leitstelle gibt es nur „kein Zugriff“ oder „Verwaltung“.")
+        if isinstance(wert, bool) or not isinstance(wert, int) or wert not in STUFEN_JE_MODUL[modul]:
+            if modul == "verwaltung":
+                raise ValueError("In der Leitstelle gibt es nur „kein Zugriff“ (0) oder „Verwaltung“ (3).")
+            if modul == "material":
+                raise ValueError("In der Materialablage gibt es „kein Zugriff“ (0), „Mitglied“ (1) und "
+                                 "„Verwaltung“ (3).")
+            raise ValueError("Eine Stufe ist 0 (kein Zugriff), 1 (Mitglied), 2 (Redakteur) oder 3 (Verwaltung).")
         neu[modul] = wert
     if neu["verwaltung"] == VERWALTUNG:
         neu = {m: VERWALTUNG for m in MODULE}
@@ -323,6 +327,9 @@ def delete_user(uid):
         db.execute("UPDATE wiki_pages SET updated_by = ? WHERE updated_by = ?", (me, uid))
         db.execute("UPDATE wiki_revisions SET user_id = ? WHERE user_id = ?", (me, uid))
         db.execute("UPDATE wiki_files SET user_id = ? WHERE user_id = ?", (me, uid))
+        # Riegenkarten: Kataloge gehören ihrem Ersteller (Redakteur pflegt nur eigene) – ohne die Übernahme fiele der
+        # Katalog still an die Verwaltung (created_by NULL), wie Seiten und Alben gehen auch sie an dich.
+        db.execute("UPDATE pruef_kataloge SET created_by = ? WHERE created_by = ?", (me, uid))
         db.execute("DELETE FROM users WHERE id = ?", (uid,))
     # Erst nach dem Festschreiben: Bricht die Umschreibung ab, bleibt das Konto samt Bild stehen.
     delete_avatar(current_app.config["MEDIA_DIR"], bild)

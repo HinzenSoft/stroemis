@@ -78,6 +78,9 @@ def test_migration_9_10():
         admin_id = zeilen(app, "SELECT id FROM users WHERE email = 'admin@example.org'")[0]["id"]
         # Stand 9: Die Schemaversion zurück, kein Eintrag von Schritt 10, Kontoverweise nur teilweise.
         sql(app, "UPDATE mat_meta SET wert = '9' WHERE schluessel = 'schema_version'")
+        # Die Plattform-Verwaltung trug damals überall 2 (Schritt 33 hebt sie erst später auf 3).
+        sql(app, "UPDATE users SET recht_karte = 2, recht_wiki = 2, recht_pruefungen = 2, recht_material = 2, "
+                 "recht_verwaltung = 2 WHERE email = 'admin@example.org'")
         sql(app, "UPDATE users SET mat_ref = NULL WHERE email LIKE 'katalog%' OR email LIKE 'phase1%'")
         vorher = {u["id"]: u for u in zeilen(app, "SELECT * FROM users")}
         journal_vorher = zeilen(app, "SELECT MAX(id) AS m FROM mat_audit")[0]["m"] or 0
@@ -85,12 +88,16 @@ def test_migration_9_10():
         app = make_app(tmp)                                    # Neustart: Schritt 10 läuft
         assert zeilen(app, "SELECT wert FROM mat_meta WHERE schluessel = 'schema_version'")[0]["wert"] == endversion()
         nachher = {u["id"]: u for u in zeilen(app, "SELECT * FROM users")}
-        assert {n: nachher[ids[n]]["recht_material"] for n in faelle} == {n: f[2] for n, f in faelle.items()}
-        assert nachher[admin_id]["recht_material"] == 2
+        # Schritt 10 schreibt die Verwaltung noch als 2, Schritt 33 (Stufe Redakteur) hebt sie danach auf 3 – das Journal
+        # von Schritt 10 behält die 2.
+        assert {n: nachher[ids[n]]["recht_material"] for n in faelle} == {n: 3 if f[2] == 2 else f[2] for n, f in faelle.items()}
+        assert nachher[admin_id]["recht_material"] == 3
         # Nur die Stufe ändert sich: Häkchen, mat_katalog, Urkundennummer, Name, Aktivität bleiben.
+        # Die übrigen Stufen hebt nur Schritt 33 (Verwaltung 2 → 3).
         for uid, u in nachher.items():
             assert {k_: v for k_, v in u.items() if k_ not in ("recht_material", "mat_ref")} == \
-                {k_: v for k_, v in vorher[uid].items() if k_ not in ("recht_material", "mat_ref")}, u
+                {k_: (3 if k_.startswith("recht_") and v == 2 else v) for k_, v in vorher[uid].items()
+                 if k_ not in ("recht_material", "mat_ref")}, u
         # Journal: je Konto mit geänderter Stufe oder aufgelöstem Katalog-Häkchen genau ein Eintrag – ohne E-Mail und
         # ohne Namen, das Konto als Verweis; keiner für 2 → 2, 1 → 1 und 0 → 0.
         e = zeilen(app, "SELECT * FROM mat_audit WHERE id > ? ORDER BY id", (journal_vorher,))
@@ -134,11 +141,14 @@ def test_migration_9_10():
         vorher = stand()
         app = make_app(tmp)
         assert stand() == vorher
+        # Seit Schritt 33 (Verwaltung = 3) ist Schritt 10 allein kein Leerlauf mehr – er schriebe die Verwaltung als 2;
+        # in der Reihe mit Schritt 33, wie die Migration ihn immer laufen lässt, bleibt jede Stufe, wie sie war.
         conn = sqlite3.connect(os.path.join(tmp, "stroemis.db"))
         conn.execute("BEGIN")
-        n = conn.total_changes
+        stufen = conn.execute("SELECT id, recht_material, recht_verwaltung FROM users ORDER BY id").fetchall()
         models._schritt_10(conn)
-        assert conn.total_changes == n
+        models._schritt_33(conn)
+        assert conn.execute("SELECT id, recht_material, recht_verwaltung FROM users ORDER BY id").fetchall() == stufen
         conn.rollback()
         conn.close()
     print("Migration 9 → 10 bestanden.")
@@ -158,7 +168,8 @@ def test_migration_produktion():
         alt.close()
         app = make_app(tmp)
         stufen = {u["email"]: u["recht_material"] for u in zeilen(app, "SELECT email, recht_material FROM users")}
-        assert stufen == {"admin@example.org": 2, "mitglied@example.org": 0, "gast@example.org": 0}, stufen
+        # Die Nacharbeit schreibt 2 (Verwaltung damals), Schritt 33 hebt sie auf 3.
+        assert stufen == {"admin@example.org": 3, "mitglied@example.org": 0, "gast@example.org": 0}, stufen
         assert not zeilen(app, "SELECT 1 FROM mat_audit WHERE user_name = 'Migration Schritt 10'")
         assert zeilen(app, "SELECT wert FROM mat_meta WHERE schluessel = 'schema_version'")[0]["wert"] == endversion()
     print("Migration ohne Modul (Produktion) bestanden.")
@@ -679,8 +690,8 @@ def test_mail_meldung():
     with post_der_meldungen() as post, tempfile.TemporaryDirectory() as tmp:
         app, k = umgebung(tmp)
         gid, _ = gliederung(k["adm"])
-        _, weg = neues_konto(app, "mv-weg@example.org", name="MV Deaktiviert", rechte={"material": 2})
-        _, leer = neues_konto(app, "mv-leer@example.org", name="MV Leer", rechte={"material": 2})
+        _, weg = neues_konto(app, "mv-weg@example.org", name="MV Deaktiviert", rechte={"material": 3})
+        _, leer = neues_konto(app, "mv-leer@example.org", name="MV Leer", rechte={"material": 3})
         assert k["adm"].put(f"/api/admin/users/{weg}", json={"active": False}).status_code == 200
         sql(app, "UPDATE users SET name = '' WHERE id = ?", (leer,))
 
@@ -735,7 +746,7 @@ def test_vorgabe_neue_konten():
             r = erst.post("/api/auth/register", json={"email": "erst@example.org", "password": "passwort1",
                                                       "name": "Erste Person", "gliederung": "OG Test"})
             assert r.status_code == 201 and r.json["pending"] is False, r.get_json()
-            assert r.json["user"]["rechte"] == {m: 2 for m in ("karte", "wiki", "pruefungen", "material", "verwaltung")}
+            assert r.json["user"]["rechte"] == {m: 3 for m in ("karte", "wiki", "pruefungen", "material", "verwaltung")}
             zweit = app.test_client()
             r = zweit.post("/api/auth/register", json={"email": "zweit@example.org", "password": "passwort1",
                                                        "name": "Zweite Person", "gliederung": "OG Test"})
