@@ -40,7 +40,7 @@ def test_datenschutz_eine_zeile():
     # die Liste eine Personenspalte hat.
     assert 'const IMPORT_PERSONEN = "Personen werden nicht übernommen.";' in mat
     assert 'const IMPORT_PERSONEN_INFO = "Artikel ordnest du nach dem Import im Ordner über „Zuordnen“ einer Person zu.";' in mat
-    assert ('${b.spalten.some((x) => x.gesperrt) ? `<span class="info-absatz">${esc(IMPORT_PERSONEN_INFO)}</span>` : ""}`)}'
+    assert ('${b.spalten.some((x) => x.gesperrt) ? `<span class="info-absatz">${esc(IMPORT_PERSONEN_INFO)}</span>` : ""}${mehrDazu("import_spalten")}`)}'
             '</summary>') in mat
     assert '${b.spalten.some((x) => x.gesperrt) ? `<p class="help">${esc(IMPORT_PERSONEN)}</p>` : ""}</details>' in mat
     # Prüfanleitung: wer sie sieht, in einer Zeile; dass neue Konten keinen Zugang haben, im „i“ (Formular und Dialog).
@@ -93,7 +93,7 @@ def test_abschnittsaktion_in_der_kopfzeile():
             'Protokoll (PDF)</a>`}</div>') in mat
     assert "Sammelprotokoll (PDF)</a>" not in mat
     # Produkt: Prüfformular und Herstellerdokumente – je eine Aktion neben der Überschrift.
-    assert ('Ein aktives spezifisches Formular ersetzt das generische der Kategorie.")}</h2>\n          ${k ? \'<button class="btn '
+    assert ('Ein aktives spezifisches Formular ersetzt das generische der Kategorie." + mehrDazu("pruefformular"))}</h2>\n          ${k ? \'<button class="btn '
             'secondary small" data-act="formular">Spezifisches Formular bearbeiten</button>\' : ""}</div>') in mat
     assert mat.count('data-act="formular">Spezifisches Formular bearbeiten</button>') == 1
     doks = mat[mat.index('<div class="abschnittskopf"><h2>Herstellerdokumente'):]

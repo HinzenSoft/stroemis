@@ -304,7 +304,7 @@ def test_info_symbol_und_namen():
         assert stelle in info, stelle
     assert ("const PRUEFSUMME_INFO = 'Die Prüfsumme steht im Fuß jeder Seite des PDFs. Ob eine Datei unverändert ist, "
             "zeigt die Seite <a href=\"/materialablage/pruefen\">„Echtheit prüfen“</a>.';") in js   # Name seit UI/UX B10
-    assert '<dt>Prüfsumme${infoKnopf("Prüfsumme", PRUEFSUMME_INFO)}</dt>' in js
+    assert '<dt>Prüfsumme${infoKnopf("Prüfsumme", PRUEFSUMME_INFO + mehrDazu("pruefsumme"))}</dt>' in js
     assert '<p class="help">Die Prüfsumme steht im Fuß jeder Seite des PDFs.' not in js
     assert "auf der Prüfseite prüfen</a>" not in js
     assert '· Prüfsumme${infoKnopf("Prüfsumme", (d.set_protokolle || []).length' in js
@@ -355,7 +355,7 @@ def test_knopftexte_ohne_auslassung():
     assert '{ text: "Reset-Mail senden", kurz: "Reset-Mail", attrs: \'data-act="reset"\' }' in lies("app/static/js/admin.js")   # S.menue (A3)
     assert ">Seiten aus ZIP importieren</button>" in lies("app/static/js/wiki.js")
     assert "von dev in die Produktion" not in js and "Zum Sichern oder für eine andere Installation" in js
-    assert ("<div class=\"abschnittskopf\"><h2>Bestandteile${infoKnopf(\"Bestandteile\", BESTANDTEILE_INFO)}</h2>${k ? '<button class=\"btn secondary small\" "
+    assert ("<div class=\"abschnittskopf\"><h2>Bestandteile${infoKnopf(\"Bestandteile\", BESTANDTEILE_INFO + mehrDazu(\"bestandteile\"))}</h2>${k ? '<button class=\"btn secondary small\" "
             "data-act=\"stueckliste\">") in js
     assert ".section .abschnittskopf:has(> :not(h2, h3)) { border-bottom: 1px solid var(--linie);" in lies("app/static/css/app.css")
     print("Knopftexte ohne „…“ bestanden.")

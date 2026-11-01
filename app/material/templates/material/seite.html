@@ -31,7 +31,7 @@
     <div id="mat-filter-inhalt"></div>
   </section>
 </aside>{% endif %}
-<main class="page breit mat" id="mat" data-ansicht="{{ ansicht }}" data-daten="{{ daten }}" data-darf="{{ darf }}">
+<main class="page breit mat" id="mat" data-ansicht="{{ ansicht }}" data-daten="{{ daten }}" data-darf="{{ darf }}" data-anleitung="{{ anleitung or '{}' }}">
   {# Passt die Zeile nicht (Telefon, Fold, Tablet hochkant), ordnet material.js sie um (navAnordnen): Die Reiter rollen
      seitlich in einer Zeile, die Nummernsuche wartet hinter der Lupe und öffnet als eigene Zeile darunter – außer auf
      Übersicht und Prüfungen: Dort stehen „☰“ und die Suche als Schublade in der Suchzeile darunter (#mat-suchzeile). #}
@@ -66,6 +66,20 @@
 </main>
 </div>
 <dialog id="dlg"><div class="dlg-body" id="dlg-body"></div></dialog>
+{# Willkommen in der Materialablage (Wunsch vom 28.10.2026): beim allerersten Besuch der Übersicht, je Konto einmal und nur,
+   wer die Anleitung in der Strömipedia lesen darf (anleitung.willkommen_einmal). Mittig und modal wie der Hinweis
+   „Entwicklungsserver“; steht der noch offen, öffnet material.js das Willkommen erst nach ihm. #}
+{% if willkommen %}
+<dialog id="mat-willkommen" class="mat-willkommen" aria-labelledby="mat-willkommen-titel"><div class="dlg-body">
+  <h2 id="mat-willkommen-titel">Willkommen in der Materialablage</h2>
+  <p>Hier stehen PSA und Material der Strömungsrettung – und für jeden Artikel, wann er von wem mit welchem Ergebnis
+    geprüft wurde und wann er wieder fällig ist.</p>
+  <p>Wie Rechte, Bestand, Prüfungen und Nachweise zusammenhängen, erklärt die Anleitung in der Strömipedia. Den Weg
+    dorthin findest du jederzeit oben auf der Übersicht.</p>
+  <div class="dlg-actions"><button class="btn secondary" type="button" id="mat-willkommen-spaeter">Später</button>
+    <a class="btn" id="mat-willkommen-los" href="{{ willkommen }}" target="_blank" rel="noopener">Zur Anleitung</a></div>
+</div></dialog>
+{% endif %}
 {% endblock %}
 {% block scripts %}<script src="{{ url_for('static', filename='vendor/signature_pad/signature_pad.umd.min.js') }}"></script>
 <script src="{{ url_for('material.static', filename='unterschrift.js') }}"></script>

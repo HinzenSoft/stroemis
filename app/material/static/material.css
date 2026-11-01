@@ -2010,3 +2010,18 @@ dialog .mat-knopfgrund { margin: 10px 0 0; }
 .mat-sprung:not(:focus) { position: fixed; top: -100px; left: 8px; }
 /* Hinweiszeile der Prüfung beim Klick auf das ausgegraute „Festschreiben“ (B1): hervorgehoben wie ein Grundsatz. */
 .mat-abschluss-hinweis.betont { color: var(--rot-auf-flaeche); font-weight: 700; }
+/* Anleitung in der Strömipedia (Wunsch vom 28.10.2026, material.js anleitungKopf/anleitungHinweis): der Textlink
+   „Anleitung“ direkt hinter der Überschrift – die Knöpfe des Kopfs bleiben rechts; an Artikel und Produkt neben der
+   Nummer bzw. dem Namen. Auf der Übersicht dauerhaft der Hinweis: blau wie eine Info (kein Rot – das bleibt der
+   Hauptaktion und „nicht verwenden“), kräftiger Rand, großer Titel; schmal nur Titel und Knopf. */
+.page-head > .mat-kopf-anleitung { margin-right: auto; }
+.mat-artikeltitel > h1:has(+ .mat-kopf-anleitung) { display: inline-block; margin-right: 12px; }
+.mat-artikeltitel .mat-kopf-anleitung + .btn-row { margin-top: 12px; }
+.notice.mat-anleitung-hinweis { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px; max-width: 100ch;
+  margin: 0 0 20px; padding: 14px 16px; background: var(--co-info-fl); border: 2px solid var(--wasser); border-left-width: 8px; }
+.mat-anleitung-hinweis p { flex: 1 1 32ch; margin: 0; }
+.mat-anleitung-hinweis strong { color: var(--wasser); font-size: 1.15rem; }
+@container mat-seite (max-width: 600px) {
+  .mat-anleitung-zusatz { display: none; }
+  .notice.mat-anleitung-hinweis { padding: 10px 12px; }
+}

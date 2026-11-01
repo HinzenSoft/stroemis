@@ -25,6 +25,8 @@
   const $ = (sel, el) => (el || document).querySelector(sel);
   const $$ = (sel, el) => Array.from((el || document).querySelectorAll(sel));
   const RECHT = { lesen: "lesen", verwalten: "verwalten", pruefen: "prüfen" };
+  // Link auf die Anleitung in der Strömipedia am Ende einer Info – nur, wer sie lesen darf (material.js, MatAnleitung).
+  const mehrDazu = (thema) => (window.MatAnleitung ? window.MatAnleitung.mehrDazu(thema) : "");
   // Die Vorlagen des Reiters: ein Grundrecht (dauerhaft, wenn man selbst dauerhaft verwaltet) und/oder eine
   // Prüffreigabe. Befristet ist nur noch der externe Prüfer; wer lesen oder verwalten mitbekommt, prüft dauerhaft
   // (pruefDauer: „dauerhaft“ vorgewählt – angeboten nur, wer selbst dauerhaft verwaltet). „Einzeln“ lässt alles frei.
@@ -194,7 +196,7 @@
         <ul class="mf-treffer" id="mf-treffer" aria-label="Gefundene Personen" hidden></ul>
         <div class="mf-gewaehlt" id="mf-gewaehlt" hidden></div>
       </div>
-      <label for="mf-anker">Gilt für${info("Gilt für", `Freigaben für „${esc(d.ordner.pfad)}“ gelten dort und in allen Unterordnern, bis einschließlich zum letzten Tag. Rechte addieren sich; weiter unten lässt sich nichts entziehen.`)}</label>
+      <label for="mf-anker">Gilt für${info("Gilt für", `Freigaben für „${esc(d.ordner.pfad)}“ gelten dort und in allen Unterordnern, bis einschließlich zum letzten Tag. Rechte addieren sich; weiter unten lässt sich nichts entziehen.${mehrDazu("freigaben")}`)}</label>
       <select id="mf-anker">${d.anker_wahl.map((a) => `<option value="${a.id}"${a.id === d.anker_vorgabe ? " selected" : ""}>${esc(a.pfad)}</option>`).join("")}</select>
       <div class="help">… und alle Ordner darunter.</div>
       <fieldset class="mf-vorlagen"><legend>Vorlage</legend>
