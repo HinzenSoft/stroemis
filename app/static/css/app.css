@@ -374,7 +374,7 @@ table.list .recht-wahl { font-size: var(--fs-marke); padding: 4px 2px 4px 4px; }
 .recht-wahl:disabled { color: var(--grau); background: var(--grau-hell); cursor: default; }
 /* Name und Gliederung sind schmaler als zuvor: Ein langer Nachname oder „Ortsgruppe“ bricht
    notfalls im Wort, wie die E-Mail – statt in die Nachbarzelle zu laufen. */
-#users td[data-l=Name], #users td[data-l=Gliederung] { overflow-wrap: break-word; -webkit-hyphens: auto; hyphens: auto; }
+#users td.u-name, #users td[data-l=Gliederung] { overflow-wrap: break-word; -webkit-hyphens: auto; hyphens: auto; }
 /* Dieselben vier Felder im Dialog „Nutzer anlegen/bearbeiten“, in einer Reihe mit Überschrift
    je Modul – schmaler als die normale Beschriftung, weil vier davon nebeneinander stehen. */
 /* Die fünf Rechte-Felder im Nutzerdialog: Fünf nebeneinander ließen je rund 95 px – „Verwaltung“ war in Firefox und
@@ -399,6 +399,35 @@ fieldset.mat-rollen .mat-urkunde { margin: 0 0 0 26px; font-size: var(--fs-klein
 #u-freigaben .badge { padding: 2px 6px; }
 /* Hinweis, wenn das Häkchen „Prüfer“ Material von „–“ auf „Mitglied“ gehoben hat – unter dem Häkchen eingerückt. */
 fieldset.mat-rollen .mat-stufe-auto { margin: 4px 0 0 26px; }
+/* Gerätetest 01.11.2026, Teil 5 (M4): Satz zur Prüffreigabe am Ordner unter dem Häkchen „Prüfer“, eingerückt wie die
+   Urkundennummer. */
+fieldset.mat-rollen .mat-pruef-hinweis { margin: 4px 0 0 26px; }
+/* B6: Suchfeld und Rollenfilter über der Nutzerliste, darunter die Zahl der Treffer. */
+.nutzer-filter { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin: 14px 0 4px; }
+.nutzer-filter input[type=search] { flex: 1 1 240px; width: auto; max-width: 440px; }
+.nutzer-filter select { flex: 0 1 auto; width: auto; max-width: 100%; }
+#u-zahl { margin: 0 0 6px; }
+/* Zugeklappte Karten (B6): In der Tabelle steht der Name als Text; Aufklapper und Rollenmarken gibt es nur in der
+   Kartenansicht (Containerabfrage „liste“ wie die Karten selbst, unten bei D13). Zugeklappt zeigt die Karte Name,
+   Gliederung und Rollen – Auswahlfelder und Knöpfe erst offen; ein Tipp beim Rollen trifft so kein sofort speicherndes
+   Feld mehr. Ohne Containerabfragen (alte Browser) bleiben die Karten offen. */
+#users .u-auf, main.leitstelle #users td.u-rollen { display: none; }
+#users .u-auf { position: relative; width: 100%; padding: 6px 0 6px 22px; border: 0; background: none; color: var(--anthrazit);
+  font: inherit; font-weight: 700; text-align: left; cursor: pointer; overflow-wrap: anywhere; }
+/* Pfeil wie am Aufklapper (details.accordion): zu nach rechts, offen nach unten. */
+#users .u-auf::before { content: ""; position: absolute; left: 4px; top: 50%; width: 6px; height: 6px;
+  border-right: 2px solid var(--grau); border-bottom: 2px solid var(--grau); transform: translateY(-70%) rotate(-45deg);
+  transition: transform .15s; }
+#users .u-auf[aria-expanded="true"]::before { transform: translateY(-70%) rotate(45deg); }
+@container liste (max-width: 820px) {
+  main.leitstelle #users .u-name-text { display: none; }
+  main.leitstelle #users .u-auf { display: block; }
+  main.leitstelle #users tr:not(.offen) > td:not(.u-name, .u-rollen, [data-l=Gliederung]) { display: none; }
+  main.leitstelle #users tr:not(.offen) > td.u-rollen { display: flex; flex-wrap: wrap; gap: 4px; padding-top: 4px; }
+}
+@media (pointer: coarse) {
+  #users .u-auf { min-height: 44px; }
+}
 /* Auf schmalen Geräten wird aus der Tabelle eine Liste: je Nutzer eine Karte, die Spaltennamen
    stehen als Beschriftung davor, die Knöpfe darunter – statt sieben Spalten, die seitwärts
    aus dem Bild laufen und die Knöpfe außer Sicht schieben.
@@ -720,6 +749,41 @@ html.tastatur dialog[open] .dlg-body { max-height: calc(var(--vv-h, 100dvh) - 22
 .album-list li:hover { background: var(--grau-hell); }
 .album-list img, .album-list .noimg { width: 56px; height: 56px; object-fit: cover; flex: none; background: var(--grau-hell); border-radius: var(--radius); }
 .album-list .t { font-weight: 600; }
+/* Gerätetest 01.11.2026, Teil 5 (B8): Jede Zeile der Albenliste ist ein Knopf (Tastatur, Vorlesen) – vorher eine
+   anklickbare Zeile ohne Fokus. Er nimmt die ganze Zeile ein und sieht aus wie zuvor; am Finger mit 10 px Polster. */
+.album-list li:has(> .album-wahl) { padding: 0; }
+.album-list .album-wahl { display: flex; gap: 10px; width: 100%; padding: 8px 0; border: 0; background: none; color: inherit;
+  font: inherit; text-align: left; cursor: pointer; }
+.album-list .album-text { display: flex; flex-direction: column; min-width: 0; }
+.album-list .noimg { display: block; }
+.album-list li.leerzustand { cursor: default; border-bottom: 0; display: block; }
+.album-list li.leerzustand:hover { background: none; }
+#al-zahl { margin: 0 0 4px; }
+.alben-sortierung { margin: 0 0 2px; }
+/* Suchfeld und „Alben“ in einer Gruppe über der Karte: am Rechner 260 px Feld, am Telefon die ganze erste Zeile. */
+.karten-suche { display: flex; gap: 6px; margin: 0; flex: 0 1 auto; }
+.karten-suche input[type=search] { width: 260px; min-width: 0; margin: 0; box-shadow: var(--schatten-karte); }
+.karten-suche .btn { flex: none; }
+/* Offene Leiste am Rechner: Die Werkzeuge brechen links von ihr um, statt unter ihr zu verschwinden. */
+@media (min-width: 641px) {
+  .map-shell:has(.panel.open) .map-tools { max-width: calc(100% - var(--panel-w) - 24px); }
+}
+@media (max-width: 640px) {
+  .karten-suche { flex: 1 1 100%; }
+  .karten-suche input[type=search] { flex: 1 1 auto; width: auto; }
+}
+@media (pointer: coarse) {
+  .album-list .album-wahl { padding: 10px 0; }
+}
+/* Telefon mit offener Leiste und wenig Höhe (Tastatur offen – die Seite schrumpft mit, resizes-content): Die Kartenknöpfe
+   über der Leiste lägen auf Suchfeld und „Alben“. Sie weichen, bis die Leiste zu ist; die Rechtehinweise bleiben. */
+@media (max-width: 640px) and (max-height: 620px) {
+  .map-shell:has(.panel.open) .leaflet-bottom.leaflet-right .leaflet-control:not(.leaflet-control-attribution) { display: none; }
+}
+/* Ortung läuft: „◎“ blinkt sanft blau, bis die Antwort da ist (FT2) – ohne Bewegung, wenn sie abgeschaltet ist. */
+.locate-me.sucht { color: var(--wasser); animation: ortung-sucht 1.2s ease-in-out infinite; }
+@keyframes ortung-sucht { 50% { opacity: .35; } }
+@media (prefers-reduced-motion: reduce) { .locate-me.sucht { animation: none; } }
 /* Leerzustand – ein Baustein für alle Module (UI/UX D6; vorher .empty, .pruef .leer und .mat-leer): ein Satz in Grau,
    davor bei Bedarf fett die Kernaussage („Noch keine Alben“), darunter bei Bedarf eine Knopfzeile; linksbündig wie der
    Inhalt. Fehlt eine ganze Seite, trägt sie ein h1 („Seite nicht gefunden“) und darunter diesen Satz. */

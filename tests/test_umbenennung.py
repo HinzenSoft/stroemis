@@ -190,8 +190,9 @@ def test_namen_in_der_oberflaeche():
             html = voll.get(pfad).text
             assert f"<title>{titel} – strömis.de</title>" in html, (pfad, re.findall(r"<title>.*?</title>", html))
         html = voll.get("/leitstelle").text
+        # Spaltenköpfe mit weichen Trennstellen (Gerätetest 01.11.2026, Q2: „Material&shy;ablage“) – der Name bleibt ganz.
         for spalte in ("Ankerplätze", "Strömipedia", "Riegenkarten", "Materialablage", "Leitstelle"):
-            assert f"<th>{spalte}</th>" in html, spalte
+            assert f"<th>{spalte}</th>" in html.replace("&shy;", ""), spalte
         assert "Globale Suchen (Materialablage)" in html and '"module": {' not in html
         assert '"name": {' in html or "module: {" in html                      # STROEMIS.module für admin.js
         # Frühere öffentliche Strömipedia: seit dem 01.11.2026 nur noch die Weiterleitung zur Anmeldung; die Anmeldeseite
@@ -210,7 +211,7 @@ def test_namen_in_der_oberflaeche():
             r = k["wart"].get(pfad, follow_redirects=True)
             assert r.status_code == 403 and auth.KEIN_ZUGANG[modul] in r.text, (pfad, r.text[-600:])
         # Spalten der Rechte-Matrix in der Reihenfolge der Kopfleiste.
-        html = voll.get("/leitstelle").text
+        html = voll.get("/leitstelle").text.replace("&shy;", "")
         spalten = [html.index(f"<th>{n}</th>") for n in ("Strömipedia", "Ankerplätze", "Riegenkarten", "Materialablage",
                                                          "Leitstelle")]
         assert spalten == sorted(spalten), spalten

@@ -73,7 +73,61 @@
     MODULE.forEach((m) => {
       tr.querySelector(`td.recht[data-modul="${m.k}"]`).innerHTML = rechtZelle(m, u);
     });
+    tr.querySelector("td.u-rollen").innerHTML = rollenMarken(u);
   }
+
+  /* --- Suche, Filter und zugeklappte Karten (Gerätetest 01.11.2026, B6) ---------------------------------------------
+     Am Telefon standen 56 Konten mit je fünf Auswahlfeldern untereinander (24 000 px) – ohne Suche, und ein Tipp beim
+     Rollen traf leicht ein Feld, das sofort speichert. Jetzt: Suchfeld (Name, E-Mail, Gliederung) und Filter nach Rolle
+     über der Tabelle, gefiltert im Browser (alle Konten bleiben geladen). In der Kartenansicht (schmaler Inhalt,
+     app.css) ist jede Karte zugeklappt: Name als Aufklapper, Gliederung und die Rollen als Marken – die Auswahlfelder
+     und Knöpfe erst nach dem Aufklappen. Am Rechner bleibt die Tabelle, wie sie war. */
+  // Die Stufe, die ein Modul wirklich hat: Verwaltung in der Leitstelle schließt alle ein (wie rechtFeld).
+  const stufeIn = (u, k) => (((u.rechte || {}).verwaltung | 0) === ST.verwaltung ? ST.verwaltung : (u.rechte || {})[k] | 0);
+  const STUFE_TEXT = Object.fromEntries(STUFEN.map(([v, t]) => [v, t]));
+  function rollenMarken(u) {
+    const marken = ((u.rechte || {}).verwaltung | 0) === ST.verwaltung
+      ? [`<span class="badge grey">${S.esc(NAME.verwaltung)}: Verwaltung (alle Module)</span>`]
+      : MODULE.filter((m) => stufeIn(u, m.k)).map((m) => `<span class="badge grey">${S.esc(m.t)}: ${STUFE_TEXT[stufeIn(u, m.k)]}</span>`);
+    if (u.mat_pruefer) marken.push('<span class="badge grey">Prüfer</span>');
+    return marken.length ? marken.join(" ") : '<span class="muted small">ohne Zugriff</span>';
+  }
+  const aufgeklappt = new Set();              // aufgeklappte Karten (Kennungen) – bleiben über ein Neuladen der Liste offen
+  const sucheFeld = document.getElementById("u-suche"), rolleFeld = document.getElementById("u-rolle");
+  // „Alle Rollen“, Prüfer, deaktiviert, dann je Modul seine Stufen (ohne „–“) – Reihenfolge wie die Spalten.
+  rolleFeld.insertAdjacentHTML("beforeend", '<option value="pruefer">Prüfer (Materialablage)</option>'
+    + '<option value="aus">Deaktivierte Konten</option>' + '<option value="ohne">Ohne Zugriff</option>'
+    + MODULE.map((m) => stufenVon(m).filter(([v]) => v).map(([v, t]) => `<option value="${m.k}:${v}">${S.esc(m.t)}: ${t}</option>`).join("")).join(""));
+  const grund = (t) => String(t || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/ß/g, "ss");
+  function passt(u) {
+    const woerter = grund(sucheFeld.value).split(/\s+/).filter(Boolean);
+    const text = grund([u.name, u.email, u.gliederung].join(" "));
+    if (!woerter.every((w) => text.includes(w))) return false;
+    const r = rolleFeld.value;
+    if (!r) return true;
+    if (r === "pruefer") return !!u.mat_pruefer;
+    if (r === "aus") return !u.active;
+    if (r === "ohne") return MODULE.every((m) => !stufeIn(u, m.k));
+    const [k, v] = r.split(":");
+    return stufeIn(u, k) === +v;
+  }
+  function filtern() {
+    const liste = users.filter((u) => u.status !== "pending");
+    let n = 0;
+    tbody.querySelectorAll("tr[data-id]").forEach((tr) => {
+      const u = users.find((x) => x.id === +tr.dataset.id);
+      const zeigen = !!u && passt(u);
+      tr.classList.toggle("hidden", !zeigen);
+      if (zeigen) n++;
+    });
+    const aktiv = !!(sucheFeld.value.trim() || rolleFeld.value);
+    document.getElementById("u-zahl").textContent = aktiv ? `${n} von ${mehrzahl(liste.length, "Konto", "Konten")}`
+      : mehrzahl(liste.length, "Konto", "Konten");
+    document.getElementById("u-leer").classList.toggle("hidden", n > 0 || !liste.length);
+  }
+  let sucheTakt;
+  sucheFeld.addEventListener("input", () => { clearTimeout(sucheTakt); sucheTakt = setTimeout(filtern, 150); });
+  rolleFeld.addEventListener("change", filtern);
 
   /* Unter dem Material-Feld: das Häkchen „Prüfer“ (gesetzt im Dialog „Bearbeiten“; gelb, solange die
      Urkundennummer fehlt – die trägt der Prüfer selbst im Profil ein) und klein die Zahl gültiger
@@ -114,10 +168,11 @@
         <div class="btn-row"><button class="btn secondary small" data-act="approve">Freigeben</button><button class="btn secondary small" data-act="reject">Ablehnen</button></div>
       </div>`).join("")}` : "";
     tbody.innerHTML = users.filter((u) => u.status !== "pending").map((u) => `
-      <tr data-id="${u.id}" ${u.active ? "" : 'class="muted"'}>
-        <td data-l="Name">${S.esc(u.name) || "<span class='muted'>–</span>"}${u.active ? "" : ' <span class="badge grey">deaktiviert</span>'}</td>
+      <tr data-id="${u.id}" class="${u.active ? "" : "muted"}${aufgeklappt.has(u.id) ? " offen" : ""}">
+        <td class="u-name"><button type="button" class="u-auf" aria-expanded="${aufgeklappt.has(u.id)}">${S.esc(u.name || u.email)}</button><span class="u-name-text">${S.esc(u.name) || "<span class='muted'>–</span>"}</span>${u.active ? "" : ' <span class="badge grey">deaktiviert</span>'}</td>
         <td class="mail" data-l="E-Mail">${mailUmbruch(u.email)}</td>
         <td data-l="Gliederung">${S.esc(u.gliederung)}</td>
+        <td class="u-rollen">${rollenMarken(u)}</td>
         ${MODULE.map((m) => `<td class="recht" data-l="${m.t}" data-modul="${m.k}">${rechtZelle(m, u)}</td>`).join("")}
         <td class="small" data-l="Zuletzt da">${letzterLogin(u)}</td>
         <td class="small" data-l="Inhalte">${u.page_count} Artikel, ${mehrzahl(u.album_count, "Album", "Alben")}, ${mehrzahl(u.photo_count, "Bild", "Bilder")}</td>
@@ -127,6 +182,7 @@
             u.id !== STROEMIS.user.id && { text: "Löschen", attrs: 'data-act="delete"' }] })}
         </div></td>
       </tr>`).join("");
+    filtern();
   }
 
   /* Probemail: Kommt bei jemandem nichts an, sagt der Mailserver hier wörtlich, woran es liegt –
@@ -228,6 +284,9 @@
           Prüfen kann er erst mit Urkundennummer und einer Prüffreigabe am Ordner (befristet nur für externe Prüfer) – auch die
           Verwaltung. Das Konto braucht einen Namen, damit es in der Materialablage handeln kann.`)}</label>
         <p class="mat-urkunde" ${u.mat_pruefer ? "" : "hidden"}>${urkundeLesend(u)}</p>
+        <p class="help mat-pruef-hinweis" ${u.mat_pruefer ? "" : "hidden"}>Prüfen kann die Person erst mit einer Prüffreigabe am Ordner –
+          die vergibt der Verwalter des Ordners in der Materialablage: <a href="${S.esc(PFAD.material || "/materialablage")}/bestand">Bestand</a>
+          → Ordner → Bearbeiten → Freigaben.</p>
         <p class="help mat-stufe-auto" role="status" hidden>Materialablage steht jetzt auf „Mitglied“ – ohne Stufe wirkt das Häkchen nicht. Gespeichert wird beim Speichern.</p>
       </fieldset>
       ${u.id ? `<fieldset class="mat-rollen"><legend>Freigaben in der Materialablage${S.info("Freigaben in der Materialablage", "Angelegt wird eine Freigabe am Ordner (Bestand → Ordner → Bearbeiten → Freigaben), nicht hier.")}</legend>
@@ -275,7 +334,13 @@
       if (hinweis) hinweis.hidden = material.value !== "0" || !(u.mat_freigaben | 0);
     };
     // Der Hinweis zur Hebung steht, solange der Wert von ihr kommt und die Verwaltung das Feld nicht überdeckt.
-    const zeigen = () => { auto.hidden = !gehoben || material.disabled; ohneZugang(); };
+    /* M4 (Gerätetest 01.11.2026): Das Häkchen allein lässt niemanden prüfen – neben ihm steht, dass es eine Prüffreigabe am
+       Ordner braucht, solange das Konto keine gültige hat (freigabenZeigen setzt data-freigabe). */
+    const pruefHinweis = body.querySelector(".mat-pruef-hinweis");
+    const zeigen = () => {
+      auto.hidden = !gehoben || material.disabled; ohneZugang();
+      pruefHinweis.hidden = !pruefer.checked || pruefHinweis.dataset.freigabe === "1";
+    };
     const heben = () => { if (material.value === "0") { material.value = "1"; gehoben = true; } };
     // Ausdrücklich gewählt: Ein „–“ von Hand bleibt, auch über ein Hin und Her der Verwaltung hinweg.
     material.addEventListener("change", () => { gehoben = false; offen = false; zeigen(); });
@@ -359,6 +424,15 @@
   });
 
   tbody.addEventListener("click", async (e) => {
+    const auf = e.target.closest("button.u-auf");
+    if (auf) {
+      const tr = auf.closest("tr"), id = +tr.dataset.id;
+      const jetzt = !tr.classList.contains("offen");
+      tr.classList.toggle("offen", jetzt);
+      auf.setAttribute("aria-expanded", String(jetzt));
+      if (jetzt) aufgeklappt.add(id); else aufgeklappt.delete(id);
+      return;
+    }
     const btn = e.target.closest("button[data-act]");
     if (!btn) return;
     const id = +btn.closest("tr").dataset.id;
@@ -433,6 +507,12 @@
     let liste;
     try { liste = (await S.api(`/api/material/freigaben?user_id=${u.id}`)).freigaben; }
     catch (e) { el.innerHTML = `<p class="help">Die Freigaben ließen sich nicht laden: ${S.esc(e.message)}</p>`; return; }
+    // Hat das Konto schon eine gültige Prüffreigabe, entfällt der Satz am Häkchen „Prüfer“ (M4).
+    const hinweis = el.closest(".dlg-body") && el.closest(".dlg-body").querySelector(".mat-pruef-hinweis");
+    if (hinweis) {
+      hinweis.dataset.freigabe = liste.some((f) => f.recht === "pruefen" && f.gueltig) ? "1" : "";
+      hinweis.hidden = !document.getElementById("u-mat-pruefer").checked || hinweis.dataset.freigabe === "1";
+    }
     el.innerHTML = liste.length ? `<table class="list"><thead><tr><th>Ordner</th><th>Recht</th><th>bis</th><th>Zustand</th><th></th></tr></thead><tbody>
       ${liste.map((f) => `<tr>
         <td data-l="Ordner"><a href="/materialablage/ordner/${f.ordner.id}?freigaben" title="Freigaben dieses Ordners öffnen">${S.esc(f.ordner.pfad)}</a>${f.notiz ? `<div class="small muted">${S.esc(f.notiz)}</div>` : ""}</td>
