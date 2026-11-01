@@ -4232,6 +4232,7 @@ Einträge und verschiedenen Ebenen angeht, vor allem auch dem Ausklappsymbol.“
 - Tests: `tests/test_wiki_seitenbaum.py` (neu – Menüeinträge ohne Import, Klappknopf mit SVG und aria, Titelspanne,
   CSS-Regeln samt Media-Block, Knopfzeile je Recht); `test_wiki_import.py` (Import nur im Menü über dem Baum, Dialog
   ohne Vorwahl).
+
 ## Verweise auf die Anleitung in der Strömipedia (Wunsch des Nutzers, 28.10.2026; gebaut 01.11.2026)
 
 Wunsch des Nutzers, wörtlich: „Verweise im Modul, z. B. an relevanten Stellen mit neuen oder bestehenden Info-i's auf
