@@ -1108,7 +1108,8 @@
     if (feld === "lock_state") return esc({ frei: "frei", gesperrt: "gesperrt", verloren: "verloren (gesperrt)", ausgesondert: "ausgesondert" }[v] || v);
     if (SET_WERTE[feld] && typeof v === "string") return esc(SET_WERTE[feld][v] || v);
     // Stufe in der Materialablage mit Zahl – Einträge vor Schritt 10 meinten die Stufen aus Phase 1 (wie beschriftung.py).
-    if (feld === "recht_material" && Number.isInteger(v)) return esc(`${["kein Zugriff", "Mitglied", "Verwaltung"][v] || "?"} (${v})`);
+    // 2 und 3 heißen beide Verwaltung: vor Schritt 33 (Stufe Redakteur) stand sie als 2 im Journal (beschriftung.py).
+    if (feld === "recht_material" && Number.isInteger(v)) return esc(`${["kein Zugriff", "Mitglied", "Verwaltung", "Verwaltung"][v] || "?"} (${v})`);
     if (/_on$|^valid_from$|^retire_by(_manual)?$|^datum$|^begonnen$|^bis$/.test(feld)) return esc(fmtTag(v));
     if (typeof v === "object") return esc(JSON.stringify(v));
     return esc(v);

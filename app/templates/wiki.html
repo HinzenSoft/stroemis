@@ -11,8 +11,10 @@
     <input type="search" id="wiki-search" placeholder="Strömipedia durchsuchen …" aria-label="Strömipedia durchsuchen">
     <ul class="search-results hidden" id="search-results"></ul>
     {# Papierkorb und Import (oberste Ebene) sind seltene Aktionen: im Menü „⋯“ neben „Neue Seite“ – so bleibt die Zeile
-       auch am Telefon und in der 260 px schmalen Seitenleiste des Tablets einzeilig (Menü: baumMenu in wiki.js). #}
-    <div class="btn-row baum-knoepfe"><button class="btn small" id="btn-new-page" type="button">Neue Seite</button>{% if rechte.wiki == 2 %}<button class="btn secondary small" id="btn-baum-mehr" type="button" aria-haspopup="menu" aria-label="Weitere Aktionen" title="Papierkorb, Seiten aus ZIP importieren">⋯</button>{% else %}<button class="btn secondary small" id="btn-papierkorb" type="button">Papierkorb</button>{% endif %}</div>
+       auch am Telefon und in der 260 px schmalen Seitenleiste des Tablets einzeilig (Menü: baumMenu in wiki.js). Seit der
+       Stufe Redakteur (01.11.2026) nur ab Redakteur: Ein Mitglied liest und kommentiert, es legt nichts an und hat
+       nichts im Papierkorb – die Zeile entfällt ganz. #}
+    {% if rechte.wiki >= stufe.redakteur %}<div class="btn-row baum-knoepfe"><button class="btn small" id="btn-new-page" type="button">Neue Seite</button>{% if rechte.wiki >= stufe.verwaltung %}<button class="btn secondary small" id="btn-baum-mehr" type="button" aria-haspopup="menu" aria-label="Weitere Aktionen" title="Papierkorb, Seiten aus ZIP importieren">⋯</button>{% else %}<button class="btn secondary small" id="btn-papierkorb" type="button">Papierkorb</button>{% endif %}</div>{% endif %}
     <div id="favorites"></div>
     <ul class="tree" id="tree"></ul>
   </aside>

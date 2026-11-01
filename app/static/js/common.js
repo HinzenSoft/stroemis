@@ -926,3 +926,13 @@ window.S = (function () {
            feldFehler, feldOk, fehlschlag, menue, menueSchwebend, plural, rollen, weich, schliessenKnopf, entfernenKnopf,
            reihenfolgeKnoepfe };
 })();
+
+/* Stufen der Rechte-Matrix (Stufe Redakteur, 01.11.2026) – dieselben Zahlen wie app/auth.py (KEIN_ZUGRIFF … VERWALTUNG;
+   in Vorlagen „stufe“): 2 heißt seit Schritt 33 Redakteur, Verwaltung ist 3. S.stufe(modul) liest die wirksame Stufe
+   des angemeldeten Kontos aus STROEMIS.user.rechte. Was ein Konto im Einzelnen darf (eigene Seite, eigenes Album, Leitung),
+   sagt der Server je Gegenstand (can_edit, darf_leiten …) – die Stufe entscheidet hier nur, ob ein Anlegen-Knopf steht. */
+window.S.STUFE = Object.freeze({ kein: 0, mitglied: 1, redakteur: 2, verwaltung: 3 });
+window.S.stufe = (modul) => {
+  const u = window.STROEMIS && window.STROEMIS.user;
+  return (u && u.rechte && u.rechte[modul]) | 0;
+};

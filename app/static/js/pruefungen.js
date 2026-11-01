@@ -107,9 +107,12 @@
   /* --- Rechte in der Oberfläche ------------------------------------------------------------
      Der Server entscheidet (403), die Oberfläche blendet nur aus, was ohnehin scheitern würde:
      Prüfende bewerten, haken ab und kommentieren; Stammdaten, Leistungen, Löschen und das
-     Lehrgangsergebnis gehören der Lehrgangsleitung und der Administration (darf_leiten). */
+     Lehrgangsergebnis gehören der Lehrgangsleitung und der Administration (darf_leiten). Seit der Stufe Redakteur
+     (01.11.2026): Lehrgänge anlegen, importieren als neuer Lehrgang und Kataloge ab Redakteur (darfAnlegen), kopieren
+     nach darf_kopieren, einen Katalog bearbeiten nach darf_bearbeiten – ein Mitglied sieht nur die Lehrgänge, in denen
+     es als Ausbilder steht (der Server liefert keine anderen). */
   const darfLeiten = () => !!(state.lehrgang && state.lehrgang.darf_leiten);
-  const istAdmin = () => !!(window.STROEMIS && STROEMIS.user && STROEMIS.user.rechte && STROEMIS.user.rechte.pruefungen === 2);
+  const darfAnlegen = () => S.stufe("pruefungen") >= S.STUFE.redakteur;
   /* Knopfsprache (designsprache.md, nach_merge_liste Punkt 13): Seltene Zeilenaktionen stehen im Zeilenmenü „Mehr“
      (details.zeilenmenue wie in der Leitstelle, schließt über common.js), Verschieben als Textknöpfe statt ↑/↓. Die
      Einträge sind <button data-act …> – derselbe Klickverteiler wie vorher die einzelnen Knöpfe. */
@@ -537,9 +540,9 @@
     S.titel([], "pruefungen");
     root.innerHTML = `
       <div class="page-head"><h1>Riegenkarten</h1>
-        <div class="btn-row"><button class="btn secondary" data-act="lg-import">Import</button>
+        ${darfAnlegen() ? `<div class="btn-row"><button class="btn secondary" data-act="lg-import">Import</button>
           <a class="btn secondary" href="/riegenkarten/kataloge">Kataloge</a>
-          <button class="btn" data-act="lg-neu"><span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Lehrgang<span class="k-anlegen"> anlegen</span></span></button></div></div>
+          <button class="btn" data-act="lg-neu"><span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Lehrgang<span class="k-anlegen"> anlegen</span></span></button></div>` : ""}</div>
       <div class="su-banner hidden" id="su-banner"></div>
       <div class="filter">
         <input type="search" id="lg-suche" placeholder="Titel, Ort oder Nummer" aria-label="Lehrgänge durchsuchen" autocomplete="off">
@@ -571,7 +574,8 @@
     }
     if (!state.liste.length) {
       ziel.innerHTML = `<div class="leerzustand"><strong>${q || jahr ? "Kein Lehrgang passt zur Suche." : "Noch keine Lehrgänge"}</strong>
-        ${q || jahr ? "" : "Lege einen Lehrgang an oder importiere eine Excel-Teilnehmerliste."}</div>`;
+        ${q || jahr ? "" : darfAnlegen() ? "Lege einen Lehrgang an oder importiere eine Excel-Teilnehmerliste."
+          : "Hier stehen die Lehrgänge, in denen du als Ausbilder eingetragen bist."}</div>`;
       return;
     }
     ziel.innerHTML = `<table class="list" id="lg-tabelle">
@@ -587,14 +591,15 @@
         <td class="tabelle-aktionen"><div class="btn-row">
           <a class="btn secondary small" href="/riegenkarten/${lg.id}">Öffnen</a>
           ${lg.darf_leiten ? zeilenMenue([["Bearbeiten", `data-act="lg-edit" data-id="${lg.id}"`],
-            ["Kopieren", `data-act="lg-kopie" data-id="${lg.id}"`], ["Löschen", `data-act="lg-del" data-id="${lg.id}"`]]) : ""}
+            ...(lg.darf_kopieren ? [["Kopieren", `data-act="lg-kopie" data-id="${lg.id}"`]] : []),
+            ["Löschen", `data-act="lg-del" data-id="${lg.id}"`]]) : ""}
         </div></td></tr>`).join("")}</tbody></table>`;
   }
 
   /* ==========================================================================================
-     Kataloge: Vorlagen für Prüfungsleistungen, unabhängig von einem Lehrgang. Lesen darf jede:r
-     Prüfer:in (Auswahl beim Anlegen eines Lehrgangs); anlegen, ändern und löschen nur die
-     Administration – anders als beim Lehrgang gibt es keine Leitung, die dafür geradestünde.
+     Kataloge: Vorlagen für Prüfungsleistungen, unabhängig von einem Lehrgang. Lesen und anlegen ab Redakteur (Auswahl
+     beim Anlegen eines Lehrgangs); ändern und löschen ein Redakteur nur seine eigenen, die Verwaltung alle
+     (darf_bearbeiten vom Server) – anders als beim Lehrgang gibt es keine Leitung, die dafür geradestünde.
      ========================================================================================== */
   async function katalogeLaden(neu) {
     if (state.kataloge && !neu) return state.kataloge;
@@ -608,14 +613,13 @@
     root.innerHTML = `<a class="zurueck" href="/riegenkarten">← Alle Lehrgänge</a>
       <div class="page-head"><h1>Prüfungsleistungskataloge${info("Prüfungsleistungskataloge", `Ein Katalog ist eine Vorlage: Seine Prüfungsleistungen lassen sich beim Anlegen eines Lehrgangs
         einmalig übernehmen. Spätere Änderungen am Katalog wirken sich nicht mehr auf schon angelegte Lehrgänge aus.`)}</h1>
-        ${istAdmin() ? '<div class="btn-row"><button class="btn" data-act="kat-neu"><span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Katalog<span class="k-anlegen"> anlegen</span></span></button></div>' : ""}</div>
+        ${darfAnlegen() ? '<div class="btn-row"><button class="btn" data-act="kat-neu"><span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Katalog<span class="k-anlegen"> anlegen</span></span></button></div>' : ""}</div>
       <div id="kat-liste"><p class="help">Wird geladen …</p></div>`;
     const ziel = $("#kat-liste");
     const kataloge = await katalogeLaden(true);
     if (!ziel) return;
     if (!kataloge.length) {
-      ziel.innerHTML = `<div class="leerzustand"><strong>Noch keine Kataloge</strong>${istAdmin()
-        ? "Lege einen an, um Prüfungsleistungen als Vorlage bereitzustellen." : "Die Verwaltung der Riegenkarten legt sie an."}</div>`;
+      ziel.innerHTML = '<div class="leerzustand"><strong>Noch keine Kataloge</strong>Lege einen an, um Prüfungsleistungen als Vorlage bereitzustellen.</div>';
       return;
     }
     ziel.innerHTML = `<table class="list">
@@ -627,7 +631,7 @@
         <td data-l="Leistungen">${k.leistungen_anzahl}</td>
         <td class="tabelle-aktionen"><div class="btn-row">
           <a class="btn secondary small" href="/riegenkarten/kataloge/${k.id}">Öffnen</a>
-          ${istAdmin() ? zeilenMenue([["Bearbeiten", `data-act="kat-edit" data-id="${k.id}"`], ["Löschen", `data-act="kat-del" data-id="${k.id}"`]]) : ""}
+          ${k.darf_bearbeiten ? zeilenMenue([["Bearbeiten", `data-act="kat-edit" data-id="${k.id}"`], ["Löschen", `data-act="kat-del" data-id="${k.id}"`]]) : ""}
         </div></td></tr>`).join("")}</tbody></table>`;
   }
 
@@ -684,7 +688,7 @@
   function renderKatalogSeite() {
     const k = state.katalog;
     if (!k) return;
-    const admin = istAdmin();
+    const admin = !!k.darf_bearbeiten;      // eigener Katalog ab Redakteur, alle für die Verwaltung
     const ls = k.leistungen || [];
     S.titel(k.titel, "pruefungen");
     root.innerHTML = `<a class="zurueck" href="/riegenkarten/kataloge">← Alle Kataloge</a>

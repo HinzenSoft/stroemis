@@ -23,9 +23,10 @@
   }
 
   /* Rechte je Modul: Jeder Nutzer hat in jedem der fünf Module eine Stufe – kein Zugriff,
-     Mitglied oder Verwaltung. Was die Stufe im Modul bedeutet, steht hier an EINER Stelle und
-     erscheint als Titel am Auswahlfeld, in der Tabelle wie im Dialog. In der Leitstelle gibt
-     es kein „Mitglied“: Nutzer, Rechte und Einstellungen pflegt man ganz oder gar nicht.
+     Mitglied, Redakteur oder Verwaltung (Zahlen wie app/auth.py, S.STUFE). Was die Stufe im Modul bedeutet, steht hier
+     an EINER Stelle und erscheint als Titel am Auswahlfeld, in der Tabelle wie im Dialog. Redakteur gibt es nur in
+     Strömipedia, Ankerplätzen und Riegenkarten (Stufe Redakteur, 01.11.2026); in der Leitstelle gibt es nur „–“ und
+     „Verwaltung“: Nutzer, Rechte und Einstellungen pflegt man ganz oder gar nicht.
      In der Materialablage ist die Stufe der Zugang (Mitglied) bzw. die Material-Verwaltung; den Bestand
      zeigen einem Mitglied erst Freigaben, die der Verwalter eines Ordners vergibt.
      Die sichtbaren Namen (t) kommen aus app/module.py (STROEMIS.module) – die Schlüssel k bleiben. */
@@ -33,36 +34,40 @@
   const PFAD = (STROEMIS.module || {}).pfad || {};
   // Reihenfolge wie die Kopfleiste (Strömipedia, Ankerplätze, Riegenkarten, Materialablage, Leitstelle).
   const MODULE = [
-    { k: "wiki", t: NAME.wiki, hilfe: "Ohne Zugriff (–): nur die öffentlich freigegebenen Seiten lesen. Mitglied: eigene und freigegebene Seiten. Verwaltung: alle Seiten, beschränkte lesen, veröffentlichen, HTML-Bausteine, Ersteller ändern." },
-    { k: "karte", t: NAME.karte, hilfe: "Mitglied: eigene Alben anlegen und bearbeiten. Verwaltung: alle Alben." },
-    { k: "pruefungen", t: NAME.pruefungen, hilfe: "Mitglied: Prüfungen abnehmen (Prüfer). Verwaltung: zusätzlich Kataloge pflegen und jeden Lehrgang leiten." },
+    { k: "wiki", t: NAME.wiki, redakteur: true, hilfe: "Ohne Zugriff (–): nur die für alle Angemeldeten freigegebenen Seiten lesen. Mitglied: alle Seiten lesen und kommentieren. Redakteur: dazu eigene Seiten anlegen und bearbeiten. Verwaltung: alle Seiten, beschränkte lesen, für alle Angemeldeten freigeben, HTML-Bausteine, ZIP-Import, Ersteller ändern." },
+    { k: "karte", t: NAME.karte, redakteur: true, hilfe: "Mitglied: Spots ansehen. Redakteur: eigene Alben anlegen und bearbeiten. Verwaltung: alle Alben." },
+    { k: "pruefungen", t: NAME.pruefungen, redakteur: true, hilfe: "Mitglied: Lehrgänge, in denen das Konto als Ausbilder steht – dort bewerten. Redakteur: dazu Lehrgänge und eigene Kataloge anlegen. Verwaltung: alle Lehrgänge und Kataloge." },
     { k: "material", t: NAME.material, hilfe: "Mitglied: die Materialablage nutzen – Katalog, Suche, Profil; Bestand nur über Freigaben, die der Verwalter eines Ordners vergibt. Verwaltung: zusätzlich Produktkatalog pflegen (Kategorien, Produkte, Dokumente, Prüfformulare, Meldungen, Rückrufe), alle Bestände aller Gliederungen, Gliederungen anlegen, jede Freigabe. Prüfen nur mit Häkchen „Prüfer“, Urkundennummer und Prüffreigabe." },
     { k: "verwaltung", t: NAME.verwaltung, nurVoll: true,
       hilfe: "Verwaltung: Nutzer, Rechte und Einstellungen – schließt alle Rechte in allen Modulen ein." },
   ];
-  const STUFEN = [[0, "–"], [1, "Mitglied"], [2, "Verwaltung"]];
+  const ST = S.STUFE;
+  const STUFEN = [[ST.kein, "–"], [ST.mitglied, "Mitglied"], [ST.redakteur, "Redakteur"], [ST.verwaltung, "Verwaltung"]];
+  // Welche Stufen ein Modul kennt – wie auth.STUFEN_JE_MODUL: Redakteur nur, wo es eigene Inhalte gibt; Leitstelle ganz
+  // oder gar nicht.
+  const stufenVon = (m) => STUFEN.filter(([v]) => !(v === ST.redakteur && !m.redakteur) && !(m.nurVoll && v === ST.mitglied));
   const VORGABE = { karte: 0, wiki: 0, pruefungen: 0, material: 1, verwaltung: 0 };   // neues Konto (wie auth.VORGABE_NEU)
   const ERGIBT_SICH = "ergibt sich aus Verwaltung";
 
   /* Ein Auswahlfeld für die Stufe eines Moduls. Steht die Verwaltung auf „Verwaltung“, sind die
-     übrigen vier Felder nur noch Anzeige: Der Server speichert dort ohnehin 2, und ein Feld, das
+     übrigen vier Felder nur noch Anzeige: Der Server speichert dort ohnehin Verwaltung, und ein Feld, das
      man umstellt und das sofort zurückspringt, wäre verwirrender als ein abgeschaltetes. Das
      eigene Konto kann sich die Verwaltung nicht entziehen – der Server lehnt es ab, also wird
      es gar nicht erst angeboten. */
   function rechtFeld(m, rechte, opts) {
     opts = opts || {};
     rechte = rechte || {};
-    const voll = (rechte.verwaltung | 0) === 2;
+    const voll = (rechte.verwaltung | 0) === ST.verwaltung;
     let wert = rechte[m.k] | 0, aus = false, titel = m.hilfe;
-    if (m.k !== "verwaltung" && voll) { wert = 2; aus = true; titel = ERGIBT_SICH; }
+    if (m.k !== "verwaltung" && voll) { wert = ST.verwaltung; aus = true; titel = ERGIBT_SICH; }
     if (m.k === "verwaltung" && opts.eigenes) { aus = true; titel = "Dein eigenes Konto: Die Verwaltung kannst du dir nicht selbst entziehen."; }
-    const stufen = STUFEN.filter(([v]) => !(m.nurVoll && v === 1));
+    const stufen = stufenVon(m);
     return `<select class="recht-wahl" data-modul="${m.k}"${opts.id ? ` id="${opts.id}"` : ""} aria-label="${S.esc(m.t)}"
       title="${S.esc(titel)}"${aus ? " disabled" : ""}>${stufen.map(([v, l]) => `<option value="${v}"${v === wert ? " selected" : ""}>${l}</option>`).join("")}</select>`;
   }
 
   /* Die fünf Zellen einer Zeile neu zeichnen – nach jeder Antwort des Servers, ob Erfolg oder
-     Fehler: So zeigt die Zeile immer das, was gespeichert ist, und bei verwaltung = 2 ziehen
+     Fehler: So zeigt die Zeile immer das, was gespeichert ist, und bei Verwaltung in der Leitstelle ziehen
      die anderen vier Felder von selbst nach. */
   function zeichneRechte(tr, u) {
     MODULE.forEach((m) => {
@@ -212,10 +217,10 @@
       </div>
       <label for="u-email">E-Mail-Adresse</label><input type="email" id="u-email" value="${S.esc(u.email)}" required>
       <label for="u-phone">Telefon</label><input type="tel" id="u-phone" value="${S.esc(u.phone)}">
-      <label>Rechte${S.info("Rechte", `„–“ kein Zugriff (in der Strömipedia: nur die öffentlichen Seiten lesen) · „Mitglied“ eigene Inhalte, bei den Riegenkarten:
-        Prüfungen abnehmen, bei der Materialablage: sie nutzen (Bestand über Freigaben je Ordner) · „Verwaltung“ alles im Modul,
-        bei der Materialablage auch Produktkatalog und alle Bestände. Verwaltung in der Leitstelle schließt alle Rechte ein.
-        Was eine Stufe genau umfasst, steht als Hinweis am Feld.`)}</label>
+      <label>Rechte${S.info("Rechte", `„–“ kein Zugriff (in der Strömipedia: nur die für alle Angemeldeten freigegebenen Seiten lesen) · „Mitglied“ liest und arbeitet mit
+        (Riegenkarten: bewertet in den eigenen Lehrgängen; Materialablage: Bestand über Freigaben je Ordner) · „Redakteur“
+        (Strömipedia, Ankerplätze, Riegenkarten) legt eigene Inhalte an · „Verwaltung“ alles im Modul. Verwaltung in der
+        Leitstelle schließt alle Rechte ein. Was eine Stufe genau umfasst, steht als Hinweis am Feld.`)}</label>
       <div class="rechte-reihe">${MODULE.map((m) => `<div><label for="u-r-${m.k}">${m.t}</label>${rechtFeld(m, rechte, { id: "u-r-" + m.k, eigenes, konto: u })}</div>`).join("")}</div>
       <fieldset class="mat-rollen"><legend>Materialablage</legend>
         <label class="inline"><input type="checkbox" id="u-mat-pruefer" ${u.mat_pruefer ? "checked" : ""}> Prüfer (Sachkundiger)${S.info("Prüfer", `Das Häkchen wirkt nur mit Stufe „Mitglied“ oder „Verwaltung“ in der Materialablage. Urkundennummer und Unterschrift
@@ -284,10 +289,10 @@
     });
     const chef = body.querySelector("#u-r-verwaltung");
     chef.addEventListener("change", () => {
-      const voll = chef.value === "2";
+      const voll = +chef.value === ST.verwaltung;
       MODULE.filter((m) => m.k !== "verwaltung").forEach((m) => {
         const f = body.querySelector("#u-r-" + m.k);
-        if (voll) { f.dataset.vorher = f.value; f.value = "2"; f.disabled = true; f.title = ERGIBT_SICH; }
+        if (voll) { f.dataset.vorher = f.value; f.value = String(ST.verwaltung); f.disabled = true; f.title = ERGIBT_SICH; }
         else { f.disabled = false; f.title = m.hilfe; if (f.dataset.vorher !== undefined) f.value = f.dataset.vorher; }
       });
       if (!voll && offen) { offen = false; heben(); }
@@ -328,7 +333,7 @@
   });
 
   /* Rechte direkt in der Tabelle ändern: ein Wechsel, ein PUT mit nur diesem Modul. Die Antwort
-     trägt die vollständigen Rechte – bei verwaltung = 2 also auch die drei nachgezogenen –, und
+     trägt die vollständigen Rechte – bei Verwaltung in der Leitstelle also auch die nachgezogenen –, und
      daraus wird die Zeile gezeichnet. Schlägt es fehl (etwa weil man sich selbst die Verwaltung
      entzieht), bleibt der alte Stand und das Feld springt zurück. Material auf „–“ beim einzigen
      Materialwart einer Gliederung erst nach der Rückfrage (materialwartBleibt) – Abbrechen ebenso.
@@ -436,7 +441,7 @@
         <td data-l="Zustand">${zustand(f)}</td>
         <td class="tabelle-aktionen"><button class="btn secondary small" type="button" data-entziehen="${f.id}">Entziehen</button></td>
       </tr>`).join("")}</tbody></table>`
-      : ((u.rechte || {}).material | 0) === 2
+      : ((u.rechte || {}).material | 0) === ST.verwaltung
         ? '<p class="leerzustand">Keine Freigaben – als Material-Verwaltung sieht das Konto ohnehin alle Bestände; prüfen nur mit eigener Prüffreigabe.</p>'
         : '<p class="leerzustand">Keine Freigaben – das Konto sieht keinen Bestand.</p>';
     el.querySelectorAll("[data-entziehen]").forEach((b) => b.addEventListener("click", async () => {
