@@ -40,6 +40,10 @@
   --font: Univers, "Univers Next", "Univers LT Std", Arial, Helvetica, sans-serif;
   --font-marke: "DLRG Univers", Univers, "Univers Next", Arial, Helvetica, sans-serif;
   --topbar: 52px;
+  /* Höhe der Kopfleiste. --topbar ist der Platz, den sie oben im Fenster belegt, solange sie klebt – klebende Leisten,
+     Schubladen und Sprungziele rechnen damit. Bei wenig Höhe oder offener Tastatur klebt sie nicht (Gerätetest Q1, unten
+     bei der Kopfzeile), dann ist --topbar 0; was die Leiste selbst misst, rechnet mit --kopf-hoehe. */
+  --kopf-hoehe: 52px;
   /* Ränder, die Kerbe, Kamera und Wischleiste freihalten (viewport-fit=cover); am Rechner null. Feste und klebende
      Leisten (Schublade, Sammel- und Abschlussleiste, Lightbox) rechnen sie zu ihrem Innenabstand. */
   --sicher-oben: env(safe-area-inset-top, 0px);
@@ -135,7 +139,7 @@ h3.abgesetzt { margin-top: 18px; }
 /* --- Kopfzeile: die rote Bauchbinde ---------------------------------- */
 .bauchbinde {
   position: sticky; top: 0; z-index: 1200;
-  height: var(--topbar);
+  height: var(--kopf-hoehe);
   background: var(--rot);
   color: var(--weiss);
   display: flex; align-items: stretch; gap: 8px;
@@ -224,7 +228,7 @@ h3.abgesetzt { margin-top: 18px; }
 .nav-mehr-knopf[aria-expanded="true"] { background: rgba(255,255,255,.16); }
 .nav-mehr-knopf[aria-expanded="true"]::after { transform: translateY(1px) rotate(-135deg); }
 .nav-mehr-liste { position: absolute; top: 100%; right: max(6px, var(--sicher-rechts)); z-index: 2;
-  min-width: 200px; max-width: calc(100vw - 12px); max-height: calc(100dvh - var(--topbar) - 12px); overflow-y: auto;
+  min-width: 200px; max-width: calc(100vw - 12px); max-height: calc(100dvh - var(--kopf-hoehe) - 12px); overflow-y: auto;
   padding: 6px 0; background: var(--weiss); border: 1px solid var(--linie); border-radius: 0 0 var(--radius-gross) var(--radius-gross);
   box-shadow: var(--schatten-menue); }
 .nav-mehr-liste[hidden] { display: none; }
@@ -237,6 +241,17 @@ h3.abgesetzt { margin-top: 18px; }
 .nav .nav-mehr-liste a.active { border-left-color: var(--rot); color: var(--rot); }
 .nav .nav-mehr-liste .user { display: none; }
 .bauchbinde .nav-mehr-liste :focus-visible { outline-color: var(--anthrazit); outline-offset: -3px; }
+/* Wenig Höhe (Gerätetest 01.11.2026, Q1): Telefon und Tablet quer, ein niedriges Fenster oder eine offene Bildschirm-
+   tastatur (html.tastatur, common.js – auch auf Android) lassen oft keine 100 px übrig; die klebende Kopfleiste deckte
+   dann das Feld zu, in das man tippt. Sie rollt jetzt mit der Seite weg (unabhängig von der Breite); --topbar ist 0, so
+   rücken klebende Leisten, Schubladen und Sprungziele an den oberen Rand. Schubladen und ihre Abdunklung liegen dann über
+   der Kopfleiste (z-index unter 1090/1100) – oben, solange die Seite nicht gerollt ist, verdeckte sie sonst deren Kopf. */
+@media (max-height: 500px) {
+  :root { --topbar: 0px; }
+  .bauchbinde { position: relative; z-index: 1080; }
+}
+html.tastatur { --topbar: 0px; }
+html.tastatur .bauchbinde { position: relative; z-index: 1080; }
 /* Auf dem Telefon bleibt von 36 px Seitenpolster nichts für den Text – Lesen und Schreiben
    teilen sich die Variable, das Raster bleibt deckungsgleich. */
 /* Tablet (bis 1024 px): Der Seitenbaum darf höchstens 260 px breit sein – auch wenn jemand ihn
@@ -564,7 +579,7 @@ html.tastatur dialog[open] .dlg-body { max-height: calc(var(--vv-h, 100dvh) - 22
 .section .abschnittskopf:has(> :not(h2, h3)) > h2 { border-bottom: 0; padding-bottom: 0; }
 
 /* --- Anmeldung --------------------------------------------------------- */
-.login-shell { min-height: calc(100vh - var(--topbar)); display: grid; grid-template-columns: 1fr minmax(340px, 33%); }
+.login-shell { min-height: calc(100vh - var(--kopf-hoehe)); display: grid; grid-template-columns: 1fr minmax(340px, 33%); }
 .login-side {
   background: var(--rot); color: var(--weiss); padding: 48px 40px;
   display: flex; flex-direction: column; justify-content: flex-end;
@@ -581,7 +596,11 @@ html.tastatur dialog[open] .dlg-body { max-height: calc(var(--vv-h, 100dvh) - 22
   padding: 48px 40px; max-width: 420px; width: 100%; margin: 0 auto;
   display: flex; flex-direction: column; justify-content: center;
 }
-.login-form h2 { margin-bottom: 14px; }
+/* Die Überschrift ist die H1 der Seite (Gerätetest B11), sieht aber aus wie bisher die H2. */
+.login-form h1 { margin-bottom: 14px; font-size: 1.3rem; color: var(--anthrazit); }
+/* Fehlermeldung: steht immer da (role="alert", B7) – leer ohne Platz. */
+.login-form .error:empty { margin: 0; }
+.login-form .pw-zeigen { margin-top: 8px; }
 .login-form .btn { width: 100%; justify-content: center; margin-top: 16px; }
 .login-links { margin-top: 18px; font-size: var(--fs-mittel); display: flex; flex-wrap: wrap; gap: 6px 16px; }
 @media (max-width: 760px) {
@@ -597,14 +616,15 @@ html.tastatur dialog[open] .dlg-body { max-height: calc(var(--vv-h, 100dvh) - 22
 /* Wenig Höhe (Telefon quer): weniger Polster, damit Feld und Knopf ins erste Bild passen (C1, 844 × 390). */
 @media (max-height: 500px) {
   .login-form { padding-top: 14px; padding-bottom: 20px; justify-content: flex-start; }
-  .login-form h2 { margin-bottom: 6px; }
+  .login-form h1 { margin-bottom: 6px; }
   .login-form label { margin-top: 8px; }
-  .login-form .btn { margin-top: 12px; }
+  .login-form .pw-zeigen { margin: 0; }                  /* „Passwort anzeigen“ dicht unter dem Feld (B9) */
+  .login-form .btn { margin-top: 8px; }
   .login-side { padding-top: 20px; padding-bottom: 20px; justify-content: flex-start; }
 }
 
 /* --- Karte ------------------------------------------------------------- */
-.map-shell { position: relative; height: calc(100vh - var(--topbar)); height: calc(100dvh - var(--topbar)); overflow: hidden; }
+.map-shell { position: relative; height: calc(100vh - var(--kopf-hoehe)); height: calc(100dvh - var(--kopf-hoehe)); overflow: hidden; }
 #map { position: absolute; inset: 0; background: var(--grau-hell); }
 .map-tools {
   position: absolute; top: 12px; left: 12px; z-index: 900;
@@ -2451,6 +2471,7 @@ dialog.us-dlg { width: min(640px, 96vw); }
   .profil-seite input:not([type=checkbox]):not([type=radio]):not([type=file]), .profil-seite .btn { min-height: 44px; }
   /* Häkchen mit Etikett (z. B. „Erinnerungen zu meiner PSA per Mail“): Tippfläche über das ganze Etikett. */
   .profil-seite label.inline { min-height: 44px; }
+  .login-form label.inline { min-height: 44px; }          /* „Passwort anzeigen“ (Gerätetest B9) */
   .comment-fab { padding: 11px 16px; font-size: 1rem; }
   .panel-body, .lb-side, .wiki-side { overscroll-behavior: contain; }
   /* Der Toast lag unten – auf dem Telefon hinter der Tastatur. Oben, unter der Bauchbinde. #toast[popover] mit: Die

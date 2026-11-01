@@ -66,7 +66,8 @@ Einstellungen, Gruppe „Seite“).
 - Beim Umstieg von den früheren Rollen werden sie einmalig übertragen: Administrator → überall Verwaltung, die damalige Rolle „Redakteur“ (bis 16.10.2026 – nicht die heutige Stufe) → Verwaltung in Spots und Wiki, Nutzer → Mitglied in Spots und Wiki, das Prüfer-Häkchen → Mitglied in Prüfungen.
 
 **Anmeldeseite**
-- Slideshow mit zufälligen Bildern aus den Ankerplätzen (langsam wandernd, überblendet; abschaltbar mit `LOGIN_SLIDESHOW=false`, respektiert „Bewegung reduzieren“). Die Bilder werden über signierte, 24 h gültige Links ausgeliefert (bleibt ohne Anmeldung). Eine Strömipedia ohne Anmeldung gibt es seit dem 01.11.2026 nicht mehr.
+- Slideshow mit zufälligen Bildern aus den Ankerplätzen (langsam wandernd, überblendet; abschaltbar mit `LOGIN_SLIDESHOW=false`, respektiert „Bewegung reduzieren“). Die Bilder werden über signierte, 24 h gültige Links ausgeliefert (bleibt ohne Anmeldung). Eine Strömipedia ohne Anmeldung gibt es seit dem 01.11.2026 nicht mehr. Seit dem Gerätetest (01.11.2026) in einer eigenen kleinen Fassung – WebP, längste Kante 1000 px, angelegt beim ersten Abruf unter `media/slide/` (ein Zehntel der Web-Variante) –; geladen werden nur das gezeigte und das nächste Bild, erst wenn die Fläche im Bild ist, und in einem verborgenen Reiter wird nicht weitergeblättert.
+- Eine Überschrift erster Ordnung je Seite (Anmelden, Konto anfragen, Passwort zurücksetzen, Neues Passwort setzen); „Passwort anzeigen“ als Häkchen unter dem Passwortfeld (auch „Passwort ändern“ im Profil); Fehlermeldungen werden vorgelesen (`role="alert"`, die Felder verweisen mit `aria-describedby` darauf), nach „falsch“ steht der Fokus im Passwortfeld; die Antworten auf „Link anfordern“ und „Konto anfragen“ sind Live-Regionen. Nach dem Anmelden ersetzt die Zielseite die Anmeldeseite im Verlauf (Zurück führt nicht mehr auf ein leeres Anmeldeformular).
 
 **Riegenkarten** (Modul „pruefungen“; nur mit Zugang zu den Riegenkarten)
 - Lehrgänge mit Titel, Nummer, Zeitraum, Ort, Status, Lehrgangsleitung und Referierenden (immer Konten mit Stufe in den Riegenkarten, gesucht über Name oder E-Mail-Adresse – Freitext-Ausbilder gibt es seit dem 01.11.2026 nicht mehr, siehe [„Ausbilder nur mit Konto“](#ausbilder-nur-mit-konto-01112026)). Liste mit Suche, Jahresfilter, Teilnehmerzahl, Fortschritt („18/24 Leistungen abgenommen“) und offenen Mängeln.
@@ -708,7 +709,7 @@ Account und mindestens das Recht Mitglied, oder machen keine Lehrgänge.“ Best
 
 ## Daten und Sicherung
 
-Alles liegt im Volume `/data`: `stroemis.db` (SQLite), `media/orig` (Originale), `media/web` und `media/thumb` (erzeugte Varianten), `media/wiki` (Wiki-Bilder), `media/avatar` (Profilbilder), `media/pruefungen` (Medien zu Prüfungen), `media/material` (Fotos, Herstellerdokumente und Prüfanhänge der Materialablage; Herstellerdokumente unter `media/material/dok/<SHA-256>.<Endung>`, eine Datei je Inhalt), `pdf/` (festgeschriebene Protokolle der Materialablage, schreibgeschützt – unbedingt mitsichern: die Datenbank verweist auf sie, und ihre Prüfsummen lassen sich nicht neu erzeugen), `secret_key`, nur auf dev `sicherung-material-…` (Sicherungen von `material dev-zuruecksetzen`, siehe dort) und `tmp/` (Zwischendateien laufender Uploads und Exporte – muss nicht gesichert werden), `katalog-import/` (Zwischendaten des Katalogimports im Hintergrund, nach 7 Tagen weg – muss nicht gesichert werden). Verwaiste Dateien unter `media/wiki` räumt der Hintergrundlauf nach einer Woche weg (siehe „Wie die Anwendung abgesichert ist“).
+Alles liegt im Volume `/data`: `stroemis.db` (SQLite), `media/orig` (Originale), `media/web` und `media/thumb` (erzeugte Varianten), `media/slide` (Fassungen der Anmeldeseite, entstehen bei Bedarf neu – muss nicht gesichert werden), `media/wiki` (Wiki-Bilder), `media/avatar` (Profilbilder), `media/pruefungen` (Medien zu Prüfungen), `media/material` (Fotos, Herstellerdokumente und Prüfanhänge der Materialablage; Herstellerdokumente unter `media/material/dok/<SHA-256>.<Endung>`, eine Datei je Inhalt), `pdf/` (festgeschriebene Protokolle der Materialablage, schreibgeschützt – unbedingt mitsichern: die Datenbank verweist auf sie, und ihre Prüfsummen lassen sich nicht neu erzeugen), `secret_key`, nur auf dev `sicherung-material-…` (Sicherungen von `material dev-zuruecksetzen`, siehe dort) und `tmp/` (Zwischendateien laufender Uploads und Exporte – muss nicht gesichert werden), `katalog-import/` (Zwischendaten des Katalogimports im Hintergrund, nach 7 Tagen weg – muss nicht gesichert werden). Verwaiste Dateien unter `media/wiki` räumt der Hintergrundlauf nach einer Woche weg (siehe „Wie die Anwendung abgesichert ist“).
 
 **Stündliche Sicherung nach `~/data.bak`** – ein einzelner Cron-Eintrag auf dem VPS. Er gehört in den Cron des
 Nutzers, dem `data/` gehört (uid 1000), oder in den von root: Nur die dürfen `secret_key` lesen. Mit `crontab -e`
@@ -969,6 +970,8 @@ python tests/test_module_info_i.py      # Info-„i“ app-weit: S.info und Jinj
                                         # umgestellten Stellen je Modul, was sichtbar bleibt, Marken je Liste, Vorlagen gerendert
 python tests/test_module_letzte_offene.py  # Letzte offene Punkte: Datenschutzsätze am „i“ eine Zeile, Baumknöpfe der Strömipedia,
                                         # Blatt-Symbol „Angaben zur Seite“, Abschnittsaktion neben der Überschrift
+python tests/test_geraetetest_teil1.py  # Gerätetest Teil 1: Slideshow als WebP, Anmeldeseiten (H1, Meldung, Passwort anzeigen,
+                                        # location.replace), Menüs und Zurück, Schubladen inert, Kopfleiste bei wenig Höhe, Toast
 python tests/test_module_uiux_verhalten.py  # UI/UX vor dem Merge, Teil U1a: Zurück schließt Overlays, Fehler am Feld, ein
                                         # Menübaustein, Rückfragen, Mehrzahl, Export mit Uhrzeit, Fehlerseiten, Bedienzeichen
 python tests/test_wiki_fehlerart.py     # Fehlerart beim Ablegen von Dateien der Strömipedia (Import, Hochladen, Drehen, Zuschneiden)
@@ -1078,7 +1081,10 @@ app/
   static/js/       common.js       gemeinsame Helfer (api, esc, dialog, toast, Datum, info – das „i“ hinter einem Begriff;
                                    seit UI/UX vor dem Merge: Zurück schließt Overlays (overlayVerlauf, dialogVerlauf,
                                    klassenVerlauf), Fehler am Feld (feldFehler, fehlschlag), ein Menübaustein (menue,
-                                   menueSchwebend), confirm mit { endgueltig: false }, plural, rollen, Bedienzeichen ✕ ↑ ↓)
+                                   menueSchwebend), confirm mit { endgueltig: false }, plural, rollen, Bedienzeichen ✕ ↑ ↓;
+                                   seit dem Gerätetest 01.11.2026: Zurück und Esc schließen auch Menüs, schubladeZustand
+                                   (zugeklappt inert), toast als gemeinsame Rückmeldung, html.tastatur auch auf Android,
+                                   „Passwort anzeigen“ über data-pw-zeigen)
                    markdown.js     Renderer: Callouts, Spalten, Boxen, Videos, TOC, Auszeichnungen
                    editor-format.js  Markdown <-> Editorformat (reine Funktionen, trägt den Rundlauf)
                    editor-layout.js  Darstellung der Abschnitte im Editor (ProseMirror-Dekorationen)

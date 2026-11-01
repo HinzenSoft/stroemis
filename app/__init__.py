@@ -18,7 +18,7 @@ from werkzeug.security import safe_join
 
 from . import (api_admin, api_albums, api_pruefungen, api_wiki, auth, db, einstellungen, material, medienpflege, module,
                pwa)
-from .images import AVATAR_MAX_BYTES, EMBED_EXT, VIDEO_EXT
+from .images import AVATAR_MAX_BYTES, EMBED_EXT, VIDEO_EXT, slide_variante
 
 
 def _env_bool(name, default=False):
@@ -265,7 +265,9 @@ def slide(token):
         name = _slide_serializer().loads(token, max_age=60 * 60 * 24)
     except BadSignature:
         abort(404)
-    return _media_response(os.path.join(current_app.config["MEDIA_DIR"], "web"), name, 3600, private=True)
+    # Die kleine WebP-Fassung statt der Web-Variante (Gerätetest B1) – angelegt beim ersten Abruf.
+    ordner, datei = slide_variante(current_app.config["MEDIA_DIR"], name)
+    return _media_response(ordner, datei, 3600, private=True)
 
 
 @pages.get("/profil")

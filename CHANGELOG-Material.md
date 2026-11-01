@@ -10327,6 +10327,52 @@ es wegen des Schemaschritts.
 - Tests: `tests/test_rechte_ausbilder.py` (neu); angepasst: test_pruefungen (Konten statt Freitext), test_rechte_redakteur
   (Schema 34, kein Freitext-Lehrgang mehr), test_pruefungen_import (`email` am Ausbilder).
 
+## Gerätetest 01.11.2026 – Teil 1 (Anmeldung und Gemeinsames)
+
+Wunsch des Nutzers (01.11.2026): „Nimm diesen UI/UX Test und setze die Findings um.“ Auftrag
+planung/geraetetest/auftrag_geraetetest.md, Teil 1; jeder Befund wurde vorher auf dem Basisstand im Browser nachgestellt
+(Bericht planung/geraetetest/bericht_teil1.md). Betrifft alle Module; hier steht es, weil hier die übrigen
+Querschnitts-Abschnitte stehen. Kein Schemaschritt.
+
+- **B1 Slideshow der Anmeldeseite:** `/media/slide/<token>` liefert eine eigene Fassung (WebP, längste Kante 1000 px,
+  Qualität 72; `images.slide_variante`), angelegt beim ersten Abruf aus der Web-Variante unter `media/slide/<key>.webp`
+  und neu, wenn die Web-Variante jünger ist; geht das Umwandeln nicht, wie bisher die Web-Variante. Mit dem Foto wird
+  sie gelöscht (`delete_photo_files`). Gemessen mit Platzhalterbildern: rund 40 statt 400 kB je Bild. `auth.js` lädt
+  nur das gezeigte und – sobald es steht – das nächste Bild, beginnt erst, wenn die Fläche im Bild ist
+  (IntersectionObserver; am Telefon steht sie unter dem Formular), und blättert in einem verborgenen Reiter nicht weiter.
+  „Zwölf Bilder auf einmal“ war auf dem Basisstand nicht nachzustellen (ein Bild je 9 s).
+- **B7/B9/B11/B15 Anmeldeseiten:** eine H1 je Seite (sieht aus wie bisher die H2); `#err` ist `role="alert"`, steht immer
+  im Dokument (leer ohne Platz) und die Felder verweisen mit `aria-describedby` darauf; nach „falsch“ steht der Fokus im
+  markierten Passwortfeld, sonst auf dem Knopf (vorher auf der Seite). „Passwort anzeigen“ (Häkchen
+  `data-pw-zeigen`, common.js schaltet alle Passwortfelder des Formulars um, ohne Großschreibung und Autokorrektur):
+  Anmelden, Konto anfragen, Neues Passwort setzen, Profil „Passwort ändern“; 44 px Tippfläche am Finger. Die Antworten
+  auf „Link anfordern“ und „Konto anfragen“ ersetzen das Formular in einer Live-Region (`aria-live="polite"`). Nach dem
+  Anmelden, Konto anlegen und Passwort setzen `location.replace` statt `location.href`.
+- **B5 Zurück schließt Menüs:** Das Menü „Mehr“ der Kopfleiste und jedes `S.menue`-/`S.menueSchwebend`-Menü legt beim
+  Öffnen einen Verlaufseintrag an (`S.overlayVerlauf`, wie Dialoge und Schubladen); Zurück schließt das Menü statt die
+  Seite zu verlassen, Schließen auf anderem Weg (Esc, daneben, Eintrag gewählt, Tab hinaus) nimmt den Eintrag wieder
+  heraus; ein Menü, das mit seiner Ansicht verschwindet, gibt ihn beim nächsten Klick ab; beim Verlassen der Seite
+  schließen offene Menüs (bfcache). Ein Eintrag im Menü „Mehr“ schließt es.
+- **B14 Schubladen:** `S.schubladeZustand(el, knoepfe)` (common.js): zugeklappt (ohne „open“, solange `position: fixed`)
+  `inert` und `aria-hidden`, die Knöpfe tragen `aria-expanded` – Seitenbaum der Strömipedia (`#wiki-menu`, `#pg-baum`
+  mit `aria-controls`, Name jetzt „Seitenbaum“) und im Lesemodus; die Ordnerleiste der Materialablage war schon inert
+  und bekommt `aria-hidden` dazu.
+- **Q1 Wenig Höhe:** Bei einer Fensterhöhe bis 500 px (unabhängig von der Breite) und bei offener Bildschirmtastatur
+  (`html.tastatur`) klebt die Kopfleiste nicht mehr; `--topbar` ist dann 0, klebende Leisten, Schubladen und Sprungziele
+  rücken an den oberen Rand, Schubladen liegen über der Kopfleiste. Neues Token `--kopf-hoehe` (52 px) für das, was die
+  Leiste selbst misst (Höhe, Karte, Anmeldeseite, Menü „Mehr“). `html.tastatur` jetzt auch auf Android (Fenster bei
+  gleicher Breite über 150 px niedriger, während ein Eingabefeld den Fokus hat; nur bei grobem Zeiger); beim Aufgehen der
+  Tastatur kommt das Feld mit dem Fokus in die Mitte des Rests (vorher nur in Dialogen), beim Wechsel von Feld zu Feld,
+  wenn es nicht ganz im Bild steht. Text im Editor der Strömipedia zieht der Editor selbst nach (Teil 2).
+- **FT4/FT7 Rückmeldung:** `S.toast(text)` ist die gemeinsame Erfolgsmeldung (`role="status"`, Fehler `role="alert"`);
+  der Toast bleibt nach dem Ausblenden als leere, unsichtbare Live-Region geöffnet und kommt bei jeder Meldung neu nach
+  oben – so sagt die Vorlesehilfe auch die zweite Meldung sicher an. Profil „Speichern“ meldete schon „Profil
+  gespeichert“. `S.feldFehler` setzt `role="alert"` an die Meldung (überall, wo sie benutzt wird).
+- **B17** („Deprecated API for given entry type“): kommt nicht aus der Anwendung – Chromium meldet es für
+  `performance.getEntriesByType("largest-contentful-paint" | "layout-shift" | "longtask" | "event")`, die nur das
+  Messskript des Tests aufruft; nichts geändert.
+- Tests: `tests/test_geraetetest_teil1.py` (neu).
+
 ## Gerätetest 01.11.2026 – Teil 5 (Ankerplätze, Leitstelle, Profil)
 
 Auftrag planung/geraetetest/auftrag_geraetetest.md, Teil 5 („Nimm diesen UI/UX Test und setze die Findings um“; Befunde

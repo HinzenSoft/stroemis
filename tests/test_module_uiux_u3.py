@@ -150,7 +150,7 @@ def test_c1_c5_anmeldung_und_texte():
     vergessen = login[login.index("{% elif mode == 'forgot' %}"):login.index("{% else %}", login.index("{% elif mode == 'forgot' %}"))]
     assert "Spam" not in re.sub(r"\{#.*?#\}", "", vergessen, flags=re.S)
     reg = login[login.index("{% elif mode == 'register' %}"):login.index("{% elif mode == 'forgot' %}")]
-    assert reg.index('<form id="f-register">') < reg.index('id="reg-spam"')
+    assert reg.index('<form id="f-register"') < reg.index('id="reg-spam"')
     assert 'const spam = document.getElementById("reg-spam");' in lies("app/static/js/auth.js")
     with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
         app = _app(tmp)

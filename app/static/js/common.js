@@ -67,21 +67,35 @@ window.S = (function () {
 
   /* Der Toast liegt als Popover in der obersten Ebene des Browsers – über dem Backdrop eines
      modalen Dialogs. Sonst stand „Bitte einen Nutzer wählen“ gedimmt HINTER dem Dialog, aus
-     dem die Meldung kam. Ältere Browser ohne Popover zeigen ihn wie bisher. */
+     dem die Meldung kam. Ältere Browser ohne Popover zeigen ihn wie bisher.
+     Die gemeinsame Rückmeldung für jede Schreibaktion (Gerätetest 01.11.2026, FT4): S.toast("Gespeichert") – eine
+     Bestätigung als role="status" (höflich), ein Fehler (isError) als role="alert". Damit die Vorlesehilfe sie sicher
+     ansagt, bleibt der Toast nach dem Ausblenden geöffnet (unsichtbar, ohne Text, nimmt keine Klicks an): Eine Live-Region,
+     die erst mit ihrem Text sichtbar wird, sagt Chrome nicht verlässlich an – eine, deren Text sich ändert, schon. Bei
+     jeder Meldung kommt er neu nach oben (über einen inzwischen geöffneten Dialog, sonst wäre er hinter dessen
+     Abdunklung inert). */
   function toast(msg, isError) {
     const el = document.getElementById("toast");
     if (!el) return;
-    el.textContent = msg;
-    el.className = "show" + (isError ? " err" : "");
     // Ein Fehler unterbricht sofort (assertive), eine Bestätigung wartet, bis eine Sprechpause ist.
-    el.setAttribute("role", isError ? "alert" : "status");
-    el.setAttribute("aria-live", isError ? "assertive" : "polite");
+    const rolle = isError ? "alert" : "status";
+    if (el.getAttribute("role") !== rolle) {
+      el.setAttribute("role", rolle);
+      el.setAttribute("aria-live", isError ? "assertive" : "polite");
+    }
+    el.className = "show" + (isError ? " err" : "");
     toastPositionieren(el);
-    try { if (!el.hasAttribute("popover")) el.setAttribute("popover", "manual"); el.showPopover(); } catch (e) { /* kein Popover */ }
+    try {
+      if (!el.hasAttribute("popover")) el.setAttribute("popover", "manual");
+      if (el.matches(":popover-open")) el.hidePopover();
+      el.showPopover();
+    } catch (e) { /* kein Popover */ }
+    el.textContent = msg;
     clearTimeout(toastTimer);
     toastTimer = setTimeout(() => {
       el.className = "";
-      try { el.hidePopover(); } catch (e) { /* egal */ }
+      // Nach dem Ausblenden (Übergang 0,2 s) ohne Text – sonst fände man die alte Meldung beim Lesen der Seite.
+      toastTimer = setTimeout(() => { el.textContent = ""; }, 250);
     }, isError ? 5000 : 2800);
   }
 
@@ -217,6 +231,25 @@ window.S = (function () {
       }
     };
     new MutationObserver(pruefen).observe(el, { attributes: true, attributeFilter: ["class"] });
+    pruefen();
+  }
+
+  /* Eine Seitenleiste, die unter 1024 px zur Schublade wird (Seitenbaum der Strömipedia; Gerätetest 01.11.2026, B14):
+     Zugeklappt ist sie inert und aria-hidden – für Tastatur und Vorlesehilfe nicht da, nicht nur nach links geschoben.
+     Die Knöpfe, die sie öffnen (knoepfe: Selektor, auch später gezeichnete), tragen aria-expanded. Zugeklappt heißt: ohne
+     die Klasse „open“, solange sie eine Schublade ist (position: fixed); ab 1024 px steht sie fest daneben und bleibt
+     bedienbar. Neu geprüft bei jedem Öffnen und Schließen und wenn sich die Fenstergröße ändert. */
+  function schubladeZustand(el, knoepfe) {
+    if (!el) return;
+    const pruefen = () => {
+      const auf = el.classList.contains("open");
+      const zu = !auf && getComputedStyle(el).position === "fixed";
+      el.inert = zu;
+      if (zu) el.setAttribute("aria-hidden", "true"); else el.removeAttribute("aria-hidden");
+      if (knoepfe) document.querySelectorAll(knoepfe).forEach((k) => k.setAttribute("aria-expanded", String(auf)));
+    };
+    new MutationObserver(pruefen).observe(el, { attributes: true, attributeFilter: ["class"] });
+    window.addEventListener("resize", pruefen);
     pruefen();
   }
 
@@ -448,7 +481,14 @@ window.S = (function () {
     // lief er bei 375 px 1 px über den Rand (Browserprüfung der Umbenennung, B2). Den Abstand zum Fensterrand hält
     // der rechte Rand der Bauchbinde (app.css, mindestens 8 px).
     const zuBreit = () => nav.scrollWidth > nav.clientWidth;
-    const zu = () => { liste.hidden = true; knopf.setAttribute("aria-expanded", "false"); };
+    // Zurück-Taste/-Geste schließt das offene Menü, statt die Seite zu verlassen (Gerätetest 01.11.2026, B5) – derselbe
+    // Verlaufseintrag wie bei Dialogen und Schubladen (S.overlayVerlauf).
+    let verlauf = null;
+    const zu = () => {
+      liste.hidden = true;
+      knopf.setAttribute("aria-expanded", "false");
+      if (verlauf) { const v = verlauf; verlauf = null; v.zu(); }
+    };
     let breite = -1;
     function anordnen() {
       zu();
@@ -467,11 +507,21 @@ window.S = (function () {
       }
     }
     knopf.addEventListener("click", () => {
-      const auf = liste.hidden;
-      liste.hidden = !auf;
-      knopf.setAttribute("aria-expanded", String(auf));
+      if (!liste.hidden) { zu(); return; }
+      liste.hidden = false;
+      knopf.setAttribute("aria-expanded", "true");
+      const v = overlayVerlauf(() => {
+        if (verlauf === v) verlauf = null;
+        liste.hidden = true;
+        knopf.setAttribute("aria-expanded", "false");
+        return true;
+      });
+      verlauf = v;
     });
     document.addEventListener("click", (e) => { if (!liste.hidden && !mehr.contains(e.target)) zu(); });
+    // Ein Punkt im Menü gewählt: Es schließt (Abmelden, Profil – der Seitenwechsel lässt den Eintrag sonst stehen).
+    liste.addEventListener("click", (e) => { if (e.target.closest("a, button")) zu(); });
+    window.addEventListener("pagehide", () => { if (!liste.hidden) zu(); });
     // Schon beim Aufsetzen daneben schließen, nicht erst beim Tippen: Ein Wisch oder Zug auf der Karte erzeugt kein
     // „click“, und das Menü stand dann weiter über der Seite. Ebenso, sobald die Seite rollt.
     document.addEventListener("pointerdown", (e) => { if (!liste.hidden && !mehr.contains(e.target)) zu(); }, true);
@@ -496,33 +546,55 @@ window.S = (function () {
      schob stattdessen den ganzen Ausschnitt hin und her – „Scrollen geht nicht mehr“. Die beiden
      Variablen tragen Höhe und Versatz des tatsächlich sichtbaren Bereichs, die Klasse „tastatur“
      sagt, dass er deutlich kleiner ist als das Fenster; app.css begrenzt offene Dialoge damit.
-     Android (interactive-widget=resizes-content) verkleinert das Fenster selbst – dort greift nichts. */
+     Android (interactive-widget=resizes-content) verkleinert das Fenster selbst; die Tastatur erkennt man dort daran,
+     dass das Fenster bei gleicher Breite deutlich niedriger wird, während ein Eingabefeld den Fokus hat (Gerätetest
+     01.11.2026, Q1 – vorher bekam Android die Klasse nie). Mit ihr klebt die Kopfleiste nicht mehr (app.css), und das
+     Feld mit dem Fokus wird in die Mitte des Rests geholt – auch außerhalb von Dialogen (Anmelden quer: 73 px blieben,
+     die Kopfleiste belegte 52 davon, das Feld lag darunter). Text im Editor der Strömipedia (contenteditable) zieht
+     der Editor selbst nach; hier nur in Dialogen. */
+  const istEingabe = (el) => Boolean(el && (el.isContentEditable || el.tagName === "TEXTAREA" || el.tagName === "SELECT"
+    || (el.tagName === "INPUT" && !/^(checkbox|radio|button|submit|reset|file|range|color|image|hidden)$/.test(el.type))));
+  function feldNachziehen(ae, immer) {
+    if (!istEingabe(ae) || !ae.getBoundingClientRect) return;
+    if (ae.isContentEditable && !(ae.closest && ae.closest("dialog[open]"))) return;
+    const vv = window.visualViewport;
+    const hoehe = vv ? vv.height : window.innerHeight;
+    const r = ae.getBoundingClientRect();
+    if (!immer && r.top >= 0 && r.bottom <= hoehe) return;              // steht schon ganz im Bild
+    try { ae.scrollIntoView({ block: r.height < hoehe ? "center" : "nearest", inline: "nearest" }); } catch (e) { /* egal */ }
+  }
   (function sichtbarerAusschnitt() {
     const vv = window.visualViewport;
     if (!vv) return;
     const root = document.documentElement;
+    const grob = window.matchMedia("(pointer: coarse)");
     let tick = null, warTastatur = false;
+    let breite = window.innerWidth, volleHoehe = window.innerHeight;   // Fensterhöhe ohne Tastatur bei dieser Breite
     const setzen = () => {
       tick = null;
       root.style.setProperty("--vv-h", Math.round(vv.height) + "px");
       root.style.setProperty("--vv-top", Math.round(vv.offsetTop) + "px");
+      const ae = document.activeElement;
+      // Gedreht oder Fenster neu: Die volle Höhe gilt ab jetzt neu; sonst die größte bei dieser Breite.
+      if (window.innerWidth !== breite) { breite = window.innerWidth; volleHoehe = window.innerHeight; }
+      else volleHoehe = Math.max(volleHoehe, window.innerHeight);
+      const android = grob.matches && istEingabe(ae) && window.innerHeight < volleHoehe - 150;
       // Beim Hineinzoomen schrumpft der Ausschnitt ebenfalls – das ist keine Tastatur.
-      const tastatur = vv.scale <= 1.01 && vv.height < window.innerHeight - 100;
+      const tastatur = vv.scale <= 1.01 && (vv.height < window.innerHeight - 100 || android);
       root.classList.toggle("tastatur", tastatur);
-      // Gerade aufgegangen: Das Feld mit dem Fokus in den nun kleineren Dialog holen – iOS hat es
-      // vorher nur im großen Ausschnitt sichtbar gemacht.
-      if (tastatur && !warTastatur) {
-        const ae = document.activeElement;
-        if (ae && ae.closest && ae.closest("dialog[open]") && (ae.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName))) {
-          try { ae.scrollIntoView({ block: "center", inline: "nearest" }); } catch (e) { /* egal */ }
-        }
-      }
+      // Gerade aufgegangen: Das Feld mit dem Fokus in den nun kleineren Ausschnitt holen – iOS hat es
+      // vorher nur im großen Ausschnitt sichtbar gemacht, Android rechnete die klebende Kopfleiste nicht ein.
+      if (tastatur && !warTastatur) feldNachziehen(ae, true);
       warTastatur = tastatur;
     };
     const planen = () => { if (tick == null) tick = requestAnimationFrame(setzen); };
     vv.addEventListener("resize", planen);
     vv.addEventListener("scroll", planen);
     window.addEventListener("resize", planen);
+    // Bei offener Tastatur von Feld zu Feld („Weiter“): Liegt das neue Feld nicht ganz im Bild, kommt es in die Mitte.
+    document.addEventListener("focusin", (e) => {
+      if (root.classList.contains("tastatur")) requestAnimationFrame(() => { if (document.activeElement === e.target) feldNachziehen(e.target, false); });
+    });
     setzen();
   })();
 
@@ -589,10 +661,29 @@ window.S = (function () {
     liste.setAttribute("role", "menu");
     liste.querySelectorAll(MENUE_EINTRAG).forEach((x) => x.setAttribute("role", "menuitem"));
   }
+  /* Zurück schließt ein offenes Menü wie Esc (Gerätetest 01.11.2026, B5): Jedes Menü bekommt beim Öffnen einen
+     Verlaufseintrag (S.overlayVerlauf) und gibt ihn beim Schließen auf anderem Weg wieder ab. Ein Menü, das mit seiner
+     Ansicht verschwindet (neu gezeichnet, ohne „toggle“), gibt ihn beim nächsten Klick ab. */
+  const menueVerlauf = new Map();            // offenes Menü → Verlaufseintrag
+  function menueVerlaufAn(m) {
+    if (menueVerlauf.has(m)) return;
+    menueVerlauf.set(m, overlayVerlauf(() => { menueVerlauf.delete(m); menueZu(m, false); return true; }));
+  }
+  function menueVerlaufAus(m) {
+    const h = menueVerlauf.get(m);
+    if (!h) return;
+    menueVerlauf.delete(m);
+    h.zu();
+  }
+  const menueVerlaufPruefen = () => menueVerlauf.forEach((h, m) => {
+    if (!m.isConnected || (m instanceof HTMLDetailsElement && !m.open)) menueVerlaufAus(m);
+  });
   let menueTaste = null;                     // der Menüknopf, der gerade per Tastatur geöffnet wird
   document.addEventListener("toggle", (e) => {
     const m = e.target;
-    if (!(m instanceof HTMLDetailsElement) || !m.classList.contains("menue") || !m.open) return;
+    if (!(m instanceof HTMLDetailsElement) || !m.classList.contains("menue")) return;
+    if (!m.open) { menueVerlaufAus(m); return; }
+    menueVerlaufAn(m);
     menueOffen().forEach((x) => { if (x !== m && !x.contains(m)) menueZu(x, false); });
     menueRollen(m);
     menueAusrichten(m);
@@ -604,7 +695,10 @@ window.S = (function () {
       const daneben = !m.contains(e.target) && !(m.menueAnker && m.menueAnker.contains(e.target));
       if (daneben || e.target.closest(".menue-liste a, .menue-liste button, .menue-schwebend a, .menue-schwebend button")) menueZu(m, false);
     });
+    setTimeout(menueVerlaufPruefen, 0);
   });
+  // Beim Verlassen der Seite zu – aus dem bfcache zurück stand das Menü sonst offen da.
+  window.addEventListener("pagehide", () => menueOffen().forEach((m) => menueZu(m, false)));
   // Schwebende Menüs schließen schon beim Aufsetzen daneben; ein Tipp auf ihren Knopf schließt nur (öffnet nicht neu).
   document.addEventListener("pointerdown", (e) => {
     document.querySelectorAll(".menue-schwebend").forEach((m) => {
@@ -708,11 +802,13 @@ window.S = (function () {
     if (hoehe > Math.max(unten, oben)) { box.style.maxHeight = `${Math.max(120, Math.floor(Math.max(unten, oben)))}px`; box.style.overflowY = "auto"; }
     box.style.top = `${window.scrollY + (hoch ? Math.max(r.oben, a.top - 4 - box.offsetHeight) : a.bottom + 4)}px`;
     const schliessen = (fokus) => {
+      menueVerlaufAus(box);
       if (!box.isConnected) return;
       box.remove();
       if (fokus !== false && anker && anker.focus) anker.focus();
     };
     menueSchwebendZu.set(box, schliessen);
+    menueVerlaufAn(box);
     setTimeout(() => { const erste = menueEintraege(box)[0]; if (erste) erste.focus(); }, 0);
     return schliessen;
   }
@@ -809,8 +905,8 @@ window.S = (function () {
   /* --- Fehler am Feld (UI/UX vor dem Merge, A2) ----------------------------------------------------------------
      Vorher meldete fast jeder Dialog einen Fehler nur als Toast; der Fokus fiel dabei auf die Seite (BODY), weil der
      ausgegraute Knopf ihn verlor, und das Feld blieb unmarkiert. Wie „Mangel melden“ jetzt überall:
-     feldFehler(feld, text) – das Feld trägt aria-invalid, darunter steht der Satz (mit aria-describedby verknüpft), der
-     Fokus geht aufs Feld; die nächste Eingabe nimmt beides wieder weg.
+     feldFehler(feld, text) – das Feld trägt aria-invalid, darunter steht der Satz (role="alert", mit aria-describedby
+     verknüpft), der Fokus geht aufs Feld; die nächste Eingabe nimmt beides wieder weg.
      fehlschlag(knopf, fehler, feld) – für das catch nach einer Anfrage: gibt den Knopf frei und meldet am Feld, wenn
      eins betroffen ist. feld ist das Feld selbst oder ein Bereich (Dialog): Dann sucht die Hilfe das Feld, das die
      Meldung des Servers nennt („„Titel“ fehlt.“ → das Feld mit der Beschriftung „Titel“). Ohne Feld: Toast und der Fokus
@@ -844,6 +940,8 @@ window.S = (function () {
       p = document.createElement("p");
       p.id = `${feld.id}-fehler`;
       p.className = "error feld-fehler";
+      // Vorgelesen, sobald sie erscheint (Gerätetest FT7); das Feld verweist zusätzlich mit aria-describedby darauf.
+      p.setAttribute("role", "alert");
       // Hinter dem Feld – bei Feldern mit Knopf daneben (Suche mit Trefferliste, Datum) hinter dieser Gruppe.
       // Ein Knopf einer Auswahlliste (Radio): hinter der Liste.
       const gruppe = (feld.type === "radio" && feld.closest(".user-pick, .mat-wahl, [role=radiogroup], fieldset"))
@@ -902,6 +1000,21 @@ window.S = (function () {
   const reihenfolgeKnoepfe = (i, n, hoch, runter, name = "", klasse = "btn secondary small") =>
     `<button type="button" class="${klasse} zeichenknopf" ${hoch} aria-label="${esc(name ? `${name} nach oben` : "Nach oben")}" title="Nach oben"${i <= 0 ? " disabled" : ""}>↑</button>`
     + `<button type="button" class="${klasse} zeichenknopf" ${runter} aria-label="${esc(name ? `${name} nach unten` : "Nach unten")}" title="Nach unten"${i >= n - 1 ? " disabled" : ""}>↓</button>`;
+
+  /* Passwort anzeigen (Gerätetest 01.11.2026, B9): Ein Häkchen <input type="checkbox" data-pw-zeigen> in einem Formular
+     zeigt dessen Passwortfelder (autocomplete current-/new-password) im Klartext – mit nassen Händen oder Handschuhen
+     vertippt man sich leicht, und die Meldung sagt nur „falsch“. Ohne Großschreibung und Autokorrektur der
+     Bildschirmtastatur, die im Klartextfeld sonst eingriffen. Anmelden, Konto anfragen, neues Passwort, Profil. */
+  document.addEventListener("change", (e) => {
+    const h = e.target.closest && e.target.closest("input[data-pw-zeigen]");
+    if (!h || !h.form) return;
+    h.form.querySelectorAll('input[autocomplete="current-password"], input[autocomplete="new-password"]').forEach((f) => {
+      f.setAttribute("autocapitalize", "off");
+      f.setAttribute("autocorrect", "off");
+      f.spellcheck = false;
+      f.type = h.checked ? "text" : "password";
+    });
+  });
 
   /* Seitentitel im Reiter des Browsers und im Verlauf: das Gezeigte vorn, dann das Modul, dann die Seite –
      „M-000123 – Materialablage – strömis.de“ (Browserprüfung vor dem Merge, V2). teile: Texte (leere fallen weg),
@@ -967,6 +1080,7 @@ window.S = (function () {
   })();
 
   return { esc, api, toast, dialog, confirm, fmtDate, fmtCoord, CAT, titel, info, overlayVerlauf, dialogVerlauf, klassenVerlauf,
+           schubladeZustand,
            feldFehler, feldOk, fehlschlag, menue, menueSchwebend, plural, rollen, weich, schliessenKnopf, entfernenKnopf,
            reihenfolgeKnoepfe };
 })();
