@@ -142,7 +142,7 @@
     };
   };
 
-  /* Unterkante der Leisten, die beim Rollen oben kleben (Bauchbinde, Artikel-Leiste) – 0, wenn keine klebt (Höhe unter
+  /* Unterkante der Leisten, die beim Rollen oben kleben (Bauchbinde, Artikel-Leiste) – 0, wenn keine klebt (Höhe bis
      500 px, offene Tastatur: dann rollen sie mit, siehe app.css). Was darunter liegt, ist verdeckt: Der Cursor des Editors
      und das „/“-Menü halten sich davon fern (Gerätetest 01.11.2026, Q1/S1, FT12). */
   const verdeckteHoehe = () => {
@@ -4846,7 +4846,7 @@
          Stelle beim Tippen ins Bild, kennt aber nur den Fensterrand – stand die Titelzeile unter Bauchbinde und
          Artikel-Leiste, tippte man blind. scrollThreshold und scrollMargin rechnen deren Höhe mit ein. Der Plugin kopiert
          seine Angaben beim Anlegen; ProseMirror liest sie aber bei jedem Rollen neu (someProp) – deshalb als Getter
-         nachträglich, damit Drehen, Tastatur und die nicht klebende Leiste unter 500 px Höhe gleich mitzählen. */
+         nachträglich, damit Drehen, Tastatur und die nicht klebende Leiste bis 500 px Höhe gleich mitzählen. */
       const leistenAbstand = ({ pmState }) => ({
         wysiwygPlugins: [() => {
           const plugin = new pmState.Plugin({ props: {} });

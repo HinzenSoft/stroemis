@@ -2628,7 +2628,7 @@ dialog.us-dlg { width: min(640px, 96vw); }
    sie über html.tastatur): Die Artikel-Leiste klebt nicht mehr oben, sie rollt mit dem Text weg (Gerätetest 01.11.2026,
    Q4/S1/Q1 – Bauchbinde und Leiste nahmen sonst 114 von 364 px, mit Tastatur verdeckten sie den Cursor). Die Bedingung
    hängt an der Höhe, nicht an der Breite: Ein Tablet quer mit Tastatur ist nicht höher als ein Telefon. */
-@media (max-height: 499.98px) {
+@media (max-height: 500px) {
   .wiki-head, .wiki-head.editing-head { position: static; }
   /* Sprungziele: Die Leiste liegt nicht mehr darüber, höchstens die Bauchbinde. */
   .wiki-content h1, .wiki-content h2, .wiki-content h3, .wiki-content h4, .wiki-content h5, .wiki-content h6,

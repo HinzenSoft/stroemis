@@ -10309,11 +10309,11 @@ wiki.js, markdown.js und app.css; kein Schemaschritt.
   Bildlauf, unter dem Cursor, wenn es dort passt, sonst darüber (unterhalb klebender Leisten); der mit den Pfeiltasten
   gewählte Eintrag rollt mit. Sichtbarer Teil des Menüs mit dem Cursor am unteren Rand vorher 41/54/0/0/138 px
   (851 × 358, 448 × 515, 947 × 200, 1333 × 276, 800 × 809), jetzt ganz (143/206/96/110/323 px).
-- **Leisten bei wenig Höhe (Q4/S1/Q1):** Unter 500 px Fensterhöhe und bei `html.tastatur` klebt die Artikel-Leiste nicht
+- **Leisten bei wenig Höhe (Q4/S1/Q1):** Bis 500 px Fensterhöhe (wie die Bauchbinde in Teil 1) und bei `html.tastatur` klebt die Artikel-Leiste nicht
   mehr, sie rollt mit dem Text weg (Bauchbinde: Teil 1). Im Editor rechnet ein ProseMirror-Plugin (`leistenAbstand`,
   `scrollThreshold`/`scrollMargin` als Getter) die Unterkante klebender Leisten ein – die Titelzeile lag nach etwas
   Bildlauf beim Tippen unter der Artikel-Leiste (alle fünf Höhen), jetzt darunter frei. Sprungziele (Überschriften, auch
-  im Editor) halten 72 statt 60 px Abstand unter der Bauchbinde (die Leiste ist am Finger 62 px hoch), unter 500 px
+  im Editor) halten 72 statt 60 px Abstand unter der Bauchbinde (die Leiste ist am Finger 62 px hoch), bis 500 px
   Höhe 8 px.
 - **Artikel-Leiste einzeilig (T1, Q4):** Der Pfad hat die Grundbreite 0 und nimmt nur, was die Knöpfe übrig lassen
   (vorher schrumpften Pfad und Knopfreihe gleichmäßig, und am Finger brachen die Knöpfe um); ab zwei Ebenen über der

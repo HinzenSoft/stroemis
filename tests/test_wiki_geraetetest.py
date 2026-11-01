@@ -3,7 +3,7 @@ python tests/test_wiki_geraetetest.py  oder  pytest tests/test_wiki_geraetetest.
 
   W5/B10  Speicherstand sofort: „Ungespeichert“ nach der Eingabe, „Speichert …“, dann „Gespeichert HH:MM“; Live-Region.
   FT12    „/“-Menü im sichtbaren Bereich: höchstens 40 % hoch, über dem Cursor, wenn darunter der Platz fehlt.
-  Q4/Q1   Artikel-Leiste unter 500 px Höhe und mit Tastatur nicht klebend; der Cursor bleibt unter den Leisten sichtbar.
+  Q4/Q1   Artikel-Leiste bis 500 px Höhe und mit Tastatur nicht klebend; der Cursor bleibt unter den Leisten sichtbar.
   T1      Artikel-Leiste einzeilig: Pfad nimmt nur den Rest und kürzt den Mittelteil, „Teilen“/„Inhaltsverzeichnis“
           weichen am Finger in „⋯“ aus.
   FT1     Inhaltsverzeichnis in „⋯“ (Lesen und Bearbeiten), als Dialog, wenn keine Gliederung neben dem Text steht.
@@ -63,7 +63,7 @@ def test_slash_menue():
 
 def test_leisten_und_cursor():
     css = lies("app/static/css/app.css")
-    hoehe = abschnitt(css, "@media (max-height: 499.98px) {\n  .wiki-head", "\n}")
+    hoehe = abschnitt(css, "@media (max-height: 500px) {\n  .wiki-head", "\n}")
     assert "position: static;" in hoehe
     assert "html.tastatur .wiki-head, html.tastatur .wiki-head.editing-head { position: static; }" in css
     js = lies("app/static/js/wiki.js")
