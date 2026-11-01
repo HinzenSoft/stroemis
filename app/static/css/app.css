@@ -778,25 +778,42 @@ progress { width: 100%; height: 10px; accent-color: var(--rot); }
 .baum-knoepfe { margin-bottom: 10px; }   /* „Neue Seite“ und „⋯“ über dem Seitenbaum */
 .wiki-side { border-right: 1px solid var(--linie); background: var(--grau-hell); padding: 14px 12px 40px; position: sticky; top: var(--topbar); height: calc(100vh - var(--topbar)); overflow: auto; }
 .wiki-side input[type=search] { margin-bottom: 10px; }
+/* Seitenbaum (Auftrag Seitenbaum, 28.10.2026, nach Docmost/GitBook): links eine feste Spalte für das Klappzeichen
+   (--baum-spalte), jede Ebene rückt gleichmäßig um --baum-einzug ein, und ihre Führungslinie läuft unter dem
+   Klappzeichen der Elternseite. Seiten ohne Unterseiten halten die Spalte frei – alle Titel einer Ebene stehen bündig. Die oberste Ebene
+   rückt nicht ein, steht fett und hat etwas Luft zum nächsten Abschnitt. */
+.tree { --baum-spalte: 20px; --baum-einzug: 20px; }
 .tree, .tree ul { list-style: none; margin: 0; padding: 0; }
-.tree ul { padding-left: 14px; border-left: 1px solid var(--linie); margin-left: 6px; }
+.tree ul ul { margin-left: calc(var(--baum-spalte) / 2 - 1px); padding-left: calc(var(--baum-einzug) - var(--baum-spalte) / 2);
+  border-left: 1px solid var(--linie); }
 .tree li { margin: 1px 0; }
+.tree > ul > li + li { margin-top: 6px; }
 .tree .row { display: flex; align-items: center; gap: 2px; min-width: 0; }
 /* Lange Seitentitel brechen nicht um, sondern enden mit … – sonst wird der Baum unruhig
    und die Zeilen springen beim Auf- und Zuklappen. Der volle Titel steht im Tooltip. Am Finger
-   (kein Tooltip) brechen sie um – siehe die Regeln für den groben Zeiger weiter unten. */
+   (kein Tooltip) brechen sie um – siehe die Regeln für den groben Zeiger weiter unten. Symbol und Titel stehen
+   nebeneinander, damit ein umbrochener Titel unter seiner ersten Zeile weiterläuft (hängender Einzug). */
 .tree a {
-  flex: 1 1 auto; min-width: 0; display: block; padding: 4px 6px; color: var(--anthrazit);
+  flex: 1 1 auto; min-width: 0; display: flex; align-items: baseline; padding: 4px 6px; color: var(--anthrazit);
   text-decoration: none; border-radius: var(--radius); font-size: var(--fs-mittel);
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   border-left: 3px solid transparent;    /* Platz für die rote Kante des aktiven Eintrags */
 }
+.tree .baum-titel { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tree > ul > li > .row > a { font-weight: 600; color: var(--schwarz); }
 .tree a:hover { background: var(--weiss); }
 .tree a.active { background: var(--weiss); border-left: 3px solid var(--rot); font-weight: 600; }
-.tree .tg { background: none; border: 0; width: 20px; height: 22px; cursor: pointer; color: var(--grau); font-size: var(--fs-marke); padding: 0; flex: none; }
+/* Klappzeichen: gezeichneter Winkel (KLAPPZEICHEN in wiki.js/public.js) in Grau, beim Aufklappen nach unten gedreht. */
+.tree .tg {
+  flex: none; display: inline-flex; align-items: center; justify-content: center; width: var(--baum-spalte); height: 28px;
+  padding: 0; background: none; border: 0; border-radius: var(--radius); color: var(--grau); cursor: pointer;
+}
+.tree .tg svg {
+  width: 14px; height: 14px; display: block; pointer-events: none; transition: transform .15s;
+  fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;
+}
+.tree li:not(.collapsed) > .row .tg svg { transform: rotate(90deg); }
+.tree button.tg:hover { background: var(--linie); color: var(--anthrazit); }
 .tree li.collapsed > ul { display: none; }
-.tree li.collapsed > .row .tg::before { content: "▸"; }
-.tree li:not(.collapsed) > .row .tg::before { content: "▾"; }
 .tree li.leaf > .row .tg { visibility: hidden; }
 .search-results { list-style: none; margin: 0 0 12px; padding: 0; }
 .search-results li { padding: 6px 6px; border-bottom: 1px solid var(--linie); font-size: var(--fs-mittel); }
@@ -947,8 +964,10 @@ h5:hover > .h-anchor, .h-anchor:focus-visible { opacity: 1; }
      und beim Herauszoomen hörte die Bauchbinde am alten Fensterrand auf. */
   .wiki-shell, body.public .wiki-shell.public, body.editing .wiki-shell { grid-template-columns: minmax(0, 1fr); }
   /* Zugeklappt ist die Schublade auch unsichtbar (visibility, nach der Fahrt): Sie lag sonst 320 px links vom Fenster
-     als „Element außerhalb“ im Dokument, Tab-Fokus landete in ihr (Geräte-Prüfung vom 22.10.2026, C1 in P4-L1). */
-  .wiki-side { position: fixed; left: 0; top: var(--topbar); bottom: 0; width: min(320px, 90vw); transform: translateX(-105%); transition: transform .2s, visibility 0s .2s; visibility: hidden; z-index: 1100; box-shadow: var(--schatten-leiste); height: auto; }
+     als „Element außerhalb“ im Dokument, Tab-Fokus landete in ihr (Geräte-Prüfung vom 22.10.2026, C1 in P4-L1).
+     Bis 360 px breit (vorher 320): übliche Titel bleiben am Telefon einzeilig, daneben bleibt ein Streifen der Seite zum
+     Zurücktippen (Auftrag Seitenbaum, 28.10.2026). */
+  .wiki-side { position: fixed; left: 0; top: var(--topbar); bottom: 0; width: min(360px, 90vw); transform: translateX(-105%); transition: transform .2s, visibility 0s .2s; visibility: hidden; z-index: 1100; box-shadow: var(--schatten-leiste); height: auto; }
   .wiki-side.open { transform: translateX(0); visibility: visible; transition: transform .2s; }
   .wiki-menu-btn { display: inline-flex; }
   /* Sobald eine Seite offen ist, sitzt der Baum-Knopf in der Kopfzeile – die eigene Zeile
@@ -1283,6 +1302,8 @@ details.accordion .accordion-body > :first-child { margin-top: 0; } details.acco
 .tree .row:hover .row-add, .tree .row:hover .row-menu,
 .tree .row-add:focus-visible, .tree .row-menu:focus-visible { opacity: 1; }
 .tree .row-add:hover, .tree .row-menu:hover { background: var(--linie); color: var(--anthrazit); }
+/* Mit der Tastatur erscheinen „+“ und „⋯“ schon, wenn ein Knopf oder der Titel der Zeile den Fokus hat. */
+.tree .row:has(:focus-visible) :is(.row-add, .row-menu) { opacity: 1; }
 .tree .row.dragging { opacity: .45; }
 .tree .row.drop-into { outline: 2px solid var(--rot); outline-offset: -2px; border-radius: var(--radius); }
 .tree .row.drop-before { box-shadow: inset 0 2px 0 var(--rot); }
@@ -2513,18 +2534,28 @@ dialog.us-dlg { width: min(640px, 96vw); }
   :is(.leerzustand, .leerzustand + .btn-row) .btn { min-height: 44px; display: inline-flex; align-items: center; }
   #users .recht-wahl { padding-top: 6px; padding-bottom: 6px; }
   /* Nachgemessen mit der Geräte-Matrix: Klappdreiecke im Seitenbaum (28 × 32), Suchfeld des Wikis (36 px) und der
-     Aufklapper „Globale Suchen“ in der Nutzerverwaltung (38 px). */
-  .tree .tg { width: 44px; height: 44px; }
+     Aufklapper „Globale Suchen“ in der Nutzerverwaltung (38 px). Klappzeichen seit dem Auftrag Seitenbaum (28.10.2026):
+     44 × 44 px Tippfläche über einer nur 24 px breiten Spalte – je 10 px ragen links in die Einrückung und rechts über den
+     Rand des Titels (darüber gelegt); vorher nahm der Knopf volle 44 px je Ebene, und tiefe Titel brachen nach 9 Zeichen um.
+     Klappzeichen und „⋯“ stehen auf Höhe der ersten Titelzeile; je Ebene 18 px Einzug (vorher 21) – das Klappzeichen
+     der Unterseite steht dann knapp vor dem Titel der Elternseite. */
+  .tree { --baum-spalte: 24px; --baum-einzug: 18px; }
+  .tree .row { align-items: flex-start; }
+  .tree .tg { width: 44px; height: 44px; margin: 0 -10px; position: relative; z-index: 1; }
+  /* Der Baum reicht in den rechten Innenrand der Leiste (12 px): „⋯“ steht am Rand, so viel mehr Platz für jeden Titel.
+     Die Liste selbst wird breiter, nicht nur der Knopf – sonst ragte „⋯“ aus seiner Zeile (Geräte-Prüfung, U). */
+  .tree { margin-right: -12px; }
   .wiki-side input[type=search] { min-height: 44px; }
   details.accordion > summary { min-height: 44px; display: flex; align-items: center; }
   /* Seitenbaum in der festen 260-px-Leiste (Telefon quer, Fold aufgeklappt, Tablet quer): Klappdreieck, „+“ und „⋯“
      mit je 44 px ließen dem Titel 52 px – alle Unterseiten hießen „Unt…“ (Browserprüfung P4-L1, B1). Je Zeile bleibt
      nur „⋯“; „Unterseite anlegen“ steht dort als erster Eintrag. Der Titel bricht um statt mit … zu enden – am Finger
-     gibt es keinen Tooltip, der den vollen Titel zeigte. Die oberste Ebene rückt nicht ein (die Einrückung samt Linie
-     gehört zu den Unterseiten) – 21 px mehr für jeden Titel. */
+     gibt es keinen Tooltip, der den vollen Titel zeigte (umbrochen unter der ersten Zeile, nicht unter dem Symbol). Die
+     oberste Ebene rückt seit dem Auftrag Seitenbaum überall nicht ein (Grundregel oben). Links 8 px statt 6: Der
+     Klappknopf ragt 10 px über den Rand des Titels und darf den ersten Buchstaben nicht abdecken. */
   .tree .row-add { display: none; }
-  .tree > ul { padding-left: 0; margin-left: 0; border-left: 0; }
-  .tree a { white-space: normal; text-overflow: clip; overflow-wrap: break-word; hyphens: auto; padding-top: 12px; padding-bottom: 12px; }
+  .tree a { padding-top: 12px; padding-bottom: 12px; padding-left: 8px; }
+  .tree .baum-titel { white-space: normal; text-overflow: clip; overflow-wrap: break-word; hyphens: auto; }
 }
 /* Wiki-Kopfzeile am Telefon: ☰, Umschalter, 💬, Teilen und ⋯ passten mit 44 px bei 344–360 px nicht in eine Zeile,
    „⋯“ stand allein in einer zweiten (Kopf 108 statt 62 px). „Teilen“ ist selten – am Telefon steht es im ⋯-Menü

@@ -58,11 +58,14 @@
   }
   window.addEventListener("popstate", () => show(slugAusPfad()));
 
+  /* Klappzeichen wie im Seitenbaum der internen Strömipedia (wiki.js): ein gezeichneter Winkel, hier immer aufgeklappt
+     (nach unten gedreht, app.css) – der öffentliche Baum klappt nicht. */
+  const KLAPPZEICHEN = '<svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M6 3.5L10.5 8 6 12.5"/></svg>';
   function tree(rows, current) {
     const kids = (pid) => rows.filter((r) => (r.parent_id || null) === pid);
     const branch = (pid) => {
       const k = kids(pid);
-      return k.length ? `<ul>${k.map((r) => `<li class="${kids(r.id).length ? "" : "leaf"}"><div class="row"><span class="tg"></span><a href="${prefix}${esc(r.slug)}" class="${r.slug === current ? "active" : ""}">${esc(r.title)}</a></div>${branch(r.id)}</li>`).join("")}</ul>` : "";
+      return k.length ? `<ul>${k.map((r) => `<li class="${kids(r.id).length ? "" : "leaf"}"><div class="row"><span class="tg">${kids(r.id).length ? KLAPPZEICHEN : ""}</span><a href="${prefix}${esc(r.slug)}" class="${r.slug === current ? "active" : ""}"><span class="baum-titel">${esc(r.title)}</span></a></div>${branch(r.id)}</li>`).join("")}</ul>` : "";
     };
     // Die Wurzel des freigegebenen Abschnitts hat parent_id null
     treeEl.innerHTML = branch(null);
@@ -138,7 +141,7 @@
   }
 
   function indexBaum(pages) {
-    treeEl.innerHTML = pages.length ? `<ul>${pages.map((p) => `<li class="leaf"><div class="row"><span class="tg"></span><a href="${prefix}${esc(p.slug)}">${esc(p.title)}</a></div></li>`).join("")}</ul>` : "";
+    treeEl.innerHTML = pages.length ? `<ul>${pages.map((p) => `<li class="leaf"><div class="row"><span class="tg"></span><a href="${prefix}${esc(p.slug)}"><span class="baum-titel">${esc(p.title)}</span></a></div></li>`).join("")}</ul>` : "";
     wire(treeEl);
   }
 
