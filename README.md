@@ -529,7 +529,7 @@ an die Plattform-Verwaltung.
 | `MAX_REQUEST_MB` | Obergrenze einer gewöhnlichen Anfrage ohne Upload (Standard 1) – begrenzt auch die Länge einer Wiki-Seite. Gilt auch am Datenstrom; Anfragen ohne `Content-Length` (chunked) werden mit 411 abgewiesen |
 | `SITE_NAME` | Name der Anwendung in Betreffzeilen und Absendern |
 | `PUBLIC_HOST`, `PUBLIC_URL` | Subdomain und Adresse der früheren öffentlichen Strömipedia (seit 01.11.2026 nur Einstieg zur Anmeldung) |
-| `KONTAKT_EMAIL` | Kontaktadresse für Fragen und Anliegen (Vorgabe `verwalter@stroemis.de`): im Fuß jeder Seite – angemeldet, Anmeldung, Fehlerseiten, öffentliche Strömipedia – und im Satz vor dem Bestandsimport der Materialablage. Leer gesetzt: Die Angabe entfällt; keine gültige Adresse: Warnung im Log, es gilt die Vorgabe. Auch unter „Leitstelle → Einstellungen“ (Gruppe „Seite“, „Kontaktadresse“) – dort lehnt Speichern eine ungültige Adresse ab |
+| `KONTAKT_EMAIL` | Kontaktadresse für Fragen und Anliegen (Vorgabe `verwalter@stroemis.de`): im Fuß jeder Seite – angemeldet, Anmeldung, Fehlerseiten – und im Satz vor dem Bestandsimport der Materialablage. Leer gesetzt: Die Angabe entfällt; keine gültige Adresse: Warnung im Log, es gilt die Vorgabe. Auch unter „Leitstelle → Einstellungen“ (Gruppe „Seite“, „Kontaktadresse“) – dort lehnt Speichern eine ungültige Adresse ab |
 | `FEHLER_EMAIL` | Adresse für Fehler und Verbesserungsvorschläge (Vorgabe `bugs@stroemis.de`): im Fuß jeder Seite und im Hinweis „Entwicklungsserver“ auf dev (Betreff „strömis.de dev: “). Leer: Die Angabe entfällt, der Hinweis bleibt ohne den Satz. Sonst wie `KONTAKT_EMAIL` („Adresse für Fehlermeldungen“) |
 | `ADMIN_NOTIFY_EMAIL` | Empfänger für Kontoanfragen (leer = das dienstälteste Konto mit Plattform-Verwaltung; es geht bewusst genau eine Mail hinaus, damit die Antwortzeit nicht verrät, ob eine Adresse schon ein Konto hat – die übrigen sehen die Anfrage unter „Leitstelle → Nutzer“) |
 | `LOGIN_SLIDESHOW` | Slideshow auf der Anmeldeseite (`true`/`false`) |
@@ -841,9 +841,9 @@ Browsermenü. Auf iPhone/iPad hat die App eine eigene Anmeldung (iOS trennt ihre
 dann gilt sie wie im Browser 30 Tage.
 
 **dev und Produktion** sind getrennte Apps (eigener Ursprung). Auf dev (`STROEMIS_NAME` endet auf `-dev`) heißt die App
-„strömis.de dev“, und ihre Symbole tragen eine gelbe Marke „dev“. Die öffentliche Strömipedia (`wiki.strömis.de`)
-verweist nicht auf das Manifest: Dort leitet die Anwendung jede Adresse nach `/oeffentlich/`, eine eigene Installation
-der öffentlichen Seiten ist nicht vorgesehen (für „Zum Home-Bildschirm“ gilt dort trotzdem das Symbol).
+„strömis.de dev“, und ihre Symbole tragen eine gelbe Marke „dev“. Die frühere öffentliche Strömipedia (`wiki.strömis.de`)
+leitet seit dem 01.11.2026 zur Anmeldung (es gibt ohne Anmeldung keine Strömipedia-Seiten mehr); eine eigene
+Installation dort ist nicht vorgesehen.
 
 **Symbole** liegen fertig unter `app/static/img/pwa/` (je 192/512 „any“ und „maskable“, 96 für die Kurzbefehle, 180 für
 iOS, jeweils auch mit `-dev`). Erzeugt aus `app/static/img/maskottchen.png` mit `python3 scripts/pwa_symbole.py` (Pillow;

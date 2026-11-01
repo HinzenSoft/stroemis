@@ -101,11 +101,12 @@ FELDER = [
          hilfe="Damit werden die Links in E-Mails gebaut – etwa der zum Zurücksetzen des "
                "Passworts. Ohne Schrägstrich am Ende.",
          platzhalter="https://strömis.de"),
-    Feld("PUBLIC_URL", "Seite", "Adresse der öffentlichen Strömipedia",
+    Feld("PUBLIC_URL", "Seite", "Adresse des Strömipedia-Einstiegs (früher öffentlich)",
          platzhalter="https://wiki.strömis.de"),
-    Feld("PUBLIC_HOST", "Seite", "Hostname der öffentlichen Strömipedia",
+    Feld("PUBLIC_HOST", "Seite", "Hostname des Strömipedia-Einstiegs (früher öffentlich)",
          wandeln=_idna,
-         hilfe="Anfragen an diesen Namen landen im öffentlichen Bereich."),
+         hilfe="Anfragen an diesen Namen führen zur Anmeldung und danach zur Seite – ohne Anmeldung "
+               "gibt es seit dem 01.11.2026 keine Strömipedia-Seiten mehr."),
     Feld("ALLOW_REGISTRATION", "Seite", "Kontoanfragen erlauben", art="schalter",
          hilfe="Aus heißt: Konten legt nur die Plattform-Verwaltung an."),
     Feld("LOGIN_SLIDESHOW", "Seite", "Bilder auf der Anmeldeseite", art="schalter",

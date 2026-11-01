@@ -4270,6 +4270,13 @@ außen, Tokens wie app.css), Einstellungen (Gruppe, Prüfung, leer, Zurücksetze
 angemeldet, 403, 404, öffentliche Strömipedia, Ersatz-Fehlerseite), dev-Hinweis aus der Einstellung, Bestandsimport-Satz,
 Profil-Abschnitt „App“, CSS (Druck, Karte, Touch).
 
+## Sammelstand 01.11.2026 – Nacharbeiten der Zusammenführung
+
+Suchzeile 2, Seitenbaum, Verweise auf die Anleitung, PWA/Kontaktadressen und Stufe Redakteur zusammengeführt. Danach:
+Feldtexte `PUBLIC_URL`/`PUBLIC_HOST` in den Einstellungen („Strömipedia-Einstieg (früher öffentlich)“, führt zur Anmeldung),
+README (Fuß ohne „öffentliche Strömipedia“, PWA-Absatz zur früheren Wiki-Subdomain), Kommentar in base.html; der neue
+Test tests/test_rechte_redakteur.py läuft in der Standardliste von st-test mit (tests/test_rechte*.py).
+
 ## Seitenbaum der Strömipedia (Wunsch des Nutzers, 28.10.2026)
 
 Wünsche des Nutzers zu einem Telefon-Foto (Seitenbaum als Schublade, „⋯“ der Seite „Allgemein“ offen), wörtlich:
