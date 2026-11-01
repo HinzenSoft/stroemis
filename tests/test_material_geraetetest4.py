@@ -78,7 +78,7 @@ def test_ft4_ausnehmen_einbeziehen_melden_sich():
     assert "toast(`${b.dataset.nr} wieder einbezogen`); await neu();" in js
     assert 'data-act="einbeziehen" data-id="${a.id}" data-nr="${esc(a.inventory_no)}">Einbeziehen</button>' in js
     # Der Toast meldet Erfolg als role="status" (common.js).
-    assert 'el.setAttribute("role", isError ? "alert" : "status");' in lies("app/static/js/common.js")
+    assert 'const rolle = isError ? "alert" : "status";' in lies("app/static/js/common.js")
     print("FT4 bestanden.")
 
 
