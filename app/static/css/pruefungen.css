@@ -589,10 +589,11 @@ body:has(.pruef.druck) #toast { top: 12px; }
   .bew-wahl button { font-size: .95rem; gap: 6px; }
   .bew-wahl button .sym { font-size: 1.4rem; }
   .su-banner { top: calc(var(--topbar) + 4px); }
-  /* Vier Reiter in einer Zeile ab 375 px; schmaler bricht die Zeile um (A9). */
+  /* Vier Reiter in einer Zeile ab 375 px; schmaler bricht die Zeile um (A9). Seit --fs-klein 14 px groß ist (Gerätetest
+     B12) mit 1 px weniger Polster je Seite – sonst fehlten bei 375 px 11 px, und die klebende Leiste wurde zweizeilig. */
   .pruef .c-tabs.reiter { gap: 0; }
-  .pruef .c-tabs.reiter button { padding: 10px 3px; font-size: var(--fs-klein); }
-  .pruef .c-tabs.reiter .reiter-zahl { margin-left: 2px; padding: 0 4px; }
+  .pruef .c-tabs.reiter button { padding: 10px 2px; font-size: var(--fs-klein); }
+  .pruef .c-tabs.reiter .reiter-zahl { margin-left: 2px; padding: 0 3px; }
   /* Matrix: Die klebende Namensspalte ließ neben sich keine ganze Zelle mehr frei (160 + 128 px
      bei 336 px). Schmaler, Zellen ohne die Nebenzeile – die steht in „je Leistung“ und „je TN“. */
   .pruef .bew-matrix th:first-child, .pruef .bew-matrix td:first-child { min-width: 108px; max-width: 132px; }
