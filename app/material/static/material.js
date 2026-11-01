@@ -3320,7 +3320,7 @@
     const verlust = grund === "verlust";
     dialog(`<h2>${esc(a.inventory_no)} ${verlust ? "als verloren melden" : "sperren"}</h2>
       <p class="help">${esc(verlust ? VERLUST_FOLGE : RUECKRUF_FOLGE)}</p>
-      <label for="sd-text">Was ist passiert?</label><input type="text" id="sd-text" maxlength="300"${verlust ? ' placeholder="z. B. nach dem Einsatz nicht mehr aufgetaucht"' : ""} value="${esc(text || "")}">
+      <label for="sd-text">Was ist passiert?</label><input type="text" id="sd-text" maxlength="300"${verlust ? ' placeholder="z. B. nach der Übung nicht mehr da"' : ""} value="${esc(text || "")}">
       <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button><button class="btn" id="sd-ok" type="button">${verlust ? "Verlust melden" : "Sperren"}</button></div>`,
     (dlg, body) => {
       $("#sd-ok", body).onclick = async (ev) => {
