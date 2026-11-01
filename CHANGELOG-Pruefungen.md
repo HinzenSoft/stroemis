@@ -4,6 +4,23 @@ Erweiterung von strömis.de um Lehrgänge, Teilnehmende, Voraussetzungen, Prüfu
 Stoppuhr, Nachprüfungen, Medien und eine Mängelübersicht für Feedbackrunden – nur für Nutzer mit dem neuen
 Zusatzrecht „Prüfer“.
 
+## Nachtrag (01.11.2026): Stufe „Redakteur“, Sichtbarkeit und eigene Kataloge
+
+Wunsch des Nutzers (28.10.2026: „So machen wir es. Nenne es analog Redakteur“; Entscheidungen „Bestätigt“, „Ja / Ja /
+ja“ und 6A vom 01.11.2026):
+- **Mitglied** sieht nur noch die Lehrgänge, in denen es mit seinem Konto als Ausbilder eingetragen ist, und bewertet
+  dort (Versuche, Haken, Medien, Kommentar); fremde Lehrgänge samt Teilnehmenden, Bewertungen, Medien, Mängeln und
+  Druckansicht antworten 404. Es legt keine Lehrgänge an und sieht keine Kataloge.
+- **Redakteur** legt Lehrgänge an (wird Leitung), kopiert und importiert als neuen Lehrgang, sieht alle Kataloge und
+  nutzt sie als Vorlage, legt eigene Kataloge an und pflegt nur diese.
+- **Leitung** bleibt die Rolle je Lehrgang: Ein Redakteur kann ein Mitglied als Leitung eintragen; es pflegt dann diesen
+  Lehrgang (auch Import hinein und dessen Vorschau), kopiert ihn aber nicht. Bestehende Leitungen behalten ihre
+  Lehrgänge.
+- **Verwaltung** wie bisher: alle Lehrgänge, alle Kataloge (auch solche ohne Ersteller).
+- Bestehende Mitglieder bleiben Mitglied. Freitext-Ausbilder ohne Konto sehen nichts; Lehrgänge nur mit ihnen sieht
+  danach nur Leitung und Verwaltung (Inbetriebnahme: Ausbilder mit Konten verknüpfen, README Schritt 7).
+- Siehe CHANGELOG-Material.md, „Stufe Redakteur (Schritt 33)“.
+
 ## Nachtrag (26.10.2026): Das Modul heißt „Riegenkarten“
 
 Wunsch des Nutzers („Prüfungen in Riegenkarten umbenennen“): Reiter, Seitentitel, Überschrift der Lehrgangsliste,
