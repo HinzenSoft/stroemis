@@ -113,8 +113,11 @@ def test_manifest():
                      '<meta name="apple-mobile-web-app-title" content="strömis.de">',
                      '<meta name="apple-mobile-web-app-status-bar-style" content="default">'):
             assert teil in seite, teil
-        # Öffentliche Strömipedia: kein Manifest (wiki.strömis.de leitet alles nach /oeffentlich/), aber das iOS-Symbol.
-        oeff = c.get("/oeffentlich/").get_data(as_text=True)
+        # Frühere öffentliche Strömipedia: Seit dem 01.11.2026 (Stufe Redakteur) leitet /oeffentlich/ ohne Anmeldung zur
+        # Anmeldung; die Vorlage public.html bleibt (kein Manifest, aber das iOS-Symbol).
+        r = c.get("/oeffentlich/")
+        assert r.status_code in (301, 302, 303) and "/login" in r.headers["Location"], (r.status_code, dict(r.headers))
+        oeff = lies("app/templates/public.html")
         assert 'rel="manifest"' not in oeff and 'rel="apple-touch-icon"' in oeff
     # dev: eigener Name und Symbole mit Marke.
     with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp, Umgebung(STROEMIS_NAME="stroemis-dev"):
@@ -268,9 +271,10 @@ def test_fuss_auf_allen_seiten():
     with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
         app = _app(tmp)
         anon = app.test_client()
+        # /oeffentlich/… leitet seit dem 01.11.2026 ohne Anmeldung zur Anmeldung (folgen: dort steht der Fuß).
         for pfad in ("/login", "/register", "/forgot", "/reset", "/oeffentlich/", "/oeffentlich/irgendwas", "/offline-gibt-es-nicht",
                      "/materialablage/pruefen"):
-            r = anon.get(pfad)
+            r = anon.get(pfad, follow_redirects=pfad.startswith("/oeffentlich"))
             html = r.get_data(as_text=True)
             if pfad == "/offline-gibt-es-nicht":
                 assert r.status_code == 404
