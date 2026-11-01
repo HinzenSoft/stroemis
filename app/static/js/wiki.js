@@ -144,6 +144,59 @@
     };
   };
 
+  /* Unterkante der Leisten, die beim Rollen oben kleben (Bauchbinde, Artikel-Leiste) – 0, wenn keine klebt (Höhe bis
+     500 px, offene Tastatur: dann rollen sie mit, siehe app.css). Was darunter liegt, ist verdeckt: Der Cursor des Editors
+     und das „/“-Menü halten sich davon fern (Gerätetest 01.11.2026, Q1/S1, FT12). */
+  const verdeckteHoehe = () => {
+    let unten = 0;
+    document.querySelectorAll(".bauchbinde, .wiki-head").forEach((el) => {
+      const lage = getComputedStyle(el).position;
+      if (lage !== "sticky" && lage !== "fixed") return;
+      const r = el.getBoundingClientRect();
+      // Eine klebende Leiste verdeckt nur, solange sie oben anliegt – nicht dort, wo sie noch im Fluss steht.
+      if (r.top <= 1 + unten) unten = Math.max(unten, r.bottom);
+    });
+    return Math.max(0, Math.round(unten));
+  };
+
+  /* Das Inhaltsverzeichnis, wenn sein Knopf nicht zu sehen ist (Gerätetest 01.11.2026, FT1 und T1): Am Telefon und bis
+     1180 px steht keine Gliederung neben dem Text, und am Tablet quer weicht der Knopf in „Weitere Aktionen“ aus, damit
+     die Artikel-Leiste einzeilig bleibt. Dann führt das Menü „⋯“ (Lesen wie Bearbeiten) einen Eintrag: Steht die
+     Gliederung in der rechten Spur, blendet er sie ein oder aus wie der Knopf; sonst öffnet er sie als Dialog über dem
+     Text. Ein Tipp auf einen Abschnitt schließt ihn und springt dorthin – über dieselben Links wie in der Spur. */
+  const tocImMenue = () => {
+    const k = $("#pg-toc");
+    return !!k && !k.offsetWidth && !!tocEl.querySelector("a");
+  };
+  const tocMenueEintrag = () => (!tocImMenue() ? "" : schmalesRaster.matches
+    ? '<button type="button" data-a="toc">Inhaltsverzeichnis</button>'
+    : `<button type="button" data-a="toc">${document.body.classList.contains("toc-aus") ? "Inhaltsverzeichnis einblenden" : "Inhaltsverzeichnis ausblenden"}</button>`);
+  /* Nach dem Schließen eines Dialogs an eine Stelle springen: erst, wenn sein Schritt zurück im Verlauf durch ist
+     (S.overlayVerlauf). Der Browser stellt dabei die Bildlaufhöhe des Eintrags darunter wieder her – ein Sprung davor
+     war sofort wieder weg. Kommt kein Schritt zurück (Dialog ohne Eintrag), geht es nach kurzer Zeit trotzdem los. */
+  function nachDialog(fn) {
+    let erledigt = false;
+    const los = () => { if (erledigt) return; erledigt = true; window.removeEventListener("popstate", bei); fn(); };
+    const bei = () => setTimeout(los, 0);
+    window.addEventListener("popstate", bei);
+    setTimeout(los, 600);
+  }
+  function tocAusMenue() {
+    if (!schmalesRaster.matches) { const k = $("#pg-toc"); if (k) k.click(); return; }
+    const liste = tocEl.querySelector("ul, ol");
+    if (!liste) return;
+    dialog(`<h2>Inhaltsverzeichnis</h2><nav class="toc" aria-label="Inhaltsverzeichnis">${liste.outerHTML}</nav>
+      <div class="dlg-actions"><button class="btn secondary" data-close type="button">Schließen</button></div>`,
+    (dlg, body) => {
+      const spur = [...tocEl.querySelectorAll("a")];
+      body.querySelectorAll("a").forEach((a, i) => a.addEventListener("click", (e) => {
+        e.preventDefault();
+        dlg.close();
+        nachDialog(() => { if (spur[i]) spur[i].click(); });
+      }));
+    });
+  }
+
   /* ======================================================================
      Baum
      ====================================================================== */
@@ -786,11 +839,44 @@
      Sie stehen in beiden Ansichten an derselben Stelle, damit beim Umschalten nichts springt. */
   function krumenPfad(crumbs, p, neu) {
     const glied = (c, aktiv) => aktiv
-      ? `<span class="krume" aria-current="page">${c.icon ? `<span class="krume-icon">${esc(c.icon)}</span>` : ""}${esc(c.title)}</span>`
-      : `<a class="krume" href="/stroemipedia/${esc(c.slug)}">${c.icon ? `<span class="krume-icon">${esc(c.icon)}</span>` : ""}${esc(c.title)}</a>`;
-    const kette = [...crumbs.map((c) => glied(c, false)),
-                   glied({ icon: p.icon, title: neu ? "Neue Seite" : (p.title || "Ohne Titel"), slug: p.slug }, true)];
-    return `<nav class="krumen" aria-label="Pfad">${kette.join('<span class="krume-sep" aria-hidden="true">/</span>')}</nav>`;
+      ? `<span class="krume" aria-current="page">${c.icon ? `<span class="krume-icon">${esc(c.icon)}</span>` : ""}<span class="krume-text">${esc(c.title)}</span></span>`
+      : `<a class="krume" href="/stroemipedia/${esc(c.slug)}">${c.icon ? `<span class="krume-icon">${esc(c.icon)}</span>` : ""}<span class="krume-text">${esc(c.title)}</span></a>`;
+    const sep = '<span class="krume-sep" aria-hidden="true">/</span>';
+    const letzte = glied({ icon: p.icon, title: neu ? "Neue Seite" : (p.title || "Ohne Titel"), slug: p.slug }, true);
+    if (crumbs.length < 2) return `<nav class="krumen" aria-label="Pfad">${[...crumbs.map((c) => glied(c, false)), letzte].join(sep)}</nav>`;
+    /* Ab zwei Ebenen über der Seite lässt sich der Mittelteil zu „…“ kürzen (Gerätetest 01.11.2026, T1): Am Tablet quer
+       teilten sich drei abgeschnittene Glieder („Allgeme“, „EH / SAN -“) die Zeile. Gekürzt wird nur, wenn ein Glied
+       sonst nicht mehr ganz zu lesen wäre (krumenKuerzen); die übersprungenen Ebenen nennt der Tooltip, der Baum führt
+       sie ohnehin. */
+    const mitte = crumbs.slice(1);
+    return `<nav class="krumen" aria-label="Pfad">${glied(crumbs[0], false)}${sep}<span class="krumen-mitte">${
+      mitte.map((c) => glied(c, false) + sep).join("")}</span><span class="krume-auslassung" aria-hidden="true"><span class="krume-punkte"
+      title="${esc(mitte.map((c) => c.title).join(" / "))}">…</span>${sep}</span>${letzte}</nav>`;
+  }
+
+  /* Mittelteil des Pfads kürzen, sobald ein Glied schmaler wird, als es sein will – nicht schon, wenn ein langer Titel an
+     seiner Höchstbreite (22ch) endet. Gemessen wird jeweils am vollen Pfad; ein Beobachter am Seitenkopf rechnet nach,
+     wenn sich die Breite oder die Knopfreihe (Speicherstand, „bearbeitet“-Marke) ändert. */
+  function krumenKuerzen() {
+    const nav = content.querySelector(".wiki-head .krumen");
+    if (!nav || !nav.querySelector(".krumen-mitte")) return;
+    nav.classList.remove("kurz");
+    if (!nav.offsetWidth) return;                       // am Telefon steht kein Pfad
+    const eng = [...nav.querySelectorAll(".krume")].some((k) => {
+      const stil = getComputedStyle(k);
+      const hoechst = parseFloat(stil.maxWidth) || Infinity;
+      const wunsch = [...k.children].reduce((n, c) => n + c.scrollWidth, 0)
+                     + (parseFloat(stil.columnGap) || 0) * Math.max(0, k.children.length - 1);
+      return k.clientWidth + 1 < Math.min(wunsch, hoechst);
+    });
+    nav.classList.toggle("kurz", eng);
+  }
+  const kopfBeobachter = window.ResizeObserver ? new ResizeObserver(() => krumenKuerzen()) : null;
+  function kopfBeobachten() {
+    krumenKuerzen();
+    if (!kopfBeobachter) return;
+    kopfBeobachter.disconnect();
+    content.querySelectorAll(".wiki-head, .wiki-head .btn-row").forEach((el) => kopfBeobachter.observe(el));
   }
 
   /* Autorzeile unter der Überschrift, samt Knopf für die Angaben zur Seite. */
@@ -937,6 +1023,7 @@
 
     artikelZeichnen(p);
     wireLinks(content);
+    kopfBeobachten();
 
     const ed = $("#pg-edit"); if (ed) ed.onclick = () => bearbeitenStarten(p);
     // Der Kopf ist neu – Anwesenheitsmarke und Knopfstand kommen aus dem letzten Herzschlag.
@@ -1020,6 +1107,7 @@
     box.className = "tree-menu";
     box.innerHTML = `
       ${teilenImMenue ? '<button type="button" data-a="share">Teilen</button>' : ""}
+      ${tocMenueEintrag()}
       <button type="button" data-a="history">Verlauf</button>
       <button type="button" data-a="fav">${p.favorite ? "Von der Merkliste nehmen" : "Zur Merkliste"}</button>
       <button type="button" data-a="watch">${p.watch ? "Nicht mehr beobachten" : "Bei Änderungen benachrichtigen"}</button>
@@ -1037,6 +1125,7 @@
       const a = b.dataset.a;
       close();
       if (a === "share") return shareDialog(p);
+      if (a === "toc") return tocAusMenue();
       if (a === "history") return showHistory(p);
       if (a === "fav") return toggleFavorite(p.id, !p.favorite);
       if (a === "watch") {
@@ -1292,11 +1381,10 @@
     anchorComments();
   }
 
-  function renderComments() {
-    const list = state.comments;
-    const tops = list.filter((c) => !c.parent_id);
-    const replies = (id) => list.filter((c) => c.parent_id === id);
-    const one = (c, isReply) => `
+  /* Ein Kommentar samt Antworten – in der Spur und im Blatt über dem Artikel (W6) dasselbe Markup. */
+  function kommentarHtml(c, isReply) {
+    const replies = state.comments.filter((r) => r.parent_id === c.id);
+    return `
       <div class="comment${c.resolved ? " resolved" : ""}${isReply ? " reply" : ""}" data-cid="${c.id}">
         <div class="c-head"><strong>${esc(c.user_name || "Unbekannt")}</strong> <span class="muted small">${fmtDate(c.created_at, true)}</span></div>
         ${c.quote && !isReply ? `<blockquote class="c-quote" title="Zur Textstelle springen">${esc(c.quote)}</blockquote>` : ""}
@@ -1307,23 +1395,16 @@
           ${!isReply && c.can_delete ? `<button class="lnk" data-resolve="${c.id}">${c.resolved ? "Wieder öffnen" : "Erledigt"}</button>` : ""}
           ${c.can_delete ? `<button class="lnk" data-del="${c.id}">Löschen</button>` : ""}
         </div>
-        ${!isReply ? replies(c.id).map((r) => one(r, true)).join("") : ""}
+        ${!isReply ? replies.map((r) => kommentarHtml(r, true)).join("") : ""}
       </div>`;
-    const open = tops.filter((c) => !c.resolved);
-    const doneList = tops.filter((c) => c.resolved);
-    const shown = state.commentFilter === "done" ? doneList : open;
-    commentsEl.innerHTML = `<div class="rail-title">Kommentare</div>
-      <div class="c-tabs">
-        <button type="button" class="${state.commentFilter === "done" ? "" : "sel"}" data-tab="open">Offen (${open.length})</button>
-        <button type="button" class="${state.commentFilter === "done" ? "sel" : ""}" data-tab="done">Erledigt (${doneList.length})</button>
-      </div>
-      ${shown.length ? shown.map((c) => one(c, false)).join("")
-        : `<div class="muted small">${state.commentFilter === "done" ? "Nichts erledigt." : "Noch keine offenen Kommentare. Text im Artikel markieren, um eine Stelle zu kommentieren."}</div>`}`;
-    commentsEl.querySelectorAll("[data-tab]").forEach((b) => b.onclick = () => {
-      state.commentFilter = b.dataset.tab;
-      renderComments();
-    });
-    commentsEl.querySelectorAll("[data-edit]").forEach((b) => b.onclick = () => {
+  }
+
+  /* Die Knöpfe eines Kommentars verdrahten – in der Spur und im Blatt. zu() schließt das Blatt, bevor ein Folgedialog
+     kommt oder die Liste neu gezeichnet wird. Erledigt, Wieder öffnen und Löschen melden sich mit einer Erfolgsmeldung
+     (Gerätetest 01.11.2026, FT4 – vorher wechselte nur der Zähler). */
+  function kommentarAktionen(wurzel, zu) {
+    const schliessen = () => { if (zu) zu(); };
+    wurzel.querySelectorAll("[data-edit]").forEach((b) => b.onclick = () => {
       const c = state.comments.find((x) => x.id === +b.dataset.edit);
       if (!c) return;
       dialog(`<h2>Kommentar bearbeiten</h2>
@@ -1341,21 +1422,64 @@
           };
         });
     });
-    commentsEl.querySelectorAll("[data-reply]").forEach((b) => b.onclick = () => commentDialog("", +b.dataset.reply));
-    commentsEl.querySelectorAll("[data-del]").forEach((b) => b.onclick = async () => {
+    wurzel.querySelectorAll("[data-reply]").forEach((b) => b.onclick = () => commentDialog("", +b.dataset.reply));
+    wurzel.querySelectorAll("[data-del]").forEach((b) => b.onclick = async () => {
+      schliessen();
       if (!(await S.confirm("Kommentar löschen?"))) return;
-      try { await api(`/api/wiki/comments/${b.dataset.del}`, { method: "DELETE" }); await loadComments(); } catch (e) { toast(e.message, true); }
+      try { await api(`/api/wiki/comments/${b.dataset.del}`, { method: "DELETE" }); await loadComments(); toast("Kommentar gelöscht"); }
+      catch (e) { toast(e.message, true); }
     });
-    commentsEl.querySelectorAll("[data-resolve]").forEach((b) => b.onclick = async () => {
+    wurzel.querySelectorAll("[data-resolve]").forEach((b) => b.onclick = async () => {
       const c = state.comments.find((x) => x.id === +b.dataset.resolve);
-      try { await api(`/api/wiki/comments/${c.id}`, { method: "PUT", body: { resolved: !c.resolved } }); await loadComments(); } catch (e) { toast(e.message, true); }
+      if (!c) return;
+      try {
+        await api(`/api/wiki/comments/${c.id}`, { method: "PUT", body: { resolved: !c.resolved } });
+        schliessen();
+        await loadComments();
+        toast(c.resolved ? "Kommentar wieder geöffnet" : "Kommentar erledigt");
+      } catch (e) { toast(e.message, true); }
     });
-    commentsEl.querySelectorAll(".c-quote").forEach((q) => q.onclick = () => {
+    wurzel.querySelectorAll(".c-quote").forEach((q) => q.onclick = () => {
       const cid = q.closest(".comment").dataset.cid;
       const m = content.querySelector(`mark.cq[data-cid="${cid}"], .cbadge[data-cid="${cid}"]`);
-      if (m) { S.rollen(m, { block: "center" }); m.classList.add("flash"); setTimeout(() => m.classList.remove("flash"), 2000); }
-      else toast("Die Textstelle wurde im Artikel nicht mehr gefunden.");
+      const zeigen = () => {
+        if (m) { S.rollen(m, { block: "center" }); m.classList.add("flash"); setTimeout(() => m.classList.remove("flash"), 2000); }
+        else toast("Die Textstelle wurde im Artikel nicht mehr gefunden.");
+      };
+      if (zu) { zu(); nachDialog(zeigen); } else zeigen();
     });
+  }
+
+  function renderComments() {
+    const list = state.comments;
+    const tops = list.filter((c) => !c.parent_id);
+    const one = kommentarHtml;
+    const open = tops.filter((c) => !c.resolved);
+    const doneList = tops.filter((c) => c.resolved);
+    const shown = state.commentFilter === "done" ? doneList : open;
+    commentsEl.innerHTML = `<div class="rail-title">Kommentare</div>
+      <div class="c-tabs">
+        <button type="button" class="${state.commentFilter === "done" ? "" : "sel"}" data-tab="open">Offen (${open.length})</button>
+        <button type="button" class="${state.commentFilter === "done" ? "sel" : ""}" data-tab="done">Erledigt (${doneList.length})</button>
+      </div>
+      ${shown.length ? shown.map((c) => one(c, false)).join("")
+        : `<div class="muted small">${state.commentFilter === "done" ? "Nichts erledigt." : "Noch keine offenen Kommentare. Text im Artikel markieren, um eine Stelle zu kommentieren."}</div>`}`;
+    commentsEl.querySelectorAll("[data-tab]").forEach((b) => b.onclick = () => {
+      state.commentFilter = b.dataset.tab;
+      renderComments();
+    });
+    kommentarAktionen(commentsEl);
+  }
+
+  /* Kommentar als Blatt über dem Artikel (Gerätetest 01.11.2026, W6): Steht die Kommentarspur unter dem Artikel
+     (bis 1180 px, siehe spurVersetzen), sprang ein Tipp auf die Markierung bis zu 1 270 px ans Seitenende, und zurück
+     zur Stelle ging es nur durch Rollen. Jetzt öffnet sich der Kommentar samt Antworten im Dialog; Schließen, Esc und
+     Zurück lassen den Leser an derselben Stelle im Text. */
+  function kommentarBlatt(c) {
+    dialog(`<h2>Kommentar</h2>
+      ${kommentarHtml(c, false)}
+      <div class="dlg-actions"><button class="btn secondary" data-close type="button">Schließen</button></div>`,
+      (dlg, body) => kommentarAktionen(body, () => dlg.close()));
   }
 
   /* Zitierte Textstellen im Artikel markieren */
@@ -1385,6 +1509,8 @@
     const zumKommentar = (m, fokus) => {
       const el = commentsEl.querySelector(`.comment[data-cid="${m.dataset.cid}"]`);
       if (!el) return;
+      const c = state.comments.find((x) => String(x.id) === m.dataset.cid);
+      if (c && schmalesRaster.matches) return kommentarBlatt(c);
       S.rollen(el, { block: "center" });
       el.classList.add("flash"); setTimeout(() => el.classList.remove("flash"), 2000);
       if (fokus) { el.tabIndex = -1; el.focus({ preventScroll: true }); }
@@ -2517,9 +2643,36 @@
       menu.classList.remove("hidden");
       const sel = document.getSelection();
       let r = sel && sel.rangeCount ? sel.getRangeAt(0).getBoundingClientRect() : null;
-      if (!r || (!r.width && !r.height)) { const n = sel && sel.anchorNode; const el = n && (n.nodeType === 1 ? n : n.parentElement); r = el ? el.getBoundingClientRect() : { left: 100, bottom: 100 }; }
+      if (!r || (!r.width && !r.height)) { const n = sel && sel.anchorNode; const el = n && (n.nodeType === 1 ? n : n.parentElement); r = el ? el.getBoundingClientRect() : { left: 100, top: 82, bottom: 100 }; }
       menu.style.left = `${window.scrollX + Math.max(8, Math.min(window.innerWidth - 320, r.left))}px`;
-      menu.style.top = `${window.scrollY + r.bottom + 6}px`;
+      /* Wie eine Vorschlagsliste (Gerätetest 01.11.2026, FT12): Mit offener Tastatur stand der Cursor am unteren Rand,
+         das Menü öffnete darunter – hinter der Tastatur, man sah nichts. Gerechnet wird im sichtbaren Bereich
+         (visualViewport; auf Android schrumpft mit der Tastatur auch das Fenster): höchstens 40 % seiner Höhe, darin
+         rollt das Menü selbst. Passt es unter den Cursor, steht es dort; sonst über ihm, wenn dort mehr Platz ist –
+         unterhalb der klebenden Leisten, die es sonst verdeckten. */
+      const vv = window.visualViewport;
+      const sichtOben = vv ? vv.offsetTop : 0, sichtHoehe = vv ? vv.height : window.innerHeight;
+      const leisten = verdeckteHoehe();
+      const unten = sichtOben + sichtHoehe - r.bottom - 6 - 8;
+      const oben = r.top - Math.max(sichtOben, leisten) - 6 - 8;
+      menu.style.maxHeight = `${Math.max(96, Math.floor(sichtHoehe * 0.4))}px`;
+      const hoehe = menu.offsetHeight;
+      if (hoehe > unten && oben > unten) {
+        const h = Math.min(hoehe, Math.floor(oben));
+        menu.style.maxHeight = `${Math.max(48, h)}px`;
+        menu.style.top = `${window.scrollY + r.top - 6 - Math.min(menu.offsetHeight, Math.max(48, h))}px`;
+      } else {
+        if (hoehe > unten) menu.style.maxHeight = `${Math.max(48, Math.floor(unten))}px`;
+        menu.style.top = `${window.scrollY + r.bottom + 6}px`;
+      }
+      // Der gewählte Eintrag bleibt im Bild, auch wenn das Menü rollt (Pfeiltasten).
+      const gewaehlt = menu.querySelector("button.sel");
+      if (gewaehlt) {
+        if (gewaehlt.offsetTop < menu.scrollTop) menu.scrollTop = gewaehlt.offsetTop - 30;
+        else if (gewaehlt.offsetTop + gewaehlt.offsetHeight > menu.scrollTop + menu.clientHeight) {
+          menu.scrollTop = gewaehlt.offsetTop + gewaehlt.offsetHeight - menu.clientHeight;
+        }
+      }
     };
     const pick = (i) => {
       const it = slash.list[i];
@@ -2836,15 +2989,17 @@
         if (status) status.textContent = `Lade ${f.name} hoch (${done + 1}/${list.length}) …`;
         try {
           const r = await uploadFile(f);
-          const ohneEndung = mdBeschriftung(f.name.replace(/\.[^.]+$/, ""));
+          const ohneEndung = mdBeschriftung(nameOhneEndung(f.name));
           if (r.kind === "image") insert(`![${ohneEndung}](${r.url})\n`);
           else if (r.kind === "video") insert(`![${ohneEndung}](${r.url})\n`);
           else insert(`[${mdBeschriftung(f.name)}](${r.url})\n`);
           done++;
         } catch (err) { toast(`${f.name}: ${err.message}`, true); }
       }
-      if (status) status.textContent = done ? `${done} Datei${done === 1 ? "" : "en"} eingefügt` : "";
-      setTimeout(() => { if (status) status.textContent = ""; }, 2500);
+      // Erfolgsmeldung (FT4); ging etwas schief, sagt sie, wie viele es geschafft haben.
+      if (done) toast(done === list.length ? `${S.plural(done, "Datei", "Dateien")} hochgeladen`
+                                           : `${done} von ${list.length} Dateien hochgeladen`, done !== list.length);
+      if (status && /^Lade /.test(status.textContent)) status.textContent = "";
     };
     root.addEventListener("paste", (e) => {
       const f = e.clipboardData && e.clipboardData.files;
@@ -4357,19 +4512,37 @@
 
   /* Bild wählen und hochladen; ruft cb(url, alt) */
   /* Datei wählen und hochladen; ruft cb(url, nameOhneEndung, kind, dateiname) */
+  /* Bezeichnung aus dem Dateinamen (Alternativtext, Linktext). Die Fotoauswahl von Android liefert Bilder unter einem
+     Zufallsnamen aus Ziffern („48698.jpg“) – das ist keine Beschreibung und wurde vorher als Alternativtext vorgelesen
+     (Gerätetest 01.11.2026, FT5). Rein numerische Namen (auch mit Trennern wie „20261101_120301“) ergeben deshalb
+     nichts; den Alternativtext trägt man dann am Bild unter „ALT“ ein. */
+  const nameOhneEndung = (name) => {
+    const n = String(name || "").replace(/\.[^.]+$/, "").trim();
+    return /^[\d\s._-]*$/.test(n) ? "" : n;
+  };
+  /* Erfolgsmeldung nach dem Hochladen (FT4 – vorher speicherte der Upload still). Ohne brauchbaren Namen sagt sie, wo
+     der Alternativtext hingehört. */
+  const hochgeladenMelden = (kind, alt) => toast(kind === "image"
+    ? (alt ? "Bild hochgeladen" : "Bild hochgeladen – den Alternativtext trägst du am Bild unter „ALT“ ein.")
+    : kind === "embed" ? "HTML-Baustein hochgeladen" : "Datei hochgeladen");
+
   function pickFile(accept, cb) {
     const inp = document.createElement("input");
     inp.type = "file"; inp.accept = accept;
     inp.onchange = async () => {
       const f = inp.files[0]; if (!f) return;
       const status = $("#ed-status");
-      const show = (pct) => { if (status) status.textContent = `Lade ${f.name} hoch … ${pct}%`; };
+      let ladeText = "";
+      const show = (pct) => { if (status) status.textContent = ladeText = `Lade ${f.name} hoch … ${pct}%`; };
       show(0);
       try {
         const r = await uploadFile(f, show);
-        cb(r.url, f.name.replace(/\.[^.]+$/, ""), r.kind, f.name);
+        const alt = nameOhneEndung(f.name);
+        cb(r.url, alt, r.kind, f.name);
+        hochgeladenMelden(r.kind, alt);
       } catch (e) { toast(e.message, true); }
-      if (status) status.textContent = "";
+      // Hat das Einfügen den Speicherstand schon gesetzt („Ungespeichert“), bleibt der stehen.
+      if (status && status.textContent === ladeText) status.textContent = "";
     };
     inp.click();
   }
@@ -4550,7 +4723,7 @@
         <button class="btn secondary small kopfknopf baum-knopf" id="pg-baum" type="button" title="Seiten" aria-label="Seitenbaum" aria-controls="wiki-side" aria-expanded="${side.classList.contains("open")}">☰</button>
         ${krumenPfad(crumbs, p, isNew)}
         <div class="btn-row">
-          <span class="muted small" id="ed-status"></span>
+          <span class="muted small" id="ed-status" role="status" aria-live="polite"></span>
           ${isNew ? "" : `<div class="mode-toggle" role="group" aria-label="Ansicht wechseln">
             <button type="button" class="on" data-mode="bearbeiten" aria-pressed="true">Bearbeiten</button>
             <button type="button" id="ed-read" data-mode="lesen" aria-pressed="false">Lesen</button>
@@ -4566,6 +4739,7 @@
         <textarea id="ed-fallback" class="plain hidden"></textarea>
       </div>`;
     wireLinks(content);          // die Brotkrumen im Editorkopf bleiben Anwendungslinks
+    kopfBeobachten();
     // Die erste Überschrift IST der Seitentitel – wie in Docmost. Fehlt sie, wird sie ergänzt.
     const titelZeile = (md) => {
       const m = /^[ \t]*#[ \t]+(.+?)[ \t]*#*[ \t]*$/.exec((md || "").split("\n")[0] || "");
@@ -4670,6 +4844,21 @@
         })],
       });
 
+      /* Der Cursor bleibt unter den klebenden Leisten sichtbar (Gerätetest 01.11.2026, Q1/S1): ProseMirror rollt die
+         Stelle beim Tippen ins Bild, kennt aber nur den Fensterrand – stand die Titelzeile unter Bauchbinde und
+         Artikel-Leiste, tippte man blind. scrollThreshold und scrollMargin rechnen deren Höhe mit ein. Der Plugin kopiert
+         seine Angaben beim Anlegen; ProseMirror liest sie aber bei jedem Rollen neu (someProp) – deshalb als Getter
+         nachträglich, damit Drehen, Tastatur und die nicht klebende Leiste bis 500 px Höhe gleich mitzählen. */
+      const leistenAbstand = ({ pmState }) => ({
+        wysiwygPlugins: [() => {
+          const plugin = new pmState.Plugin({ props: {} });
+          const abstand = (rand) => ({ top: verdeckteHoehe() + rand, bottom: rand, left: rand, right: rand });
+          Object.defineProperty(plugin.props, "scrollThreshold", { get: () => abstand(0), enumerable: true });
+          Object.defineProperty(plugin.props, "scrollMargin", { get: () => abstand(8), enumerable: true });
+          return plugin;
+        }],
+      });
+
       /* Toast UI baut im WYSIWYG für jeden Bildknoten ein <img> – auch für ![](film.mp4).
          Das ergab ein kaputtes Bild statt eines Abspielers, und weil das <img> mitgezählt
          wurde, traf das Bildmenü nach einer Tonaufnahme die falsche Fundstelle. Eine eigene
@@ -4728,7 +4917,7 @@
            Schreibweise "@cols=2:"/"@rows=2:" im Markdown. Fehlt sie – etwa weil die Datei
            nicht geladen wurde –, läuft der Editor ohne sie weiter; verbundene Zellen wären
            dann nur nicht mehr verbindbar. */
-        plugins: [autorWidget, layoutPlugin, medienNodeView, EDVERLAUF.plugin, zellenAuswahl, markenSchuetzen,
+        plugins: [autorWidget, layoutPlugin, medienNodeView, leistenAbstand, EDVERLAUF.plugin, zellenAuswahl, markenSchuetzen,
                   ...(toastui.Editor.plugin && toastui.Editor.plugin.tableMergedCell
                       ? [toastui.Editor.plugin.tableMergedCell] : [])],
         initialEditType: "wysiwyg",
@@ -4760,7 +4949,9 @@
             try {
               const file = blob instanceof File ? blob : new File([blob], "bild.png", { type: blob.type });
               const r = await uploadFile(file);
-              callback(r.url, r.kind === "video" ? "Video" : (file.name || "Bild"));
+              const alt = r.kind === "video" ? "Video" : nameOhneEndung(file.name);
+              callback(r.url, alt);
+              hochgeladenMelden(r.kind, alt);
             } catch (e) { toast(e.message, true); }
           },
         },
@@ -4941,6 +5132,12 @@
       st.textContent = text;
       st.classList.toggle("warn", !!warnung);
     };
+    /* Der Stand steht sofort da (Gerätetest 01.11.2026, W5/B10): Nach der ersten Eingabe „Ungespeichert“, während der
+       Anfrage „Speichert …“, danach „Gespeichert“ mit Uhrzeit – vorher erschien erst nach rund drei Sekunden überhaupt
+       etwas, und wer in der Zwischenzeit auf „Lesen“ tippte, wusste nicht, ob der Text schon gespeichert war. Die
+       Statuszeile ist eine höfliche Live-Region (role="status"), die Vorlesehilfe sagt den Wechsel in einer Pause an. */
+    let gespeichertAnzeige = "";
+    const uhrzeit = () => new Date().toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
     // Der Stand des eigenen Editors – oder null, wenn er schon abgeräumt ist.
     const editorStand = () => { try { return fromEditorMd(meinEditor.getMarkdown()); } catch (e) { return null; } };
     /* Den eigenen Entwurf (nicht state.dropDraft – das zeigt nach einem Seitenwechsel schon auf
@@ -4969,7 +5166,8 @@
       if (isNew || konflikt || state.editorGesperrt) return false;
       if (sichertGerade) { wiederholen = true; return false; }
       const md = fromEditorMd(meinEditor.getMarkdown());
-      if (md === gesichert) { state.dirty = false; return true; }
+      // Zurückgetippt auf den gespeicherten Stand: dann gilt wieder die letzte Meldung.
+      if (md === gesichert) { state.dirty = false; stand(gespeichertAnzeige); return true; }
       /* Ein leerer Editor bei einer Seite, die eben noch Text hatte, ist fast immer ein Unfall:
          ein Strg+Z zu viel, ein verrutschtes Alles-Markieren, ein Editor, der beim Öffnen
          stolpert. Weil von allein geschrieben wird, wäre der Artikel fort, bevor jemand
@@ -5010,7 +5208,9 @@
         // zwar richtig, aber Statuszeile und Adresszeile gehören jetzt einer anderen Seite.
         if (!lebt || state.editor !== meinEditor) return true;
         state.dirty = false;
-        stand(EDMD.repariert() ? "Gespeichert – unvollständige Marken entfernt" : "Gespeichert", EDMD.repariert());
+        gespeichertAnzeige = `Gespeichert ${uhrzeit()}${EDMD.repariert() ? " – unvollständige Marken entfernt" : ""}`;
+        // Während der Anfrage weitergeschrieben: Das Neue ist noch nicht gespeichert, der Nachschlag kommt.
+        stand(editorStand() !== md ? "Ungespeichert" : gespeichertAnzeige, EDMD.repariert());
         // Der Baustein wiegt schwerer als ein Spaltenabschnitt: Mit ihm verschwindet die
         // Kennung, über die andere Seiten ihn einbinden. Das gehört gesagt, auch beim
         // automatischen Speichern, wo sonst nur die Statuszeile spricht.
@@ -5049,7 +5249,11 @@
       clearTimeout(sicherLauf);
       sicherLauf = setTimeout(() => { sicherLauf = 0; if (lebt) jetztSichern(); }, verzoegerung);
     };
-    meinEditor.on("change", () => spaeterSichern());
+    meinEditor.on("change", () => {
+      // Während einer Anfrage bleibt „Speichert …“ stehen; danach sagt der Abschluss, ob noch etwas offen ist.
+      if (!isNew && !konflikt && !state.editorGesperrt && !sichertGerade) stand("Ungespeichert");
+      spaeterSichern();
+    });
     editorCleanup.push(() => clearTimeout(sicherLauf));
     /* Den beim Verlassen festgehaltenen Stand hinter der laufenden Anfrage herschicken. Läuft
        ohne Editor und ohne Oberfläche: kein Status, keine Adresszeile – das gehört inzwischen
@@ -5109,6 +5313,7 @@
         <button type="button" data-a="suchen">Suchen und ersetzen <span class="muted small">Strg+Umschalt+F</span></button>
         <button type="button" data-a="klar">Formatierung entfernen <span class="muted small">Strg+\\</span></button>
         <button type="button" data-a="kopieren">Als Markdown kopieren <span class="muted small">Strg+Umschalt+C</span></button>
+        ${tocMenueEintrag()}
         ${isNew ? "" : '<button type="button" data-a="verlauf">Verlauf</button>'}`;
       const zu = S.menueSchwebend(mehr, box);
       box.addEventListener("click", (e) => {
@@ -5118,6 +5323,7 @@
         if (b.dataset.a === "suchen" && state.editorSuchen) state.editorSuchen();
         else if (b.dataset.a === "klar" && state.editorKlartext) state.editorKlartext();
         else if (b.dataset.a === "kopieren" && state.editorCopyMd) state.editorCopyMd();
+        else if (b.dataset.a === "toc") tocAusMenue();
         else if (b.dataset.a === "verlauf") showHistory(p);
       });
     };

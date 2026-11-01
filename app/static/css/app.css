@@ -986,8 +986,10 @@ h5:hover > .h-anchor, .h-anchor:focus-visible { opacity: 1; }
 .wiki-content img { display: block; margin: .6em 0; max-height: 70vh; }
 .wiki-content img + em, .wiki-content p > em:only-child { color: var(--grau); font-size: .9em; }
 .wiki-content input[type=checkbox] { margin-right: 6px; }
-/* Aufgabenlisten: der Haken ersetzt den Aufzählungspunkt, sonst steht beides nebeneinander. */
-.wiki-content li:has(> input[type=checkbox]) { list-style: none; margin-left: -1.35em; }
+/* Aufgabenlisten: der Haken ersetzt den Aufzählungspunkt, sonst steht beides nebeneinander. Das Kästchen ist 24 px groß
+   (Gerätetest 01.11.2026, O1 – vorher 13 bis 16 px) und steht auf der ersten Textzeile; den Namen gibt markdown.js. */
+.wiki-content li:has(> input[type=checkbox]) { list-style: none; margin: 4px 0 4px -1.35em; }
+.wiki-content li > input[type=checkbox] { width: 24px; height: 24px; margin: 0 8px 0 0; vertical-align: -5px; }
 /* Auszeichnungen ohne Markdown-Entsprechung: ++unterstrichen++ ==hervorgehoben== 10^3^ H~2~O.
    Im Editor stehen sie als Widget (contenteditable=false) und sehen dort genauso aus. */
 .wiki-content mark, .toastui-editor-contents mark {
@@ -1238,7 +1240,8 @@ details.accordion .accordion-body > :first-child { margin-top: 0; } details.acco
    gemeinsamen Block weiter unten. Hier steht nur, was die Textleiste allein betrifft. */
 
 /* "/"-Einfügemenü */
-.ed-slash { position: absolute; z-index: 1300; width: 300px; max-height: 60vh; overflow: auto; background: var(--weiss); border: 1px solid var(--linie); border-radius: var(--radius-gross); box-shadow: var(--schatten-leiste); padding: 6px; }
+/* Höhe und Lage setzt wiki.js im sichtbaren Bereich (höchstens 40 %, über dem Cursor, wenn darunter der Platz fehlt). */
+.ed-slash { position: absolute; z-index: 1300; width: 300px; max-height: 40vh; overflow: auto; background: var(--weiss); border: 1px solid var(--linie); border-radius: var(--radius-gross); box-shadow: var(--schatten-leiste); padding: 6px; }
 .ed-slash-title { font-size: var(--fs-marke); color: var(--grau); padding: 4px 8px 6px; }
 .ed-slash button.sel strong { color: var(--rot); }
 
@@ -1792,7 +1795,17 @@ details:is(.menue, .mat-menue, .zeilenmenue)[open] > summary::after { transform:
   margin: 0 0 20px; padding: 6px 0 8px; border-bottom: 2px solid var(--anthrazit);
   /* Über allem, was im Text liegt, aber unter der Bauchbinde (z-index 1200). */
   position: sticky; top: var(--topbar); z-index: 40; background: var(--weiss);
+  /* Bezugsgröße für die Knöpfe, die am Finger in „⋯“ ausweichen (Gerätetest 01.11.2026, T1, unten). */
+  container: wiki-kopf / inline-size;
 }
+/* Pfad mit gekürztem Mittelteil (wiki.js krumenKuerzen): erste Ebene / … / Seite. */
+.krumen .krumen-mitte { display: contents; }
+.krumen .krume-auslassung { display: none; }
+.krumen.kurz .krumen-mitte { display: none; }
+.krumen.kurz .krume-auslassung { display: contents; }
+.krumen .krume-punkte { flex: none; color: var(--grau); }
+/* Der Titel im Glied endet mit „…“ – als Textknoten im inline-flex-Glied wurde er nur abgeschnitten („Allgeme“). */
+.krumen .krume-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .wiki-head .wiki-meta {
   margin: 0; padding: 0; border: 0; min-width: 0; flex: 1 1 auto;
   font-size: var(--fs-klein); color: var(--grau);
@@ -1801,7 +1814,11 @@ details:is(.menue, .mat-menue, .zeilenmenue)[open] > summary::after { transform:
 /* Der Pfad steht links, alles andere rechtsbündig am Rand der Textspalte – wie in Docmost.
    Der Innenabstand nach links schiebt die Knöpfe ans Ende, egal wie lang der Pfad ist; ist er
    zu lang für die Zeile, wird er gekürzt statt umzubrechen. */
-.wiki-head .krumen { flex: 0 1 auto; min-width: 0; flex-wrap: nowrap; overflow: hidden; }
+/* Der Pfad nimmt nur, was die Knöpfe übrig lassen (Grundbreite 0): Vorher schrumpften Pfad und Knopfreihe gleichmäßig,
+   und am Finger brachen die Knöpfe am Tablet quer und am Fold in eine zweite Zeile – Leiste 108 statt 62 px
+   (Gerätetest 01.11.2026, T1/Q4). Umgebrochen wird nur noch, wenn die Knöpfe allein nicht in die Zeile passen (Telefon
+   mit der Marke „… bearbeitet“). */
+.wiki-head .krumen { flex: 1 1 0; min-width: 0; flex-wrap: nowrap; overflow: hidden; }
 /* Wird es eng, schrumpfen die Ebenen darüber – der Titel der Seite selbst zuletzt. */
 .wiki-head .krumen .krume { flex: 0 8 auto; }
 .wiki-head .krumen .krume[aria-current] { flex: 0 1 auto; }
@@ -1809,9 +1826,11 @@ details:is(.menue, .mat-menue, .zeilenmenue)[open] > summary::after { transform:
 .wiki-head .btn-row { display: flex; align-items: center; gap: 6px; flex-wrap: nowrap; margin: 0 0 0 auto; flex: none; }
 /* Die Symbolknöpfe der Kopfzeile sind quadratisch – wie die Symbole in Docmost. */
 /* Sprungziele (Inhaltsverzeichnis, Kommentaranker) dürfen nicht unter der klebenden
-   Bauchbinde und Kopfzeile landen. */
+   Bauchbinde und Kopfzeile landen – auch im Editor (seit dem Gerätetest 01.11.2026 springt das Inhaltsverzeichnis auch
+   dort am Telefon). 72 statt 60 px: Die Leiste ist am Finger 62 px hoch, die Überschrift lag 2 px darunter. */
 .wiki-content h1, .wiki-content h2, .wiki-content h3, .wiki-content h4,
-.wiki-content h5, .wiki-content h6, .wiki-content [id] { scroll-margin-top: calc(var(--topbar) + 60px); }
+.wiki-content h5, .wiki-content h6, .wiki-content [id],
+.wiki-editor .toastui-editor-contents :is(h1, h2, h3, h4, h5, h6) { scroll-margin-top: calc(var(--topbar) + 72px); }
 /* Der Knopf in der Kopfzeile blendet die Gliederung aus; die rechte Spur behält ihre
    Breite, damit sich der Text dabei nicht verschiebt. */
 body.toc-aus .wiki-rail .toc { display: none; }
@@ -2518,7 +2537,6 @@ dialog.us-dlg { width: min(640px, 96vw); }
   .lb-side .close { position: absolute; top: 8px; right: 8px; float: none; z-index: 2; width: 44px; height: 44px;
                     background: rgba(0, 0, 0, .55); color: var(--weiss); border-radius: 50%; }
   .lb.editing .lb-side .close { background: var(--grau-hell); color: var(--anthrazit); }
-  .ed-slash { max-height: 40dvh; }
 }
 /* Ganz schmale Telefone: die Navigation der Bauchbinde rückt zusammen, der Rand deutet an,
    dass sie weiterrollt. */
@@ -2672,6 +2690,36 @@ dialog.us-dlg { width: min(640px, 96vw); }
 @media (pointer: coarse) and (max-width: 640px) {
   .wiki-head #pg-share { display: none; }
 }
+/* Artikel-Leiste am Finger, wo der Text schmal ist (Gerätetest 01.11.2026, T1 – Tablet quer mit Seitenbaum und
+   Kommentarspalte, Fold): „Teilen“ und „Inhaltsverzeichnis“ weichen in „⋯“ aus (pageMenu nimmt auf, was nicht zu sehen
+   ist), damit Pfad und Knöpfe in eine 62-px-Zeile passen. Kommentieren bleibt als Knopf. */
+@media (pointer: coarse) {
+  @container wiki-kopf (max-width: 720px) {
+    .btn-row #pg-share, .btn-row #pg-toc { display: none; }
+  }
+  /* Das Inhaltsverzeichnis als Dialog (FT1): jeder Abschnitt eine 44-px-Zeile. Das Zitat eines Kommentars führt zur
+     Textstelle (in der Spur und im Blatt über dem Artikel, W6) – ebenfalls mindestens 44 px (vorher 27). */
+  dialog .toc-list a { display: flex; align-items: center; min-height: 44px; }
+  .c-quote { min-height: 44px; }
+}
+/* Telefon im Editor: Der Pfad steht nicht da; die Knopfreihe nimmt die Zeile, und nur der Speicherstand gibt nach
+   (mit „…“). Vorher begrenzten 38vw den Stand, und bei 344–360 px brach „⋯“ in eine zweite Zeile. */
+@media (max-width: 640px) {
+  .wiki-head.editing-head .btn-row { flex: 1 1 auto; min-width: 0; flex-wrap: nowrap; justify-content: flex-end; }
+  .wiki-head.editing-head #ed-status { max-width: none; margin-right: auto; }
+  .wiki-head.editing-head .btn-row > :not(#ed-status) { flex: none; }
+}
+/* Wenig Höhe (Telefon quer, Tablet quer mit Tastatur – auf Android schrumpft das Fenster mit der Tastatur; iOS meldet
+   sie über html.tastatur): Die Artikel-Leiste klebt nicht mehr oben, sie rollt mit dem Text weg (Gerätetest 01.11.2026,
+   Q4/S1/Q1 – Bauchbinde und Leiste nahmen sonst 114 von 364 px, mit Tastatur verdeckten sie den Cursor). Die Bedingung
+   hängt an der Höhe, nicht an der Breite: Ein Tablet quer mit Tastatur ist nicht höher als ein Telefon. */
+@media (max-height: 500px) {
+  .wiki-head, .wiki-head.editing-head { position: static; }
+  /* Sprungziele: Die Leiste liegt nicht mehr darüber, höchstens die Bauchbinde. */
+  .wiki-content h1, .wiki-content h2, .wiki-content h3, .wiki-content h4, .wiki-content h5, .wiki-content h6,
+  .wiki-content [id], .wiki-editor .toastui-editor-contents :is(h1, h2, h3, h4, h5, h6) { scroll-margin-top: calc(var(--topbar) + 8px); }
+}
+html.tastatur .wiki-head, html.tastatur .wiki-head.editing-head { position: static; }
 /* Nutzerverwaltung zwischen 861 und 1100 px (Fold aufgeklappt, Tablet hochkant): Die Knöpfe „Bearbeiten“ und
    „Reset-Mail“ (92–94 px) ragten aus ihrer 80 px breiten Spalte 2 px über den Fensterrand – waagerechter Bildlauf
    (Geräte-Prüfung vom 22.10.2026). Die Spalte (col.col-aktionen in admin.html – bei festem Tabellenlayout zählt die
