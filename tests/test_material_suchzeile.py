@@ -1,11 +1,14 @@
-"""Suchzeile wie im Katalog auf Übersicht und Prüfungen (Wunsch vom 28.10.2026):  python tests/test_material_suchzeile.py
+"""Suchzeile wie im Katalog auf allen Seiten mit Nummernsuche (Wünsche vom 28.10.2026):  python tests/test_material_suchzeile.py
 
-„Bei der Übersicht und den Prüfungen soll der Suchbalken und das linke Burgermenü sich genauso verhalten wie im Katalog.
-Nur entsprechend dort als Artikelsuche.“ Solange die Leiste eine Schublade ist, hängt material.js (leisteKnopfSetzen)
-„☰ Ordner“ und das Formular der Nummernsuche aus der Modulnavigation in die klebende Suchzeile #mat-suchzeile – dasselbe
-Formular, kein zweites; die Lupe entfällt dort. Breiter (Leiste daneben, Doppelbildschirm) bleibt alles wie bisher.
-Katalog und alle übrigen Seiten sind unverändert. Die Bedienung (Kleben, Schublade, Zurück, Vorschläge, Enter) ist im
-Browser geprüft; hier stehen Markup und die Stellen in Skript und Stil fest. Alle Namen hier sind erfunden."""
+Zuerst Übersicht und Prüfungen: „Bei der Übersicht und den Prüfungen soll der Suchbalken und das linke Burgermenü sich
+genauso verhalten wie im Katalog. Nur entsprechend dort als Artikelsuche.“ Danach „Beim Bestand das gleiche“ – damit alle
+Seiten mit Nummernsuche außer der Prüfung selbst (Bestand, Ordner, Artikel, Artikel anlegen, Anträge, Jahresbericht,
+Bestandsimport, Prüfdurchgang, Abgeschlossene Prüfdurchgänge, Prüfung beginnen, Trefferseite). Solange die Leiste eine
+Schublade ist, hängt material.js (leisteKnopfSetzen) „☰ Ordner“ und das Formular der Nummernsuche aus der
+Modulnavigation in die klebende Suchzeile #mat-suchzeile – dasselbe Formular, kein zweites; die Lupe entfällt dort.
+Breiter (Leiste daneben, Doppelbildschirm) bleibt alles wie bisher. Katalog und Prüfung sind unverändert. Die Bedienung
+(Kleben, Schubladen, Zurück, Vorschläge, Enter) ist im Browser geprüft; hier stehen Markup und die Stellen in Skript und
+Stil fest. Alle Namen hier sind erfunden."""
 import os
 import re
 import sys
@@ -28,22 +31,26 @@ CSS = _lesen("app/material/static/material.css")
 ZEILE = '<div class="mat-suchzeile mat-suchzeile-oben" id="mat-suchzeile" hidden></div>'
 
 
-def _seiten(k, ids, gid, artikel, pruefung):
-    """(Pfad, mit Suchzeile oben?, mit Nummernsuche in der Navigation?) – Katalogseiten ohne Nummernsuche (26.10.2026)."""
+def _seiten(k, ids, gid, artikel, pruefung, durchgang):
+    """(Pfad, mit Suchzeile oben?, mit Nummernsuche in der Navigation?) – Katalogseiten ohne Nummernsuche (26.10.2026);
+    die Zeile überall sonst außer in der Prüfung selbst (28.10.2026)."""
     return [("/materialablage", True, True), ("/materialablage/pruefungen", True, True),
             ("/materialablage/pruefungen?status=ueberfaellig", True, True),
-            ("/materialablage/bestand", False, True), (f"/materialablage/ordner/{gid}", False, True),
-            (f"/materialablage/artikel/{artikel}", False, True), ("/materialablage/suche?q=QQ-NICHTS", False, True),
-            ("/materialablage/durchgaenge", False, True), ("/materialablage/bestand/antraege", False, True),
+            ("/materialablage/bestand", True, True), (f"/materialablage/ordner/{gid}", True, True),
+            (f"/materialablage/artikel/{artikel}", True, True), ("/materialablage/suche?q=QQ-NICHTS", True, True),
+            (f"/materialablage/artikel/neu?ordner={gid}", True, True), (f"/materialablage/ordner/{gid}/bericht", True, True),
+            (f"/materialablage/ordner/{gid}/import", True, True), (f"/materialablage/durchgang/{durchgang}", True, True),
+            (f"/materialablage/artikel/{artikel}/pruefung/neu", True, True),
+            ("/materialablage/durchgaenge", True, True), ("/materialablage/bestand/antraege", True, True),
             (f"/materialablage/pruefung/{pruefung}", False, True),
             ("/materialablage/katalog", False, False), (f"/materialablage/katalog/produkt/{ids['gurt']}", False, False),
             ("/materialablage/katalog/meldungen", False, False)]
 
 
 def test_markup_je_ansicht():
-    """Übersicht und Prüfungen liefern die leere, verborgene Zeile zwischen Modulnavigation und Inhalt aus; das Formular
-    steht genau einmal im Dokument – in der Navigation, mit Lupe, Reitern und „☰“ wie bisher (material.js hängt um).
-    Alle übrigen Seiten haben keine Zeile, der Katalog weiterhin weder Nummernsuche noch Lupe."""
+    """Alle Seiten mit Nummernsuche außer der Prüfung liefern die leere, verborgene Zeile zwischen Modulnavigation und
+    Inhalt aus; das Formular steht genau einmal im Dokument – in der Navigation, mit Lupe, Reitern und „☰“ wie bisher
+    (material.js hängt um). Prüfung und Katalog haben keine Zeile, der Katalog weiterhin weder Nummernsuche noch Lupe."""
     with tempfile.TemporaryDirectory() as tmp:
         app, k = umgebung(tmp)
         ids = katalog_grund(k["adm"])
@@ -53,12 +60,17 @@ def test_markup_je_ansicht():
         r = starten(k["pruefer"], a["id"])
         assert r.status_code in (200, 201), r.get_json()
         pruefung = r.json["pruefung"]["id"]
+        r = k["wart"].post("/api/material/durchgaenge", json={"folder_id": gid, "titel": "Musterdurchgang"})
+        assert r.status_code == 201, r.get_json()
+        durchgang = r.json["durchgang"]["id"]
+        gesehen = set()
         for konto in ("adm", "wart", "pruefer"):
-            for pfad, oben, mit_suche in _seiten(k, ids, gid, a["id"], pruefung):
+            for pfad, oben, mit_suche in _seiten(k, ids, gid, a["id"], pruefung, durchgang):
                 r = k[konto].get(pfad)
                 if r.status_code != 200:            # z. B. die offene Prüfung eines anderen: dort zählt nur das Gerüst
-                    assert pfad.startswith("/materialablage/pruefung/"), (konto, pfad, r.status_code)
+                    assert konto != "wart", (konto, pfad, r.status_code)
                     continue
+                gesehen.add(pfad)
                 html = r.get_data(as_text=True)
                 assert (ZEILE in html) is oben, (konto, pfad)
                 assert html.count('id="mat-suchzeile"') == (1 if oben else 0), (konto, pfad)
@@ -72,6 +84,8 @@ def test_markup_je_ansicht():
                     # Zwischen Navigation und Inhalt – oben im Inhalt, unter den Reitern.
                     assert html.index("</nav>") < html.index(ZEILE) < html.index('<div id="mat-inhalt">'), (konto, pfad)
                     assert 'placeholder="Nummer suchen"' in mnav, (konto, pfad)    # breit unverändert
+        # Jede Seite ist mindestens einmal wirklich gezeichnet worden (die Prüfung als Prüfer, der sie begonnen hat).
+        assert len(gesehen) == len(_seiten(k, ids, gid, a["id"], pruefung, durchgang)), gesehen
     print("Markup je Ansicht bestanden.")
 
 
@@ -93,6 +107,8 @@ def test_skript_haengt_um():
     assert "if (lupe) lupe.hidden = false;" not in JS
     assert '!matNav.classList.contains("eng") || !lupe || sucheInZeile()) return;' in JS
     assert "if (sucheZeileOben) leisteKnopfSetzen();" in JS
+    # Keine Liste je Seite im Skript: Wo seite.html die Zeile liefert, wird umgehängt (Katalog: eigene Zeile im Inhalt).
+    assert 'ANSICHT === "dashboard"' not in JS[JS.index("function leisteKnopfSetzen"):JS.index("function leisteInert")]
     assert "const umschalten = () => { leisteZu(); leisteInert(); leisteKnopfSetzen(); };" in JS
     # Der Fokus geht beim Umhängen nicht verloren (Drehen mit offener Tastatur).
     assert "const fokus = el.contains(document.activeElement) ? document.activeElement : null;" in JS
@@ -126,8 +142,13 @@ def test_katalog_unveraendert():
     assert JS.index('<div id="kat-liste"></div>`;') < JS.index("leisteKnopfSetzen();             //")
     seite = _lesen("app/material/templates/material/seite.html")
     # Nur mit Modulzugang (innerhalb von „if not nur_psa“, wie die Navigation).
-    assert '{% if ansicht in ("dashboard", "pruefungen") %}' + ZEILE + "{% endif %}{% endif %}" in seite
-    print("Katalog unverändert bestanden.")
+    assert '{% if ansicht not in katalog_gruppe and ansicht != "pruefung" %}' + ZEILE + "{% endif %}{% endif %}" in seite
+    assert '{% set katalog_gruppe = ("katalog", "produkt", "formular", "meldungen") %}' in seite
+    assert '{% if ansicht not in katalog_gruppe %}<button class="btn secondary small mat-lupe"' in seite
+    # Die Prüfung bleibt, wie sie ist: am Telefon ohne Suche und ohne Lupe.
+    assert '#mat[data-ansicht="pruefung"] .mat-suche { display: none; }' in CSS
+    assert '@media (max-width: 640px) { #mat[data-ansicht="pruefung"] .mat-lupe { display: none; } }' in CSS
+    print("Katalog und Prüfung unverändert bestanden.")
 
 
 if __name__ == "__main__":
