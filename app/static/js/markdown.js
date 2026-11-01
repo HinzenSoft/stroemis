@@ -722,6 +722,16 @@ window.MD = (function () {
       next.remove();
     });
 
+    /* Aufgabenlisten: Das Kästchen bekommt den Text seines Punkts als Namen (Gerätetest 01.11.2026, O1 – vorher las die
+       Vorlesehilfe nur „Kontrollkästchen, nicht aktiviert“). Unterlisten gehören nicht dazu. */
+    wurzel.querySelectorAll("li > input[type=checkbox]").forEach((kaestchen) => {
+      if (kaestchen.hasAttribute("aria-label")) return;
+      const punkt = kaestchen.parentElement.cloneNode(true);
+      punkt.querySelectorAll("ul, ol, input").forEach((el) => el.remove());
+      const text = punkt.textContent.replace(/\s+/g, " ").trim();
+      if (text) kaestchen.setAttribute("aria-label", text.length > 200 ? text.slice(0, 199).trimEnd() + "…" : text);
+    });
+
     // Bilder und Videos im Vollbild ansehen
     wurzel.querySelectorAll("img").forEach((img) => {
       if (img.closest("a")) return;                     // verlinkte Bilder behalten ihren Link
