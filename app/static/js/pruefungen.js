@@ -31,6 +31,8 @@
     medienGruppen: {}, medienZaehler: 0,                      // Medienlisten für den Leuchtkasten
     dlgAufraeumen: null,     // räumt Stoppuhr-Timer und Objekt-URLs des Bewertungsdialogs weg
     lb: null,                // {medien, i, onDelete} des offenen Leuchtkastens
+    vorKlapp: {},            // Karte „Voraussetzungen“ je Person auf-/zugeklappt (tid → bool), solange die Seite offen ist
+    kopfOffen: null,         // Angaben zum Lehrgang am Telefon/bei wenig Höhe aufgeklappt (null: Vorgabe zu)
   };
 
   /* --- Kleine Helfer --------------------------------------------------------------------- */
@@ -90,13 +92,26 @@
   const versuchTitel = (v) => (v.ist_nachpruefung ? `Nachprüfung ${Math.max(1, v.versuch_nr - 1)}` : `Versuch ${v.versuch_nr}`);
   // Gerenderte Beschreibungen tragen keine id-Attribute: Ein <div id="bw-wahl"> im Text stünde
   // im Dialog vor dem Formular und würde von querySelector statt des echten Feldes gefunden.
+  // Überschriften der Beschreibung stehen in einer Karte oder einem Dialog unter deren eigenen Überschriften: drei
+  // Stufen tiefer (H1 → H4, ab H3 → H6), leere fallen weg (Gerätetest B11 – „# Ablauf“ war eine zweite H1 der Seite).
   const md = (text) => {
     if (!window.MD || !text) return `<p>${esc(text || "")}</p>`;
     const t = document.createElement("div");
     t.innerHTML = MD.render(text);
     t.querySelectorAll("[id]").forEach((el) => el.removeAttribute("id"));
+    t.querySelectorAll("h1, h2, h3, h4, h5, h6").forEach((h) => {
+      if (!h.textContent.trim() && !h.querySelector("img")) { h.remove(); return; }
+      const tiefer = document.createElement(`h${Math.min(6, +h.tagName[1] + 3)}`);
+      [...h.attributes].forEach((a) => tiefer.setAttribute(a.name, a.value));
+      tiefer.innerHTML = h.innerHTML;
+      h.replaceWith(tiefer);
+    });
     return t.innerHTML;
   };
+  /* Ohne Netz (Gerätetest W1): Ein Schreibvorgang, der scheitert, nimmt die Anzeige zurück und sagt es so – keine
+     Warteschlange, wie bei der App ohne Netz (nur ein Hinweis). Der Status 0 kommt von S.api („keine Antwort“). */
+  const NICHT_GESPEICHERT = "Nicht gespeichert – keine Verbindung.";
+  const schreibFehler = (e) => (e && e.status === 0 ? Object.assign(new Error(NICHT_GESPEICHERT), { status: 0 }) : e);
   const groesseText = (b) => (b >= 1048576 ? `${(b / 1048576).toFixed(1).replace(".", ",")} MB` : `${Math.max(1, Math.round(b / 1024))} kB`);
   const isVideo = (f) => /^video\//.test(f.type) || /\.(mp4|m4v|mov|webm)$/i.test(f.name || "");
   const plural = S.plural;              // „1 Bild“, „3 Bilder“ – app-weit in common.js (UI/UX vor dem Merge, A11)
@@ -209,15 +224,22 @@
     } catch (e) { /* egal */ }
   };
 
-  function fortschrittHtml(lg) {
+  /* opts.ohneHinweise: nur Zahl und Balken – in der Lehrgangsliste stehen offene Mängel und Voraussetzungen unter dem
+     Titel (lgHinweisHtml), die schmale Spalte quetschte sie auf drei Zeilen (Gerätetest F2). */
+  function fortschrittHtml(lg, opts = {}) {
     const ges = lg.zellen_gesamt || 0, ab = lg.zellen_abgenommen || 0;
     const pct = ges ? Math.round((ab / ges) * 100) : 0;
     const offen = lg.offene_maengel || 0;
     return `<div class="fortschritt"><span>${ab}/${ges} Leistungen abgenommen</span>
       <div class="balken"><span class="${ges && ab === ges ? "voll" : ""}" style="width:${pct}%"></span></div>
-      ${offen ? `<span class="maengel">${plural(offen, "offener Mangel", "offene Mängel")}</span>` : '<span class="muted">keine offenen Mängel</span>'}
-      ${lg.voraussetzungen_offen ? `<span class="maengel"> · ${lg.voraussetzungen_offen} Teilnehmende mit offenen Voraussetzungen</span>` : ""}</div>`;
+      ${opts.ohneHinweise ? "" : `${offen ? `<span class="maengel">${plural(offen, "offener Mangel", "offene Mängel")}</span>` : '<span class="muted">keine offenen Mängel</span>'}
+      ${lg.voraussetzungen_offen ? `<span class="maengel"> · ${lg.voraussetzungen_offen} Teilnehmende mit offenen Voraussetzungen</span>` : ""}`}</div>`;
   }
+  const lgHinweisHtml = (lg) => {
+    const t = [lg.offene_maengel ? plural(lg.offene_maengel, "offener Mangel", "offene Mängel") : "",
+      lg.voraussetzungen_offen ? `${lg.voraussetzungen_offen} Teilnehmende mit offenen Voraussetzungen` : ""].filter(Boolean);
+    return t.length ? `<div class="lg-hinweis">${t.join(" · ")}</div>` : "";
+  };
 
   /* Medienkacheln. Die Liste wird unter einem Schlüssel gemerkt, damit der Leuchtkasten beim
      Antippen weiß, worin er blättern soll. loeschbar hängt ein ✕ an jede Kachel. */
@@ -533,7 +555,8 @@
             const r = neu ? await api(`${API}/lehrgaenge`, { method: "POST", body: d })
                           : await api(`${API}/lehrgaenge/${lg.id}`, { method: "PUT", body: d });
             dlg.close();
-            toast(neu ? "Lehrgang angelegt" : "Gespeichert");
+            // Neu: „Lehrgang angelegt“ meldet erst die Seite des neuen Lehrgangs (nachher springt dorthin).
+            if (!neu) toast("Gespeichert");
             if (nachher) await nachher(r.lehrgang);
           } catch (e) {
             // Nennt der Server eine Ausbilderzeile (kein Konto, keine Stufe), steht die Meldung an ihr.
@@ -632,16 +655,18 @@
           : "Hier stehen die Lehrgänge, in denen du als Ausbilder eingetragen bist."}</div>`;
       return;
     }
+    // Die Statusspalte hat eine feste Breite für „abgeschlossen“ in einer Zeile (Gerätetest F2: bei 883 px 84 px breit,
+    // die Marke brach zu „abgeschlo/ssen“).
     ziel.innerHTML = `<table class="list" id="lg-tabelle">
-      <colgroup><col style="width:28%"><col style="width:15%"><col style="width:10%"><col style="width:11%"><col style="width:20%"><col style="width:16%"></colgroup>
+      <colgroup><col style="width:30%"><col style="width:15%"><col class="lg-status-spalte"><col style="width:11%"><col style="width:18%"><col style="width:16%"></colgroup>
       <thead><tr><th>Lehrgang</th><th>Datum</th><th>Status</th><th>Teilnehmende</th><th>Fortschritt</th><th></th></tr></thead>
       <tbody>${state.liste.map((lg) => `<tr data-id="${lg.id}">
         <td data-l="Lehrgang"><a class="titel" href="/riegenkarten/${lg.id}">${esc(lg.titel)}</a>
-          ${lg.nummer ? `<div class="nummer">Nr. ${esc(lg.nummer)}</div>` : ""}${lg.ort ? `<div class="small muted">${esc(lg.ort)}</div>` : ""}</td>
+          ${lg.nummer ? `<div class="nummer">Nr. ${esc(lg.nummer)}</div>` : ""}${lg.ort ? `<div class="small muted">${esc(lg.ort)}</div>` : ""}${lgHinweisHtml(lg)}</td>
         <td data-l="Datum">${esc(spanne(lg.datum_von, lg.datum_bis)) || '<span class="muted">–</span>'}</td>
         <td data-l="Status">${statusMarke(lg.status)}</td>
         <td data-l="Teilnehmende">${lg.tn_anzahl}</td>
-        <td data-l="Fortschritt">${fortschrittHtml(lg)}</td>
+        <td data-l="Fortschritt">${fortschrittHtml(lg, { ohneHinweise: true })}</td>
         <td class="tabelle-aktionen"><div class="btn-row">
           <a class="btn secondary small" href="/riegenkarten/${lg.id}">Öffnen</a>
           ${lg.darf_leiten ? zeilenMenue([["Bearbeiten", `data-act="lg-edit" data-id="${lg.id}"`],
@@ -789,7 +814,8 @@
                 await api(`${API}/katalog-leistungen/${l.id}/kriterien`, { method: "POST", body: { bezeichnung: bez } });
                 await kritNachziehen();
                 $("#krit-neu-text", body).focus();
-              } catch (e) { toast(e.message, true); }
+                toast("Kriterium angelegt");
+              } catch (e) { toast(schreibFehler(e).message, true); }
             };
             $("#krit-neu-go", body).onclick = anlegen;
             $("#krit-neu-text", body).addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); anlegen(); } });
@@ -824,7 +850,8 @@
                   await api(`${API}/katalog-leistungen/${l.id}/kriterien/reihenfolge`, { method: "PUT", body: { ids: ks.map((x) => x.id) } });
                 }
                 await kritNachziehen();
-              } catch (err) { toast(err.message, true); }
+                toast(b.hasAttribute("data-krit-del") ? "Kriterium gelöscht" : "Reihenfolge gespeichert");
+              } catch (err) { toast(schreibFehler(err).message, true); }
             });
           };
           // Nach jeder Änderung: frischen Stand holen (auch für die Seite hinter dem Dialog – der
@@ -880,7 +907,8 @@
     try {
       await api(`${API}/kataloge/${kid}/leistungen/reihenfolge`, { method: "PUT", body: { ids: ls.map((x) => x.id) } });
       renderKatalogSeite();
-    } catch (e) { [ls[i], ls[j]] = [ls[j], ls[i]]; toast(e.message, true); }
+      toast("Reihenfolge gespeichert");     // still war das nicht zu sehen (Gerätetest FT4)
+    } catch (e) { [ls[i], ls[j]] = [ls[j], ls[i]]; toast(schreibFehler(e).message, true); }
   }
 
   /* ==========================================================================================
@@ -914,45 +942,83 @@
             referierende ? `<span class="muted">Referierende:</span> ${referierende}` : ""].filter(Boolean).join(" · ");
   }
 
+  /* Kopf des Lehrgangs (Gerätetest B3/Q3): Bis zu den Reitern war fast eine Bildschirmhöhe zu rollen, im Querformat
+     füllte der Kopf den ganzen ersten Bildschirm. Jetzt
+     - kleben die Reiter unter der Kopfleiste (.reiter-kleben) – Wechsel zwischen Bewertung und Mängeln ohne Hochrollen;
+     - stehen Status, Nummer, Datum, Ort, Leitung, Beschreibung und Fortschritt am Telefon (≤ 760 px) und bei weniger als
+       600 px Höhe in der zugeklappten Zeile „Angaben zum Lehrgang“ (Status, Datum und Stand stehen auch zugeklappt
+       darin); breit und hoch genug ist sie immer offen und ohne Zeile darüber;
+     - stehen „Bearbeiten“ und „Import“ (nur die Leitung) im Menü „Mehr“ der Seite wie auf der Katalogseite. */
+  const kompaktMq = window.matchMedia("(max-width: 760px), (max-height: 599px)");
+  const kopfOffen = () => !kompaktMq.matches || state.kopfOffen === true;
+  kompaktMq.addEventListener("change", () => { const d = $("details.lg-kopf", root); if (d) d.open = kopfOffen(); });
+  /* Wie weit oben die Reiter kleben: unter der Kopfleiste, solange sie selbst klebt – rollt sie mit (wenig Höhe, offene
+     Tastatur), ganz oben. Gemessen statt als feste Zahl, damit beides stimmt. */
+  function reiterObenSetzen() {
+    const k = document.querySelector("header.bauchbinde");
+    const pos = k ? getComputedStyle(k).position : "";
+    root.style.setProperty("--reiter-oben", `${pos === "sticky" || pos === "fixed" ? Math.round(k.getBoundingClientRect().height) : 0}px`);
+  }
+  if (ANSICHT === "lehrgang") {
+    window.addEventListener("resize", reiterObenSetzen);
+    if (window.visualViewport) window.visualViewport.addEventListener("resize", reiterObenSetzen);
+    new MutationObserver(reiterObenSetzen).observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
+  }
+
   function renderLehrgangSeite() {
     const lg = state.lehrgang;
     if (!lg) return;
     const ausb = ausbilderZeile(lg);
-    // Kopfknöpfe nur für die Leitung; „Bearbeiten“ steht ganz rechts. Kopieren geht über die Liste. So groß wie die Kopfknöpfe
-    // der Liste (UI/UX vor dem Merge D15 – vorher „small“).
     const best = lg.ergebnis_bestanden || 0, nicht = lg.ergebnis_nicht_bestanden || 0;
+    const ges = lg.zellen_gesamt || 0, ab = lg.zellen_abgenommen || 0;
     // Rollstand der Matrizen und offene Beschreibungen überleben das Neuzeichnen – sonst sprang die
-    // Matrix nach jedem Speichern auf dem Tablet zurück in die erste Spalte.
+    // Matrix nach jedem Speichern auf dem Tablet zurück in die erste Spalte. Die Angaben zum Lehrgang und die Karten
+    // „Voraussetzungen“ merken sich ihren Zustand selbst (state.kopfOffen, state.vorKlapp).
     const rollstaende = $$(".table-scroll", root).map((el) => el.scrollLeft);
-    const aufgeklappt = $$("details", root).map((d) => d.open);
+    const AUFKLAPPER = "details:not(.lg-kopf):not(.vor-klapp):not(.menue)";
+    const aufgeklappt = $$(AUFKLAPPER, root).map((d) => d.open);
     S.titel(lg.titel, "pruefungen");                  // Reiter des Browsers (Browserprüfung vor dem Merge, V2)
+    const datum = lg.datum_von || lg.datum_bis ? esc(spanne(lg.datum_von, lg.datum_bis)) : "";
     root.innerHTML = `
       <a class="zurueck" href="/riegenkarten">← Alle Lehrgänge</a>
       <div class="page-head"><h1>${esc(lg.titel)}</h1>
-        ${lg.darf_leiten ? `<div class="btn-row">
-          <button class="btn secondary" data-act="lg-import-in" data-id="${lg.id}">Import</button>
-          <button class="btn secondary" data-act="lg-edit" data-id="${lg.id}">Bearbeiten</button>
-        </div>` : ""}</div>
-      <div class="kopf-meta">${statusMarke(lg.status)}${lg.nummer ? `<span>Nr. ${esc(lg.nummer)}</span>` : ""}
-        ${lg.datum_von || lg.datum_bis ? `<span>${esc(spanne(lg.datum_von, lg.datum_bis))}</span>` : ""}${lg.ort ? `<span>${esc(lg.ort)}</span>` : ""}
-        <span>${lg.tn_anzahl} Teilnehmende</span>
-        ${best || nicht ? `<span class="erg-zaehler" title="Vermerkte Lehrgangsergebnisse"><b class="ja">${best} bestanden</b> · <b class="nein">${nicht} nicht bestanden</b></span>` : ""}</div>
-      ${ausb ? `<p class="ausbilder-zeile">${ausb}</p>` : ""}
-      ${lg.beschreibung ? `<details class="beschreibung-kopf"><summary>Beschreibung</summary><div class="md">${esc(lg.beschreibung).replace(/\n/g, "<br>")}</div></details>` : ""}
-      ${fortschrittHtml(lg)}
-      <div class="c-tabs reiter reiter-linie" role="tablist">
-        <button type="button" role="tab" data-reiter="teilnehmer">Teilnehmende<span class="reiter-zahl">${lg.tn_anzahl}</span></button>
-        <button type="button" role="tab" data-reiter="leistungen">Leistungen<span class="reiter-zahl">${lg.leistungen_anzahl}</span></button>
-        <button type="button" role="tab" data-reiter="bewertung">Bewertung</button>
-        <button type="button" role="tab" data-reiter="maengel">Mängel${lg.offene_maengel ? `<span class="reiter-zahl offen" title="offene Mängel">${lg.offene_maengel}</span>` : ""}</button>
+        ${lg.darf_leiten ? `<div class="btn-row">${S.menue({ klein: false, eintraege: [
+          { text: "Bearbeiten", attrs: `data-act="lg-edit" data-id="${lg.id}"` },
+          { text: "Import", attrs: `data-act="lg-import-in" data-id="${lg.id}"` }] })}</div>` : ""}</div>
+      <details class="lg-kopf"${kopfOffen() ? " open" : ""}>
+        <summary><span class="lg-kopf-titel">Angaben zum Lehrgang</span>
+          <span class="lg-kopf-kurz">${statusMarke(lg.status)}${datum ? `<span>${datum}</span>` : ""}<span>${ab}/${ges} abgenommen</span></span></summary>
+        <div class="kopf-meta">${statusMarke(lg.status)}${lg.nummer ? `<span>Nr. ${esc(lg.nummer)}</span>` : ""}
+          ${datum ? `<span>${datum}</span>` : ""}${lg.ort ? `<span>${esc(lg.ort)}</span>` : ""}
+          <span>${lg.tn_anzahl} Teilnehmende</span>
+          ${best || nicht ? `<span class="erg-zaehler" title="Vermerkte Lehrgangsergebnisse"><b class="ja">${best} bestanden</b> · <b class="nein">${nicht} nicht bestanden</b></span>` : ""}</div>
+        ${ausb ? `<p class="ausbilder-zeile">${ausb}</p>` : ""}
+        ${lg.beschreibung ? `<details class="beschreibung-kopf"><summary>Beschreibung</summary><div class="md">${esc(lg.beschreibung).replace(/\n/g, "<br>")}</div></details>` : ""}
+        ${fortschrittHtml(lg)}
+      </details>
+      <div class="reiter-kleben">
+        <div class="su-banner hidden" id="su-banner"></div>
+        <div class="c-tabs reiter reiter-linie" role="tablist">
+          <button type="button" role="tab" data-reiter="teilnehmer">Teilnehmende<span class="reiter-zahl">${lg.tn_anzahl}</span></button>
+          <button type="button" role="tab" data-reiter="leistungen">Leistungen<span class="reiter-zahl">${lg.leistungen_anzahl}</span></button>
+          <button type="button" role="tab" data-reiter="bewertung">Bewertung</button>
+          <button type="button" role="tab" data-reiter="maengel">Mängel${lg.offene_maengel ? `<span class="reiter-zahl offen" title="offene Mängel">${lg.offene_maengel}</span>` : ""}</button>
+        </div>
       </div>
-      <div class="su-banner hidden" id="su-banner"></div>
       <div id="reiter-inhalt"></div>`;
+    reiterObenSetzen();
     renderReiter();
     bannerZeichnen();
     $$(".table-scroll", root).forEach((el, i) => { if (rollstaende[i]) el.scrollLeft = rollstaende[i]; });
-    $$("details", root).forEach((d, i) => { if (aufgeklappt[i]) d.open = true; });
+    $$(AUFKLAPPER, root).forEach((d, i) => { if (aufgeklappt[i]) d.open = true; });
   }
+  // Wer die Angaben oder eine Karte „Voraussetzungen“ auf- oder zuklappt, behält das beim Neuzeichnen (nach jedem Häkchen).
+  root.addEventListener("toggle", (e) => {
+    const d = e.target;
+    if (!(d instanceof HTMLDetailsElement)) return;
+    if (d.classList.contains("lg-kopf") && kompaktMq.matches) state.kopfOffen = d.open;
+    else if (d.classList.contains("vor-klapp")) state.vorKlapp[+d.dataset.tid] = d.open;
+  }, true);
 
   function renderReiter() {
     const lg = state.lehrgang;
@@ -979,8 +1045,10 @@
     const kopf = `<div class="abschnittskopf"><h2>Teilnehmende${eingefrorenInfo(tns)}</h2>
       ${leitung ? `<div class="btn-row"><button class="btn secondary small" data-act="vor-verwalten">Voraussetzungen verwalten</button>
         <button class="btn small" data-act="tn-neu"><span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Teilnehmende<span class="k-anlegen"> anlegen</span></span></button></div>` : ""}</div>`;
+    // Hierher führt „Lehrgang anlegen“ (Gerätetest FT6) – der Leerzustand sagt, wie es weitergeht; der Import steht im Menü
+    // „Mehr“ oben.
     if (!tns.length) {
-      return kopf + `<div class="leerzustand"><strong>Noch keine Teilnehmenden</strong>${leitung ? "Lege sie an oder importiere die Excel-Teilnehmerliste – daraus kommen auch die Voraussetzungen." : "Die Lehrgangsleitung legt sie an oder importiert die Excel-Teilnehmerliste."}</div>`;
+      return kopf + `<div class="leerzustand"><strong>Noch niemand eingetragen</strong>${leitung ? "Lege Teilnehmende an oder importiere die Excel-Teilnehmerliste (oben unter „Mehr“ → „Import“) – daraus kommen auch die Voraussetzungen." : "Die Lehrgangsleitung legt sie an oder importiert die Excel-Teilnehmerliste."}</div>`;
     }
     const hinweis = vor.length ? "" : `<p class="leerzustand">Noch keine Voraussetzungen angelegt${leitung ? " – über „Voraussetzungen verwalten“ oder den Import." : "."}</p>`;
     // Der Name ist für die Leitung ein Knopf (Bearbeiten), für alle anderen nur Text.
@@ -998,24 +1066,29 @@
           const st = tn.voraussetzungen[String(v.id)];
           return `<td><div class="vk">
             <input type="checkbox" data-vk data-tid="${tn.id}" data-vid="${v.id}" ${st && st.erfuellt ? "checked" : ""} ${tn.eingefroren ? "disabled" : ""} aria-label="${esc(v.bezeichnung)} – ${esc(tnName(tn))}">
-            <button type="button" class="vk-stempel ${st ? (st.erfuellt ? "ja" : "nein") : ""}" data-act="vk-verlauf" data-tid="${tn.id}" data-vid="${v.id}" ${st ? "" : "disabled"} title="Verlauf anzeigen">${st ? stempelHtml(st) : ""}</button>
+            <button type="button" class="vk-stempel vk-stand ${st ? (st.erfuellt ? "ja" : "nein") : ""}" data-act="vk-verlauf" data-tid="${tn.id}" data-vid="${v.id}" ${st ? "" : "disabled"} title="Verlauf anzeigen">${st ? stempelHtml(st) : ""}</button>
           </div></td>`;
         }).join("")}
       </tr>`).join("")}</tbody></table></div>`;
-    // Telefon: Karten je Person mit großen Kästen.
+    /* Telefon: Karten je Person mit großen Kästen. „Voraussetzungen“ ist eine erkennbare Zeile zum Aufklappen (Pfeil,
+       Rahmen, „4 von 6 erfüllt“) und bei offenen Voraussetzungen aufgeklappt – zugeklappt sah der Bereich leer aus
+       (Gerätetest B2). Wer sie selbst auf- oder zuklappt oder darin abhakt, behält den Zustand (state.vorKlapp). */
+    const vorAuf = (tn) => (state.vorKlapp[tn.id] != null ? state.vorKlapp[tn.id] : tn.voraussetzungen_offen > 0);
     const karten = `<div class="tn-mobil">${tns.map((tn) => `<div class="tn-karte ${tn.voraussetzungen_offen ? "offen" : ""}${tn.eingefroren ? " gesperrt" : ""}">
       <div class="tn-kopf">${tnKopfHtml(tn, leitung ? `<button type="button" class="linkbtn" data-act="tn-edit" data-tid="${tn.id}">${esc(tnName(tn))}</button>` : null)}
         ${tn.voraussetzungen_offen ? `<span class="badge rot">${tn.voraussetzungen_offen} offen</span>` : (vor.length ? '<span class="badge gruen">alle erfüllt</span>' : "")}${ergebnisMarkeHtml(tn)}</div>
       ${tn.gliederung || tn.geburtsdatum ? `<div class="small muted">${esc(tn.gliederung || "")}${tn.geburtsdatum ? `${tn.gliederung ? " · " : ""}geb. ${esc(fmtTag(tn.geburtsdatum))}` : ""}</div>` : ""}
-      ${vor.length ? `<details class="vor-klapp">
-        <summary>Voraussetzungen</summary>
+      ${vor.length ? `<details class="vor-klapp" data-tid="${tn.id}"${vorAuf(tn) ? " open" : ""}>
+        <summary><span class="vor-klapp-titel">Voraussetzungen</span>
+          <span class="vor-klapp-zahl${tn.voraussetzungen_offen ? " offen" : ""}">${vor.length - (tn.voraussetzungen_offen || 0)} von ${vor.length} erfüllt</span></summary>
         ${vor.map((v) => {
           const st = tn.voraussetzungen[String(v.id)];
           const id = `vk-${tn.id}-${v.id}`;
+          // „Verlauf“ erst, wenn es einen gibt – ausgegraut ohne Grund wirkte der Knopf kaputt (Gerätetest FT6).
           return `<div class="vk-zeile">
             <input type="checkbox" id="${id}" data-vk data-tid="${tn.id}" data-vid="${v.id}" ${st && st.erfuellt ? "checked" : ""} ${tn.eingefroren ? "disabled" : ""}>
-            <label class="vk-text" for="${id}">${esc(v.bezeichnung)}${st ? `<small class="${st.erfuellt ? "ja" : "nein"}">${stempelHtml(st)}</small>` : ""}</label>
-            <button type="button" class="btn secondary small vk-verlauf" data-act="vk-verlauf" data-tid="${tn.id}" data-vid="${v.id}" ${st ? "" : "disabled"} aria-label="Verlauf anzeigen">Verlauf</button>
+            <label class="vk-text" for="${id}">${esc(v.bezeichnung)}<small class="vk-stand${st ? (st.erfuellt ? " ja" : " nein") : ""}">${st ? stempelHtml(st) : ""}</small></label>
+            ${st ? `<button type="button" class="btn secondary small vk-verlauf" data-act="vk-verlauf" data-tid="${tn.id}" data-vid="${v.id}" aria-label="Verlauf anzeigen">Verlauf</button>` : ""}
           </div>`;
         }).join("")}
       </details>` : ""}
@@ -1024,24 +1097,40 @@
   }
 
   /* Häkchen setzen oder nehmen: Der Server antwortet mit wer/wann – das kommt sofort unter den
-     Kasten, ohne den ganzen Lehrgang neu zu laden. Geht es schief, springt der Kasten zurück. */
+     Kasten, ohne den ganzen Lehrgang neu zu laden. Geht es schief, springt der Kasten zurück.
+     Gerätetest W1/W2: Solange die Antwort fehlt (Funkloch – die Anfrage hängt, ohne zu scheitern), steht unter dem Kasten
+     „Wird gespeichert …“, nach zehn Sekunden „Noch nicht gespeichert – keine Antwort“; vorher sah das Häkchen gespeichert
+     aus. Scheitert die Anfrage, springt der Kasten zurück und die Meldung sagt „Nicht gespeichert – keine Verbindung.“.
+     Gespeichert meldet es ein Toast (role="status", wie bei Bewertungen), und der Fokus bleibt auf dem Kasten. */
   async function voraussetzungSetzen(cb) {
     const tid = +cb.dataset.tid, vid = +cb.dataset.vid, erfuellt = cb.checked;
+    const inKarte = !!cb.closest(".tn-mobil");
+    const hatteFokus = document.activeElement === cb;
+    if (inKarte) state.vorKlapp[tid] = true;      // die Karte bleibt offen, auch wenn danach nichts mehr offen ist
+    const stand = cb.closest(".vk, .vk-zeile").querySelector(".vk-stand");
+    const alt = stand ? { html: stand.innerHTML, klasse: stand.className } : null;
+    const zeigen = (text) => { if (stand) { stand.textContent = text; stand.classList.remove("ja", "nein"); stand.classList.add("speichert"); } };
+    zeigen("Wird gespeichert …");
+    const langsam = setTimeout(() => zeigen("Noch nicht gespeichert – keine Antwort vom Server"), 10000);
     cb.disabled = true;
     try {
       const r = await api(`${API}/teilnehmer/${tid}/voraussetzungen/${vid}`, { method: "PUT", body: { erfuellt } });
       const tn = (state.lehrgang.teilnehmer || []).find((t) => t.id === tid);
+      const v = (state.lehrgang.voraussetzungen || []).find((x) => x.id === vid);
       if (tn) {
         tn.voraussetzungen[String(vid)] = r.status;
-        tn.voraussetzungen_offen = (state.lehrgang.voraussetzungen || []).filter((v) => !(tn.voraussetzungen[String(v.id)] || {}).erfuellt).length;
+        tn.voraussetzungen_offen = (state.lehrgang.voraussetzungen || []).filter((x) => !(tn.voraussetzungen[String(x.id)] || {}).erfuellt).length;
         state.lehrgang.voraussetzungen_offen = state.lehrgang.teilnehmer.filter((t) => t.voraussetzungen_offen > 0).length;
       }
       renderLehrgangSeite();
+      toast(`Gespeichert – ${tn ? `${tnName(tn)}: ` : ""}„${v ? v.bezeichnung : "Voraussetzung"}“ ${erfuellt ? "erfüllt" : "nicht erfüllt"}`);
+      const neu = $(`${inKarte ? ".tn-mobil" : ".tn-desktop"} input[data-vk][data-tid="${tid}"][data-vid="${vid}"]`, root);
+      if (neu && hatteFokus) neu.focus({ preventScroll: true });
     } catch (e) {
       cb.checked = !erfuellt;
-      cb.disabled = false;
-      toast(e.message, true);
-    }
+      if (stand && alt) { stand.innerHTML = alt.html; stand.className = alt.klasse; }
+      S.fehlschlag(cb, schreibFehler(e));
+    } finally { clearTimeout(langsam); }
   }
 
   async function verlaufDialog(tid, vid) {
@@ -1215,7 +1304,8 @@
               state.lehrgang.voraussetzungen.push(r.voraussetzung);
               await nachziehen();
               $("#vor-neu-text").focus();
-            } catch (e) { toast(e.message, true); }
+              toast("Voraussetzung angelegt");
+            } catch (e) { toast(schreibFehler(e).message, true); }
           };
           $("#vor-neu-go", body).onclick = neu;
           $("#vor-neu-text", body).addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); neu(); } });
@@ -1232,7 +1322,7 @@
                 if (v) v.bezeichnung = r.voraussetzung.bezeichnung;
                 renderLehrgangSeite();
                 toast("Umbenannt");
-              } catch (e) { inp.value = alt; toast(e.message, true); }
+              } catch (e) { inp.value = alt; toast(schreibFehler(e).message, true); }
             });
             inp.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); inp.blur(); } });
           });
@@ -1257,7 +1347,8 @@
                 await api(`${API}/lehrgaenge/${LEHRGANG_ID}/voraussetzungen/reihenfolge`, { method: "PUT", body: { ids: vor.map((x) => x.id) } });
               }
               await nachziehen();
-            } catch (err) { toast(err.message, true); }
+              toast(b.hasAttribute("data-del") ? "Voraussetzung gelöscht" : "Reihenfolge gespeichert");
+            } catch (err) { toast(schreibFehler(err).message, true); }
           });
         });
     };
@@ -1303,7 +1394,8 @@
     try {
       await api(`${API}/lehrgaenge/${LEHRGANG_ID}/leistungen/reihenfolge`, { method: "PUT", body: { ids: ls.map((x) => x.id) } });
       renderReiter();
-    } catch (e) { [ls[i], ls[j]] = [ls[j], ls[i]]; toast(e.message, true); }
+      toast("Reihenfolge gespeichert");
+    } catch (e) { [ls[i], ls[j]] = [ls[j], ls[i]]; toast(schreibFehler(e).message, true); }
   }
 
   /* Adresse (und Text) für einen Link – als eigenes <dialog>-Element wie S.confirm, nicht über
@@ -1572,7 +1664,8 @@
                 await api(`${API}/leistungen/${l.id}/kriterien`, { method: "POST", body: { bezeichnung: bez } });
                 await kritNachziehen();
                 $("#krit-neu-text", body).focus();
-              } catch (e) { toast(e.message, true); }
+                toast("Kriterium angelegt");
+              } catch (e) { toast(schreibFehler(e).message, true); }
             };
             $("#krit-neu-go", body).onclick = anlegen;
             $("#krit-neu-text", body).addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); anlegen(); } });
@@ -1607,7 +1700,8 @@
                   await api(`${API}/leistungen/${l.id}/kriterien/reihenfolge`, { method: "PUT", body: { ids: ks.map((x) => x.id) } });
                 }
                 await kritNachziehen();
-              } catch (err) { toast(err.message, true); }
+                toast(b.hasAttribute("data-krit-del") ? "Kriterium gelöscht" : "Reihenfolge gespeichert");
+              } catch (err) { toast(schreibFehler(err).message, true); }
             });
           };
           // Nach jeder Änderung: frischen Stand holen (auch für die Seite hinter dem Dialog – der
@@ -1806,7 +1900,7 @@
             dlg.close();
             toast("Kommentar gespeichert");
             renderReiter();
-          } catch (e) { toast(e.message, true); }
+          } catch (e) { S.fehlschlag(knopf, schreibFehler(e)); }
           finally { knopf.disabled = false; }
         };
       });
@@ -1830,7 +1924,7 @@
       // Der Kopf zeigt die Zähler, die Matrix Schloss und Dämpfung – die ganze Seite neu.
       await loadDetail().catch(() => {});
       renderLehrgangSeite();
-    } catch (e) { S.fehlschlag(knopf, e); }
+    } catch (e) { S.fehlschlag(knopf, schreibFehler(e)); }
   }
 
   function bewertungBinden() {
@@ -1843,6 +1937,9 @@
      ========================================================================================== */
   // Drei Zustände je Kriterium: nicht bewertet → erfüllt → nicht erfüllt → nicht bewertet.
   const KRIT_SYM = { leer: "⬜", ja: "✅", nein: "❌" };
+  // Der Zustand steht im Namen des Knopfs – aria-pressed kennt nur zwei, „nicht erfüllt“ klang wie „nicht bewertet“
+  // (Gerätetest W4); ein Wechsel wird zusätzlich angesagt (#bw-krit-ansage).
+  const KRIT_TEXT = { leer: "nicht bewertet", ja: "erfüllt", nein: "nicht erfüllt" };
   const KRIT_ZYKLUS = { leer: "ja", ja: "nein", nein: "leer" };
   // Die Kriteriendefinitionen einer Leistung (Text, Reihenfolge) stehen an ihr selbst, nicht am
   // Versuch – wie beim Zeitansatz (soll()) zeigt eine spätere Umbenennung sich rückwirkend überall.
@@ -1902,12 +1999,13 @@
       <div class="kriterien-liste" id="bw-kriterien">${l.kriterien.map((k) => {
         const stand = v.kriterien || {};
         const z = stand[String(k.id)] === true ? "ja" : stand[String(k.id)] === false ? "nein" : "leer";
-        return `<button type="button" class="krit-zeile ${z}" data-kid="${k.id}" data-stand="${z}" aria-pressed="${z === "ja"}">
+        return `<button type="button" class="krit-zeile ${z}" data-kid="${k.id}" data-stand="${z}" aria-label="${esc(k.bezeichnung)}: ${KRIT_TEXT[z]}">
           <span class="krit-sym" aria-hidden="true">${KRIT_SYM[z]}</span><span class="krit-text">${esc(k.bezeichnung)}</span></button>`;
       }).join("")}</div>
+      <span class="nur-vorlesen" id="bw-krit-ansage" aria-live="polite"></span>
       <div class="help">Antippen wechselt zwischen nicht bewertet, ✅ erfüllt und ❌ nicht erfüllt.</div>` : ""}
-      <label>Bewertung</label>
-      <div class="bew-wahl" id="bw-wahl">
+      <label id="bw-wahl-label">Bewertung</label>
+      <div class="bew-wahl" id="bw-wahl" role="group" aria-labelledby="bw-wahl-label" tabindex="-1">
         <button type="button" data-erg="bestanden" class="${v.ergebnis === "bestanden" ? "sel" : ""}" aria-pressed="${v.ergebnis === "bestanden"}"><span class="sym" aria-hidden="true">👍</span> bestanden</button>
         <button type="button" data-erg="mangelhaft" class="${v.ergebnis === "mangelhaft" ? "sel" : ""}" aria-pressed="${v.ergebnis === "mangelhaft"}"><span class="sym" aria-hidden="true">👎</span> mangelhaft</button>
       </div>
@@ -2134,6 +2232,7 @@
       const pflichtZeigen = () => { kommLabel.textContent = gewaehlt() === "mangelhaft" ? "Kommentar (Pflicht bei mangelhaft)" : "Kommentar"; if (gewaehlt() !== "mangelhaft") komm.classList.remove("fehler"); };
       $$("button", wahl).forEach((b) => b.onclick = () => {
         $$("button", wahl).forEach((x) => { x.classList.toggle("sel", x === b); x.setAttribute("aria-pressed", String(x === b)); });
+        S.feldOk(wahl);
         pflichtZeigen();
       });
       komm.addEventListener("input", () => { if (komm.value.trim()) komm.classList.remove("fehler"); });
@@ -2147,7 +2246,9 @@
         btn.dataset.stand = naechster;
         btn.className = `krit-zeile ${naechster}`;
         btn.querySelector(".krit-sym").textContent = KRIT_SYM[naechster];
-        btn.setAttribute("aria-pressed", String(naechster === "ja"));
+        const name = `${btn.querySelector(".krit-text").textContent}: ${KRIT_TEXT[naechster]}`;
+        btn.setAttribute("aria-label", name);
+        $("#bw-krit-ansage", form).textContent = name;
       });
 
       // Medien auswählen: Vorschau, Größe, einzeln entfernbar. Die Dateien liegen im Speicher,
@@ -2171,7 +2272,8 @@
         const knopf = ev.currentTarget;
         if (knopf.disabled) return;
         const erg = gewaehlt();
-        if (!erg) { wahl.scrollIntoView({ block: "center" }); return toast("Bitte „bestanden“ oder „mangelhaft“ wählen.", true); }
+        // Fehler an der Stelle (S.feldFehler), nicht als Toast (Gerätetest FT7, designsprache „Fehler am Feld“).
+        if (!erg) { wahl.scrollIntoView({ block: "center" }); return S.feldFehler(wahl, "Bitte „bestanden“ oder „mangelhaft“ wählen."); }
         // Läuft die Stoppuhr noch und ist das Zeitfeld leer, gilt die gemessene Zeit – wer
         // direkt speichert, hat das Stoppen nur übersprungen, nicht die Messung verworfen.
         const laufend = suLesen();
@@ -2216,8 +2318,9 @@
           if (modus.art === "edit") bewertungsDialog(tid, lid);
           else dlg.close();
         } catch (e) {
-          if (/Kommentar/i.test(e.message)) { komm.classList.add("fehler"); komm.focus(); }
-          toast(e.message, true);
+          // Ohne Netz bleibt alles Eingegebene im Dialog stehen – „Nicht gespeichert – keine Verbindung.“ (W1).
+          if (/Kommentar/i.test(e.message)) { komm.classList.add("fehler"); S.feldFehler(komm, e.message); }
+          else S.fehlschlag(knopf, schreibFehler(e));
         } finally { knopf.disabled = false; }
       };
       if (modus.art === "np" || modus.art === "edit") $("#bw-form-titel", form).scrollIntoView({ block: "start" });
@@ -2233,7 +2336,7 @@
         <div><label for="mf-l">Prüfungsleistung</label><select id="mf-l"><option value="">Alle</option>${ls.map((l) => `<option value="${l.id}" ${String(l.id) === String(state.mf.leistung) ? "selected" : ""}>${esc(l.bezeichnung)}</option>`).join("")}</select></div>
         <label class="inline"><input type="checkbox" id="mf-offen" ${state.mf.nur_offen ? "checked" : ""}> nur offene Mängel</label>
         <div class="btn-row knoepfe"><button class="btn secondary small" data-act="m-druck">Druckansicht</button>
-          <button class="btn secondary small" data-act="m-alle" id="mf-alle" title="Alle Bewertungen der gewählten Person, auch die bestandenen">Alle Bewertungen</button></div>
+          ${tns.length ? '<button class="btn secondary small" data-act="m-alle" id="mf-alle" title="Alle Bewertungen der gewählten Person, auch die bestandenen">Alle Bewertungen</button>' : ""}</div>
       </div>
       <div id="maengel-liste"><p class="help">Wird geladen …</p></div>`;
   }
@@ -2241,7 +2344,8 @@
   function maengelBinden() {
     const tn = $("#mf-tn"), l = $("#mf-l"), offen = $("#mf-offen");
     // „Alle Bewertungen“ bleibt bedienbar – ohne gewählte Person sagt ein Hinweis, was fehlt (wirkte ausgegraut
-    // ohne Grund, Browserprüfung vor dem Merge, Verbesserung 8).
+    // ohne Grund, Browserprüfung vor dem Merge, Verbesserung 8); seit dem Gerätetest (FT6) als Fehler an der Auswahl
+    // „Teilnehmende“. Ohne Teilnehmende gibt es den Knopf nicht – es gäbe niemanden zu wählen.
     const neu = () => { state.mf = { teilnehmer: tn.value, leistung: l.value, nur_offen: offen.checked }; maengelLaden(); };
     tn.onchange = neu; l.onchange = neu; offen.onchange = neu;
   }
@@ -2555,7 +2659,15 @@
       // Der Reiter steht in der Adresse (Neuladen bleibt auf ihm), aber ohne eigenen Verlaufseintrag – wie Leitstelle und
       // Album (UI/UX vor dem Merge C6): Zurück verlässt den Lehrgang, statt durch die Reiter zu blättern.
       history.replaceState(history.state, "", "#" + tab.dataset.reiter);
-      if (state.reiter !== tab.dataset.reiter) { state.reiter = tab.dataset.reiter; renderReiter(); }
+      if (state.reiter !== tab.dataset.reiter) {
+        // Kleben die Reiter schon (weit gerollt), beginnt der neue Reiter direkt unter ihnen statt irgendwo in seiner Mitte.
+        const leiste = $(".reiter-kleben", root);
+        const klebt = leiste && window.scrollY > 0 && leiste.getBoundingClientRect().top <= parseFloat(getComputedStyle(leiste).top) + 1;
+        state.reiter = tab.dataset.reiter;
+        renderReiter();
+        const unterLeiste = parseFloat(getComputedStyle(leiste).top) + leiste.offsetHeight + 8;
+        if (klebt) window.scrollTo({ top: Math.max(0, window.scrollY + $("#reiter-inhalt").getBoundingClientRect().top - unterLeiste) });
+      }
       return;
     }
     const b = e.target.closest("[data-act]");
@@ -2564,7 +2676,9 @@
     const lgAus = (x) => (ANSICHT === "liste" ? state.liste.find((l) => l.id === x) : state.lehrgang);
     try {
       switch (act) {
-        case "lg-neu": return lehrgangDialog(null, (lg) => { location.href = `/riegenkarten/${lg.id}#leistungen`; });
+        // Ein neuer Lehrgang öffnet bei den Teilnehmenden – dort geht es weiter (Gerätetest FT6); die Meldung
+        // „Lehrgang angelegt“ überlebt den Seitenwechsel.
+        case "lg-neu": return lehrgangDialog(null, (lg) => { meldungMerken("Lehrgang angelegt"); location.href = `/riegenkarten/${lg.id}#teilnehmer`; });
         case "lg-import": return importDialog(null);
         case "lg-edit": {
           // In der Liste fehlen Referierende und Beschreibung – dafür das Detail holen.
@@ -2611,7 +2725,8 @@
         case "bew-tn-druck": window.open(`/riegenkarten/${LEHRGANG_ID}/druck?ansicht=tn&teilnehmer=${state.bewTn}`, "_blank", "noopener"); return;
         case "zelle": return bewertungsDialog(tid, lid);
         case "m-np": return bewertungsDialog(tid, lid, { nachpruefung: true });
-        case "m-alle": return state.mf.teilnehmer ? alleBewertungenDialog(+state.mf.teilnehmer) : toast("Bitte zuerst eine Person wählen.", true);
+        // Ohne gewählte Person steht der Hinweis an der Auswahl (Fehler am Feld statt Toast, Gerätetest FT6).
+        case "m-alle": return state.mf.teilnehmer ? alleBewertungenDialog(+state.mf.teilnehmer) : S.feldFehler($("#mf-tn"), "Bitte zuerst eine Person wählen.");
         case "m-druck": window.open(`/riegenkarten/${LEHRGANG_ID}/druck?${maengelQuery(state.mf)}`, "_blank", "noopener"); return;
         default: return;
       }

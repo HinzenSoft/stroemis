@@ -4,6 +4,43 @@ Erweiterung von strömis.de um Lehrgänge, Teilnehmende, Voraussetzungen, Prüfu
 Stoppuhr, Nachprüfungen, Medien und eine Mängelübersicht für Feedbackrunden – nur für Nutzer mit dem neuen
 Zusatzrecht „Prüfer“.
 
+## Gerätetest 01.11.2026 – Teil 3 (Riegenkarten)
+
+Wunsch des Nutzers: „Nimm diesen UI/UX Test und setze die Findings um.“ (Gerätetest auf Pixel 8 Pro, Pixel 10 Pro Fold,
+Vale V12X, Galaxy Tab S6 Lite; Auftrag planung/geraetetest/auftrag_geraetetest.md, Teil 3). Nur Oberfläche, kein Schema.
+- **B2** „Voraussetzungen“ in den Karten der Teilnehmenden (Telefon) ist eine erkennbare Zeile zum Aufklappen: Pfeil,
+  Rahmen, rechts „4 von 6 erfüllt“ (rot, solange etwas offen ist); bei offenen Voraussetzungen aufgeklappt. Wer auf- oder
+  zuklappt oder darin abhakt, behält den Zustand beim Neuzeichnen. Der Pfeil wird selbst gezeichnet (wie beim
+  Aufklapper der Leitstelle) – auch an „Beschreibung“, „Prüfungsbeschreibung“ und „Frühere Stände“, wo ihn die
+  Fingerregel (summary als flex) ebenfalls verschluckte.
+- **B3/Q3** Lehrgangsseite: Die Reiter kleben unter der Kopfleiste (Höhe gemessen – rollt die Kopfleiste mit, ganz oben);
+  ein Reiterwechsel weit unten beginnt unter ihnen. Status, Nummer, Datum, Ort, Leitung, Beschreibung und Fortschritt
+  stehen am Telefon und bei weniger als 600 px Höhe in der zugeklappten Zeile „Angaben zum Lehrgang“; „Bearbeiten“ und
+  „Import“ im Menü „Mehr“ der Seite (am Telefon neben dem Titel). Erster Bildschirm 448 × 891: Reiter bei 279 px statt
+  435 px (im Test mit Leitung und langer Beschreibung rund 900 px), 947 × 364: bei 258 px statt nach dem Rollen.
+- **F2** Lehrgangsliste: Statusspalte fest 9,5 em, die Marke bricht nicht mehr („abgeschlo/ssen“); offene Mängel und
+  Teilnehmende mit offenen Voraussetzungen stehen unter dem Titel statt in der Fortschrittsspalte.
+- **W1** Ohne Netz: Ein Häkchen, dessen Anfrage scheitert, springt zurück, die Meldung heißt „Nicht gespeichert – keine
+  Verbindung.“ (auch Bewertung, Kommentar, Lehrgangsergebnis, Reihenfolgen); keine Warteschlange. Solange die Antwort
+  fehlt (Funkloch, die Anfrage hängt), steht unter dem Kasten „Wird gespeichert …“, nach zehn Sekunden „Noch nicht
+  gespeichert – keine Antwort vom Server“ – vorher sah das Häkchen gespeichert aus.
+- **W2** Abhaken meldet „Gespeichert – Name: „Voraussetzung“ erfüllt/nicht erfüllt“ (Toast mit role="status"); der Fokus
+  bleibt auf dem Kasten. Die Zuschreibung unter dem Häkchen (Telefon) in 14 px statt 12 px.
+- **W4** Kriterien im Bewertungsdialog nennen ihren Zustand im Namen („Kriterium: nicht erfüllt“) statt aria-pressed
+  (kannte nur zwei Zustände); ein Wechsel wird angesagt.
+- **B11** Überschriften in den Beschreibungen der Prüfungsleistungen kommen drei Stufen tiefer an (H1 → H4), leere fallen
+  weg.
+- **FT6** „Lehrgang anlegen“ öffnet den Reiter „Teilnehmende“ mit „Noch niemand eingetragen“ und dem Weg zum Import;
+  „Lehrgang angelegt“ erscheint auf der neuen Seite. „Alle Bewertungen“ ohne gewählte Person meldet am Feld
+  „Teilnehmende“, ohne Teilnehmende gibt es den Knopf nicht. „Verlauf“ steht erst da, wenn es einen gibt (ausgegraut
+  ohne Grund wirkte er kaputt).
+- **FT7** Die Pflichtfelder der Riegenkarten melden schon über S.feldFehler (aria-describedby, Fokus); role="alert" kommt
+  mit Teil 1. Neu am Feld statt als Toast: „Bitte „bestanden“ oder „mangelhaft“ wählen.“ und die Kommentar-Pflicht aus
+  der Antwort des Servers.
+- **FT4** Erfolgsmeldungen für bisher stille Schreibvorgänge: Reihenfolge (Katalog, Lehrgang, Voraussetzungen,
+  Kriterien), Voraussetzung und Kriterium angelegt/gelöscht, „Lehrgang angelegt“. „Umbenannt“ (Voraussetzung) gab es
+  schon.
+
 ## Nachtrag (01.11.2026): Ausbilder nur noch mit Konto
 
 Wunsch des Nutzers: „Entferne die Freitext-Ausbilder in der Riegenkarte, entweder Personen haben einen Account und

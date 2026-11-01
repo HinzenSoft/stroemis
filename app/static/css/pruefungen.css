@@ -28,6 +28,41 @@
 .pruef .beschreibung-kopf summary { cursor: pointer; color: var(--grau); }
 .pruef .beschreibung-kopf .md { margin-top: 6px; }
 
+/* Gerätetest 01.11.2026 (Teil 3). Aufklapper mit gezeichnetem Pfeil (B2): Sobald ein summary flex ist (Fingerregel
+   unten), zeichnet Chrome kein Dreieck mehr – „Voraussetzungen“ sah dann wie eine leere Überschrift aus. Der Pfeil wie
+   bei details.accordion (app.css): nach rechts zu, nach unten offen. Menüs („Mehr“) haben ihren eigenen. */
+.pruef details:is(.vor-klapp, .lg-kopf, .beschreibung-kopf, .staende) > summary,
+#dlg details:is(.beschreibung, .beschreibung-kopf, .staende) > summary { list-style: none; position: relative; padding-left: 20px; }
+.pruef details:is(.vor-klapp, .lg-kopf, .beschreibung-kopf, .staende) > summary::-webkit-details-marker,
+#dlg details:is(.beschreibung, .beschreibung-kopf, .staende) > summary::-webkit-details-marker { display: none; }
+.pruef details:is(.vor-klapp, .lg-kopf, .beschreibung-kopf, .staende) > summary::before,
+#dlg details:is(.beschreibung, .beschreibung-kopf, .staende) > summary::before {
+  content: ""; position: absolute; left: 4px; top: 50%; width: 6px; height: 6px;
+  border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: translateY(-70%) rotate(-45deg);
+}
+.pruef details:is(.vor-klapp, .lg-kopf, .beschreibung-kopf, .staende)[open] > summary::before,
+#dlg details:is(.beschreibung, .beschreibung-kopf, .staende)[open] > summary::before { transform: translateY(-70%) rotate(45deg); }
+
+/* Kopf des Lehrgangs (B3/Q3): Angaben am Telefon und bei weniger als 600 px Höhe zugeklappt in einer Zeile, sonst offen
+   ohne die Zeile; die Reiter kleben unter der Kopfleiste (--reiter-oben misst pruefungen.js – 0, wenn die Kopfleiste
+   mitrollt). */
+.pruef details.lg-kopf { margin: 6px 0 0; }
+.pruef details.lg-kopf > summary {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 2px 10px; padding: 6px 10px 6px 28px;
+  border: 1px solid var(--linie); border-radius: var(--radius); background: var(--grau-hell); cursor: pointer; font-size: var(--fs-mittel);
+}
+.pruef details.lg-kopf > summary::before { left: 12px; }
+.pruef details.lg-kopf[open] > summary { margin-bottom: 6px; }
+.pruef details.lg-kopf[open] > summary .lg-kopf-kurz { display: none; }   /* aufgeklappt steht alles darunter */
+.pruef .lg-kopf-titel { font-weight: 700; }
+.pruef .lg-kopf-kurz { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 2px 10px; color: var(--grau); }
+@media (min-width: 761px) and (min-height: 600px) {
+  .pruef details.lg-kopf > summary { display: none; }
+}
+.pruef .reiter-kleben { position: sticky; top: var(--reiter-oben, var(--topbar)); z-index: 30; background: var(--weiss); margin: 8px 0 16px; padding-top: 6px; }
+.pruef .reiter-kleben .su-banner { position: static; margin: 0 0 6px; }
+.pruef .reiter-kleben .c-tabs.reiter { margin: 0; }
+
 /* Marken in den Prüfungsfarben (rot, grün, blau, grau): ein Farbsystem in app.css (UI/UX D7). */
 .badge.np { background: var(--anthrazit); color: var(--weiss); font-size: var(--fs-marke); padding: 0 5px; margin-left: 4px; }
 /* Büroklammer in der Zelle: Anhänge vorhanden (Bilder/Videos) – mit Zähler ab zwei. */
@@ -143,9 +178,14 @@ p.dlg-tn { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .pruef table.list td .titel { font-weight: 700; font-size: 1rem; text-decoration: none; color: var(--anthrazit); overflow-wrap: anywhere; }
 .pruef table.list td .titel:hover { color: var(--rot); }
 .pruef table.list td .nummer { color: var(--grau); font-size: var(--fs-klein); }
+/* Gerätetest F2: Status in einer Zeile (feste Spalte für „abgeschlossen“), offene Mängel und Voraussetzungen unter dem
+   Titel statt in der schmalen Fortschrittsspalte. */
+#lg-tabelle col.lg-status-spalte { width: 9.5em; }
+#lg-tabelle td[data-l=Status] .badge { white-space: nowrap; overflow-wrap: normal; }
+.pruef .lg-hinweis { color: var(--rot); font-weight: 700; font-size: var(--fs-klein); margin-top: 2px; }
 
 /* --- Reiter des Lehrgangs --------------------------------------------------------------- */
-.pruef .c-tabs.reiter { margin: 14px 0 16px; }   /* Aussehen: Reiter als Linie (app.css, .reiter-linie) */
+/* Aussehen der Reiter: Linie (app.css, .reiter-linie); Abstand und Kleben: .reiter-kleben oben. */
 .pruef .abschnittskopf { margin-bottom: 12px; }   /* Abschnittskopf: app.css (UI/UX D5) */
 .pruef .abschnittskopf .btn-row { margin-left: auto; }
 
@@ -186,13 +226,25 @@ p.dlg-tn { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 /* Zugeklappt, damit die Liste nicht für jede Person voll ausgerollt scrollt – wer offen hat,
    steht schon in der Marke oben im Kartenkopf. Der Zustand übersteht ein Häkchen: renderLehrgangSeite
    merkt sich beim Neuzeichnen, welche <details> offen waren, und klappt sie wieder auf. */
-.tn-karte details.vor-klapp { margin-top: 4px; }
-.tn-karte details.vor-klapp summary { cursor: pointer; font-weight: 600; padding: 6px 0; }
-.tn-karte details.vor-klapp[open] summary { margin-bottom: 2px; }
+.tn-karte details.vor-klapp { margin-top: 6px; }
+/* B2: Die ganze Zeile ist der Knopf – Rahmen, Pfeil, rechts „4 von 6 erfüllt“ (rot, solange etwas offen ist). */
+.tn-karte details.vor-klapp > summary {
+  display: flex; align-items: center; justify-content: space-between; gap: 4px 10px; flex-wrap: wrap;
+  padding: 8px 10px 8px 28px; border: 1px solid var(--linie); border-radius: var(--radius); background: var(--weiss);
+  cursor: pointer; font-weight: 600;
+}
+.tn-karte details.vor-klapp > summary::before { left: 12px; }
+.tn-karte details.vor-klapp > summary:hover { border-color: var(--anthrazit); }
+.tn-karte details.vor-klapp[open] > summary { margin-bottom: 4px; }
+.vor-klapp-zahl { font-weight: 400; font-size: var(--fs-mittel); color: var(--grau); }
+.vor-klapp-zahl.offen { color: var(--rot-auf-flaeche); font-weight: 700; }
 .vk-zeile { display: grid; grid-template-columns: 44px 1fr auto; align-items: center; gap: 0 8px; padding: 4px 0; border-top: 1px solid var(--linie); min-height: 48px; }
 .vk-zeile input[type=checkbox] { width: 30px; height: 30px; margin: 0 auto; accent-color: var(--ok); }
 .vk-zeile .vk-text { font-size: var(--fs-mittel); cursor: pointer; padding: 8px 0; }
-.vk-zeile .vk-text small { display: block; font-size: var(--fs-marke); color: var(--grau); }
+.vk-zeile .vk-text small { display: block; font-size: var(--fs-mittel); color: var(--grau); }   /* W2: 14 px statt 12 px */
+.vk-zeile .vk-text small:empty { display: none; }
+/* W1: Solange die Antwort fehlt, steht „Wird gespeichert …“ unter dem Kasten. */
+.vk-stand.speichert { color: var(--anthrazit); font-style: italic; }
 .vk-zeile .vk-text small.ja { color: var(--ok); }
 .vk-zeile .vk-text small.nein { color: var(--rot); }
 .vk-zeile .vk-verlauf { min-height: 44px; }   /* Text statt „🕓“ (Knopfregel, nach_merge_liste Punkt 13) */
@@ -211,7 +263,10 @@ p.dlg-tn { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .leistung-karte .md-vorschau { grid-column: 1 / -1; font-size: var(--fs-mittel); color: var(--grau); max-height: 4.6em; overflow: hidden; position: relative; }
 .leistung-karte .md-vorschau::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 1.6em; background: linear-gradient(rgba(255,255,255,0), var(--weiss)); }
 .leistung-karte .md-vorschau p, .leistung-karte .md-vorschau ul, .leistung-karte .md-vorschau ol { margin: 0 0 .3em; }
-.leistung-karte .md-vorschau h1, .leistung-karte .md-vorschau h2, .leistung-karte .md-vorschau h3 { font-size: 1em; margin: 0 0 .2em; color: var(--grau); }
+.leistung-karte .md-vorschau :is(h4, h5, h6) { font-size: 1em; margin: 0 0 .2em; color: var(--grau); }
+/* B11: Überschriften der Beschreibungen kommen drei Stufen tiefer an (H1 → H4) – im Dialog und in „je Leistung“ so
+   groß wie eine Zwischenzeile. */
+.pruef .md :is(h4, h5, h6), #dlg .md :is(h4, h5, h6) { font-size: 1em; margin: .8em 0 .3em; }
 .leistung-karte .btn-row { justify-content: flex-end; align-self: start; }
 #pl-editor { margin-top: 4px; }
 .pl-fallback { min-height: 220px; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: var(--fs-mittel); }
@@ -492,6 +547,11 @@ body:has(.pruef.druck) #toast { top: 12px; }
   .pruef .page-head { gap: 8px; }
   .pruef .page-head .btn-row { margin-left: 0; width: 100%; }
   .pruef .page-head .btn-row .btn { flex: 1 1 auto; justify-content: center; }
+  /* Lehrgang: Das Menü „Mehr“ steht neben dem Titel statt in einer eigenen Zeile – eine Zeile weniger bis zu den Reitern
+     (Gerätetest B3). */
+  .pruef[data-ansicht=lehrgang] .page-head { flex-wrap: nowrap; align-items: flex-start; }
+  .pruef[data-ansicht=lehrgang] .page-head h1 { min-width: 0; }
+  .pruef[data-ansicht=lehrgang] .page-head .btn-row { width: auto; flex: none; margin-left: auto; }
   .pruef .abschnittskopf .btn-row { margin-left: 0; width: 100%; }
   .pruef .abschnittskopf .btn-row .btn { flex: 1 1 auto; justify-content: center; }
   .tn-desktop { display: none; }
@@ -551,6 +611,9 @@ body:has(.pruef.druck) #toast { top: 12px; }
   /* Haken und Stempel mindestens 44 px (nach_merge_liste Punkt 12; vorher 40 und 24 px). */
   .vk input[type=checkbox] { width: 44px; height: 44px; }
   .vk-stempel { min-height: 44px; display: inline-flex; align-items: center; }
+  /* Die Beschriftung neben dem Kasten der Karte ist die Tippfläche – auch ohne Zuschreibung darunter 44 px hoch (seit die
+     Karten mit offenen Voraussetzungen aufgeklappt stehen, Gerätetest B2; vorher 37 px). */
+  .vk-zeile .vk-text { min-height: 44px; display: flex; flex-direction: column; justify-content: center; }
   .zelle { min-height: 56px; }
   .linkbtn { min-height: 44px; display: inline-flex; align-items: center; }
   .vor-liste .btn, .ausb-zeile [data-weg] { min-width: 44px; min-height: 44px; justify-content: center; }
