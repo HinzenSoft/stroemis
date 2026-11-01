@@ -538,7 +538,7 @@
 
   function loeschDialog(u) {
     S.dialog(`<h2>Nutzer löschen</h2>
-      <p>${S.esc(u.name || u.email)} (${S.esc(u.email)}) löschen? Alben, Bilder und Seiten der Strömipedia bleiben erhalten und gehen auf dich über.</p>
+      <p>${S.esc(u.name || u.email)} (${S.esc(u.email)}) löschen? Alben, Bilder und Seiten der Strömipedia bleiben erhalten und gehen auf dich über. Aus den Lehrgängen der Riegenkarten wird das Konto als Ausbilder ausgetragen – seine Bewertungen behalten den Namen.</p>
       <div id="u-folgen"><p class="help">Folgen in der Materialablage werden ermittelt …</p></div>
       <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button>
         <button class="btn danger" id="u-del" type="button">Löschen</button></div>`,
