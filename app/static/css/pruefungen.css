@@ -432,6 +432,23 @@ dialog.pruef-dlg { width: min(720px, 96vw); }
 .ausb-zeile .ausb-wer { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .ausb-zeile label.inline { margin: 0; font-size: var(--fs-klein); }
 .ausb-zeile .ausb-leit { white-space: nowrap; font-size: var(--fs-mittel); font-weight: 600; }
+/* Ausbilder nur mit Konto (01.11.2026): je Zeile die gewählte Person oder die Suche mit Trefferliste – wie die
+   Personenwahl der Freigaben in der Materialablage (mf-personwahl). Fehler am Feld stehen unter der ganzen Zeile. */
+.ausb-zeile + .feld-fehler { margin: -2px 0 8px; }
+.ausb-gewaehlt { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; padding: 6px 10px; border: 1px solid var(--linie);
+  background: var(--grau-hell); overflow-wrap: anywhere; min-width: 0; }
+.ausb-gewaehlt:focus { outline: 3px solid var(--gelb); outline-offset: 1px; }
+.ausb-wer .ausb-ohne { margin: 0; color: var(--rot-auf-flaeche); }
+.ausb-treffer { list-style: none; margin: 0; padding: 0; border: 1px solid var(--linie); max-height: 240px; overflow: auto; background: var(--weiss); }
+.ausb-treffer[hidden] { display: none; }
+.ausb-treffer li + li { border-top: 1px solid var(--linie); }
+.ausb-konto { display: block; width: 100%; text-align: left; background: var(--weiss); border: 0; padding: 8px 10px; font: inherit;
+  color: var(--anthrazit); cursor: pointer; overflow-wrap: anywhere; }
+.ausb-konto:hover, .ausb-konto:focus-visible { background: var(--grau-hell); }
+.ausb-konto:focus-visible { outline: 3px solid var(--gelb); outline-offset: -3px; }
+.ausb-treffer-leer { padding: 8px 10px; color: var(--grau); font-size: var(--fs-klein); }
+.import-nicht ul { margin: 4px 0; padding-left: 18px; }
+.import-nicht .help { margin: 4px 0 0; }
 
 /* Verlauf-Dialog: Liste der Zustände, neueste oben. */
 .verlauf-liste { list-style: none; margin: 8px 0; padding: 0; }
@@ -489,6 +506,10 @@ body:has(.pruef.druck) #toast { top: 12px; }
   .ausb-zeile [data-weg] { grid-column: 2; grid-row: 1; }
   .ausb-zeile .ausb-funktion { grid-column: 1; grid-row: 2; }
   .ausb-zeile .ausb-leit { grid-column: 2; grid-row: 2; }
+  /* Je Ausbilder zwei Zeilen – eine Linie trennt die Personen; „Entfernen“ bleibt neben dem Namen, auch wenn darunter
+     die Trefferliste oder „ohne Zugriff“ steht. */
+  .ausb-zeile + .ausb-zeile { border-top: 1px solid var(--linie); padding-top: 6px; }
+  .ausb-zeile:has(.ausb-treffer:not([hidden]), .ausb-ohne) [data-weg] { align-self: start; }
   .import-spalten thead { display: none; }
   .import-spalten tr, .import-spalten td { display: block; }
   .import-spalten tr { padding: 6px 0; border-bottom: 1px solid var(--linie); }
@@ -535,6 +556,7 @@ body:has(.pruef.druck) #toast { top: 12px; }
   .vor-liste .btn, .ausb-zeile [data-weg] { min-width: 44px; min-height: 44px; justify-content: center; }
   .ausb-zeile .ausb-leit { min-height: 44px; }
   .ausb-zeile .ausb-leit input[type=checkbox] { width: 24px; height: 24px; }
+  .ausb-zeile .ausb-suche, .ausb-zeile .ausb-funktion, .ausb-konto { min-height: 44px; }
   .medien-grid .medium-weg { width: 44px; height: 44px; }
   .medien-grid { grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); }
   /* Der Schalter „nur offene Mängel“: das Kästchen selbst wird größer, die ganze Beschriftung ist Ziel. */

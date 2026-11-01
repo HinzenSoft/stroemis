@@ -1870,13 +1870,13 @@ def _ausbilder_zuordnen(ausbilder):
 def _ausbilder_aus_datei(ergebnis, bisher):
     """Die Ausbilder der Datei zugeordnet: (übernehmen, nicht_uebernommen). übernehmen: [(Konto, Funktion, Leitung)] ohne
     Konten, die schon im Lehrgang stehen (bisher) oder in der Datei zweimal vorkommen; nicht_uebernommen: [{name,
-    funktion}] – kein passendes Konto, für Vorschau und Ergebnis. Schreibt dazu je Ausbilder „konto“ ({id, name} oder
-    None) in das Ergebnis der Analyse (Vorschau)."""
+    funktion}] – kein passendes Konto, für Vorschau und Ergebnis. Schreibt dazu je Ausbilder „konto“ ({id, name,
+    eingetragen} oder None) in das Ergebnis der Analyse (Vorschau)."""
     uebernehmen, nicht, gesehen = [], [], set(bisher)
     ausbilder = ergebnis.get("ausbilder") or []
     for a, u in zip(ausbilder, _ausbilder_zuordnen(ausbilder)):
         funktion = (a.get("funktion") or "").strip()[:80]
-        a["konto"] = {"id": u["id"], "name": _kontoname(u)} if u else None
+        a["konto"] = {"id": u["id"], "name": _kontoname(u), "eingetragen": u["id"] in bisher} if u else None
         a.pop("email", None)                         # bleibt in der Datei, geht nicht zurück
         if not u:
             nicht.append({"name": (a.get("name") or "").strip()[:120], "funktion": funktion})

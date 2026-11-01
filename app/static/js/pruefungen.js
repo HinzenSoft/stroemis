@@ -22,7 +22,6 @@
 
   const state = {
     lehrgang: null,          // LehrgangDetail der geöffneten Seite
-    nutzer: null,            // Nutzerliste für die Auswahl der Referierenden, einmal geladen
     kataloge: null,          // Kataloge (Kurzform mit Anzahl), einmal geladen – Auswahl beim Anlegen
     katalog: null,           // Katalogdetail der geöffneten Katalogseite
     liste: [], jahre: [],    // Lehrgangsliste und die darin vorkommenden Jahre
@@ -369,57 +368,107 @@
     return dlg;
   }
 
-  /* --- Nutzerliste für die Auswahl der Referierenden ----------------------------------------- */
-  async function nutzerLaden() {
-    if (state.nutzer) return state.nutzer;
-    try { state.nutzer = (await api(`${API}/nutzer`)).nutzer || []; }
-    catch (e) { toast("Die Nutzerliste ließ sich nicht laden: " + e.message, true); state.nutzer = []; }
-    return state.nutzer;
-  }
-
   /* ==========================================================================================
      Lehrgang anlegen / bearbeiten
      ========================================================================================== */
-  function ausbilderZeileHtml(a, nutzer) {
+  /* Ausbilder sind Konten mit Stufe in den Riegenkarten (Wunsch des Nutzers vom 01.11.2026) – einen freien Namen gibt es
+     nicht mehr. Je Zeile sucht man die Person über Name oder E-Mail-Adresse (GET /nutzer?q=, ab 2 Zeichen; der Server
+     liefert nur passende Konten), Funktion und „Leitung“ bleiben je Ausbilder. Ein schon eingetragenes Konto ohne Zugriff
+     bleibt stehen und ist markiert (OHNE_ZUGRIFF); neu wählen lässt es sich nicht. Eine andere Person: Zeile entfernen
+     (✕) und eine neue anlegen. */
+  const OHNE_ZUGRIFF = {
+    stufe: "ohne Zugriff – Stufe in der Leitstelle vergeben",
+    deaktiviert: "ohne Zugriff – Konto deaktiviert",
+    konto: "ohne Zugriff – kein Konto",
+  };
+  const KEIN_KONTO = "Bitte eine Person aus der Trefferliste wählen – Ausbilder gibt es nur mit Konto.";
+  // Name als Einheit (name-einheit), Gliederung grau dahinter.
+  const kontoHtml = (a) => `<span class="name-einheit"><strong>${esc(a.name)}</strong></span>${a.gliederung ? ` <span class="small muted">${esc(a.gliederung)}</span>` : ""}`;
+
+  function ausbilderPersonHtml(a) {
+    if (a && a.user_id != null) {
+      return `<div class="ausb-gewaehlt" tabindex="-1">${kontoHtml(a)}</div>
+        ${a.zugriff === false ? `<p class="help ausb-ohne">${esc(OHNE_ZUGRIFF[a.ohne_zugriff] || OHNE_ZUGRIFF.stufe)}</p>` : ""}`;
+    }
+    return `<input type="search" class="ausb-suche" placeholder="Name oder E-Mail" autocomplete="off" enterkeyhint="search"
+        aria-label="Person suchen – Name oder E-Mail-Adresse, ab 2 Zeichen">
+      <ul class="ausb-treffer" aria-label="Gefundene Konten" hidden></ul>`;
+  }
+
+  function ausbilderZeileHtml(a) {
     a = a || {};
-    const bekannt = a.user_id != null && nutzer.some((n) => n.id === a.user_id);
-    const extern = !!a.name && !bekannt;
-    return `<div class="ausb-zeile">
-      <div class="ausb-wer">
-        <select class="ausb-user${extern ? " hidden" : ""}" aria-label="Referierende:n aus den Nutzern wählen">
-          <option value="">– Nutzer wählen –</option>
-          ${nutzer.map((n) => `<option value="${n.id}" ${bekannt && n.id === a.user_id ? "selected" : ""}>${esc(n.name)}${n.gliederung ? ` (${esc(n.gliederung)})` : ""}</option>`).join("")}
-        </select>
-        <input type="text" class="ausb-name${extern ? "" : " hidden"}" placeholder="Name (extern)" value="${extern ? esc(a.name) : ""}" aria-label="Name der externen Person">
-        <label class="inline"><input type="checkbox" class="ausb-extern" ${extern ? "checked" : ""}> extern (Freitext)</label>
-      </div>
+    const konto = a.user_id != null;
+    return `<div class="ausb-zeile feld-gruppe"${konto ? ` data-uid="${a.user_id}"` : ""}>
+      <div class="ausb-wer">${ausbilderPersonHtml(konto ? a : null)}</div>
       <input type="text" class="ausb-funktion" list="ausb-funktionen" placeholder="Funktion (optional)" value="${esc(a.funktion || "")}" aria-label="Funktion">
       <label class="inline ausb-leit"><input type="checkbox" class="ausb-leitung" ${a.ist_leitung ? "checked" : ""}> Leitung</label>
       ${S.entfernenKnopf("data-weg", "Zeile entfernen")}
     </div>`;
   }
 
+  /* Die Zeilen des Dialogs als Liste für den Server – dazu je Eintrag die Zeile (Fehler des Servers nennen die Nummer
+     in dieser Liste). Eine leere Zeile zählt nicht; eine angefangene Suche ohne gewählte Person ist ein Fehler am Feld. */
   function ausbilderLesen(body) {
-    const liste = [];
+    const liste = [], zeilen = [];
+    let fehlt = null;
     $$(".ausb-zeile", body).forEach((z) => {
-      const extern = $(".ausb-extern", z).checked;
       const funktion = $(".ausb-funktion", z).value.trim();
       const ist_leitung = $(".ausb-leitung", z).checked;
-      if (extern) {
-        const name = $(".ausb-name", z).value.trim();
-        if (name) liste.push({ user_id: null, name, funktion, ist_leitung });
-      } else {
-        const sel = $(".ausb-user", z);
-        // Der Name kommt aus der Nutzerliste, nicht aus dem Optionstext – dort hängt die Gliederung dran.
-        const n = sel.value ? (state.nutzer || []).find((x) => x.id === +sel.value) : null;
-        if (n) liste.push({ user_id: n.id, name: n.name, funktion, ist_leitung });
+      if (z.dataset.uid) {
+        liste.push({ user_id: +z.dataset.uid, funktion, ist_leitung });
+        zeilen.push(z);
+      } else if (!fehlt && ($(".ausb-suche", z).value.trim() || funktion)) {
+        fehlt = $(".ausb-suche", z);
       }
     });
-    return liste;
+    return { liste, zeilen, fehlt };
+  }
+
+  /* Suche in einer Zeile: verzögert (250 ms), die jüngste Eingabe gewinnt; Konten, die schon in einer anderen Zeile
+     stehen, fehlen in den Treffern. Enter nimmt den einzigen Treffer. */
+  function ausbilderSucheVerdrahten(liste) {
+    let suchzeit = null, suchlauf = 0;
+    const gewaehlt = () => new Set($$(".ausb-zeile[data-uid]", liste).map((z) => +z.dataset.uid));
+    const waehlen = (z, k) => {
+      z.dataset.uid = String(k.id);
+      $(".ausb-wer", z).innerHTML = ausbilderPersonHtml({ user_id: k.id, name: k.name, gliederung: k.gliederung });
+      $(".ausb-funktion", z).focus();          // weiter mit der Funktion der gewählten Person
+    };
+    async function suchen(feld) {
+      const z = feld.closest(".ausb-zeile");
+      const treffer = $(".ausb-treffer", z);
+      const q = feld.value.trim();
+      if (q.length < 2) { treffer.hidden = true; return; }
+      const lauf = ++suchlauf;
+      let r;
+      try { r = await api(`${API}/nutzer?q=${encodeURIComponent(q)}`); }
+      catch (e) { if (lauf === suchlauf) { treffer.innerHTML = `<li class="ausb-treffer-leer">${esc(e.message)}</li>`; treffer.hidden = false; } return; }
+      if (lauf !== suchlauf || !feld.isConnected) return;
+      const schon = gewaehlt();
+      const konten = (r.nutzer || []).filter((k) => !schon.has(k.id));
+      treffer.innerHTML = konten.length
+        ? konten.map((k) => `<li><button type="button" class="ausb-konto" data-id="${k.id}">${kontoHtml(k)}</button></li>`).join("")
+          + (r.mehr ? '<li class="ausb-treffer-leer">Mehr als 20 – bitte genauer.</li>' : "")
+        : `<li class="ausb-treffer-leer">${(r.nutzer || []).length ? "Schon eingetragen." : "Niemand gefunden – Ausbilder brauchen ein Konto mit Stufe in den Riegenkarten (die vergibt die Plattform-Verwaltung)."}</li>`;
+      treffer.hidden = false;
+      $$("button.ausb-konto", treffer).forEach((b) => b.addEventListener("click", () => waehlen(z, konten.find((k) => k.id === +b.dataset.id))));
+    }
+    liste.addEventListener("input", (e) => {
+      if (!e.target.classList.contains("ausb-suche")) return;
+      clearTimeout(suchzeit);
+      suchzeit = setTimeout(() => suchen(e.target), 250);
+    });
+    liste.addEventListener("keydown", (e) => {
+      if (e.key !== "Enter" || !e.target.classList.contains("ausb-suche")) return;
+      e.preventDefault();
+      const knoepfe = $$("button.ausb-konto", e.target.closest(".ausb-zeile"));
+      if (knoepfe.length === 1) knoepfe[0].click();
+      else if (knoepfe.length) knoepfe[0].focus();
+    });
+    liste.addEventListener("click", (e) => { const b = e.target.closest("[data-weg]"); if (b) b.closest(".ausb-zeile").remove(); });
   }
 
   async function lehrgangDialog(lg, nachher) {
-    const nutzer = await nutzerLaden();
     lg = lg || {};
     const neu = !lg.id;
     // Die Katalogauswahl gibt es nur beim Anlegen: Sie kopiert einmalig Leistungen hinein, ein
@@ -439,9 +488,9 @@
         ${Object.keys(STATUS).map((s) => `<option value="${s}" ${(lg.status || "geplant") === s ? "selected" : ""}>${STATUS[s][0]}</option>`).join("")}
       </select>
       <label>Lehrgangsleitung und Referierende${info("Lehrgangsleitung und Referierende", `Mehrere Personen können Lehrgangsleitung sein – dafür den Haken „Leitung“ setzen. Die Leitung darf den Lehrgang
-        bearbeiten, Stammdaten pflegen, Prüfungen löschen und das Lehrgangsergebnis vermerken; alle anderen prüfen und haken ab.
-        Rechte bekommt nur, wer über sein Nutzerkonto gewählt ist – ein externer Freitext-Eintrag erscheint nur in der Anzeige.`)}</label>
-      <div class="ausb-liste" id="ausb-liste">${(lg.ausbilder || []).map((a) => ausbilderZeileHtml(a, nutzer)).join("")}</div>
+        bearbeiten, Stammdaten pflegen, Prüfungen löschen und das Lehrgangsergebnis vermerken; alle anderen prüfen und haken ab.`)}</label>
+      <p class="help">Ausbilder ist nur, wer ein Konto mit Stufe in den Riegenkarten hat – suche die Person über Namen oder E-Mail-Adresse.</p>
+      <div class="ausb-liste" id="ausb-liste">${(lg.ausbilder || []).map((a) => ausbilderZeileHtml(a)).join("")}</div>
       <datalist id="ausb-funktionen"><option value="Referierende:r"><option value="Seiltechnik"><option value="Wasser"><option value="Helfer:in"></datalist>
       <div class="btn-row"><button type="button" class="btn secondary small" id="ausb-plus"><span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Person<span class="k-anlegen"> anlegen</span></span></button></div>
       <div class="feld-kopf"><label for="lg-besch">Beschreibung / Bemerkungen</label>${diktatKnopf("lg-besch")}</div>
@@ -456,17 +505,14 @@
         const liste = $("#ausb-liste", body);
         // Ein neuer Lehrgang beginnt mit der anlegenden Person als Leitung – der Server trüge sie ohnehin
         // ein; so sieht man es gleich und kann weitere Leitungen daneben setzen.
-        if (!liste.children.length) liste.insertAdjacentHTML("beforeend", ausbilderZeileHtml({ user_id: (STROEMIS.user || {}).id, ist_leitung: true }, nutzer));
+        const ich = STROEMIS.user || {};
+        if (!liste.children.length && ich.id) liste.insertAdjacentHTML("beforeend", ausbilderZeileHtml({ user_id: ich.id, name: ich.name || ich.email, ist_leitung: true }));
         // Eine leere Zeile für beides: Die Funktion ist frei, der Haken „Leitung“ steht jeder Person offen.
-        $("#ausb-plus", body).onclick = () => liste.insertAdjacentHTML("beforeend", ausbilderZeileHtml({}, nutzer));
-        liste.addEventListener("click", (e) => { const b = e.target.closest("[data-weg]"); if (b) b.closest(".ausb-zeile").remove(); });
-        liste.addEventListener("change", (e) => {
-          if (!e.target.classList.contains("ausb-extern")) return;
-          const z = e.target.closest(".ausb-zeile");
-          $(".ausb-user", z).classList.toggle("hidden", e.target.checked);
-          $(".ausb-name", z).classList.toggle("hidden", !e.target.checked);
-          if (e.target.checked) $(".ausb-name", z).focus();
-        });
+        $("#ausb-plus", body).onclick = () => {
+          liste.insertAdjacentHTML("beforeend", ausbilderZeileHtml({}));
+          $(".ausb-zeile:last-child .ausb-suche", liste).focus();
+        };
+        ausbilderSucheVerdrahten(liste);
         if (neu) fokus($("#lg-titel", body));
         $("#lg-save", body).onclick = async (ev) => {
           const knopf = ev.currentTarget;
@@ -474,11 +520,14 @@
           const d = {
             titel: $("#lg-titel", body).value.trim(), nummer: $("#lg-nummer", body).value.trim(), ort: $("#lg-ort", body).value.trim(),
             datum_von: $("#lg-von", body).value || null, datum_bis: $("#lg-bis", body).value || null,
-            status: $("#lg-status", body).value, beschreibung: $("#lg-besch", body).value, ausbilder: ausbilderLesen(body),
+            status: $("#lg-status", body).value, beschreibung: $("#lg-besch", body).value,
           };
+          const ausb = ausbilderLesen(body);
+          d.ausbilder = ausb.liste;
           if (neu && $("#lg-katalog", body)) d.katalog_id = $("#lg-katalog", body).value ? +$("#lg-katalog", body).value : null;
           if (!d.titel) return S.feldFehler($("#lg-titel", body), "Bitte einen Titel angeben.");
           if (d.datum_von && d.datum_bis && d.datum_bis < d.datum_von) return S.feldFehler($("#lg-bis", body), "Das Enddatum liegt vor dem Anfang.");
+          if (ausb.fehlt) return S.feldFehler(ausb.fehlt, KEIN_KONTO);
           knopf.disabled = true;
           try {
             const r = neu ? await api(`${API}/lehrgaenge`, { method: "POST", body: d })
@@ -486,7 +535,12 @@
             dlg.close();
             toast(neu ? "Lehrgang angelegt" : "Gespeichert");
             if (nachher) await nachher(r.lehrgang);
-          } catch (e) { S.fehlschlag(knopf, e, body); }
+          } catch (e) {
+            // Nennt der Server eine Ausbilderzeile (kein Konto, keine Stufe), steht die Meldung an ihr.
+            const z = e.daten && Number.isInteger(e.daten.zeile) ? ausb.zeilen[e.daten.zeile] : null;
+            const feld = z && ($(".ausb-gewaehlt", z) || $(".ausb-suche", z));
+            if (feld) { knopf.disabled = false; S.feldFehler(feld, e.message); } else S.fehlschlag(knopf, e, body);
+          }
           finally { knopf.disabled = false; }
         };
       });
@@ -845,19 +899,25 @@
     return REITER.includes(h) ? h : "teilnehmer";
   }
 
-  function renderLehrgangSeite() {
-    const lg = state.lehrgang;
-    if (!lg) return;
-    // Kopf: erst die Leitung(en), dann die übrigen Referierenden – jeweils mit Funktion in Klammern.
-    // Bei einer Leitung ist die Funktion „Lehrgangsleitung“ (etwa aus der ISC-Liste) nur eine Wiederholung – weg damit.
+  /* Leitung(en) und übrige Referierende für Kopf und Druckansicht – mit den Namen ihrer Konten (name-einheit), Funktion
+     in Klammern, „ohne Zugriff“ bei einem Konto, das den Lehrgang nicht sieht (keine Stufe, deaktiviert). Bei einer
+     Leitung ist die Funktion „Lehrgangsleitung“ (etwa aus der ISC-Liste) nur eine Wiederholung – weg damit. */
+  function ausbilderZeile(lg) {
     const person = (a) => {
       const f = a.ist_leitung && /^(lehrgangs)?leitung$/i.test((a.funktion || "").trim()) ? "" : a.funktion;
-      return `${esc(a.name)}${f ? ` <span class="muted">(${esc(f)})</span>` : ""}`;
+      return `<span class="name-einheit">${esc(a.name)}</span>${f ? ` <span class="muted">(${esc(f)})</span>` : ""}`
+        + (a.zugriff === false ? ` <span class="badge grey" title="${esc(OHNE_ZUGRIFF[a.ohne_zugriff] || OHNE_ZUGRIFF.stufe)}">ohne Zugriff</span>` : "");
     };
     const leitungen = (lg.ausbilder || []).filter((a) => a.ist_leitung).map(person).join(", ");
     const referierende = (lg.ausbilder || []).filter((a) => !a.ist_leitung).map(person).join(", ");
-    const ausb = [leitungen ? `<span class="muted">Leitung:</span> ${leitungen}` : "",
-                  referierende ? `<span class="muted">Referierende:</span> ${referierende}` : ""].filter(Boolean).join(" · ");
+    return [leitungen ? `<span class="muted">Leitung:</span> ${leitungen}` : "",
+            referierende ? `<span class="muted">Referierende:</span> ${referierende}` : ""].filter(Boolean).join(" · ");
+  }
+
+  function renderLehrgangSeite() {
+    const lg = state.lehrgang;
+    if (!lg) return;
+    const ausb = ausbilderZeile(lg);
     // Kopfknöpfe nur für die Leitung; „Bearbeiten“ steht ganz rechts. Kopieren geht über die Liste. So groß wie die Kopfknöpfe
     // der Liste (UI/UX vor dem Merge D15 – vorher „small“).
     const best = lg.ergebnis_bestanden || 0, nicht = lg.ergebnis_nicht_bestanden || 0;
@@ -2273,6 +2333,9 @@
   /* --- Druckansicht --------------------------------------------------------------------------- */
   // Welche Druckansicht gemeint ist, sagt ?ansicht= in der Adresse – „tn“ für eine Person mit
   // allen ihren Leistungen, sonst (auch ohne den Parameter, für alte Verweise) die Mängelübersicht.
+  // Wer den Lehrgang leitet und prüft, steht auch auf dem Ausdruck – mit den Namen der Konten.
+  const druckAusbilder = (lg) => { const z = ausbilderZeile(lg); return z ? `<div class="druck-filter ausbilder-zeile">${z}</div>` : ""; };
+
   async function renderDruck() {
     const p = new URLSearchParams(location.search);
     if (p.get("ansicht") === "tn") return renderDruckTn(+p.get("teilnehmer"));
@@ -2288,7 +2351,8 @@
     S.titel(`Mängelübersicht ${lg.titel}`, "pruefungen");
     root.innerHTML = `<div class="druck-kopf"><h1>Mängelübersicht – ${esc(lg.titel)}</h1>
         <button class="btn no-print" id="druck-los" type="button">Drucken</button>
-        <div class="druck-filter">${esc([spanne(lg.datum_von, lg.datum_bis), lg.ort, lg.nummer ? `Nr. ${lg.nummer}` : ""].filter(Boolean).join(" · "))}<br>${esc(filter.join(" · "))} · Stand ${esc(fmtDate(new Date().toISOString(), true))}</div></div>
+        <div class="druck-filter">${esc([spanne(lg.datum_von, lg.datum_bis), lg.ort, lg.nummer ? `Nr. ${lg.nummer}` : ""].filter(Boolean).join(" · "))}<br>${esc(filter.join(" · "))} · Stand ${esc(fmtDate(new Date().toISOString(), true))}</div>
+        ${druckAusbilder(lg)}</div>
       ${maengelGruppenHtml(d.maengel || [], { druck: true, nurOffen: mf.nur_offen })}`;
     $("#druck-los").onclick = () => window.print();
   }
@@ -2315,7 +2379,8 @@
     root.innerHTML = `<div class="druck-kopf"><h1>Prüfungsleistungen – ${esc(tnName(tn))}</h1>
         <button class="btn no-print" id="druck-los" type="button">Drucken</button>
         <div class="druck-filter">${esc([lg.titel, spanne(lg.datum_von, lg.datum_bis), lg.ort].filter(Boolean).join(" · "))}<br>
-          ${esc(tn.gliederung || "")}${tn.gliederung ? " · " : ""}${plural(versuche.length, "Bewertung", "Bewertungen")}${tn.ergebnis ? ` · Lehrgang ${ERGEBNIS[tn.ergebnis][0]}` : ""} · Stand ${esc(fmtDate(new Date().toISOString(), true))}</div></div>
+          ${esc(tn.gliederung || "")}${tn.gliederung ? " · " : ""}${plural(versuche.length, "Bewertung", "Bewertungen")}${tn.ergebnis ? ` · Lehrgang ${ERGEBNIS[tn.ergebnis][0]}` : ""} · Stand ${esc(fmtDate(new Date().toISOString(), true))}</div>
+        ${druckAusbilder(lg)}</div>
       <div class="tn-block-kopf">${tnBildHtml(tn, "gross")}<div class="tn-block-text"><span class="tn-name-zeile">${schlossHtml(tn)}<span class="tn-name">${esc(tnName(tn))}</span></span>${tn.gliederung ? `<span class="muted tn-gliederung">${esc(tn.gliederung)}</span>` : ""}</div></div>
       ${bewertungenListeHtml(tn, versuche, soll)}`;
     $("#druck-los").onclick = () => window.print();
@@ -2326,6 +2391,18 @@
      ========================================================================================== */
   const ZUORDNUNG = [["vorname", "Vorname"], ["name", "Nachname"], ["geburtsdatum", "Geburtsdatum"], ["gliederung", "Gliederung"],
     ["email", "E-Mail"], ["rolle", "Rolle"], ["bemerkung", "Bemerkung"], ["extra", "Weitere Angabe"], ["voraussetzung", "Voraussetzung"], ["ignorieren", "Ignorieren"]];
+
+  /* Referierende aus der Datei: Übernommen wird nur, wer einem Konto mit Stufe zugeordnet ist (der Server: zuerst die
+     E-Mail-Adresse, sonst ein eindeutiger Name); die übrigen stehen als eigene Liste da – derselbe Satz wie im Server. */
+  const NICHT_UEBERNOMMEN = "Nicht übernommen – kein Konto mit Riegenkarten-Stufe: ";
+  function importAusbilderHtml(v) {
+    const mit = (v.ausbilder || []).filter((a) => a.konto), nicht = v.ausbilder_nicht_uebernommen || [];
+    const funktion = (a) => (a.funktion ? ` <span class="muted">(${esc(a.funktion)})</span>` : "");
+    return (mit.length ? `<p class="help">Referierende: ${mit.map((a) => `<span class="name-einheit">${esc(a.konto.name)}</span>${funktion(a)}${a.konto.eingetragen ? ' <span class="muted">– schon eingetragen</span>' : ""}`).join(", ")}</p>` : "")
+      + (nicht.length ? `<div class="notice import-nicht"><strong>${esc(NICHT_UEBERNOMMEN.replace(/: $/, ""))}</strong>
+          <ul>${nicht.map((a) => `<li><span class="name-einheit">${esc(a.name)}</span>${funktion(a)}</li>`).join("")}</ul>
+          <p class="help">Wer prüfen soll, braucht ein Konto mit Stufe in den Riegenkarten – danach erneut importieren oder im Lehrgang unter „Bearbeiten“ eintragen.</p></div>` : "");
+  }
 
   /* lehrgang: der Lehrgang, in den importiert wird – oder null für einen neuen aus der Datei.
      Zustandslos gegenüber dem Server: Vorschau und Übernahme schicken die Datei jeweils mit. */
@@ -2408,7 +2485,7 @@
           </tr>`).join("")}</tbody></table>
         <div class="import-zahlen">
           <span><b>${tn.length}</b> Teilnehmende erkannt${vorhanden ? ` <span class="muted">(davon ${vorhanden} bereits vorhanden → werden aktualisiert)</span>` : ""}</span>
-          <span><b>${(v.ausbilder || []).length}</b> Referierende erkannt</span>
+          <span><b>${(v.ausbilder || []).filter((a) => a.konto).length}</b> Referierende mit Konto</span>
           <span><b>${vor.length}</b> Voraussetzungen${vorAlt ? ` <span class="muted">(${vorAlt} schon vorhanden)</span>` : ""}</span>
         </div>
         ${(v.warnungen || []).length ? `<div class="notice import-warnungen"><strong>Hinweise</strong><ul>${v.warnungen.map((w) => `<li>${esc(w)}</li>`).join("")}</ul></div>` : ""}
@@ -2416,7 +2493,7 @@
           <div class="table-scroll"><table class="import-vorschau"><thead><tr><th>Name</th><th>Vorname</th><th>Geburtsdatum</th><th>Gliederung</th><th>Voraussetzungen erfüllt</th></tr></thead>
           <tbody>${tn.slice(0, 8).map((t) => `<tr class="${t.vorhanden ? "vorhanden" : ""}"><td>${esc(t.name)}${t.vorhanden ? ' <span class="badge grey">vorhanden</span>' : ""}</td><td>${esc(t.vorname)}</td>
             <td>${esc(fmtTag(t.geburtsdatum))}</td><td>${esc(t.gliederung)}</td><td>${Object.values(t.voraussetzungen || {}).filter(Boolean).length} / ${vor.length}</td></tr>`).join("")}</tbody></table></div>` : ""}
-        ${(v.ausbilder || []).length ? `<p class="help">Referierende: ${v.ausbilder.map((a) => `${esc(a.name)}${a.funktion ? ` (${esc(a.funktion)})` : ""}`).join(", ")}</p>` : ""}
+        ${importAusbilderHtml(v)}
         <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button>
           <button class="btn" id="imp-go" type="button" ${tn.length ? "" : "disabled"}>${lehrgang ? "In diesen Lehrgang übernehmen" : "Lehrgang anlegen und übernehmen"}</button></div>`,
         (dlg, body) => {
@@ -2444,8 +2521,10 @@
             try {
               const r = await api(`${API}/import`, { method: "POST", body: fd });
               const lg = r.lehrgang;
+              const nicht = r.ausbilder_nicht_uebernommen || [];
               const meldung = `Import: ${r.angelegt} angelegt, ${r.aktualisiert} aktualisiert, ${r.voraussetzungen_neu} neue Voraussetzungen, ${r.ausbilder_neu} neue Referierende`
-                + ((r.warnungen || []).length ? ` – ${plural(r.warnungen.length, "Hinweis", "Hinweise")}` : "");
+                + ((r.warnungen || []).length ? ` – ${plural(r.warnungen.length, "Hinweis", "Hinweise")}` : "")
+                + (nicht.length ? `. ${NICHT_UEBERNOMMEN}${nicht.map((a) => a.name).join(", ")}` : "");
               if (!lehrgang) {
                 const diff = {};
                 Object.entries(felder).forEach(([k, val]) => { if ((val || "") !== (lg[k] || "")) diff[k] = val; });

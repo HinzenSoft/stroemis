@@ -34,6 +34,8 @@ window.S = (function () {
       // von "gerade nicht erreichbar" (0, 5xx) unterscheiden.
       const err = new Error(data.error || ("Fehler " + res.status));
       err.status = res.status;
+      // Die ganze Antwort für Felder neben „error“ (etwa „zeile“ der Riegenkarten: welche Ausbilderzeile gemeint ist).
+      err.daten = data;
       throw err;
     }
     return data;

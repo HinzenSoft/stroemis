@@ -160,6 +160,8 @@ def test_import_zuordnung():
             ("Ulla Unbekannt", None), ("Sven Stufenlos", None), ("Pia Parallel", None),
             ("Rita Redakteurin", "Rita Redakteurin")], v["ausbilder"]
         assert all("email" not in a for a in v["ausbilder"])
+        # Die importierende Redakteurin steht schon (als Leitung des neuen Lehrgangs) – die Vorschau sagt es.
+        assert [a["konto"]["eingetragen"] for a in v["ausbilder"] if a["konto"]] == [False, False, True]
         assert v["ausbilder_nicht_uebernommen"] == nicht, v["ausbilder_nicht_uebernommen"]
 
         r = senden(f"{API}/import")

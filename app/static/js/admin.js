@@ -36,7 +36,7 @@
   const MODULE = [
     { k: "wiki", t: NAME.wiki, redakteur: true, hilfe: "Ohne Zugriff (–): nur die für alle Angemeldeten freigegebenen Seiten lesen. Mitglied: alle Seiten lesen und kommentieren. Redakteur: dazu eigene Seiten anlegen und bearbeiten. Verwaltung: alle Seiten, beschränkte lesen, für alle Angemeldeten freigeben, HTML-Bausteine, ZIP-Import, Ersteller ändern." },
     { k: "karte", t: NAME.karte, redakteur: true, hilfe: "Mitglied: Spots ansehen. Redakteur: eigene Alben anlegen und bearbeiten. Verwaltung: alle Alben." },
-    { k: "pruefungen", t: NAME.pruefungen, redakteur: true, hilfe: "Mitglied: Lehrgänge, in denen das Konto als Ausbilder steht – dort bewerten. Redakteur: dazu Lehrgänge und eigene Kataloge anlegen. Verwaltung: alle Lehrgänge und Kataloge." },
+    { k: "pruefungen", t: NAME.pruefungen, redakteur: true, hilfe: "Mitglied: Lehrgänge, in denen das Konto als Ausbilder steht – dort bewerten (Ausbilder ist nur, wer mindestens Mitglied ist). Redakteur: dazu Lehrgänge und eigene Kataloge anlegen. Verwaltung: alle Lehrgänge und Kataloge." },
     { k: "material", t: NAME.material, hilfe: "Mitglied: die Materialablage nutzen – Katalog, Suche, Profil; Bestand nur über Freigaben, die der Verwalter eines Ordners vergibt. Verwaltung: zusätzlich Produktkatalog pflegen (Kategorien, Produkte, Dokumente, Prüfformulare, Meldungen, Rückrufe), alle Bestände aller Gliederungen, Gliederungen anlegen, jede Freigabe. Prüfen nur mit Häkchen „Prüfer“, Urkundennummer und Prüffreigabe." },
     { k: "verwaltung", t: NAME.verwaltung, nurVoll: true,
       hilfe: "Verwaltung: Nutzer, Rechte und Einstellungen – schließt alle Rechte in allen Modulen ein." },
