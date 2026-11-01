@@ -298,12 +298,12 @@ def test_original_sofort():
 
 
 def test_schon_gesperrt():
-    """Vorher vom Prüfer gesperrt (Sturz): Meldung 201, gesperrt false, Grund unverändert, Journal nur {"mangel"};
+    """Vorher vom Prüfer gesperrt (Rückruf): Meldung 201, gesperrt false, Grund unverändert, Journal nur {"mangel"};
     verloren ebenso; ausgesondert 409."""
     with post_mangel(), tempfile.TemporaryDirectory() as tmp:
         t = aufbau(tmp)
         a1, a2, a3 = t.art
-        sperren(t.k["pruefer"], a1, "sturz")
+        sperren(t.k["pruefer"], a1, "rueckruf")
         sperren(t.k["pruefer"], a2, "verlust")
         grund = item(t.app, a1)["lock_reason"]
         for iid, zustand_ in ((a1, "gesperrt"), (a2, "verloren")):
@@ -434,7 +434,7 @@ def test_aussondern_materialwart():
         assert d["closed_inspection_id"] == r.json["aussonderung"] and d["closed_at"]
         # Vorher vom Prüfer gesperrt, dann gemeldet: keine reine Mangelsperre – seit Schritt 28 braucht die direkte Sperre
         # aber eine Prüfung (verloren gemeldet: sofort).
-        sperren(p, a2, "sturz")
+        sperren(p, a2, "rueckruf")
         assert melden(w, a2).status_code == 201
         assert w.get(f"/api/material/artikel/{a2}").json["artikel"]["mangel_nur_gemeldet"] is False
         assert w.post(f"/api/material/artikel/{a2}/aussondern", json={"grund": "irreparabel"}).status_code == 409
@@ -481,7 +481,7 @@ def test_pruefart():
         neue_sekunde()
         assert festschreiben(p, pr["id"], ergebnis="instandsetzen", grund="Platzhaltergrund").status_code == 200
         assert f.get(f"/api/material/artikel/{a1}").json["artikel"]["pruefarten"]["vorschlag"] == "reparatur"
-        sperren(p, a2, "sturz")
+        sperren(p, a2, "rueckruf")
         assert f.get(f"/api/material/artikel/{a2}").json["artikel"]["pruefarten"]["vorschlag"] == "reparatur"
         assert melden(f, a3).status_code == 201
         pa = f.get(f"/api/material/artikel/{a3}").json["artikel"]["pruefarten"]
@@ -1150,7 +1150,7 @@ def test_sperrmitteilung_vorher():
         a1, a2, a3 = t.art
         for iid in t.art:
             zuordnen(t, iid, t.person_id)
-        sperren(t.k["pruefer"], a2, "sturz")
+        sperren(t.k["pruefer"], a2, "rueckruf")
         sperren(t.k["pruefer"], a3, "verlust")
         erwartet = {a1: ("ist gesperrt – nicht verwenden", "Sie ist damit gesperrt.",
                          "Bitte nicht mehr verwenden: leg sie sofort beiseite"),

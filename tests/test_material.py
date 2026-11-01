@@ -1293,19 +1293,23 @@ def test_sperre_und_aussonderung():
         # Ausgesondert: zählt nicht mehr als Bestand, wird nicht mehr geprüft, gesperrt oder bearbeitet.
         assert w.get("/api/material/start").json["bestand"] == bestand_vorher
         assert starten(p1, alt["id"]).status_code == 409
-        assert p1.post(f"/api/material/artikel/{alt['id']}/sperren", json={"grund": "sturz"}).status_code == 409
+        assert p1.post(f"/api/material/artikel/{alt['id']}/sperren", json={"grund": "verlust"}).status_code == 409
         assert w.put(f"/api/material/artikel/{alt['id']}", json={"notes": "x"}).status_code == 409
 
-        # Metall: Sperre ohne Prüfung nur durch Prüfer, Aussonderung danach durch den Materialwart.
+        # Metall: Sperre ohne Prüfung nur durch Prüfer, Aussonderung danach durch den Materialwart. Seit 01.11.2026 nur
+        # noch mit „verlust“ und „rueckruf“ – Beschädigung und Sturzbelastung gehen über „Mangel melden“.
         b = neuer_artikel(w, ids["hms"], lager)
-        assert w.post(f"/api/material/artikel/{b['id']}/sperren", json={"grund": "beschaedigung"}).status_code == 403
+        assert w.post(f"/api/material/artikel/{b['id']}/sperren", json={"grund": "rueckruf"}).status_code == 403
         assert p1.post(f"/api/material/artikel/{b['id']}/sperren", json={"grund": "unfug"}).status_code == 400
-        r = p1.post(f"/api/material/artikel/{b['id']}/sperren", json={"grund": "beschaedigung", "text": "Riss am Schnapper"})
+        for alt_grund in ("sturz", "beschaedigung"):
+            r = p1.post(f"/api/material/artikel/{b['id']}/sperren", json={"grund": alt_grund, "text": "Platzhalter"})
+            assert r.status_code == 400 and "„Mangel melden“" in r.json["error"], r.get_json()
+        r = p1.post(f"/api/material/artikel/{b['id']}/sperren", json={"grund": "rueckruf", "text": "Platzhalter Rückruf"})
         assert r.status_code == 200, r.get_json()
         a = r.json["artikel"]
         assert a["status"] == "gesperrt" and a["folder_id"] == system["gesperrt"] and a["origin_folder_id"] == lager, a
-        assert a["lock_reason"] == "Beschädigung: Riss am Schnapper"
-        assert p1.post(f"/api/material/artikel/{b['id']}/sperren", json={"grund": "sturz"}).status_code == 409
+        assert a["lock_state"] == "gesperrt" and a["lock_reason"] == "Rückruf: Platzhalter Rückruf"
+        assert p1.post(f"/api/material/artikel/{b['id']}/sperren", json={"grund": "verlust"}).status_code == 409
         # Aussondern darf der Prüfer ohne Prüfung nicht – das ist Sache des Materialwarts.
         assert p1.post(f"/api/material/artikel/{b['id']}/aussondern", json={"grund": "irreparabel"}).status_code == 403
         morgen = (h + timedelta(days=1)).isoformat()
@@ -1334,7 +1338,7 @@ def test_sperre_und_aussonderung():
         # Ein Entwurf blockiert Sperre und Aussonderung: Darüber entscheidet die laufende Prüfung.
         d = neuer_artikel(w, ids["hms"], lager, serial_no="E-1")
         starten(p1, d["id"])
-        r = p1.post(f"/api/material/artikel/{d['id']}/sperren", json={"grund": "sturz"})
+        r = p1.post(f"/api/material/artikel/{d['id']}/sperren", json={"grund": "verlust"})
         assert r.status_code == 409 and "In Prüfung bei" in r.json["error"], r.get_json()
     print("Sperr- und Aussonderungstest bestanden.")
 
@@ -2953,7 +2957,7 @@ def test_review_lieferung3():
         a = neuer_artikel(w, ids["hms"], gid)
         pid = starten(p1, a["id"]).json["pruefung"]["id"]
         assert festschreiben(p1, pid, ergebnis="einsatzbereit").status_code == 200
-        assert p1.post(f"/api/material/artikel/{a['id']}/sperren", json={"grund": "sturz"}).status_code == 200
+        assert p1.post(f"/api/material/artikel/{a['id']}/sperren", json={"grund": "rueckruf"}).status_code == 200
         r = p1.post(f"/api/material/pruefungen/{pid}/berichtigen", json={"grund": "x"})
         assert r.status_code == 409 and "gesperrt" in r.json["error"], r.get_json()
 

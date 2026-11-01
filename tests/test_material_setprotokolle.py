@@ -69,7 +69,7 @@ def aufbau(tmp):
                         b=b, c=c, lager=lager, d=d, e=e)
     t.a1, t.a2, t.b1, t.c1, t.l1, t.d1, t.a3, t.a4 = (art(x) for x in (a, tasche, b, c, lager, d, a, a))
     # a4: gesperrt vor dem Durchgang – liegt in „Gesperrt“, Heimat bleibt A.
-    r = p.post(f"{API}/artikel/{t.a4['id']}/sperren", json={"grund": "beschaedigung", "text": "Platzhalter"})
+    r = p.post(f"{API}/artikel/{t.a4['id']}/sperren", json={"grund": "rueckruf", "text": "Platzhalter"})
     assert r.status_code == 200, r.get_json()
     return t
 

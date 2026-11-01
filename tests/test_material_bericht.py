@@ -115,11 +115,11 @@ def aufbau(tmp):
       krit      Fahrzeug; Eingangsprüfung mit kritischem Mangel → instandsetzen → gesperrt (aus Prüfung)
       aus       Fahrzeug; Eingangsprüfung mit „aussondern empfohlen“ → gesperrt (aus Prüfung), nach dem Durchgang vom
                 Materialwart ausgesondert („irreparabel“; seit Schritt 28 – vorher sonderte die Prüfung selbst aus)
-      unter     Fach 1; vom Prüfer gesperrt (Beschädigung), im Durchgang ausgenommen – Heimat bleibt das Fach
+      unter     Fach 1; vom Prüfer gesperrt (Rückruf), im Durchgang ausgenommen – Heimat bleibt das Fach
       verlust   Lager; Verlust gemeldet, vom Materialwart ausgesondert
       verloren  Lager; Verlust gemeldet (bleibt gesperrt/verloren)
       mangel_a  Lager; Mangel gemeldet von der Führungskraft (sperrt), zweite Meldung vom Materialwart (keine Sperre)
-      frei      Lager; Eingangsprüfung, Sperre nach Sturz, Freiprüfung (außerplanmäßig) → einsatzbereit; Fälligkeit im
+      frei      Lager; Eingangsprüfung, Sperre (Rückruf), Freiprüfung (außerplanmäßig) → einsatzbereit; Fälligkeit im
                 Ausblick in drei Monaten
       ug_a      Untergliederung, neu
       demo_a    Lager, DEMO-Produkt, offener Entwurf
@@ -182,7 +182,7 @@ def aufbau(tmp):
     pid_aus = pruefung(p1, a["aus"]["id"], "aussondern_empfohlen", durchgang_id=rid, grund="Platzhalter kaputt")
     r = w.post(f"/api/material/durchgaenge/{rid}/ausnehmen", json={"item_id": a["fach_a"]["id"], "grund": "nicht auffindbar"})
     assert r.status_code == 200, r.get_json()
-    sperren(p1, a["unter"]["id"], "beschaedigung", "Platzhalter Riss")
+    sperren(p1, a["unter"]["id"], "rueckruf", "Platzhalter Riss")
     r = w.post(f"/api/material/durchgaenge/{rid}/ausnehmen", json={"item_id": a["unter"]["id"], "grund": "gesperrt – Platzhalter"})
     assert r.status_code == 200, r.get_json()
     assert w.post(f"/api/material/durchgaenge/{rid}/abschliessen", json={}).status_code == 200
@@ -206,7 +206,7 @@ def aufbau(tmp):
     assert r.status_code == 201, r.get_json()
     a["frei"] = neuer_artikel(w, ids["hms"], lager, serial_no="FREI-1")
     pruefung(p1, a["frei"]["id"], "einsatzbereit")
-    sperren(p1, a["frei"]["id"], "sturz")
+    sperren(p1, a["frei"]["id"], "rueckruf")
     pruefung(p1, a["frei"]["id"], "einsatzbereit", art="ausserplanmaessig")
     in_drei = (h.replace(day=1) + timedelta(days=95)).replace(day=1)            # der Monatserste in drei Monaten
     sql(tmp, "UPDATE mat_item SET next_due_on = ? WHERE id = ?", (in_drei.isoformat(), a["frei"]["id"]))
@@ -287,7 +287,7 @@ def test_zahlen():
         assert {x["art"]: x["n"] for x in sp["arten"]} == {"pruefung": 2, "mangel": 1, "verlust": 2, "ohne_pruefung": 3}
         gruende = {(x["inventarnummer"], x["art"]): x["grund"] for x in sp["liste"]}
         assert gruende[(a["grenze"]["inventory_no"], "ohne_pruefung")] == "Platzhalter Grenze spät"
-        assert gruende[(a["unter"]["inventory_no"], "ohne_pruefung")] == "Beschädigung: Platzhalter Riss"
+        assert gruende[(a["unter"]["inventory_no"], "ohne_pruefung")] == "Rückruf: Platzhalter Riss"
         assert gruende[(a["mangel_a"]["inventory_no"], "mangel")].startswith("Mangel gemeldet am")
         assert "instandsetzen" in gruende[(a["krit"]["inventory_no"], "pruefung")]
         assert (a["verloren"]["inventory_no"], "verlust") in gruende and (a["verlust"]["inventory_no"], "verlust") in gruende

@@ -47,7 +47,7 @@ from flask import has_request_context
 from ... import db
 from ...images import delete_photo_files
 from ..models import (ANHANGARTEN, AUSSONDERUNGSGRUENDE, BEFUNDE, ERGEBNISSE, PRUEFARTEN, SERIE_MAX, SPERRGRUENDE,
-                      WAEHLBARE_ERGEBNISSE)
+                      SPERRGRUENDE_ALT, WAEHLBARE_ERGEBNISSE)
 from . import OHNE_NAMEN, Abgelehnt, auswahl, datum, erster_tag, heute, laenge, laenge_text, text, wahr
 from . import anhang as anh
 from . import bestand, journal, katalog, protokoll, rechte
@@ -58,6 +58,9 @@ from .interval import plus_monate, wirksam
 BEFUND_TEXT = {"ok": "in Ordnung", "mangel": "Mangel", "nicht_zutreffend": "nicht zutreffend"}
 ABGESCHLOSSEN = ("Die Prüfung ist festgeschrieben und lässt sich nicht mehr ändern – eine Korrektur geht nur als "
                  "Berichtigung.")
+# Sperre ohne Prüfung mit einem Grund, den es seit 01.11.2026 nur noch über „Mangel melden“ gibt.
+SPERRE_ALT_GRUND = ("Beschädigung und Sturzbelastung meldest du über „Mangel melden“ – mit Beschreibung und Fotos. "
+                    "Ohne Prüfung sperrt ein Prüfer nur noch bei Verlust („Verlust melden“) oder Rückruf.")
 URKUNDE_FEHLT = ("Prüfen dürfen nur Prüfer mit Urkundennummer – das Häkchen „Prüfer“ setzt die Plattform-Verwaltung "
                  "in der Leitstelle, die Urkundennummer trägt der Prüfer selbst im Profil ein.")
 # Aussondern nur durch den Materialwart (Schritt 28, Wunsch vom 25.10.2026).
@@ -1096,9 +1099,12 @@ def _sperren(item, zustand, grund, pruefung_id=None, aktion="gesperrt", zusatz=N
 
 
 def sperren(iid, d, pruefer):
-    """Sperre ohne Prüfung – nur Prüfer, nach Sturzbelastung, Beschädigung, bei Verlust oder Rückruf."""
+    """Sperre ohne Prüfung – nur Prüfer, seit 01.11.2026 nur bei Verlust („Verlust melden“, Zustand „verloren“) oder
+    Rückruf. Sturzbelastung und Beschädigung lehnt der Server mit SPERRE_ALT_GRUND ab: Sie gehen über „Mangel melden“."""
     if not pruefer.get("urkunde"):
         raise Abgelehnt(URKUNDE_FEHLT, 403)
+    if d.get("grund") in SPERRGRUENDE_ALT:
+        raise Abgelehnt(SPERRE_ALT_GRUND)
     art = auswahl(d.get("grund"), SPERRGRUENDE, "Grund der Sperre")
     zusatz = text(d, "text", "Erläuterung", 300)
     with db.transaction(sofort=True):
@@ -1213,8 +1219,9 @@ def aussondern_moeglich(item):
     """Darf der Materialwart jetzt aussondern (Bedingung E2 vom 25.10.2026)? {ok, grund}: nur einen gesperrten Artikel,
     dessen letzte Prüfung „instandsetzen“ oder „aussondern empfohlen“ ergab – sie liegt dann seit der Sperre, denn
     zurück in den Bestand bringt nur eine Freiprüfung; die sperrende Prüfung selbst zählt. Eine direkte Sperre nach
-    Sturz, Beschädigung oder Rückruf und eine Mangelmeldung brauchen so erst eine Prüfung; allein ein verloren
-    gemeldeter Artikel geht ohne. So hat, was der Materialwart aussondert, vorher ein Sachkundiger gesehen."""
+    Rückruf (bis 01.11.2026 auch nach Sturz oder Beschädigung) und eine Mangelmeldung brauchen so erst eine Prüfung;
+    allein ein verloren gemeldeter Artikel geht ohne. So hat, was der Materialwart aussondert, vorher ein Sachkundiger
+    gesehen."""
     from . import mangel
 
     def nein(grund):

@@ -66,7 +66,7 @@ def aufbau(tmp):
     pid_g = starten(p1, a["gesperrt"]["id"]).json["pruefung"]["id"]
     assert festschreiben(p1, pid_g, ergebnis="einsatzbereit").status_code == 200
     r = p1.post(f"/api/material/artikel/{a['gesperrt']['id']}/sperren",
-                json={"grund": "beschaedigung", "text": "Riss am Schnapper"})
+                json={"grund": "rueckruf", "text": "Riss am Schnapper"})
     assert r.status_code == 200, r.get_json()
     # Verloren und ausgesondert: liegt danach in „Ausgesondert“ der Gliederung; seit Phase 2 bleibt die Herkunft
     # (Fahrzeug) – sie ist seine Heimat.
@@ -124,7 +124,7 @@ def test_csv():
                 assert x["Status"] == f.get(f"/api/material/artikel/{iid}").json["artikel"]["status_text"]
         g = z[a["gesperrt"]["inventory_no"]]
         assert g["Status"] == "gesperrt" and g["Sperrzustand"] == "gesperrt", g
-        assert g["Sperr-/Aussonderungsgrund"] == "Beschädigung: Riss am Schnapper", g
+        assert g["Sperr-/Aussonderungsgrund"] == "Rückruf: Riss am Schnapper", g
         assert g["Ordner"] == "OG Übungsstadt / Gesperrt" and g["Gliederung"] == "OG Übungsstadt", g
         assert g["Herkunftsordner"] == "OG Übungsstadt / Fahrzeug GW-Wasserrettung", g
         assert g["Seriennummer"] == "'-7" and g["zuletzt geprüft"] == _tag(heute), g
