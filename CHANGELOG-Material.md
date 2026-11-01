@@ -62,6 +62,7 @@ Geschichte stehen. Schemaversion nach der Nachbesserung vor dem Merge: 30; mit d
 | PWA und Kontaktadressen | strömis.de als App installierbar (Manifest, Service Worker, Maskottchen auf Rot, ohne Netz nur eine Hinweisseite, „App installieren“ im Profil); Kontaktadressen als Einstellung (Leitstelle → Einstellungen, Gruppe „Seite“) im Fuß jeder Seite, im Hinweis „Entwicklungsserver“ und vor dem Bestandsimport | gebaut 01.11.2026 (kein Schemaschritt), Zweig pwakontakt, zur Freigabe |
 | Stufe Redakteur (Schritt 33) | Rechte-Matrix mit „Redakteur“ in Strömipedia, Ankerplätzen und Riegenkarten (Mitglied liest bzw. bewertet in eigenen Lehrgängen, Redakteur legt eigene Inhalte an, Verwaltung alles); eine Skala 0/1/2/3 in allen Spalten, Schritt 33 hebt Verwaltung 2 → 3; Riegenkarten: Sichtbarkeit nur eigener Lehrgänge (404), eigene Kataloge; dazu: keine Strömipedia ohne Anmeldung mehr | gebaut 01.11.2026 (Schema 33), Zweig redakteur, nicht auf dev |
 | Ausbilder nur mit Konto (Schritt 34) | Riegenkarten: Ausbilder sind Konten mit Stufe ≥ Mitglied (Suche nach Name/E-Mail, Server lehnt anderes mit Zeile ab), Excel-Import ordnet per E-Mail bzw. eindeutigem Namen zu und listet „nicht übernommen“, Schritt 34 verknüpft oder entfernt den Freitext-Bestand ohne Text in der Beschreibung (nur Startprotokoll), Konten ohne Stufe als „ohne Zugriff“ markiert | gebaut 01.11.2026 (Schema 34), Zweig ausbilder, nicht auf dev |
+| Gerätetest 01.11.2026 – Teil 4 (Materialablage) | Prüfdurchgang: Suche nach Nummer/Name und „QR-Code scannen“ über der Liste, Vorgabe „offen“, eine Zählweise in Kopf, Filtern und Grund, Meldung nach Ausnehmen/Einbeziehen; Abschlussleiste der Prüfung beim Scrollen eingeklappt; ausgegrautes „Festschreiben“ führt zum fehlenden Schritt; Filter der Prüfungen mit aria-pressed, Links der Übersicht springen zur Liste; Bestandsbaum am Telefon nur „überfällig“; ein Platzhalter der Nummernsuche | gebaut 01.11.2026 (kein Schemaschritt), zur Freigabe |
 
 ## Abgleich mit dem Bestand (vor Lieferung 1)
 
@@ -4194,6 +4195,76 @@ Danach liefen die ganze Suite (`st-test`) grün, `st-py`, `st-js` und `st-css` o
 14. **Kasten „Mailversand“ am Telefon**: Eine Karte hat vier Inhaltszeilen (Mail mit Betreff, Empfänger, Fehler mit
     Antwort), bei 360 px umbrochen etwa 170 px hoch; die Antwort des Mailservers ließe sich noch hinter „Technische
     Antwort“ einklappen – bitte am Gerät ansehen.
+
+## Gerätetest 01.11.2026 – Teil 4 (Materialablage)
+
+Wunsch des Nutzers, wörtlich: „Nimm diesen UI/UX Test und setze die Findings um.“ Quelle: Gerätetest auf Pixel 8 Pro,
+Pixel 10 Pro Fold (innen/außen), Vale V12X und Galaxy Tab S6 Lite (28.10. und 01.11.2026). Entscheidung des Nutzers vom
+01.11.2026 zu langen Listen: Suche und Filter, kein seitenweises Laden – Listen bleiben vollständig. Jeder Befund wurde auf
+dem Sammelstand (664c46d) im Browser nachgestellt; Messungen und Fotos: planung/geraetetest/bericht_teil4.md. Nur
+Oberfläche (material.js, material.css, seite.html), kein Schemaschritt, keine neue Schnittstelle.
+
+- **W3/M3 Prüfdurchgang** (`durchgangAnsicht`): Über den Filtern ein Suchfeld „Nummer oder Name“ – Inventar-, Serien-
+  und Herstellernummer, Hersteller, Modell, Beschreibung, Kategorie; jedes Wort muss vorkommen, Bindestriche und
+  Leerzeichen zählen bei Nummern nicht („000015“ findet „M-000015“). Es blendet nur aus (die Liste bleibt vollständig),
+  die Zeile darunter nennt die Treffer (aria-live) und bietet „Alle zeigen“, wenn sie nur unter einem anderen Filter
+  liegen; Enter springt bei genau einem Treffer zu seiner Aktion (auch für Handscanner, die die Nummer tippen). Am
+  Telefon rollt das Feld beim Antippen an den oberen Rand, damit die Treffer über der Tastatur stehen. Nur die Liste
+  wird neu gezeichnet – Fokus, Filter und Trefferzeile bleiben. **„QR-Code scannen“** (nur mit Finger und
+  `BarcodeDetector`, also Chrome unter Android): ein Foto mit der Kamera wie bei den Prüfpunkten (`capture`), kein
+  Kamerabild in der Seite – die Kamerafreigabe der App (`Permissions-Policy: camera=()`) bleibt aus. Ein Etikett der
+  Materialablage (`…/m/<token>`) führt über die eigene Adresse zum Artikel; steht er im Durchgang, sucht die Liste nach
+  seiner Inventarnummer (Filter „alle“), sonst sagt die Zeile, dass er nicht im Durchgang steht (mit Link) bzw. nicht im
+  eigenen Bereich ist; ein anderer Code (etwa eine Seriennummer als Strichcode) wird zum Suchbegriff. Ohne
+  `BarcodeDetector` (iPhone, Firefox, Rechner) gibt es den Knopf nicht – dort öffnet die Kamera-App den Artikel über
+  seinen QR-Code wie bisher. **Vorgabe „offen“** beim Öffnen, solange es Offenes gibt (sonst „alle“). **Eine
+  Zählweise:** Der Kopf rechnet vor, was fertig ist („5 erledigt + 2 ausgenommen = 7 von 16 fertig · 8 offen · 1 in
+  Prüfung“), die Filter tragen dieselben Wörter und Zahlen (jetzt auch „alle (16)“, als Umschalter mit `aria-pressed`
+  in einer Gruppe „Stand“), der Grund am ausgegrauten „Durchgang abschließen“ lautet „Noch 8 offen und 1 in Prüfung.“
+  (vorher „Noch 9 Artikel offen oder in Prüfung.“). In den Listen (laufende und abgeschlossene Durchgänge) kurz
+  „7 von 16 fertig“ statt „7/16“, die Rechnung im title des Balkens.
+- **FT4:** „Ausnehmen“ und „Einbeziehen“ im Durchgang bestätigen sich mit dem Toast („M-000011 ausgenommen“, „… wieder
+  einbezogen“, role="status") – vorher wechselte nur die Zahl am Filter.
+- **M1 Abschlussleiste der Prüfung:** Solange sie über dem Formular klebt, schaut nur ihre erste Zeile heraus – was noch
+  fehlt (bzw. „Ergebnis: …“, wenn nichts mehr fehlt) und „Zum Abschluss“ (am Fold außen 56 statt 133 px). Am Ende des
+  Formulars steht sie voll da, ebenso, solange der Fokus in Ergebnis oder „Festschreiben“ liegt. Umgesetzt als Kleben mit
+  negativem Abstand (`bottom: -weg`, `.kompakt`; `weg` misst `leisteMessen`) statt eines Umbaus: Die Höhe im Fluss bleibt
+  gleich, am Wechsel (eine Marke hinter der Leiste kommt ins Bild, IntersectionObserver) steht sie ohnehin an ihrem
+  eigenen Platz – nichts springt. `--mat-leiste-h` (Abstand fokussierter Felder) rechnet mit dem sichtbaren Teil. Mit
+  offener Tastatur (`.tippt`) unverändert. „Zum Abschluss“ (Knopf und der Sprunglink für die Tastatur, b115e2f) rollt
+  ans Ende und setzt den Fokus aufs Ergebnis. Der Sprunglink bleibt: Er erscheint nur mit dem Tastaturfokus – die
+  Messung „100 px über dem Rand“ im Test war sein Warteplatz.
+- **FT10:** Ein Tipp auf einen ausgegrauten Knopf mit `data-sprung` hebt wie bisher den Grund hervor und führt dazu zum
+  fehlenden Schritt (Klick-Abfang in material.js): in der Leiste zum ersten wählbaren Ergebnis, im Dialog „Prüfung
+  festschreiben“ (Freiprüfung) zum ersten nicht abgehakten gemeldeten Mangel – der Satz darunter wird rot und fett
+  (`#fs-maengel-hilfe.betont`; die Liste heller Flächen in app.css setzt Nebentext dort mit hoher Spezifität anthrazit).
+  Fehlt beim Festschreiben ein Befund, Foto oder eine Bemerkung, rollt die Seite zusätzlich zum ersten solchen
+  Prüfpunkt (am Telefon ohne Fokus ins Feld). Kein zusätzlicher Toast: Der Schritt ist ein Feld, der Grund steht daneben
+  (Designsprache „Fehler am Feld … Toast nur, wenn kein Feld betroffen ist“).
+- **M2:** schon auf dem Sammelstand gebaut (UI/UX B11): je Prüfpunkt `role="radiogroup"` mit „Befund zu <Prüftext>“,
+  die Tasten `role="radio"` mit `aria-checked`, das Ergebnis ebenso – im Barrierefreiheitsbaum nachgemessen. `aria-pressed`
+  bewusst nicht: An `role="radio"` ist es nicht erlaubt; der Zustand wird als „ausgewählt“ vorgelesen.
+- **FT9 Prüfungen:** Die Filter sind Umschalter mit `aria-pressed` (Gruppe „Status“). Die Zahlen und Kacheln der
+  Übersicht, „… und n weitere“ gesperrte und „Fällige Artikel im ganzen Zweig →“ führen auf `…#zu-pruefen`: Ist die
+  Liste gezeichnet, rollt die Seite zur Überschrift „Zu prüfen“ (Fokus darauf, die Marke verlässt danach die Adresse) –
+  am Telefon begann die Liste vorher anderthalb Bildschirme tiefer.
+- **B13 Bestandsbaum:** Am Telefon (Container „mat-seite“ bis 600 px) steht hinter dem Bestand nur „überfällig“; die
+  Ordnerart und weitere DEMO-Marken unter einem DEMO-Ordner entfallen dort, damit nichts unter den Namen rutscht (vorher
+  22 px tiefer). Die Legende im „i“ an „Bestand“ sagt es; jede Zahl trägt weiter ihre Bedeutung als title. Breiter und
+  die Unterordnerliste des Ordners unverändert; die Ordnerleiste (Nachtrag Klappzeichen) nicht berührt.
+- **T2 Nummernsuche:** Ein Wortlaut in Suchzeile und Navigation – Platzhalter „Inventar-, Serien-, Herstellernr.“
+  (die kürzeste Fassung, die überall passt: 219 px am 360-px-Telefon, 205 px im Feld der Navigation; die lange Fassung
+  „Inventar-, Serien- oder Herstellernummer“ passt dort nicht), Name zum Vorlesen „Artikel suchen: Inventar-, Serien- oder
+  Herstellernummer“. Vorher „Nummer suchen“ am Rechner, „Artikel: Inv.-, Serien-, Herst.-Nr.“ bzw. „Artikel suchen:
+  Inventar-, Serien-, Herstellernr.“ in der Zeile; das Umbeschriften beim Umhängen (`sucheBeschriften`) entfällt.
+- **FT11 (Ordner, Katalog, Prüfungen):** schon auf dem Sammelstand – die Suchzeile 2 (28.10.2026, nach dem Teststand
+  0e0c60c) stellt die Nummernsuche auf Ordner und Prüfungen oben in den Inhalt, der Katalog hat seine Produktsuche
+  über der Liste; am Rechner steht das Feld oben in der Navigation. Seitenweise bleibt, was es schon war (Prüfungen 50,
+  Ordner 200 je Seite) – nichts Neues.
+- **FT3:** nicht nachstellbar – „Filter“ öffnet auch am Fold-Außendisplay (443 × 848) die Schublade mit lesbarer
+  Status- und Kategorieliste samt Zahlen.
+- Tests: `tests/test_material_geraetetest4.py` (neu, statisch); `test_material_suchzeile.py`, `test_material_l5.py`,
+  `test_material_uiux_u2.py` an den einen Platzhalter und den neuen Grundsatz angepasst.
 
 ## PWA und Kontaktadressen (Wünsche des Nutzers, 28.10.2026; gebaut 01.11.2026)
 
