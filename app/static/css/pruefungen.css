@@ -53,6 +53,7 @@
 }
 .pruef details.lg-kopf > summary::before { left: 12px; }
 .pruef details.lg-kopf[open] > summary { margin-bottom: 6px; }
+.pruef details.lg-kopf[open] > summary .lg-kopf-kurz { display: none; }   /* aufgeklappt steht alles darunter */
 .pruef .lg-kopf-titel { font-weight: 700; }
 .pruef .lg-kopf-kurz { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 2px 10px; color: var(--grau); }
 @media (min-width: 761px) and (min-height: 600px) {

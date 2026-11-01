@@ -65,6 +65,7 @@ def test_b3_q3_kopf_und_reiter():
     assert ".pruef .reiter-kleben { position: sticky; top: var(--reiter-oben, var(--topbar)); z-index: 30; background: var(--weiss);" in css
     assert "@media (min-width: 761px) and (min-height: 600px) {\n  .pruef details.lg-kopf > summary { display: none; }\n}" in css
     assert ".pruef[data-ansicht=lehrgang] .page-head { flex-wrap: nowrap; align-items: flex-start; }" in css
+    assert ".pruef details.lg-kopf[open] > summary .lg-kopf-kurz { display: none; }" in css
     assert ".pruef .c-tabs.reiter { margin: 14px 0 16px; }" not in css
 
 
