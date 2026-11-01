@@ -28,7 +28,7 @@ from . import models
 from .services import (Abgelehnt, anhang, bestand, bestandsimport, durchgang, eingabe, globalprotokoll, globalsuche,
                        journal, katalog, kennung, medien as medien_dienst, meldung, protokoll, pruefung, search,
                        unterschrift)
-from .services import antrag, erinnerung, mailprotokoll, mangel, psa, rueckruf, stueckliste
+from .services import anleitung, antrag, erinnerung, mailprotokoll, mangel, psa, rueckruf, stueckliste
 from .services import status as st
 from .services import ueberblick
 from .services.bestand import FremdeDublette
@@ -135,12 +135,14 @@ def _bezug_seite(art, kennung_wert):
     return None if sichtbar else b.meldung
 
 
-def _seite(ansicht, katalog_seite=False, warnung=None, bezug=None, **daten):
+def _seite(ansicht, katalog_seite=False, warnung=None, bezug=None, willkommen=False, **daten):
     """Eine Seite des Moduls. Ohne Anmeldung zur Anmeldung, ohne Modulzugang die Fehlerseite 403 mit dem Grund
     (zugang_meldung). bezug: („artikel“ | „ordner“ | „pruefung“ | „durchgang“, Kennung) – was das Konto nicht sehen
     darf, antwortet vor dem Zeichnen wie Unbekanntes mit der Fehlerseite 404, ohne Banner, ohne Daten. warnung: eine
     Funktion, die erst danach gefragt wird – ihr Hinweis steht schon im HTML. Katalogseiten brauchen nur den
-    Modulzugang (katalog_seite)."""
+    Modulzugang (katalog_seite). Jede Seite bekommt die Verweise auf die Anleitung in der Strömipedia mit, die das
+    Konto lesen darf (anleitung.verweise); willkommen (nur die Übersicht): beim allerersten Besuch der Dialog
+    „Willkommen in der Materialablage“."""
     u = current_user()
     if not u:
         return redirect(url_for("pages.login", next=request.full_path.rstrip("?")))
@@ -152,7 +154,9 @@ def _seite(ansicht, katalog_seite=False, warnung=None, bezug=None, **daten):
             return _fehlerseite(404, fehlt)
     return render_template("material/seite.html", user=u, active="material", ansicht=ansicht,
                            daten=json.dumps(daten, ensure_ascii=False), darf=json.dumps(darf_alles()),
-                           warnung=warnung() if warnung else None)
+                           warnung=warnung() if warnung else None,
+                           anleitung=json.dumps(anleitung.verweise(u), ensure_ascii=False),
+                           willkommen=anleitung.willkommen_einmal(u) if willkommen else None)
 
 
 @seiten.get("/materialablage")
@@ -162,7 +166,7 @@ def dashboard():
     u = current_user()
     if u and not zugang(u) and psa.konto(u) and psa.anzahl(u["id"]):
         return redirect(url_for("material.meine_psa"))
-    return _seite("dashboard")
+    return _seite("dashboard", willkommen=True)
 
 
 @seiten.get("/materialablage/pruefungen")
@@ -289,10 +293,11 @@ def setprotokoll(rid, sid):
 @seiten.get("/materialablage/pruefen")
 def pruefseite():
     """Prüfseite: Jeder – auch ohne Anmeldung – lädt ein Protokoll hoch und erfährt, ob es unverändert ist.
-    Sie zeigt nur das Ergebnis und die Protokoll-ID, keine Personendaten; den Link zur Prüfung nur, wer sie sehen darf."""
+    Sie zeigt nur das Ergebnis und die Protokoll-ID, keine Personendaten; den Link zur Prüfung nur, wer sie sehen darf,
+    den zur Anleitung in der Strömipedia nur, wer sie lesen darf (anleitung.verweise – ohne Anmeldung nie)."""
     u = current_user()
     return render_template("material/pruefen.html", user=u, active="material" if u else None,
-                           angemeldet=bool(u and zugang(u)))
+                           angemeldet=bool(u and zugang(u)), anleitung=anleitung.verweise(u).get("echtheit"))
 
 
 @seiten.get("/materialablage/katalog")

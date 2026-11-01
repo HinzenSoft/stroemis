@@ -29,6 +29,7 @@ ab, bleibt das Konto samt allem stehen:
   Mailfehler         Zeilen des Kontos gelöscht (mat_mail_fehler, Phase 4 · L1: gescheiterte Modul-Mails mit Kontoverweis,
                      Rolle, Betreff und gereinigter Serverantwort – Arbeitsdaten, sonst nach 13 Monaten weg, erledigte
                      nach 3 Monaten; kein Prüfnachweis)
+  Willkommen         der Merker „Willkommen in der Materialablage gesehen“ (mat_meta, anleitung.py) gelöscht
   Mangelmeldungen    nichts; die Kennung setzt die Datenbank auf NULL, der Name bleibt (Handelnder, F3) – unbefristet
                      mit dem Artikel; users.mat_psa_mails geht mit der Kontozeile
   Änderungsanträge   nichts; Antragsteller und Entscheider sind Handelnde an festen Stammdaten (Prüfnachweis): Die
@@ -50,7 +51,7 @@ Protokoll nennt. Es gibt keine Löschfrist und keine Löschroutine. In der Daten
 Dateien nur zu offenen Entwürfen – die dürfen verworfen werden, sie sind kein Nachweis
 (test_material_zuordnung.test_pruefnachweise_bleiben)."""
 from ... import db
-from . import bestand, erinnerung, journal, mailprotokoll
+from . import anleitung, bestand, erinnerung, journal, mailprotokoll
 
 GELOESCHT = "(gelöschtes Konto)"            # wie journal.konto_name für einen Verweis ohne Konto
 GRUND = "Konto gelöscht"
@@ -96,4 +97,5 @@ def konto_loeschen_vorbereiten(uid):
     db.execute("UPDATE mat_import_row SET resolved_by_name = ? WHERE resolved_by = ?", (GELOESCHT, uid))
     erinnerung.konto_loeschen(uid)                  # vor dem Löschen der Kontozeile: der Verweis geht über mat_ref
     mailprotokoll.konto_loeschen(uid)
+    anleitung.konto_vergessen(uid)
     return zahlen
