@@ -154,6 +154,10 @@
   function openPanel(title, html) {
     panelTitle.textContent = title;
     panelBody.innerHTML = html;
+    // Fuß mit den Kontaktadressen (_fuss.html): Unter der Vollbild-Karte hätte er keinen Platz – er stünde außerhalb des
+    // Bilds oder läge über der Karte. Er kommt ans Ende des Panels, wo man ohnehin liest (Alben, Album).
+    const fuss = document.querySelector("body > .seitenfuss");
+    if (fuss) { const kopie = fuss.cloneNode(true); kopie.classList.add("im-panel"); panelBody.append(kopie); }
     panel.classList.add("open");
     S.titel(title, "karte");          // Reiter des Browsers: „Album … – Ankerplätze – strömis.de“ (V2)
   }

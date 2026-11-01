@@ -7389,6 +7389,18 @@
   const nacharbeitHinweis = (liste) => (liste && liste.length ? `<p class="notice">Nacharbeit aus Bestandsimporten:
       ${liste.map((x) => `<a href="/materialablage/ordner/${esc(x.ordner.id)}/import#bi-nacharbeit">${esc(x.ordner.pfad)}</a> (${esc(x.offen)})`).join(", ")}</p>` : "");
 
+  /* Vor dem Übernehmen eines bestehenden Bestands mit der Plattform-Verwaltung sprechen (Wunsch vom 28.10.2026, Punkt 4):
+     ein sichtbarer Satz, kein „i“ – ein Handlungshinweis vor einer folgenreichen Aktion. Die Adresse ist die
+     „Kontaktadresse“ aus Leitstelle → Einstellungen (base.html, STROEMIS.kontakt); leer: kein Satz. Am Telefon die
+     kurze Fassung, damit es eine Zeile bleibt (material.css). */
+  function importKontakt() {
+    const adresse = (window.STROEMIS && STROEMIS.kontakt) || "";
+    if (!adresse) return "";
+    const href = "mailto:" + encodeURIComponent(adresse).replace(/%40/g, "@");
+    return `<p class="help mat-import-kontakt"><span class="lang">Übernimmst du einen bestehenden Bestand? Stimm dich vorher mit der
+      Plattform-Verwaltung ab:</span><span class="kurz">Bestand übernehmen? Vorher abstimmen:</span> <a href="${esc(href)}">${esc(adresse)}</a></p>`;
+  }
+
   async function bestandsimport() {
     const fid = DATEN.id;
     const [antwort] = await Promise.all([api(`${API}/ordner/${fid}?pro_seite=1`), ordnerBaum().catch(() => null)]);
@@ -7411,6 +7423,7 @@
     inhalt.innerHTML = `<div class="mat-pfad">${pfadHtml(['<a href="/materialablage/bestand">Bestand</a>', ...o.pfad.map(pfadGlied), "<span>Import</span>"])}</div>
       <div class="page-head"><h1>Bestandsliste importieren${infoKnopf("Bestandsliste importieren", "Importierte Artikel stehen auf „neu“, bis sie im System geprüft sind. Die Fälligkeit kommt aus „nächste Prüfung“ oder „zuletzt geprüft“ der Liste; ohne beides ist die Eingangsprüfung sofort fällig." + mehrDazu("bestandsimport"))} ${demoMarke(o.demo)}</h1></div>
       <p class="help">Zielordner: <strong>${esc(o.pfad.map((x) => x.name).join(" / "))}</strong> – mit der Spalte „Ordner“ auch seine Unterordner.</p>
+      ${importKontakt()}
       <section class="section mat-import" id="bi-neu" aria-labelledby="bi-neu-titel"><h2 id="bi-neu-titel">Neue Liste</h2>
         <div class="mat-ablage" id="bi-ablage">
           <p><strong>Datei hierher ziehen</strong> oder <label class="btn secondary small mat-ablage-knopf">Datei wählen<input type="file" id="bi-datei" class="mat-datei"

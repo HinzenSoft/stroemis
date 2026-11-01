@@ -76,6 +76,13 @@
     <label class="inline"><input type="checkbox" id="psa-mails"{% if psa_mails %} checked{% endif %}> Erinnerungen zu meiner PSA per Mail{% call info("psa-mails", "Erinnerungen zu meiner PSA") %}Eine Mail am Morgen, wenn deine PSA in 30 Tagen zur Prüfung muss, wenn die Prüfung überfällig ist und 90 Tage vor ihrem Lebensende – jede Erinnerung nur einmal, auch wenn der Materialwart für den Ordner die Erinnerungsmails abgeschaltet hat. Meldet jemand anderes einen Mangel an deiner PSA, bekommst du immer sofort eine Mail – sie betrifft deine Sicherheit.{% endcall %}</label>
   </section>
   {% endif %}
+  {# Hinweis „App installieren“ (Wunsch vom 28.10.2026, Punkt 1): erscheint nur, wo der Browser die Installation anbietet
+     (Knopf) oder auf iPhone/iPad (Anleitung) – und nicht, wenn die Seite schon als App läuft. common.js schaltet ihn. #}
+  <section class="section hidden" id="app-installieren" aria-labelledby="app-titel">
+    <div class="abschnittskopf"><h2 id="app-titel">App</h2><button class="btn secondary hidden" type="button" id="app-installieren-knopf">App installieren</button></div>
+    <p class="help">strömis.de lässt sich wie eine App auf den Startbildschirm legen: eigenes Fenster, ohne Adressleiste. Ohne Netz zeigt sie nur einen Hinweis.</p>
+    <p class="help hidden" id="app-ios">Auf iPhone und iPad: in Safari „Teilen“ antippen, dann „Zum Home-Bildschirm“.</p>
+  </section>
   <section class="section">
     <h2>Passwort ändern</h2>
     <form id="f-password">

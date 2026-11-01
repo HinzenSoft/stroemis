@@ -1418,6 +1418,30 @@ details.accordion .accordion-body > :first-child { margin-top: 0; } details.acco
   details.accordion > .accordion-body { display: block !important; }
   .table-scroll { overflow: visible; }
 }
+/* --- Fuß jeder Seite: Kontaktadressen (Wunsch vom 28.10.2026, Punkt 4; templates/_fuss.html) ------------------------
+   Klein und grau, im Fluss hinter dem Inhalt – nie fest oder klebend, so liegt er nie über Leisten oder Schubladen, und
+   am Telefon kostet er keinen Platz neben dem Inhalt. Grau auf Weiß 5,3 : 1 (AA). Die Links grau mit Unterstrich: als
+   Link erkennbar, ohne mit den roten Links des Inhalts zu konkurrieren. Schmal brechen die zwei Angaben um – der Punkt
+   dazwischen fällt dann weg. Auf der Vollbild-Karte steht er unten im Panel (map.js, .im-panel). Nicht im Druck. */
+.seitenfuss { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; column-gap: .6em;
+  padding: 12px calc(16px + var(--sicher-rechts)) calc(12px + var(--sicher-unten)) calc(16px + var(--sicher-links));
+  border-top: 1px solid var(--linie); color: var(--grau); font-size: var(--fs-klein); line-height: 1.4; text-align: center; }
+.seitenfuss a { color: var(--grau); }
+.seitenfuss a:hover { color: var(--rot-dunkel); }
+.fuss-teil { white-space: nowrap; }
+@media (max-width: 420px) {
+  .seitenfuss { column-gap: 1.2em; }
+  .fuss-punkt { display: none; }
+}
+main.map-shell ~ .seitenfuss { display: none; }
+.seitenfuss.im-panel { margin: 28px -16px -30px; padding: 10px 16px 12px; }
+@media (pointer: coarse) {
+  .seitenfuss { padding-top: 2px; padding-bottom: calc(2px + var(--sicher-unten)); }
+  .seitenfuss.im-panel { padding-top: 2px; padding-bottom: 2px; }
+  .seitenfuss a { display: inline-flex; align-items: center; min-height: 44px; }
+}
+@media print { .seitenfuss { display: none !important; } }
+
 /* Kommentar-Reiter */
 .c-tabs { display: flex; gap: 4px; margin-bottom: 8px; }
 .c-tabs button {
