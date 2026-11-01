@@ -589,7 +589,8 @@ html.tastatur dialog[open] .dlg-body { max-height: calc(var(--vv-h, 100dvh) - 22
   .login-form { padding-top: 14px; padding-bottom: 20px; justify-content: flex-start; }
   .login-form h1 { margin-bottom: 6px; }
   .login-form label { margin-top: 8px; }
-  .login-form .btn { margin-top: 12px; }
+  .login-form .pw-zeigen { margin: 0; }                  /* „Passwort anzeigen“ dicht unter dem Feld (B9) */
+  .login-form .btn { margin-top: 8px; }
   .login-side { padding-top: 20px; padding-bottom: 20px; justify-content: flex-start; }
 }
 
