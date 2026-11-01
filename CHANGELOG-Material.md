@@ -5,7 +5,7 @@ Gliederungen, Prüfnachweise je Ausrüstungsteil, unveränderliche PDF-Prüfprot
 umgesetzt, Phase 2 (mehrere Gliederungen und externe Prüfer in einer Instanz) in drei, Phase 3 und 4 in Lieferungen
 und Wünschen des Nutzers; jede war für sich deploybar. Seit dem 26.10.2026 heißt das Modul „Materialablage“ (im Code,
 in Tabellen und unter `/api/material` weiter `material`). Ältere Abschnitte sagen noch „Modul Material“ – sie bleiben als
-Geschichte stehen. Schemaversion nach der Nachbesserung vor dem Merge: 30; mit der Prüfsumme für den Lebenslauf: 31; mit der Liste nach dem Merge (Teil A): 32; mit der Stufe Redakteur: 33.
+Geschichte stehen. Schemaversion nach der Nachbesserung vor dem Merge: 30; mit der Prüfsumme für den Lebenslauf: 31; mit der Liste nach dem Merge (Teil A): 32; mit der Stufe Redakteur: 33; mit den Riegenkarten-Ausbildern nur mit Konto: 34.
 
 | Lieferung | Inhalt | Stand |
 | --- | --- | --- |
@@ -61,6 +61,7 @@ Geschichte stehen. Schemaversion nach der Nachbesserung vor dem Merge: 30; mit d
 | Verweise auf die Anleitung | „Mehr dazu in der Strömipedia“ in 28 Infos (drei neu), „Anleitung“ hinter der Überschrift der übrigen Seiten, Hinweis oben auf der Übersicht, „Willkommen in der Materialablage“ beim ersten Besuch – alles nur für Konten, die die Zielseite lesen dürfen | gebaut 01.11.2026 (kein Schemaschritt), Zweig wikiverweise, zur Freigabe |
 | PWA und Kontaktadressen | strömis.de als App installierbar (Manifest, Service Worker, Maskottchen auf Rot, ohne Netz nur eine Hinweisseite, „App installieren“ im Profil); Kontaktadressen als Einstellung (Leitstelle → Einstellungen, Gruppe „Seite“) im Fuß jeder Seite, im Hinweis „Entwicklungsserver“ und vor dem Bestandsimport | gebaut 01.11.2026 (kein Schemaschritt), Zweig pwakontakt, zur Freigabe |
 | Stufe Redakteur (Schritt 33) | Rechte-Matrix mit „Redakteur“ in Strömipedia, Ankerplätzen und Riegenkarten (Mitglied liest bzw. bewertet in eigenen Lehrgängen, Redakteur legt eigene Inhalte an, Verwaltung alles); eine Skala 0/1/2/3 in allen Spalten, Schritt 33 hebt Verwaltung 2 → 3; Riegenkarten: Sichtbarkeit nur eigener Lehrgänge (404), eigene Kataloge; dazu: keine Strömipedia ohne Anmeldung mehr | gebaut 01.11.2026 (Schema 33), Zweig redakteur, nicht auf dev |
+| Ausbilder nur mit Konto (Schritt 34) | Riegenkarten: Ausbilder sind Konten mit Stufe ≥ Mitglied (Suche nach Name/E-Mail, Server lehnt anderes mit Zeile ab), Excel-Import ordnet per E-Mail bzw. eindeutigem Namen zu und listet „nicht übernommen“, Schritt 34 verknüpft oder entfernt den Freitext-Bestand ohne Text in der Beschreibung (nur Startprotokoll), Konten ohne Stufe als „ohne Zugriff“ markiert | gebaut 01.11.2026 (Schema 34), Zweig ausbilder, nicht auf dev |
 
 ## Abgleich mit dem Bestand (vor Lieferung 1)
 
@@ -10253,3 +10254,38 @@ es wegen des Schemaschritts und der Umnummerierung, die auch die Materialablage 
   test_pruefungen, test_wiki_lesemodus, test_wiki_import, test_wiki_seitenbaum, test_umbenennung, test_module_* und die
   Material-Tests, die die Verwaltung als 2 setzten.
 
+## Ausbilder nur mit Konto (Schritt 34, 01.11.2026)
+
+Wunsch des Nutzers (01.11.2026): „Entferne die Freitext-Ausbilder in der Riegenkarte, entweder Personen haben einen
+Account und mindestens das Recht Mitglied, oder machen keine Lehrgänge.“ – zum Vorschlag „bestätigen, aber ohne Text in
+der Beschreibung“. Auftrag planung/rechte-redakteur/auftrag_ausbilder_konten.md. Betrifft die Riegenkarten; hier steht
+es wegen des Schemaschritts.
+
+- **Schritt 34** (`models._schritt_34`): Je Freitext-Ausbilder (`pruef_ausbilder.user_id` NULL) das Konto, dessen Name
+  eindeutig passt (NFKC, Groß/klein und Leerraum egal, „Nachname, Vorname“ wie „Vorname Nachname“) – unter den aktiven
+  Konten mit `recht_pruefungen >= 1` oder `recht_verwaltung >= 3`. Gefunden: `user_id` setzen (Funktion, Leitung und
+  Name-Schnappschuss bleiben); steht das Konto im Lehrgang schon, fällt der Freitext in dessen Zeile (Leitung, wenn eine
+  es war; Funktion der Kontozeile, sonst die des Freitexts). Nicht eindeutig, unbekannt, ohne Stufe, deaktiviert:
+  Zeile löschen – kein Text in `pruef_lehrgaenge.beschreibung`. Das Startprotokoll nennt nach dem Festschreiben je
+  Lehrgang die Entfernten (WARNING „Schritt 34 (Riegenkarten): Lehrgang <id> „<Titel>“ – Ausbilder ohne passendes Konto
+  entfernt: Name (Funktion), …“) und eine Summe; bricht die Migration ab, steht nichts im Protokoll
+  (`_NACH_DEM_FESTSCHREIBEN`). Einmal je Stand über den Versionsvermerk; kein Journal (die Riegenkarten führen keins).
+  Verknüpfte Konten ohne Stufe bleiben unangetastet.
+- **Schnittstelle:** `POST/PUT /api/pruefungen/lehrgaenge` nehmen nur Zeilen mit `user_id` eines Kontos; neu
+  eingetragen nur passende Konten (sonst 400 „… nur mit Konto …“ bzw. „„Name“ hat keine Stufe in den Riegenkarten …“
+  mit `zeile`), schon eingetragene bleiben auch ohne Stufe. `ausbilder[]` trägt `name` aus dem Konto, `gliederung`,
+  `zugriff`, `ohne_zugriff` („stufe“, „deaktiviert“). `GET /api/pruefungen/nutzer?q=` sucht Name oder E-Mail (ab 2
+  Zeichen, höchstens 20, `mehr`), nur ab Redakteur oder als Leitung, ohne E-Mail in der Antwort. Import: Vorschau mit
+  `ausbilder[].konto` und `ausbilder_nicht_uebernommen`, Ergebnis mit `ausbilder_nicht_uebernommen` (Zuordnung
+  `_ausbilder_zuordnen`: E-Mail zuerst – gehört sie einem Konto, entscheidet nur dieses –, sonst eindeutiger Name).
+  `pruefungen_import.analysieren` liefert je Ausbilder die `email` der Zeile (geht nicht an die Oberfläche).
+- **Konto löschen** (`api_admin.delete_user`) löscht seine Ausbildereinträge – über `ON DELETE SET NULL` entstünden sonst
+  wieder Freitext-Ausbilder.
+- **Oberfläche:** Dialog „Lehrgang anlegen/bearbeiten“ je Zeile Kontosuche (Trefferliste wie die Personenwahl der
+  Freigaben) statt Auswahlliste und Häkchen „extern (Freitext)“; gewählte Person mit „andere Person“; Meldungen des
+  Servers an der Zeile (`err.daten.zeile`, neu in `S.api`). Kopf und Druckansichten (Mängelübersicht, je TN) nennen
+  Leitung und Referierende mit den Namen der Konten (`.name-einheit`), Marke „ohne Zugriff“. Import-Vorschau: Zahl der
+  Referierenden mit Konto, Liste „Nicht übernommen – kein Konto mit Riegenkarten-Stufe“, dieselbe Liste in der Meldung
+  nach dem Übernehmen. Leitstelle: Hilfe „Rechte je Modul“ und Hinweis der Matrix ergänzt.
+- Tests: `tests/test_rechte_ausbilder.py` (neu); angepasst: test_pruefungen (Konten statt Freitext), test_rechte_redakteur
+  (Schema 34, kein Freitext-Lehrgang mehr), test_pruefungen_import (`email` am Ausbilder).

@@ -4,6 +4,23 @@ Erweiterung von strömis.de um Lehrgänge, Teilnehmende, Voraussetzungen, Prüfu
 Stoppuhr, Nachprüfungen, Medien und eine Mängelübersicht für Feedbackrunden – nur für Nutzer mit dem neuen
 Zusatzrecht „Prüfer“.
 
+## Nachtrag (01.11.2026): Ausbilder nur noch mit Konto
+
+Wunsch des Nutzers: „Entferne die Freitext-Ausbilder in der Riegenkarte, entweder Personen haben einen Account und
+mindestens das Recht Mitglied, oder machen keine Lehrgänge.“ – Vorschlag bestätigt, „aber ohne Text in der
+Beschreibung“.
+- Lehrgang anlegen/bearbeiten: Ausbilder nur aus den Konten mit Stufe in den Riegenkarten (Suche nach Name oder
+  E-Mail-Adresse), kein freier Name und kein Häkchen „extern“ mehr; Funktion und „Leitung“ bleiben je Ausbilder, die
+  anlegende Person bleibt Leitung. Der Server lehnt anderes mit Klartext an der Zeile ab.
+- Ein eingetragenes Konto ohne Stufe (oder deaktiviert) bleibt stehen und ist markiert („ohne Zugriff – Stufe in der
+  Leitstelle vergeben“); es sieht den Lehrgang nicht. Ein gelöschtes Konto verschwindet aus den Lehrgängen.
+- Excel-Import: Ausbilder per E-Mail-Adresse, sonst per eindeutigem Namen einem Konto zugeordnet; die übrigen stehen in
+  Vorschau und Ergebnis als „Nicht übernommen – kein Konto mit Riegenkarten-Stufe“.
+- Bestand: Schritt 34 verknüpft eindeutig passende Freitext-Ausbilder und entfernt die übrigen – ohne Text in der
+  Beschreibung, nur das Startprotokoll nennt sie (README „Ausbilder nur mit Konto“, vorher in der Produktion mit
+  Konten versehen).
+- Kopf des Lehrgangs und Druckansichten nennen Leitung und Referierende mit den Namen der Konten.
+
 ## Nachtrag (01.11.2026): Stufe „Redakteur“, Sichtbarkeit und eigene Kataloge
 
 Wunsch des Nutzers (28.10.2026: „So machen wir es. Nenne es analog Redakteur“; Entscheidungen „Bestätigt“, „Ja / Ja /

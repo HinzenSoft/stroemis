@@ -65,7 +65,7 @@ Einstellungen, Gruppe „Seite“).
 - Slideshow mit zufälligen Bildern aus den Ankerplätzen (langsam wandernd, überblendet; abschaltbar mit `LOGIN_SLIDESHOW=false`, respektiert „Bewegung reduzieren“). Die Bilder werden über signierte, 24 h gültige Links ausgeliefert (bleibt ohne Anmeldung). Eine Strömipedia ohne Anmeldung gibt es seit dem 01.11.2026 nicht mehr.
 
 **Riegenkarten** (Modul „pruefungen“; nur mit Zugang zu den Riegenkarten)
-- Lehrgänge mit Titel, Nummer, Zeitraum, Ort, Status, Lehrgangsleitung und Referierenden (aus den Nutzern gewählt oder als Freitext für Externe). Liste mit Suche, Jahresfilter, Teilnehmerzahl, Fortschritt („18/24 Leistungen abgenommen“) und offenen Mängeln.
+- Lehrgänge mit Titel, Nummer, Zeitraum, Ort, Status, Lehrgangsleitung und Referierenden (immer Konten mit Stufe in den Riegenkarten, gesucht über Name oder E-Mail-Adresse – Freitext-Ausbilder gibt es seit dem 01.11.2026 nicht mehr, siehe [„Ausbilder nur mit Konto“](#ausbilder-nur-mit-konto-01112026)). Liste mit Suche, Jahresfilter, Teilnehmerzahl, Fortschritt („18/24 Leistungen abgenommen“) und offenen Mängeln.
 - Zwei Stufen innerhalb des Bereichs: **Lehrgangsleitung** (wer im Lehrgang mit dem Kennzeichen „Leitung“ eingetragen ist – mehrere Personen je Lehrgang sind möglich) und die Verwaltung der Riegenkarten legen Lehrgänge, Teilnehmende, Voraussetzungen und Leistungen an, ändern und löschen sie; alle anderen Prüfenden – etwa Referierende – nehmen Prüfungen ab und haken Voraussetzungen ab. Wer einen Lehrgang anlegt, wird automatisch seine Leitung.
 - Je Teilnehmendem ein Profilbild, ein freier Kommentar der Prüfenden und das **Lehrgangsergebnis** der Leitung (bestanden / nicht bestanden). Mit dem Ergebnis sind die Prüfungsdaten der Person eingefroren – keine neuen Versuche, Medien oder Haken, bis die Leitung das Ergebnis aufhebt. Eine Person mit vermerktem Ergebnis lässt sich auch nicht löschen, und Leistungen, Kriterien oder Voraussetzungen, an denen eingefrorene Bewertungen oder Haken hängen, lassen sich weder ändern noch löschen; den Lehrgang als Ganzes darf die Leitung weiterhin löschen.
 - **Diktieren per Mikrofon** an den Kommentarfeldern (Web Speech API des Browsers, Deutsch). Die Erkennung läuft im Browser – Chrome und Safari können das Audio an Google bzw. Apple senden; die Einstellung `SPRACHEINGABE` schaltet den Knopf ab.
@@ -644,7 +644,8 @@ Auswahlfeld). Kurz die Regeln, die nicht offensichtlich sind:
   alles andere (Lehrgang, Teilnehmende, Versuche, Medien unter `/media/pruefung/…`, Druckansicht, Mängel, Import
   in den Lehrgang) antwortet 404 wie „gibt es nicht“. Leitung ist die Rolle je Lehrgang – ein Redakteur kann ein
   Mitglied als Leitung eintragen; es pflegt dann diesen Lehrgang (auch Import hinein), kopiert ihn aber nicht
-  (Kopieren und Import als neuer Lehrgang ab Redakteur). Freitext-Ausbilder ohne Konto sehen nichts.
+  (Kopieren und Import als neuer Lehrgang ab Redakteur). Ausbilder sind seit dem 01.11.2026 immer Konten (siehe
+  „Ausbilder nur mit Konto“).
 - **Inbetriebnahme:** siehe „Inbetriebnahme in der Produktion“, Schritt 7 (Redakteure vergeben, Ausbilder verknüpfen).
 
 **Rückweg** auf einen Stand vor Schritt 33 (älterer Code): Er läse Redakteure (2) als Verwaltung – eine
@@ -662,7 +663,44 @@ COMMIT;
 ```
 
 Redakteure werden dabei Mitglied (sie behalten ihre Inhalte; der ältere Code lässt Mitglieder wieder anlegen). Die
-Indizes `idx_pruef_ausbilder_user`, `idx_pruef_medien_file`, `idx_pruef_tn_bild` dürfen bleiben.
+Indizes `idx_pruef_ausbilder_user`, `idx_pruef_medien_file`, `idx_pruef_tn_bild` dürfen bleiben. Das gilt auch ab
+Schritt 34 (siehe unten): Die SQL setzt den Stand auf 32, Schritt 34 braucht keinen eigenen Rückweg.
+
+## Ausbilder nur mit Konto (01.11.2026)
+
+Wunsch des Nutzers (01.11.2026): „Entferne die Freitext-Ausbilder in der Riegenkarte, entweder Personen haben einen
+Account und mindestens das Recht Mitglied, oder machen keine Lehrgänge.“ Bestätigt mit „ohne Text in der Beschreibung“.
+
+- **Regel:** Ausbilder (Leitung und Referierende) ist ein aktives Konto mit Stufe in den Riegenkarten (mindestens
+  Mitglied; die Plattform-Verwaltung hat sie überall). Funktion (frei) und Kennzeichen „Leitung“ bleiben je Ausbilder;
+  wer einen Lehrgang anlegt, wird wie bisher Leitung. Die Namen kommen aus dem Konto (auch nach einer Umbenennung).
+- **Lehrgang anlegen/bearbeiten:** je Zeile die Suche nach Name oder E-Mail-Adresse (`GET /api/pruefungen/nutzer?q=`,
+  ab 2 Zeichen, höchstens 20 Treffer, nur passende Konten, ohne E-Mail-Adresse in der Antwort; suchen darf, wer
+  Lehrgänge anlegt oder einen leitet). Der Server lehnt eine Zeile ohne Konto oder mit einem Konto ohne Stufe
+  (auch deaktiviert) mit 400 ab – mit Klartext und `zeile`, der Dialog zeigt die Meldung an der Zeile. Ein Konto, das
+  schon eingetragen ist und seine Stufe verliert, bleibt eingetragen; Lehrgang und Druckansicht markieren es mit
+  „ohne Zugriff“, der Dialog mit „ohne Zugriff – Stufe in der Leitstelle vergeben“ (bzw. „Konto deaktiviert“). Es
+  sieht den Lehrgang nicht, bis es die Stufe wieder hat. Ein gelöschtes Konto verschwindet aus allen Lehrgängen (seine
+  Bewertungen behalten den Namen).
+- **Excel-Import:** Ausbilder aus der Datei (Rolle) werden einem Konto zugeordnet – zuerst über die E-Mail-Adresse der
+  Zeile (gehört sie zu einem Konto, entscheidet nur dieses), sonst über den Namen, wenn er unter den passenden Konten
+  genau einmal vorkommt („Nachname, Vorname“ wie „Vorname Nachname“, Groß/klein egal). Wer nicht eindeutig passt, wird
+  nicht übernommen und steht in Vorschau und Ergebnis unter „Nicht übernommen – kein Konto mit Riegenkarten-Stufe“
+  (`ausbilder_nicht_uebernommen`: Name, Funktion). Schon eingetragene Konten kommen nicht doppelt.
+- **Bestand (Schritt 34 der Materialablage):** Jeder Freitext-Ausbilder wird verknüpft, wenn sein Name eindeutig zu
+  einem aktiven Konto mit Stufe passt (Funktion und Leitung bleiben; steht das Konto schon im Lehrgang, wird es eine
+  Zeile – Leitung, wenn eine es war). Sonst wird er **entfernt – ohne Text in der Lehrgangsbeschreibung**; nur das
+  Startprotokoll nennt je Lehrgang die Entfernten („Schritt 34 (Riegenkarten): Lehrgang … – Ausbilder ohne passendes
+  Konto entfernt: …“) und eine Summenzeile. Läuft einmal (Versionsvermerk, eine Transaktion); ein zweiter Start ändert
+  nichts. Rückweg auf Schritt 33: nichts zu tun – der ältere Stand nimmt Stand 34 als aktuell und liest die
+  verknüpften Zeilen wie immer; entfernte Freitext-Ausbilder gibt es nur in der Sicherung vor dem Deploy.
+- **Vor dem Merge (Produktion):** Freitext-Ausbilder vorher mit Konten versehen – sonst fallen sie beim ersten Start
+  weg (die Sicherung vor dem Merge enthält sie). Auflisten, ohne etwas zu ändern:
+  `sqlite3 -readonly data/stroemis.db "SELECT l.id, l.titel, a.name, a.funktion FROM pruef_ausbilder a JOIN pruef_lehrgaenge l ON l.id = a.lehrgang_id WHERE a.user_id IS NULL ORDER BY l.id"`.
+  Für jede Person, die weiter prüfen soll: Konto anlegen (Name genau wie im Lehrgang) und Stufe „Mitglied“ in den
+  Riegenkarten geben – dann verknüpft der Schritt sie selbst –, oder vorher im alten Stand den Eintrag auf das Konto
+  umstellen (Häkchen „extern“ weg, Konto wählen). Nach dem Start im Protokoll (`docker compose logs | grep "Schritt
+  34"`) nachsehen, wer entfernt wurde.
 
 ## Daten und Sicherung
 
@@ -752,8 +790,10 @@ gelungenen Merge `docker image rm stroemis:vor-merge-5c7e848` und `~/data.vor-me
 ## Inbetriebnahme in der Produktion (erster Merge dev → main)
 
 Die Produktion (main) hat bis zum Merge keine Materialablage; der erste Start danach legt ihr Schema in einem Lauf an
-(Schemaversion 33, unter einer Sekunde) und ändert an Konten, Strömipedia, Ankerplätzen und Riegenkarten nur die
-Rechte-Matrix (Schritt 33: Verwaltung 2 → 3, siehe „Stufe Redakteur“). Es geht keine Mail von selbst hinaus (Erinnerungsmails sind aus). Reihenfolge:
+(Schemaversion 34, unter einer Sekunde) und ändert an Konten, Strömipedia, Ankerplätzen und Riegenkarten nur die
+Rechte-Matrix (Schritt 33: Verwaltung 2 → 3, siehe „Stufe Redakteur“) und die Riegenkarten-Ausbilder ohne Konto
+(Schritt 34: verknüpfen oder entfernen, siehe „Ausbilder nur mit Konto“ – **vorher** die Freitext-Ausbilder mit
+Konten versehen). Es geht keine Mail von selbst hinaus (Erinnerungsmails sind aus). Reihenfolge:
 
 1. **Vorab:** Stand der Produktion ansehen (`git status --short; git log -1 --oneline` im Ordner der Produktion,
    `docker port stroemis`). Läuft der Reverse-Proxy auf demselben Rechner, `STROEMIS_PORT=127.0.0.1:8080` in die `.env`
@@ -775,7 +815,7 @@ Rechte-Matrix (Schritt 33: Verwaltung 2 → 3, siehe „Stufe Redakteur“). Es 
 4. **Kontrolle:** `docker ps` (healthy), `docker port stroemis` wie unter 1 festgelegt (mit `STROEMIS_PORT` nur
    `127.0.0.1:8080`), `docker compose logs --tail 200` ohne Traceback; Schemaversion und
    Unversehrtheit: `docker exec stroemis python -c "import sqlite3;c=sqlite3.connect('/data/stroemis.db');print(c.execute(\"select wert from mat_meta where schluessel='schema_version'\").fetchone(), c.execute('pragma integrity_check').fetchone())"`
-   → `('33',) ('ok',)`. Zählung vorher/nachher gegen die Vor-Merge-Kopie – beide Zeilen gleich:
+   → `('34',) ('ok',)`. Zählung vorher/nachher gegen die Vor-Merge-Kopie – beide Zeilen gleich:
    `for d in ~/data.vor-merge-<Datum> data; do python3 -c "import sqlite3,sys;c=sqlite3.connect('file:'+sys.argv[1]+'/stroemis.db?mode=ro',uri=True);print([(t,c.execute(f'select count(*) from {t}').fetchone()[0]) for t in ('users','wiki_pages','wiki_revisions','wiki_comments','wiki_files','albums','photos','pruef_lehrgaenge','pruef_teilnehmer','pruef_versuche','pruef_medien','einstellungen')])" $d; done`,
    dazu `find data/media -type f | wc -l` gegen die Kopie (als Nutzer 1000 oder mit `sudo`). Im Browser als
    Plattform-Verwaltung: fünf Module in der Kopfleiste, Leitstelle → Nutzer (Materialablage nur bei der
@@ -805,10 +845,11 @@ Rechte-Matrix (Schritt 33: Verwaltung 2 → 3, siehe „Stufe Redakteur“). Es 
    was sie früher selbst angelegt haben. In Leitstelle → Nutzer zeigt die Spalte „Inhalte“, wer Artikel, Alben oder
    Bilder hat: diesen Konten bei Bedarf „Redakteur“ in der Strömipedia bzw. den Ankerplätzen geben. In den
    Riegenkarten sieht ein Mitglied nur noch die Lehrgänge, in denen es **mit seinem Konto** als Ausbilder steht; wer
-   Lehrgänge anlegen soll, bekommt „Redakteur“. Lehrgänge mit Ausbildern ohne Konto (Freitext, oft aus dem
-   Excel-Import) sieht danach nur noch ihre Leitung und die Verwaltung – die Leitung trägt die Ausbilder in
-   „Bearbeiten“ als Nutzer ein (Häkchen „extern“ weg, Konto wählen). Lehrgänge der Verwaltung ohne Ausbilder-Eintrag
-   sieht nur die Verwaltung.
+   Lehrgänge anlegen soll, bekommt „Redakteur“. Ausbilder ohne Konto gibt es nicht mehr: Schritt 34 hat sie verknüpft
+   oder entfernt (vorher vorbereitet, siehe „Ausbilder nur mit Konto“ – „Vor dem Merge“); im Startprotokoll
+   nachsehen, wer entfernt wurde, und diese Personen bei Bedarf mit Konto und Stufe „Mitglied“ wieder eintragen.
+   Verknüpfte Konten ohne Stufe stehen im Lehrgang als „ohne Zugriff“ – ihnen die Stufe geben oder sie austragen.
+   Lehrgänge der Verwaltung ohne Ausbilder-Eintrag sieht nur die Verwaltung.
 8. **Erinnerungsmails zuletzt:** erst wenn Gliederungen, Freigaben und Bestand stehen – Materialablage → Übersicht →
    „Probelauf ansehen“, dann Leitstelle → Einstellungen → Materialablage → „Erinnerungsmails verschicken“ an. In der
    `.env` der Produktion weder `MATERIAL_ERINNERUNGEN_SPERRE` noch `STROEMIS_NAME=…-dev`.
@@ -910,6 +951,7 @@ python tests/test_smoke.py    # Rauchtest über die API (Login, Upload, EXIF, Re
                               # und Härtungstest (Freigaben, alte Adressen, Anmeldebremse, Grenzen)
 python tests/test_wiki_lesemodus.py    # Wiki-Lesemodus: Konto ohne Wiki-Stufe sieht genau die freigegebenen Seiten, ohne Anmeldung nichts (alle Wiki-Routen)
 python tests/test_rechte_redakteur.py  # Stufe Redakteur: Mitglied/Redakteur/Verwaltung je Endpunkt, Sichtbarkeit der Riegenkarten, Schritt 33
+python tests/test_rechte_ausbilder.py  # Riegenkarten-Ausbilder nur mit Konto: Anlegen/Bearbeiten, Kontosuche, Import-Zuordnung, Schritt 34
 python tests/test_pruefungen.py         # Prüfungsbereich (Rechte, Kataloge, Excel-Import, Kopieren, Nachprüfung, Medien)
 python tests/test_pruefungen_import.py  # Excel-Erkennung
 python tests/test_material_feinschliff.py  # Feinschliff aus den Wiki-Fragen: „Deine PSA“ trotz „Erinnerungsmails aus“ (E2 B), Verlauf des
