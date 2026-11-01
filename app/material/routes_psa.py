@@ -13,7 +13,7 @@ from flask import jsonify, redirect, render_template, request, url_for
 
 from ..auth import current_user, json_body, login_required
 from .routes import _eingabe, _fehlerseite, api, seiten
-from .services import Abgelehnt, mangel, psa, wahr
+from .services import Abgelehnt, anleitung, mangel, psa, wahr
 from .services import status as st
 from .services.rechte import darf_alles, requires_artikel_oder_zugeordnet, zugang
 
@@ -48,7 +48,8 @@ def _psa_seite(iid=None):
             return _fehlerseite(exc.code, str(exc))
     return render_template("material/seite.html", user=u, active="meine_psa" if psa.kopfleiste(u) else "material",
                            ansicht="meine_psa", nur_psa=not zugang(u), daten=json.dumps({"id": iid}),
-                           darf=json.dumps(darf_alles(u)), warnung=None)
+                           darf=json.dumps(darf_alles(u)), warnung=None,
+                           anleitung=json.dumps(anleitung.verweise(u), ensure_ascii=False))
 
 
 @seiten.get("/materialablage/meine-psa")

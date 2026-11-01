@@ -33,7 +33,7 @@ ADMIN_HTML, PROFIL = "app/templates/admin.html", "app/templates/profil.html"
 
 # (Stelle, Datei, das „i“ am Begriff, der frühere Erklärsatz als Hilfezeile – darf nicht mehr vorkommen)
 STELLEN = [
-    ("M1", MAT, '<h1>Bestand${infoKnopf("Bestand", info)}</h1>', "Oben stehen die Gliederungen"),
+    ("M1", MAT, '<h1>Bestand${infoKnopf("Bestand", info + mehrDazu("bestand"))}</h1>', "Oben stehen die Gliederungen"),
     ("M2", MAT, '<span class="info-absatz">${ZAEHLER_LEGENDE}</span>', '!<p class="help mat-legende">'),
     ("M3", MAT, '<h2>Fälligkeiten je Ordner${d.ordner_uebersicht.length ? infoKnopf("Fälligkeiten je Ordner", ordnerUebersichtInfo(',
      "Die Zahlen gelten für den ganzen Zweig"),
@@ -49,12 +49,12 @@ STELLEN = [
     ("M13", MAT, '${infoKnopf("Dokumente für alle Produkte dieser Kategorie", "Pflegehinweise', "Pflegehinweise, allgemeine Anleitungen"),
     ("M14", MAT, '${infoKnopf("Lebensdauer", "Nur ein Vorschlag beim Anlegen', "Nur ein Vorschlag beim Anlegen"),
     ("M15", MAT, 'Artikel haben eine Länge${infoKnopf("Artikel haben eine Länge", "Seile und Meterware', "Seile und Meterware"),
-    ("M16", MAT, '<h2>Bestandteile${infoKnopf("Bestandteile", BESTANDTEILE_INFO)}</h2>', "Jede Prüfung fragt je Position ab"),
+    ("M16", MAT, '<h2>Bestandteile${infoKnopf("Bestandteile", BESTANDTEILE_INFO + mehrDazu("bestandteile"))}</h2>', "Jede Prüfung fragt je Position ab"),
     ("M17", MAT, '<h2>Prüfformular${infoKnopf("Prüfformular", "Ein aktives spezifisches Formular', "Ein aktives spezifisches Formular"),
     ("M18", MAT, '<h2>Herstellerdokumente${infoKnopf("Herstellerdokumente", `Gelten für alle Artikel', "Gelten für alle Artikel dieses Produkts"),
-    ("M19", MAT, '<strong>Prüfanleitung in der Strömipedia${infoKnopf("Prüfanleitung in der Strömipedia", info)}:</strong>',
+    ("M19", MAT, '<strong>Prüfanleitung in der Strömipedia${infoKnopf("Prüfanleitung in der Strömipedia", info + mehrDazu("pruefanleitung"))}:</strong>',
      "Die Verknüpfung gehört nicht zum Prüfinhalt"),
-    ("M20", MAT, '<h2 class="mat-fp-punkte">Prüfpunkte${infoKnopf("Prüfpunkte", PRUEFPUNKTE_INFO)}</h2>', "Bei der Prüfung ist jeder Befund"),
+    ("M20", MAT, '<h2 class="mat-fp-punkte">Prüfpunkte${infoKnopf("Prüfpunkte", PRUEFPUNKTE_INFO + mehrDazu("pruefpunkte"))}</h2>', "Bei der Prüfung ist jeder Befund"),
     ("M21", MAT, 'Seite suchen (Titel)${infoKnopf("Seite suchen", `${WIKI_PRUEFUNG_INFO} Jeder sieht nur', "Jeder sieht nur, was er in der Strömipedia"),
     ("M22", MAT, 'infoKnopf("Eingangsprüfung", "Die erste Prüfung eines Artikels', "Die erste Prüfung eines Artikels ist"),
     ("M23", MAT, '<h2>Anhänge${bearbeitbar() ? infoKnopf("Anhänge", "Externe Prüfkarte', "Externe Prüfkarte, Bericht"),
@@ -185,7 +185,7 @@ def test_marken_je_liste():
     assert 'title="Lehrgangsleitung: darf' not in rk                                           # R1: das title je Zeile entfällt
     # Prüfung: „kritisch“ in den Befunden.
     assert ('<h2>Befunde${pr.punkte.some((x) => x.kritisch) ? infoKnopf("kritisch", "„kritisch“: Ein Mangel an diesem Prüfpunkt '
-            'schließt „einsatzbereit“ aus.") : ""}</h2>') in mat
+            'schließt „einsatzbereit“ aus." + mehrDazu("kritisch")) : ""}</h2>') in mat
     assert 'title="Ein Mangel hier schließt „einsatzbereit“ aus">kritisch</span>' in mat
     # Leitstelle: Marken der Nutzerliste seit dem Auftrag „letzte offene Punkte“ (Nutzer: „i“ und Box redundant) in der
     # Box „Hilfe: Rechte je Modul“ statt im „i“ am Seitentitel; das title je Marke bleibt.

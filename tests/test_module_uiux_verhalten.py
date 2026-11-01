@@ -49,7 +49,7 @@ def test_a1_zurueck_schliesst_overlays():
     assert "if (!dlg.open) dlg.showModal();\n    dialogVerlauf(dlg);" in dlg
     conf = co[co.index("  function confirm(text, okLabel, neinLabel, opt = {}) {"):co.index("  function fmtDate(")]
     assert "dlg.showModal();\n      dialogVerlauf(dlg);" in conf
-    for pfad, anzahl in (("app/static/js/map.js", 1), ("app/static/js/pruefungen.js", 3), (MAT, 1),
+    for pfad, anzahl in (("app/static/js/map.js", 1), ("app/static/js/pruefungen.js", 3), (MAT, 2),
                          ("app/material/static/freigaben.js", 1), ("app/material/static/unterschrift.js", 1)):
         assert lies(pfad).count("S.dialogVerlauf(") == anzahl, pfad
     # Jedes showModal außerhalb von S.dialog/S.confirm hat seinen Verlauf.

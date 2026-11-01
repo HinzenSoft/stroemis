@@ -58,6 +58,7 @@ Geschichte stehen. Schemaversion nach der Nachbesserung vor dem Merge: 30; mit d
 | Suchzeile auf Übersicht und Prüfungen | Am Telefon und Tablet hochkant „☰“ und die Nummernsuche als Artikelsuche in einer klebenden Suchzeile oben im Inhalt wie im Katalog, ohne Lupe; Entscheidung V4 für diese beiden Seiten abgelöst | gebaut 28.10.2026 (kein Schemaschritt), zur Freigabe |
 | Suchzeile auf allen Seiten | Dieselbe Suchzeile auch im Bestand (Bestand, Ordner, Artikel, Artikel anlegen, Anträge, Jahresbericht, Bestandsimport) und auf den übrigen Seiten der Prüfungen (Prüfdurchgang, Abgeschlossene Prüfdurchgänge, Prüfung beginnen) sowie auf der Trefferseite – nirgends mehr „☰ + Lupe“ am Telefon; Entscheidung V4 ganz abgelöst; Prüfung und Katalog unverändert | gebaut 28.10.2026 (kein Schemaschritt), zur Freigabe |
 | Seitenbaum der Strömipedia | „Seiten aus ZIP importieren“ nur noch im „⋯“ über dem Baum; Klappzeichen als gezeichneter Winkel in fester Spalte, gleichmäßiger Einzug mit Führungslinien, oberste Ebene fett, Titel mit hängendem Umbruch, am Finger 44-px-Tippfläche ohne Platzverlust, Schublade bis 360 px | gebaut 28.10./01.11.2026 (kein Schemaschritt), zur Freigabe |
+| Verweise auf die Anleitung | „Mehr dazu in der Strömipedia“ in 28 Infos (drei neu), „Anleitung“ hinter der Überschrift der übrigen Seiten, Hinweis oben auf der Übersicht, „Willkommen in der Materialablage“ beim ersten Besuch – alles nur für Konten, die die Zielseite lesen dürfen | gebaut 01.11.2026 (kein Schemaschritt), Zweig wikiverweise, zur Freigabe |
 
 ## Abgleich mit dem Bestand (vor Lieferung 1)
 
@@ -4231,6 +4232,53 @@ Einträge und verschiedenen Ebenen angeht, vor allem auch dem Ausklappsymbol.“
 - Tests: `tests/test_wiki_seitenbaum.py` (neu – Menüeinträge ohne Import, Klappknopf mit SVG und aria, Titelspanne,
   CSS-Regeln samt Media-Block, Knopfzeile je Recht); `test_wiki_import.py` (Import nur im Menü über dem Baum, Dialog
   ohne Vorwahl).
+## Verweise auf die Anleitung in der Strömipedia (Wunsch des Nutzers, 28.10.2026; gebaut 01.11.2026)
+
+Wunsch des Nutzers, wörtlich: „Verweise im Modul, z. B. an relevanten Stellen mit neuen oder bestehenden Info-i's auf
+Stellen im Wiki, die alles erklären. Auch in der Übersicht soll beim allerersten Betreten durch einen Nutzer auf das Wiki
+via Textbox wie beim Login auf Dev verwiesen werden und danach ein sehr auffälliger Hinweis in der Übersicht stehen.“
+Entscheidung vom 28.10.2026 auf die Frage „Wer soll die Verweise sehen?“: **„Nur wer lesen darf“**. Kein Schemaschritt.
+
+- **Auflösung** (`app/material/services/anleitung.py`, neu): Die Tabelle `THEMEN` (Thema → Seitentitel, Kennung der
+  Überschrift) steht nur dort. Jede Seite der Materialablage bekommt `data-anleitung` = {Thema: Adresse} mit (`_seite`,
+  `routes_psa._psa_seite`; „Echtheit prüfen“ nur seine eine Adresse), je Anfrage einmal gerechnet. Gesucht wird über den
+  **Titel** im Teilbaum unter der Seite „Materialablage“ (die mit Unterseiten, sonst die neueste; ohne Papierkorb und
+  Vorlagen, bis sechs Ebenen) – die Adresse bildet der ZIP-Import aus dem Titel und hängt bei Doppelungen „-2“ an, darum
+  keine festen Adressen. Ein Anker kommt nur an die Adresse, wenn die Seite die Überschrift hat (`kennungen` bildet die
+  Kennungen wie `markdown.js buildToc`: ä/ö/ü/ß ausgeschrieben, Rahmen-Vorsätze mit „-abschnitt“, Doppelte „-2“, nicht in
+  Codeblöcken); sonst führt der Link an den Seitenanfang.
+- **Rechte** – jede Zielseite einzeln mit `wikiverweis.darf_lesen` (dieselbe Regel wie die Strömipedia: mit Stufe
+  `can_read` samt Lesebeschränkung, ohne Stufe nur Öffentliches). Nicht lesbar, im Papierkorb oder nicht vorhanden → kein
+  Link, kein Titel, keine Meldung; das „i“ behält seinen Text. An den Rechten der Strömipedia ändert sich nichts; ob der
+  Artikel öffentlich wird, entscheidet die Wiki-Verwaltung per „Teilen“.
+- **„Mehr dazu in der Strömipedia“** als letzter Absatz von 28 Infos (material.js `mehrDazu`, freigaben.js über
+  `window.MatAnleitung`): an den Überschriften „Bestand“, „Artikel anlegen“, „Änderungsanträge“, „Bestandsliste
+  importieren“ und an „Fälligkeiten je Ordner“, „Zu prüfen“, „Offene Prüfungen“, „Prüfintervall“, „Gilt für“
+  (Freigaben), „QR-Code und NFC“, „Seriennummer des Herstellers“, „Dokumente für alle Produkte dieser Kategorie“,
+  „geändert“ (Katalogimport), „Bestandteile“/„Positionen“, „Prüfformular“, „Herstellerdokumente“, „Prüfanleitung in der
+  Strömipedia“, „Prüfpunkte“, „Eingangsprüfung“, „kritisch“, „Prüfsumme“ (Prüfung, Prüfdurchgang), „Betroffene
+  Seriennummern“ (Rückruf), „Spalten“ (Bestandsimport). **Neu** (Erklärung für alle, Link nur mit Leserecht): „Gemeldete
+  Mängel“ (Übersicht), „Laufende Prüfdurchgänge“ (Übersicht, Prüfungen), „Art“ im Dialog „Ordner anlegen/bearbeiten“.
+- **„Anleitung“** als Textlink (`.lnk`, 44 px unter Touch) direkt hinter der Überschrift der übrigen Seiten: Prüfungen,
+  Abgeschlossene Prüfdurchgänge, Prüfdurchgang, Ordner (Systemordner: Abschnitt „Systemordner …“), Artikel, Prüfung
+  starten, Prüfung, Katalog, Produkt, Prüfformular, Produktmeldungen, Suche, Jahresbericht, Meine PSA; auf „Echtheit
+  prüfen“ in der Hilfe-Box „Wie funktioniert das?“. Die Knöpfe des Kopfs bleiben rechts. Kein Eintrag im Menü „Mehr“ –
+  nicht jede Seite hat eines, und so steht der Weg überall an derselben Stelle.
+- **Hinweis auf der Übersicht** (dauerhaft, nicht ausblendbar): blauer Kasten oben unter der Überschrift (`--wasser`,
+  Callout-Info-Fläche, 8 px Rand links), Titel „Anleitung zur Materialablage“, am Rechner mit dem Satz „– wie Rechte,
+  Bestand, Prüfungen und Nachweise zusammenhängen, steht in der Strömipedia.“, Knopf „Anleitung in der Strömipedia
+  öffnen“ (grau umrandet – Rot bleibt Hauptaktion und „nicht verwenden“); unter 600 px nur Titel und Knopf.
+- **Willkommen** beim allerersten Besuch der Übersicht (seite.html `#mat-willkommen`, `anleitung.willkommen_einmal`):
+  Dialog mittig wie der Hinweis „Entwicklungsserver“ – „Willkommen in der Materialablage“, zwei Sätze, „Später“ und „Zur
+  Anleitung“ (Hauptaktion, neuer Tab, schließt den Dialog); Fokus auf „Zur Anleitung“, Esc und Zurück schließen. Je Konto
+  einmal, gemerkt in `mat_meta` (`willkommen:<Konto>` = Zeitpunkt; die vorhandene Schlüssel-Wert-Tabelle des Moduls, darum
+  kein Schemaschritt); geschrieben wird nur beim ersten Mal. Ohne Leserecht an der Seite „Materialablage“ kein Dialog und
+  kein Merker – er kommt, sobald das Konto lesen darf. Beim Löschen eines Kontos geht der Merker mit (`loeschung.py`).
+  Steht der Hinweis „Entwicklungsserver“ offen (erste Anmeldung auf dev), öffnet das Willkommen erst nach „Verstanden“.
+- Tests: `tests/test_material_anleitung.py` (neu – Kennungen wie buildToc, Tabelle gegen den Artikel, Auflösung mit und
+  ohne Leserecht, Lesebeschränkung, Lesemodus mit öffentlicher Seite, fehlende Seite und Überschrift, Papierkorb,
+  „Echtheit prüfen“, Willkommen genau einmal je Konto, nicht ohne Leserecht, Merker beim Löschen, Reihenfolge mit dem
+  dev-Hinweis, Hinweis dauerhaft, jedes benutzte Thema in der Tabelle).
 
 ## Suchzeile auf Übersicht und Prüfungen (Wunsch des Nutzers, 28.10.2026)
 
