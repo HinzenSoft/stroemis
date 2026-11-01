@@ -452,7 +452,7 @@ fieldset.mat-rollen .mat-pruef-hinweis { margin: 4px 0 0 26px; }
   border-right: 2px solid var(--grau); border-bottom: 2px solid var(--grau); transform: translateY(-70%) rotate(-45deg);
   transition: transform .15s; }
 #users .u-auf[aria-expanded="true"]::before { transform: translateY(-70%) rotate(45deg); }
-@container liste (max-width: 820px) {
+@container liste (max-width: 759px) {
   main.leitstelle #users .u-name-text { display: none; }
   main.leitstelle #users .u-auf { display: block; }
   main.leitstelle #users tr:not(.offen) > td:not(.u-name, .u-rollen, [data-l=Gliederung]) { display: none; }
@@ -2768,8 +2768,23 @@ html.tastatur .wiki-head, html.tastatur .wiki-head.editing-head { position: stat
    (Geräte-Prüfung vom 22.10.2026). Die Spalte (col.col-aktionen in admin.html – bei festem Tabellenlayout zählt die
    Breite der Spalte, nicht die der Kopfzelle) bekommt die Breite der Knöpfe, „Inhalte“ rückt zusammen. */
 #users .col-aktionen { width: 9%; }                  /* vorher als style am <col>; 9 % seit nach_merge_liste Punkt 10 */
-@media (min-width: 861px) and (max-width: 1100px) {
-  #users .col-aktionen { width: 112px; }
+@container liste (min-width: 760px) and (max-width: 1100px) {
+  main.leitstelle #users .col-aktionen { width: 112px; }   /* bis zum Gerätetest (F1) Fensterbreite 861–1100 px */
+}
+/* Gerätetest 01.11.2026 (F1, Teil X): Die Tabelle beginnt schon bei 760 px Inhalt (Fold innen 851, Tablet hochkant 800 px).
+   Unter rund 1 100 px Inhalt wären die fünf Rechte-Spalten aber schmaler als das Auswahlfeld mit „Verwaltung“ (83 px; es
+   stand dort schon vorher als „Verwa“) und die Köpfe liefen ineinander (Q2). Die Tabelle behält deshalb 1 100 px und rollt
+   in ihrem Rahmen seitwärts – wie die Matrix der Riegenkarten; der Name bleibt links stehen. Die Seite selbst rollt nie
+   seitwärts. Als Karten (unter 760 px Inhalt) rollt nichts. */
+@container liste (min-width: 760px) and (max-width: 1099px) {
+  /* Menüs im Rahmen öffnen nach oben, wenn unten der Rand des Rahmens kommt (common.js, menueRahmen). */
+  main.leitstelle .nutzer-rahmen { overflow-x: auto; overscroll-behavior-x: contain; }
+}
+@container liste (min-width: 760px) {
+  main.leitstelle #users { min-width: 1100px; }
+  main.leitstelle #users :is(th, td):first-child { position: sticky; left: 0; z-index: 1; background: var(--weiss);
+    box-shadow: inset -1px 0 0 var(--linie); }
+  @media (hover: hover) and (pointer: fine) { main.leitstelle #users tr:hover > td:first-child { background: var(--grau-hell); } }
 }
 
 /* ============================================================================
@@ -2843,9 +2858,10 @@ html.tastatur .wiki-head, html.tastatur .wiki-head.editing-head { position: stat
    des Fensters – wie die Materialablage (Container „mat-seite“). Auf dem Doppelbildschirm steht der Inhalt in einer Hälfte
    (C11, unten): Das Fenster ist dort 1 114 px breit, die Liste aber nur gut 500 px. Die Fensterregel (860 px, oben) gilt
    weiter für Dialoge und für Browser ohne Containerabfragen; für diese beiden Seiten nimmt der erste Block sie zurück, der
-   zweite setzt die Karten nach der Inhaltsbreite (820 px Inhalt = 860 px Fenster abzüglich Seitenrand). Die Selektoren
-   beginnen mit main:where(…), damit sie die Fensterregel sicher schlagen, aber nicht die Feinheiten der Rechte-Felder
-   (table.list td.recht). */
+   zweite setzt die Karten nach der Inhaltsbreite (unter 760 px Inhalt = 800 px Fenster abzüglich Seitenrand; bis zum
+   Gerätetest 01.11.2026, F1, waren es 820 px – Fold innen mit 851 px und Tablets hochkant mit 800 px bekamen Karten und
+   eine dreimal so lange Liste). Die Selektoren beginnen mit main:where(…), damit sie die Fensterregel sicher schlagen,
+   aber nicht die Feinheiten der Rechte-Felder (table.list td.recht). */
 main.leitstelle, main.pruef { container: liste / inline-size; }
 @supports (container-type: inline-size) {
   @media (max-width: 860px) {
@@ -2860,7 +2876,7 @@ main.leitstelle, main.pruef { container: liste / inline-size; }
     main:where(.leitstelle, .pruef) table.list td.recht .recht-wahl { font-size: var(--fs-marke); padding: 4px 2px 4px 4px; }
     @media (hover: hover) and (pointer: fine) { main:where(.leitstelle, .pruef) table.list tr:hover td { background: var(--grau-hell); } }
   }
-  @container liste (max-width: 820px) {
+  @container liste (max-width: 759px) {
     main:where(.leitstelle, .pruef) table.list, main:where(.leitstelle, .pruef) table.list tbody,
     main:where(.leitstelle, .pruef) table.list tr, main:where(.leitstelle, .pruef) table.list td { display: block; }
     main:where(.leitstelle, .pruef) table.list thead { display: none; }
