@@ -409,21 +409,21 @@ def test_erben():
 
 def test_oberflaeche_statisch():
     js = open(os.path.join(WURZEL, "app/static/js/wiki.js"), encoding="utf-8").read()
-    # Seit 27.10.2026 (Wunsch des Nutzers) im „⋯“-Menü jeder Seite im Seitenbaum, nicht mehr im Menü des Seitenkopfs;
-    # der Dialog wählt die Seite der Zeile vor, auf die oberste Ebene führt der graue Knopf „Importieren“ über dem Baum.
+    # Nicht im Menü des Seitenkopfs (seit 27.10.2026) und seit dem 28.10.2026 auch nicht mehr im „⋯“ jeder Seite im
+    # Seitenbaum (Wunsch des Nutzers: „reicht am oberen zentralen ⋯ aus“) – nur im Menü „⋯“ neben „Neue Seite“.
     kopf = js[js.index("function pageMenu(anchor, p)"):js.index("/* Seiten aus einem ZIP importieren")]
     assert 'data-a="import"' not in kopf and "importDialog" not in kopf
     baum = js[js.index("function treeRowMenu(anchor, page)"):js.index("function wireTreeDrag()")]
-    assert '${darfImportieren() ? \'<button type="button" data-a="import">Seiten aus ZIP importieren</button>\' : ""}' in baum
-    assert baum.index('data-a="export"') < baum.index('data-a="import"') < baum.index('data-a="del"')
-    assert 'if (a === "import") { side.classList.remove("open"); return importDialog(page); }' in baum
+    assert 'data-a="import"' not in baum and "importDialog" not in baum and "ZIP" not in baum
+    assert baum.index('data-a="export"') < baum.index('data-a="del"')
+    assert js.count("importDialog(") == 2      # die Funktion selbst und der Aufruf aus dem Menü über dem Baum
     assert "const darfImportieren = () => { const u = window.STROEMIS && STROEMIS.user; return !!(u && u.rechte && u.rechte.wiki === 2); };" in js
-    # Oberste Ebene: seit dem Auftrag „letzte offene Punkte“ (27.10.2026) im Menü „⋯“ neben „Neue Seite“ über dem Baum
-    # (mit dem Papierkorb) – vorher drei Knöpfe, „Importieren“ brach am Telefon in eine zweite Zeile.
+    # Seit dem Auftrag „letzte offene Punkte“ (27.10.2026) im Menü „⋯“ neben „Neue Seite“ über dem Baum (mit dem
+    # Papierkorb) – vorher drei Knöpfe, „Importieren“ brach am Telefon in eine zweite Zeile. Ziel wählt der Dialog.
     menue = js[js.index("function baumMenu(anchor)"):js.index("function treeRowMenu(anchor, page)")]
     assert '<button type="button" data-a="trash">Papierkorb</button>' in menue
     assert '${darfImportieren() ? \'<button type="button" data-a="import">Seiten aus ZIP importieren</button>\' : ""}' in menue
-    assert 'if (b.dataset.a === "import") { side.classList.remove("open"); importDialog(null); }' in menue
+    assert 'if (b.dataset.a === "import") { side.classList.remove("open"); importDialog(); }' in menue
     assert 'if (b.dataset.a === "trash") return trashDialog();' in menue and "const close = S.menueSchwebend(anchor, box);" in menue
     assert 'if (baumMehr) baumMehr.addEventListener("click", (e) => baumMenu(e.currentTarget));' in js
     assert "#btn-import" not in js and "#btn-trash" not in js
@@ -434,8 +434,10 @@ def test_oberflaeche_statisch():
     assert zeile.count("<button") == 3 and 'class="btn small"' in zeile and 'class="btn secondary small" id="btn-baum-mehr"' in zeile
     assert 'class="btn secondary small" id="btn-papierkorb"' in zeile
     assert 'aria-haspopup="menu" aria-label="Weitere Aktionen"' in zeile and ">⋯</button>" in zeile and "…" not in zeile
-    dlg = js[js.index("function importDialog(p)"):js.index("/* --- Ende Import")]
-    assert '${p && k.id === p.id ? " selected" : ""}' in dlg
+    dlg = js[js.index("function importDialog()"):js.index("/* --- Ende Import")]
+    # Vorgewählt ist die oberste Ebene (erste Option), jede Seite steht zur Wahl – keine Vorwahl aus einer Baumzeile mehr.
+    assert '<select id="im-ziel"><option value="">– oberste Ebene –</option>${zeilen.join("")}</select>' in dlg
+    assert " selected" not in dlg
     assert "<h2>Seiten importieren</h2>" in dlg and 'accept=".zip' in dlg and "Einsortieren unter" in dlg
     assert dlg.count('class="btn"') == 1 and '<button class="btn" id="im-ok" type="button">Importieren</button>' in dlg
     assert "Wird importiert …" in dlg and "btn ghost" not in dlg and "esc(" in dlg

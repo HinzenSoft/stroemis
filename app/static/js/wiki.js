@@ -160,6 +160,12 @@
     return out;
   }
 
+  /* Klappzeichen als gezeichneter Winkel im 16er-Raster wie die Kopfsymbole (ico weiter unten) – vorher das Schriftzeichen
+     „▸/▾“ in 12 px, kaum zu sehen und zu treffen (Auftrag Seitenbaum, 28.10.2026). Er zeigt nach rechts und dreht sich
+     beim Aufklappen nach unten (app.css); ohne Unterseiten bleibt der Knopf leer und unsichtbar, hält aber die Spalte frei,
+     damit alle Titel einer Ebene bündig stehen. */
+  const KLAPPZEICHEN = '<svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M6 3.5L10.5 8 6 12.5"/></svg>';
+
   function branch(pid, depth) {
     const kids = children(pid);
     if (!kids.length) return "";
@@ -173,8 +179,8 @@
         : 'aria-hidden="true" tabindex="-1"';
       return `<li class="${sub ? "" : "leaf"}${collapsed ? " collapsed" : ""}" data-id="${p.id}" data-slug="${esc(p.slug)}">
         <div class="row" draggable="true">
-          <button class="tg" type="button" ${tg}></button>
-          <a href="/stroemipedia/${esc(p.slug)}" title="${esc(p.title)}" class="${state.current && state.current.id === p.id ? "active" : ""}">${p.icon ? `<span class="tree-icon" aria-hidden="true">${esc(p.icon)}</span>` : ""}${esc(p.title)}${p.is_public ? ' <span class="pub" title="öffentlich freigegeben">🌐</span>' : ""}${p.favorite ? ' <span class="fav" title="auf der Merkliste">★</span>' : ""}</a>
+          <button class="tg" type="button" ${tg}>${sub ? KLAPPZEICHEN : ""}</button>
+          <a href="/stroemipedia/${esc(p.slug)}" title="${esc(p.title)}" class="${state.current && state.current.id === p.id ? "active" : ""}">${p.icon ? `<span class="tree-icon" aria-hidden="true">${esc(p.icon)}</span>` : ""}<span class="baum-titel">${esc(p.title)}${p.is_public ? ' <span class="pub" title="öffentlich freigegeben">🌐</span>' : ""}${p.favorite ? ' <span class="fav" title="auf der Merkliste">★</span>' : ""}</span></a>
           <button class="row-add" type="button" title="Unterseite anlegen" aria-label="Unterseite zu ${esc(p.title)} anlegen">+</button>
           <button class="row-menu" type="button" title="Mehr" aria-haspopup="menu" aria-label="Weitere Aktionen zu ${esc(p.title)}">⋯</button>
         </div>${sub}</li>`;
@@ -213,9 +219,12 @@
     renderFavorites();
   }
 
-  /* Menü „⋯“ neben „Neue Seite“ über dem Seitenbaum: Papierkorb und – nur mit Wiki-Verwaltung – der Import auf die oberste
-     Ebene (der Dialog beginnt mit „– oberste Ebene –“). Seltene Aktionen gehören ins Menü; als drei Knöpfe brach die Zeile
-     am Telefon und in der 260 px schmalen Seitenleiste des Tablets um (Auftrag „letzte offene Punkte“, 27.10.2026). */
+  /* Menü „⋯“ neben „Neue Seite“ über dem Seitenbaum: Papierkorb und – nur mit Wiki-Verwaltung – der Import (der Dialog
+     beginnt mit „– oberste Ebene –“, unter „Einsortieren unter“ steht jede Seite zur Wahl). Seit dem 28.10.2026 der einzige
+     Weg zum Import – im „⋯“ jeder Baumzeile stand er doppelt (Wunsch des Nutzers). Seltene Aktionen gehören ins Menü; als
+     drei Knöpfe brach die Zeile am Telefon und in der 260 px schmalen Seitenleiste des Tablets um (Auftrag „letzte offene
+     Punkte“, 27.10.2026). */
+  const darfImportieren = () => { const u = window.STROEMIS && STROEMIS.user; return !!(u && u.rechte && u.rechte.wiki === 2); };
   function baumMenu(anchor) {
     const box = document.createElement("div");
     box.className = "tree-menu";
@@ -229,14 +238,13 @@
       if (!b) return;
       close();
       if (b.dataset.a === "trash") return trashDialog();
-      if (b.dataset.a === "import") { side.classList.remove("open"); importDialog(null); }
+      if (b.dataset.a === "import") { side.classList.remove("open"); importDialog(); }
     });
   }
 
   /* Kontextmenü an der Baumzeile – dieselben Aktionen wie im Seitenkopf. „Seiten aus ZIP importieren“ steht seit dem
-     27.10.2026 nur hier (Wunsch des Nutzers: im Menü der Übersicht links statt im Menü des Seitenkopfs) – der Dialog
-     wählt die Seite der Zeile als Ziel vor; auf die oberste Ebene führt das Menü „⋯“ neben „Neue Seite“ (baumMenu). */
-  const darfImportieren = () => { const u = window.STROEMIS && STROEMIS.user; return !!(u && u.rechte && u.rechte.wiki === 2); };
+     28.10.2026 nicht mehr hier, sondern nur im Menü „⋯“ neben „Neue Seite“ über dem Baum (baumMenu; Wunsch des Nutzers:
+     „reicht am oberen zentralen ⋯ aus“) – die Zielseite wählt der Dialog unter „Einsortieren unter“. */
   function treeRowMenu(anchor, page) {
     if (!page) return;
     const box = document.createElement("div");
@@ -247,7 +255,6 @@
       <button type="button" data-a="icon">Symbol ändern</button>
       <button type="button" data-a="dup">Duplizieren</button>
       <button type="button" data-a="export">Als Markdown herunterladen</button>
-      ${darfImportieren() ? '<button type="button" data-a="import">Seiten aus ZIP importieren</button>' : ""}
       <button type="button" data-a="del" class="danger">In den Papierkorb</button>`;
     // Verhalten wie jedes Menü (common.js: Esc, Pfeiltasten, daneben tippen, Fokus zurück auf „⋯“).
     const close = S.menueSchwebend(anchor, box);
@@ -260,7 +267,6 @@
       if (a === "fav") return toggleFavorite(page.id, !page.favorite);
       if (a === "icon") return iconDialog(page.id, page.icon || "");
       if (a === "export") { window.location.href = `/api/wiki/pages/${page.id}/export?stand=${Date.now()}`; return; }
-      if (a === "import") { side.classList.remove("open"); return importDialog(page); }
       if (a === "dup") {
         try { const r2 = await api(`/api/wiki/pages/${page.id}/duplicate`, { method: "POST", body: {} });
           toast("Seite dupliziert"); await loadTree(); navigate(r2.page.slug); }
@@ -1051,14 +1057,14 @@
   }
 
   /* Seiten aus einem ZIP importieren (Wunsch vom 25.10.2026, nur die Wiki-Verwaltung): ein Export dieses Wikis oder ein
-     Archiv mit Markdown-Dateien. Ziel ist die Seite, aus deren Menü im Baum der Dialog kam (p), oder ohne p die
-     oberste Ebene (Menü „⋯“ neben „Neue Seite“ über dem Baum) – im Auswahlfeld lässt sich jedes andere wählen; die neuen Seiten
+     Archiv mit Markdown-Dateien. Aufgerufen aus dem Menü „⋯“ neben „Neue Seite“ über dem Baum; vorgewählt ist die oberste
+     Ebene, im Auswahlfeld lässt sich jede Seite wählen (bis 28.10.2026 auch aus dem „⋯“ jeder Baumzeile); die neuen Seiten
      erben Freigabe und Lesebeschränkung des Ziels – der Satz unter der Auswahl sagt das vorher. Das Ergebnis steht im
      selben Dialog. */
-  function importDialog(p) {
+  function importDialog() {
     const zeilen = [];
     const ablaufen = (pid, tiefe) => children(pid).forEach((k) => {
-      zeilen.push(`<option value="${k.id}"${p && k.id === p.id ? " selected" : ""}>${"\u00a0\u00a0".repeat(tiefe)}${esc(k.title)}</option>`);
+      zeilen.push(`<option value="${k.id}">${"\u00a0\u00a0".repeat(tiefe)}${esc(k.title)}</option>`);
       if (tiefe < 30) ablaufen(k.id, tiefe + 1);
     });
     ablaufen(null, 0);
