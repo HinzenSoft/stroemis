@@ -5,7 +5,7 @@ Gliederungen, Prüfnachweise je Ausrüstungsteil, unveränderliche PDF-Prüfprot
 umgesetzt, Phase 2 (mehrere Gliederungen und externe Prüfer in einer Instanz) in drei, Phase 3 und 4 in Lieferungen
 und Wünschen des Nutzers; jede war für sich deploybar. Seit dem 26.10.2026 heißt das Modul „Materialablage“ (im Code,
 in Tabellen und unter `/api/material` weiter `material`). Ältere Abschnitte sagen noch „Modul Material“ – sie bleiben als
-Geschichte stehen. Schemaversion nach der Nachbesserung vor dem Merge: 30; mit der Prüfsumme für den Lebenslauf: 31; mit der Liste nach dem Merge (Teil A): 32.
+Geschichte stehen. Schemaversion nach der Nachbesserung vor dem Merge: 30; mit der Prüfsumme für den Lebenslauf: 31; mit der Liste nach dem Merge (Teil A): 32; mit der Stufe Redakteur: 33.
 
 | Lieferung | Inhalt | Stand |
 | --- | --- | --- |
@@ -60,6 +60,7 @@ Geschichte stehen. Schemaversion nach der Nachbesserung vor dem Merge: 30; mit d
 | Seitenbaum der Strömipedia | „Seiten aus ZIP importieren“ nur noch im „⋯“ über dem Baum; Klappzeichen als gezeichneter Winkel in fester Spalte, gleichmäßiger Einzug mit Führungslinien, oberste Ebene fett, Titel mit hängendem Umbruch, am Finger 44-px-Tippfläche ohne Platzverlust, Schublade bis 360 px | gebaut 28.10./01.11.2026 (kein Schemaschritt), zur Freigabe |
 | Verweise auf die Anleitung | „Mehr dazu in der Strömipedia“ in 28 Infos (drei neu), „Anleitung“ hinter der Überschrift der übrigen Seiten, Hinweis oben auf der Übersicht, „Willkommen in der Materialablage“ beim ersten Besuch – alles nur für Konten, die die Zielseite lesen dürfen | gebaut 01.11.2026 (kein Schemaschritt), Zweig wikiverweise, zur Freigabe |
 | PWA und Kontaktadressen | strömis.de als App installierbar (Manifest, Service Worker, Maskottchen auf Rot, ohne Netz nur eine Hinweisseite, „App installieren“ im Profil); Kontaktadressen als Einstellung (Leitstelle → Einstellungen, Gruppe „Seite“) im Fuß jeder Seite, im Hinweis „Entwicklungsserver“ und vor dem Bestandsimport | gebaut 01.11.2026 (kein Schemaschritt), Zweig pwakontakt, zur Freigabe |
+| Stufe Redakteur (Schritt 33) | Rechte-Matrix mit „Redakteur“ in Strömipedia, Ankerplätzen und Riegenkarten (Mitglied liest bzw. bewertet in eigenen Lehrgängen, Redakteur legt eigene Inhalte an, Verwaltung alles); eine Skala 0/1/2/3 in allen Spalten, Schritt 33 hebt Verwaltung 2 → 3; Riegenkarten: Sichtbarkeit nur eigener Lehrgänge (404), eigene Kataloge; dazu: keine Strömipedia ohne Anmeldung mehr | gebaut 01.11.2026 (Schema 33), Zweig redakteur, nicht auf dev |
 
 ## Abgleich mit dem Bestand (vor Lieferung 1)
 
@@ -10204,3 +10205,44 @@ export.py). Kein Schemaschritt; festgeschriebene PDFs bleiben unverändert, nur 
   Profilseite lädt material.css nicht – dort sieht „Übernehmen“ im Pad aktiv aus, erklärt sich aber beim Klick);
   profil.html „Sie steht auf jedem Prüfprotokoll“ → „Die Nummer steht …“ (Datei von U3).
 - Tests: `tests/test_material_uiux_u2.py` (neu, je Punkt); angepasst: siehe Bericht.
+
+## Stufe Redakteur (Schritt 33, 01.11.2026)
+
+Wunsch des Nutzers (28.10.2026, Punkte 2 und 3 der angehaltenen Aufgaben; Entscheidungen vom 28.10. und 01.11.2026),
+Entwurf planung/rechte-redakteur/entwurf.md. Betrifft vor allem Strömipedia, Ankerplätze und Riegenkarten; hier steht
+es wegen des Schemaschritts und der Umnummerierung, die auch die Materialablage trifft.
+
+- **Neue Stufe:** In Strömipedia, Ankerplätzen und Riegenkarten zwischen Mitglied und Verwaltung „Redakteur“. Die Zahlen
+  sind in allen fünf Spalten `users.recht_*` dieselben: 0 kein Zugriff, 1 Mitglied, 2 Redakteur, 3 Verwaltung
+  (`auth.KEIN_ZUGRIFF … VERWALTUNG`, `auth.schreibt()`, `STUFEN_JE_MODUL`; Oberfläche `S.STUFE`, Vorlagen `stufe`).
+  Materialablage 0/1/3, Leitstelle 0/3 – `_rechte_lesen` lehnt anderes mit 400 ab.
+- **Schritt 33:** `UPDATE users SET recht_<x> = 3 WHERE recht_<x> = 2` je vorhandener Spalte, in der Transaktion des
+  Versionsvermerks; 0 und 1 bleiben (bestehende Mitglieder bleiben Mitglied, niemand wird von selbst Redakteur). Nicht
+  frei wiederholbar, deshalb nie in db.NACHARBEITEN (die schreiben weiter 2 und laufen vorher). Kein Journal; die
+  Beschriftung der Stufe (beschriftung.py, material.js) kennt 2 und 3 als „Verwaltung“. Die SQL-Vergleiche der
+  Materialablage (rechte.py, erinnerung.py, freigaben.py) laufen über die Konstanten. Rückweg-SQL: README
+  „Stufe Redakteur“. Neue Indizes (additiv): `idx_pruef_ausbilder_user`, `idx_pruef_medien_file`, `idx_pruef_tn_bild`.
+- **Strömipedia:** Mitglied liest (außer beschränkten Seiten) und kommentiert; eigene Kommentare ändern, löschen,
+  erledigen; bearbeiten nur eine Seite mit eigener Freigabe – genau diese (Entscheidung 2B), ohne Verschieben, mit
+  Bildern. Redakteur: eigene Seiten anlegen (auch unter fremden, Entscheidung 3A), duplizieren, bearbeiten,
+  verschieben, Papierkorb, Lesen einschränken, Bearbeiter freigeben, Kommentare an eigenen Seiten erledigen und löschen
+  (4A). Nur die Verwaltung gibt für alle Angemeldeten frei, stellt HTML-Bausteine ein, importiert, ändert den Ersteller.
+  `page_json.can_create`, Baumzeilen mit `can_edit`/`can_delete`; ohne „Neue Seite“, Papierkorb, „+“ und Ziehen für
+  Mitglieder.
+- **Ankerplätze:** Mitglied sieht; Redakteur eigene Alben (auch per Ablegen auf der Karte), Bilder nur in eigene;
+  Verwaltung alle. „Album anlegen“ ab Redakteur.
+- **Riegenkarten:** Ohne Verwaltung nur Lehrgänge, in denen das Konto mit seinem Konto als Ausbilder steht – jeder
+  Nachschlag-Helfer prüft `_sichtbar`, fremd = 404 (auch Seiten `/riegenkarten/<id>[/druck]` und Medien
+  `/media/pruefung/…`). Anlegen, Kopieren und Import als neuer Lehrgang ab Redakteur (6A); Import in einen Lehrgang und
+  seine Vorschau nur für dessen Leitung (auch Mitglied-Leitung, Entscheidung a). Kataloge sehen und als Vorlage nutzen
+  ab Redakteur (c), eigene anlegen und pflegen, fremde und solche ohne Ersteller nur die Verwaltung; Löschen eines Kontos
+  übergibt seine Kataloge. `darf_kopieren`, `darf_bearbeiten` an Lehrgang bzw. Katalog.
+- **Nachtrag des Nutzers (01.11.2026): kein öffentliches Wiki ohne Anmeldung mehr.** `/api/public/pages|index|search`
+  und Wiki-Anhänge nur noch mit Anmeldung (401), `/oeffentlich/…` und die Subdomain leiten zur Anmeldung (mit
+  Rücksprung nach `/stroemipedia/<slug>`, auf der Subdomain über `BASE_URL`); „Veröffentlichen“ heißt „Für alle
+  Angemeldeten freigeben“ (Konten ohne Strömipedia-Stufe lesen die Seite im Lesemodus). Nicht betroffen: Slideshow der
+  Anmeldeseite, `/m/…`, „Echtheit prüfen“. `public.html` bleibt liegen.
+- Tests: `tests/test_rechte_redakteur.py` (neu); angepasst: test_smoke (BISHER = Redakteur, Wiki nur mit Anmeldung),
+  test_pruefungen, test_wiki_lesemodus, test_wiki_import, test_wiki_seitenbaum, test_umbenennung, test_module_* und die
+  Material-Tests, die die Verwaltung als 2 setzten.
+

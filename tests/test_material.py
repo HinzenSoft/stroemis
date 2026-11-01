@@ -142,7 +142,7 @@ def umgebung(tmp):
     _KONTEN.pop(app, None)
     _konten(app)["adm"] = adm
     k = {"adm": adm}
-    k["katalog"], k["katalog_id"] = neues_konto(app, "katalog@example.org", "lesen", rechte={"material": 2})
+    k["katalog"], k["katalog_id"] = neues_konto(app, "katalog@example.org", "lesen", rechte={"material": 3})
     k["wart"], k["wart_id"] = neues_konto(app, "wart@example.org", "verwalten", rechte={"material": 1})
     k["fuehrung"], k["fuehrung_id"] = neues_konto(app, "fuehrung@example.org", "lesen", rechte={"material": 1})
     k["pruefer"], k["pruefer_id"] = neues_konto(app, "pruefer@example.org", "lesen", mat_pruefer=True,
@@ -176,7 +176,7 @@ def freigeben(adm, fid, uid, recht, bis=None):
     bis = bis.isoformat() if hasattr(bis, "isoformat") else bis
     with adm.application.app_context():
         from app import db
-        von = db.query("SELECT id FROM users WHERE recht_verwaltung = 2 ORDER BY id LIMIT 1", one=True)
+        von = db.query("SELECT id FROM users WHERE recht_verwaltung = 3 ORDER BY id LIMIT 1", one=True)
         arten = ("lesen", "verwalten") if recht in ("lesen", "verwalten") else (recht,)
         with db.transaction():
             db.execute(f"DELETE FROM mat_folder_grant WHERE folder_id = ? AND user_id = ? "
@@ -361,10 +361,10 @@ def test_rollen():
                              "alles": True, "gliederung_anlegen": True, "qualifiziert": False,
                              "urkundennummer": "", "pruefer_haekchen": False, "unterschrift": False}
         assert darf(k["nutzer"]) == 403
-        # Die Stufe für Kopfleiste, Startweiche und Profil ist die gespeicherte (die Plattform-Verwaltung hat 2).
+        # Die Stufe für Kopfleiste, Startweiche und Profil ist die gespeicherte (die Plattform-Verwaltung hat 3).
         stufen = {u["email"]: u["rechte"]["material"] for u in adm.get("/api/admin/users").json["users"]}
         assert {m: stufen[m + "@example.org"] for m in ("admin", "wart", "fuehrung", "katalog", "pruefer", "nutzer")} == \
-            {"admin": 2, "wart": 1, "fuehrung": 1, "katalog": 2, "pruefer": 1, "nutzer": 0}, stufen
+            {"admin": 3, "wart": 1, "fuehrung": 1, "katalog": 3, "pruefer": 1, "nutzer": 0}, stufen
         # Ohne Namen kein Modulzugang – auch nicht mit Stufe und Freigabe. Die Nutzerverwaltung vergibt einem Konto ohne
         # Namen keine Stufe; ein Altkonto bekommt sie hier per SQL.
         c, uid = neues_konto(app, "namenlos@example.org", name="")
@@ -1991,7 +1991,7 @@ def test_produktmeldung():
             assert x["status"] == "eingepflegt" and x["produkt"] is None and x["produkt_geloescht"], x
             # Ohne Material-Verwaltung (außer der Plattform-Verwaltung) geht die Meldung an die Plattform-Verwaltung.
             with app.app_context():
-                db.execute("UPDATE users SET recht_material = 1 WHERE recht_material = 2 AND recht_verwaltung < 2")
+                db.execute("UPDATE users SET recht_material = 1 WHERE recht_material = 3 AND recht_verwaltung < 3")
             post.clear()
             assert melden(k["wart"], manufacturer="Helmwerk", model="Helm Epsilon").status_code == 201
             assert [p[0] for p in post] == ["admin@example.org"], post

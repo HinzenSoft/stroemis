@@ -23,13 +23,21 @@
     <div class="accordion-body help">
     <p>Rechte gelten je Modul:</p>
     <ul>
-      <li>„–“ heißt kein Zugriff (in der Strömipedia: nur die öffentlichen Seiten lesen).</li>
-      <li>„Mitglied“ arbeitet im Modul mit eigenen Inhalten – in den Riegenkarten: nimmt Prüfungen ab; in der
-        Materialablage: nutzt sie, den Bestand zeigen Freigaben, die der Verwalter eines Ordners vergibt.</li>
-      <li>„Verwaltung“ darf im Modul alles – in der Materialablage auch den Produktkatalog pflegen, alle Bestände sehen
-        und Gliederungen anlegen. Wer die Verwaltung in der Leitstelle hat, hat sie überall.</li>
+      <li>„–“ heißt kein Zugriff (in der Strömipedia: nur die für alle Angemeldeten freigegebenen Seiten lesen; ohne
+        Anmeldung gibt es keine Seite).</li>
+      <li>„Mitglied“ liest und arbeitet mit: in der {{ modul.name.wiki }} alle Seiten lesen und kommentieren (bearbeiten
+        nur eine Seite, für die es freigegeben ist); in den {{ modul.name.karte }} die Spots ansehen; in den
+        {{ modul.name.pruefungen }} die Lehrgänge, in denen es als Ausbilder eingetragen ist, bewerten (als Leitung
+        eingetragen auch leiten); in der {{ modul.name.material }} sie nutzen – den Bestand zeigen Freigaben, die der
+        Verwalter eines Ordners vergibt.</li>
+      <li>„Redakteur“ ({{ modul.name.wiki }}, {{ modul.name.karte }}, {{ modul.name.pruefungen }}) legt eigene Inhalte an
+        und bearbeitet sie: Seiten, Alben, Lehrgänge (wird dabei Leitung) und Kataloge.</li>
+      <li>„Verwaltung“ darf im Modul alles – für alle Angemeldeten freigeben darf in der {{ modul.name.wiki }} nur sie; in der
+        Materialablage auch den Produktkatalog pflegen, alle Bestände sehen und Gliederungen anlegen. Wer die Verwaltung in
+        der Leitstelle hat, hat sie überall.</li>
     </ul>
-    <p>Neue Konten starten als Mitglied in der Materialablage, sonst ohne Zugriff. Prüfer ist ein Häkchen unter
+    <p>Redakteure vergibst du hier von Hand – bestehende Mitglieder bleiben Mitglied. Neue Konten starten als Mitglied in
+      der Materialablage, sonst ohne Zugriff. Prüfer ist ein Häkchen unter
       „Bearbeiten“: Es wirkt nur mit Materialablage „Mitglied“ oder „Verwaltung“, und Prüfen braucht zusätzlich eine
       Prüffreigabe am Ordner (befristet nur für externe Prüfer) – Prüfer ist niemand von selbst.</p>
     <p>Marken in der Spalte „{{ modul.name.material }}“:</p>

@@ -2,8 +2,9 @@
 (function () {
   const { esc, api, toast, dialog, fmtDate, fmtCoord, CAT } = S;
   const me = STROEMIS.user;
-  // Verwaltung in den Ankerplätzen (Rechte-Matrix): darf alle Alben bearbeiten.
-  const isAdmin = !!(me.rechte && me.rechte.karte === 2);
+  // Alben anlegen (Knopf, Ablegen von Dateien auf der Karte) ab Redakteur (Stufe Redakteur, 01.11.2026) – ein Mitglied
+  // sieht Spots und Alben. Was es an einem Album darf, sagt der Server (can_edit; Verwaltung: alle Alben).
+  const darfAnlegen = S.stufe("karte") >= S.STUFE.redakteur;
 
   const state = {
     map: null, cluster: null, photos: [], markers: new Map(), filter: "",
@@ -177,7 +178,9 @@
     try { d = await api("/api/albums"); } catch (e) { return toast("Die Alben ließen sich nicht laden: " + e.message, true); }
     state.album = null;
     if (!d.albums.length) {
-      return openPanel("Alben", `<div class="leerzustand"><strong>Noch keine Alben</strong>Lege ein Album an und lade Bilder hoch – Bilder mit Geotag erscheinen sofort auf der Karte.</div>`);
+      return openPanel("Alben", `<div class="leerzustand"><strong>Noch keine Alben</strong>${darfAnlegen
+        ? "Lege ein Album an und lade Bilder hoch – Bilder mit Geotag erscheinen sofort auf der Karte."
+        : "Sobald jemand ein Album anlegt, steht es hier."}</div>`);
     }
     openPanel("Alben", `<ul class="album-list">${d.albums.map((a) => `
       <li data-id="${a.id}">
@@ -312,7 +315,8 @@
         };
       });
   }
-  $("#btn-new-album").addEventListener("click", () => albumDialog());
+  const neuesAlbum = $("#btn-new-album");          // nur ab Redakteur (index.html)
+  if (neuesAlbum) neuesAlbum.addEventListener("click", () => albumDialog());
 
   /* --- Upload ------------------------------------------------------------ */
   fileInput.addEventListener("change", () => {
@@ -502,6 +506,9 @@
   let ziehTiefe = 0;
   const hatDateien = (e) => e.dataTransfer && Array.from(e.dataTransfer.types || []).includes("Files");
   const ueberAlbum = (e) => !!(state.album && state.album.can_edit && panel.classList.contains("open") && panel.contains(e.target));
+  // Ohne Recht zum Anlegen gibt es keine Ablagefläche – außer über einem Album, das man bearbeiten darf (Verwaltung hat
+  // ohnehin beides). Die Seite selbst nimmt die Dateien trotzdem nicht als Seite auf (document weiter unten).
+  const ablageMoeglich = (e) => hatDateien(e) && (darfAnlegen || ueberAlbum(e));
   const ablageZeigen = (e) => {
     const zuAlbum = ueberAlbum(e);
     schale.classList.add("drop-aktiv");
@@ -509,11 +516,14 @@
     panel.classList.toggle("drop-ziel", zuAlbum);
   };
   const ablageWeg = () => { ziehTiefe = 0; schale.classList.remove("drop-aktiv"); panel.classList.remove("drop-ziel"); };
-  schale.addEventListener("dragenter", (e) => { if (!hatDateien(e)) return; e.preventDefault(); ziehTiefe++; ablageZeigen(e); });
-  schale.addEventListener("dragover", (e) => { if (!hatDateien(e)) return; e.preventDefault(); e.dataTransfer.dropEffect = "copy"; ablageZeigen(e); });
+  schale.addEventListener("dragenter", (e) => { if (!ablageMoeglich(e)) return; e.preventDefault(); ziehTiefe++; ablageZeigen(e); });
+  schale.addEventListener("dragover", (e) => {
+    if (!ablageMoeglich(e)) { if (hatDateien(e)) ablageWeg(); return; }
+    e.preventDefault(); e.dataTransfer.dropEffect = "copy"; ablageZeigen(e);
+  });
   schale.addEventListener("dragleave", (e) => { if (!hatDateien(e)) return; if (--ziehTiefe <= 0) ablageWeg(); });
   schale.addEventListener("drop", (e) => {
-    if (!hatDateien(e)) return;
+    if (!ablageMoeglich(e)) { if (hatDateien(e)) { e.preventDefault(); ablageWeg(); } return; }
     e.preventDefault();
     const zuAlbum = ueberAlbum(e);
     ablageWeg();
@@ -646,7 +656,8 @@
     const a = state.album;
     const p = a.photos[state.lbIndex];
     if (!p) return lb.close();
-    const canEdit = a.can_edit || isAdmin || p.owner_id === me.id;
+    // Wie api_albums.can_edit_photo: wer das Album bearbeiten darf, dazu der Hochlader ab Redakteur.
+    const canEdit = a.can_edit || (darfAnlegen && p.owner_id === me.id);
     const kv = [];
     if (p.taken_at) kv.push(["Aufgenommen", esc(fmtDate(p.taken_at, true))]);
     kv.push(["Position", p.lat != null ? `<a href="https://www.openstreetmap.org/?mlat=${p.lat}&mlon=${p.lon}#map=18/${p.lat}/${p.lon}" target="_blank" rel="noopener">${fmtCoord(p.lat, p.lon)}</a> <span class="muted">(${p.geo_source === "exif" ? "aus Bild" : "manuell"})</span>` : '<span class="badge">keine Position</span>']);

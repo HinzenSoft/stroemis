@@ -142,13 +142,13 @@ def test_demo_konto_keine_material_verwaltung():
         from test_material import _KONTEN, _konten, anmelden
         _KONTEN.pop(app, None)
         _konten(app)["adm"] = anmelden(app, "admin@example.org", "geheim123")
-        _, demo_id = neues_konto(app, "demo-mv@example.invalid", rechte={"material": 2})
+        _, demo_id = neues_konto(app, "demo-mv@example.invalid", rechte={"material": 3})
         from app import db
         from app.material.services import rechte
         with app.app_context():
             adm_id = db.query("SELECT id FROM users WHERE email = 'admin@example.org'", one=True)["id"]
             assert [u["id"] for u in rechte.material_verwaltung_konten()] == [adm_id]
-        _, echt_id = neues_konto(app, "mv@example.org", rechte={"material": 2})
+        _, echt_id = neues_konto(app, "mv@example.org", rechte={"material": 3})
         with app.app_context():
             assert [u["id"] for u in rechte.material_verwaltung_konten()] == [echt_id]
             assert demo_id != echt_id

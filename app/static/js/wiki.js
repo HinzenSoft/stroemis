@@ -1,5 +1,5 @@
 /* Strömipedia (Modul wiki): Seitenbaum, Ansicht mit Inhaltsverzeichnis und Kommentaren, WYSIWYG-Editor (Toast UI),
-   Bearbeitungsfreigaben, öffentliche Freigabe, Versionen, Suche, Import */
+   Bearbeitungsfreigaben, Freigabe für alle Angemeldeten, Versionen, Suche, Import */
 (function () {
   const { esc, api, toast, dialog, fmtDate, info } = S;
   const $ = (sel, root) => (root || document).querySelector(sel);
@@ -103,7 +103,10 @@
   // (Redakteur/Admin): automatisch für jeden Leser ausgeführter Inhalt ist etwas anderes als
   // ein Bild oder ein Download, den sich jemand erst selbst öffnen müsste.
   // window.STROEMIS setzt base.html; die Prüfstände unter tests/ bauen die Seite ohne Vorlage auf.
-  const darfEinbetten = () => { const u = window.STROEMIS && STROEMIS.user; return !!(u && u.rechte && u.rechte.wiki === 2); };
+  const darfEinbetten = () => S.stufe("wiki") >= S.STUFE.verwaltung;
+  /* Seiten anlegen, duplizieren, im Baum verschieben: ab Redakteur (Stufe Redakteur, 01.11.2026). Ein Mitglied liest und
+     kommentiert; bearbeiten darf es nur eine Seite, für die es freigegeben ist (can_edit vom Server). */
+  const darfAnlegen = () => S.stufe("wiki") >= S.STUFE.redakteur;
   // Jede Zeile, die im Editorformat einen Block eröffnet. Blockmenü und Ziehgriff bilden
   // damit Text und Editor aufeinander ab – beide müssen dieselbe Liste sehen.
   const MARKEN_RE = window.EDMD.MARKEN_RE;
@@ -178,10 +181,10 @@
       const tg = sub ? `aria-label="${esc(p.title)} ${collapsed ? "aufklappen" : "zuklappen"}" aria-expanded="${!collapsed}"`
         : 'aria-hidden="true" tabindex="-1"';
       return `<li class="${sub ? "" : "leaf"}${collapsed ? " collapsed" : ""}" data-id="${p.id}" data-slug="${esc(p.slug)}">
-        <div class="row" draggable="true">
+        <div class="row"${darfAnlegen() && p.can_edit ? ' draggable="true"' : ""}>
           <button class="tg" type="button" ${tg}>${sub ? KLAPPZEICHEN : ""}</button>
-          <a href="/stroemipedia/${esc(p.slug)}" title="${esc(p.title)}" class="${state.current && state.current.id === p.id ? "active" : ""}">${p.icon ? `<span class="tree-icon" aria-hidden="true">${esc(p.icon)}</span>` : ""}<span class="baum-titel">${esc(p.title)}${p.is_public ? ' <span class="pub" title="öffentlich freigegeben">🌐</span>' : ""}${p.favorite ? ' <span class="fav" title="auf der Merkliste">★</span>' : ""}</span></a>
-          <button class="row-add" type="button" title="Unterseite anlegen" aria-label="Unterseite zu ${esc(p.title)} anlegen">+</button>
+          <a href="/stroemipedia/${esc(p.slug)}" title="${esc(p.title)}" class="${state.current && state.current.id === p.id ? "active" : ""}">${p.icon ? `<span class="tree-icon" aria-hidden="true">${esc(p.icon)}</span>` : ""}<span class="baum-titel">${esc(p.title)}${p.is_public ? ' <span class="pub" title="für alle Angemeldeten freigegeben">🌐</span>' : ""}${p.favorite ? ' <span class="fav" title="auf der Merkliste">★</span>' : ""}</span></a>
+          ${darfAnlegen() ? `<button class="row-add" type="button" title="Unterseite anlegen" aria-label="Unterseite zu ${esc(p.title)} anlegen">+</button>` : ""}
           <button class="row-menu" type="button" title="Mehr" aria-haspopup="menu" aria-label="Weitere Aktionen zu ${esc(p.title)}">⋯</button>
         </div>${sub}</li>`;
     }).join("")}</ul>`;
@@ -224,7 +227,7 @@
      Weg zum Import – im „⋯“ jeder Baumzeile stand er doppelt (Wunsch des Nutzers). Seltene Aktionen gehören ins Menü; als
      drei Knöpfe brach die Zeile am Telefon und in der 260 px schmalen Seitenleiste des Tablets um (Auftrag „letzte offene
      Punkte“, 27.10.2026). */
-  const darfImportieren = () => { const u = window.STROEMIS && STROEMIS.user; return !!(u && u.rechte && u.rechte.wiki === 2); };
+  const darfImportieren = () => S.stufe("wiki") >= S.STUFE.verwaltung;
   function baumMenu(anchor) {
     const box = document.createElement("div");
     box.className = "tree-menu";
@@ -244,18 +247,20 @@
 
   /* Kontextmenü an der Baumzeile – dieselben Aktionen wie im Seitenkopf. „Seiten aus ZIP importieren“ steht seit dem
      28.10.2026 nicht mehr hier, sondern nur im Menü „⋯“ neben „Neue Seite“ über dem Baum (baumMenu; Wunsch des Nutzers:
-     „reicht am oberen zentralen ⋯ aus“) – die Zielseite wählt der Dialog unter „Einsortieren unter“. */
+     „reicht am oberen zentralen ⋯ aus“) – die Zielseite wählt der Dialog unter „Einsortieren unter“. Was nicht geht, steht
+     nicht da (Stufe Redakteur, 01.11.2026): Anlegen und Duplizieren ab Redakteur, Symbol nach can_edit, Papierkorb nach
+     can_delete der Baumzeile (api_wiki._baum_rechte). */
   function treeRowMenu(anchor, page) {
     if (!page) return;
     const box = document.createElement("div");
     box.className = "tree-menu";
     box.innerHTML = `
-      <button type="button" data-a="child">Unterseite anlegen</button>
+      ${darfAnlegen() ? '<button type="button" data-a="child">Unterseite anlegen</button>' : ""}
       <button type="button" data-a="fav">${page.favorite ? "Von der Merkliste nehmen" : "Zur Merkliste"}</button>
-      <button type="button" data-a="icon">Symbol ändern</button>
-      <button type="button" data-a="dup">Duplizieren</button>
+      ${page.can_edit ? '<button type="button" data-a="icon">Symbol ändern</button>' : ""}
+      ${darfAnlegen() ? '<button type="button" data-a="dup">Duplizieren</button>' : ""}
       <button type="button" data-a="export">Als Markdown herunterladen</button>
-      <button type="button" data-a="del" class="danger">In den Papierkorb</button>`;
+      ${page.can_delete ? '<button type="button" data-a="del" class="danger">In den Papierkorb</button>' : ""}`;
     // Verhalten wie jedes Menü (common.js: Esc, Pfeiltasten, daneben tippen, Fokus zurück auf „⋯“).
     const close = S.menueSchwebend(anchor, box);
     box.addEventListener("click", async (e) => {
@@ -654,6 +659,10 @@
     renderRail([]);
     const roots = children(null);
     if (!roots.length) {
+      if (!darfAnlegen()) {
+        content.innerHTML = '<div class="leerzustand"><strong>Die Strömipedia ist noch leer</strong>Sobald jemand eine Seite anlegt, steht sie hier.</div>';
+        return;
+      }
       content.innerHTML = `<div class="leerzustand"><strong>Die Strömipedia ist noch leer</strong>Lege die erste Seite an.
         <div class="btn-row"><button class="btn" id="h-new">Erste Seite anlegen</button></div></div>`;
       $("#h-new").onclick = () => openEditor({ parent_id: null });
@@ -829,7 +838,7 @@
       const r = await api(`/api/wiki/pages/${p.id}/contributors`);
       const mit = r.contributors || [];
       // Umschreiben darf nur die Administration – am Ersteller hängen Rechte, nicht bloß ein Name.
-      const darfWechseln = !!(STROEMIS.user && STROEMIS.user.rechte && STROEMIS.user.rechte.wiki === 2);
+      const darfWechseln = S.stufe("wiki") >= S.STUFE.verwaltung;
       box.innerHTML = (r.owner ? person(r.owner, "Ersteller") : "")
         + (darfWechseln ? '<button class="lnk autor-wechsel" id="au-wechsel" type="button">Ersteller ändern</button>' : "")
         + (mit.length ? `<div class="autor-trenner"></div><div class="autor-titel">Mitwirkende</div>`
@@ -898,8 +907,9 @@
     const p = state.current;
     const crumbs = ancestors(p);
     const kids = children(p.id);
-    // Marke als Wort ohne Zeichen (UI/UX vor dem Merge D14 – vorher „🌐 öffentlich“).
-    const pubBadge = p.effective_public ? '<span class="badge pubbadge" title="Ohne Anmeldung erreichbar">öffentlich</span>' : "";
+    // Marke als Wort ohne Zeichen (UI/UX vor dem Merge D14 – vorher „🌐 öffentlich“). Seit dem 01.11.2026 gibt es kein Wiki
+    // ohne Anmeldung mehr: „freigegeben“ heißt, auch Angemeldete ohne Strömipedia-Stufe lesen die Seite (Lesemodus).
+    const pubBadge = p.effective_public ? '<span class="badge pubbadge" title="Lesen auch Angemeldete ohne Freischaltung für die Strömipedia">für alle Angemeldeten</span>' : "";
     content.innerHTML = `
       <div class="wiki-head">
         <button class="btn secondary small kopfknopf baum-knopf" id="pg-baum" type="button" title="Seiten" aria-label="Seitenbaum öffnen">☰</button>
@@ -915,8 +925,8 @@
           <button class="btn secondary small kopfknopf" id="pg-more" title="Weitere Aktionen" aria-label="Weitere Aktionen">⋯</button>
         </div>
       </div>
-      <div class="seitentitel-zeile"><button class="page-icon" id="pg-icon" type="button" title="Symbol der Seite ändern"
-        aria-label="Symbol der Seite ändern">${p.icon ? esc(p.icon) : "＋"}</button><h1 class="seitentitel">${esc(p.title)} ${pubBadge}</h1></div>
+      <div class="seitentitel-zeile">${p.can_edit ? `<button class="page-icon" id="pg-icon" type="button" title="Symbol der Seite ändern"
+        aria-label="Symbol der Seite ändern">${p.icon ? esc(p.icon) : "＋"}</button>` : (p.icon ? `<span class="page-icon" aria-hidden="true">${esc(p.icon)}</span>` : "")}<h1 class="seitentitel">${esc(p.title)} ${pubBadge}</h1></div>
       ${autorZeile(p)}
       <article class="wiki-content" id="article"></article>
       ${kids.length ? `<div class="children-list"><strong>Unterseiten</strong><ul>${kids.map((k) => `<li><a href="/stroemipedia/${esc(k.slug)}">${k.icon ? esc(k.icon) + " " : ""}${esc(k.title)}</a></li>`).join("")}</ul></div>` : ""}
@@ -933,7 +943,7 @@
     const autorKnopf = content.querySelector(".autor-knopf");
     if (autorKnopf && p.id) autorKnopf.onclick = () => autorTafel(p, autorKnopf);
     $("#pg-comment").onclick = () => commentDialog("");
-    $("#pg-icon").onclick = () => iconDialog(p.id, p.icon || "");
+    if ($("#pg-icon")) $("#pg-icon").onclick = () => iconDialog(p.id, p.icon || "");
     tocKnopfVerdrahten();
     const baum = $("#pg-baum"); if (baum) baum.onclick = () => side.classList.toggle("open");
     $("#pg-more").onclick = (e) => pageMenu(e.currentTarget, p);
@@ -1015,7 +1025,7 @@
       <button type="button" data-a="exportzip">Abschnitt als ZIP herunterladen</button>
       <button type="button" data-a="print">Drucken / als PDF sichern</button>
       ${p.can_edit ? `<button type="button" data-a="template">${p.is_template ? "Nicht mehr als Vorlage" : "Als Vorlage anbieten"}</button>` : ""}
-      <button type="button" data-a="dup">Duplizieren</button>
+      ${p.can_create ? '<button type="button" data-a="dup">Duplizieren</button>' : ""}
       ${p.can_delete ? '<button type="button" data-a="del" class="danger">In den Papierkorb</button>' : ""}`;
     // Verhalten wie jedes Menü (common.js: Esc, Pfeiltasten, daneben tippen, Fokus zurück auf „⋯“).
     const close = S.menueSchwebend(anchor, box);
@@ -1095,7 +1105,7 @@
       const satz = () => {
         const ziel = state.byId.get(+wahl.value);
         $("#im-freigabe", body).textContent = !ziel ? ""
-          : oeffentlich(ziel) ? "Dieser Abschnitt ist ohne Anmeldung sichtbar – die importierten Seiten sind es sofort auch."
+          : oeffentlich(ziel) ? "Dieser Abschnitt ist für alle Angemeldeten freigegeben – die importierten Seiten sind es sofort auch."
             : beschraenkt(ziel) ? "Dieser Abschnitt ist lesebeschränkt – die importierten Seiten sind dann ebenso beschränkt." : "";
       };
       wahl.addEventListener("change", satz);
@@ -1501,15 +1511,16 @@
       });
   }
 
-  /* --- Teilen: Bearbeiter und öffentliche Freigabe ------------------------------
+  /* --- Teilen: Bearbeiter und Freigabe für alle Angemeldeten (früher „öffentlich“; seit dem 01.11.2026 ohne Anmeldung
+     keine Seite mehr – die Freigabe öffnet sie nur Angemeldeten ohne Strömipedia-Stufe) ---------------------------
      Wer eine eingeschränkte Seite noch sieht, steht als Satz unter „Lesen einschränken“ – ein Datenschutzhinweis gehört
      nicht hinter ein „i“ (UI/UX vor dem Merge C8). */
   async function shareDialog(p) {
     if (!state.users) { try { state.users = (await api("/api/wiki/users")).users; } catch (e) { state.users = []; } }
     const editorIds = new Set((p.editors || []).map((u) => u.id));
-    const publicLink = `${STROEMIS.publicUrl}/${p.slug}`;
+    const publicLink = `${location.origin}/stroemipedia/${encodeURIComponent(p.slug)}`;
     dialog(`<h2>Teilen: ${esc(p.title)}</h2>
-      ${p.can_share ? `<h3>Bearbeiten erlauben${info("Bearbeiten erlauben", "Freigegebene Nutzer dürfen diese Seite und ihre Unterseiten bearbeiten, aber nicht löschen.")}</h3>
+      ${p.can_share ? `<h3>Bearbeiten erlauben${info("Bearbeiten erlauben", "Freigegebene Redakteure bearbeiten diese Seite und ihre Unterseiten, freigegebene Mitglieder nur diese Seite. Löschen darf keiner von beiden.")}</h3>
       <input type="search" id="sh-filter" placeholder="Nutzer suchen …" aria-label="Nutzer suchen">
       <div class="user-pick" id="sh-users">${state.users.filter((u) => u.id !== p.created_by).map((u) => `
         <label class="inline"><input type="checkbox" value="${u.id}" ${editorIds.has(u.id) ? "checked" : ""}> ${esc(u.name || "Unbenannt")} <span class="muted small">${esc(u.gliederung || "")}</span></label>`).join("") || '<div class="muted small">Keine weiteren Nutzer.</div>'}</div>` : ""}
@@ -1518,13 +1529,14 @@
         nur noch du, die Wiki-Verwaltung und die oben freigegebenen Nutzer.</p>
       <label class="inline"><input type="checkbox" id="sh-restrict" ${p.read_restricted ? "checked" : ""}
         ${p.effective_public ? "disabled" : ""}> Nur für freigegebene Nutzer lesbar</label>
-      ${p.effective_public ? '<div class="help">Nicht möglich, solange die Seite öffentlich freigegeben ist.</div>' : ""}` : ""}
-      ${p.can_publish ? `<h3 class="abgesetzt">Öffentlich freigeben</h3>
-      <p class="help">Öffentliche Seiten sind ohne Anmeldung über den Link unten erreichbar – samt ihrer Bilder und Videos.</p>
-      <label class="inline"><input type="checkbox" id="sh-public" ${p.is_public ? "checked" : ""}> Diese Seite öffentlich zeigen</label>
+      ${p.effective_public ? '<div class="help">Nicht möglich, solange die Seite für alle Angemeldeten freigegeben ist.</div>' : ""}` : ""}
+      ${p.can_publish ? `<h3 class="abgesetzt">Für alle Angemeldeten freigeben</h3>
+      <p class="help">Freigegebene Seiten lesen auch angemeldete Konten ohne Freischaltung für die Strömipedia – samt ihrer
+        Bilder und Videos. Ohne Anmeldung ist keine Seite erreichbar.</p>
+      <label class="inline"><input type="checkbox" id="sh-public" ${p.is_public ? "checked" : ""}> Diese Seite für alle Angemeldeten freigeben</label>
       <label class="inline"><input type="checkbox" id="sh-children" ${p.public_children ? "checked" : ""} ${p.is_public ? "" : "disabled"}> … einschließlich aller Unterseiten (ganzer Abschnitt)</label>
-      <div class="share-link ${p.is_public ? "" : "hidden"}" id="sh-link"><input type="text" readonly value="${esc(publicLink)}" id="sh-url" aria-label="Öffentlicher Link"><button class="btn secondary small" id="sh-copy" type="button">Kopieren</button></div>`
-      : (p.effective_public ? `<p class="notice">Diese Seite ist über einen freigegebenen Abschnitt öffentlich: <a href="${esc(publicLink)}" target="_blank" rel="noopener">${esc(publicLink)}</a></p>` : "")}
+      <div class="share-link ${p.is_public ? "" : "hidden"}" id="sh-link"><input type="text" readonly value="${esc(publicLink)}" id="sh-url" aria-label="Link zur Seite"><button class="btn secondary small" id="sh-copy" type="button">Kopieren</button></div>`
+      : (p.effective_public ? `<p class="notice">Diese Seite ist über einen freigegebenen Abschnitt für alle Angemeldeten lesbar: <a href="${esc(publicLink)}" target="_blank" rel="noopener">${esc(publicLink)}</a></p>` : "")}
       <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button><button class="btn" id="sh-save" type="button">Speichern</button></div>`,
       (dlg, body) => {
         const filter = body.querySelector("#sh-filter");
@@ -5268,16 +5280,19 @@
   /* ======================================================================
      Start
      ====================================================================== */
-  $("#btn-new-page").addEventListener("click", () => { side.classList.remove("open"); if (leaveEditor()) openEditor({ parent_id: state.current ? state.current.id : null }); });
+  // „Neue Seite“ steht nur ab Redakteur da (wiki.html).
+  const neueSeiteKnopf = $("#btn-new-page");
+  if (neueSeiteKnopf) neueSeiteKnopf.addEventListener("click", () => { side.classList.remove("open"); if (leaveEditor()) openEditor({ parent_id: state.current ? state.current.id : null }); });
   /* „Neue Seite“ ist rot, solange in der Textspalte keine andere Hauptaktion steht. Im Editor („Anlegen“, „Entwurf
      übernehmen“) und auf der leeren Übersicht („Erste Seite anlegen“) wird er grau – je Ansicht ein roter Knopf (UI/UX vor
      dem Merge C2). Beobachtet werden nur die Klasse am <body> und der Wechsel des Inhalts, nicht jede Eingabe im Editor. */
-  const neueSeiteKnopf = $("#btn-new-page");
   const neueSeiteFarbe = () => neueSeiteKnopf.classList.toggle("secondary",
     document.body.classList.contains("editing") || !!content.querySelector("#h-new"));
-  new MutationObserver(neueSeiteFarbe).observe(document.body, { attributes: true, attributeFilter: ["class"] });
-  new MutationObserver(neueSeiteFarbe).observe(content, { childList: true });
-  neueSeiteFarbe();
+  if (neueSeiteKnopf) {
+    new MutationObserver(neueSeiteFarbe).observe(document.body, { attributes: true, attributeFilter: ["class"] });
+    new MutationObserver(neueSeiteFarbe).observe(content, { childList: true });
+    neueSeiteFarbe();
+  }
   // Mit Wiki-Verwaltung „⋯“ (Papierkorb, Import); sonst bleibt nur der Papierkorb – eine Funktion steht als Knopf da
   // (Nutzer, 27.10.2026).
   const baumMehr = $("#btn-baum-mehr");

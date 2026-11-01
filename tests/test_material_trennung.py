@@ -133,10 +133,11 @@ def test_migration_7_8():
         entwurf = starten(k["pruefer"], y, durchgang_id=rid).json["pruefung"]["id"]
         konten = {n: neues_konto(app, f"{n}@example.org")[1] for n in ("stufe1", "stufe2", "ohne_urkunde", "katalogpflege",
                                                                          "pv", "extern")}
-        # So hat Phase 1 die Konten hinterlassen (Prüfer und Katalogpfleger hob die Nutzerverwaltung auf Stufe 1).
+        # So hat Phase 1 die Konten hinterlassen (Prüfer und Katalogpfleger hob die Nutzerverwaltung auf Stufe 1) – mit den
+        # Zahlen von damals (Verwaltung 2, Phase-1-Stufe 2 = Materialwart); Schritt 33 hebt die Verwaltung danach auf 3.
         sql(app, "UPDATE users SET recht_material = 0, mat_pruefer = 0, mat_katalog = 0, urkundennummer = '' "
-                 "WHERE id NOT IN (SELECT id FROM users WHERE recht_verwaltung = 2)")
-        sql(app, "UPDATE users SET mat_pruefer = 0 WHERE recht_verwaltung = 2")
+                 "WHERE id NOT IN (SELECT id FROM users WHERE recht_verwaltung >= 2)")
+        sql(app, "UPDATE users SET mat_pruefer = 0 WHERE recht_verwaltung >= 2")
         for uid, spalten in ((konten["stufe1"], "recht_material = 1"),
                              (konten["stufe2"], "recht_material = 2, mat_pruefer = 1, urkundennummer = '1012-0001'"),
                              (konten["ohne_urkunde"], "recht_material = 1, mat_pruefer = 1"),
@@ -241,7 +242,7 @@ def test_migration_7_8():
             {k_: v for k_, v in z.items() if k_ != "recht_material"} for z in stufen_vorher]
         stufen = {u["id"]: u["recht_material"] for u in zeilen(app, "SELECT id, recht_material FROM users")}
         assert {n_: stufen[uid] for n_, uid in konten.items()} == {"stufe1": 1, "stufe2": 1, "ohne_urkunde": 1,
-                                                                   "katalogpflege": 2, "pv": 2, "extern": 1}, stufen
+                                                                   "katalogpflege": 3, "pv": 3, "extern": 1}, stufen
         assert zeilen(app, "SELECT * FROM mat_folder_grant ORDER BY rowid") == vorher["mat_folder_grant"]
         # Schritt 11 (Erinnerungen) im selben Start: das Log in neuer Form und leer, der Schalter je Ordner aus.
         assert erinnerungslog_wie_schritt_11(app)

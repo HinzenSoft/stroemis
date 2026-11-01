@@ -561,11 +561,11 @@ def test_rechteschnitt():
             p = planen(app)
             assert "admin@example.org" not in mails(p) and [x.kennung for x in p.ohne_empfaenger] == [c["id"]], p
             sql(app, "UPDATE users SET name = 'Administrator' WHERE id = ?", (k["adm_id"],))
-            sql(app, "UPDATE users SET recht_material = 2 WHERE id = ?", (k["katalog_id"],))
+            sql(app, "UPDATE users SET recht_material = 3 WHERE id = ?", (k["katalog_id"],))
 
             # Plattform-Verwaltung als eingetragener Materialwart (und eine zweite Material-Verwaltung): Die PV bekommt
             # ihre Gliederung ohne Rückfall, die übrige Verwaltung nicht. Ebenso eine MV als Materialwart.
-            mv2, mv2_id = konto(app, adm, "mv2@example.org", rechte={"material": 2})
+            mv2, mv2_id = konto(app, adm, "mv2@example.org", rechte={"material": 3})
             gd, _ = gliederung(adm, "OG Plattform", standard=False)
             freigeben(adm, gd, k["adm_id"], "verwalten")
             artikel(app, adm, ids["hms"], gd, "RS-D", faellig=f)
@@ -667,7 +667,7 @@ def test_gescheitert():
             # Ein frisch angelegtes Konto (ohne Kontoverweis) als einzige Material-Verwaltung im Rückfall – seine Mail
             # scheitert: Der Stand nennt es trotzdem mit Namen.
             tag(3)
-            neu, neu_id = konto(app, adm, "neu-mv@example.org", name="Neue Verwaltung", rechte={"material": 2})
+            neu, neu_id = konto(app, adm, "neu-mv@example.org", name="Neue Verwaltung", rechte={"material": 3})
             sql(app, "UPDATE users SET mat_ref = NULL WHERE id = ?", (neu_id,))
             sql(app, "UPDATE users SET recht_material = 1 WHERE id = ?", (k["katalog_id"],))
             g3, _ = gliederung(adm, "OG Ohnewart", standard=False)
@@ -678,7 +678,7 @@ def test_gescheitert():
             assert ref(app, neu_id)
             mf = zeilen(app, "SELECT konto_ref, rolle, folder_id FROM mat_mail_fehler WHERE erledigt_at IS NULL")
             assert mf == [{"konto_ref": ref(app, neu_id), "rolle": "verwaltung", "folder_id": g3}], mf
-            sql(app, "UPDATE users SET recht_material = 2 WHERE id = ?", (k["katalog_id"],))
+            sql(app, "UPDATE users SET recht_material = 3 WHERE id = ?", (k["katalog_id"],))
 
             # Während des Versands werden ein Artikel gelöscht und eine Freigabe der Mail entzogen: kein
             # Fremdschlüsselfehler, die übrigen Zeilen stehen im Log, die Mails danach gehen hinaus.
@@ -1595,7 +1595,7 @@ def test_routen():
             sql(app, "UPDATE users SET name = '' WHERE id = ?", (k["adm_id"],))
             p = mit(app, erinnerung_modul().probelauf)
             sql(app, "UPDATE users SET name = 'Administrator' WHERE id = ?", (k["adm_id"],))
-            sql(app, "UPDATE users SET recht_material = 2 WHERE id = ?", (k["katalog_id"],))
+            sql(app, "UPDATE users SET recht_material = 3 WHERE id = ?", (k["katalog_id"],))
             assert p["ohne_empfaenger"] == [{"ordner": "OG Ohnewart", "artikel": 2, "freigaben": 0}], p["ohne_empfaenger"]
             # /start: der Laufstand nur für Material- und Plattform-Verwaltung.
             assert k["katalog"].get("/api/material/start").json["erinnerungen"]["letzter"]["mails"] == 2

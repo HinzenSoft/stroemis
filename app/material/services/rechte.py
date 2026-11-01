@@ -49,7 +49,7 @@ from functools import wraps
 from flask import g, has_app_context, has_request_context, jsonify, request
 
 from ... import db
-from ...auth import current_user, json_body, nutzt, verwaltet
+from ...auth import MITGLIED, VERWALTUNG, current_user, json_body, nutzt, verwaltet
 from .. import services as dienste
 from . import Abgelehnt, eingabe, journal, kennung, text, wahr
 
@@ -460,9 +460,9 @@ def verwalter_von(fid, ohne_freigabe=None):
         "SELECT u.id, u.name, u.email, MAX(COALESCE(x.valid_until, '9999-12-31')) AS ende FROM mat_folder_grant x "
         "JOIN users u ON u.id = x.user_id WHERE x.folder_id IN (SELECT id FROM kette) AND x.permission = 'verwalten' "
         "AND (x.valid_until IS NULL OR x.valid_until >= ?) AND u.active = 1 AND u.status = 'active' "
-        "AND u.recht_verwaltung < 2 AND u.recht_material = 1 AND trim(u.name) <> '' AND x.id IS NOT ? "
+        "AND u.recht_verwaltung < ? AND u.recht_material = ? AND trim(u.name) <> '' AND x.id IS NOT ? "
         "GROUP BY u.id ORDER BY u.name COLLATE NOCASE, u.id",
-        (fid, _stichtag(), ohne_freigabe))
+        (fid, _stichtag(), VERWALTUNG, MITGLIED, ohne_freigabe))
     return [dict(r, ende=None if r["ende"] == "9999-12-31" else r["ende"]) for r in rows]
 
 
@@ -750,11 +750,11 @@ def material_verwaltung_konten():
     Zeilen mit id und email, nach Kennung."""
     from .erinnerung import demo_adresse
     rows = [u for u in db.query("SELECT id, email FROM users WHERE active = 1 AND status = 'active' AND trim(name) <> '' "
-                                "AND recht_material >= 2 AND recht_verwaltung < 2 ORDER BY id")
+                                "AND recht_material >= ? AND recht_verwaltung < ? ORDER BY id", (VERWALTUNG, VERWALTUNG))
             if not demo_adresse(u["email"])]
     if not rows:
         rows = [u for u in db.query("SELECT id, email FROM users WHERE active = 1 AND status = 'active' "
-                                    "AND recht_verwaltung >= 2 ORDER BY id") if not demo_adresse(u["email"])]
+                                    "AND recht_verwaltung >= ? ORDER BY id", (VERWALTUNG,)) if not demo_adresse(u["email"])]
     return rows
 
 

@@ -153,8 +153,10 @@ SET_WERTE = {"lock_cause": {"eigen": "eigener Grund", "set": "mit dem Set"},
                            "stueckliste": "Stückliste übertragen"},
              "austausch": {"ja": "ja", "nein": "nein", "nicht_belegt": "nicht belegt"}}
 # Stufe in der Materialablage – mit der Zahl dahinter: Einträge vor „Migration Schritt 10“ meinten die Stufen aus Phase 1
-# (1 Führungskraft, 2 Materialwart), die Zahl hält das eindeutig.
-STUFE_MATERIAL = {0: "kein Zugriff", 1: "Mitglied", 2: "Verwaltung"}
+# (1 Führungskraft, 2 Materialwart), die Zahl hält das eindeutig. Vor Schritt 33 (Stufe Redakteur) stand die Verwaltung
+# als 2 im Journal, seitdem als 3 – beides heißt Verwaltung (einen Redakteur gibt es in der Materialablage nicht). Das
+# Journal bleibt, wie es ist; nur die Beschriftung kennt beide Zahlen (ebenso material.js).
+STUFE_MATERIAL = {0: "kein Zugriff", 1: "Mitglied", 2: "Verwaltung", 3: "Verwaltung"}
 _VERWEISE = ("pruefung", "aussonderung", "basis", "empfehlung", "berichtigung", "berichtigt")
 
 

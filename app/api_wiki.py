@@ -13,7 +13,8 @@ from urllib.parse import unquote
 from flask import Blueprint, current_app, jsonify, request
 
 from . import db
-from .auth import avatar_url, current_user, eingabefehler_abfangen, json_body, nutzt, verwaltet, wiki_required
+from .auth import (avatar_url, current_user, eingabefehler_abfangen, json_body, nutzt, schreibt, verwaltet,
+                   wiki_required)
 from .images import EMBED_EXT, crop_wiki_image, fehlerart, rotate_wiki_image, store_wiki_file, wiki_endung
 from .mailer import send_mail
 
@@ -71,18 +72,44 @@ def _ancestor_ids(page):
     return ids
 
 
+# Seiten anlegen und bearbeiten (Stufe Redakteur, 01.11.2026): Ersteller- und Freigaberechte wirken ab Redakteur. Ein
+# Mitglied liest und kommentiert; bearbeiten darf es nur eine Seite, für die es selbst freigegeben ist – genau diese,
+# ohne Unterseiten (Entscheidung des Nutzers, 01.11.2026). Eigene Seiten aus der Zeit vor der Stufe bearbeitet es nicht
+# mehr (bestehende Mitglieder bleiben Mitglied).
+NUR_REDAKTION = "Seiten anlegen dürfen Redakteure und die Wiki-Verwaltung."
+NUR_REDAKTION_DATEIEN = ("Dateien hochladen dürfen Redakteure, die Wiki-Verwaltung und Mitglieder, die eine Seite "
+                         "bearbeiten dürfen.")
+NUR_REDAKTION_VERSCHIEBEN = "Seiten verschieben dürfen Redakteure und die Wiki-Verwaltung."
+
+
 def can_edit(page, user=None):
-    """Bearbeiten dürfen Admins und Redakteure, der Ersteller und freigegebene Nutzer
-    (Freigaben vererben sich auf Unterseiten)."""
+    """Bearbeiten dürfen die Wiki-Verwaltung, der Ersteller und freigegebene Nutzer ab Redakteur (Freigaben vererben
+    sich auf Unterseiten) – ein Mitglied nur die Seite, an der seine eigene Freigabe steht."""
     user = user or current_user()
-    if not user:
+    if not user or not nutzt("wiki", user):
         return False
-    if verwaltet("wiki", user) or page["created_by"] == user["id"]:
+    if verwaltet("wiki", user):
+        return True
+    if not schreibt("wiki", user):
+        return bool(db.query("SELECT 1 FROM wiki_editors WHERE user_id = ? AND page_id = ?",
+                             (user["id"], page["id"]), one=True))
+    if page["created_by"] == user["id"]:
         return True
     ids = [page["id"], *_ancestor_ids(page)]
     marks = ",".join("?" * len(ids))
     return bool(db.query(f"SELECT 1 FROM wiki_editors WHERE user_id = ? AND page_id IN ({marks})",
                          (user["id"], *ids), one=True))
+
+
+def darf_hochladen(user=None):
+    """Artikeldateien ablegen, drehen, zuschneiden: wer Seiten schreibt – ein Mitglied nur, wenn es mindestens eine
+    Seite bearbeiten darf (seine Freigabe); sonst bräuchte es keine Dateien."""
+    user = user or current_user()
+    if not user or not nutzt("wiki", user):
+        return False
+    if schreibt("wiki", user):
+        return True
+    return bool(db.query("SELECT 1 FROM wiki_editors WHERE user_id = ? LIMIT 1", (user["id"],), one=True))
 
 
 def restricted_ids(page):
@@ -97,7 +124,7 @@ def restricted_ids(page):
 
 def can_read(page, user=None):
     """Lesen darf jeder Angemeldete – außer die Seite (oder ein Abschnitt darüber) ist beschränkt.
-    Dann nur Admin und Redakteur, der Ersteller und die zum Bearbeiten freigegebenen Nutzer.
+    Dann nur die Wiki-Verwaltung, der Ersteller und die zum Bearbeiten freigegebenen Nutzer.
     Wer alles bearbeiten darf, muss alles lesen dürfen – sonst bearbeitete er blind."""
     user = user or current_user()
     if not user:
@@ -140,8 +167,10 @@ def readable(rows):
 
 
 def can_delete(page, user=None):
+    """Papierkorb, Wiederherstellen, endgültig löschen, Lesen einschränken, Bearbeiter freigeben: die Wiki-Verwaltung
+    und der Ersteller ab Redakteur."""
     user = user or current_user()
-    return bool(user and (verwaltet("wiki", user) or page["created_by"] == user["id"]))
+    return bool(user and (verwaltet("wiki", user) or (schreibt("wiki", user) and page["created_by"] == user["id"])))
 
 
 def is_public(page):
@@ -230,7 +259,7 @@ def _beschraenkung_verlassen(page, neuer_parent_id):
 
 
 def _fremde_seiten(ids, nur_lebende=False, user=None):
-    """Wie viele Seiten dieses Teilbaums der Nutzer nicht löschen dürfte. Redakteure und Admins:
+    """Wie viele Seiten dieses Teilbaums der Nutzer nicht löschen dürfte. Die Wiki-Verwaltung:
     keine. Für alle anderen zählt je Seite die Erstellerregel – Papierkorb und endgültiges
     Löschen nähmen sonst mit, was andere geschrieben haben, auch Seiten, die der Löschende
     nicht einmal lesen darf. Für den Papierkorb zählen nur Seiten, die noch nicht darin liegen
@@ -380,8 +409,10 @@ def page_json(p):
     out["content"] = p["content"]
     out["can_edit"] = can_edit(p)
     out["can_delete"] = can_delete(p)
-    out["can_share"] = can_delete(p)      # Freigabe zum Bearbeiten: Ersteller oder Admin
-    out["can_publish"] = verwaltet("wiki")       # Veröffentlichen: nur Admin
+    out["can_share"] = can_delete(p)      # Freigabe zum Bearbeiten: Ersteller ab Redakteur oder Wiki-Verwaltung
+    out["can_publish"] = verwaltet("wiki")       # Veröffentlichen: nur die Wiki-Verwaltung
+    # Unterseite anlegen, Duplizieren, Verschieben: ab Redakteur – die Oberfläche rechnet die Stufe nicht selbst nach.
+    out["can_create"] = schreibt("wiki")
     if out["can_share"]:
         out["editors"] = _editors(p["id"])
     out["comment_count"] = db.query("SELECT COUNT(*) AS n FROM wiki_comments WHERE page_id = ? AND resolved = 0",
@@ -498,7 +529,36 @@ def tree():
         "       (f.page_id IS NOT NULL) AS favorite "
         "FROM wiki_pages p LEFT JOIN wiki_favorites f ON f.page_id = p.id AND f.user_id = ? "
         "WHERE p.deleted_at IS NULL ORDER BY p.position, p.title COLLATE NOCASE", (uid,))
-    return jsonify(pages=readable(rows))
+    rows = readable(rows)
+    _baum_rechte(rows)
+    return jsonify(pages=rows)
+
+
+def _baum_rechte(rows):
+    """can_edit und can_delete je Baumzeile – dieselben Regeln wie can_edit/can_delete, aber für den ganzen Baum mit
+    einer Abfrage der eigenen Freigaben statt einer Ahnenkette je Seite. So zeigt das Zeilenmenü nur, was geht."""
+    me = current_user()
+    if verwaltet("wiki", me):
+        for r in rows:
+            r["can_edit"] = r["can_delete"] = True
+        return
+    redaktion = schreibt("wiki", me)
+    frei = {f["page_id"] for f in db.query("SELECT page_id FROM wiki_editors WHERE user_id = ?", (me["id"],))}
+    eltern = {r["id"]: r["parent_id"] for r in rows}
+    for r in rows:
+        eigen = redaktion and r["created_by"] == me["id"]
+        r["can_delete"] = eigen
+        if eigen or r["id"] in frei:
+            r["can_edit"] = True
+            continue
+        geerbt, cur, gesehen = False, eltern.get(r["id"]), set()
+        while redaktion and cur is not None and cur not in gesehen:
+            if cur in frei:
+                geerbt = True
+                break
+            gesehen.add(cur)
+            cur = eltern.get(cur)
+        r["can_edit"] = geerbt
 
 
 def _like(term):
@@ -650,6 +710,8 @@ def get_page(slug):
 @bp.post("/pages")
 @wiki_required
 def create_page():
+    if not schreibt("wiki"):
+        return jsonify(error=NUR_REDAKTION), 403
     d = json_body()
     title = (d.get("title") or "").strip()
     if not title:
@@ -658,7 +720,7 @@ def create_page():
     if parent_id and not _elternseite(parent_id):
         return jsonify(error="Übergeordnete Seite nicht gefunden."), 400
     if inherits_public(parent_id) and not verwaltet("wiki"):
-        return jsonify(error="Dieser Abschnitt ist ohne Anmeldung sichtbar. Seiten darin darf nur "
+        return jsonify(error="Dieser Abschnitt ist für alle Angemeldeten freigegeben. Seiten darin darf nur "
                              "die Wiki-Verwaltung anlegen."), 403
     content = d.get("content") or ""
     ts = db.now()
@@ -683,7 +745,8 @@ def update_page(pid):
     if not p:
         return jsonify(error="Seite nicht gefunden"), 404
     if not can_edit(p):
-        return jsonify(error="Diese Seite darf nur der Ersteller oder ein freigegebener Nutzer bearbeiten."), 403
+        return jsonify(error="Diese Seite dürfen ihr Ersteller, freigegebene Nutzer und die Wiki-Verwaltung "
+                             "bearbeiten."), 403
     d = json_body()
     # Zwei Leute an derselben Seite: wer die ältere Fassung geladen hat, überschreibt nicht stillschweigend.
     base = d.get("base_version")
@@ -721,12 +784,16 @@ def update_page(pid):
         parent_id = d.get("parent_id") or None
         if parent_id is not None:
             parent_id = int(parent_id)
+        if parent_id != p["parent_id"] and not schreibt("wiki"):
+            # Ein Mitglied mit Freigabe bearbeitet die Seite, es ordnet den Baum nicht um.
+            return jsonify(error=NUR_REDAKTION_VERSCHIEBEN), 403
+        if parent_id is not None:
             if parent_id == pid or _is_descendant(pid, parent_id):
                 return jsonify(error="Eine Seite kann nicht unter sich selbst einsortiert werden."), 400
             if not _elternseite(parent_id):
                 return jsonify(error="Übergeordnete Seite nicht gefunden."), 400
         if parent_id != p["parent_id"] and inherits_public(parent_id) and not verwaltet("wiki"):
-            return jsonify(error="Dieser Abschnitt ist ohne Anmeldung sichtbar. Seiten dorthin verschieben "
+            return jsonify(error="Dieser Abschnitt ist für alle Angemeldeten freigegeben. Seiten dorthin verschieben "
                                  "darf nur die Wiki-Verwaltung."), 403
         if parent_id != p["parent_id"] and _beschraenkung_verlassen(p, parent_id):
             return jsonify(error=BESCHRAENKUNG_VERLASSEN), 403
@@ -851,8 +918,8 @@ def trash():
     # Titel beschränkter Seiten gehören nicht in jedermanns Papierkorb.
     rows = [r for r in rows if can_read(_trashed(r["id"]), me)]
     for r in rows:
-        r["can_restore"] = bool(verwaltet("wiki", me) or db.query(
-            "SELECT 1 FROM wiki_pages WHERE id = ? AND created_by = ?", (r["id"], me["id"]), one=True))
+        r["can_restore"] = bool(verwaltet("wiki", me) or (schreibt("wiki", me) and db.query(
+            "SELECT 1 FROM wiki_pages WHERE id = ? AND created_by = ?", (r["id"], me["id"]), one=True)))
     return jsonify(pages=rows)
 
 
@@ -875,7 +942,7 @@ def restore_page(pid):
     # Ist der frühere Ort inzwischen öffentlich, wäre Wiederherstellen ein Veröffentlichen –
     # das dürfen nur Administratoren, genau wie Anlegen und Verschieben dorthin.
     if parent and inherits_public(parent) and not verwaltet("wiki"):
-        return jsonify(error="Der frühere Ort dieser Seite ist inzwischen ohne Anmeldung sichtbar. "
+        return jsonify(error="Der frühere Ort dieser Seite ist inzwischen für alle Angemeldeten freigegeben. "
                              "Dorthin wiederherstellen darf nur die Wiki-Verwaltung."), 403
     ids = _subtree_ids(pid)
     marks = ",".join("?" * len(ids))
@@ -1276,8 +1343,10 @@ def duplicate_page(pid):
         return jsonify(error="Seite nicht gefunden"), 404
     if not can_read(p):
         return jsonify(error="Diese Seite ist nur für freigegebene Nutzer sichtbar."), 403
+    if not schreibt("wiki"):
+        return jsonify(error=NUR_REDAKTION), 403
     if inherits_public(p["parent_id"]) and not verwaltet("wiki"):
-        return jsonify(error="Dieser Abschnitt ist ohne Anmeldung sichtbar. Seiten darin darf nur "
+        return jsonify(error="Dieser Abschnitt ist für alle Angemeldeten freigegeben. Seiten darin darf nur "
                              "die Wiki-Verwaltung anlegen."), 403
     title = f"{p['title']} (Kopie)"
     ts = db.now()
@@ -1299,6 +1368,8 @@ def duplicate_page(pid):
 def reorder():
     """Seitenbaum umsortieren: Liste aus {id, parent_id, position}.
     Verschieben darf nur, wer die jeweilige Seite bearbeiten darf."""
+    if not schreibt("wiki"):
+        return jsonify(error=NUR_REDAKTION_VERSCHIEBEN), 403
     items = json_body().get("items") or []
     if not isinstance(items, list) or len(items) > 500 or not all(isinstance(it, dict) for it in items):
         return jsonify(error="Ungültige Angaben."), 400
@@ -1324,7 +1395,7 @@ def reorder():
                 return jsonify(error="Übergeordnete Seite nicht gefunden."), 400
         # Verschieben in einen öffentlichen Abschnitt ist Veröffentlichen – nur für Administratoren.
         if parent_id != page["parent_id"] and inherits_public(parent_id) and not verwaltet("wiki"):
-            return jsonify(error="Dieser Abschnitt ist ohne Anmeldung sichtbar. Dorthin darf nur "
+            return jsonify(error="Dieser Abschnitt ist für alle Angemeldeten freigegeben. Dorthin darf nur "
                                  "die Wiki-Verwaltung verschieben."), 403
         if parent_id != page["parent_id"] and _beschraenkung_verlassen(page, parent_id):
             return jsonify(error=BESCHRAENKUNG_VERLASSEN), 403
@@ -1365,7 +1436,7 @@ def set_restrict(pid):
         return jsonify(error="Nur der Ersteller oder die Wiki-Verwaltung kann das umstellen."), 403
     on = 1 if json_body().get("read_restricted") else 0
     if on and (p["is_public"] or is_public(p)):
-        return jsonify(error="Diese Seite ist öffentlich freigegeben. Bitte zuerst die "
+        return jsonify(error="Diese Seite ist für alle Angemeldeten freigegeben. Bitte zuerst die "
                              "Veröffentlichung zurücknehmen."), 400
     if on:
         # Eine Beschränkung vererbt sich nach unten – eine öffentliche Unterseite darunter
@@ -1377,7 +1448,7 @@ def set_restrict(pid):
             "  AND is_public = 1 AND deleted_at IS NULL ORDER BY title LIMIT 5", (pid, pid))
         if drin:
             namen = ", ".join(f"„{r['title']}“" for r in drin)
-            return jsonify(error="Darunter liegen öffentlich freigegebene Seiten: " + namen +
+            return jsonify(error="Darunter liegen für alle Angemeldeten freigegebene Seiten: " + namen +
                                  ". Bitte erst deren Veröffentlichung zurücknehmen."), 400
     db.execute("UPDATE wiki_pages SET read_restricted = ? WHERE id = ?", (on, pid))
     return jsonify(page=page_json(_get_page(pid)))
@@ -1643,7 +1714,7 @@ def set_share(pid):
         # Auch ein beschränkter Abschnitt darüber zählt: sonst läse jedermann im Netz, was
         # Angemeldete nicht sehen dürfen.
         return jsonify(error="Diese Seite liegt in einem lesebeschränkten Bereich und kann nicht "
-                             "öffentlich freigegeben werden. Bitte zuerst die Beschränkung aufheben."), 400
+                             "für alle Angemeldeten freigegeben werden. Bitte zuerst die Beschränkung aufheben."), 400
     if d.get("is_public") and d.get("public_children"):
         # Sonst geriete eine beschränkte Unterseite durch die Freigabe des Abschnitts ins Netz.
         drin = db.query(
@@ -1671,7 +1742,10 @@ def set_share(pid):
 def _comment_json(c, page):
     me = current_user()
     out = dict(c)
-    out["can_delete"] = bool(me and (verwaltet("wiki", me) or c["user_id"] == me["id"] or page["created_by"] == me["id"]))
+    # Erledigen und löschen: der Verfasser seine eigenen, der Seitenersteller fremde an seiner Seite erst ab Redakteur
+    # (Entscheidung des Nutzers, 01.11.2026), die Wiki-Verwaltung alle.
+    out["can_delete"] = bool(me and (verwaltet("wiki", me) or c["user_id"] == me["id"]
+                                     or (schreibt("wiki", me) and page["created_by"] == me["id"])))
     out["can_edit"] = bool(me and (verwaltet("wiki", me) or c["user_id"] == me["id"]))
     return out
 
@@ -1783,12 +1857,14 @@ def delete_comment(cid):
 @bp.post("/files")
 @wiki_required
 def upload_file():
+    if not darf_hochladen():
+        return jsonify(error=NUR_REDAKTION_DATEIEN), 403
     f = request.files.get("file") or request.files.get("image")
     if not f:
         return jsonify(error="Keine Datei empfangen."), 400
     # Ein HTML-Baustein bettet sich mit eigenem Skript gesandboxt ein (siehe media() in
     # __init__.py) – sicher für die Leser, aber wer ihn einstellen darf, bleibt trotzdem auf
-    # Redakteur/Admin beschränkt: automatisch für jeden Leser ausgeführter Inhalt ist etwas
+    # die Wiki-Verwaltung beschränkt: automatisch für jeden Leser ausgeführter Inhalt ist etwas
     # anderes als ein Download, den sich jemand erst selbst öffnen müsste.
     # Dieselbe Endungsregel wie beim Ablegen (wiki_endung): Eine Datei ohne Endung mit erfundenem
     # Inhaltstyp lief sonst an dieser Prüfung vorbei und wurde erst in der Ablage zum .html.
@@ -1814,6 +1890,8 @@ def upload_file():
 def rotate_file():
     """Ein Artikelbild um eine Vierteldrehung kippen. Wie beim Zuschnitt entsteht eine neue
     Datei; das Ausgangsbild bleibt liegen."""
+    if not darf_hochladen():
+        return jsonify(error=NUR_REDAKTION_DATEIEN), 403
     d = request.get_json(silent=True) or {}
     name = str(d.get("file") or "").replace("/media/wiki/", "", 1)
     if not name:
@@ -1835,6 +1913,8 @@ def crop_file():
     """Ausschnitt eines Artikelbildes. Das Ergebnis ist eine neue Datei – das Ausgangsbild
     bleibt liegen, damit ein Zuschnitt sich rückgängig machen lässt und ein Bild, das an
     zwei Stellen steht, nicht an beiden seine Ränder verliert."""
+    if not darf_hochladen():
+        return jsonify(error=NUR_REDAKTION_DATEIEN), 403
     d = request.get_json(silent=True) or {}
     name = str(d.get("file") or "").replace("/media/wiki/", "", 1)
     if not name:
@@ -1851,7 +1931,16 @@ def crop_file():
     return jsonify(url=f"/media/wiki/{neu}")
 
 
-# --- Öffentliche Seiten (ohne Login) ----------------------------------------------------------
+# --- Für alle Angemeldeten freigegebene Seiten („öffentlich“; seit dem 01.11.2026 nur noch mit Anmeldung) -----------
+# Früher las das jeder ohne Anmeldung (wiki.*, /oeffentlich). Heute liest es der Lesemodus: angemeldete Konten ohne
+# Stufe in der Strömipedia (auth.wiki_lesemodus, public.js). Ohne Sitzung antworten diese Schnittstellen 401.
+
+@public_bp.before_request
+def _nur_angemeldet():
+    if not current_user():
+        return jsonify(error="Nicht angemeldet"), 401
+    return None
+
 
 def _public_page_json(p):
     return {k: p[k] for k in ("id", "title", "slug", "parent_id", "content", "format", "updated_at")}
@@ -1872,7 +1961,7 @@ def public_index():
 def _seitenkarte():
     """Alle Seiten auf einen Griff (auch die im Papierkorb – eine Beschränkung dort zählt weiter):
     Grundlage, um die Freigabe vieler Treffer ohne eine Abfrage je Treffer und Ahnen zu klären.
-    Die öffentliche Suche läuft ohne Anmeldung; je Treffer mehrere Abfragen wären dort eine
+    Die Suche des Lesemodus läuft über viele Treffer; je Treffer mehrere Abfragen wären eine
     Einladung, den Server zu beschäftigen."""
     return {r["id"]: r for r in db.query(
         "SELECT id, parent_id, is_public, public_children, read_restricted, deleted_at FROM wiki_pages")}
@@ -1934,12 +2023,12 @@ def public_search():
 def public_page(slug):
     p = _get_page(slug)
     if not p or not is_public(p):
-        return jsonify(error="Diese Seite ist nicht öffentlich."), 404
+        return jsonify(error="Diese Seite ist nicht für alle Angemeldeten freigegeben."), 404
     root = public_root(p)
     tree_rows = []
     if root and root["public_children"]:
         def collect(pid):
-            # Beschränkte Seiten samt allem darunter bleiben draußen – der Baum steht ohne Anmeldung.
+            # Beschränkte Seiten samt allem darunter bleiben draußen – der Baum steht im Lesemodus.
             for k in db.query("SELECT id, title, slug, parent_id FROM wiki_pages "
                               "WHERE parent_id = ? AND deleted_at IS NULL AND read_restricted = 0 "
                               "ORDER BY position, title COLLATE NOCASE", (pid,)):
@@ -1953,7 +2042,7 @@ def public_page(slug):
 
 
 def file_is_public(filename):
-    """Ein Wiki-Anhang darf ohne Login gezeigt werden, wenn ihn eine öffentliche Seite einbindet.
+    """Ein Wiki-Anhang darf ein angemeldetes Konto ohne Wiki-Stufe sehen, wenn ihn eine freigegebene Seite einbindet.
     Die Zuordnung steht indiziert in wiki_page_files – kein LIKE über alle Seiteninhalte."""
     # Genauso normalisiert wie beim Eintragen in file_refs, sonst passt ein kodierter Name nicht.
     ref = unquote(filename or "").strip("/")

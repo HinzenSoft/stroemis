@@ -15,7 +15,7 @@ from datetime import datetime
 from flask import Blueprint, current_app, jsonify, request
 
 from . import db
-from .auth import current_user, eingabefehler_abfangen, json_body, karte_required, verwaltet
+from .auth import current_user, eingabefehler_abfangen, json_body, karte_required, schreibt, verwaltet
 from .images import delete_photo_files, store_upload
 
 bp = Blueprint("albums", __name__, url_prefix="/api")
@@ -82,9 +82,10 @@ def album_json(a, photos):
 
 
 def can_edit(owner_id):
-    """Ein Album führt, wer es angelegt hat – dazu Administratoren und Redakteure."""
+    """Ein Album führt, wer es angelegt hat (ab Redakteur) – dazu die Verwaltung der Ankerplätze. Ein Mitglied sieht
+    Spots und Alben, bearbeitet aber nichts – auch kein Album, das es vor der Stufe Redakteur angelegt hat."""
     u = current_user()
-    return verwaltet("karte", u) or u["id"] == owner_id
+    return verwaltet("karte", u) or (schreibt("karte", u) and u["id"] == owner_id)
 
 
 def can_edit_photo(p):
@@ -119,6 +120,10 @@ def _clean_album(d, existing=None):
     if "title" in vals and not vals["title"]:
         raise ValueError("Der Titel darf nicht leer sein.")
     return vals
+
+
+# Alben anlegen (auch per Einwurf auf die Karte): ab Redakteur (Stufe Redakteur, 01.11.2026).
+NUR_REDAKTION = "Alben anlegen dürfen Redakteure und die Verwaltung der Ankerplätze."
 
 
 # --- Karte -------------------------------------------------------------------
@@ -232,6 +237,8 @@ def list_albums():
 @bp.post("/albums")
 @karte_required
 def create_album():
+    if not schreibt("karte"):
+        return jsonify(error=NUR_REDAKTION), 403
     try:
         vals = _clean_album(json_body())
     except ValueError as exc:
@@ -401,6 +408,8 @@ def einwurf():
     Das neue Album entsteht in jedem Fall zuerst: Die Geotags kennt der Server erst, wenn die
     Dateien verarbeitet sind, und verarbeitete Bilder brauchen ein Album. Es ist die Antwort auf
     „neues Album“, und beim Zusammenlegen löst es sich wieder auf."""
+    if not schreibt("karte"):
+        return jsonify(error=NUR_REDAKTION), 403
     files = request.files.getlist("files")
     if not files:
         return jsonify(error="Keine Dateien empfangen."), 400

@@ -20,9 +20,11 @@ from PIL import Image  # noqa: E402
 H = {"X-Requested-With": "XMLHttpRequest"}
 
 
-# Die Stufen, mit denen Konten bis zum 18.10.2026 starteten (Mitglied in Spots und Wiki, kein Material). Die Tests der
-# Spots und des Wikis legen ihre Konten so an; die heutige Vorgabe (nur Material „Mitglied“) prüft test_rechte.
-BISHER = {"karte": 1, "wiki": 1, "material": 0}
+# Die Stufen, mit denen Konten bis zum 18.10.2026 starteten (Mitglied in Spots und Wiki, kein Material) – seit der Stufe
+# Redakteur (01.11.2026) legt erst ein Redakteur Seiten und Alben an; was das Mitglied von damals durfte, darf heute der
+# Redakteur (2). Die Tests der Spots und des Wikis legen ihre Konten so an; die heutige Vorgabe (nur Material
+# „Mitglied“) prüft test_rechte, die Stufe Mitglied tests/test_rechte_redakteur.py.
+BISHER = {"karte": 2, "wiki": 2, "material": 0}
 
 
 def wie_bisher(adm, uid):
@@ -156,7 +158,7 @@ def test_everything():
 
         # Login als Admin
         r = c.post("/api/auth/login", json={"email": "admin@example.org", "password": "geheim123"})
-        assert r.status_code == 200 and r.json["user"]["rechte"]["verwaltung"] == 2
+        assert r.status_code == 200 and r.json["user"]["rechte"]["verwaltung"] == 3
         assert c.get("/").status_code == 200
         assert "Content-Security-Policy" in c.get("/").headers
 
@@ -319,18 +321,29 @@ def test_everything():
         assert r.status_code == 201
         assert c3.delete(f"/api/wiki/comments/{cid}", headers=H).status_code == 200
         assert c2.get(f"/api/wiki/pages/{root['id']}/comments").json["comments"] == []
-        # Öffentliche Freigabe: nur Admin; Abschnitt inkl. Unterseiten; ohne Login lesbar; Subdomain
-        assert anon.get("/api/public/pages/anker").status_code == 404
+        # Freigabe für alle Angemeldeten (früher „öffentlich“): nur Admin; Abschnitt inkl. Unterseiten; lesbar im
+        # Lesemodus. Ohne Anmeldung gibt es seit dem 01.11.2026 keine Seite mehr: Schnittstelle 401, alte Adressen und die
+        # Subdomain führen zur Anmeldung mit Rücksprung in die Strömipedia.
+        lm = leser_client(app)
+        assert lm.get("/api/public/pages/anker").status_code == 404
         assert c2.put(f"/api/wiki/pages/{root['id']}/share", json={"is_public": True}).status_code == 403
         assert c.put(f"/api/wiki/pages/{root['id']}/share", json={"is_public": True, "public_children": True}).status_code == 200
-        pub = anon.get("/api/public/pages/ringankern").json
+        pub = lm.get("/api/public/pages/ringankern").json
         assert pub["page"]["title"] == "Ringankern" and {t["slug"] for t in pub["tree"]} == {"anker", "ringankern"}
-        assert anon.get("/api/public/index").json["pages"][0]["slug"] == "anker"
-        assert anon.get("/oeffentlich/ringankern").status_code == 200
+        assert lm.get("/api/public/index").json["pages"][0]["slug"] == "anker"
+        for adresse in ("/api/public/pages/ringankern", "/api/public/index", "/api/public/search?q=ring"):
+            r = anon.get(adresse)
+            assert r.status_code == 401 and "Ringankern" not in r.get_data(as_text=True), adresse
+        r = anon.get("/oeffentlich/ringankern")
+        assert r.status_code == 302 and r.headers["Location"] == "/login?next=/stroemipedia/ringankern", r.headers
+        r = lm.get("/oeffentlich/ringankern")
+        assert r.status_code == 302 and r.headers["Location"] == "/stroemipedia/ringankern", r.headers
+        assert 'data-modus="lesemodus"' in lm.get("/stroemipedia/ringankern").get_data(as_text=True)
         r = anon.get("/", headers={"Host": "wiki.xn--strmis-yxa.de"})
-        assert r.status_code == 200 and "public.js" in r.text
+        assert r.status_code == 302 and r.headers["Location"] == "http://localhost/login?next=/stroemipedia", r.headers
         r = anon.get("/ringankern", headers={"Host": "wiki.xn--strmis-yxa.de"})
-        assert r.status_code == 200 and "public.js" in r.text
+        assert r.status_code == 302 and r.headers["Location"] == "http://localhost/login?next=/stroemipedia/ringankern"
+        assert "public.js" not in anon.get("/oeffentlich/").get_data(as_text=True)
         assert anon.get("/ringankern").status_code == 404
         assert anon.get("/api/wiki/tree", headers={"Host": "wiki.xn--strmis-yxa.de"}).status_code == 401
         assert len(c2.get(f"/api/wiki/pages/{root['id']}/revisions").json["revisions"]) == 3
@@ -374,8 +387,10 @@ def test_everything():
         r = c2.post("/api/wiki/files", data={"file": (jpeg(False), "skizze.jpg")}, headers=H, content_type="multipart/form-data")
         assert r.status_code == 200 and r.json["kind"] == "image"
         assert anon.get(r.json["url"]).status_code in (401, 302)  # nicht öffentlich: Login-Weiterleitung
+        assert lm.get(r.json["url"]).status_code == 403            # Lesemodus: nicht in einer freigegebenen Seite
         c2.put(f"/api/wiki/pages/{root['id']}", json={"content": f"# Anker\n\n![s]({r.json['url']})", "format": "markdown"})
-        assert anon.get(r.json["url"]).status_code == 200
+        assert lm.get(r.json["url"]).status_code == 200
+        assert anon.get(r.json["url"]).status_code in (401, 302)   # ohne Anmeldung auch eingebunden nicht mehr
         # Zuschneiden: Das Ergebnis ist eine NEUE Datei, das Ausgangsbild bleibt liegen –
         # sonst verlöre ein Bild, das an zwei Stellen steht, an beiden seine Ränder.
         bild = r.json["url"].rsplit("/", 1)[-1]
@@ -485,7 +500,7 @@ def test_everything():
 
         # Admin-Endpunkte + Passwort-Reset-Link
         assert c2.get("/api/admin/users").status_code == 403
-        users = c.get("/api/admin/users").json["users"]
+        users = [u for u in c.get("/api/admin/users").json["users"] if u["email"] != "lesemodus@example.org"]   # leser_client
         assert len(users) == 3 and all(u["status"] == "active" for u in users)
         r = c.post("/api/auth/forgot", json={"email": "sr@example.org"})
         assert r.status_code == 200
@@ -575,9 +590,9 @@ def test_everything():
         assert c2.get("/api/wiki/search?q=%25").json["results"] == []   # "%" ist kein Platzhalter
 
         # Öffentliche Suche zeigt nur freigegebene Seiten
-        pub_hits = anon.get("/api/public/search?q=ring").json["results"]
+        pub_hits = lm.get("/api/public/search?q=ring").json["results"]
         assert all(h["slug"] in ("anker", "ringankern", "bandschlingenanker") for h in pub_hits), pub_hits
-        assert anon.get("/api/public/search?q=x").json["results"] == []  # zu kurz
+        assert lm.get("/api/public/search?q=x").json["results"] == []  # zu kurz
 
         # --- Lesebeschränkung, Beschriftungen, Beobachten ---------------------------------
         priv = c2.post("/api/wiki/pages", json={"title": "Nur intern", "content": "# Nur intern\ngeheimwort"}).json["page"]
@@ -663,8 +678,8 @@ def test_haertung():
         assert c1.put(f"/api/wiki/pages/{eigen['id']}", json={"parent_id": pub["id"]}).status_code == 403
         assert adm.post("/api/wiki/pages", json={"title": "Erlaubt", "parent_id": pub["id"],
                                                  "content": "x"}).status_code == 201
-        assert anon_get(app, "/api/public/pages/erlaubt").status_code == 200
-        assert anon_get(app, "/api/public/pages/schmuggel").status_code == 404
+        assert leser_get(app, "/api/public/pages/erlaubt").status_code == 200
+        assert leser_get(app, "/api/public/pages/schmuggel").status_code == 404
 
         # --- Umbenennen: die alte Adresse trägt weiter ---------------------------------------
         assert c1.put(f"/api/wiki/pages/{eigen['id']}", json={"title": "Umbenannt"}).json["page"]["slug"] == "umbenannt"
@@ -798,9 +813,9 @@ def test_haertung():
         # --- Verwaltung im Wiki (Rechte-Matrix, früher „Redakteur“) ---------------------------
         # Darf alle Seiten bearbeiten und veröffentlichen, aber keine Nutzer verwalten.
         red, red_id = member("redakteur@example.org")
-        assert adm.put(f"/api/admin/users/{red_id}", json={"rechte": {"karte": 2, "wiki": 2}}).status_code == 200
+        assert adm.put(f"/api/admin/users/{red_id}", json={"rechte": {"karte": 3, "wiki": 3}}).status_code == 200
         assert [u["rechte"] for u in adm.get("/api/admin/users").json["users"]
-                if u["email"] == "redakteur@example.org"] == [{"karte": 2, "wiki": 2, "pruefungen": 0, "material": 0, "verwaltung": 0}]
+                if u["email"] == "redakteur@example.org"] == [{"karte": 3, "wiki": 3, "pruefungen": 0, "material": 0, "verwaltung": 0}]
         rseite = c1.post("/api/wiki/pages", json={"title": "Fremde Seite", "format": "markdown",
                                                   "content": "# Fremde Seite\n\nText"}).json["page"]
         c1.put(f"/api/wiki/pages/{rseite['id']}/restrict", json={"read_restricted": True})
@@ -810,7 +825,7 @@ def test_haertung():
         assert red.delete(f"/api/wiki/pages/{rseite['id']}", headers=H).status_code == 200
         red.post(f"/api/wiki/pages/{rseite['id']}/restore", json={}, headers=H)
         assert red.get("/api/admin/users").status_code == 403                        # keine Nutzer
-        assert red.put(f"/api/admin/users/{red_id}", json={"rechte": {"verwaltung": 2}}, headers=H).status_code == 403
+        assert red.put(f"/api/admin/users/{red_id}", json={"rechte": {"verwaltung": 3}}, headers=H).status_code == 403
         # Verwaltung im Wiki schließt das Veröffentlichen ein – nur an der Lesebeschränkung der
         # Seite scheitert es hier, nicht am Recht.
         assert red.put(f"/api/wiki/pages/{rseite['id']}/share",
@@ -830,21 +845,25 @@ def test_haertung():
         bild_up = red.post("/api/wiki/files", data={"file": (jpeg(False), "normal.jpg")}, headers=H,
                            content_type="multipart/form-data")
         assert "default-src 'none'" in red.get(bild_up.json["url"]).headers["Content-Security-Policy"]
-        # Auf einer freigegebenen Seite ist der Baustein auch ohne Anmeldung abrufbar – aber
-        # genau deshalb bleibt die Sandbox-Richtlinie auch für Unangemeldete bestehen.
+        # Auf einer freigegebenen Seite erreicht der Baustein auch Konten ohne Wiki-Stufe (Lesemodus) – die
+        # Sandbox-Richtlinie bleibt; ohne Anmeldung gibt es ihn seit dem 01.11.2026 nicht mehr.
         embed_seite = adm.post("/api/wiki/pages", json={"title": "Grafikseite", "parent_id": pub["id"],
                                                          "content": f"# Grafikseite\n\n![t]({html_up.json['url']})"})
         assert embed_seite.status_code == 201
-        anon_embed = anon_get(app, html_up.json["url"])
-        assert anon_embed.status_code == 200 and anon_embed.headers["Content-Security-Policy"] == "sandbox allow-scripts"
+        lm_embed = leser_get(app, html_up.json["url"])
+        assert lm_embed.status_code == 200 and lm_embed.headers["Content-Security-Policy"] == "sandbox allow-scripts"
+        assert anon_get(app, html_up.json["url"]).status_code in (401, 302)
 
         # Unbekannte Module und Stufen verteilen keine Rechte.
         assert adm.put(f"/api/admin/users/{red_id}", json={"rechte": {"wiki": 7}}).status_code == 400
         assert adm.put(f"/api/admin/users/{red_id}", json={"rechte": {"chef": 2}}).status_code == 400
         assert adm.put(f"/api/admin/users/{red_id}", json={"rechte": {"verwaltung": 1}}).status_code == 400
+        assert adm.put(f"/api/admin/users/{red_id}", json={"rechte": {"verwaltung": 2}}).status_code == 400   # kein Redakteur
+        assert adm.put(f"/api/admin/users/{red_id}", json={"rechte": {"material": 2}}).status_code == 400
+        assert adm.put(f"/api/admin/users/{red_id}", json={"rechte": {"wiki": 4}}).status_code == 400
         assert adm.put(f"/api/admin/users/{red_id}", json={"rechte": {"wiki": True}}).status_code == 400
         assert [u["rechte"]["wiki"] for u in adm.get("/api/admin/users").json["users"]
-                if u["email"] == "redakteur@example.org"] == [2]
+                if u["email"] == "redakteur@example.org"] == [3]
         # Zurück auf Mitglied: die beschränkte fremde Seite ist wieder zu.
         assert adm.put(f"/api/admin/users/{red_id}", json={"rechte": {"karte": 1, "wiki": 1}}).status_code == 200
         assert red.get(f"/api/wiki/pages/{rseite['slug']}").status_code == 403
@@ -1134,12 +1153,14 @@ def test_haertung():
         cc = c1.get(foto["thumb"]).headers["Cache-Control"]
         assert "private" in cc and "public" not in cc, cc
         assert "default-src 'none'" in c1.get(foto["thumb"]).headers["Content-Security-Policy"]
-        # Ein Anhang einer öffentlichen Seite darf gemeinsam zwischengespeichert werden
+        # Ein Anhang einer freigegebenen Seite: lesbar im Lesemodus, aber nur noch im eigenen Zwischenspeicher – ohne
+        # Anmeldung gibt es ihn nicht mehr (01.11.2026).
         up = c1.post("/api/wiki/files", data={"file": (jpeg(False), "s.jpg")}, headers=H,
                      content_type="multipart/form-data").json["url"]
         adm.put(f"/api/wiki/pages/{pub['id']}", json={"content": f"# Freigegeben\n\n![s]({up})", "format": "markdown"})
-        assert "public" in anon_get(app, up).headers["Cache-Control"]
-        assert anon_get(app, up).status_code == 200
+        cc = leser_get(app, up).headers["Cache-Control"]
+        assert "private" in cc and "public" not in cc, cc
+        assert leser_get(app, up).status_code == 200 and anon_get(app, up).status_code in (401, 302)
 
         # --- Album-Besitzer darf Bilder im eigenen Album ändern ------------------------------
         r = adm.post(f"/api/albums/{aid}/photos", data={"files": [(jpeg(False), "vomadmin.jpg")],
@@ -1228,7 +1249,8 @@ def test_haertung():
         with app.app_context():
             from app import db as _db
             _db.execute("UPDATE wiki_pages SET public_children = 1 WHERE id = ?", (dach["id"],))
-        assert db_.get(f"/api/public/pages/{gh['slug']}").status_code == 404
+        assert leser_get(app, f"/api/public/pages/{gh['slug']}").status_code == 404
+        assert db_.get(f"/api/public/pages/{gh['slug']}").status_code == 401
 
         # --- Papierkorb: was gemeinsam gelöscht wurde, kommt gemeinsam zurück ----------------
         # Eine Unterseite, die schon vorher einzeln im Papierkorb lag, darf beim Wiederherstellen
@@ -1596,6 +1618,26 @@ def anon_get(app, path):
     return app.test_client().get(path)
 
 
+def leser_client(app):
+    """Angemeldet, aber ohne Stufe in der Strömipedia (Lesemodus): Seit dem 01.11.2026 gibt es kein Wiki ohne Anmeldung
+    mehr – was früher jeder ohne Anmeldung las (/api/public, Anhänge freigegebener Seiten), liest nur noch so ein Konto
+    (und jedes mit Wiki-Stufe); ohne Anmeldung antwortet es 401. Je App ein Konto, beim ersten Gebrauch angelegt."""
+    if not hasattr(app, "_leser"):
+        adm = app.test_client()
+        assert adm.post("/api/auth/login", json={"email": "admin@example.org", "password": "geheim123"}).status_code == 200
+        r = adm.post("/api/admin/users", json={"email": "lesemodus@example.org", "password": "passwort1",
+                                               "name": "Lesemodus Probe", "rechte": {"wiki": 0, "material": 0}})
+        assert r.status_code == 201, r.get_json()
+        c = app.test_client()
+        assert c.post("/api/auth/login", json={"email": "lesemodus@example.org", "password": "passwort1"}).status_code == 200
+        app._leser = c
+    return app._leser
+
+
+def leser_get(app, path):
+    return leser_client(app).get(path)
+
+
 def test_befunde():
     """Die Fixes aus der Sicherheitsprüfung vom 15.10.2026 – jeder Punkt einmal nachgestellt."""
     with tempfile.TemporaryDirectory() as tmp:
@@ -1735,12 +1777,12 @@ def test_befunde():
         # --- Öffentlich: ein beschränkter Vorfahr schlägt die Freigabe – auch in Index und Suche
         schau = adm.post("/api/wiki/pages", json={"title": "Schaufenster", "content": "# Schaufenster\n\nsichtbar"}).json["page"]
         assert adm.put(f"/api/wiki/pages/{schau['id']}/share", json={"is_public": True, "public_children": False}).status_code == 200
-        assert any(p["slug"] == "schaufenster" for p in anon_get(app, "/api/public/index").json["pages"])
-        assert anon_get(app, "/api/public/search?q=sichtbar").json["results"]
+        assert any(p["slug"] == "schaufenster" for p in leser_get(app, "/api/public/index").json["pages"])
+        assert leser_get(app, "/api/public/search?q=sichtbar").json["results"]
         assert adm.put(f"/api/wiki/pages/{schau['id']}", json={"parent_id": geheim["id"]}).status_code == 200
-        assert not any(p["slug"] == "schaufenster" for p in anon_get(app, "/api/public/index").json["pages"])
-        assert not anon_get(app, "/api/public/search?q=sichtbar").json["results"]
-        assert anon_get(app, "/api/public/pages/schaufenster").status_code == 404
+        assert not any(p["slug"] == "schaufenster" for p in leser_get(app, "/api/public/index").json["pages"])
+        assert not leser_get(app, "/api/public/search?q=sichtbar").json["results"]
+        assert leser_get(app, "/api/public/pages/schaufenster").status_code == 404
 
         # --- Einstellungen: Zurücksetzen wirkt auch im anderen Arbeitsprozess -----------------
         from app import db as db_mod, einstellungen
@@ -1809,7 +1851,7 @@ def test_rechte():
         # Der Administrator aus der .env hat überall Verwaltung; ein neues Konto die Vorgabe (seit dem 18.10.2026):
         # Mitglied in der Materialablage, sonst nichts – die Startseite führt dorthin, Spots sind zu, das Wiki zeigt den
         # Lesemodus. Vorhandene Konten behalten ihre Stufen.
-        assert adm.get("/api/me").json["user"]["rechte"] == {"karte": 2, "wiki": 2, "pruefungen": 2, "material": 2, "verwaltung": 2}
+        assert adm.get("/api/me").json["user"]["rechte"] == {"karte": 3, "wiki": 3, "pruefungen": 3, "material": 3, "verwaltung": 3}
         neu = app.test_client()
         assert neu.post("/api/auth/register", json={"email": "neu@example.org", "password": "passwort1", "name": "Neu Konto",
                                                     "gliederung": "OG Test"}).status_code == 201
@@ -1830,9 +1872,9 @@ def test_rechte():
         r = adm.post("/api/admin/users", json={"email": "neu3@example.org", "password": "geheim12345",
                                                 "rechte": {"material": 0}})
         assert r.status_code == 201 and r.json["user"]["rechte"]["material"] == 0, r.get_json()
-        # Die übrigen Konten hier starten wie Konten von früher (Mitglied in Spots und Wiki).
+        # Die übrigen Konten hier starten wie Konten von früher, die anlegen durften (heute Redakteur in Spots und Wiki).
         c1, uid1 = member("a@example.org")
-        assert c1.get("/api/me").json["user"]["rechte"] == {"karte": 1, "wiki": 1, "pruefungen": 0, "material": 0, "verwaltung": 0}
+        assert c1.get("/api/me").json["user"]["rechte"] == {"karte": 2, "wiki": 2, "pruefungen": 0, "material": 0, "verwaltung": 0}
         assert c1.get("/").status_code == 200 and c1.get("/ankerplaetze").status_code == 200
         assert c1.get("/riegenkarten").status_code == 403 and c1.get("/leitstelle").status_code == 403
         assert c1.get("/api/pruefungen/lehrgaenge").status_code == 403
@@ -1861,7 +1903,7 @@ def test_rechte():
         # … mit Kopfleiste: Profil und Abmelden bleiben erreichbar, der Reiter „Wiki“ führt in den Lesemodus.
         seite = c1.get("/stroemipedia").get_data(as_text=True)
         assert 'id="logout"' in seite and 'href="/profil"' in seite and '<a href="/stroemipedia"' in seite, seite[-600:]
-        assert "Du siehst die öffentlichen Seiten" in seite
+        assert "für alle Angemeldeten freigegeben" in seite
         fehler = c1.get("/riegenkarten").get_data(as_text=True)              # ebenso die Fehlerseite ohne Recht
         assert 'id="logout"' in fehler and '<a href="/stroemipedia">Zur Strömipedia</a>' in fehler, fehler[-600:]
         assert c1.get("/profil").status_code == 200                      # das Profil bleibt immer
@@ -1877,7 +1919,7 @@ def test_rechte():
 
         # Verwaltung im Wiki: fremde Seiten bearbeiten und veröffentlichen, aber keine Nutzer.
         c2, uid2 = member("b@example.org")
-        assert adm.put(f"/api/admin/users/{uid2}", json={"rechte": {"wiki": 2}}).status_code == 200
+        assert adm.put(f"/api/admin/users/{uid2}", json={"rechte": {"wiki": 3}}).status_code == 200
         fremd = adm.post("/api/wiki/pages", json={"title": "Fremd", "content": "# Fremd"}).json["page"]
         assert c2.put(f"/api/wiki/pages/{fremd['id']}", json={"content": "# Fremd\n\nNeu"}).status_code == 200
         assert c2.put(f"/api/wiki/pages/{fremd['id']}/share", json={"is_public": True}, headers=H).status_code == 200
@@ -1885,8 +1927,8 @@ def test_rechte():
         assert c2.get("/api/pruefungen/lehrgaenge").status_code == 403
 
         # Verwaltung in der Leitstelle zieht alle Module nach – auch gespeichert, nicht nur wirksam.
-        assert adm.put(f"/api/admin/users/{uid2}", json={"rechte": {"verwaltung": 2}}).status_code == 200
-        assert c2.get("/api/me").json["user"]["rechte"] == {"karte": 2, "wiki": 2, "pruefungen": 2, "material": 2, "verwaltung": 2}
+        assert adm.put(f"/api/admin/users/{uid2}", json={"rechte": {"verwaltung": 3}}).status_code == 200
+        assert c2.get("/api/me").json["user"]["rechte"] == {"karte": 3, "wiki": 3, "pruefungen": 3, "material": 3, "verwaltung": 3}
         assert c2.get("/api/admin/users").status_code == 200 and c2.get("/api/pruefungen/lehrgaenge").status_code == 200
         # Niemand nimmt sich selbst die Verwaltung; andere Module am eigenen Konto gehen.
         assert c2.put(f"/api/admin/users/{uid2}", json={"rechte": {"verwaltung": 0}}).status_code == 400
@@ -1895,10 +1937,10 @@ def test_rechte():
         # übrigen Module auf Verwaltung, bis jemand sie einzeln setzt – nichts wird stillschweigend
         # auf einen früheren Stand zurückgedreht.
         assert c2.put(f"/api/admin/users/{uid2}", json={"rechte": {"pruefungen": 0}}).status_code == 200
-        assert c2.get("/api/me").json["user"]["rechte"]["pruefungen"] == 2
+        assert c2.get("/api/me").json["user"]["rechte"]["pruefungen"] == 3
         assert adm.put(f"/api/admin/users/{uid2}", json={"rechte": {"verwaltung": 0}}).status_code == 200
         # Auch Material bleibt auf Verwaltung (Material-Verwaltung: alle Bestände), bis jemand es einzeln senkt.
-        assert c2.get("/api/me").json["user"]["rechte"] == {"karte": 2, "wiki": 2, "pruefungen": 2, "material": 2, "verwaltung": 0}
+        assert c2.get("/api/me").json["user"]["rechte"] == {"karte": 3, "wiki": 3, "pruefungen": 3, "material": 3, "verwaltung": 0}
         assert adm.put(f"/api/admin/users/{uid2}", json={"rechte": {"pruefungen": 0}}).status_code == 200
         assert c2.get("/api/me").json["user"]["rechte"]["pruefungen"] == 0
         # Anlegen mit Matrix, ohne Angabe die Vorgabe.
@@ -1930,7 +1972,8 @@ def test_rechte():
             stand = {u["email"]: (u["recht_karte"], u["recht_wiki"], u["recht_pruefungen"], u["recht_verwaltung"],
                                    u["recht_material"])
                      for u in db_mod.query("SELECT * FROM users")}
-        assert stand == {"admin@example.org": (2, 2, 2, 2, 2), "red@example.org": (2, 2, 1, 0, 0),
+        # Die Nacharbeit schreibt Verwaltung noch als 2 (db.NACHARBEITEN), Schritt 33 der Materialablage hebt sie auf 3.
+        assert stand == {"admin@example.org": (3, 3, 3, 3, 3), "red@example.org": (3, 3, 1, 0, 0),
                          "nu@example.org": (1, 1, 1, 0, 0), "gast@example.org": (1, 1, 0, 0, 0)}, stand
     print("Rechte-Test bestanden.")
 

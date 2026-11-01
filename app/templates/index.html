@@ -17,7 +17,8 @@
     <button class="chip seil" data-cat="seil">Seiltechnik</button>
     <button class="chip wasser" data-cat="wasser">Gewässer</button>
     <button class="btn secondary" id="btn-albums">Alben</button>
-    <button class="btn" id="btn-new-album"><span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Album<span class="k-anlegen"> anlegen</span></span></button>
+    {# Alben anlegen ab Redakteur (Stufe Redakteur, 01.11.2026) – ein Mitglied sieht die Spots. #}
+    {% if rechte.karte >= stufe.redakteur %}<button class="btn" id="btn-new-album"><span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Album<span class="k-anlegen"> anlegen</span></span></button>{% endif %}
   </div>
   <div id="map"></div>
   <div class="locate-banner hidden" id="locate-banner"></div>

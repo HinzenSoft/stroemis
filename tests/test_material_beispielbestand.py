@@ -450,7 +450,7 @@ def test_beispielbestand():
                 assert f"{mail}@example.invalid" in mails, mail
             # Modulstufe Material: Mitglied, die Material-Verwaltung Verwaltung, die Einsatzkräfte ab der zweiten keinen.
             for u in konten.values():
-                soll = 2 if u["email"].startswith("demo-mv@") else (
+                soll = 3 if u["email"].startswith("demo-mv@") else (
                     0 if re.match(r"demo-einsatzkraft-(?!01@)", u["email"]) else 1)
                 assert u["recht_material"] == soll and u["recht_karte"] == 0 and u["recht_wiki"] == 0 \
                     and u["recht_verwaltung"] == 0, (u["email"], u["recht_material"])
@@ -907,12 +907,12 @@ def test_konten():
             from app import db
             db.execute("DELETE FROM users WHERE email IN ('demo-mv@example.invalid', 'demo-pruefer@example.invalid', "
                        "'demo-wart-a@example.invalid', 'demo-pruefer-2@example.invalid')")
-            konto("demo-mitglied@example.invalid", "DEMO-Mitglied (alt)", recht_material=2, recht_karte=1)
+            konto("demo-mitglied@example.invalid", "DEMO-Mitglied (alt)", recht_material=3, recht_karte=1)
             alt = db.query("SELECT * FROM users WHERE email = 'demo-mitglied@example.invalid'", one=True)
         aus, code = laufen("--beispielbestand", "--artikel", "6")
         assert code == 0, aus[-3000:]
         assert re.search(r"demo-mitglied@example\.invalid .*schon da – Passwort unverändert", aus), aus[-3000:]
-        assert ("demo-mitglied@example.invalid: Stufe in der Materialablage 2 statt 1, Karte an") in aus, aus[-3000:]
+        assert ("demo-mitglied@example.invalid: Stufe in der Materialablage 3 statt 1, Karte an") in aus, aus[-3000:]
         with app.app_context():
             from app import db
             jetzt = db.query("SELECT * FROM users WHERE email = 'demo-mitglied@example.invalid'", one=True)

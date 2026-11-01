@@ -661,7 +661,7 @@ def test_mails():
         r = beantragen(t.p, t.s1, purchased_on="2024-02")
         assert [m[0] for m in liste] == ["admin@example.org"], liste
         assert zurueckziehen(t.p, r.json["antrag"]["id"]).status_code == 200
-        sql(t.app, "UPDATE users SET recht_material = 2 WHERE id = ?", (t.k["katalog_id"],))
+        sql(t.app, "UPDATE users SET recht_material = 3 WHERE id = ?", (t.k["katalog_id"],))
         sql(t.app, "UPDATE mat_folder_grant SET permission = 'verwalten' WHERE user_id = ? AND permission = 'lesen'",
             (t.k["wart_id"],))
         # Still: Umgebungssperre und ohne Mailserver.

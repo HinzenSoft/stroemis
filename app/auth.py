@@ -104,26 +104,38 @@ def _im_hintergrund(funktion, *args):
 
 
 # --- Rechte-Matrix ------------------------------------------------------------------------------
-# Statt Rollen trägt jedes Konto je Modul eine Stufe: 0 kein Zugriff, 1 Mitglied, 2 Verwaltung.
-#   karte       Mitglied: eigene Alben anlegen und bearbeiten; Verwaltung: alle Alben.
-#   wiki        Mitglied: eigene und freigegebene Seiten; Verwaltung: alle Seiten, beschränkte lesen,
-#               veröffentlichen, HTML-Bausteine, Ersteller ändern, endgültig löschen. Kein Zugriff heißt hier:
-#               Lesemodus – nur die Seiten, die der öffentliche Teil zeigt (siehe wiki_lesemodus).
-#   pruefungen  Mitglied: Prüfungen abnehmen; Verwaltung: Kataloge pflegen, jeden Lehrgang leiten.
+# Statt Rollen trägt jedes Konto je Modul eine Stufe: 0 kein Zugriff, 1 Mitglied, 2 Redakteur, 3 Verwaltung – in
+# allen fünf Spalten dieselbe Skala, Verwaltung ist der höchste Wert („>= VERWALTUNG“ stimmt überall). Redakteur gibt
+# es nur in Strömipedia, Ankerplätzen und Riegenkarten (STUFEN_JE_MODUL; Wunsch vom 28.10.2026, Schema-Schritt 33 der
+# Materialablage hob die frühere Verwaltung 2 auf 3).
+#   karte       Mitglied: Spots ansehen; Redakteur: eigene Alben anlegen und bearbeiten (Bilder nur in eigene Alben);
+#               Verwaltung: alle Alben.
+#   wiki        Mitglied: alle Seiten lesen (außer beschränkten) und kommentieren – bearbeiten nur eine Seite, für die
+#               es selbst freigegeben ist (genau diese Seite); Redakteur: eigene Seiten anlegen und bearbeiten,
+#               freigegebene fremde samt Unterseiten; Verwaltung: alle Seiten, beschränkte lesen, veröffentlichen,
+#               HTML-Bausteine, ZIP-Import, Ersteller ändern. Kein Zugriff heißt hier: Lesemodus – nur die Seiten, die
+#               der öffentliche Teil zeigt (siehe wiki_lesemodus).
+#   pruefungen  Mitglied: nur Lehrgänge, in denen das Konto als Ausbilder steht – dort bewerten (als Leitung
+#               eingetragen auch leiten); Redakteur: dazu Lehrgänge anlegen (wird Leitung) und eigene Kataloge;
+#               Verwaltung: alle Lehrgänge und Kataloge.
 #   material    Mitglied: das Modul nutzen (Katalog, Suche, Profil) – Bestand nur über Freigaben je Ordner, die der
 #               Verwalter eines Ordners vergibt; Verwaltung (Material-Verwaltung): zusätzlich Produktkatalog pflegen,
 #               alle Bestände, Gliederungen anlegen, jede Freigabe. Prüfen nie über die Stufe – nur mit Häkchen
 #               „Prüfer“, Urkundennummer und Prüffreigabe. Ohne Stufe wirken weder Freigaben noch das Häkchen
-#               (app/material/services/rechte.py).
+#               (app/material/services/rechte.py). Einen Redakteur gibt es hier nicht.
 #   verwaltung  Verwaltung: Nutzer, Rechte, Einstellungen – und damit alle Rechte überall; eine
-#               Mitglied-Stufe gibt es hier nicht.
-# Die Werte liegen als Spalten recht_<modul> am Nutzer (db.py); api_admin schreibt sie.
+#               Mitglied- oder Redakteur-Stufe gibt es hier nicht.
+# Die Werte liegen als Spalten recht_<modul> am Nutzer (db.py); api_admin schreibt sie. Die Oberfläche kennt dieselben
+# Zahlen als S.STUFE (common.js) und in Vorlagen als „stufe“ (Kontextprozessor in app/__init__.py).
 MODULE = ("karte", "wiki", "pruefungen", "material", "verwaltung")
-KEIN_ZUGRIFF, MITGLIED, VERWALTUNG = 0, 1, 2
-STUFEN = (KEIN_ZUGRIFF, MITGLIED, VERWALTUNG)
+KEIN_ZUGRIFF, MITGLIED, REDAKTEUR, VERWALTUNG = 0, 1, 2, 3
+STUFEN = (KEIN_ZUGRIFF, MITGLIED, REDAKTEUR, VERWALTUNG)
+STUFEN_JE_MODUL = {"karte": STUFEN, "wiki": STUFEN, "pruefungen": STUFEN,
+                   "material": (KEIN_ZUGRIFF, MITGLIED, VERWALTUNG), "verwaltung": (KEIN_ZUGRIFF, VERWALTUNG)}
+STUFE_NAME = {KEIN_ZUGRIFF: "kein Zugriff", MITGLIED: "Mitglied", REDAKTEUR: "Redakteur", VERWALTUNG: "Verwaltung"}
 # Vorgabe für neue Konten (Kontoanfrage und Nutzerverwaltung): Mitglied in der Materialablage, sonst nichts – Spots und
-# Wiki gibt es nicht mehr von selbst (Wunsch vom 18.10.2026; ohne Wiki-Stufe bleibt der Lesemodus). Vorhandene Konten
-# behalten ihre Stufen.
+# Wiki gibt es nicht mehr von selbst (Wunsch vom 18.10.2026, bestätigt am 01.11.2026; ohne Wiki-Stufe bleibt der
+# Lesemodus). Vorhandene Konten behalten ihre Stufen; Redakteure vergibt die Plattform-Verwaltung von Hand.
 VORGABE_NEU = {"karte": KEIN_ZUGRIFF, "wiki": KEIN_ZUGRIFF, "pruefungen": KEIN_ZUGRIFF, "material": MITGLIED,
                "verwaltung": KEIN_ZUGRIFF}
 
@@ -139,8 +151,14 @@ def stufe(modul, user=None):
 
 
 def nutzt(modul, user=None):
-    """Hat Zugang zum Modul (Mitglied oder Verwaltung)."""
+    """Hat Zugang zum Modul (Mitglied, Redakteur oder Verwaltung)."""
     return stufe(modul, user) >= MITGLIED
+
+
+def schreibt(modul, user=None):
+    """Legt im Modul eigene Inhalte an und bearbeitet sie (Redakteur oder Verwaltung) – Seiten, Alben, Lehrgänge,
+    Kataloge. In der Materialablage und der Leitstelle gibt es die Stufe nicht; dort heißt das Verwaltung."""
+    return stufe(modul, user) >= REDAKTEUR
 
 
 def verwaltet(modul, user=None):
@@ -168,7 +186,8 @@ def is_admin(user=None):
 
 
 def is_pruefer(user=None):
-    """Darf Prüfungen abnehmen (Mitglied oder Verwaltung in den Riegenkarten). Der Bereich enthält
+    """Hat eine Stufe in den Riegenkarten (Mitglied, Redakteur oder Verwaltung). Welche Lehrgänge das Konto sieht,
+    entscheidet api_pruefungen._sichtbar (ohne Verwaltung nur die, in denen es als Ausbilder steht). Der Bereich enthält
     personenbezogene Daten von Teilnehmenden – wer ihn nicht braucht, bekommt die Stufe nicht."""
     return nutzt("pruefungen", user)
 
@@ -365,10 +384,10 @@ def ensure_admin():
         try:
             db.execute(
                 "INSERT INTO users (email, password_hash, name, recht_karte, recht_wiki, recht_pruefungen, "
-                "recht_material, recht_verwaltung, created_at) VALUES (?,?,?,2,2,2,2,2,?)",
+                "recht_material, recht_verwaltung, created_at) VALUES (?,?,?,?,?,?,?,?,?)",
                 # Name nach der Rolle, wie sie überall heißt (UI/UX vor dem Merge C5; bis dahin „Administrator“) – nur bei
                 # der Neuanlage, ein bestehendes Startkonto behält seinen Namen.
-                (email, generate_password_hash(pw), "Plattform-Verwaltung", db.now()))
+                (email, generate_password_hash(pw), "Plattform-Verwaltung", *(VERWALTUNG,) * len(MODULE), db.now()))
             current_app.logger.info("Administrator %s angelegt.", email)
         except sqlite3.IntegrityError:
             # Gunicorn startet die App in jedem Arbeitsprozess getrennt. Beim allerersten Start
@@ -379,8 +398,9 @@ def ensure_admin():
     if u and u["recht_verwaltung"] != VERWALTUNG:
         # status mitziehen: ein noch wartendes Konto käme sonst trotz Verwaltungsrecht nicht an der
         # Anmeldung vorbei (login() weist 'pending' vor 'active' ab).
-        db.execute("UPDATE users SET recht_karte = 2, recht_wiki = 2, recht_pruefungen = 2, recht_material = 2, "
-                   "recht_verwaltung = 2, active = 1, status = 'active' WHERE id = ?", (u["id"],))
+        db.execute("UPDATE users SET recht_karte = ?, recht_wiki = ?, recht_pruefungen = ?, recht_material = ?, "
+                   "recht_verwaltung = ?, active = 1, status = 'active' WHERE id = ?",
+                   (*(VERWALTUNG,) * len(MODULE), u["id"]))
 
 
 # --- Endpunkte ---------------------------------------------------------------
@@ -389,8 +409,8 @@ def notify_admins_about_request(user):
     """Alle Administratoren (oder ADMIN_NOTIFY_EMAIL) über eine neue Kontoanfrage informieren."""
     cfg = current_app.config
     to = ([cfg["ADMIN_NOTIFY_EMAIL"]] if cfg.get("ADMIN_NOTIFY_EMAIL") else
-          [a["email"] for a in db.query(
-              "SELECT email FROM users WHERE recht_verwaltung = 2 AND active = 1 ORDER BY id")])[:MAX_NOTIFY_MAILS]
+          [a["email"] for a in db.query("SELECT email FROM users WHERE recht_verwaltung >= ? AND active = 1 ORDER BY id",
+                                        (VERWALTUNG,))])[:MAX_NOTIFY_MAILS]
     body = (
         "Eine neue Kontoanfrage wartet auf Freigabe:\n\n"
         f"Name:        {user['name']}\n"
@@ -462,7 +482,7 @@ def register():
                 # Modul Material, sonst nichts – das Wiki lesen sie im Lesemodus; VORGABE in api_admin.py)
                 # und warten auf die Freigabe.
                 (email, pw_hash, name, gliederung, _einzeilig(sfield(d, "phone")),
-                 *((2, 2, 2, 2, 2) if first else tuple(VORGABE_NEU[m] for m in MODULE)),
+                 *((VERWALTUNG,) * len(MODULE) if first else tuple(VORGABE_NEU[m] for m in MODULE)),
                  1 if first else 0, "active" if first else "pending",
                  sfield(d, "reason").strip()[:2000], db.now()))
     except sqlite3.IntegrityError:

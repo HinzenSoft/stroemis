@@ -34,7 +34,7 @@ DOC_EXT = {".pdf", ".doc", ".docx", ".odt", ".rtf", ".xls", ".xlsx", ".ods", ".c
            ".ppt", ".pptx", ".odp", ".txt", ".zip", ".gpx", ".kml", ".kmz"} | AUDIO_EXT
 # Die eine bewusste Ausnahme von "ohne ausführbare Formate": ein eigenständiger HTML-Baustein
 # zum Einbetten (z. B. eine interaktive Erklärgrafik). Eigene Kategorie statt einfach bei DOC_EXT
-# mitzulaufen – wer das hochladen darf, entscheidet api_wiki.py (nur Redakteur/Admin), und
+# mitzulaufen – wer das hochladen darf, entscheidet api_wiki.py (nur die Wiki-Verwaltung), und
 # ausgeliefert wird er über eine eigene, gesandboxte Route (siehe app/__init__.py).
 EMBED_EXT = {".html"}
 WIKI_EXT = ALLOWED_EXT | VIDEO_EXT | DOC_EXT | EMBED_EXT | {".gif", ".svg"}
@@ -533,7 +533,7 @@ def wiki_endung(file_storage):
     Rechteprüfung beim Hochladen (api_wiki.upload_file) und die Ablage dieselbe Antwort geben.
     Fehlt die Endung, hilft der Inhaltstyp des Browsers aus, aber nur zu einer Bildendung: Aus
     einem erfundenen "image/html" wurde sonst ein .html – und damit ein HTML-Baustein, den auch
-    ein Nutzer ohne Redakteursrecht einstellen konnte."""
+    ein Nutzer ohne Wiki-Verwaltung einstellen konnte."""
     name = file_storage.filename or "datei"
     ext = os.path.splitext(name)[1].lower()
     if not ext and (file_storage.mimetype or "").startswith("image/"):

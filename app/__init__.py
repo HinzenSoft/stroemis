@@ -78,8 +78,10 @@ def _idna(host):
 
 
 class PublicHostMiddleware:
-    """Anfragen an die Wiki-Subdomain landen im öffentlichen Bereich (/oeffentlich/…).
-    API, Medien und statische Dateien bleiben unverändert erreichbar."""
+    """Anfragen an die Wiki-Subdomain landen unter /oeffentlich/… – seit dem 01.11.2026 (kein öffentliches Wiki ohne
+    Anmeldung mehr) nur noch ein Einstieg, der zur Anmeldung bzw. zur Seite unter BASE_URL weiterleitet (public_page).
+    API, Medien und statische Dateien bleiben unverändert erreichbar; die Kennzeichnung im environ sagt der Route, dass
+    das Ziel auf der Hauptadresse liegen muss (die Sitzung gilt nur dort)."""
 
     def __init__(self, wsgi, app):
         self.wsgi, self.app = wsgi, app
@@ -91,8 +93,10 @@ class PublicHostMiddleware:
         host = self.app.config.get("PUBLIC_HOST") or ""
         req_host = _idna(environ.get("HTTP_X_FORWARDED_HOST") or environ.get("HTTP_HOST", ""))
         path = environ.get("PATH_INFO", "/")
-        if host and req_host == host and not path.startswith(("/static/", "/media/", "/api/", "/oeffentlich")):
-            environ["PATH_INFO"] = "/oeffentlich" + (path if path != "/" else "/")
+        if host and req_host == host:
+            environ["stroemis.wiki_host"] = True
+            if not path.startswith(("/static/", "/media/", "/api/", "/oeffentlich")):
+                environ["PATH_INFO"] = "/oeffentlich" + (path if path != "/" else "/")
         return self.wsgi(environ, start_response)
 
 
@@ -184,16 +188,30 @@ def wiki_page(slug):
     return _wiki(slug)
 
 
-# --- Öffentliche Strömipedia (ohne Login; unter der Subdomain wiki.* oder unter /oeffentlich) -----
+# --- Frühere öffentliche Strömipedia (Subdomain wiki.* und /oeffentlich) ------------------------
+# Seit dem 01.11.2026 gibt es kein Wiki ohne Anmeldung mehr (Nutzer: „Veröffentlichen von Artikeln wirkt sich nur noch
+# darauf aus, dass Personen ohne Rechte im Wiki, aber mit Anmeldedaten sie lesen können.“). Alte Links und die
+# Subdomain bleiben gültige Einstiege: ohne Anmeldung zur Anmeldeseite mit Rücksprung, sonst gleich zur Seite in der
+# Strömipedia (mit Stufe die volle, ohne der Lesemodus mit den freigegebenen Seiten). Auf der Subdomain führt die
+# Weiterleitung auf BASE_URL – die Sitzung gilt nur dort. public.html bleibt liegen, wird aber nicht mehr gezeichnet.
+
+def _frueher_oeffentlich(slug):
+    ziel = module.PFAD["wiki"] + (f"/{quote(slug, safe='')}" if slug else "")
+    if not auth.current_user():
+        ziel = url_for("pages.login", next=ziel)
+    if request.environ.get("stroemis.wiki_host"):
+        ziel = current_app.config["BASE_URL"].rstrip("/") + ziel
+    return redirect(ziel)
+
 
 @pages.get("/oeffentlich/")
 def public_index():
-    return render_template("public.html", slug="")
+    return _frueher_oeffentlich("")
 
 
 @pages.get("/oeffentlich/<slug>")
 def public_page(slug):
-    return render_template("public.html", slug=slug)
+    return _frueher_oeffentlich(slug)
 
 
 def _slide_serializer():
@@ -218,7 +236,7 @@ def slideshow():
 
 
 _STRICT_MEDIA_CSP = "default-src 'none'; img-src 'self' data:; media-src 'self'; sandbox"
-# Gilt nur für hochgeladene HTML-Bausteine (EMBED_EXT in images.py; nur Redakteur/Admin dürfen sie
+# Gilt nur für hochgeladene HTML-Bausteine (EMBED_EXT in images.py; nur die Wiki-Verwaltung darf sie
 # einstellen, siehe api_wiki.upload_file). "sandbox allow-scripts" ohne "allow-same-origin" heißt:
 # der Inhalt darf sein eigenes Skript ausführen (sonst bliebe vom Einbetten nichts übrig), läuft
 # dabei aber in einem eigenen, nicht wiederverwendbaren Ursprung – kein Zugriff auf Cookies,
@@ -289,6 +307,12 @@ def admin():
 def _pruefungen_seite(ansicht, lehrgang_id=None, katalog_id=None):
     if not auth.is_pruefer():
         abort(403, description=auth.KEIN_ZUGANG["pruefungen"])
+    # Stufe Redakteur (01.11.2026): Kataloge ab Redakteur; einen fremden Lehrgang (ohne Verwaltung: einer, in dem das
+    # Konto nicht als Ausbilder steht) gibt es für das Konto nicht – dieselbe 404 wie die Schnittstelle.
+    if ansicht in ("kataloge", "katalog") and not auth.schreibt("pruefungen"):
+        abort(403, description=api_pruefungen.NUR_REDAKTION_KATALOG)
+    if lehrgang_id is not None and not api_pruefungen._sichtbar(lehrgang_id):
+        abort(404)
     return render_template("pruefungen.html", user=auth.current_user(), ansicht=ansicht,
                            lehrgang_id=lehrgang_id, katalog_id=katalog_id)
 
@@ -337,6 +361,9 @@ def pruefung_media(kind, filename):
         abort(401)
     if not auth.is_pruefer():
         abort(403)
+    # Nur Medien aus Lehrgängen, die das Konto sieht (Stufe Redakteur, 01.11.2026) – sonst 404 wie eine fehlende Datei.
+    if not api_pruefungen.medium_sichtbar(kind, filename):
+        abort(404)
     wurzel = os.path.join(current_app.config["MEDIA_DIR"], "pruefungen", kind)
     return _media_response(wurzel, filename, 60 * 60, private=True)
 
@@ -397,24 +424,24 @@ def media(kind, filename):
         ziel = safe_join(wurzel, basis + ".mp4")
         if ext.lower() in VIDEO_EXT and ziel and os.path.isfile(ziel):
             filename = basis + ".mp4"
-    public = kind == "wiki" and api_wiki.file_is_public(filename)
-    if not public and not auth.current_user():
-        # Anhänge öffentlicher Wiki-Seiten dürfen ohne Login geladen werden
+    # Ohne Anmeldung nichts – seit dem 01.11.2026 auch keine Anhänge freigegebener Wiki-Seiten mehr.
+    if not auth.current_user():
         abort(401)
+    # „public“: eingebunden in eine für alle Angemeldeten freigegebene Seite – die sieht auch ein Konto ohne Wiki-Stufe.
+    public = kind == "wiki" and not auth.nutzt("wiki") and api_wiki.file_is_public(filename)
     # Medien gehören zu ihrem Modul: Bilder der Spots nur mit Zugang zu den Spots, Artikeldateien
-    # nur mit Zugang zum Wiki (oder öffentlich). Profilbilder sieht jeder Angemeldete.
+    # nur mit Zugang zum Wiki (oder freigegeben für alle Angemeldeten). Profilbilder sieht jeder Angemeldete.
     if kind in ("orig", "web", "thumb") and not auth.nutzt("karte"):
         abort(403)
     if kind == "wiki" and not public and not auth.nutzt("wiki"):
         abort(403)
     # Ein Profilbild ist eine Angabe zur Person: Wer es entfernt, soll es nicht wochenlang aus
     # dem eigenen Zwischenspeicher weiterbekommen. Eine Stunde genügt, um die Autorenzeilen
-    # eines Rundgangs durchs Wiki abzudecken. Öffentliche Anhänge einen Tag: Die dürfen in
-    # gemeinsamen Zwischenspeichern liegen, und eine zurückgenommene Freigabe soll dort nicht
-    # wochenlang nachwirken.
+    # eines Rundgangs durchs Wiki abzudecken. Anhänge über die Freigabe einen Tag: Eine zurückgenommene
+    # Freigabe soll nicht wochenlang nachwirken. Alles nur noch im eigenen Zwischenspeicher (privat).
     dauer = 60 * 60 if kind == "avatar" else 60 * 60 * 24 if public else 60 * 60 * 24 * 30
     csp = _EMBED_CSP if kind == "wiki" and os.path.splitext(filename)[1].lower() in EMBED_EXT else None
-    return _media_response(wurzel, filename, dauer, private=not public, csp=csp)
+    return _media_response(wurzel, filename, dauer, private=True, csp=csp)
 
 
 @pages.get("/healthz")
@@ -693,6 +720,8 @@ def create_app():
         return {"cfg": app.config, "is_admin": auth.is_admin(), "is_pruefer": auth.is_pruefer(),
                 "meine_psa": material_psa() if auth.current_user() else 0,
                 "rechte": auth.rechte_von(auth.current_user()) if auth.current_user() else {},
+                # Die Zahlen der Stufen für Vergleiche in Vorlagen (rechte.wiki >= stufe.redakteur) – wie S.STUFE.
+                "stufe": {"mitglied": auth.MITGLIED, "redakteur": auth.REDAKTEUR, "verwaltung": auth.VERWALTUNG},
                 "wiki_lesemodus": auth.wiki_lesemodus(),
                 "material_zugang": material_zugang(),
                 # Sichtbare Modulnamen und Seitenadressen (app/module.py) für Reiter, Titel und Links.

@@ -14,8 +14,8 @@ CREATE TABLE IF NOT EXISTS users (
   name          TEXT NOT NULL DEFAULT '',
   gliederung    TEXT NOT NULL DEFAULT '',
   phone         TEXT NOT NULL DEFAULT '',
-  -- Rechte je Modul: 0 = kein Zugriff, 1 = Mitglied, 2 = Verwaltung (siehe auth.MODULE).
-  -- Verwaltung im Modul „verwaltung“ schließt alle anderen Rechte ein.
+  -- Rechte je Modul: 0 = kein Zugriff, 1 = Mitglied, 2 = Redakteur, 3 = Verwaltung (siehe auth.MODULE; bis Schritt 33
+  -- der Materialablage hieß 2 Verwaltung). Verwaltung im Modul „verwaltung“ schließt alle anderen Rechte ein.
   recht_karte      INTEGER NOT NULL DEFAULT 1,
   recht_wiki       INTEGER NOT NULL DEFAULT 1,
   recht_pruefungen INTEGER NOT NULL DEFAULT 0,
@@ -453,8 +453,9 @@ MIGRATIONS = [
     ("pruef_teilnehmer", "ergebnis_am", "TEXT"),
     # Prüfungen: die Leitung ist ein eigenes Kennzeichen, nicht mehr nur ein Wort in der Funktion.
     ("pruef_ausbilder", "ist_leitung", "INTEGER NOT NULL DEFAULT 0"),
-    # Rechte-Matrix statt Rollen: je Modul eine Stufe (0 kein Zugriff, 1 Mitglied, 2 Verwaltung).
-    # Die Nacharbeit überträgt role/is_pruefer, danach fallen beide Spalten (OBSOLETE_COLUMNS).
+    # Rechte-Matrix statt Rollen: je Modul eine Stufe (damals 0 kein Zugriff, 1 Mitglied, 2 Verwaltung – seit Schritt 33
+    # der Materialablage ist Verwaltung 3, 2 heißt Redakteur). Die Nacharbeit überträgt role/is_pruefer, danach fallen
+    # beide Spalten (OBSOLETE_COLUMNS).
     ("users", "recht_karte", "INTEGER NOT NULL DEFAULT 1"),
     ("users", "recht_wiki", "INTEGER NOT NULL DEFAULT 1"),
     ("users", "recht_pruefungen", "INTEGER NOT NULL DEFAULT 0"),
@@ -481,16 +482,25 @@ MIGRATIONS = [
 # einer älteren Datenbank noch nicht.
 INDIZES_NACH_MIGRATION = [
     "CREATE UNIQUE INDEX IF NOT EXISTS ux_users_mat_ref ON users(mat_ref) WHERE mat_ref IS NOT NULL",
+    # Riegenkarten (Stufe Redakteur, 01.11.2026): Wer kein Verwalter ist, sieht nur Lehrgänge, in denen er als Ausbilder
+    # steht – auch jede Mediendatei wird über Dateiname → Lehrgang geprüft (app/__init__.py, pruefung_media).
+    "CREATE INDEX IF NOT EXISTS idx_pruef_ausbilder_user ON pruef_ausbilder(user_id)",
+    "CREATE INDEX IF NOT EXISTS idx_pruef_medien_file ON pruef_medien(file)",
+    "CREATE INDEX IF NOT EXISTS idx_pruef_tn_bild ON pruef_teilnehmer(bild) WHERE bild != ''",
 ]
 
 # Was nach dem Anlegen einer Spalte einmalig mit den vorhandenen Zeilen geschieht. Nur der Prozess,
 # der die Spalte wirklich angelegt hat, führt es aus – so läuft es genau einmal.
+# Die Stufen-Nacharbeiten unten schreiben die Verwaltung noch als 2, wie es beim Schreiben galt: Sie laufen nur an einer
+# Datenbank, der die Spalte fehlt – also vor Schritt 33 der Materialablage, der danach 2 auf 3 hebt (SCHEMA_MODULE läuft
+# nach diesen Nacharbeiten). Nicht auf 3 ändern: Die Schritte 8 bis 10 der Materialablage rechnen dort noch mit 2.
 NACHARBEITEN = {
     # Bisher galt als Leitung, wessen Funktion „leit“ enthielt („Lehrgangsleitung“, „Leiter:in“).
     ("pruef_ausbilder", "ist_leitung"):
         "UPDATE pruef_ausbilder SET ist_leitung = 1 WHERE lower(funktion) LIKE '%leit%'",
-    # Administrator → überall Verwaltung; Redakteur → Verwaltung in Spots und Wiki (er durfte dort
-    # schon alles bearbeiten); Nutzer → Mitglied; das Prüfer-Häkchen → Mitglied in Prüfungen.
+    # Administrator → überall Verwaltung; die frühere Rolle „Redakteur“ (role = 'editor', nicht die heutige Stufe) →
+    # Verwaltung in Spots und Wiki (er durfte dort schon alles bearbeiten); Nutzer → Mitglied; das Prüfer-Häkchen →
+    # Mitglied in Prüfungen.
     ("users", "recht_karte"):
         "UPDATE users SET recht_karte = CASE WHEN role IN ('admin', 'editor') THEN 2 ELSE 1 END",
     ("users", "recht_wiki"):

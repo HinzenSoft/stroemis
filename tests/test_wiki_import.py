@@ -42,7 +42,7 @@ def aufbau(tmp):
     assert t.adm.post("/api/auth/login", json={"email": "admin@example.org", "password": "geheim123"}).status_code == 200
     t.mitglied, _ = konto(t.app, t.adm, "mitglied@example.org", "Mitglied Platzhalter", {"wiki": 1})
     t.leser, _ = konto(t.app, t.adm, "leser@example.org", "Leser Platzhalter", {"wiki": 0, "karte": 1})
-    t.redaktion, _ = konto(t.app, t.adm, "redaktion@example.org", "Redaktion Platzhalter", {"wiki": 2})
+    t.redaktion, _ = konto(t.app, t.adm, "redaktion@example.org", "Redaktion Platzhalter", {"wiki": 3})
     t.media = os.path.join(tmp, "media", "wiki")
     return t
 
@@ -397,8 +397,10 @@ def test_erben():
         for s in r.json["seiten"]:
             p = t.adm.get(f"/api/wiki/pages/{s['slug']}").json["page"]
             assert p["effective_public"] and not p["is_public"] and not p["read_restricted"], p
+        # Freigegeben für alle Angemeldeten: das Konto ohne Wiki-Stufe liest sie, ohne Anmeldung niemand (01.11.2026).
         anon = t.app.test_client()
-        assert anon.get(f"/api/public/pages/{r.json['seiten'][0]['slug']}").status_code == 200
+        assert t.leser.get(f"/api/public/pages/{r.json['seiten'][0]['slug']}").status_code == 200
+        assert anon.get(f"/api/public/pages/{r.json['seiten'][0]['slug']}").status_code == 401
         r = importieren(t.adm, archiv, geheim["id"])
         assert r.status_code == 201
         for s in r.json["seiten"]:
@@ -417,7 +419,7 @@ def test_oberflaeche_statisch():
     assert 'data-a="import"' not in baum and "importDialog" not in baum and "ZIP" not in baum
     assert baum.index('data-a="export"') < baum.index('data-a="del"')
     assert js.count("importDialog(") == 2      # die Funktion selbst und der Aufruf aus dem Menü über dem Baum
-    assert "const darfImportieren = () => { const u = window.STROEMIS && STROEMIS.user; return !!(u && u.rechte && u.rechte.wiki === 2); };" in js
+    assert 'const darfImportieren = () => S.stufe("wiki") >= S.STUFE.verwaltung;' in js
     # Seit dem Auftrag „letzte offene Punkte“ (27.10.2026) im Menü „⋯“ neben „Neue Seite“ über dem Baum (mit dem
     # Papierkorb) – vorher drei Knöpfe, „Importieren“ brach am Telefon in eine zweite Zeile. Ziel wählt der Dialog.
     menue = js[js.index("function baumMenu(anchor)"):js.index("function treeRowMenu(anchor, page)")]
@@ -441,7 +443,7 @@ def test_oberflaeche_statisch():
     assert "<h2>Seiten importieren</h2>" in dlg and 'accept=".zip' in dlg and "Einsortieren unter" in dlg
     assert dlg.count('class="btn"') == 1 and '<button class="btn" id="im-ok" type="button">Importieren</button>' in dlg
     assert "Wird importiert …" in dlg and "btn ghost" not in dlg and "esc(" in dlg
-    assert "– oberste Ebene –" in dlg and "ohne Anmeldung sichtbar" in dlg and "ebenso beschränkt" in dlg
+    assert "– oberste Ebene –" in dlg and "für alle Angemeldeten freigegeben" in dlg and "ebenso beschränkt" in dlg
     print("Oberfläche (statisch) bestanden.")
 
 

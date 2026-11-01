@@ -401,7 +401,7 @@ def test_mail_empfaenger():
             del post[:]
             r = anlegen(adm, hms, title="Ohne Materialwart, ohne Material-Verwaltung", serials="RR-1")
             assert sorted(mails()) == ["admin@example.org", "pruefer@example.org"], post
-            schreiben(tmp, "UPDATE users SET recht_material = 2 WHERE email = 'katalog@example.org'")
+            schreiben(tmp, "UPDATE users SET recht_material = 3 WHERE email = 'katalog@example.org'")
             # Ohne Empfänger (Produkt ohne Artikel im Bestand) ist der Versand gleich fertig.
             del post[:]
             leer = produkt_anlegen(kp, ids, "HMS Leer", "HL-2")
