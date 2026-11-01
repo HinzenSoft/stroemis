@@ -62,6 +62,7 @@ Geschichte stehen. Schemaversion nach der Nachbesserung vor dem Merge: 30; mit d
 | PWA und Kontaktadressen | strömis.de als App installierbar (Manifest, Service Worker, Maskottchen auf Rot, ohne Netz nur eine Hinweisseite, „App installieren“ im Profil); Kontaktadressen als Einstellung (Leitstelle → Einstellungen, Gruppe „Seite“) im Fuß jeder Seite, im Hinweis „Entwicklungsserver“ und vor dem Bestandsimport | gebaut 01.11.2026 (kein Schemaschritt), Zweig pwakontakt, zur Freigabe |
 | Stufe Redakteur (Schritt 33) | Rechte-Matrix mit „Redakteur“ in Strömipedia, Ankerplätzen und Riegenkarten (Mitglied liest bzw. bewertet in eigenen Lehrgängen, Redakteur legt eigene Inhalte an, Verwaltung alles); eine Skala 0/1/2/3 in allen Spalten, Schritt 33 hebt Verwaltung 2 → 3; Riegenkarten: Sichtbarkeit nur eigener Lehrgänge (404), eigene Kataloge; dazu: keine Strömipedia ohne Anmeldung mehr | gebaut 01.11.2026 (Schema 33), Zweig redakteur, nicht auf dev |
 | Ausbilder nur mit Konto (Schritt 34) | Riegenkarten: Ausbilder sind Konten mit Stufe ≥ Mitglied (Suche nach Name/E-Mail, Server lehnt anderes mit Zeile ab), Excel-Import ordnet per E-Mail bzw. eindeutigem Namen zu und listet „nicht übernommen“, Schritt 34 verknüpft oder entfernt den Freitext-Bestand ohne Text in der Beschreibung (nur Startprotokoll), Konten ohne Stufe als „ohne Zugriff“ markiert | gebaut 01.11.2026 (Schema 34), Zweig ausbilder, nicht auf dev |
+| Gerätetest 01.11.2026 – Teil 2 (Strömipedia) | Speicherstand sofort („Ungespeichert“, „Speichert …“, „Gespeichert 13:02“, Live-Region); „/“-Menü im sichtbaren Bereich (höchstens 40 %, über dem Cursor); Artikel-Leiste einzeilig (Pfad kürzt sich, „Teilen“/„Inhaltsverzeichnis“ am Finger in „⋯“), unter 500 px Höhe nicht klebend, Cursor nicht unter den Leisten; Inhaltsverzeichnis in „⋯“ als Dialog; Aufgabenlisten-Kästchen 24 px mit Namen; Kommentar als Blatt über dem Artikel; numerische Dateinamen nicht als Alternativtext; Erfolgsmeldungen für Hochladen und Kommentare | gebaut 01.11.2026 (kein Schemaschritt), Zweig gt-wiki, nicht auf dev |
 
 ## Abgleich mit dem Bestand (vor Lieferung 1)
 
@@ -10289,3 +10290,51 @@ es wegen des Schemaschritts.
   nach dem Übernehmen. Leitstelle: Hilfe „Rechte je Modul“ und Hinweis der Matrix ergänzt.
 - Tests: `tests/test_rechte_ausbilder.py` (neu); angepasst: test_pruefungen (Konten statt Freitext), test_rechte_redakteur
   (Schema 34, kein Freitext-Lehrgang mehr), test_pruefungen_import (`email` am Ausbilder).
+
+## Gerätetest 01.11.2026 – Teil 2 (Strömipedia)
+
+Wunsch des Nutzers (wörtlich): „Nimm diesen UI/UX Test und setze die Findings um.“ Quelle: Gerätetest auf Pixel 8 Pro,
+Pixel 10 Pro Fold, Vale V12X und Galaxy Tab S6 Lite (planung/geraetetest/befunde_geraetetest.txt). Jeder Befund wurde
+zuerst auf dem Sammelstand (664c46d) in Chromium mit Touch-Emulation und den Viewports des Tests nachgestellt
+(Tastatur = geringere Fensterhöhe); Bericht mit Vorher-/Nachher-Werten: planung/geraetetest/bericht_teil2.md. Nur
+wiki.js, markdown.js und app.css; kein Schemaschritt.
+
+- **Speicherstand (W5/B10):** `#ed-status` ist eine höfliche Live-Region (`role="status"`, `aria-live="polite"`). Nach der
+  ersten Eingabe steht sofort „Ungespeichert“ (vorher nichts, bis nach rund 3 s „Gespeichert“ kam), während der Anfrage
+  „Speichert …“, danach „Gespeichert HH:MM“. Wer während der Anfrage weiterschreibt, sieht danach „Ungespeichert“ (der
+  Nachschlag folgt); auf den gespeicherten Stand zurückgetippt, gilt wieder die letzte Meldung. Konflikt, fremder
+  Schreiber und „Artikel wäre leer“ bleiben stehen. Eine feste Formatierungsleiste über der Tastatur gibt es nicht – der
+  Editor hat keine; die schwebende Leiste bei Textauswahl erscheint auch am Finger (gemessen bei 448 px).
+- **„/“-Menü (FT12):** Lage und Höhe im sichtbaren Bereich (`visualViewport`): höchstens 40 % seiner Höhe mit eigenem
+  Bildlauf, unter dem Cursor, wenn es dort passt, sonst darüber (unterhalb klebender Leisten); der mit den Pfeiltasten
+  gewählte Eintrag rollt mit. Sichtbarer Teil des Menüs mit dem Cursor am unteren Rand vorher 41/54/0/0/138 px
+  (851 × 358, 448 × 515, 947 × 200, 1333 × 276, 800 × 809), jetzt ganz (143/206/96/110/323 px).
+- **Leisten bei wenig Höhe (Q4/S1/Q1):** Unter 500 px Fensterhöhe und bei `html.tastatur` klebt die Artikel-Leiste nicht
+  mehr, sie rollt mit dem Text weg (Bauchbinde: Teil 1). Im Editor rechnet ein ProseMirror-Plugin (`leistenAbstand`,
+  `scrollThreshold`/`scrollMargin` als Getter) die Unterkante klebender Leisten ein – die Titelzeile lag nach etwas
+  Bildlauf beim Tippen unter der Artikel-Leiste (alle fünf Höhen), jetzt darunter frei. Sprungziele (Überschriften, auch
+  im Editor) halten 72 statt 60 px Abstand unter der Bauchbinde (die Leiste ist am Finger 62 px hoch), unter 500 px
+  Höhe 8 px.
+- **Artikel-Leiste einzeilig (T1, Q4):** Der Pfad hat die Grundbreite 0 und nimmt nur, was die Knöpfe übrig lassen
+  (vorher schrumpften Pfad und Knopfreihe gleichmäßig, und am Finger brachen die Knöpfe um); ab zwei Ebenen über der
+  Seite kürzt `krumenKuerzen` den Mittelteil zu „…“ (Tooltip mit den Ebenen), sobald ein Glied sonst abgeschnitten
+  würde, und jeder Titel endet mit „…“ statt mitten im Wort. Am Finger weichen „Teilen“ und „Inhaltsverzeichnis“ in
+  „⋯“ aus, wenn die Leiste schmaler als 720 px ist (Container-Abfrage `wiki-kopf`); „Kommentieren“ bleibt. Im Editor am
+  Telefon gibt nur der Speicherstand nach. Leistenhöhe am Finger vorher 108 px bei 947 × 364, 883 × 689, 800 × 1160,
+  1280 × 680, 1333 × 680 und 87 px bei 851 × 720, jetzt überall 62 px; am Rechner unverändert eine Zeile. Mit der Marke
+  „… bearbeitet“ bricht die Reihe am Telefon weiter um (passt nicht anders).
+- **Inhaltsverzeichnis (FT1):** Ist der Knopf nicht zu sehen, führt „⋯“ (Lesen und „Weitere Werkzeuge“ im Editor) den
+  Eintrag „Inhaltsverzeichnis“: bis 1180 px als Dialog mit 44-px-Zeilen, ein Tipp springt zum Abschnitt (nach dem
+  Schritt zurück des Dialogs – sonst stellte der Browser die alte Bildlaufhöhe wieder her, `nachDialog`); darüber,
+  wo die Gliederung rechts steht, „Inhaltsverzeichnis ein-/ausblenden“.
+- **Aufgabenlisten (O1):** Kästchen 24 × 24 px (vorher 13 px) mit dem Text des Punkts als `aria-label`
+  (markdown.js `nachbearbeiten`, auch im Lesemodus).
+- **Kommentare am Telefon (W6):** Bis 1180 px öffnet ein Tipp (oder Eingabe) auf eine markierte Stelle den Kommentar samt
+  Antworten als Dialog über dem Artikel (`kommentarBlatt`); vorher sprang die Seite um bis zu 4 065 px ans Ende. Dieselben
+  Knöpfe wie in der Liste (`kommentarHtml`/`kommentarAktionen`), Zurück und Esc schließen.
+- **Dateinamen (FT5):** Rein numerische Namen (auch mit Trennern, etwa „20261101_120301“) werden weder Alternativtext
+  noch Linktext (`nameOhneEndung`; „/“-Menü, Einfügen, Ablegen mehrerer Dateien); vorher Alternativtext „48698“.
+- **Erfolgsmeldungen (FT4):** „Bild hochgeladen“ (ohne brauchbaren Namen mit dem Hinweis auf „ALT“), „Datei
+  hochgeladen“, „HTML-Baustein hochgeladen“, „n Dateien hochgeladen“; „Kommentar erledigt“, „Kommentar wieder geöffnet“,
+  „Kommentar gelöscht“ – vorher still.
+- Tests: `tests/test_wiki_geraetetest.py` (neu, statisch).
