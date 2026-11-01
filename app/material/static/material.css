@@ -2014,6 +2014,9 @@ dialog .mat-knopfgrund { margin: 10px 0 0; }
    „Anleitung“ direkt hinter der Überschrift – die Knöpfe des Kopfs bleiben rechts; an Artikel und Produkt neben der
    Nummer bzw. dem Namen. Auf der Übersicht dauerhaft der Hinweis: blau wie eine Info (kein Rot – das bleibt der
    Hauptaktion und „nicht verwenden“), kräftiger Rand, großer Titel; schmal nur Titel und Knopf. */
+/* inline-block: Die 44 px unter Touch (.lnk) rechnen mit der Zeilenhöhe – als reines Inline neben der Nummer des Artikels
+   blieb die Fläche bei 43 px. */
+.mat-kopf-anleitung { display: inline-block; }
 .page-head > .mat-kopf-anleitung { margin-right: auto; }
 .mat-artikeltitel > h1:has(+ .mat-kopf-anleitung) { display: inline-block; margin-right: 12px; }
 .mat-artikeltitel .mat-kopf-anleitung + .btn-row { margin-top: 12px; }
