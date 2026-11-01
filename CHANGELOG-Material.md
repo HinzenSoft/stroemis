@@ -10539,3 +10539,50 @@ wiki.js, markdown.js und app.css; kein Schemaschritt.
   hochgeladen“, „HTML-Baustein hochgeladen“, „n Dateien hochgeladen“; „Kommentar erledigt“, „Kommentar wieder geöffnet“,
   „Kommentar gelöscht“ – vorher still.
 - Tests: `tests/test_wiki_geraetetest.py` (neu, statisch).
+
+## Gerätetest 01.11.2026 – Teil X (Querschnitt)
+
+Wunsch des Nutzers (01.11.2026): „Nimm diesen UI/UX Test und setze die Findings um.“ Auftrag
+planung/geraetetest/auftrag_teil_x.md – nach dem Zusammenführen der Teile 1–5 (Sammelstand 401853e). Jeder Befund wurde
+vorher auf dem Sammelstand im Browser nachgestellt (Chromium über CDP mit Touch-Emulation, Viewports des Tests); Messungen
+vorher/nachher: planung/geraetetest/bericht_teilx.md. Betrifft alle Module; kein Schemaschritt, keine Schnittstelle.
+
+- **B4 Überfahren nur mit der Maus:** Chrome unter Android hält `:hover` nach einem Tipp fest – „Anmelden“ blieb
+  dunkelrot (gemessen rgb(179, 0, 14) nach dem Tipp, `:hover` true), ebenso Zeilen, Reiter und Menüeinträge. Alle
+  `:hover`-Regeln aller Stylesheets (app.css 64, material.css 25, pruefungen.css 17, freigaben.css, global.css,
+  offline.html) stehen jetzt an Ort und Stelle in `@media (hover: hover) and (pointer: fine)`; gemischte Selektorlisten
+  sind geteilt (der Grundzustand, `:focus-visible`, `.sel`/`.an` bleiben außerhalb), eine tote Regel
+  (`@media (hover: none)` in material.css) ist weg. Am Finger zeigt `:active` dieselbe Farbe, solange der Finger liegt
+  (Knöpfe rot/grau/danger, Hauptnavigation, „Mehr“, Menüeinträge, Chips, Albenzeilen; im Rückruf-Banner hell statt
+  dunkelrot). Was am Rechner erst beim Überfahren erscheint („+“/„⋯“ im Seitenbaum, „Kopieren“ am Codeblock, Anker an
+  Überschriften, Ergebnisknöpfe), steht jetzt bei `(hover: none), (pointer: coarse)` immer da – vorher nur bei
+  `hover: none`. `:focus-visible` unverändert.
+- **B12 Schriftgrößen über die Tokens:** `--fs-klein` 14 px statt 13,1 px (Hilfetexte, Nebenangaben, Meta-Zeilen,
+  Tabellenköpfe, `.btn.small`). Die Hauptnavigation bleibt in jeder Breite 15 px (vorher 14,4 px bis 640 px und 13,1 px
+  bis 480 px), die Einträge in „Mehr“ ebenso; was nicht passt, wandert wie bisher in „Mehr“ (bei 448 px auf der
+  Materialablage zwei statt drei Punkte in der Leiste, bei 344 px einer). Die Zwischentitel der Leisten („Zuletzt
+  besucht“, „Inhalt“, „Kommentare“, Ordner/Filter der Materialablage) und die Zuschreibung an Voraussetzungen der
+  Riegenkarten von 11,8 auf 14 px. Kleiner bleiben nur Marken, Plaketten und Zähler (`--fs-marke`). Folge: Die Reiter
+  eines Lehrgangs bekamen bei 375 px eine zweite Zeile – mit 1 px weniger Polster je Seite wieder einzeilig.
+- **F1/T0/S0 Listen ab 800 px als Tabelle:** Nutzerliste der Leitstelle und Lehrgangsliste der Riegenkarten wechseln
+  erst unter 760 px Inhalt (Fenster 800 px) zu Karten (Container „liste“, vorher 820 px Inhalt = 860 px Fenster) – das
+  Fold innen (851 px) und Tablets hochkant (800 px) bekommen die Tabelle. Die Nutzertabelle ist zwischen 760 und 1 100 px
+  Inhalt 1 100 px breit und rollt in ihrem Rahmen seitwärts (der Name bleibt links stehen) – so stehen die Auswahlfelder
+  mit „Verwaltung“ ganz da (vorher bei 883–1 100 px alle 265 Felder abgeschnitten, „Verwa“) und die Spaltenköpfe laufen
+  nicht ineinander. Menüs in einem abschneidenden Rahmen öffnen nach oben bzw. rollen in sich (`menueRahmen` in
+  common.js beachtet den Rahmen). Der Kopf „Teilnehmende“ der Lehrgangsliste hat eine weiche Trennstelle und 13 % Breite.
+- **Klebende Leisten bei wenig Höhe (Teil 1 × Teile 2–5):** geprüft bei 947 × 364, 1333 × 680 mit Tastatur (276 px) und
+  448 × 891 (auch mit Tastatur, 480 px): Reiter der Riegenkarten, Suchzeile und Ordnerleiste der Materialablage,
+  Abschlussleiste der Prüfung, Artikel-Leiste der Strömipedia und die Albenliste der Ankerplätze sitzen ohne Lücke und
+  ohne Überlappung an der Kopfleiste bzw. am oberen Rand – nichts geändert.
+- **Abschlussleiste der Prüfung am Telefon:** randlos ohne `margin: 0 -12px` – Fläche und Linie reichen nur gezeichnet
+  12 px weiter (Schatten, `border-image-outset`); `.mat-pruefung` ist nicht mehr 12 px breiter als ihr Kasten
+  (st-geraete „U“), Aussehen unverändert.
+- **Q3 Bewertungsmatrix quer:** bis 500 px Höhe ohne Gliederung unter dem Namen und ohne „wer/wann“ in den Zellen (beides
+  in „je Teilnehmende“/„je Leistung“), Zellen 44 px, die Fläche des Namens unsichtbar 45 px: Zeilen 54 statt 91 px, bei
+  947 × 364 fünf statt drei Zeilen im Bild (844 × 390: sechs statt drei).
+- **Gesamtlauf (st-geraete mit den Viewports des Tests):** Die Gliederung rechts neben dem Artikel (Tablet quer mit
+  Touch, 1280 × 680 und 1333 × 680) hatte 33 px hohe Zeilen – am Finger jetzt 44 px.
+- Tests: `tests/test_geraetetest_quer.py` (neu, statisch); angepasst `test_wiki_seitenbaum.py`, `test_material_uiux_u2.py`,
+  `test_module_uiux_u3.py` und `test_material_geraetetest4.py` (erwartete noch den Toast vor Teil 1 – auf dem Sammelstand
+  401853e rot). Die 44-px-Flächen der kompakten Matrix gelten nur unter `pointer: coarse` (Knopfsprache).

@@ -282,7 +282,10 @@ def test_riegenkarten_a10_c6_c7_c11_d13_d14_d15():
     assert "`🔒 eingefroren" not in rk
     # D13: Listen nach der Inhaltsbreite; C11: Duo – Inhalt in der rechten Hälfte.
     assert "main.leitstelle, main.pruef { container: liste / inline-size; }" in css
-    assert "@container liste (max-width: 820px) {" in css and "@container liste (max-width: 720px) {" in pcss
+    # Gerätetest 01.11.2026 (Teil X, F1): Karten erst unter 760 px Inhalt (vorher 820) – Fold innen und Tablets hochkant
+    # bekommen die Tabelle.
+    assert "@container liste (max-width: 759px) {" in css and "@container liste (max-width: 720px) {" in pcss
+    assert "@container liste (max-width: 820px)" not in css
     duo = css[css.index("/* C11: Doppelbildschirm"):]
     assert "main.page.breit.leitstelle, main.pruef[data-ansicht], main.page.profil-seite {" in duo
     assert "max-width: env(viewport-segment-width 1 0); margin-left: env(viewport-segment-left 1 0);" in duo

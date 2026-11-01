@@ -23,7 +23,7 @@
       --font: Univers, "Univers Next", "Univers LT Std", Arial, Helvetica, sans-serif;
       --topbar: 52px;
       --radius: 2px;
-      --fs-klein: .82rem;
+      --fs-klein: .875rem;
       --fokus-hof: rgba(255, 237, 0, .6);
       --sicher-oben: env(safe-area-inset-top, 0px);
       --sicher-links: env(safe-area-inset-left, 0px);
@@ -42,7 +42,8 @@
     p { margin: 0 0 .9em; }
     .btn { display: inline-flex; align-items: center; justify-content: center; min-height: 40px; padding: 8px 18px; margin-top: 6px;
       border-radius: var(--radius); background: var(--rot); color: var(--weiss); font-weight: 700; text-decoration: none; }
-    .btn:hover { background: var(--rot-dunkel); }
+    @media (hover: hover) and (pointer: fine) { .btn:hover { background: var(--rot-dunkel); } }
+    @media (pointer: coarse) { .btn:active { background: var(--rot-dunkel); } }
     :focus-visible { outline: 2px solid var(--anthrazit); outline-offset: 2px; box-shadow: 0 0 0 5px var(--fokus-hof); }
     .muted { color: var(--grau); font-size: var(--fs-klein); }
     @media (pointer: coarse) { .btn { min-height: 44px; } }

@@ -66,6 +66,8 @@
     <select id="u-rolle" aria-label="Nach Rolle filtern"><option value="">Alle Rollen</option></select>
   </div>
   <p class="meta" id="u-zahl" role="status"></p>
+  {# Rahmen: Die Tabelle rollt zwischen 760 und 1 100 px Inhalt darin seitwärts (app.css, Gerätetest F1). #}
+  <div class="nutzer-rahmen">
   <table class="list" id="users">
     <!-- Feste Spaltenbreiten (table-layout: fixed in app.css): So passt die Tabelle in jeder
          Fensterbreite in die Seite, statt sie über den Rand zu schieben. Die fünf Rechte-Spalten
@@ -81,6 +83,7 @@
                     "Materialablage": "Material&shy;ablage", "Leitstelle": "Leit&shy;stelle"} %}
     <thead><tr><th>Name</th><th>E-Mail</th><th>Gliederung</th>{% for m in ("wiki", "karte", "pruefungen", "material", "verwaltung") %}<th>{% if modul.name[m] in trenn %}{{ trenn[modul.name[m]]|safe }}{% else %}{{ modul.name[m] }}{% endif %}</th>{% endfor %}<th>Zuletzt da</th><th>Inhalte</th><th></th></tr></thead><tbody></tbody>
   </table>
+  </div>
   <p class="leerzustand hidden" id="u-leer"><strong>Kein Konto passt</strong>Ändere den Suchbegriff oder wähle „Alle Rollen“.</p>
   {# Protokoll der Blicke über den eigenen Bereich hinaus (Materialablage, Phase 2): selten gebraucht, daher
      zugeklappt; admin_globalsuche.js lädt es erst beim Aufklappen. #}

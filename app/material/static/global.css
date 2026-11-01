@@ -65,7 +65,8 @@
   min-height: 56px; padding: 8px 12px; border: 0; background: none; font: inherit; color: var(--anthrazit);
   text-align: left; cursor: pointer; overflow-wrap: anywhere; }
 .mat-vorschlaege .mv-global strong { color: var(--rot); }
-.mat-vorschlaege .mv-global[aria-selected="true"] > button, .mat-vorschlaege .mv-global > button:hover { background: var(--grau-hell); }
+.mat-vorschlaege .mv-global[aria-selected="true"] > button { background: var(--grau-hell); }
+@media (hover: hover) and (pointer: fine) { .mat-vorschlaege .mv-global > button:hover { background: var(--grau-hell); } }
 .mat-vorschlaege .mv-global .mv-zeile { white-space: normal; }
 .mat-vorschlaege li.mv-trenner { display: flex; align-items: center; gap: 8px; padding: 12px 12px 4px; border-top: 0;
   font-size: var(--fs-marke); font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--wasser); }

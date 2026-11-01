@@ -625,7 +625,10 @@ window.S = (function () {
     if (fokus) m.querySelector("summary").focus();
   }
   // Die Grenzen des Bilds: das Fenster unter der Kopfleiste – auf einem Doppelbildschirm die Hälfte, in der der Knopf steht.
-  function menueRahmen(knopf) {
+  // Steht das Menü in einem Rahmen, der seinen Inhalt abschneidet (overflow – die Nutzertabelle der Leitstelle rollt
+  // zwischen 760 und 1 100 px Inhalt seitwärts, Gerätetest Teil X), gelten auch dessen Ränder: Die Liste öffnet dann
+  // nach oben oder rollt in sich, statt am Rahmen abgeschnitten zu werden.
+  function menueRahmen(knopf, el) {
     let links = 0;
     let rechts = document.documentElement.clientWidth;
     const haelften = window.viewport && window.viewport.segments;
@@ -634,8 +637,17 @@ window.S = (function () {
       if (h) { links = h.x; rechts = Math.min(rechts, h.x + h.width); }
     }
     const kopf = document.querySelector("header.bauchbinde");
-    const oben = Math.max(0, kopf ? kopf.getBoundingClientRect().bottom : 0);
-    return { links: links + 8, rechts: rechts - 8, oben: oben + 8, unten: (window.visualViewport ? window.visualViewport.height : window.innerHeight) - 8 };
+    let oben = Math.max(0, kopf ? kopf.getBoundingClientRect().bottom : 0);
+    let unten = window.visualViewport ? window.visualViewport.height : window.innerHeight;
+    for (let e = el && el.parentElement; e && e !== document.body; e = e.parentElement) {
+      const cs = getComputedStyle(e);
+      if (cs.overflowX === "visible" && cs.overflowY === "visible") continue;
+      const b = e.getBoundingClientRect();
+      links = Math.max(links, b.left); rechts = Math.min(rechts, b.right);
+      oben = Math.max(oben, b.top); unten = Math.min(unten, b.bottom);
+      break;
+    }
+    return { links: links + 8, rechts: rechts - 8, oben: oben + 8, unten: unten - 8 };
   }
   function menueAusrichten(m) {
     const liste = menueListe(m);
@@ -643,7 +655,7 @@ window.S = (function () {
     liste.style.left = ""; liste.style.right = ""; liste.style.top = ""; liste.style.bottom = "";
     liste.style.maxHeight = ""; liste.style.overflowY = "";
     const knopf = m.getBoundingClientRect();
-    const r = menueRahmen(knopf);
+    const r = menueRahmen(knopf, m);
     const breite = liste.offsetWidth;
     const links = Math.max(r.links, Math.min(knopf.right - breite, r.rechts - breite));
     liste.style.right = "auto";

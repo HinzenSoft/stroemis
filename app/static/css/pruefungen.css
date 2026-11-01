@@ -20,7 +20,7 @@
 .pruef .page-head h1 { margin: 0; overflow-wrap: anywhere; }
 .pruef .page-head .btn-row { margin-left: auto; }
 .pruef .zurueck { display: inline-block; margin-bottom: 8px; font-size: var(--fs-mittel); text-decoration: none; }
-.pruef .zurueck:hover { text-decoration: underline; }
+@media (hover: hover) and (pointer: fine) { .pruef .zurueck:hover { text-decoration: underline; } }
 .pruef .kopf-meta { color: var(--grau); font-size: var(--fs-mittel); display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: center; margin: 6px 0 4px; }
 .pruef .kopf-meta .badge { vertical-align: baseline; }
 .pruef .ausbilder-zeile { font-size: var(--fs-mittel); margin: 0 0 6px; }
@@ -72,7 +72,7 @@
 
 /* Ein Knopf, der wie ein Verweis aussieht – für Namen, die eine Bearbeitung öffnen. */
 .linkbtn { background: none; border: 0; padding: 0; font: inherit; color: var(--anthrazit); font-weight: 600; cursor: pointer; text-align: left; }
-.linkbtn:hover { color: var(--rot); text-decoration: underline; }
+@media (hover: hover) and (pointer: fine) { .linkbtn:hover { color: var(--rot); text-decoration: underline; } }
 
 /* --- Teilnehmende: Profilbild, Schloss, Lehrgangsergebnis ---------------------------------
    Der Kreis vor dem Namen: Profilbild oder Initialen, 28 px, rund – dieselbe Form wie die
@@ -91,7 +91,8 @@
 .tn-bild.gross { width: 76px; height: 76px; font-size: 1.7rem; }
 /* Ein echtes Bild ist antippbar (Leuchtkasten); der Rahmen zeigt es beim Überfahren und im Fokus. */
 .tn-bild.klick { cursor: zoom-in; }
-.tn-bild.klick:hover, .tn-bild.klick:focus-visible { outline: 2px solid var(--rot); outline-offset: 1px; }
+.tn-bild.klick:focus-visible { outline: 2px solid var(--rot); outline-offset: 1px; }
+@media (hover: hover) and (pointer: fine) { .tn-bild.klick:hover { outline: 2px solid var(--rot); outline-offset: 1px; } }
 .lb-profil img { width: min(90vw, 420px); height: auto; border-radius: var(--radius-gross); }
 .zelle-zeile .name .zeile-zeit { color: var(--anthrazit); }
 .zelle-zeile .name .zeile-komm { color: var(--anthrazit); font-style: italic; white-space: normal; margin-top: 2px; }
@@ -118,9 +119,11 @@ p.dlg-tn { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
   filter: grayscale(1); opacity: .65; transition: transform .1s ease;
 }
 .erg-knopf .sym { font-size: 1.1rem; line-height: 1; }
-.erg-knopf:hover { filter: none; opacity: 1; transform: scale(1.06); }
-.erg-knopf.ja:hover { border-color: var(--ok); }
-.erg-knopf.nein:hover { border-color: var(--rot); }
+@media (hover: hover) and (pointer: fine) {
+  .erg-knopf:hover { filter: none; opacity: 1; transform: scale(1.06); }
+  .erg-knopf.ja:hover { border-color: var(--ok); }
+  .erg-knopf.nein:hover { border-color: var(--rot); }
+}
 .erg-knopf.sel { filter: none; opacity: 1; color: var(--weiss); }
 .erg-knopf.ja.sel { background: var(--ok); border-color: var(--ok); }
 .erg-knopf.nein.sel { background: var(--rot); border-color: var(--rot); }
@@ -134,13 +137,13 @@ p.dlg-tn { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
   font: inherit; font-size: var(--fs-klein); color: var(--anthrazit); text-align: left; cursor: pointer; line-height: 1.3;
   overflow-wrap: anywhere;
 }
-.komm-zelle:hover { border-color: var(--anthrazit); }
+@media (hover: hover) and (pointer: fine) { .komm-zelle:hover { border-color: var(--anthrazit); } }
 .komm-zelle:not(.leer) { border-style: solid; }
 .komm-zelle.leer { color: var(--grau); }
 .bew-matrix th.komm-kopf, .bew-matrix th.erg-kopf { text-align: left; }
 /* Eingefroren: Zellen, Kästen und Kommentar gedämpft – ansehen ja, ändern nein. */
 .zelle.gesperrt, .komm-zelle.gesperrt { opacity: .7; cursor: default; }
-.zelle.gesperrt:hover, .komm-zelle.gesperrt:hover { border-color: var(--linie); }
+@media (hover: hover) and (pointer: fine) { .zelle.gesperrt:hover, .komm-zelle.gesperrt:hover { border-color: var(--linie); } }
 .komm-zelle.gesperrt { border-style: solid; }
 .zelle-zeile.gesperrt .zelle { opacity: .55; }
 .pruef .table-scroll tr.gesperrt td { background: var(--grau-hell); }
@@ -176,7 +179,7 @@ p.dlg-tn { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .pruef .filter input[type=search] { flex: 1 1 220px; width: auto; }
 .pruef .filter select { width: auto; flex: 0 0 auto; }
 .pruef table.list td .titel { font-weight: 700; font-size: 1rem; text-decoration: none; color: var(--anthrazit); overflow-wrap: anywhere; }
-.pruef table.list td .titel:hover { color: var(--rot); }
+@media (hover: hover) and (pointer: fine) { .pruef table.list td .titel:hover { color: var(--rot); } }
 .pruef table.list td .nummer { color: var(--grau); font-size: var(--fs-klein); }
 /* Gerätetest F2: Status in einer Zeile (feste Spalte für „abgeschlossen“), offene Mängel und Voraussetzungen unter dem
    Titel statt in der schmalen Fortschrittsspalte. */
@@ -210,8 +213,8 @@ p.dlg-tn { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 /* --- Voraussetzungs-Häkchen: Kasten, darunter klein wer und wann -------------------------- */
 .vk { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-width: 110px; }
 .vk input[type=checkbox] { width: 28px; height: 28px; margin: 0; accent-color: var(--ok); cursor: pointer; flex: none; }
-.vk-stempel { background: none; border: 0; padding: 0; font: inherit; font-size: var(--fs-marke); line-height: 1.25; color: var(--grau); text-align: left; cursor: pointer; overflow-wrap: anywhere; }
-.vk-stempel:hover { color: var(--rot); text-decoration: underline; }
+.vk-stempel { background: none; border: 0; padding: 0; font: inherit; font-size: var(--fs-klein); line-height: 1.25; color: var(--grau); text-align: left; cursor: pointer; overflow-wrap: anywhere; }
+@media (hover: hover) and (pointer: fine) { .vk-stempel:hover { color: var(--rot); text-decoration: underline; } }
 .vk-stempel.ja { color: var(--ok); }
 .vk-stempel.nein { color: var(--rot); }
 .vk-stempel:disabled { cursor: default; text-decoration: none; }
@@ -234,7 +237,7 @@ p.dlg-tn { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
   cursor: pointer; font-weight: 600;
 }
 .tn-karte details.vor-klapp > summary::before { left: 12px; }
-.tn-karte details.vor-klapp > summary:hover { border-color: var(--anthrazit); }
+@media (hover: hover) and (pointer: fine) { .tn-karte details.vor-klapp > summary:hover { border-color: var(--anthrazit); } }
 .tn-karte details.vor-klapp[open] > summary { margin-bottom: 4px; }
 .vor-klapp-zahl { font-weight: 400; font-size: var(--fs-mittel); color: var(--grau); }
 .vor-klapp-zahl.offen { color: var(--rot-auf-flaeche); font-weight: 700; }
@@ -293,7 +296,7 @@ p.dlg-tn { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
   border: 1px solid var(--linie); border-radius: var(--radius); background: var(--weiss);
   font: inherit; color: var(--anthrazit); cursor: pointer; text-align: center; line-height: 1.2;
 }
-.zelle:hover { border-color: var(--anthrazit); }
+@media (hover: hover) and (pointer: fine) { .zelle:hover { border-color: var(--anthrazit); } }
 .zelle .sym { font-size: 1.35rem; line-height: 1; }
 .zelle .txt { font-size: var(--fs-klein); font-weight: 700; }
 .zelle .sub { font-size: var(--fs-marke); color: var(--grau); overflow-wrap: anywhere; }
@@ -311,7 +314,7 @@ p.dlg-tn { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
   width: 100%; min-height: 60px; padding: 6px 4px; background: none; border: 0; font: inherit; color: var(--anthrazit);
   cursor: pointer; text-align: left;
 }
-.zelle-zeile:hover { background: var(--grau-hell); }
+@media (hover: hover) and (pointer: fine) { .zelle-zeile:hover { background: var(--grau-hell); } }
 .zelle-zeile .name { font-weight: 600; font-size: 1rem; overflow-wrap: break-word; }
 .zelle-zeile .name small { display: block; font-weight: 400; color: var(--grau); font-size: var(--fs-klein); }
 .zelle-zeile .zelle { min-height: 48px; }
@@ -364,7 +367,7 @@ dialog.pruef-dlg { width: min(720px, 96vw); }
 .medien-grid .medium img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .medien-grid .medium .play { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: var(--weiss); font-size: 1.6rem; text-shadow: 0 0 6px rgba(0,0,0,.7); pointer-events: none; }
 .medien-grid .medium-weg { position: absolute; top: 2px; right: 2px; width: 28px; height: 28px; border: 0; border-radius: 50%; background: rgba(60,60,59,.8); color: var(--weiss); font-size: 1rem; line-height: 1; cursor: pointer; }
-.medien-grid .medium-weg:hover { background: var(--rot); }
+@media (hover: hover) and (pointer: fine) { .medien-grid .medium-weg:hover { background: var(--rot); } }
 .medien-grid .medium-huelle { position: relative; }
 .medien-grid.klein { grid-template-columns: repeat(auto-fill, 64px); }
 
@@ -398,8 +401,10 @@ dialog.pruef-dlg { width: min(720px, 96vw); }
   overflow-wrap: normal; word-break: keep-all; white-space: nowrap;
 }
 .bew-wahl button .sym { font-size: 1.6rem; }
-.bew-wahl button[data-erg=bestanden]:hover { border-color: var(--ok); }
-.bew-wahl button[data-erg=mangelhaft]:hover { border-color: var(--rot); }
+@media (hover: hover) and (pointer: fine) {
+  .bew-wahl button[data-erg=bestanden]:hover { border-color: var(--ok); }
+  .bew-wahl button[data-erg=mangelhaft]:hover { border-color: var(--rot); }
+}
 .bew-wahl button[data-erg=bestanden].sel { background: var(--ok); border-color: var(--ok); color: var(--weiss); }
 .bew-wahl button[data-erg=mangelhaft].sel { background: var(--rot); border-color: var(--rot); color: var(--weiss); }
 
@@ -499,7 +504,8 @@ dialog.pruef-dlg { width: min(720px, 96vw); }
 .ausb-treffer li + li { border-top: 1px solid var(--linie); }
 .ausb-konto { display: block; width: 100%; text-align: left; background: var(--weiss); border: 0; padding: 8px 10px; font: inherit;
   color: var(--anthrazit); cursor: pointer; overflow-wrap: anywhere; }
-.ausb-konto:hover, .ausb-konto:focus-visible { background: var(--grau-hell); }
+.ausb-konto:focus-visible { background: var(--grau-hell); }
+@media (hover: hover) and (pointer: fine) { .ausb-konto:hover { background: var(--grau-hell); } }
 .ausb-konto:focus-visible { outline: 3px solid var(--gelb); outline-offset: -3px; }
 .ausb-treffer-leer { padding: 8px 10px; color: var(--grau); font-size: var(--fs-klein); }
 .import-nicht ul { margin: 4px 0; padding-left: 18px; }
@@ -583,10 +589,11 @@ body:has(.pruef.druck) #toast { top: 12px; }
   .bew-wahl button { font-size: .95rem; gap: 6px; }
   .bew-wahl button .sym { font-size: 1.4rem; }
   .su-banner { top: calc(var(--topbar) + 4px); }
-  /* Vier Reiter in einer Zeile ab 375 px; schmaler bricht die Zeile um (A9). */
+  /* Vier Reiter in einer Zeile ab 375 px; schmaler bricht die Zeile um (A9). Seit --fs-klein 14 px groß ist (Gerätetest
+     B12) mit 1 px weniger Polster je Seite – sonst fehlten bei 375 px 11 px, und die klebende Leiste wurde zweizeilig. */
   .pruef .c-tabs.reiter { gap: 0; }
-  .pruef .c-tabs.reiter button { padding: 10px 3px; font-size: var(--fs-klein); }
-  .pruef .c-tabs.reiter .reiter-zahl { margin-left: 2px; padding: 0 4px; }
+  .pruef .c-tabs.reiter button { padding: 10px 2px; font-size: var(--fs-klein); }
+  .pruef .c-tabs.reiter .reiter-zahl { margin-left: 2px; padding: 0 3px; }
   /* Matrix: Die klebende Namensspalte ließ neben sich keine ganze Zelle mehr frei (160 + 128 px
      bei 336 px). Schmaler, Zellen ohne die Nebenzeile – die steht in „je Leistung“ und „je TN“. */
   .pruef .bew-matrix th:first-child, .pruef .bew-matrix td:first-child { min-width: 108px; max-width: 132px; }
@@ -667,7 +674,7 @@ body:has(.pruef.druck) #toast { top: 12px; }
 }
 /* Ohne Maus gibt es kein Überfahren: Die Ergebnisknöpfe sahen dauerhaft ausgegraut aus, und
    Namen, die eine Bearbeitung öffnen, wirkten wie Text. */
-@media (hover: none) {
+@media (hover: none), (pointer: coarse) {
   .erg-knopf { filter: none; opacity: .9; }
   .linkbtn, .vk-stempel { text-decoration: underline dotted; text-underline-offset: 3px; }
 }
@@ -690,4 +697,19 @@ body:has(.pruef.druck) #toast { top: 12px; }
     .tn-desktop { display: none; }
     .tn-mobil { display: block; }
   }
+}
+/* Matrix bei wenig Höhe (Gerätetest Q3, Teil X): Telefon quer (947 × 364) zeigte nur drei Zeilen – die Namensspalte
+   war mit Bild, Name (44 px Tippfläche), Gliederung und „Vorauss. offen“ 91 px hoch. Bis 500 px Höhe (dieselbe Grenze
+   wie die Kopfleiste) ohne Gliederung und ohne „wer/wann“ in den Zellen (beides steht in „je Teilnehmende“ bzw. „je
+   Leistung“); die Fläche des Namens bleibt 45 px hoch, aber unsichtbar über der Zeile (Muster der Listentitel), die
+   Zellen behalten 44 px. */
+@media (max-height: 500px) {
+  .pruef .bew-matrix td { padding-top: 2px; padding-bottom: 2px; }
+  .pruef .bew-matrix .tn-sub, .bew-matrix .zelle .sub { display: none; }
+  .bew-matrix .zelle { padding-top: 2px; padding-bottom: 2px; }
+}
+@media (max-height: 500px) and (pointer: coarse) {
+  .bew-matrix .zelle { min-height: 44px; }
+  .bew-matrix .linkbtn { min-height: 0; position: relative; }
+  .bew-matrix .linkbtn::after { content: ""; position: absolute; inset: -12px -4px; }
 }

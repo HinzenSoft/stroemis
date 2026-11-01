@@ -77,8 +77,9 @@ def test_ft4_ausnehmen_einbeziehen_melden_sich():
     assert "dlg.close(); toast(`${b.dataset.nr} ausgenommen`); await neu();" in js
     assert "toast(`${b.dataset.nr} wieder einbezogen`); await neu();" in js
     assert 'data-act="einbeziehen" data-id="${a.id}" data-nr="${esc(a.inventory_no)}">Einbeziehen</button>' in js
-    # Der Toast meldet Erfolg als role="status" (common.js).
-    assert 'const rolle = isError ? "alert" : "status";' in lies("app/static/js/common.js")
+    # Der Toast meldet Erfolg als role="status" (common.js; seit Teil 1 setzt toast() die Rolle nur bei einem Wechsel).
+    common = lies("app/static/js/common.js")
+    assert 'const rolle = isError ? "alert" : "status";' in common and 'el.setAttribute("role", rolle);' in common
     print("FT4 bestanden.")
 
 

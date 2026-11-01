@@ -656,10 +656,11 @@
       return;
     }
     // Die Statusspalte hat eine feste Breite für „abgeschlossen“ in einer Zeile (Gerätetest F2: bei 883 px 84 px breit,
-    // die Marke brach zu „abgeschlo/ssen“).
+    // die Marke brach zu „abgeschlo/ssen“). Ab 760 px Inhalt ist die Liste eine Tabelle (Teil X, F1): „Teilnehmende“ mit
+    // weicher Trennstelle und 13 % breit, sonst lief der Kopf bei 800 px über seine Spalte.
     ziel.innerHTML = `<table class="list" id="lg-tabelle">
-      <colgroup><col style="width:30%"><col style="width:15%"><col class="lg-status-spalte"><col style="width:11%"><col style="width:18%"><col style="width:16%"></colgroup>
-      <thead><tr><th>Lehrgang</th><th>Datum</th><th>Status</th><th>Teilnehmende</th><th>Fortschritt</th><th></th></tr></thead>
+      <colgroup><col style="width:28%"><col style="width:15%"><col class="lg-status-spalte"><col style="width:13%"><col style="width:18%"><col style="width:16%"></colgroup>
+      <thead><tr><th>Lehrgang</th><th>Datum</th><th>Status</th><th>Teil&shy;nehmende</th><th>Fortschritt</th><th></th></tr></thead>
       <tbody>${state.liste.map((lg) => `<tr data-id="${lg.id}">
         <td data-l="Lehrgang"><a class="titel" href="/riegenkarten/${lg.id}">${esc(lg.titel)}</a>
           ${lg.nummer ? `<div class="nummer">Nr. ${esc(lg.nummer)}</div>` : ""}${lg.ort ? `<div class="small muted">${esc(lg.ort)}</div>` : ""}${lgHinweisHtml(lg)}</td>

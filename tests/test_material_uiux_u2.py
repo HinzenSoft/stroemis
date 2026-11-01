@@ -70,7 +70,10 @@ def test_b1_ausgegraute_hauptknoepfe():
     assert "los.disabled = !datei" not in lies("app/material/static/pruefen.js")
     css = lies(CSS)
     # Seit der Zusammenführung app-weit in app.css (wirkt auch im Profil/Unterschrift-Pad ohne material.css).
-    assert '.btn[aria-disabled="true"], .btn[aria-disabled="true"]:hover { opacity: .55;' in lies("app/static/css/app.css")
+    # Gerätetest B4: das Überfahren steht in (hover: hover) and (pointer: fine), der Grundzustand davor.
+    app_css = lies("app/static/css/app.css")
+    assert '.btn[aria-disabled="true"] { opacity: .55;' in app_css
+    assert '@media (hover: hover) and (pointer: fine) { .btn[aria-disabled="true"]:hover { opacity: .55;' in app_css
     assert ".mat-knopfgrund.betont { font-weight: 700; color: var(--rot-auf-flaeche); }" in css
     print("B1 bestanden.")
 
