@@ -4263,7 +4263,7 @@ Oberfläche (material.js, material.css, seite.html), kein Schemaschritt, keine n
   Ordner 200 je Seite) – nichts Neues.
 - **FT3:** nicht nachstellbar – „Filter“ öffnet auch am Fold-Außendisplay (443 × 848) die Schublade mit lesbarer
   Status- und Kategorieliste samt Zahlen.
-- Tests: `tests/test_material_geraetetest4.py` (neu, statisch); `test_material_suchzeile.py`, `test_material_l5.py`,
+- Tests: `tests/test_material_geraetetest4.py` (neu, statisch); `test_material_suchzeile.py`, `test_material_l5.py`, `test_material_mangel.py`,
   `test_material_uiux_u2.py` an den einen Platzhalter und den neuen Grundsatz angepasst.
 
 ## PWA und Kontaktadressen (Wünsche des Nutzers, 28.10.2026; gebaut 01.11.2026)

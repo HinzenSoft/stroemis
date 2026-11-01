@@ -1310,7 +1310,9 @@ def test_oberflaeche_statisch():
     assert 'data-mangel="${Number(m.id)}"' in fs and "Gemeldeten Mangel vom" in fs
     # Ausgegraut, aber fokussierbar (aria-disabled, UI/UX vor dem Merge B1).
     assert "daten.maengel_gesehen = haken.filter((h) => h.checked)" in fs
-    assert 'if (alleAbgehakt()) knopf.removeAttribute("aria-disabled"); else knopf.setAttribute("aria-disabled", "true");' in fs
+    # Gerätetest FT10 (01.11.2026): solange gesperrt, führt ein Tipp zum ersten nicht abgehakten Häkchen (data-sprung).
+    assert 'if (alleAbgehakt()) { knopf.removeAttribute("aria-disabled"); knopf.removeAttribute("data-sprung"); }' in fs
+    assert 'else { knopf.setAttribute("aria-disabled", "true"); knopf.dataset.sprung = "input[data-mangel]:not(:checked)"; }' in fs
     # Artikelseite: grauer Knopf, ausgegrautes Aussondern mit Erklärung. Die Erklärung zum Melden steht im Dialog, nicht
     # mehr unter den Knöpfen (Wunsch des Nutzers 23.10.2026).
     assert "' data-act=\"mangel\"'}>Mangel melden</button>" in js and "Sperren: ohne Meldung, mit Sperrgrund." not in js
