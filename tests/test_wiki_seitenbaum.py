@@ -84,7 +84,8 @@ def test_klappknopf_markup():
 
 def test_css_regeln():
     css = lies("app/static/css/app.css")
-    # Kein Schriftzeichen mehr als Klappzeichen.
+    # Kein Schriftzeichen mehr als Klappzeichen; „⋯“ ragt nicht aus seiner Zeile (die Liste reicht in den Innenrand).
+    assert ".row-menu { margin-right: -12px; }" not in css
     assert 'content: "▸"' not in css and 'content: "▾"' not in css
     grund = [
         ".tree { --baum-spalte: 20px; --baum-einzug: 20px; }",
@@ -111,7 +112,7 @@ def test_css_regeln():
         ".tree { --baum-spalte: 24px; --baum-einzug: 18px; }",
         ".tree .row { align-items: flex-start; }",
         ".tree .tg { width: 44px; height: 44px; margin: 0 -10px; position: relative; z-index: 1; }",
-        ".tree .row-menu { margin-right: -12px; }",
+        ".tree { margin-right: -12px; }",
         ".tree a { padding-top: 12px; padding-bottom: 12px; padding-left: 8px; }",
         ".tree .baum-titel { white-space: normal; text-overflow: clip; overflow-wrap: break-word; hyphens: auto; }",
         ".tree .row-add, .tree .row-menu { width: 44px; height: 44px; margin-left: 0; }",

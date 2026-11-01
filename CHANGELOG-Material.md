@@ -4217,8 +4217,8 @@ Einträge und verschiedenen Ebenen angeht, vor allem auch dem Ausklappsymbol.“
   ersten Zeile weiter (hängender Einzug). Am Rechner Zeilen 29 px, lange Titel mit „…“ und Tooltip; „+“ und „⋯“ wie
   bisher erst beim Überfahren, neu auch, sobald die Zeile den Tastaturfokus hat. Am Finger Zeilen ab 44 px, Klappzeichen
   und „⋯“ auf Höhe der ersten Titelzeile; der Klappknopf hat 44 × 44 px Tippfläche, belegt aber nur 24 px Breite (je 10 px
-  ragen in die Einrückung und, darübergelegt, über den Rand des Titels – der Titel beginnt 8 px nach dem Rand), „⋯“ ragt
-  in den rechten Innenrand der Leiste. Vorher kostete das Klappzeichen 44 px je Zeile: Der Text der vierten Ebene begann
+  ragen in die Einrückung und, darübergelegt, über den Rand des Titels – der Titel beginnt 8 px nach dem Rand), der Baum
+  reicht in den rechten Innenrand der Leiste (12 px), „⋯“ steht am Rand. Vorher kostete das Klappzeichen 44 px je Zeile: Der Text der vierten Ebene begann
   bei 130 px, jetzt bei 103 px.
 - **Schublade** (unter 1024 px): bis 360 px breit (vorher 320) – bei 390 px Fenster 351 px, daneben bleibt ein Streifen
   der Seite, der sie schließt; Zurück schließt sie wie bisher.

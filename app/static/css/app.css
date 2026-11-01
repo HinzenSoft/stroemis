@@ -2542,8 +2542,9 @@ dialog.us-dlg { width: min(640px, 96vw); }
   .tree { --baum-spalte: 24px; --baum-einzug: 18px; }
   .tree .row { align-items: flex-start; }
   .tree .tg { width: 44px; height: 44px; margin: 0 -10px; position: relative; z-index: 1; }
-  /* „⋯“ darf in den rechten Innenrand der Leiste (12 px) ragen – so viel mehr Platz für jeden Titel. */
-  .tree .row-menu { margin-right: -12px; }
+  /* Der Baum reicht in den rechten Innenrand der Leiste (12 px): „⋯“ steht am Rand, so viel mehr Platz für jeden Titel.
+     Die Liste selbst wird breiter, nicht nur der Knopf – sonst ragte „⋯“ aus seiner Zeile (Geräte-Prüfung, U). */
+  .tree { margin-right: -12px; }
   .wiki-side input[type=search] { min-height: 44px; }
   details.accordion > summary { min-height: 44px; display: flex; align-items: center; }
   /* Seitenbaum in der festen 260-px-Leiste (Telefon quer, Fold aufgeklappt, Tablet quer): Klappdreieck, „+“ und „⋯“
