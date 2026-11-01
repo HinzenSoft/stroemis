@@ -10581,5 +10581,7 @@ vorher/nachher: planung/geraetetest/bericht_teilx.md. Betrifft alle Module; kein
 - **Q3 Bewertungsmatrix quer:** bis 500 px Höhe ohne Gliederung unter dem Namen und ohne „wer/wann“ in den Zellen (beides
   in „je Teilnehmende“/„je Leistung“), Zellen 44 px, die Fläche des Namens unsichtbar 45 px: Zeilen 54 statt 91 px, bei
   947 × 364 fünf statt drei Zeilen im Bild (844 × 390: sechs statt drei).
+- **Gesamtlauf (st-geraete mit den Viewports des Tests):** Die Gliederung rechts neben dem Artikel (Tablet quer mit
+  Touch, 1280 × 680 und 1333 × 680) hatte 33 px hohe Zeilen – am Finger jetzt 44 px.
 - Tests: `tests/test_geraetetest_quer.py` (neu, statisch); angepasst `test_wiki_seitenbaum.py`, `test_material_uiux_u2.py`,
   `test_module_uiux_u3.py`.

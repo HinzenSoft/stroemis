@@ -1323,7 +1323,8 @@ details.accordion .accordion-body > :first-child { margin-top: 0; } details.acco
   .chip { padding: 10px 12px; }
   .lb-nav { padding: 16px 14px; }
   .lb-side .close, .panel-head .close { padding: 6px 10px; min-width: 44px; min-height: 44px; }
-  .toc-list a { padding: 7px 8px; }
+  /* Gliederung rechts (Tablet quer mit Touch, Gerätetest Teil X): 44 statt 33 px je Abschnitt. */
+  .toc-list a { padding: 7px 8px; min-height: 44px; display: flex; align-items: center; }
   .album-list li { padding: 10px 0; }
   .search-results li { padding: 9px 6px; }
 }

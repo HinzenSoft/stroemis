@@ -85,6 +85,11 @@ def test_b12_schriftgroessen():
     assert ".pruef .c-tabs.reiter button { padding: 10px 2px; font-size: var(--fs-klein); }" in rk
 
 
+def test_gliederung_am_finger():
+    # Gesamtlauf: Tablet quer mit Touch zeigt die Gliederung rechts – Zeilen 44 statt 33 px.
+    assert "  .toc-list a { padding: 7px 8px; min-height: 44px; display: flex; align-items: center; }" in lies(APP)
+
+
 def test_f1_listen_ab_760_px_inhalt():
     app = lies(APP)
     assert "@container liste (max-width: 820px)" not in app
