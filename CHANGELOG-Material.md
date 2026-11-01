@@ -62,6 +62,7 @@ Geschichte stehen. Schemaversion nach der Nachbesserung vor dem Merge: 30; mit d
 | PWA und Kontaktadressen | strömis.de als App installierbar (Manifest, Service Worker, Maskottchen auf Rot, ohne Netz nur eine Hinweisseite, „App installieren“ im Profil); Kontaktadressen als Einstellung (Leitstelle → Einstellungen, Gruppe „Seite“) im Fuß jeder Seite, im Hinweis „Entwicklungsserver“ und vor dem Bestandsimport | gebaut 01.11.2026 (kein Schemaschritt), Zweig pwakontakt, zur Freigabe |
 | Stufe Redakteur (Schritt 33) | Rechte-Matrix mit „Redakteur“ in Strömipedia, Ankerplätzen und Riegenkarten (Mitglied liest bzw. bewertet in eigenen Lehrgängen, Redakteur legt eigene Inhalte an, Verwaltung alles); eine Skala 0/1/2/3 in allen Spalten, Schritt 33 hebt Verwaltung 2 → 3; Riegenkarten: Sichtbarkeit nur eigener Lehrgänge (404), eigene Kataloge; dazu: keine Strömipedia ohne Anmeldung mehr | gebaut 01.11.2026 (Schema 33), Zweig redakteur, nicht auf dev |
 | Ausbilder nur mit Konto (Schritt 34) | Riegenkarten: Ausbilder sind Konten mit Stufe ≥ Mitglied (Suche nach Name/E-Mail, Server lehnt anderes mit Zeile ab), Excel-Import ordnet per E-Mail bzw. eindeutigem Namen zu und listet „nicht übernommen“, Schritt 34 verknüpft oder entfernt den Freitext-Bestand ohne Text in der Beschreibung (nur Startprotokoll), Konten ohne Stufe als „ohne Zugriff“ markiert | gebaut 01.11.2026 (Schema 34), Zweig ausbilder, nicht auf dev |
+| Gerätetest 01.11.2026 – Teil 5 (Ankerplätze, Leitstelle, Profil) | Ankerplätze: Suchfeld über der Karte und Liste „in der Nähe“ (B8), Standortmeldungen je Fall (FT2), Liste nach dem Löschen frisch und Satz für Alben ohne Position (FT8), keine Ziffern-Dateinamen als Bildname (FT5), Hochlade-Ergebnis sichtbar (FT4); Leitstelle: Suche, Rollenfilter und zugeklappte Karten (B6), Spaltenköpfe mit Trennstellen (Q2), Satz zur Prüffreigabe am Häkchen „Prüfer“ (M4) | gebaut 01.11.2026 (kein Schemaschritt), Zweig gt-karte-leit, nicht auf dev |
 
 ## Abgleich mit dem Bestand (vor Lieferung 1)
 
@@ -10289,3 +10290,50 @@ es wegen des Schemaschritts.
   nach dem Übernehmen. Leitstelle: Hilfe „Rechte je Modul“ und Hinweis der Matrix ergänzt.
 - Tests: `tests/test_rechte_ausbilder.py` (neu); angepasst: test_pruefungen (Konten statt Freitext), test_rechte_redakteur
   (Schema 34, kein Freitext-Lehrgang mehr), test_pruefungen_import (`email` am Ausbilder).
+
+## Gerätetest 01.11.2026 – Teil 5 (Ankerplätze, Leitstelle, Profil)
+
+Auftrag planung/geraetetest/auftrag_geraetetest.md, Teil 5 („Nimm diesen UI/UX Test und setze die Findings um“; Befunde
+aus dem Test auf Pixel 8 Pro, Pixel 10 Pro Fold, Vale V12X und Galaxy Tab S6 Lite). Jeder Befund wurde vorher im Browser
+nachgestellt (Bericht planung/geraetetest/bericht_teil5.md). Betrifft nicht die Materialablage; hier steht es wie die
+übrigen Nachbesserungen der Module. Kein Schemaschritt, keine neue Schnittstelle.
+
+- **B8 Ankerplätze – Suche und Liste** (Entscheidung des Nutzers: Suchfeld + Liste): Über der Karte ein Suchfeld
+  („Album suchen: Name oder Ort“) mit dem Knopf „Alben“ daneben (`form.karten-suche`, am Telefon die erste Zeile, Filter
+  darunter – „+ Album“ steht damit nicht mehr am rechten Rand). Gesucht wird im Browser in Titel, Beschreibung und
+  Gliederung des Ansprechpartners aller Alben (ein Ortsfeld hat ein Album nicht), ohne Groß/klein, Akzente und ß; die
+  Karte zeigt nur die Bilder der Treffer, Enter öffnet einen einzelnen Treffer bzw. rückt mehrere ins Bild. „Alben“
+  schaltet die Liste (`aria-expanded`): mit bekanntem Standort „In der Nähe“ nach Entfernung (`L.LatLng.distanceTo`, „x km
+  entfernt“, Alben ohne Position am Ende), sonst alphabetisch mit „Standort verwenden“; ist der Standort für die Seite
+  schon freigegeben, wird er ohne Rückfrage geholt. Die Filter Seiltechnik/Gewässer gelten auch für die Liste; Zahl als
+  `role="status"`, Liste `aria-live="off"` (die Leiste ist sonst „polite“), Leerzustand „Kein Album passt …“. Jede Zeile
+  ist jetzt ein Knopf (`.album-wahl`, vorher eine Zeile ohne Fokus). Die Albenliste wird nach jeder Änderung (Hochladen,
+  Position, Anlegen, Löschen) mit der Karte neu gelesen, solange Suche oder Liste aktiv sind. Am Rechner brechen die
+  Werkzeuge bei offener Leiste links von ihr um.
+- **FT2 Standort**: eine Stelle für alle Ortungen (`standortSuchen`, Knopf „◎“, „Mein Standort“ beim Positionieren,
+  Liste). Leaflet-`timeout` 20 s statt 10 s; Meldung erst mit `locationerror` und je Fall (1 nicht freigegeben, 3 nach
+  20 s kein Standort, 2 nicht verfügbar); ist die Berechtigung schon „denied“ (`navigator.permissions`), sofort ein Hinweis
+  auf die Website-Einstellungen; kommt nach 30 s gar keine Antwort (Rückfrage still unterdrückt), meldet sich die Seite.
+  Während der Ortung blinkt „◎“ blau (`aria-busy`, ohne Bewegung bei „Bewegung reduzieren“). Vorher stand in jedem Fall
+  „Standort konnte nicht ermittelt werden.“
+- **FT8**: Nach „Album löschen“ steht die frisch geladene Liste da (vorher schloss die Leiste). Ein Album ohne Bild mit
+  Position sagt, wie es auf die Karte kommt (mit Bearbeitungsrecht: Bild mit GPS hochladen oder „Auf Karte platzieren“).
+- **FT5**: Ein Dateiname nur aus Ziffern (Android-Fotoauswahl: „48698.jpg“) ist kein Bildname mehr – Großansicht,
+  Bildraster, Positionieren und Rückfrage „Bild 1 von 3 endgültig löschen?“ nennen dann „Bild n von m“ (`bildName`).
+- **FT4**: Folgt nach dem Hochladen die Frage nach Bildern ohne Geotag (oder einem Album in der Nähe), lag der Toast
+  „n Bilder hochgeladen“ unter ihrem Dialog – das Ergebnis steht jetzt im Dialog bzw. kommt nach der Frage. „Bild gelöscht“
+  erscheint nach dem Schließen der Großansicht (vorher an ihrem oberen Rand, danach mitten in der Kopfleiste). Profil
+  „Speichern“ meldete schon „Profil gespeichert“ (nachgestellt, nicht geändert).
+- **B6 Leitstelle – Nutzerliste**: Suchfeld (Name, E-Mail, Gliederung) und Auswahl „Alle Rollen“ (Prüfer, deaktiviert,
+  ohne Zugriff, je Modul jede Stufe) über der Tabelle, „n von m Konten“ als `role="status"`, Leerzustand; gefiltert wird im
+  Browser über alle geladenen Konten. In der Kartenansicht (Containerabfrage „liste“ wie D13) ist jede Karte zugeklappt:
+  Name als Aufklapper (`.u-auf`, `aria-expanded`, Pfeil wie `details.accordion`), Gliederung, Rollen als Marken
+  (`td.u-rollen`); Auswahlfelder, E-Mail, Inhalte und Knöpfe erst offen; offene Karten bleiben über ein Neuladen offen. Am
+  Telefon (448 px) ist die Liste mit 56 DEMO-Konten 8 300 statt 24 400 px lang. Die Tabelle am Rechner ist unverändert.
+- **Q2**: Die Spaltenköpfe der Module tragen weiche Trennstellen („Material&shy;ablage“) und brechen zwischen 861 und
+  1100 px zweizeilig um, statt ineinanderzulaufen – ohne Kürzel, ohne waagerechten Bildlauf.
+- **M4**: Unter dem Häkchen „Prüfer“ im Nutzerdialog steht „Prüfen kann die Person erst mit einer Prüffreigabe am
+  Ordner – …: Bestand → Ordner → Bearbeiten → Freigaben“ (Link zum Bestand), solange das Konto keine gültige
+  Prüffreigabe hat.
+- Tests: `tests/test_module_geraetetest_t5.py` (neu); angepasst: `tests/test_umbenennung.py` (Spaltenköpfe ohne
+  Trennstellen gelesen).
