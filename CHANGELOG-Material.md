@@ -76,6 +76,7 @@ Geschichte stehen. Schemaversion nach der Nachbesserung vor dem Merge: 30; mit d
 | Text der Hinweiskästen über die ganze Breite | Inhalt der Hinweiskästen (`.notice`, `.mat-wikizeile`), Hilfetexte darin, Mangel- und Sperr-Banner und Liste „Gemeldete Mängel“ nicht mehr auf 100ch begrenzt | gebaut 02.11.2026 (kein Schemaschritt), freigegeben 02.11.2026 |
 | Freigaben je Person, Ordnerbild neben dem Namen | Reiter „Freigaben“: eine Zeile je Person in allen drei Listen, EIN „Ändern“ → Dialog „Rechte ändern“ (neuer Endpunkt je Person und Ordner, eine Transaktion), „Entziehen“ nimmt alle Rechte der Person dort, „… hat hier schon: …“ beim Anlegen; Ordnerfoto links neben Name und Knopfzeile (96 px, Telefon 64 px) | gebaut 02.11.2026 (kein Schemaschritt), freigegeben 02.11.2026 |
 | Suchzeile in der Strömipedia | Unter 1024 px (außer im Editor) klebt oben im Inhalt eine Zeile „☰“ + „Artikel suchen“ wie in der Materialablage; Treffer als Liste darunter über dem Text (Tippen/Enter öffnet, Esc/daneben/Zurück schließt); ersetzt „☰ Seiten“, das „☰“ der Kopfzeile einer Seite und das Suchfeld in der Schublade; die Kopfzeile klebt direkt darunter; dieselbe Zeile im Lesemodus (Konten ohne Stufe) und in public.html, gesucht über `/api/public/search` (eine Suchlogik in markdown.js) | gebaut 02.11.2026 (kein Schemaschritt); Lesemodus bestätigt am 02.11.2026: ja, gebaut 02.11.2026 |
+| Rechte ändern mit Rollen | Dialog „Rechte ändern“ mit denselben Rollenkarten wie „Freigabe anlegen“ (vorgewählt die Rolle zu den heutigen Rechten, seltene Fälle unter „Einzeln“), Gültigkeit als Radiogruppe „dauerhaft / bis [Datum]“ in Dialog und Anlegen-Formular, nicht wählbare Rollen ausgegraut mit Grund als Satz, Erklärungen im „i“, Notiz zugeklappt; ohne Änderung schließt „Speichern“ ohne Anfrage; Server und Schnittstelle unverändert | gebaut 02.11.2026 (kein Schemaschritt) |
 
 ## Abgleich mit dem Bestand (vor Lieferung 1)
 
@@ -11453,3 +11454,67 @@ bestätigt am 02.11.2026: ja.
   `/api/public/search` vor und nach der Freigabe, `/oeffentlich/` leitet weiter, public.html gerendert mit Zeile);
   angepasst: `test_geraetetest_teil1.py` (`test_b14_schubladen`: „☰“ mit „Seiten“ zum Vorlesen auch im Lesemodus) und
   `test_material_vor_merge_3.py` (statische Prüfung der übrigen Module: dasselbe für wiki_lesemodus.html und public.html).
+
+## Rechte ändern mit Rollen (Wunsch des Nutzers, 02.11.2026)
+
+Nutzer zum Dialog „Rechte ändern“ (Reiter „Freigaben“): „Das Menü ist meiner Meinung nach sehr unübersichtlich und
+unintuitiv, gibt es hier bessere Design Language?“ Gewählt: „Rollen wie beim Anlegen“ mit der bestätigten Skizze
+(`planung/rechte-dialog/auftrag.md`). Kein Schemaschritt; Server und Schnittstelle unverändert – die Rolle wird im
+Browser auf `grundrecht`/`pruefen` (PUT …/freigaben/person/<uid>) bzw. `grundrecht`/`grund_bis`/`pruefen`/`pruefen_bis`
+(POST …/freigaben) abgebildet; der Server entscheidet weiter jede Regel.
+
+**Rollen (eine Komponente für „Freigabe anlegen“ und „Rechte ändern“, freigaben.js `ROLLEN`, `rollenHtml`)**
+- Karten mit Titel und Kurztext wie in der Skizze, in dieser Reihenfolge: Führungskraft (ansehen, Mängel melden),
+  Materialwart (Ordner und Artikel pflegen), Materialwart und Prüfer (wie Materialwart, dazu prüfen), Prüfer (ansehen
+  und prüfen), Externer Prüfer (nur prüfen, höchstens 24 Monate), Einzeln. Die Legende heißt an beiden Stellen
+  „Rolle“ (bisher beim Anlegen „Vorlage“); die langen Texte stehen im „i“ an „Rolle“ mit „Mehr dazu in der Strömipedia“.
+- Im Dialog vorgewählt die Rolle zu den heutigen Rechten der Person an diesem Ordner (`rolleZu`): lesen →
+  Führungskraft, verwalten → Materialwart, dazu dauerhaft prüfen → Prüfer bzw. Materialwart und Prüfer, nur befristet
+  prüfen → Externer Prüfer; befristet prüfen mit Grundrecht, dauerhaft prüfen ohne Grundrecht hier (von oben) → „Einzeln“
+  mit den Werten vorbelegt. Ist ein Recht nicht änderbar (reicht weiter als das eigene Verwalten), öffnet er in
+  „Einzeln“, das Recht steht dort als Text.
+- Nicht wählbare Rollen sind ausgegraut, der Grund steht als Satz unter den Karten (je Grund eine Zeile mit den
+  Rollen davor, die Knöpfe verweisen mit `aria-describedby` darauf; `rollenGruende`): ein Recht nicht änderbar (nur
+  „Einzeln“), eigene Rechte nur herab und kürzen (keine eigene neue Prüffreigabe, kein Heraufsetzen, kein dauerhaftes
+  Prüfen aus einem befristeten – nicht für die Material-Verwaltung), die eigene letzte Verwalterfreigabe nicht
+  herabsetzen oder entziehen, ohne Zugang/deaktiviert nichts mehr, Prüfen neu oder länger nur mit Qualifikation.
+  Beim Anlegen wie bisher nur die Qualifikation.
+- „Einzeln“ klappt Grundrecht (– / lesen / verwalten) und Prüffreigabe (Kästchen) untereinander auf, je mit eigener
+  Gültigkeit. Das Wort „Grundrecht“ steht nur noch dort.
+
+**Gültigkeit als Radiogruppe** (`gueltigHtml`, `gueltig`)
+- „Gültig ● dauerhaft ○ bis [TT.MM.JJJJ]“ – das Datumsfeld steht immer da; Tippen oder Schreiben hinein wählt „bis“
+  (der Fokus allein nicht – wer mit Tab durchgeht, ändert nichts); wird „bis“ mit leerem Feld gewählt, steht die
+  Vorgabe darin. Ersetzt im Dialog und im Anlegen-Formular „Grundrecht bis“/„Prüfen bis“ mit Kästchen „dauerhaft“.
+- Bei einer Rolle EINE Zeile: Sie gilt fürs Grundrecht; das Prüfen von Prüfer und Materialwart und Prüfer ist
+  dauerhaft und gilt, solange das Grundrecht gilt – wer selbst nur befristet verwaltet, vergibt es bis zum selben Tag.
+  Externer Prüfer: nur „bis“ (Pflicht) mit dem Satz „Spätestens … – höchstens 24 Monate“. Darf man nicht dauerhaft
+  vergeben, fehlt „dauerhaft“ und darunter steht „Du verwaltest hier bis … – länger vergibst du nichts.“; die eigene
+  befristete Zeile: „Deine Freigabe läuft bis … – länger geht nicht.“
+- Hilfetexte nur, was gerade zutrifft (Grenzen, Gründe, „Daran hängt …“, „Dauerhaft prüft nur, wer …“); die
+  Erklärung zu dauerhaft/bis steht im „i“ an „Gültig“ (ersetzt den Satz „Gilt, solange die Person hier lesen oder
+  verwalten hat …“).
+
+**Dialog „Rechte ändern“**
+- Notiz zugeklappt wie im Anlegen-Formular (`details.mf-notiz`), offen, wenn es eine gibt; geöffnet steht der
+  Datenschutzsatz darunter.
+- Speichern wie bisher: eine Anfrage, alles oder nichts, Rückfrage, wenn ein Recht wegfällt (etwa „Materialwart und
+  Prüfer“ → „Materialwart“ nimmt die Prüffreigabe), Hinweis auf offene Prüfungen danach. Bleibt alles, wie es ist
+  (Rolle, Gültigkeit, Notiz), schließt „Speichern“ ohne Anfrage. Ablehnungen zum Ende (24 Monate, Vergangenheit,
+  länger als das eigene Verwalten, dauerhaft) stehen an der Gültigkeit, sonst an der Rolle bzw. unter „Einzeln“ an der
+  Auswahl des Rechts; Fehler im Browser (Datum fehlt oder falsch) am Datumsfeld. Ganz entziehen bleibt „Entziehen“ an
+  der Zeile.
+- Telefon: Karten untereinander (am Finger mindestens 44 px, auch „Einzeln“ ohne Kurztext), die Gültigkeitszeile
+  bricht um („bis“ und Feld bleiben zusammen), der Dialog rollt, die Knopfzeile klebt unten.
+- Die eigene Zeile der Material-Verwaltung hat keine Grenzen nach Nr. 5 mehr im Dialog (der Server prüft sie für sie
+  ohnehin nicht) – sie kann sich so etwa eine Prüffreigabe geben.
+
+**Sonst**: Leitstelle (Rückfrage „Einziger Materialwart“) nennt „Rolle „Materialwart““ statt „Vorlage“.
+
+**Tests**: neu `tests/test_material_rechte_dialog.py` – statisch (Rollenkarten an beiden Stellen, Gültigkeits-
+Radiogruppe in Dialog und Anlegen-Formular, kein „Grundrecht bis“/„Prüfen bis“, „Grundrecht“ nur unter „Einzeln“,
+Gründe als Satz, Notiz, Touch-Regeln nur unter pointer: coarse); mit Node.js die Zuordnung Rechte → Rolle für alle
+Fälle, die Gründe und die Abbildung Rolle → Anfrage; gegen die Schnittstelle jede Rolle beim Anlegen und reihum beim
+Ändern mit den erwarteten Rechten (und wieder dieselbe Rolle beim Öffnen), externer Prüfer höchstens 24 Monate (alles
+oder nichts), ohne Qualifikation und eigene Rechte – was der Dialog ausgraut, lehnt auch der Server ab; herabsetzen
+und kürzen der eigenen Zeile gehen. Bestehende Freigabe-Tests liefen unverändert grün.

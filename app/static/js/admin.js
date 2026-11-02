@@ -610,7 +610,7 @@
         Materialwart ${gliederungenText(gl)}. ${wie} verwaltet dort danach nur noch die Material-Verwaltung und vergibt
         Freigaben.</p>
       <p class="help">Soll dort weiter jemand aus der Gliederung verwalten, vorher einen zweiten Materialwart eintragen:
-        Bestand → Gliederung → Bearbeiten → Freigaben, Vorlage „Materialwart“.</p>`, "Trotzdem speichern");
+        Bestand → Gliederung → Bearbeiten → Freigaben, Rolle „Materialwart“.</p>`, "Trotzdem speichern");
   }
 
   /* Löschen: Was in der Materialablage daraus folgt, steht vorher da (GET …/material-folgen) – auch, wenn das Konto der
