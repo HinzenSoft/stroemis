@@ -630,7 +630,7 @@
   function renderListe() {
     S.titel([], "pruefungen");
     root.innerHTML = `
-      <div class="page-head"><h1>Riegenkarten</h1>${anleitungKopf("uebersicht")}
+      <div class="page-head"><h1>Riegenkarten${anleitungKopf("uebersicht", { satz: "Wie Lehrgänge, Bewertung und Kataloge in den Riegenkarten funktionieren, erklärt die Anleitung." })}</h1>
         ${darfAnlegen() ? `<div class="btn-row"><button class="btn secondary" data-act="lg-import">Import</button>
           <a class="btn secondary" href="/riegenkarten/kataloge">Kataloge</a>
           <button class="btn" data-act="lg-neu"><span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Lehrgang<span class="k-anlegen"> anlegen</span></span></button></div>` : ""}</div>
@@ -786,7 +786,7 @@
     const ls = k.leistungen || [];
     S.titel(k.titel, "pruefungen");
     root.innerHTML = `<a class="zurueck" href="/riegenkarten/kataloge">← Alle Kataloge</a>
-      <div class="page-head"><h1>${esc(k.titel)}</h1>${anleitungKopf("katalog")}
+      <div class="page-head"><h1>${esc(k.titel)}${anleitungKopf("katalog")}</h1>
         ${admin ? `<div class="btn-row">${S.menue({ art: "zeilenmenue", klein: false, eintraege: [
           { text: "Bearbeiten", attrs: `data-act="kat-edit" data-id="${k.id}"` },
           { text: "Löschen", attrs: `data-act="kat-del" data-id="${k.id}"` }] })}</div>` : ""}</div>
@@ -996,7 +996,7 @@
     const datum = lg.datum_von || lg.datum_bis ? esc(spanne(lg.datum_von, lg.datum_bis)) : "";
     root.innerHTML = `
       <a class="zurueck" href="/riegenkarten">← Alle Lehrgänge</a>
-      <div class="page-head"><h1>${esc(lg.titel)}</h1>${anleitungKopf("lehrgang")}
+      <div class="page-head"><h1>${esc(lg.titel)}${anleitungKopf("lehrgang")}</h1>
         ${lg.darf_leiten ? `<div class="btn-row">${S.menue({ klein: false, eintraege: [
           { text: "Bearbeiten", attrs: `data-act="lg-edit" data-id="${lg.id}"` },
           { text: "Import", attrs: `data-act="lg-import-in" data-id="${lg.id}"` }] })}</div>` : ""}</div>

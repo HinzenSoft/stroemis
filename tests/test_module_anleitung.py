@@ -106,7 +106,9 @@ def test_hilfen_in_common_und_kein_link_auf_die_offene_seite():
     teil = common[common.index("window.S.anleitung = (function () {"):]
     for stelle in ('document.querySelector("[data-anleitung]")', '`/stroemipedia/${ausser}`',
                    'target="_blank" rel="noopener">Mehr dazu in der Strömipedia</a></span>',
-                   '<a class="lnk kopf-anleitung" href="${window.S.esc(u)}"${tab}>Anleitung<span class="nur-vorlesen"> in der Strömipedia</span></a>',
+                   # Seit dem 02.11.2026 ein „i“ an der Überschrift statt des Textlinks (test_module_kleinigkeiten.py).
+                   'return window.S.info("Anleitung", `${window.S.esc((opt && opt.satz) || ANLEITUNG_SATZ)}<span class="info-absatz"><a',
+                   'class="kopf-anleitung" href="${window.S.esc(u)}"${tab}>Anleitung in der Strömipedia öffnen</a></span>`);',
                    "return { url, mehrDazu, kopf };"):
         assert stelle in teil, stelle
     wiki = lesen(JS["wiki"])
@@ -114,11 +116,10 @@ def test_hilfen_in_common_und_kein_link_auf_die_offene_seite():
     assert 'const offeneSeite = () => (state.editorNeu ? "" : (state.current && state.current.slug) || "");' in wiki
     assert 'const anleitungUrl = (thema) => S.anleitung.url(thema, { ausser: offeneSeite() });' in wiki
     assert 'const mehrDazu = (thema) => S.anleitung.mehrDazu(thema, { ausser: offeneSeite() });' in wiki
-    assert '<h1>Strömipedia</h1>${S.anleitung.kopf("uebersicht", { neuerTab: false })}' in wiki       # in der Anwendung
+    assert '<h1>Strömipedia${S.anleitung.kopf("uebersicht", { neuerTab: false,' in wiki       # in der Anwendung
     assert 'if (a === "anleitung") return navigate(slugAus(anleitungUrl("seite")));' in wiki
     css = lesen("app/static/css/app.css")
-    assert ".kopf-anleitung { display: inline-block; flex: none; }" in css
-    assert ":is(.page-head, .wiki-head) > .kopf-anleitung { margin-right: auto; }" in css
+    assert ".kopf-anleitung {" not in css and "> .kopf-anleitung" not in css         # das „i“ braucht keine eigene Regel
 
 
 def test_aufloesung_je_modul_mit_den_rechten_der_stroemipedia():

@@ -313,6 +313,51 @@ def test_9_verloren_in_meiner_psa_und_10_rueckruf_dialog():
     assert 'data-act="rr-sperren" data-id="${r.id}">Sperren (Rückruf)</button>' in js
 
 
+
+# --- 11 Anleitung als „i“ an der Überschrift, 12 Karten mittig ---------------------------------------------------
+
+def test_11_anleitung_als_i_an_der_ueberschrift():
+    import re
+    common = lesen("app/static/js/common.js")
+    teil = common[common.index("window.S.anleitung = (function () {"):]
+    assert 'return window.S.info("Anleitung", `${window.S.esc((opt && opt.satz) || ANLEITUNG_SATZ)}<span class="info-absatz"><a' in teil
+    assert ">Anleitung in der Strömipedia öffnen</a></span>`);" in teil and "nur-vorlesen" not in teil
+    mat = lesen("app/material/static/material.js")
+    assert 'infoKnopf("Anleitung", `${esc(satz || ANLEITUNG_SATZ)}<span' in mat
+    # Überall IN der Überschrift: nirgends mehr hinter </h1>, und der Hinweiskasten ist weg (das Willkommen bleibt).
+    for pfad in ("app/material/static/material.js", "app/static/js/pruefungen.js", "app/static/js/wiki.js"):
+        js = lesen(pfad)
+        assert not re.search(r"</h1>\$\{(?:anleitungKopf|S\.anleitung\.kopf)\(", js), pfad
+    assert mat.count("${anleitungKopf(") == 16 and "anleitungHinweis" not in mat
+    assert '<h1>Materialablage${anleitungKopf("uebersicht", ' in mat
+    assert '<h1>Riegenkarten${anleitungKopf("uebersicht", ' in lesen("app/static/js/pruefungen.js")
+    assert '<h1>Strömipedia${S.anleitung.kopf("uebersicht", { neuerTab: false,' in lesen("app/static/js/wiki.js")
+    assert 'if (link) panelTitle.insertAdjacentHTML("beforeend", link);' in lesen("app/static/js/map.js")
+    assert "im „i“ an der Überschrift der Übersicht" in lesen("app/material/templates/material/seite.html")
+    # Je Überschrift höchstens ein „i“: Keine Überschrift mit „i“ bekommt zusätzlich das der Anleitung.
+    for pfad in ("app/material/static/material.js", "app/static/js/pruefungen.js"):
+        for h1 in re.findall(r"<h1>.*?</h1>", lesen(pfad)):
+            assert not ("anleitungKopf(" in h1 and re.search(r"\b(?:infoKnopf|info)\(", h1)), h1[:120]
+    # Menüeinträge und „Mehr dazu“ bleiben.
+    wiki = lesen("app/static/js/wiki.js")
+    assert "Anleitung zur Strömipedia" in wiki and "Anleitung zum Editor" in wiki
+    assert 'target="_blank" rel="noopener">Mehr dazu in der Strömipedia</a></span>' in common
+    css = lesen("app/static/css/app.css") + lesen("app/static/css/pruefungen.css") + lesen("app/material/static/material.css")
+    assert "mat-anleitung-hinweis" not in css and "> .kopf-anleitung" not in css and ".mat-kopf-anleitung.lnk { display: inline-block; }" in css
+
+
+def test_12_karten_der_stroemipedia_mittig():
+    css = lesen("app/static/css/app.css")
+    assert (".wiki-karten { list-style: none; margin: 0 0 8px; padding: 0; container: karten / inline-size;\n"
+            "  display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; }") in css
+    assert ".wiki-karte { --spalten: 1; flex: 0 0 calc((100% - (var(--spalten) - 1) * 12px) / var(--spalten));" in css
+    for breite, n in ((492, 2), (744, 3), (996, 4), (1248, 5)):
+        assert f"@container karten (min-width: {breite}px) {{ .wiki-karte {{ --spalten: {n}; }} }}" in css
+        assert breite == n * 240 + (n - 1) * 12                    # dieselben Grenzen wie auto-fill ab 240 px
+    assert "grid-template-columns: repeat(auto-fill, minmax(min(100%, 240px), 1fr))" not in css
+    assert ".start-wiki .wiki-karten" not in css                   # eine Regel für alle drei Stellen
+
+
 if __name__ == "__main__":
     for name, f in list(globals().items()):
         if name.startswith("test_") and callable(f):

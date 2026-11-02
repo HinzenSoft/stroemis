@@ -165,18 +165,13 @@
   }
 
   /* --- Seitenleiste ------------------------------------------------------ */
-  /* thema: „Anleitung“ in der Strömipedia hinter dem Titel der Leiste (Nachtrag vom 01.11.2026, S.anleitung; nur, wenn
-     das Konto die Seite lesen darf) – die Liste der Alben führt zum Artikel „Ankerplätze“, ein Album zu „Alben“. Die
+  /* thema: Anleitung in der Strömipedia als „i“ am Titel der Leiste (Nachtrag vom 01.11.2026, S.anleitung; seit dem
+     02.11.2026 „i“ statt Textlink; nur, wenn das Konto die Seite lesen darf) – die Liste der Alben führt zum Artikel „Ankerplätze“, ein Album zu „Alben“. Die
      Karte selbst hat keinen Seitenkopf: In der Werkzeugleiste ist am Telefon kein Platz, und „Alben“ ist ein Tipp. */
   function openPanel(title, html, liste, thema) {
     panelTitle.textContent = title;
-    const alt = $("#panel-anleitung");
-    if (alt) alt.remove();
     const link = thema ? S.anleitung.kopf(thema) : "";
-    if (link) {
-      panelTitle.insertAdjacentHTML("afterend", link);
-      panelTitle.nextElementSibling.id = "panel-anleitung";
-    }
+    if (link) panelTitle.insertAdjacentHTML("beforeend", link);
     panelBody.innerHTML = html;
     // Fuß mit den Kontaktadressen (_fuss.html): Unter der Vollbild-Karte hätte er keinen Platz – er stünde außerhalb des
     // Bilds oder läge über der Karte. Er kommt ans Ende des Panels, wo man ohnehin liest (Alben, Album).

@@ -90,11 +90,9 @@ def test_kaesten_ganze_breite_inhalt_100ch():
             # Kein späterer Innenabstand rechts – er überstimmte die Regel (die Kurzform „padding“ setzt ihn mit).
             for verboten in ("padding", "padding-right", "padding-inline", "padding-inline-end"):
                 assert verboten not in eigenschaften, f"{datei}: {regel}"
-    # Der Anleitungshinweis (eigener Rahmen) gibt nur sein Mindestmaß an – am Rechner wie am Telefon.
-    css = lesen("app/material/static/material.css")
-    regel = css[css.index(".notice.mat-anleitung-hinweis {"):css.index("}", css.index(".notice.mat-anleitung-hinweis {"))]
-    assert "padding-block: 14px; padding-left: 16px; --kasten-rand: 16px;" in regel
-    assert ".notice.mat-anleitung-hinweis { padding-block: 10px; padding-left: 12px; --kasten-rand: 12px; }" in css
+    # Den Anleitungshinweis (eigener Rahmen) gibt es seit dem 02.11.2026 nicht mehr – die Anleitung steht als „i“ an der
+    # Überschrift (test_module_kleinigkeiten.py).
+    assert "mat-anleitung-hinweis {" not in lesen("app/material/static/material.css")
     # Gegenprobe der Prüfung selbst: Diese Regeln wären Verstöße bzw. keine.
     assert _trifft_kasten(".notice.mat-anleitung-hinweis") and _trifft_kasten("#mat-inhalt p.notice")
     assert not _trifft_kasten("#mat-inhalt :is(.notice, .mat-wikizeile) :is(a:not(.btn), .lnk)")

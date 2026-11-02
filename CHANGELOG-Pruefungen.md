@@ -12,6 +12,9 @@ Teil des gleichnamigen Abschnitts in CHANGELOG-Material.md (alle Module); hier, 
   ausgegraut mit `aria-disabled` – vorher erst 409 nach dem Klick. Begründung: `update_leistung` sperrt alle drei Felder
   mit derselben Bedingung wie die Kriterien, änderbar bleibt nichts.
 - Hilfetext im Ausbilder-Dialog: „über Namen oder vollständige E-Mail-Adresse“ (wie die Suche und ihr aria-label).
+- Anleitung als „i“ an der Überschrift von Lehrgangsliste, Lehrgangsseite und Katalogseite statt des Textlinks
+  „Anleitung“ (alle Module, Nachtrag Punkt 11); die Sonderregel für die Lehrgangsseite am Telefon (Link unter dem Titel)
+  entfällt.
 
 ## Anleitungsverweise und Nachträge aus den Modul-Artikeln (01.11.2026)
 

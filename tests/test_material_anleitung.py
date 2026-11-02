@@ -282,10 +282,11 @@ def test_willkommen_nach_dem_hinweis_entwicklungsserver():
 
 def test_hinweis_und_links_in_der_oberflaeche():
     js = lesen("app/material/static/material.js")
-    hinweis = js[js.index("function anleitungHinweis() {"):js.index("(function willkommen() {")]
-    assert "Anleitung in der Strömipedia öffnen" in hinweis and 'class="btn secondary"' in hinweis
-    assert "schliessen" not in hinweis.lower() and "data-act" not in hinweis          # nicht ausblendbar
-    assert "${anleitungHinweis()}" in js
+    # Seit dem 02.11.2026 (Wunsch des Nutzers): kein blauer Hinweiskasten mehr, die Anleitung steht als „i“ an der
+    # Überschrift „Materialablage“ – wie an jeder anderen Überschrift (test_module_kleinigkeiten.py).
+    assert "anleitungHinweis" not in js and "mat-anleitung-hinweis" not in js
+    assert '<div class="page-head"><h1>Materialablage${anleitungKopf("uebersicht", ' in js
+    assert "Anleitung\n    in der Strömipedia öffnen</a></span>`)" in js
     # Kopf-Links und Infos fragen nur nach Themen, die es in der Tabelle gibt.
     from app.material.services.anleitung import THEMEN
     benutzt = set(re.findall(r'(?:mehrDazu|anleitungKopf|anleitungUrl)\("([a-z_]+)"\)', js))
@@ -293,9 +294,7 @@ def test_hinweis_und_links_in_der_oberflaeche():
     benutzt |= {"ordner_system", "ordner", "uebersicht", "echtheit"}
     assert benutzt <= set(THEMEN), benutzt - set(THEMEN)
     assert set(THEMEN) <= benutzt, set(THEMEN) - benutzt
-    css = lesen("app/material/static/material.css")
-    regel = css[css.index(".notice.mat-anleitung-hinweis {"):css.index("}", css.index(".notice.mat-anleitung-hinweis {"))]
-    assert "var(--wasser)" in regel and "--rot" not in regel
+    assert "mat-anleitung-hinweis" not in lesen("app/material/static/material.css")
 
 
 if __name__ == "__main__":

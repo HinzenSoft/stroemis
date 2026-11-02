@@ -1133,10 +1133,13 @@ window.S.stufe = (modul) => {
 /* Anleitung in der Strömipedia für Strömipedia, Ankerplätze und Riegenkarten (Nachtrag vom 01.11.2026, wie in der
    Materialablage): Der Server gibt der Seite die Adressen mit, die das Konto lesen darf (app/anleitung.py, data-anleitung
    am Rahmen der Seite: {Thema: Adresse}); fehlt ein Thema, gibt es keinen Link – kein toter Link, keine Meldung, das „i“
-   behält seinen Text. mehrDazu(thema) ist der letzte Absatz einer Info, kopf(thema) der Textlink „Anleitung“ hinter der
-   Überschrift einer Ansicht. Beide öffnen einen neuen Tab (ein offener Dialog, die Karte, eine laufende Stoppuhr bleiben
-   stehen) – außer kopf(thema, { neuerTab: false }) in der Strömipedia selbst. ausser: die Seite der Strömipedia, die
-   gerade offen ist (Adresse ohne /stroemipedia/) – auf sie zeigt kein Link. */
+   behält seinen Text. mehrDazu(thema) ist der letzte Absatz einer Info, kopf(thema) das „i“ an der Überschrift einer
+   Ansicht (seit dem 02.11.2026 statt des Textlinks „Anleitung“ hinter ihr, Wunsch des Nutzers: „Füge die Anleitungen
+   einheitlich in einem i bei der Überschrift hinzu“; gehört INS Element der Überschrift): ein Satz, worum es geht
+   (opt.satz, sonst ein allgemeiner), und „Anleitung in der Strömipedia öffnen“. Hat die Überschrift schon ein „i“, gehört
+   der Link als mehrDazu dort hinein – je Begriff ein „i“. Beide öffnen einen neuen Tab (ein offener Dialog, die Karte,
+   eine laufende Stoppuhr bleiben stehen) – außer kopf(thema, { neuerTab: false }) in der Strömipedia selbst. ausser:
+   die Seite der Strömipedia, die gerade offen ist (Adresse ohne /stroemipedia/) – auf sie zeigt kein Link. */
 window.S.anleitung = (function () {
   let tabelle = null;
   const lesen = () => {
@@ -1153,11 +1156,13 @@ window.S.anleitung = (function () {
   }
   const mehrDazu = (thema, opt) => (url(thema, opt) ? `<span class="info-absatz"><a href="${window.S.esc(url(thema, opt))}"
     target="_blank" rel="noopener">Mehr dazu in der Strömipedia</a></span>` : "");
+  const ANLEITUNG_SATZ = "Wie diese Seite funktioniert, erklärt die Anleitung in der Strömipedia.";
   const kopf = (thema, opt) => {
     const u = url(thema, opt);
     if (!u) return "";
     const tab = opt && opt.neuerTab === false ? "" : ' target="_blank" rel="noopener"';
-    return `<a class="lnk kopf-anleitung" href="${window.S.esc(u)}"${tab}>Anleitung<span class="nur-vorlesen"> in der Strömipedia</span></a>`;
+    return window.S.info("Anleitung", `${window.S.esc((opt && opt.satz) || ANLEITUNG_SATZ)}<span class="info-absatz"><a
+      class="kopf-anleitung" href="${window.S.esc(u)}"${tab}>Anleitung in der Strömipedia öffnen</a></span>`);
   };
   return { url, mehrDazu, kopf };
 })();

@@ -149,28 +149,21 @@
   /* --- Anleitung in der Strömipedia (Wunsch vom 28.10.2026) -------------------------------------------------------
      Der Server gibt jeder Seite die Adressen mit, die das Konto in der Strömipedia lesen darf (services/anleitung.py,
      data-anleitung: {Thema: Adresse}); fehlt ein Thema, gibt es keinen Link – kein toter Link, keine Meldung, das „i“
-     behält seinen Text. mehrDazu ist der letzte Absatz einer Info, anleitungKopf der Textlink „Anleitung“ direkt hinter
-     der Überschrift einer Ansicht, die kein „i“ an der Überschrift hat (sonst trägt das „i“ den Link). Alle öffnen
+     behält seinen Text. mehrDazu ist der letzte Absatz einer Info, anleitungKopf das „i“ IN der Überschrift einer Ansicht,
+     die noch kein „i“ hat (sonst trägt ihr „i“ den Link als mehrDazu) – seit dem 02.11.2026 statt des Textlinks „Anleitung“
+     hinter ihr und statt des blauen Hinweiskastens auf der Übersicht (Wunsch des Nutzers: „Füge die Anleitungen
+     einheitlich in einem i bei der Überschrift hinzu“; das Willkommen beim ersten Besuch bleibt). Alle öffnen
      einen neuen Tab wie die Prüfanleitung: Eine angefangene Prüfung oder ein offener Dialog bleibt stehen. freigaben.js
      nimmt mehrDazu über window.MatAnleitung. */
   const ANLEITUNG = JSON.parse(root.dataset.anleitung || "{}");
   const anleitungUrl = (thema) => (typeof ANLEITUNG[thema] === "string" ? ANLEITUNG[thema] : "");
   const mehrDazu = (thema) => (anleitungUrl(thema) ? `<span class="info-absatz"><a href="${esc(anleitungUrl(thema))}"
     target="_blank" rel="noopener">Mehr dazu in der Strömipedia</a></span>` : "");
-  const anleitungKopf = (thema) => (anleitungUrl(thema) ? `<a class="lnk mat-kopf-anleitung" href="${esc(anleitungUrl(thema))}"
-    target="_blank" rel="noopener">Anleitung<span class="mat-vorlesen"> in der Strömipedia</span></a>` : "");
+  const ANLEITUNG_SATZ = "Wie diese Seite funktioniert, erklärt die Anleitung in der Strömipedia.";
+  const anleitungKopf = (thema, satz) => (anleitungUrl(thema) ? infoKnopf("Anleitung", `${esc(satz || ANLEITUNG_SATZ)}<span
+    class="info-absatz"><a class="mat-kopf-anleitung" href="${esc(anleitungUrl(thema))}" target="_blank" rel="noopener">Anleitung
+    in der Strömipedia öffnen</a></span>`) : "");
   window.MatAnleitung = { url: anleitungUrl, mehrDazu };
-
-  /* Übersicht: dauerhaft oben der Hinweis auf die Anleitung (Wunsch vom 28.10.2026: beim ersten Besuch das Willkommen,
-     „danach … ein sehr auffälliger Hinweis“) – blau wie eine Info, nicht ausblendbar; schmal nur Titel und Knopf. */
-  function anleitungHinweis() {
-    const url = anleitungUrl("uebersicht");
-    if (!url) return "";
-    return `<div class="notice mat-anleitung-hinweis"><p><strong>Anleitung zur Materialablage</strong><span
-        class="mat-anleitung-zusatz"> – wie Rechte, Bestand, Prüfungen und Nachweise zusammenhängen, steht in der
-        Strömipedia.</span></p>
-      <a class="btn secondary" href="${esc(url)}" target="_blank" rel="noopener">Anleitung in der Strömipedia öffnen</a></div>`;
-  }
 
   /* Willkommen beim allerersten Besuch der Übersicht (seite.html setzt den Dialog nur dann in die Seite): mittig und
      modal wie der Hinweis „Entwicklungsserver“ – Zurück schließt ihn, Esc und „Später“ auch, der Fokus steht auf „Zur
@@ -1348,8 +1341,7 @@
           Die Nummernsuche oben findet eine Herstellerseriennummer auf Wunsch auch außerhalb deines Bereichs – das wird mit deinem Namen protokolliert.</p>`;
     // Ohne Knöpfe im Kopf (Wunsch vom 20.10.2026): Bestand und „Artikel anlegen“ erreicht man über den Reiter „Bestand“.
     seitenTitel("Übersicht");
-    inhalt.innerHTML = `<div class="page-head"><h1>Materialablage</h1></div>
-      ${anleitungHinweis()}
+    inhalt.innerHTML = `<div class="page-head"><h1>Materialablage${anleitungKopf("uebersicht", "Wie Rechte, Bestand, Prüfungen und Nachweise zusammenhängen, erklärt die Anleitung zur Materialablage in der Strömipedia.")}</h1></div>
       ${mangelKasten(d.maengel, d.maengel_gesamt)}
       ${rueckrufKasten(d.rueckrufe)}
       ${d.meldungen_offen ? `<p class="notice"><a href="/materialablage/katalog/meldungen"><strong>${plural(d.meldungen_offen, "offene Produktmeldung", "offene Produktmeldungen")}</strong></a>
@@ -1893,7 +1885,7 @@
         : DARF.verwalten ? '<p class="help">Prüffreigaben für deine Ordner vergibst du unter Ordner → Bearbeiten → Freigaben.</p>' : "");
     async function zeichnen() {
       seitenTitel("Prüfungen");
-      inhalt.innerHTML = `<div class="page-head"><h1>Prüfungen</h1>${anleitungKopf("pruefungen")}
+      inhalt.innerHTML = `<div class="page-head"><h1>Prüfungen${anleitungKopf("pruefungen")}</h1>
           <div class="btn-row"><a class="btn secondary" href="/materialablage/pruefen" title="Ist ein Protokoll oder Lebenslauf (PDF) unverändert?">Echtheit prüfen</a>
             ${rundenMenue()}</div></div>
         ${prueferHinweisSeite()}
@@ -2100,7 +2092,7 @@
     const baum = await ordnerBaum().catch(() => []);
     const wahl = ordnerOptionen(baum, () => true, ordner, false);
     inhalt.innerHTML = `<div class="mat-pfad">${pfadHtml(['<a href="/materialablage/pruefungen">Prüfungen</a>', "<span>Abgeschlossene Prüfdurchgänge</span>"])}</div>
-      <div class="page-head"><h1>Abgeschlossene Prüfdurchgänge</h1>${anleitungKopf("durchgaenge")}</div>
+      <div class="page-head"><h1>Abgeschlossene Prüfdurchgänge${anleitungKopf("durchgaenge")}</h1></div>
       <form class="mat-dg-filter" id="dg-filter" role="search" aria-label="Abgeschlossene Prüfdurchgänge filtern">
         <label for="dg-ordner">Ordner <select id="dg-ordner"><option value="">alle Ordner</option>${wahl.html}</select></label>
         <label for="dg-q">Im Titel <input type="search" id="dg-q" maxlength="200" value="${esc(q)}" autocomplete="off" enterkeyhint="search"></label>
@@ -2593,7 +2585,7 @@
         : "Ausgesonderte Artikel bleiben hier mit ihrem vollen Lebenslauf sichtbar, zählen aber nirgends mehr als Bestand und lassen sich nicht zurückholen.";
       seitenTitel(d.name);
       inhalt.innerHTML = `<div class="mat-pfad">${pfadHtml(['<a href="/materialablage/bestand">Bestand</a>', ...bc])}</div>
-        <div class="page-head"><h1>${schloss(d)}${esc(d.name)} ${system ? "" : `<span class="mat-art">${esc(ORDNERART[d.kind])}</span>`}${demoMarke(d.demo)}</h1>${anleitungKopf(system ? "ordner_system" : "ordner")}
+        <div class="page-head"><h1>${schloss(d)}${esc(d.name)} ${system ? "" : `<span class="mat-art">${esc(ORDNERART[d.kind])}</span>`}${demoMarke(d.demo)}${anleitungKopf(system ? "ordner_system" : "ordner")}</h1>
           <div class="btn-row">${darfPflegen ? `<button class="btn secondary small" data-act="unterordner"><span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Unterordner<span class="k-anlegen"> anlegen</span></span></button>
             <a class="btn secondary small" href="/materialablage/artikel/neu?ordner=${d.id}"><span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Artikel<span class="k-anlegen"> anlegen</span></span></a>
             ${darfOben ? bearbeitenMenue : '<button class="btn secondary small" data-act="bearbeiten">Bearbeiten</button>'}` : ""}
@@ -2984,7 +2976,7 @@
       const k = b.kopf;
       const jahre = k.jahre.includes(k.jahr) ? k.jahre : [...k.jahre, k.jahr].sort();
       inhalt.innerHTML = `<div class="mat-pfad">${pfadHtml(['<a href="/materialablage/bestand">Bestand</a>', `<a href="/materialablage/ordner/${fid}">${esc(k.pfad)}</a>`])}</div>
-        <div class="page-head"><h1>Jahresbericht ${esc(k.ordner)} <span id="be-titel-jahr">${esc(String(k.jahr))}</span>${demoMarke(k.demo)}</h1>${anleitungKopf("bericht")}
+        <div class="page-head"><h1>Jahresbericht ${esc(k.ordner)} <span id="be-titel-jahr">${esc(String(k.jahr))}</span>${demoMarke(k.demo)}${anleitungKopf("bericht")}</h1>
           <div class="btn-row" id="be-dateien">${dateien(b)}</div></div>
         <div class="mat-bericht-wahl">
           <label for="be-jahr">Kalenderjahr${infoKnopf("Kalenderjahr", "Bestandszahlen gelten zum Stichtag heute, Ereignisse für das Kalenderjahr.")} <select id="be-jahr">${jahre.map((j) => `<option value="${Number(j)}"${j === k.jahr ? " selected" : ""}>${Number(j)}</option>`).join("")}</select></label>
@@ -3003,7 +2995,7 @@
       const jahre = Array.from({ length: 15 }, (_, i) => dieses - i);
       const gewaehlt = jahre.includes(jahr) ? jahr : dieses;
       inhalt.innerHTML = `<div class="mat-pfad">${pfadHtml(['<a href="/materialablage">Materialablage</a>', '<a href="/materialablage/bestand">Bestand</a>'])}</div>
-        <div class="page-head"><h1>Jahresbericht</h1>${anleitungKopf("bericht")}</div>
+        <div class="page-head"><h1>Jahresbericht${anleitungKopf("bericht")}</h1></div>
         <div class="mat-bericht-wahl">
           <label for="be-jahr">Kalenderjahr <select id="be-jahr">${jahre.map((j) => `<option value="${j}"${j === gewaehlt ? " selected" : ""}>${j}</option>`).join("")}</select></label></div>
         <div id="be-inhalt"><p class="notice" role="alert">${esc(e.message)}</p></div>`;
@@ -3132,7 +3124,7 @@
       <div class="mat-artikelkopf">
         ${p.bild ? bildLink(p.bild, p.original, `Produktbild ${produktName(p)}`, null, `<img class="mat-produktbild" src="${esc(p.bild)}" alt="Produktbild ${esc(produktName(p))}">`) : '<div class="mat-produktbild leer" aria-hidden="true">kein Produktbild</div>'}
         <div class="mat-artikeltitel">
-          <h1><span class="mat-inv">${esc(a.inventory_no)}</span> ${verloren ? '<span class="mat-status s-gesperrt gross">verloren</span>' : statusMarke(a.status, true)}</h1>${anleitungKopf("artikel")}
+          <h1><span class="mat-inv">${esc(a.inventory_no)}</span> ${verloren ? '<span class="mat-status s-gesperrt gross">verloren</span>' : statusMarke(a.status, true)}${anleitungKopf("artikel")}</h1>
           <p class="mat-produktzeile"><a href="/materialablage/katalog/produkt/${p.id}">${nameHtml(p)}</a>${zusatzHtml(p)}${artNrHtml(p.article_no)}</p>
           <p>Seriennummer <strong>${esc(a.serial_no)}</strong>${a.serial_generated ? ' <span class="badge grey">vom System vergeben</span><span class="help mat-sn-hinweis">Der Hersteller vergibt keine Seriennummer – diese Nummer bitte dauerhaft am Artikel anbringen.</span>' : ""}</p>
           ${aus || darf.pruefen ? "" : DARF.qualifiziert || DARF.pruefer_haekchen ? `<p class="notice small">${pruefHinweis(a)}</p>` : ""}
@@ -4078,7 +4070,7 @@
           : ` · generisches Prüfformular von ${DARF.katalog
             ? `<a href="/materialablage/katalog?kategorie=${geerbt.id}" data-act="kategorie" data-id="${geerbt.id}">„${esc(geerbt.name)}“</a>`
             : `<a href="/materialablage/katalog/formular/${geerbt.aktives_formular}">„${esc(geerbt.name)}“</a>`}`;
-      inhalt.innerHTML = `<div class="page-head"><h1>Katalog</h1>${anleitungKopf("katalog")}
+      inhalt.innerHTML = `<div class="page-head"><h1>Katalog${anleitungKopf("katalog")}</h1>
           <div class="btn-row">${DARF.katalog ? '<button class="btn secondary" data-act="kat-neu"><span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Kategorie<span class="k-anlegen"> anlegen</span></span></button><button class="btn secondary" data-act="produkt-neu"><span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Produkt<span class="k-anlegen"> anlegen</span></span></button>' : ""}
             ${DARF.lesen || DARF.katalog ? `<a class="btn secondary mat-mit-zahl" href="/materialablage/katalog/meldungen">Produktmeldungen<span class="mat-meldezahl" id="kat-meldungen" hidden></span></a>` : ""}
             ${DARF.katalog ? katalogMenue : ""}</div></div>
@@ -4940,7 +4932,7 @@
       <div class="mat-pfad">${pfadHtml(['<a href="/materialablage/katalog">Katalog</a>', ...p.kategorie_pfad.map((x) => `<a href="/materialablage/katalog?kategorie=${x.id}">${esc(x.name)}</a>`)])}</div>
       <div class="mat-artikelkopf">
         ${p.bild ? bildLink(p.bild, p.original, `Produktbild ${produktName(p)}`, null, `<img class="mat-produktbild" src="${esc(p.bild)}" alt="">`) : '<div class="mat-produktbild leer" aria-hidden="true">kein Produktbild</div>'}
-        <div class="mat-artikeltitel"><h1>${nameHtml(p)}${zusatzHtml(p)} ${demoMarke(p.demo)}</h1>${anleitungKopf("produkt")}
+        <div class="mat-artikeltitel"><h1>${nameHtml(p)}${zusatzHtml(p)} ${demoMarke(p.demo)}${anleitungKopf("produkt")}</h1>
           ${DARF.verwalten ? `<div class="btn-row"><a class="btn secondary small" href="/materialablage/artikel/neu?produkt=${p.id}"><span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Artikel dieses Produkts<span class="k-anlegen"> anlegen</span></span></a></div>` : ""}
           ${k ? `<div class="btn-row"><button class="btn secondary small" data-act="bearbeiten">Bearbeiten</button>${produktMenue}</div>` : ""}</div>
       </div>
@@ -5205,7 +5197,7 @@
       seitenTitel(`Prüfformular ${f.ziel.art === "kategorie" ? (f.ziel.pfad.length ? f.ziel.pfad[f.ziel.pfad.length - 1].name : "") : f.ziel.name} v${f.version}`.replace(/\s+/g, " "));
       inhalt.innerHTML = `${f.demo ? '<p class="mat-demo-banner">DEMO – nicht für echte Prüfungen.</p>' : ""}
         <div class="mat-pfad">${pfadHtml(['<a href="/materialablage/katalog">Katalog</a>', `<a href="${zielLink}">${esc(zielText)}</a>`])}</div>
-        <div class="page-head"><h1>${esc(f.titel || "Prüfformular")} <span class="badge grey">Version ${f.version}</span> ${f.aktiv ? '<span class="mat-status s-einsatzbereit">aktiv</span>' : '<span class="badge grey">inaktiv</span>'} ${demoMarke(f.demo)}</h1>${anleitungKopf("formular")}
+        <div class="page-head"><h1>${esc(f.titel || "Prüfformular")} <span class="badge grey">Version ${f.version}</span> ${f.aktiv ? '<span class="mat-status s-einsatzbereit">aktiv</span>' : '<span class="badge grey">inaktiv</span>'} ${demoMarke(f.demo)}${anleitungKopf("formular")}</h1>
           ${DARF.katalog ? `<div class="btn-row">${formularKnoepfe()}</div>` : ""}</div>
         ${wikiZeile()}
         <p class="help">${esc(zielText)}. ${f.gueltig_ab ? `Gültig ab ${esc(fmtTag(f.gueltig_ab))}.` : "Noch nie aktiviert."}
@@ -5353,7 +5345,7 @@
       const p = sortParameter(new URLSearchParams({ q, seite, pro_seite: 50 }), sort);
       const d = await api(`${API}/suche?${p}`);
       seitenTitel(`Suche „${q}“`);
-      inhalt.innerHTML = `<div class="page-head"><h1>Suche „${esc(q)}“</h1>${anleitungKopf("suche")}</div>
+      inhalt.innerHTML = `<div class="page-head"><h1>Suche „${esc(q)}“${anleitungKopf("suche")}</h1></div>
         ${d.treffer.length ? artikelTabelle(d.treffer, { pfad: true, sort }) : leer("Kein Artikel in deinem Bereich gefunden.")}${seitenleiste(d.gesamt, seite, 50)}
         ${d.global_angebot ? '<div id="mat-global-angebot"></div>' : ""}`;
       // Unter der eigenen Liste das Angebot, auch außerhalb des eigenen Bereichs zu suchen (global.js – mit Rückfrage
@@ -5398,7 +5390,7 @@
     seitenTitel(`Prüfung ${a.inventory_no}`);
     inhalt.innerHTML = `${a.demo ? `<p class="mat-demo-banner">${DEMO_ARTIKEL}</p>` : ""}
       ${artikelPfad(a)}
-      <div class="page-head"><h1>Prüfung <span class="mat-inv">${esc(a.inventory_no)}</span> ${statusMarke(a.status, true)}</h1>${anleitungKopf("pruefung_neu")}</div>
+      <div class="page-head"><h1>Prüfung <span class="mat-inv">${esc(a.inventory_no)}</span> ${statusMarke(a.status, true)}${anleitungKopf("pruefung_neu")}</h1></div>
       <div class="mat-formular">
         <p class="mat-produktzeile"><strong>${nameHtml(p)}</strong>${zusatzHtml(p)}${artNrHtml(p.article_no)} · ${nummerHtml("Seriennummer", a.serial_no)}</p>
         ${a.lock_state !== "frei" && a.lock_state !== "ausgesondert" ? `<p class="mat-banner s-gesperrt">GESPERRT${a.lock_reason ? ` – ${esc(a.lock_reason)}` : ""}. Mit „einsatzbereit“ ist diese Prüfung die Freiprüfung.</p>` : ""}
@@ -5936,7 +5928,7 @@
       // „Aussonderung M-… aussondern (ausgesondert)“ und dieselbe Marke darunter noch einmal).
       return `${pr.artikel.demo ? `<p class="mat-demo-banner">${DEMO_ARTIKEL}</p>` : ""}
         <div class="mat-pfad">${pfadHtml([...a.pfad.map(pfadGlied), `<a href="/materialablage/artikel/${a.id}">${esc(a.inventory_no)}</a>`])}</div>
-        <div class="page-head"><h1>${esc(PRUEFART[pr.art] || pr.art)} <span class="mat-h1-zusatz mat-inv">${esc(a.inventory_no)}</span> ${pr.entwurf ? '<span class="badge">Entwurf</span>' : pr.art === "aussonderung" ? "" : ergebnisMarke(pr.ergebnis)}</h1>${anleitungKopf("pruefung")}
+        <div class="page-head"><h1>${esc(PRUEFART[pr.art] || pr.art)} <span class="mat-h1-zusatz mat-inv">${esc(a.inventory_no)}</span> ${pr.entwurf ? '<span class="badge">Entwurf</span>' : pr.art === "aussonderung" ? "" : ergebnisMarke(pr.ergebnis)}${anleitungKopf("pruefung")}</h1>
           ${knoepfe.length ? `<div class="mat-kopfaktion">${berGrund ? grundSatz("pr-ber-grund", berGrund) : ""}<div class="btn-row">${knoepfe.join("")}</div></div>` : ""}</div>
         ${berichtigungHinweis()}
         <p class="mat-produktzeile"><strong>${nameHtml(pr.produkt)}</strong>${zusatzHtml(pr.produkt)}${artNrHtml(pr.produkt.article_no)} · ${nummerHtml("Seriennummer", a.serial_no)} ${statusMarke(a.status)}</p>
@@ -6827,7 +6819,7 @@
       seitenTitel(d.titel);
       // Ein beendeter Durchgang steht unter „Abgeschlossene Prüfdurchgänge“ – die Brotkrume führt dorthin zurück.
       inhalt.innerHTML = `<div class="mat-pfad">${pfadHtml(['<a href="/materialablage/pruefungen">Prüfungen</a>', d.offen ? "" : '<a href="/materialablage/durchgaenge">Abgeschlossene Prüfdurchgänge</a>', "<span>Prüfdurchgang</span>"])}</div>
-        <div class="page-head"><h1>${esc(d.titel)} ${d.offen ? '<span class="badge">offen</span>' : `<span class="badge grey">${d.abgebrochen ? "abgebrochen" : "abgeschlossen"}</span>`}</h1>${anleitungKopf("durchgang")}
+        <div class="page-head"><h1>${esc(d.titel)} ${d.offen ? '<span class="badge">offen</span>' : `<span class="badge grey">${d.abgebrochen ? "abgebrochen" : "abgeschlossen"}</span>`}${anleitungKopf("durchgang")}</h1>
           ${d.offen && darf ? `<div class="mat-kopfaktion">${grundSatz("dg-abschluss", abschlussGrund)}
             <div class="btn-row"><button class="btn secondary" data-act="abbrechen">Durchgang abbrechen</button>
             <button class="btn" data-act="schliessen"${knopfAus("dg-abschluss", abschlussGrund)}>Durchgang abschließen</button></div></div>` : ""}
@@ -7010,7 +7002,7 @@
         : d.alle ? "Materialwarte melden hier Produkte, die ihnen beim Anlegen von Artikeln im Katalog fehlen; die Material-Verwaltung nimmt sie auf oder lehnt sie mit Begründung ab."
           : "Produkte, die du beim Anlegen von Artikeln als fehlend gemeldet hast. Du bekommst eine Mail, sobald die Material-Verwaltung sie bearbeitet hat.";
       seitenTitel(d.alle ? "Produktmeldungen" : "Deine Produktmeldungen");
-      inhalt.innerHTML = `<div class="page-head"><h1>${d.alle ? "Produktmeldungen" : "Deine Produktmeldungen"}</h1>${anleitungKopf("meldungen")}
+      inhalt.innerHTML = `<div class="page-head"><h1>${d.alle ? "Produktmeldungen" : "Deine Produktmeldungen"}${anleitungKopf("meldungen")}</h1>
           <div class="btn-row"><a class="btn secondary" href="/materialablage/katalog">Katalog</a>${DARF.verwalten && !d.alle && !d.bearbeiten ? '<a class="btn secondary" href="/materialablage/artikel/neu"><span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Artikel<span class="k-anlegen"> anlegen</span></span></a>' : ""}</div></div>
         <p class="help">${hilfe}${DARF.verwalten && !DARF.katalog ? ` <button type="button" class="lnk" data-act="eigene">${d.alle ? "Nur deine zeigen" : "Alle Meldungen zeigen"}</button>` : ""}</p>
         <div class="c-tabs mat-filter" role="group" aria-label="Status">${[["offen", "offen"], ["erledigt", "erledigt"], ["alle", "alle"]].map(([w, t]) => `<button type="button" class="${w === filter ? "sel" : ""}" data-act="filter" data-f="${w}" aria-pressed="${w === filter}">${t}${w === "offen" && d.offen ? ` (${d.offen})` : ""}</button>`).join("")}</div>
@@ -8429,7 +8421,7 @@
     const einzeln = Boolean(DATEN.id);
     const karten = einzeln ? d.artikel.filter((k) => k.id === DATEN.id) : d.artikel;
     const kopf = `${einzeln ? '<p class="mat-psa-zurueck"><a href="/materialablage/meine-psa">← Alle meine PSA</a></p>' : ""}
-      <div class="page-head"><h1>Meine PSA</h1>${anleitungKopf("meine_psa")}</div>
+      <div class="page-head"><h1>Meine PSA${anleitungKopf("meine_psa")}</h1></div>
       <p class="help">Ausrüstung, die dir persönlich zugeordnet ist. Vor jedem Gebrauch ansehen; was dir auffällt, meldest du hier – und gibst sie deinem Materialwart.</p>`;
     const liste = karten.length ? `<div class="mat-psa-liste${einzeln ? " einzeln" : ""}">${karten.map((k) => psaKarte(k, einzeln)).join("")}</div>`
       : einzeln ? leer("Dieser Artikel ist dir nicht (mehr) zugeordnet – oder er steht nicht unter den ersten in deiner Liste.")

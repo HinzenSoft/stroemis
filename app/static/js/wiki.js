@@ -795,7 +795,8 @@
           ? `<li class="wiki-karte-mehr"><a href="/stroemipedia/${esc(r.slug)}">… ${mehr} weitere<span class="nur-vorlesen"> ${mehr === 1 ? "Unterseite" : "Unterseiten"} von ${esc(r.title)}</span></a></li>` : ""}</ul>` : ""}</li>`;
     };
     shell.classList.add("uebersicht");
-    content.innerHTML = `<div class="wiki-head"><h1>Strömipedia</h1>${S.anleitung.kopf("uebersicht", { neuerTab: false })}</div>
+    content.innerHTML = `<div class="wiki-head"><h1>Strömipedia${S.anleitung.kopf("uebersicht", { neuerTab: false,
+      satz: "Wie man in der Strömipedia liest, sucht, Seiten anlegt und teilt, erklärt die Anleitung." })}</h1></div>
       <div class="wiki-meta">${S.plural(state.pages.length, "Seite", "Seiten")} · Wissen für die Strömungsrettung und seiltechnische Rettung</div>
       <ul class="wiki-karten">${roots.map(karte).join("")}</ul>
       <div class="home-cols" id="home-recent"></div>`;
