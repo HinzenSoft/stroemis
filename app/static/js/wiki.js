@@ -107,7 +107,7 @@
   // window.STROEMIS setzt base.html; die Prüfstände unter tests/ bauen die Seite ohne Vorlage auf.
   const darfEinbetten = () => S.stufe("wiki") >= S.STUFE.verwaltung;
   /* Seiten anlegen, duplizieren, im Baum verschieben: ab Redakteur (Stufe Redakteur, 01.11.2026). Ein Mitglied liest und
-     kommentiert; bearbeiten darf es nur eine Seite, für die es freigegeben ist (can_edit vom Server). */
+     kommentiert; bearbeiten darf es nur Seiten, für die es freigegeben ist, samt Unterseiten (can_edit vom Server). */
   const darfAnlegen = () => S.stufe("wiki") >= S.STUFE.redakteur;
   /* Anleitung in der Strömipedia (Nachtrag vom 01.11.2026, app/anleitung.py): Der Artikel „Strömipedia“ liegt in der
      Strömipedia selbst – kein Link zeigt auf die Seite, die gerade offen ist (gelesen oder bearbeitet; eine neue Seite
@@ -1749,7 +1749,7 @@
     const kandidaten = state.users.concat((p.editors || []).filter((u) => !mitStufe.has(u.id)));
     const publicLink = `${location.origin}/stroemipedia/${encodeURIComponent(p.slug)}`;
     dialog(`<h2>Teilen: ${esc(p.title)}</h2>
-      ${p.can_share ? `<h3>Bearbeiten erlauben${info("Bearbeiten erlauben", `Freigegebene Redakteure bearbeiten diese Seite und ihre Unterseiten, freigegebene Mitglieder nur diese Seite. Löschen darf keiner von beiden.${mehrDazu("bearbeiten_erlauben")}`)}</h3>
+      ${p.can_share ? `<h3>Bearbeiten erlauben${info("Bearbeiten erlauben", `Freigegebene Redakteure und Mitglieder bearbeiten diese Seite und ihre Unterseiten. Löschen und verschieben darf keiner von beiden.${mehrDazu("bearbeiten_erlauben")}`)}</h3>
       <input type="search" id="sh-filter" placeholder="Nutzer suchen …" aria-label="Nutzer suchen">
       <div class="user-pick" id="sh-users">${kandidaten.filter((u) => u.id !== p.created_by).map((u) => `
         <label class="inline"><input type="checkbox" value="${u.id}" ${editorIds.has(u.id) ? "checked" : ""}> ${esc(u.name || "Unbenannt")} <span class="muted small">${esc(u.gliederung || "")}${mitStufe.has(u.id) ? "" : " – ohne Stufe in der Strömipedia, die Freigabe wirkt nicht"}</span></label>`).join("") || '<div class="muted small">Keine weiteren Nutzer.</div>'}</div>` : ""}

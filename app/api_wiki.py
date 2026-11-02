@@ -73,9 +73,9 @@ def _ancestor_ids(page):
 
 
 # Seiten anlegen und bearbeiten (Stufe Redakteur, 01.11.2026): Ersteller- und Freigaberechte wirken ab Redakteur. Ein
-# Mitglied liest und kommentiert; bearbeiten darf es nur eine Seite, für die es selbst freigegeben ist – genau diese,
-# ohne Unterseiten (Entscheidung des Nutzers, 01.11.2026). Eigene Seiten aus der Zeit vor der Stufe bearbeitet es nicht
-# mehr (bestehende Mitglieder bleiben Mitglied).
+# Mitglied liest und kommentiert; bearbeiten darf es nur Seiten, für die es selbst freigegeben ist – samt Unterseiten
+# wie ein Redakteur (Wunsch des Nutzers vom 02.11.2026; vorher genau diese Seite, Entscheidung 2B vom 01.11.2026).
+# Eigene Seiten aus der Zeit vor der Stufe bearbeitet es nicht mehr (bestehende Mitglieder bleiben Mitglied).
 NUR_REDAKTION = "Seiten anlegen dürfen Redakteure und die Wiki-Verwaltung."
 NUR_REDAKTION_DATEIEN = ("Dateien hochladen dürfen Redakteure, die Wiki-Verwaltung und Mitglieder, die eine Seite "
                          "bearbeiten dürfen.")
@@ -95,17 +95,14 @@ OHNE_STUFE_BEARBEITER = ("%s keine Stufe in der Strömipedia – ohne sie wirkt 
 
 
 def can_edit(page, user=None):
-    """Bearbeiten dürfen die Wiki-Verwaltung, der Ersteller und freigegebene Nutzer ab Redakteur (Freigaben vererben
-    sich auf Unterseiten) – ein Mitglied nur die Seite, an der seine eigene Freigabe steht."""
+    """Bearbeiten dürfen die Wiki-Verwaltung, der Ersteller ab Redakteur und freigegebene Nutzer – Freigaben vererben
+    sich auf Unterseiten, für Mitglieder wie für Redakteure (seit dem 02.11.2026)."""
     user = user or current_user()
     if not user or not nutzt("wiki", user):
         return False
     if verwaltet("wiki", user):
         return True
-    if not schreibt("wiki", user):
-        return bool(db.query("SELECT 1 FROM wiki_editors WHERE user_id = ? AND page_id = ?",
-                             (user["id"], page["id"]), one=True))
-    if page["created_by"] == user["id"]:
+    if schreibt("wiki", user) and page["created_by"] == user["id"]:
         return True
     ids = [page["id"], *_ancestor_ids(page)]
     marks = ",".join("?" * len(ids))
@@ -589,7 +586,7 @@ def _baum_rechte(rows):
             r["can_edit"] = True
             continue
         geerbt, cur, gesehen = False, eltern.get(r["id"]), set()
-        while redaktion and cur is not None and cur not in gesehen:
+        while cur is not None and cur not in gesehen:     # Freigaben vererben sich, auch für Mitglieder
             if cur in frei:
                 geerbt = True
                 break

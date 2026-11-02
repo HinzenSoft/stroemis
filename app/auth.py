@@ -110,8 +110,8 @@ def _im_hintergrund(funktion, *args):
 # Materialablage hob die frühere Verwaltung 2 auf 3).
 #   karte       Mitglied: Spots ansehen; Redakteur: eigene Alben anlegen und bearbeiten (Bilder nur in eigene Alben);
 #               Verwaltung: alle Alben.
-#   wiki        Mitglied: alle Seiten lesen (außer beschränkten) und kommentieren – bearbeiten nur eine Seite, für die
-#               es selbst freigegeben ist (genau diese Seite); Redakteur: eigene Seiten anlegen und bearbeiten,
+#   wiki        Mitglied: alle Seiten lesen (außer beschränkten) und kommentieren – bearbeiten nur Seiten, für die
+#               es selbst freigegeben ist (samt Unterseiten, seit 02.11.2026); Redakteur: eigene Seiten anlegen und bearbeiten,
 #               freigegebene fremde samt Unterseiten; Verwaltung: alle Seiten, beschränkte lesen, veröffentlichen,
 #               HTML-Bausteine, ZIP-Import, Ersteller ändern. Kein Zugriff heißt hier: Lesemodus – nur die Seiten, die
 #               der öffentliche Teil zeigt (siehe wiki_lesemodus).

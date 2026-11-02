@@ -71,6 +71,7 @@ Geschichte stehen. Schemaversion nach der Nachbesserung vor dem Merge: 30; mit d
 | Startseite über alle Module | „/“ für jedes Konto mit Modul: Kacheln je Modul mit Zahlen, die zum Handeln führen (Materialablage wie ihre Übersicht), „Zuletzt besucht“ und „Neu und geändert“ über die Module, Abschnitte der Strömipedia als Karten (auch auf ihrer Übersicht und im Lesemodus), Suchfeld der Strömipedia; Logo und Anmeldung führen dorthin | gebaut 02.11.2026 (kein Schemaschritt, Merker in `mat_meta`), Fotos vor dem Push |
 | Kleinigkeiten aus dem Artikel-Nachzug | Strömipedia: Sprung zum Anker bleibt oben, auch wenn Bilder darüber nachladen, Gliederung markiert den angesprungenen Abschnitt; Editor meldet entzogene Berechtigung als „keine Berechtigung mehr“; Vorlagen auch über „+“ und „Erste Seite anlegen“; Ersteller und Bearbeiter nur mit Stufe (Server); Riegenkarten: Leistungsdialog bei eingefrorenen Bewertungen nur zum Lesen mit Satz und ausgegrautem „Speichern“, Hilfetext Ausbilder; Ankerplätze: „Bild bearbeiten“ speichert nur Geändertes; Materialablage: „verloren“ in Meine PSA, Rückruf-Dialog „wegen Rückruf sperren“; alle Module: Anleitung als „i“ an der Überschrift statt Textlink „Anleitung“ und blauem Hinweiskasten; Karten der Strömipedia-Übersicht mittig wie auf der Startseite | gebaut 02.11.2026 (kein Schemaschritt) |
 | Menüeintrag „Anleitung zur Strömipedia“ entfernt | „⋯“ einer Seite der Strömipedia ohne „Anleitung zur Strömipedia“; Thema `seite` aus `app/anleitung.py` | gebaut 02.11.2026 (kein Schemaschritt) |
+| Bearbeitungsfreigabe an Mitglieder samt Unterseiten | „Bearbeiten erlauben“ wirkt für Mitglieder wie für Redakteure auch auf die Unterseiten (vorher genau diese Seite) | gebaut 02.11.2026 (kein Schemaschritt) |
 
 ## Abgleich mit dem Bestand (vor Lieferung 1)
 
@@ -11010,3 +11011,19 @@ Schemaschritt.
 - README „Verweise auf die Anleitung“ angepasst.
 - **Tests**: `test_module_anleitung.py` (kein Eintrag, kein Thema `seite`), `test_module_kleinigkeiten.py`.
 - **Artikel**: „Strömipedia“ (Seiten „Strömipedia“ und „Lesen und Finden“) beim nächsten Nachzug anpassen.
+
+## Bearbeitungsfreigabe an Mitglieder samt Unterseiten (02.11.2026)
+
+Wunsch des Nutzers: „Bei bearbeiten Erlauben, sollen freigeeben Mitglieder auch die Unterseiten bearbeiten können, wie
+redakteure“. Löst Entscheidung 2B vom 01.11.2026 ab (Mitglied: genau diese Seite). Kein Schemaschritt.
+
+- `app/api_wiki.py`: `can_edit` – die Freigabe vererbt sich für jede Stufe auf die Unterseiten; „Ersteller darf
+  bearbeiten“ gilt weiter erst ab Redakteur (eigene Seiten aus der Zeit vor der Stufe bearbeitet ein Mitglied nicht).
+  `_baum_rechte` rechnet die Vererbung auch für Mitglieder. Unverändert: Mitglieder legen nichts an, verschieben nichts,
+  löschen nichts, geben nicht frei; Lesen beschränkter Unterseiten über eine Freigabe darüber ging schon vorher.
+- Texte: „i“ an „Bearbeiten erlauben“ („Freigegebene Redakteure und Mitglieder bearbeiten diese Seite und ihre
+  Unterseiten. Löschen und verschieben darf keiner von beiden.“), Hilfe „Rechte je Modul“ in der Leitstelle, README
+  (Rechte-Matrix, „Stufe Redakteur“), Kommentare in auth.py und wiki.js.
+- **Tests**: `test_rechte_redakteur.py` – Mitglied mit Freigabe bearbeitet die Unterseite (Seite und Baum), verschiebt
+  und löscht sie nicht.
+- **Artikel**: „Strömipedia“ (Rollen und Rechte, Teilen und Freigaben) beim nächsten Nachzug anpassen.

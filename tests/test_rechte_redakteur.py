@@ -233,12 +233,16 @@ def test_wiki():
         assert v.delete(f"/api/wiki/comments/{fremd_k['id']}", headers=H).status_code == 200
         assert m.delete(f"/api/wiki/comments/{mk['id']}", headers=H).status_code == 200
 
-        # Bearbeitungsfreigabe an ein Mitglied (Entscheidung 2B): genau diese Seite, keine Unterseiten, kein Verschieben.
+        # Bearbeitungsfreigabe an ein Mitglied: samt Unterseiten wie ein Redakteur (Wunsch des Nutzers 02.11.2026, vorher
+        # Entscheidung 2B: genau diese Seite), kein Verschieben, kein Löschen.
         assert r2.put(f"/api/wiki/pages/{rita['id']}/editors", json={"user_ids": [m_id, r1_id]}).status_code == 200
         assert m.get(f"/api/wiki/pages/{rita['slug']}").json["page"]["can_edit"] is True
-        assert m.get(f"/api/wiki/pages/{kind['slug']}").json["page"]["can_edit"] is False
+        assert m.get(f"/api/wiki/pages/{kind['slug']}").json["page"]["can_edit"] is True
         assert m.put(f"/api/wiki/pages/{rita['id']}", json={"content": "# Ritas Seite\n\nVon Mia"}).status_code == 200
-        assert m.put(f"/api/wiki/pages/{kind['id']}", json={"content": "# U\n\nVon Mia"}).status_code == 403
+        assert m.put(f"/api/wiki/pages/{kind['id']}", json={"content": "# U\n\nVon Mia"}).status_code == 200
+        r = m.put(f"/api/wiki/pages/{kind['id']}", json={"parent_id": None})
+        assert r.status_code == 403 and "verschieben" in r.json["error"], r.get_json()
+        assert m.delete(f"/api/wiki/pages/{kind['id']}", headers=H).status_code == 403
         r = m.put(f"/api/wiki/pages/{rita['id']}", json={"parent_id": rolf["id"]})
         assert r.status_code == 403 and "verschieben" in r.json["error"], r.get_json()
         assert m.put(f"/api/wiki/pages/{rita['id']}", json={"parent_id": None, "title": "Ritas Seite"}).status_code == 200
@@ -246,8 +250,9 @@ def test_wiki():
         assert m.put(f"/api/wiki/pages/{rita['id']}/editors", json={"user_ids": []}).status_code == 403
         assert datei(m, "/api/wiki/files").status_code == 200          # mit Freigabe darf sie Bilder einfügen
         baum = {b["id"]: b for b in m.get("/api/wiki/tree").json["pages"]}
-        assert baum[rita["id"]]["can_edit"] and not baum[kind["id"]]["can_edit"] and not baum[rita["id"]]["can_delete"]
-        # Ein Redakteur mit derselben Freigabe bearbeitet auch die Unterseiten (Vererbung wie bisher).
+        assert baum[rita["id"]]["can_edit"] and baum[kind["id"]]["can_edit"] and not baum[rita["id"]]["can_delete"]
+        assert not baum[kind["id"]]["can_delete"] and not baum[kind["id"]]["can_create"]
+        # Ein Redakteur mit derselben Freigabe bearbeitet ebenso die Unterseiten (Vererbung wie bisher).
         assert r1.put(f"/api/wiki/pages/{kind['id']}", json={"content": "# U\n\nVon Rolf"}).status_code == 200
         assert {b["id"]: b for b in r1.get("/api/wiki/tree").json["pages"]}[kind["id"]]["can_edit"] is True
         assert r1.delete(f"/api/wiki/pages/{kind['id']}", headers=H).status_code == 403
