@@ -109,6 +109,12 @@
   /* Seiten anlegen, duplizieren, im Baum verschieben: ab Redakteur (Stufe Redakteur, 01.11.2026). Ein Mitglied liest und
      kommentiert; bearbeiten darf es nur eine Seite, für die es freigegeben ist (can_edit vom Server). */
   const darfAnlegen = () => S.stufe("wiki") >= S.STUFE.redakteur;
+  /* Anleitung in der Strömipedia (Nachtrag vom 01.11.2026, app/anleitung.py): Der Artikel „Strömipedia“ liegt in der
+     Strömipedia selbst – kein Link zeigt auf die Seite, die gerade offen ist (gelesen oder bearbeitet; eine neue Seite
+     ist noch keine). mehrDazu ist der letzte Absatz einer Info („i“, neuer Tab: der Dialog bleibt stehen). */
+  const offeneSeite = () => (state.editorNeu ? "" : (state.current && state.current.slug) || "");
+  const anleitungUrl = (thema) => S.anleitung.url(thema, { ausser: offeneSeite() });
+  const mehrDazu = (thema) => S.anleitung.mehrDazu(thema, { ausser: offeneSeite() });
   // Jede Zeile, die im Editorformat einen Block eröffnet. Blockmenü und Ziehgriff bilden
   // damit Text und Editor aufeinander ab – beide müssen dieselbe Liste sehen.
   const MARKEN_RE = window.EDMD.MARKEN_RE;
@@ -323,7 +329,7 @@
       if (!b) return;
       const a = b.dataset.a;
       close();
-      if (a === "child") { if (leaveEditor()) openEditor({ parent_id: page.id }); return; }
+      if (a === "child") return neueSeite(page.id);
       if (a === "fav") return toggleFavorite(page.id, !page.favorite);
       if (a === "icon") return iconDialog(page.id, page.icon || "");
       if (a === "export") { window.location.href = `/api/wiki/pages/${page.id}/export?stand=${Date.now()}`; return; }
@@ -738,7 +744,7 @@
       }
       return `<ul>${kids.map((k) => `<li>${eintrag(k)}${zweig(k.id, tiefe + 1)}</li>`).join("")}</ul>`;
     };
-    content.innerHTML = `<div class="wiki-head"><h1>Strömipedia</h1></div>
+    content.innerHTML = `<div class="wiki-head"><h1>Strömipedia</h1>${S.anleitung.kopf("uebersicht", { neuerTab: false })}</div>
       <div class="wiki-meta">${S.plural(state.pages.length, "Seite", "Seiten")} · Wissen für die Strömungsrettung und seiltechnische Rettung</div>
       <div class="wiki-content home-baum">${roots.map((r) =>
         `<h2>${eintrag(r)}</h2>${zweig(r.id, 1)}`).join("")}</div>
@@ -762,13 +768,53 @@
     wireLinks(box);
   }
 
+  /* „Neue Seite“ (Knopf über dem Baum, „Unterseite anlegen“): leer oder aus einer Vorlage (Entscheidung des Nutzers vom
+     01.11.2026). Vorlagen sind Seiten mit „Als Vorlage anbieten“ im „⋯“, die das Konto lesen darf (/api/wiki/templates).
+     Gibt es keine (oder antwortet der Server nicht), öffnet der Editor gleich leer – wie bisher. Gewählt wird im Dialog;
+     erst „Weiter“ verlässt einen offenen Editor. Der Inhalt der Vorlage wird in den Editor der neuen Seite KOPIERT (ohne
+     ihre Titelzeile – die neue Seite beginnt mit „Neue Seite“ wie leer); angelegt wird sie wie jede neue Seite mit
+     „Anlegen“, danach hängt nichts mehr an der Vorlage. Bilder und Anhänge wie beim Duplizieren: dieselben Dateien, die
+     Seite verweist auf sie (api_wiki.sync_page_files beim Anlegen). */
+  async function neueSeite(parentId) {
+    let vorlagen;
+    try { vorlagen = (await api("/api/wiki/templates")).pages || []; } catch (e) { vorlagen = []; }
+    if (!vorlagen.length) { if (leaveEditor()) openEditor({ parent_id: parentId }); return; }
+    const zeile = (wert, text, an) => `<label class="inline"><input type="radio" name="nv-wahl" value="${esc(wert)}"${an ? " checked" : ""}> ${text}</label>`;
+    dialog(`<h2>Neue Seite</h2>
+      <p>Leer beginnen oder den Inhalt einer Vorlage übernehmen. Die neue Seite hängt danach nicht an der Vorlage.</p>
+      <fieldset class="vorlagen-wahl"><legend>Beginnen mit</legend>
+        ${zeile("", "Leer", true)}
+        ${vorlagen.map((v) => zeile(v.slug, `${v.icon ? esc(v.icon) + " " : ""}${esc(v.title)}`, false)).join("")}
+      </fieldset>
+      <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button><button class="btn" id="nv-los" type="button">Weiter</button></div>`,
+      (dlg, body) => {
+        const los = body.querySelector("#nv-los");
+        los.onclick = async () => {
+          const slug = (body.querySelector('input[name="nv-wahl"]:checked') || {}).value || "";
+          let inhalt = "";
+          if (slug) {
+            los.disabled = true;
+            try {
+              const v = (await api(`/api/wiki/pages/${encodeURIComponent(slug)}?leise=1`)).page;
+              if (!v.is_template) throw new Error(`„${v.title}“ ist keine Vorlage mehr.`);
+              // Die Titelzeile der Vorlage („# …“) bleibt dort – die neue Seite bekommt ihren eigenen Titel.
+              inhalt = (v.content || "").replace(/^\s*#[ \t]+[^\n]*\n*/, "");
+            } catch (e) { los.disabled = false; return S.fehlschlag(los, e); }
+          }
+          if (!leaveEditor()) { los.disabled = false; return; }
+          dlg.close();
+          openEditor({ parent_id: parentId, content: inhalt });
+        };
+      });
+  }
+
   /* Papierkorb: wiederherstellen oder endgültig entfernen */
   async function trashDialog() {
     let d;
     try { d = await api("/api/wiki/trash"); } catch (e) { return toast(e.message, true); }
     const rows = d.pages;
     dialog(`<h2>Papierkorb${rows.length ? info("Papierkorb", `Wiederhergestellte Seiten kommen an ihren alten Platz zurück; ist die
-      übergeordnete Seite noch gelöscht, landen sie auf der obersten Ebene.`) : ""}</h2>
+      übergeordnete Seite noch gelöscht, landen sie auf der obersten Ebene.${mehrDazu("papierkorb")}`) : ""}</h2>
       ${rows.length ? `      <ul class="trash-list">${rows.map((r) => `<li data-id="${r.id}">
         <div><strong>${r.icon ? esc(r.icon) + " " : ""}${esc(r.title)}</strong>
           <span class="muted small">${r.children ? `· ${r.children} Unterseite${r.children > 1 ? "n" : ""} ` : ""}· gelöscht ${fmtDate(r.deleted_at, true)}${r.created_by_name ? " · " + esc(r.created_by_name) : ""}</span></div>
@@ -1114,6 +1160,7 @@
       <button type="button" data-a="export">Als Markdown herunterladen</button>
       <button type="button" data-a="exportzip">Abschnitt als ZIP herunterladen</button>
       <button type="button" data-a="print">Drucken / als PDF sichern</button>
+      ${anleitungUrl("seite") ? '<button type="button" data-a="anleitung">Anleitung zur Strömipedia</button>' : ""}
       ${p.can_edit ? `<button type="button" data-a="template">${p.is_template ? "Nicht mehr als Vorlage" : "Als Vorlage anbieten"}</button>` : ""}
       ${p.can_create ? '<button type="button" data-a="dup">Duplizieren</button>' : ""}
       ${p.can_delete ? '<button type="button" data-a="del" class="danger">In den Papierkorb</button>' : ""}`;
@@ -1126,6 +1173,7 @@
       close();
       if (a === "share") return shareDialog(p);
       if (a === "toc") return tocAusMenue();
+      if (a === "anleitung") return navigate(slugAus(anleitungUrl("seite")));
       if (a === "history") return showHistory(p);
       if (a === "fav") return toggleFavorite(p.id, !p.favorite);
       if (a === "watch") {
@@ -1374,8 +1422,8 @@
     let geladen;
     try { geladen = (await api(`/api/wiki/pages/${p.id}/comments`)).comments; }
     catch (e) { geladen = []; }
-    // Während der Anfrage kann der Nutzer längst auf einer anderen Seite sein.
-    if (!state.current || state.current.id !== p.id) return;
+    // Während der Anfrage kann der Nutzer längst auf einer anderen Seite sein – oder im Editor einer neuen.
+    if (!state.current || state.current.id !== p.id || state.editorNeu) return;
     state.comments = geladen;
     renderComments();
     anchorComments();
@@ -1648,7 +1696,7 @@
     const editorIds = new Set((p.editors || []).map((u) => u.id));
     const publicLink = `${location.origin}/stroemipedia/${encodeURIComponent(p.slug)}`;
     dialog(`<h2>Teilen: ${esc(p.title)}</h2>
-      ${p.can_share ? `<h3>Bearbeiten erlauben${info("Bearbeiten erlauben", "Freigegebene Redakteure bearbeiten diese Seite und ihre Unterseiten, freigegebene Mitglieder nur diese Seite. Löschen darf keiner von beiden.")}</h3>
+      ${p.can_share ? `<h3>Bearbeiten erlauben${info("Bearbeiten erlauben", `Freigegebene Redakteure bearbeiten diese Seite und ihre Unterseiten, freigegebene Mitglieder nur diese Seite. Löschen darf keiner von beiden.${mehrDazu("bearbeiten_erlauben")}`)}</h3>
       <input type="search" id="sh-filter" placeholder="Nutzer suchen …" aria-label="Nutzer suchen">
       <div class="user-pick" id="sh-users">${state.users.filter((u) => u.id !== p.created_by).map((u) => `
         <label class="inline"><input type="checkbox" value="${u.id}" ${editorIds.has(u.id) ? "checked" : ""}> ${esc(u.name || "Unbenannt")} <span class="muted small">${esc(u.gliederung || "")}</span></label>`).join("") || '<div class="muted small">Keine weiteren Nutzer.</div>'}</div>` : ""}
@@ -2165,7 +2213,7 @@
       const NAMES = { rot: "Rot", blau: "Blau (Gewässer)", gruen: "Grün", grau: "Grau", gelb: "Gelb hinterlegt" };
       hideBubble();
       dialog(`<h2>Textfarbe${info("Textfarbe", `Nach dem Handbuch CD sind nur die Hausfarben vorgesehen – Rot als Auszeichnung,
-        Blau als Kennfarbe für Gewässer, Gelb als Hinweis.`)}</h2>
+        Blau als Kennfarbe für Gewässer, Gelb als Hinweis.${mehrDazu("textfarbe")}`)}</h2>
         <div class="callout-pick">${MD.COLOR_NAMES.map((c) =>
           `<button type="button" class="btn secondary" data-c="${c}"><span class="tc tc-${c}">${esc(NAMES[c] || c)}</span></button>`).join("")}
           <button type="button" class="btn secondary" data-c="">Farbe entfernen</button></div>
@@ -2574,7 +2622,7 @@
       dialog(`<h2>Abschnitt einbinden${info("Abschnitt einbinden", `Zeigt einen synchronisierten Abschnitt einer anderen Seite. Der Text wird
           dort gepflegt und erscheint hier immer in seinem neuesten Stand. Aufgeführt ist, was
           gespeichert ist – ein eben erst angelegter Abschnitt erscheint erst nach dem Speichern
-          seiner Seite.`)}</h2>
+          seiner Seite.${mehrDazu("abschnitt_einbinden")}`)}</h2>
         <label for="eb-search">Abschnitt suchen</label>
         <input type="search" id="eb-search" placeholder="Kennung, Seite oder Text …" autocomplete="off">
         <ul class="link-pages bausteinliste" id="eb-liste"><li class="muted small">Wird gelesen …</li></ul>
@@ -4717,6 +4765,10 @@
     if (!isNew && p.id) { state.current = state.current || p; loadComments(); }
     if (isNew) document.title = "Neue Seite – Strömipedia – strömis.de";
     else commentsEl.innerHTML = "";
+    /* Eine neue Seite hat keine Kommentare: Die Spur zeigte sonst die der zuvor gelesenen Seite, die in state.current
+       bleibt (Rückweg bei „Verwerfen“) – Fehler aus dem Strömipedia-Artikel, 01.11.2026. loadComments zeichnet im Editor
+       einer neuen Seite nichts mehr nach. */
+    if (isNew) { state.comments = []; commentsEl.innerHTML = ""; }
     const crumbs = isNew ? [] : ancestors(p);
     content.innerHTML = `
       <div class="wiki-head editing-head">
@@ -4803,7 +4855,7 @@
           });
       };
       const columnsMenu = () => {
-        dialog(`<h2>Spalten einfügen${info("Spalten einfügen", "Die Spalten stehen im Editor wie im Artikel nebeneinander; Anfang, Trenner und Ende sind schmale Marken. Auf schmalen Bildschirmen stehen sie untereinander.")}</h2>
+        dialog(`<h2>Spalten einfügen${info("Spalten einfügen", `Die Spalten stehen im Editor wie im Artikel nebeneinander; Anfang, Trenner und Ende sind schmale Marken. Auf schmalen Bildschirmen stehen sie untereinander.${mehrDazu("spalten")}`)}</h2>
           <div class="callout-pick">${[2, 3, 4, 5].map((n) => `<button type="button" class="btn secondary" data-n="${n}">${n} Spalten</button>`).join("")}</div>
           <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button></div>`,
           (dlg, body) => body.querySelectorAll("[data-n]").forEach((b) => b.onclick = () => {
@@ -5314,7 +5366,8 @@
         <button type="button" data-a="klar">Formatierung entfernen <span class="muted small">Strg+\\</span></button>
         <button type="button" data-a="kopieren">Als Markdown kopieren <span class="muted small">Strg+Umschalt+C</span></button>
         ${tocMenueEintrag()}
-        ${isNew ? "" : '<button type="button" data-a="verlauf">Verlauf</button>'}`;
+        ${isNew ? "" : '<button type="button" data-a="verlauf">Verlauf</button>'}
+        ${anleitungUrl("editor") ? `<a href="${esc(anleitungUrl("editor"))}" target="_blank" rel="noopener">Anleitung zum Editor</a>` : ""}`;
       const zu = S.menueSchwebend(mehr, box);
       box.addEventListener("click", (e) => {
         const b = e.target.closest("button[data-a]");
@@ -5490,7 +5543,7 @@
      ====================================================================== */
   // „Neue Seite“ steht nur ab Redakteur da (wiki.html).
   const neueSeiteKnopf = $("#btn-new-page");
-  if (neueSeiteKnopf) neueSeiteKnopf.addEventListener("click", () => { side.classList.remove("open"); if (leaveEditor()) openEditor({ parent_id: state.current ? state.current.id : null }); });
+  if (neueSeiteKnopf) neueSeiteKnopf.addEventListener("click", () => { side.classList.remove("open"); neueSeite(state.current ? state.current.id : null); });
   /* „Neue Seite“ ist rot, solange in der Textspalte keine andere Hauptaktion steht. Im Editor („Anlegen“, „Entwurf
      übernehmen“) und auf der leeren Übersicht („Erste Seite anlegen“) wird er grau – je Ansicht ein roter Knopf (UI/UX vor
      dem Merge C2). Beobachtet werden nur die Klasse am <body> und der Wechsel des Inhalts, nicht jede Eingabe im Editor. */

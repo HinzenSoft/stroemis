@@ -69,6 +69,10 @@
 .zelle .anhang { font-size: var(--fs-klein); font-weight: 600; margin-left: 5px; color: var(--anthrazit); white-space: nowrap; }
 /* X/Y erfüllte Kriterien der Leistung, an dieser Zelle – schneller Indikator vor dem Öffnen. */
 .zelle .krit-stand { font-size: var(--fs-klein); font-weight: 600; margin-left: 5px; color: var(--anthrazit); white-space: nowrap; }
+/* Nachtrag 01.11.2026 (C2): „mangelhaft“ und „Kriterien 2/3“ stoßen ohne Leerzeichen aneinander – ohne Umbruchstelle lief
+   der Text in „je Leistung“ (128 bzw. 112 px) über den Rand der Zelle. Als eigene Kästchen (inline-block) brechen Büroklammer
+   und Kriterienstand um, sobald die Zeile nicht reicht. */
+.zelle .txt > :is(.anhang, .krit-stand) { display: inline-block; }
 
 /* Ein Knopf, der wie ein Verweis aussieht – für Namen, die eine Bearbeitung öffnen. */
 .linkbtn { background: none; border: 0; padding: 0; font: inherit; color: var(--anthrazit); font-weight: 600; cursor: pointer; text-align: left; }
@@ -558,6 +562,12 @@ body:has(.pruef.druck) #toast { top: 12px; }
   .pruef[data-ansicht=lehrgang] .page-head { flex-wrap: nowrap; align-items: flex-start; }
   .pruef[data-ansicht=lehrgang] .page-head h1 { min-width: 0; }
   .pruef[data-ansicht=lehrgang] .page-head .btn-row { width: auto; flex: none; margin-left: auto; }
+  /* „Anleitung“ (Nachtrag 01.11.2026) steht dort unter dem Titel, „Mehr“ bleibt daneben – sonst nähme der Link dem
+     Titel die Breite (drei Zeilen am Telefon). */
+  .pruef[data-ansicht=lehrgang] .page-head:has(> .kopf-anleitung) { display: grid; grid-template-columns: minmax(0, 1fr) auto;
+    gap: 2px 8px; align-items: start; }
+  .pruef[data-ansicht=lehrgang] .page-head > .kopf-anleitung { grid-row: 2; grid-column: 1; justify-self: start; margin: 0; }
+  .pruef[data-ansicht=lehrgang] .page-head > .btn-row { grid-row: 1; grid-column: 2; }
   .pruef .abschnittskopf .btn-row { margin-left: 0; width: 100%; }
   .pruef .abschnittskopf .btn-row .btn { flex: 1 1 auto; justify-content: center; }
   .tn-desktop { display: none; }

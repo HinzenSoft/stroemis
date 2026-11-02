@@ -70,17 +70,18 @@ STELLEN = [
     ("R1", RK, '<label>Lehrgangsleitung und Referierende${info("Lehrgangsleitung und Referierende", `Mehrere Personen', "Mehrere Personen können"),
     ("R2", RK, 'aus Katalog übernehmen (optional)${info("Prüfungsleistungen aus Katalog", `Die Leistungen werden einmalig', "Die Leistungen werden einmalig"),
     ("R3", RK, '<h1>Prüfungsleistungskataloge${info("Prüfungsleistungskataloge", `Ein Katalog ist eine Vorlage', "Ein Katalog ist eine Vorlage"),
-    ("R4", RK, '<label for="kl-zeit">Zeitansatz${info("Zeitansatz", ZEITANSATZ_INFO)}', "Mit Zeitansatz zeigt"),
-    ("R5", RK, '<label for="pl-zeit">Zeitansatz${info("Zeitansatz", ZEITANSATZ_INFO)}', "Mit Zeitansatz zeigt"),
+    ("R4", RK, '<label for="kl-zeit">Zeitansatz${info("Zeitansatz", ZEITANSATZ_INFO + mehrDazu("zeitansatz"))}', "Mit Zeitansatz zeigt"),
+    ("R5", RK, '<label for="pl-zeit">Zeitansatz${info("Zeitansatz", ZEITANSATZ_INFO + mehrDazu("zeitansatz"))}', "Mit Zeitansatz zeigt"),
     ("R6", RK, '${info("Kriterienliste", `${KRITERIEN_INFO} Wird beim Anlegen', "!Zusätzlich zur Beschreibung: einzeln abhakbare Punkte. Wird"),
     ("R7", RK, '${info("Kriterienliste", `${KRITERIEN_INFO} Im Bewertungsdialog', "!Zusätzlich zur Beschreibung: einzeln abhakbare Punkte. Im"),
-    ("R8", RK, 'Datei (.xlsx)${info("Datei", "Kopfzeilen über der Tabelle', "Kopfzeilen über der Tabelle"),
+    ("R8", RK, 'Datei (.xlsx)${info("Datei", `Kopfzeilen über der Tabelle', "Kopfzeilen über der Tabelle"),
     ("W1", WIKI, '<h2>Papierkorb${rows.length ? info("Papierkorb", `Wiederhergestellte Seiten', "Wiederhergestellte Seiten kommen"),
-    ("W2", WIKI, '<h3>Bearbeiten erlauben${info("Bearbeiten erlauben", "Freigegebene Redakteure', "Freigegebene Redakteure bearbeiten"),
+    ("W2", WIKI, '<h3>Bearbeiten erlauben${info("Bearbeiten erlauben", `Freigegebene Redakteure', "Freigegebene Redakteure bearbeiten"),
     ("W4", WIKI, '<h2>Textfarbe${info("Textfarbe", `Nach dem Handbuch CD', "Nach dem Handbuch CD"),
     ("W5", WIKI, '<h2>Abschnitt einbinden${info("Abschnitt einbinden", `Zeigt einen synchronisierten', "Zeigt einen synchronisierten Abschnitt"),
-    ("W6", WIKI, '<h2>Spalten einfügen${info("Spalten einfügen", "Die Spalten stehen im Editor', "Die Spalten stehen im Editor"),
-    ("A1", MAP, '${S.info("Album", "Ein Album ist ein Übungsobjekt oder ein Übungsgewässer.")}</h2>', "!Ein Album ist ein Übungsobjekt oder ein Übungsgewässer. Alle"),
+    ("W6", WIKI, '<h2>Spalten einfügen${info("Spalten einfügen", `Die Spalten stehen im Editor', "Die Spalten stehen im Editor"),
+    ("A1", MAP, '${S.info("Album", `Ein Album ist ein Übungsobjekt oder ein Übungsgewässer.${S.anleitung.mehrDazu(isNew ? "album_neu" : "album_bearbeiten")}`)}</h2>',
+     "!Ein Album ist ein Übungsobjekt oder ein Übungsgewässer. Alle"),
     ("L1", ADM, '<label>Rechte${S.info("Rechte", `„–“ kein Zugriff', "kein Zugriff (in der Strömipedia: nur die für alle Angemeldeten freigegebenen Seiten lesen) · „Mitglied“"),
     ("L2", ADM, 'Prüfer (Sachkundiger)${S.info("Prüfer", `Das Häkchen wirkt nur', "Das Häkchen wirkt nur mit Stufe"),
     ("L3", ADM, '<legend>Freigaben in der Materialablage${S.info("Freigaben in der Materialablage", "Angelegt wird', "Angelegt wird eine Freigabe am Ordner (Bestand"),
@@ -169,7 +170,7 @@ def test_sichtbar_geblieben():
     assert "Verknüpfen kann, wer in der Strömipedia mindestens Mitglied ist." in mat
     assert '`<p class="help">${esc(IMPORT_PERSONEN)}</p>`' in mat
     assert "Für „${esc(produktName(p))}“. Der Hinweis steht danach am Produkt" in mat          # Dialogeinleitung Rückruf
-    assert '<p class="help">Alle angemeldeten Nutzer können es sehen.</p>' in karte
+    assert '<p class="help">Alle mit Zugang zu den Ankerplätzen können es sehen.</p>' in karte   # berichtigt 01.11.2026
     assert '<p class="help">Verschickt eine Probemail über den eingerichteten Mailserver und zeigt, was er\n        dazu sagt.' in adm
     assert "Vorbelegt mit dem Sollwert – ändere nur, was abweicht." in mat                      # Anleitung in der Prüfung
     assert "Name und Kontaktdaten sind für andere angemeldete Nutzer sichtbar" in lies(PROFIL)
@@ -180,7 +181,7 @@ def test_marken_je_liste():
     rk, mat, html = lies(RK), lies(MAT), lies(ADMIN_HTML)
     # Riegenkarten: Schloss „eingefroren“ – title je Zeile bleibt, ein „i“ an „Teilnehmende“ und „Bewertung“.
     assert 'title="${esc(EINGEFROREN)}">🔒</span>' in rk
-    assert 'const eingefrorenInfo = (tns) => (tns.some((t) => t.eingefroren) ? info("eingefroren", `Eingefroren (Schloss am Namen): ${esc(EINGEFROREN)}`) : "");' in rk   # ohne Emoji (UI/UX D14)
+    assert 'const eingefrorenInfo = (tns) => (tns.some((t) => t.eingefroren) ? info("eingefroren", `Eingefroren (Schloss am Namen): ${esc(EINGEFROREN)}${mehrDazu("eingefroren")}`) : "");' in rk   # ohne Emoji (UI/UX D14)
     assert '<h2>Teilnehmende${eingefrorenInfo(tns)}</h2>' in rk and '<h2>Bewertung${eingefrorenInfo(tns)}</h2>' in rk
     assert 'title="Lehrgangsleitung: darf' not in rk                                           # R1: das title je Zeile entfällt
     # Prüfung: „kritisch“ in den Befunden.
