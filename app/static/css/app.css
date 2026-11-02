@@ -1348,7 +1348,9 @@ details.accordion .accordion-body > :first-child { margin-top: 0; } details.acco
   /* Gliederung rechts (Tablet quer mit Touch, Gerätetest Teil X): 44 statt 33 px je Abschnitt. */
   .toc-list a { padding: 7px 8px; min-height: 44px; display: flex; align-items: center; }
   .album-list li { padding: 10px 0; }
-  .search-results li { padding: 9px 6px; }
+  /* Treffer der Suche: der Titel selbst 44 px hoch (Startseite 02.11.2026 – ihr Suchfeld führt am Telefon direkt hierher). */
+  .search-results li { padding: 0 6px 8px; }
+  .search-results a { line-height: 44px; }
 }
 @media (max-width: 640px) {
   /* iOS zoomt in jedes Feld unter 16 px hinein – und danach nicht mehr heraus. */
@@ -2990,6 +2992,11 @@ main.start { container: start / inline-size; }
 @media (hover: hover) and (pointer: fine) { .start-liste li > a:hover .start-titel { text-decoration: underline; } }
 .start-wiki .abschnittskopf > .start-alle { text-decoration: none; padding: 0 2px; }
 @media (hover: hover) and (pointer: fine) { .start-wiki .abschnittskopf > .start-alle:hover { text-decoration: underline; } }
+/* Doppelbildschirm nebeneinander (Surface Duo): nichts auf der Falz – die Startseite steht ganz in der rechten Hälfte, wie
+   Leitstelle, Riegenkarten und Profil (C11). */
+@media (horizontal-viewport-segments: 2) {
+  main.page.breit.start { max-width: env(viewport-segment-width 1 0); margin-left: env(viewport-segment-left 1 0); margin-right: 0; }
+}
 @media (pointer: coarse) {
   .start-kachel h2 a { display: inline-flex; align-items: center; min-height: 44px; }
   .start-zeile { align-items: center; min-height: 44px; }

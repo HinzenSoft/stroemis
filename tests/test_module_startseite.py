@@ -439,6 +439,10 @@ def test_oberflaeche_texte_und_muster():
     teil = css[css.index("Startseite über alle Module (Wunsch vom 02.11.2026"):]
     assert "#" not in re.sub(r"/\*.*?\*/", "", teil, flags=re.S).replace("#pending", ""), "keine freien Farbwerte"
     assert "@container start (min-width: 1100px)" in teil and "@container start (min-width: 740px)" in teil
+    # Surface Duo nebeneinander: die Startseite ganz in der rechten Hälfte (nichts auf der Falz).
+    assert "main.page.breit.start { max-width: env(viewport-segment-width 1 0); margin-left: env(viewport-segment-left 1 0);" in teil
+    # Suchtreffer der Strömipedia am Finger 44 px – das Suchfeld der Startseite führt am Telefon direkt dorthin.
+    assert ".search-results a { line-height: 44px; }" in css
     touch = teil[teil.index("@media (pointer: coarse)"):]
     assert ".start-zeile { align-items: center; min-height: 44px; }" in touch
     for hover in re.findall(r"[^{}]*:hover[^{]*\{", re.sub(r"@media \(hover: hover\) and \(pointer: fine\) \{[^@]*?\}\s*\}", "", teil)):
