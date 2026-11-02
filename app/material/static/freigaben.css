@@ -2,7 +2,8 @@
    bearbeiten“ und des Hinweises „Meine Freigaben“ (freigaben.js). Der Reiter misst sich selbst: Ob die Listen Tabelle
    oder Karte sind, entscheidet die Breite seines Inhalts (Container „mf“) – wie die Modullisten am Container
    „mat-seite“ (material.css), denn Dialoge liegen außerhalb der Seite. Am Telefon, am Außendisplay eines Fold und am
-   Tablet hochkant werden sie zu Karten. Die Breite des Dialogs (sieben Spalten) steht bei ihm in material.css. */
+   Tablet hochkant werden sie zu Karten. Die Breite des Dialogs steht bei ihm in material.css. Seit dem 02.11.2026 eine
+   Zeile je Person (Person, Rechte, Notiz, Vergeben, Knöpfe) und der Dialog „Rechte ändern“ (.mf-unter, .mfp-*). */
 .mf { container: mf / inline-size; }
 .mf > .help:first-child { margin-top: 0; }
 
@@ -61,6 +62,10 @@ table.list.mf-tabelle { table-layout: auto; margin-top: 4px; }
 table.list.mf-tabelle td { vertical-align: top; }
 table.list.mf-tabelle td.tabelle-aktionen .btn-row { flex-wrap: nowrap; justify-content: flex-end; }
 .mf-notiztext { overflow-wrap: break-word; min-width: 5em; max-width: 16em; }
+/* Die Rechte einer Person: je Recht eine Zeile („verwalten (dauerhaft)“) mit seiner Zustandsmarke dahinter. */
+.mf-recht { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; }
+.mf-recht + .mf-recht { margin-top: 4px; }
+.mf-recht > span:first-child { white-space: nowrap; }
 .mf-nur-pv { max-width: 13em; margin-top: 4px; }
 tr.mf-alt td { color: var(--grau); }
 @supports (container-type: inline-size) {
@@ -74,18 +79,18 @@ tr.mf-alt td { color: var(--grau); }
     table.list.mf-tabelle td[data-l]::before { content: none; }
   }
 }
-/* Als Karte, sobald die Spalten nicht mehr nebeneinander passen: Person oben, Recht und Ende nebeneinander, darunter
-   Zustand, Notiz und wer vergeben hat, zuletzt die Knöpfe. Die sieben Spalten brauchen mit üblichem Inhalt (Marke
-   „abgelaufen am …“, zwei Knöpfe) rund 790 px – darunter ragte die Tabelle aus dem Dialog. Tabelle also erst ab gut
-   840 px Inhaltsbreite (der volle Dialog am Rechner); am Tablet hochkant und quer bis etwa 920 px Karten. */
+/* Als Karte, sobald die Spalten nicht mehr nebeneinander passen: Person oben, darunter „Rechte:“ mit je Recht einer
+   Zeile, Notiz und wer vergeben hat, zuletzt die Knöpfe. Die fünf Spalten brauchen mit üblichem Inhalt (zwei Rechte
+   mit Marke „läuft in n Tagen ab“, zwei Knöpfe) rund 800 px – Tabelle also erst ab gut 840 px Inhaltsbreite (der volle
+   Dialog am Rechner); am Tablet hochkant und quer bis etwa 920 px Karten. */
 @container mf (max-width: 840px) {
   table.list.mf-tabelle, table.list.mf-tabelle tbody, table.list.mf-tabelle tr, table.list.mf-tabelle td { display: block; }
   table.list.mf-tabelle thead { display: none; }
-  table.list.mf-tabelle tr { padding: 10px 0 12px; border-bottom: 1px solid var(--linie);
-    display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: 12px; }
-  table.list.mf-tabelle td { border: 0; padding: 2px 0; white-space: normal; grid-column: 1 / -1; }
-  table.list.mf-tabelle td.mf-k-halb { grid-column: auto; }
+  table.list.mf-tabelle tr { padding: 10px 0 12px; border-bottom: 1px solid var(--linie); }
+  table.list.mf-tabelle td { border: 0; padding: 2px 0; white-space: normal; }
   table.list.mf-tabelle td[data-l]::before { content: attr(data-l) ": "; color: var(--grau); font-size: var(--fs-klein); }
+  /* „Rechte:“ als eigene Zeile über den Rechten – die stehen untereinander. */
+  table.list.mf-tabelle td.mf-rechte::before { display: block; }
   table.list.mf-tabelle td.mf-k-person::before { content: none; }
   table.list.mf-tabelle td.tabelle-aktionen { padding-top: 8px; }
   table.list.mf-tabelle td.tabelle-aktionen .btn-row { flex-wrap: wrap; justify-content: flex-start; }
@@ -117,3 +122,17 @@ tr.mf-alt td { color: var(--grau); }
 .mf-meine-ordner { font-weight: 600; min-width: 0; }
 .mf-meine-recht { color: var(--grau); font-size: var(--fs-klein); }
 .mf-kopf { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; }
+
+/* „Freigabe anlegen“ für eine Person, die am Anker schon Rechte hat: der Satz mit „Rechte ändern“ über den Vorlagen. */
+.mf-schon { margin: 12px 0 0; }
+.mf-schon[hidden] { display: none; }
+
+/* Dialog „Rechte ändern“ (freigaben.js, personDialog): Grundrecht und Prüffreigabe je ein Abschnitt, darunter ihr Ende. */
+.mfp-teil { margin-top: 12px; padding-top: 4px; border-top: 1px solid var(--linie); }
+.mfp-titel { font-weight: 600; margin: 12px 0 4px; }
+.mfp-fest { margin: 0 0 4px; }
+.mfp-ende { margin: 4px 0 0; }
+.mfp-ende .mat-datum { max-width: 11em; }
+.mfp-ende label.inline { margin: 0 0 4px; }
+/* hidden muss gegen label.inline (inline-flex) und die Felder gewinnen. */
+.mfp-ende[hidden], .mfp-teil label.inline[hidden], .mfp-teil .mat-datum[hidden], .mfp-teil .help[hidden] { display: none; }

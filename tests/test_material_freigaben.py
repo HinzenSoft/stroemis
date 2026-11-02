@@ -1320,6 +1320,49 @@ def test_person_setzen_entwuerfe_und_erinnerung():
     print("Rechte ändern – Entwürfe und Erinnerungen bestanden.")
 
 
+def test_person_oberflaeche_statisch():
+    """Die Oberfläche zu „eine Zeile je Person“ und zum Ordnerbild (02.11.2026), statisch: Ändern und Entziehen je
+    Person (Schlüssel „ordner:konto“), nicht je Freigabe; der Dialog speichert über den neuen Endpunkt; Zähler zählen
+    Personen; das Ordnerbild steht im Seitenkopf außerhalb der Überschrift, 96 px und am Telefon 64 px."""
+    with open(os.path.join(REPO, "app/material/static/freigaben.js"), encoding="utf-8") as f:
+        js = f.read()
+    with open(os.path.join(REPO, "app/material/static/freigaben.css"), encoding="utf-8") as f:
+        css = f.read()
+    with open(os.path.join(REPO, "app/material/static/material.js"), encoding="utf-8") as f:
+        mjs = f.read()
+    with open(os.path.join(REPO, "app/material/static/material.css"), encoding="utf-8") as f:
+        mcss = f.read()
+    # Knöpfe der Listen je Person; kein Ändern/Entziehen je Freigabe mehr.
+    assert 'data-act="entziehen" data-id' not in js and 'data-act="aendern" data-id' not in js
+    assert 'data-act="aendern" data-person="${p.k}"' in js and 'data-act="entziehen" data-person="${p.k}"' in js
+    assert '<tr data-person="${p.k}"' in js and "data-zeile" not in js
+    assert "/freigaben/person/${p.konto.id}`, { method: \"PUT\"" in js
+    assert "/api/material/freigaben/${" not in js and "`${API}/freigaben/${" not in js
+    # Zähler: Personen (gruppiert), der Ablaufhinweis zählt weiter Freigaben.
+    for teil in ("direkt", "geerbt", "unten"):
+        assert f"const {teil} = personen(d.{teil});" in js and f'<span class="mf-zahl">${{{teil}.length}}</span>' in js
+    assert 'plural(d.laeuft_ab, "Freigabe läuft", "Freigaben laufen")' in js
+    # Rückfragen beim Entziehen ohne „endgültig“, ein Verlaufseintrag nur über unterDialog.
+    assert js.count("{ endgueltig: false }") >= 2 and js.count("S.dialogVerlauf(") == 1
+    # Hinweis beim Anlegen mit „Rechte ändern“ als Textknopf.
+    assert 'hat hier schon: ${esc(rechteText(p))}.' in js and '<button class="lnk" type="button" data-act="person-dialog">Rechte ändern</button>' in js
+    # Karten: kein Halbspaltenraster mehr (Touch- und Überfahrregeln prüft test_module_uiux_u1b für alle Dateien).
+    assert "mf-k-halb" not in js and "mf-k-halb" not in css
+    # Ordnerbild: im Seitenkopf vor der Titelgruppe, die Überschrift ohne Bild; der Kasten darunter ohne Foto.
+    kopf = mjs[mjs.index("const ordnerKopf = (d, inhalt) =>"):]
+    kopf = kopf[:kopf.index(";\n")]
+    assert kopf.index("bildLink(d.foto") < kopf.index('<div class="mat-ordnertitel">${inhalt}</div>')
+    assert '`<div class="page-head">${inhalt}</div>`' in kopf
+    assert "${ordnerKopf(d, `<h1>" in mjs
+    zeile = [z for z in mjs.splitlines() if '<div class="mat-ordnerkopf">' in z]
+    assert len(zeile) == 1 and "d.foto" not in zeile[0], zeile
+    assert ".mat-ordnerfoto { display: block; width: 96px; height: 96px;" in mcss
+    tel = mcss[mcss.index(".mat-mit-bild > .mat-ordnertitel { display: contents; }") - 200:]
+    assert tel.index("@container mat-seite (max-width: 600px) {") < tel.index(".mat-ordnerfoto { width: 64px; height: 64px; }")
+    assert "160px" not in mcss[mcss.index(".page-head.mat-mit-bild"):mcss.index(".mat-ordnerfoto { width: 64px")]
+    print("Oberfläche je Person und Ordnerbild (statisch) bestanden.")
+
+
 if __name__ == "__main__":
     test_erteilen_aendern_entziehen()
     test_vorlagen_eine_transaktion()
@@ -1340,3 +1383,4 @@ if __name__ == "__main__":
     test_person_setzen_alles_oder_nichts()
     test_person_setzen_rechte()
     test_person_setzen_entwuerfe_und_erinnerung()
+    test_person_oberflaeche_statisch()
