@@ -480,12 +480,12 @@ erneut gewählt hebt sie wieder auf.
 
 ## Typische Fehler
 
-| Fehler | Fehlerbild |
-| --- | --- |
-| :::warning **Callout nicht geschlossen** – ohne abschließende Zeile mit `:::` entsteht gar keine Kiste: Die Marke steht als gewöhnlicher Text im Artikel, der Inhalt darunter ebenso. ::: |     |
-| :::warning **Trenner falsch gesetzt** – `\|\|\|` muss allein auf einer Zeile stehen, sonst entsteht keine Spalte. ::: |     |
-| :::warning **Hochstellen mit Leerzeichen** – `^a b^` wirkt nicht; Hoch- und Tiefstellen vertragen keine Leerzeichen. ::: |     |
-| :::warning **Alles gelöscht** – bleibt nicht einmal die Überschrift stehen, wird nichts geschrieben. Die Überschrift ist der Seitentitel und muss bleiben. ::: |     |
+| Fehler |
+| --- |
+| :::warning **Callout nicht geschlossen** – ohne abschließende Zeile mit `:::` entsteht gar keine Kiste: Die Marke steht als gewöhnlicher Text im Artikel, der Inhalt darunter ebenso. ::: |
+| :::warning **Trenner falsch gesetzt** – `\|\|\|` muss allein auf einer Zeile stehen, sonst entsteht keine Spalte. ::: |
+| :::warning **Hochstellen mit Leerzeichen** – `^a b^` wirkt nicht; Hoch- und Tiefstellen vertragen keine Leerzeichen. ::: |
+| :::warning **Alles gelöscht** – bleibt nicht einmal die Überschrift stehen, wird nichts geschrieben. Die Überschrift ist der Seitentitel und muss bleiben. ::: |
 
 ## Quellen
 

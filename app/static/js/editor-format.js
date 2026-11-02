@@ -444,7 +444,8 @@ window.EDMD = (function () {
     accordion: akkordeonMd("Titel der Box", "Inhalt, der erst nach dem Aufklappen sichtbar ist."),
     // Ohne <details>: rohes HTML in einer Tabellenzelle verwirft der WYSIWYG-Editor beim
     // Speichern. Für ausklappbare Inhalte gibt es die einklappbare Box ($$accordion).
-    fehler: "## Typische Fehler\n\n| Fehler | Fehlerbild |\n| --- | --- |\n| **Fehlername** – Erklärung des Fehlers und seiner Folgen. |     |\n",
+    // Einspaltig (Nutzer 02.11.2026: „Entferne die leere Spalte in der Fehlertabelle“).
+    fehler: "## Typische Fehler\n\n| Fehler |\n| --- |\n| **Fehlername** – Erklärung des Fehlers und seiner Folgen. |\n",
   };
 
   // Ein synchronisierter Abschnitt und sein Einbau – in der Marken-Schreibweise des Editors.
