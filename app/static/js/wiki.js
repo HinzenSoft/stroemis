@@ -5581,9 +5581,10 @@
   /* ======================================================================
      Start
      ====================================================================== */
-  // „Neue Seite“ steht nur ab Redakteur da (wiki.html).
+  // „Neue Seite“ steht nur ab Redakteur da (wiki.html). Unter der offenen Seite nur, wenn dort angelegt werden darf
+  // (can_create, z. B. nicht im freigegebenen Abschnitt) – sonst auf der obersten Ebene statt einer 403.
   const neueSeiteKnopf = $("#btn-new-page");
-  if (neueSeiteKnopf) neueSeiteKnopf.addEventListener("click", () => { side.classList.remove("open"); neueSeite(state.current ? state.current.id : null); });
+  if (neueSeiteKnopf) neueSeiteKnopf.addEventListener("click", () => { side.classList.remove("open"); neueSeite(state.current && state.current.can_create ? state.current.id : null); });
   /* „Neue Seite“ ist rot, solange in der Textspalte keine andere Hauptaktion steht. Im Editor („Anlegen“, „Entwurf
      übernehmen“) und auf der leeren Übersicht („Erste Seite anlegen“) wird er grau – je Ansicht ein roter Knopf (UI/UX vor
      dem Merge C2). Beobachtet werden nur die Klasse am <body> und der Wechsel des Inhalts, nicht jede Eingabe im Editor. */

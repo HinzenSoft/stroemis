@@ -235,7 +235,7 @@ def test_vorlagen_beim_anlegen():
                    "openEditor({ parent_id: parentId, content: inhalt });"):
         assert stelle in teil, stelle
     assert 'if (a === "child") return neueSeite(page.id);' in js
-    assert "neueSeite(state.current ? state.current.id : null);" in js
+    assert "neueSeite(state.current && state.current.can_create ? state.current.id : null);" in js
 
 
 def test_import_als_neuer_lehrgang_macht_zur_leitung():
