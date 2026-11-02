@@ -32,7 +32,7 @@ def zustand(app, iid, **felder):
         db.execute(f"UPDATE mat_item SET {', '.join(f'{k} = ?' for k in felder)} WHERE id = ?", (*felder.values(), iid))
 
 
-def sperren(p, iid, grund="beschaedigung"):
+def sperren(p, iid, grund="rueckruf"):
     r = p.post(f"/api/material/artikel/{iid}/sperren", json={"grund": grund, "text": "Testsperre"})
     assert r.status_code == 200, r.get_json()
     return r.json["artikel"]
@@ -447,7 +447,7 @@ def test_qr_ausgesondert():
         sperren(p1, a["id"])
         html = seite_ueber_qr(a)
         assert 'class="mat-banner s-gesperrt"' in html and f"– {a['inventory_no']} nicht verwenden" in html, html[-900:]
-        assert "Beschädigung: Testsperre" in html
+        assert "Rückruf: Testsperre" in html
         assert 'class="mat-banner s-lebensdauer"' in seite_ueber_qr(alt)
         # Ausgesondert: Weiterleitung zum richtigen Artikel, der Hinweis prominent in #mat-inhalt (material.js ersetzt
         # ihn beim Zeichnen durch die Ansicht mit eigenem Banner), die Schnittstelle meldet „ausgesondert“.

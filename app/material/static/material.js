@@ -303,7 +303,6 @@
   const WAEHLBAR = ["einsatzbereit", "instandsetzen", "aussondern_empfohlen"];
   const BEFUND = { ok: "in Ordnung", mangel: "Mangel", nicht_zutreffend: "nicht zutreffend" };
   const ANHANGART = { externes_pruefformular: "externes Prüfformular", pruefbericht: "Prüfbericht", foto: "Foto", sonstiges: "Sonstiges" };
-  const SPERRGRUND = { sturz: "Sturzbelastung", beschaedigung: "Beschädigung", verlust: "Verlust", rueckruf: "Rückruf" };
   const AUSSONDERUNGSGRUND = { lebensdauer: "Lebensdauer erreicht", verlust: "Verlust", irreparabel: "irreparabel" };
   const MATERIALART = { textil: "textil", metall_hardware: "Metall", sonstiges: "sonstiges" };
   // „Set“: ein Ordner, in dem ein Satz Material zusammen liegt (seit Schritt 26 wieder so benannt) – wie models.ORDNERARTEN.
@@ -2833,8 +2832,8 @@
      Knopf da. */
   function artikelMehr(a, eintraege) {
     const zeile = {
-      sperren: { text: "Sperren", satz: "Ohne Prüfung, mit Grund.", attrs: 'data-act="sperren"' },
       mangel: { text: "Mangel melden", satz: "Sperrt den Artikel.", attrs: 'data-act="mangel"' },
+      verlust: { text: "Verlust melden", satz: "Sperrt den Artikel als verloren.", attrs: 'data-act="verlust"' },
       trenner: { trenner: true },
       verschieben: { text: "Verschieben", satz: "In einen anderen Ordner.", attrs: 'data-act="verschieben"' },
       lebenslauf: { text: "Lebenslauf (PDF)", satz: "Prüfungen und Ereignisse, prüfbar.", href: `/materialablage/artikel/${a.id}/lebenslauf.pdf`,
@@ -3083,10 +3082,12 @@
     // Eigene offene Meldung: Knopf ausgegraut mit Hilfezeile wie in „Meine PSA“ – kein Dialog, der erst 409 bringt.
     // Wer den Artikel selbst verwaltet, bekommt den Satz „an den Materialwart“ nicht.
     const schonGemeldet = darfMelden && a.mangel_eigen_offen;
-    const sperrKnopf = frei && darf.pruefen && !a.entwurf;
-    /* Wer hier prüfen kann, hat „Prüfung starten“ als Hauptaktion; „Sperren“ (ohne Prüfung) und „Mangel melden“ sind für
-       ihn selten und stehen im Menü „Mehr“ – vorher fünf gleichrangige Knöpfe im Kopf (UI/UX vor dem Merge, B6). Für
-       alle anderen bleibt „Mangel melden“ der Knopf: Es ist ihr Weg, einen Schaden zu melden. */
+    const verlustKnopf = frei && darf.pruefen && !a.entwurf;
+    /* Wer hier prüfen kann, hat „Prüfung starten“ als Hauptaktion; „Mangel melden“ und „Verlust melden“ sind für ihn
+       selten und stehen im Menü „Mehr“ – vorher fünf gleichrangige Knöpfe im Kopf (UI/UX vor dem Merge, B6). Für alle
+       anderen bleibt „Mangel melden“ der Knopf: Es ist ihr Weg, einen Schaden zu melden. „Verlust melden“ ersetzt seit
+       01.11.2026 „Sperren“ ohne Prüfung (Entscheidung des Nutzers: Beschädigung und Sturzbelastung laufen über „Mangel
+       melden“ mit Beschreibung, Fotos und Mail; die Sperre wegen Rückruf hat ihren Knopf im Rückruf-Banner). */
     const pruefKnopf = !aus && darf.pruefen && !fremderEntwurf;
     const aussonderKnopf = gesperrt && darf.verwalten && !a.entwurf;
     // Designsprache: keine Erklärzeilen unter Knöpfen – was ein Knopf gerade nicht kann (ausgegraut, mit
@@ -3095,7 +3096,12 @@
     const empf = a.aussonderung_empfohlen;
     // Hat die Empfehlung selbst gesperrt, steht ihr Grund nur im Hinweis darunter – der Banner sagt nur „Aussonderung
     // empfohlen“ (Browserprüfung vom 25.10.2026: dreimal derselbe Grund).
-    const sperrText = empf && /aussondern empfohlen/.test(a.lock_reason || "") ? "Aussonderung empfohlen" : a.lock_reason;
+    // Als verloren gemeldet (Sperrgrund „Verlust“ bzw. „Verlust: …“): im Banner „als verloren gemeldet (…)“, am Titel
+    // die Marke „verloren“.
+    const verloren = a.lock_state === "verloren";
+    const verlustText = (g) => { const m = /^Verlust(?:: ([\s\S]*))?$/.exec(g || "Verlust"); return m ? `als verloren gemeldet${m[1] ? ` (${m[1]})` : ""}` : g; };
+    const sperrText = empf && /aussondern empfohlen/.test(a.lock_reason || "") ? "Aussonderung empfohlen"
+      : verloren ? verlustText(a.lock_reason) : a.lock_reason;
     // Kommt die Sperre von einer offenen Mangelmeldung (Sperrgrund „Mangel gemeldet am …“, mangel.melden) und steht deren
     // roter Banner, sagt der graue GESPERRT-Banner dasselbe noch einmal – er entfällt (Nutzer, 26.10.2026). Bei jedem
     // anderen Sperrgrund bleibt er; die Marke „gesperrt“ im Kopf bleibt immer.
@@ -3116,7 +3122,7 @@
     seitenTitel(a.inventory_no);
     inhalt.innerHTML = `${quittungHtml()}${a.demo ? `<p class="mat-demo-banner">${DEMO_ARTIKEL}</p>` : ""}
       ${a.status === "ausgesondert" ? `<p class="mat-banner s-ausgesondert">AUSGESONDERT – dieser Artikel ist außer Dienst und darf nicht mehr verwendet werden.</p>` : ""}
-      ${gesperrtBanner ? `<div class="mat-banner s-gesperrt" role="note"><p>GESPERRT${sperrText ? ` – ${esc(sperrText)}` : ""}. Nicht verwenden, bis eine Freiprüfung ihn freigibt.</p>${empfZeile}</div>` : ""}
+      ${gesperrtBanner ? `<div class="mat-banner s-gesperrt" role="note"><p>GESPERRT${sperrText ? ` – ${esc(sperrText)}` : ""}. ${verloren ? "Taucht er wieder auf: nicht verwenden" : "Nicht verwenden"}, bis eine Freiprüfung ihn freigibt.</p>${empfZeile}</div>` : ""}
       ${empf && !gesperrtBanner && !sperreImMangel ? `<div class="mat-banner s-gesperrt" role="note"><p>AUSSONDERUNG EMPFOHLEN</p>${empfZeile}</div>` : ""}
       ${offeneMaengel.map((m, i) => mangelBanner(m, sperreImMangel && i === 0 ? sperrText || "" : null, darf.verwalten, sperreImMangel && i === 0 ? empfZeile : "")).join("")}
       ${a.status === "lebensdauer" ? `<p class="mat-banner s-lebensdauer">LEBENSDAUER ERREICHT – nicht mehr verwenden, prüfen lassen und aussondern.</p>` : ""}
@@ -3126,14 +3132,14 @@
       <div class="mat-artikelkopf">
         ${p.bild ? bildLink(p.bild, p.original, `Produktbild ${produktName(p)}`, null, `<img class="mat-produktbild" src="${esc(p.bild)}" alt="Produktbild ${esc(produktName(p))}">`) : '<div class="mat-produktbild leer" aria-hidden="true">kein Produktbild</div>'}
         <div class="mat-artikeltitel">
-          <h1><span class="mat-inv">${esc(a.inventory_no)}</span> ${statusMarke(a.status, true)}</h1>${anleitungKopf("artikel")}
+          <h1><span class="mat-inv">${esc(a.inventory_no)}</span> ${verloren ? '<span class="mat-status s-gesperrt gross">verloren</span>' : statusMarke(a.status, true)}</h1>${anleitungKopf("artikel")}
           <p class="mat-produktzeile"><a href="/materialablage/katalog/produkt/${p.id}">${nameHtml(p)}</a>${zusatzHtml(p)}${artNrHtml(p.article_no)}</p>
           <p>Seriennummer <strong>${esc(a.serial_no)}</strong>${a.serial_generated ? ' <span class="badge grey">vom System vergeben</span><span class="help mat-sn-hinweis">Der Hersteller vergibt keine Seriennummer – diese Nummer bitte dauerhaft am Artikel anbringen.</span>' : ""}</p>
           ${aus || darf.pruefen ? "" : DARF.qualifiziert || DARF.pruefer_haekchen ? `<p class="notice small">${pruefHinweis(a)}</p>` : ""}
           ${schonGemeldet ? `<p class="help mat-schon-gemeldet" id="mat-schon-gemeldet">Du hast am ${esc(S.fmtDate(a.mangel_eigen_offen))} schon gemeldet – ein Prüfer sieht es sich an.${darf.verwalten ? "" : " Ergänzungen bitte direkt an den Materialwart."}</p>` : ""}
           ${aussondernNein ? `<p class="help mat-aussondern-hilfe" id="mat-aussondern-hilfe">${esc(aussondernNein)}</p>` : ""}
           <div class="btn-row mat-pruefknoepfe">${pruefKnopf ? `<button class="btn" data-act="pruefen">${eigenerEntwurf ? "Prüfung fortsetzen" : a.status === "neu" ? "Eingangsprüfung starten" : "Prüfung starten"}</button>` : ""}
-            ${sperrKnopf && !pruefKnopf ? '<button class="btn secondary small" data-act="sperren">Sperren</button>' : ""}
+            ${verlustKnopf && !pruefKnopf ? '<button class="btn secondary small" type="button" data-act="verlust">Verlust melden</button>' : ""}
             ${darfMelden && !pruefKnopf ? `<button class="btn secondary small" type="button"${schonGemeldet ? ' disabled aria-describedby="mat-schon-gemeldet"' : ' data-act="mangel"'}>Mangel melden</button>` : ""}
             ${aussonderKnopf ? `<button class="btn secondary small" type="button"${aussondernNein ? ' disabled aria-describedby="mat-aussondern-hilfe"' : ' data-act="aussondern"'}>Aussondern</button>` : ""}</div>
           ${a.entwurf ? `<p class="small">In Prüfung bei <strong>${person(a.entwurf.pruefer)}</strong> seit ${esc(fmtZeit(a.entwurf.seit))}
@@ -3141,7 +3147,7 @@
             ${fremderEntwurf && darf.verwalten ? ' <span class="mat-nowrap">· <button class="lnk" type="button" data-act="freigeben">Reservierung aufheben</button></span>' : ""}</p>` : ""}
           ${a.durchgang ? `<p class="small">Steht im Prüfdurchgang ${a.durchgang.sichtbar ? `<a href="/materialablage/durchgang/${a.durchgang.id}">${esc(a.durchgang.titel)}</a>` : `„${esc(a.durchgang.titel)}“`}.</p>` : ""}
           <div class="btn-row">${darfDirekt ? '<button class="btn secondary small" data-act="bearbeiten">Bearbeiten</button>' : ""}${artikelMehr(a, [
-            pruefKnopf && sperrKnopf ? "sperren" : "", pruefKnopf && darfMelden && !schonGemeldet ? "mangel" : "", "trenner",
+            pruefKnopf && darfMelden && !schonGemeldet ? "mangel" : "", pruefKnopf && verlustKnopf ? "verlust" : "", "trenner",
             darfPflegen && frei ? "verschieben" : "", darf.grund ? "lebenslauf" : "", darfPflegen && a.darf_loeschen ? "loeschen" : ""].filter(Boolean))}</div>
         </div>
       </div>
@@ -3189,11 +3195,11 @@
       antrag: () => antragDialog(a),
       "antrag-zurueck": (b) => antragZurueckziehen((a.antraege || []).find((x) => x.id === +b.dataset.id), () => zeigen(artikel)),
       pruefen: () => { location.href = eigenerEntwurf ? `/materialablage/pruefung/${a.entwurf.id}` : `/materialablage/artikel/${a.id}/pruefung/neu`; },
-      sperren: () => sperrDialog(a),
+      verlust: () => sperrDialog(a, "verlust"),
       mangel: () => mangelDialog(a, (r, q) => { quittung = q; return zeigen(artikel); }, { verwaltet: Boolean(darf.verwalten), gesperrt: a.lock_state !== "frei" }),
       "mangel-weiterlesen": (b) => mangelWeiterlesen(b),
       "journal-alle": (b) => journalUmschalten(b),
-      "rr-sperren": (b) => sperrDialog(a, { grund: "rueckruf", text: ((a.rueckrufe || []).find((r) => r.id === +b.dataset.id) || {}).title }),
+      "rr-sperren": (b) => sperrDialog(a, "rueckruf", ((a.rueckrufe || []).find((r) => r.id === +b.dataset.id) || {}).title),
       aussondern: () => aussonderDialog(a),
       freigeben: () => reservierungFreigeben(a.entwurf.id, a.entwurf.pruefer, () => zeigen(artikel)),
       verschieben: async () => {
@@ -3304,22 +3310,26 @@
   }
   const ergebnisMarke = (e) => (e ? `<span class="mat-ergebnis-marke e-${esc(e)}">${esc(ERGEBNIS[e] || e)}</span>` : "");
 
-  // vorgabe: { grund, text } – etwa aus dem Rückruf-Banner (Grund „Rückruf“, Titel des Rückrufs).
-  // „Sperren“ ist die Hauptaktion des Dialogs (btn) – nicht btn danger: Eine
-  // Freiprüfung hebt die Sperre wieder auf (Entscheidung vom 23.10.2026, L2b).
-  function sperrDialog(a, vorgabe) {
-    vorgabe = vorgabe || {};
-    dialog(`<h2>${esc(a.inventory_no)} sperren</h2>
-      <p class="help">Sperren ohne Prüfung – nach Sturzbelastung, Beschädigung, bei Verlust oder bei einem Rückruf des Herstellers. Der Artikel wandert nach „Gesperrt“ seiner Gliederung; zurück bringt ihn nur eine Freiprüfung mit „einsatzbereit“.</p>
-      <label for="sd-grund">Grund</label><select id="sd-grund">${Object.entries(SPERRGRUND).map(([k, v]) => `<option value="${k}"${k === vorgabe.grund ? " selected" : ""}>${esc(v)}</option>`).join("")}</select>
-      <label for="sd-text">Was ist passiert?</label><input type="text" id="sd-text" maxlength="300" placeholder="z. B. Sturz in die Rettungskette, Schnitt am Band" value="${esc(vorgabe.text || "")}">
-      <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button><button class="btn" id="sd-ok" type="button">Sperren</button></div>`,
+  /* Sperre ohne Prüfung (pruefung.sperren) – seit 01.11.2026 zwei Wege mit festem Grund, ohne Auswahlfeld: „Verlust
+     melden“ (Menü „Mehr“, Zustand „verloren“) und „Sperren (Rückruf)“ im Rückruf-Banner (Titel des Rückrufs vorbelegt).
+     Beschädigung und Sturzbelastung laufen über „Mangel melden“ (Entscheidung des Nutzers). Die Hauptaktion ist btn,
+     nicht btn danger: Eine Freiprüfung hebt die Sperre wieder auf (Entscheidung vom 23.10.2026, L2b). */
+  const VERLUST_FOLGE = "Der Artikel wird gesperrt, zählt als verloren und wandert nach „Gesperrt“ seiner Gliederung. Taucht er wieder auf: nicht verwenden – zurück bringt ihn nur eine Freiprüfung mit „einsatzbereit“. Der Materialwart kann ihn mit dem Grund „Verlust“ sofort aussondern.";
+  const RUECKRUF_FOLGE = "Sperren wegen eines Rückrufs des Herstellers. Der Artikel wandert nach „Gesperrt“ seiner Gliederung; zurück bringt ihn nur eine Freiprüfung mit „einsatzbereit“.";
+  function sperrDialog(a, grund, text) {
+    const verlust = grund === "verlust";
+    dialog(`<h2>${esc(a.inventory_no)} ${verlust ? "als verloren melden" : "sperren"}</h2>
+      <p class="help">${esc(verlust ? VERLUST_FOLGE : RUECKRUF_FOLGE)}</p>
+      <label for="sd-text">Was ist passiert?</label><input type="text" id="sd-text" maxlength="300"${verlust ? ' placeholder="z. B. nach der Übung nicht mehr da"' : ""} value="${esc(text || "")}">
+      <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button><button class="btn" id="sd-ok" type="button">${verlust ? "Verlust melden" : "Sperren"}</button></div>`,
     (dlg, body) => {
       $("#sd-ok", body).onclick = async (ev) => {
         const knopf = ev.currentTarget;
         knopf.disabled = true;
-        try { await api(`${API}/artikel/${a.id}/sperren`, { method: "POST", body: { grund: $("#sd-grund", body).value, text: $("#sd-text", body).value } }); dlg.close(); toast("Gesperrt"); zeigen(artikel); }
-        catch (e) { S.fehlschlag(knopf, e, body); }
+        try {
+          await api(`${API}/artikel/${a.id}/sperren`, { method: "POST", body: { grund, text: $("#sd-text", body).value } });
+          dlg.close(); toast(`${a.inventory_no} ${verlust ? "als verloren gemeldet" : "gesperrt"}`); zeigen(artikel);
+        } catch (e) { S.fehlschlag(knopf, e, body); }
       };
     });
   }

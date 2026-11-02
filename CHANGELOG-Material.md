@@ -66,6 +66,7 @@ Geschichte stehen. Schemaversion nach der Nachbesserung vor dem Merge: 30; mit d
 | Gerätetest 01.11.2026 – Teil 2 (Strömipedia) | Speicherstand sofort („Ungespeichert“, „Speichert …“, „Gespeichert 13:02“, Live-Region); „/“-Menü im sichtbaren Bereich (höchstens 40 %, über dem Cursor); Artikel-Leiste einzeilig (Pfad kürzt sich, „Teilen“/„Inhaltsverzeichnis“ am Finger in „⋯“), unter 500 px Höhe nicht klebend, Cursor nicht unter den Leisten; Inhaltsverzeichnis in „⋯“ als Dialog; Aufgabenlisten-Kästchen 24 px mit Namen; Kommentar als Blatt über dem Artikel; numerische Dateinamen nicht als Alternativtext; Erfolgsmeldungen für Hochladen und Kommentare | gebaut 01.11.2026 (kein Schemaschritt), Zweig gt-wiki, nicht auf dev |
 | Gerätetest 01.11.2026 – Teil 4 (Materialablage) | Prüfdurchgang: Suche nach Nummer/Name und „QR-Code scannen“ über der Liste, Vorgabe „offen“, eine Zählweise in Kopf, Filtern und Grund, Meldung nach Ausnehmen/Einbeziehen; Abschlussleiste der Prüfung beim Scrollen eingeklappt; ausgegrautes „Festschreiben“ führt zum fehlenden Schritt; Filter der Prüfungen mit aria-pressed, Links der Übersicht springen zur Liste; Bestandsbaum am Telefon nur „überfällig“; ein Platzhalter der Nummernsuche | gebaut 01.11.2026 (kein Schemaschritt), zur Freigabe |
 | Hinweiskästen über die ganze Breite | Hinweiskästen (`.notice`, Zeile zur Prüfanleitung) laufen in allen Modulen über die volle Breite ihrer Spalte, ihr Inhalt – Text und Knöpfe – bleibt höchstens 100ch (rund 120 Zeichen) breit, der Knopf neben seinem Text; ersetzt V10 „der Kasten darf schmaler sein“ | gebaut 01.11.2026 (kein Schemaschritt), Zweig kaesten, zur Freigabe |
+| Verlust melden statt Sperren | Artikelseite: „Verlust melden“ (Menü „Mehr“ des Prüfers, Dialog ohne Grundauswahl) statt „Sperren“; ohne Prüfung sperrt der Server nur noch mit „verlust“ und „rueckruf“, „sturz“/„beschaedigung“ 400 mit Hinweis auf „Mangel melden“; ältere Sperren bleiben lesbar; Banner und Marke „verloren“ am Artikel | gebaut 01.11.2026 (kein Schemaschritt), Zweig verlust |
 
 ## Abgleich mit dem Bestand (vor Lieferung 1)
 
@@ -9848,7 +9849,7 @@ oder Plattform-Verwaltung).
 | `GET /materialablage/pruefung/<id>/pdf`, `GET /materialablage/durchgang/<id>/sammelprotokoll` | lesen | Protokoll als PDF (nur, solange die Datei ihre Prüfsumme hat) |
 | `GET /materialablage/pruefen`, `POST /api/material/pruefen` (`datei`) | ohne Anmeldung | Prüfseite: `ergebnis` (unveraendert, veraendert, unbekannt), `protokoll_id`, `art`, `hinweis` – angemeldet mit Zugang dazu `link`; seit Schritt 31 auch Lebensläufe: `protokoll_id` = Kennung `L-…`, `art` „Lebenslauf“, dazu `stand`, `link` zum Artikel (nur mit Leserecht) |
 | `GET /api/material/entwuerfe` | Modulzugang | offene Prüfungen aller Prüfer im eigenen Bereich |
-| `POST /api/material/artikel/<id>/sperren` (`grund`: sturz, beschaedigung, verlust, rueckruf; `text`) | Prüfer | Sperre ohne Prüfung |
+| `POST /api/material/artikel/<id>/sperren` (`grund`: verlust, rueckruf – seit 01.11.2026; sturz, beschaedigung → 400; `text` bis 300 Zeichen) | Prüfer | Sperre ohne Prüfung („Verlust melden“, „Sperren (Rückruf)“) |
 | `POST /api/material/artikel/<id>/aussondern` (`grund`: lebensdauer, verlust, irreparabel; `datum`, `bemerkung`) | Materialwart (mit Unterschrift) | Aussonderung gesperrter Artikel mit Aussonderungsprotokoll; liefert `aussonderung` (Kennung) |
 | `GET/POST /api/material/durchgaenge`, `GET/DELETE …/<id>` | lesen / Materialwart oder Prüfer | Prüfdurchgänge (`?offen=1`; `?abgeschlossen=1` mit `jahr`, `ordner`, `q`, `seite`, `pro_seite` → `{jahre, jahr, gesamt, seite, pro_seite, durchgaenge}`, 27.10.2026); eröffnen (`folder_id`, `titel`); löschen, solange nichts geprüft ist |
 | `POST /api/material/durchgaenge/<id>/ausnehmen`, `…/einbeziehen` (`item_id`, `grund`), `…/abschliessen` | Materialwart oder Prüfer | Artikel ausnehmen, wieder einbeziehen, Durchgang abschließen (mit Sammel- und Set-Protokollen; 409 „Während des Festschreibens wurde am Durchgang weitergearbeitet …“, wenn sich dreimal zwischen Rendern und Festschreiben etwas geändert hat, 503 bei gesperrter Datenbank) |
@@ -10624,3 +10625,44 @@ vorher/nachher: planung/geraetetest/bericht_teilx.md. Betrifft alle Module; kein
 - Tests: `tests/test_geraetetest_quer.py` (neu, statisch); angepasst `test_wiki_seitenbaum.py`, `test_material_uiux_u2.py`,
   `test_module_uiux_u3.py` und `test_material_geraetetest4.py` (erwartete noch den Toast vor Teil 1 – auf dem Sammelstand
   401853e rot). Die 44-px-Flächen der kompakten Matrix gelten nur unter `pointer: coarse` (Knopfsprache).
+
+## Verlust melden statt Sperren (01.11.2026)
+
+Entscheidung des Nutzers (01.11.2026) zum Menü „Mehr“ der Artikelseite, wie es ein Prüfer sieht („Sperren“, „Mangel
+melden“, „Verschieben“, „Lebenslauf (PDF)“): „Mangel melden ist redundant, wenn man Sperren als Prüfer zur Verfügung
+hat“ – „Sperren“ fällt weg, an seine Stelle tritt „Verlust melden“. Auftrag planung/kaesten/auftrag_verlust_melden.md.
+Kein Schemaschritt.
+
+- **Artikelseite:** Im Menü „Mehr“ des Prüfers (Prüffreigabe mit Urkundennummer, Artikel frei, kein offener Entwurf –
+  wie bisher) steht „Mangel melden“ („Sperrt den Artikel.“) vor **„Verlust melden“** („Sperrt den Artikel als
+  verloren.“); „Sperren“ („Ohne Prüfung, mit Grund.“) ist weg, ebenso der Knopf „Sperren“ für Prüfer ohne Prüfknopf
+  (er heißt jetzt „Verlust melden“). „Mangel melden“ bleibt unverändert, auch in „Meine PSA“.
+- **Dialog „M-… als verloren melden“:** ohne Auswahlfeld für den Grund; „Was ist passiert?“ freiwillig, bis 300 Zeichen;
+  darüber die Folge: gesperrt, zählt als verloren, wandert nach „Gesperrt“; taucht er wieder auf, nicht verwenden –
+  zurück nur mit einer Freiprüfung; der Materialwart kann ihn mit dem Grund „Verlust“ sofort aussondern. Hauptaktion
+  „Verlust melden“ (`btn`), danach der Toast „M-… als verloren gemeldet“.
+- **Rückruf:** Der Knopf „Sperren (Rückruf)“ im Rückruf-Banner bleibt; sein Dialog „M-… sperren“ hat ebenfalls kein
+  Auswahlfeld mehr (der Grund steht fest: „Rückruf“, „Was ist passiert?“ mit dem Titel des Rückrufs vorbelegt), Toast
+  „M-… gesperrt“.
+- **Am Artikel nach der Meldung:** Marke „verloren“ am Titel (statt „gesperrt“, Farbe wie gesperrt) und im roten Banner
+  „GESPERRT – als verloren gemeldet (…). Taucht er wieder auf: nicht verwenden, bis eine Freiprüfung ihn freigibt.“
+  (vorher „GESPERRT – Verlust: …. Nicht verwenden, …“); in einem Mangel-Banner „Außerdem gesperrt: als verloren
+  gemeldet (…)“. „Meine PSA“ zeigt wie bisher „Als verloren gemeldet – …“.
+- **Server (`pruefung.sperren`, `models.SPERRGRUENDE`):** Neue Sperren ohne Prüfung nur noch mit `verlust` (Zustand
+  „verloren“) und `rueckruf` (Zustand „gesperrt“). `sturz` und `beschaedigung` lehnt der Server mit 400 und Klartext ab
+  (`SPERRE_ALT_GRUND`: „Beschädigung und Sturzbelastung meldest du über „Mangel melden“ – mit Beschreibung und Fotos.
+  …“) – vor jeder Prüfung des Zustands, also auch an einem schon gesperrten Artikel; ein Konto ohne Prüfrecht bekommt
+  weiter 403. Die alten Gründe stehen als `SPERRGRUENDE_ALT` nur noch für diese Absage im Code.
+- **Altbestand:** Ältere Sperren tragen ihren Grund als Text (`lock_reason`, z. B. „Sturzbelastung: …“) und bleiben
+  unverändert lesbar – Artikel, Journal, Lebenslauf, Jahresbericht (Art „Sperre durch Prüfer ohne Prüfung“, die
+  Abschnitte „Sperren und Freiprüfungen“ bleiben, sie zählen auch Sperren aus Prüfungen) und „Meine PSA“. Aussondern
+  nach so einer Sperre weiter erst nach einer Prüfung.
+- **Andere Aufrufer:** Der Beispielbestand (`scripts/material_beispielbestand.py`) sperrt ohne Prüfung nur mit
+  „verlust“ – unverändert. Tests, die eine Sperre ohne Prüfung als Vorbedingung brauchten, sperren jetzt mit
+  „rueckruf“ (gleicher Zustand „gesperrt“, gleiche Regel fürs Aussondern) bzw. „verlust“.
+- **Texte:** README („Sperren und Aussondern“), Schnittstelle (oben), Docstrings in pruefung.py und models.py.
+- Tests: `tests/test_material_verlust_melden.py` (neu: Gründe am Server, alte Sperre „Sturzbelastung“ lesbar, „Meine
+  PSA“ verloren, Oberfläche statisch); angepasst `test_material.py`, `test_material_aussondern.py`,
+  `test_material_bericht.py`, `test_material_export.py`, `test_material_mangel.py`, `test_material_meine_psa.py`,
+  `test_material_setprotokolle.py`, `test_material_ueberblick.py` (Helfer `sperren` mit Vorgabe „rueckruf“) und
+  `test_material_uiux_u2.py` (B6: Menüeinträge).

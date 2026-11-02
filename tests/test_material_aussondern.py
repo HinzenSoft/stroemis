@@ -80,8 +80,8 @@ def test_ergebnis_sperrt_nur():
 
 
 def test_bedingungen_materialwart():
-    """E2 je Sperrart: frei 409; direkte Sperre (Sturz, Beschädigung) 409 bis zu einer Prüfung mit „instandsetzen“ oder
-    „aussondern empfohlen“; Verlust sofort; Mangelmeldung 409 NUR_GEMELDET bis zu einer Prüfung; nach einer
+    """E2 je Sperrart: frei 409; direkte Sperre (Rückruf, früher auch Sturz und Beschädigung) 409 bis zu einer Prüfung
+    mit „instandsetzen“ oder „aussondern empfohlen“; Verlust sofort; Mangelmeldung 409 NUR_GEMELDET bis zu einer Prüfung; nach einer
     Freiprüfung und neuer Sperre wieder 409; nichts ändert sich bei einer Ablehnung."""
     from app.material.services import mangel
     from app.material.services import pruefung as dienst
@@ -97,7 +97,7 @@ def test_bedingungen_materialwart():
         r = aussondern(w, a1)
         assert r.status_code == 409 and r.json["error"] == dienst.AUSSONDERN_NUR_GESPERRT, r.get_json()
         # Direkte Sperre ohne Prüfung.
-        sperren(p, a1, "sturz")
+        sperren(p, a1, "rueckruf")
         vorher = item(t.app, a1)
         r = aussondern(w, a1)
         assert r.status_code == 409 and r.json["error"] == dienst.AUSSONDERN_OHNE_PRUEFUNG, r.get_json()
@@ -124,16 +124,16 @@ def test_bedingungen_materialwart():
         assert festschreiben(p, pr["id"], ergebnis="instandsetzen", grund="Platzhalter").status_code == 200
         pr = pruefung(p, a4)
         assert festschreiben(p, pr["id"], ergebnis="einsatzbereit").status_code == 200
-        sperren(p, a4, "beschaedigung")
+        sperren(p, a4, "rueckruf")
         r = aussondern(w, a4)
         assert r.status_code == 409 and r.json["error"] == dienst.AUSSONDERN_OHNE_PRUEFUNG, r.get_json()
         # Eine Prüfung am schon gesperrten Artikel mit „aussondern empfohlen“ hält die Sperre und macht den Weg frei.
         pr = pruefung(p, a4)
         assert festschreiben(p, pr["id"], ergebnis="aussondern_empfohlen", grund="Platzhalter").status_code == 200
         a = artikel(w, a4)
-        assert a["lock_reason"].startswith("Beschädigung") and a["aussonderung_empfohlen"]["pruefung"] == pr["id"]
+        assert a["lock_reason"].startswith("Rückruf") and a["aussonderung_empfohlen"]["pruefung"] == pr["id"]
         assert aussondern(w, a4).status_code == 200
-        # Rückruf-Sperre wie Sturz.
+        # Rückruf-Sperre (wie früher Sturz).
         sperren(p, a5, "rueckruf")
         assert aussondern(w, a5).status_code == 409
     print("Bedingungen des Materialwarts bestanden.")

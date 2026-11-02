@@ -130,9 +130,9 @@ def test_b6_knoepfe():
     form = abschnitt(js, "function formularKnoepfe() {", "\n    }")
     assert form.count("S.menue(") == 1 and 'text: "Löschen"' in form and 'text: "Deaktivieren"' in form
     assert 'const klasse = bearbeitbar ? "btn secondary small" : "btn small";' in form
-    # Prüfer: „Sperren“ und „Mangel melden“ im Menü „Mehr“, sonst Knöpfe.
-    assert 'pruefKnopf && sperrKnopf ? "sperren" : "", pruefKnopf && darfMelden && !schonGemeldet ? "mangel" : ""' in js
-    assert "${sperrKnopf && !pruefKnopf ?" in js and "${darfMelden && !pruefKnopf ?" in js
+    # Prüfer: „Mangel melden“ und „Verlust melden“ (seit 01.11.2026 statt „Sperren“) im Menü „Mehr“, sonst Knöpfe.
+    assert 'pruefKnopf && darfMelden && !schonGemeldet ? "mangel" : "", pruefKnopf && verlustKnopf ? "verlust" : ""' in js
+    assert "${verlustKnopf && !pruefKnopf ?" in js and "${darfMelden && !pruefKnopf ?" in js
     # Berichtigen: grauer Knopf (einzige Aktion), ausgegraut mit Satz statt title.
     assert 'disabled title="${esc(pr.berichtigbar.grund)}">Berichtigen' not in js and 'grundSatz("pr-ber-grund", berGrund)' in js
     print("B6 bestanden.")
@@ -142,7 +142,9 @@ def test_b7_b8_b9_artikel_und_pruefungen():
     js = lies(MAT)
     assert 'class="notice mat-empfehlung"><strong>Aussonderung empfohlen</strong> – ' not in js
     assert 'const empfZeile = empf ? `<p class="mat-banner-zeile">Empfohlen von ' in js
-    assert '<h1><span class="mat-inv">${esc(a.inventory_no)}</span> ${statusMarke(a.status, true)}</h1>' in js
+    # Am Titel nur die Statusmarke (seit 01.11.2026 bei einem verloren gemeldeten Artikel „verloren“).
+    assert ('<h1><span class="mat-inv">${esc(a.inventory_no)}</span> ${verloren ? \'<span class="mat-status s-gesperrt '
+            'gross">verloren</span>\' : statusMarke(a.status, true)}</h1>') in js
     assert "const JOURNAL_KURZ = 5;" in js and "journalHtml(a.journal, true, JOURNAL_KURZ)" in js
     assert 'aria-expanded="false" aria-controls="mat-journal">Alle ${eintraege.length} Einträge anzeigen</button>' in js
     seite = abschnitt(js, "const prueferHinweisSeite = () =>", ";\n")

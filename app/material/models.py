@@ -311,8 +311,12 @@ PRUEFARTEN = {"eingang": "Eingangsprüfung", "periodisch": "periodisch", "ausser
               "reparatur": "Reparatur", "aussonderung": "Aussonderung"}
 # Die Prüfarten, mit denen Schritt 1 die Tabelle angelegt hat – Schritt 1 bleibt, wie er ausgeliefert wurde.
 PRUEFARTEN_1 = ("periodisch", "ausserplanmaessig", "reparatur", "aussonderung")
-# Sperre ohne Prüfung (nur Prüfer) und Aussonderung durch den Materialwart: die Gründe zur Auswahl.
-SPERRGRUENDE = {"sturz": "Sturzbelastung", "beschaedigung": "Beschädigung", "verlust": "Verlust", "rueckruf": "Rückruf"}
+# Sperre ohne Prüfung (nur Prüfer) und Aussonderung durch den Materialwart: die Gründe zur Auswahl. Ohne Prüfung sperrt
+# ein Prüfer seit 01.11.2026 nur noch bei Verlust („Verlust melden“) und Rückruf („Sperren (Rückruf)“ im Rückruf-Banner);
+# Sturzbelastung und Beschädigung meldet man über „Mangel melden“ (Entscheidung des Nutzers). Ältere Sperren mit diesen
+# Gründen tragen ihn als Text in lock_reason und bleiben so lesbar – SPERRGRUENDE_ALT nennt sie nur noch für die Absage.
+SPERRGRUENDE = {"verlust": "Verlust", "rueckruf": "Rückruf"}
+SPERRGRUENDE_ALT = {"sturz": "Sturzbelastung", "beschaedigung": "Beschädigung"}
 AUSSONDERUNGSGRUENDE = {"lebensdauer": "Lebensdauer erreicht", "verlust": "Verlust", "irreparabel": "irreparabel"}
 # Prüfergebnisse. Seit Schritt 28 (Wunsch vom 25.10.2026) sondern Prüfer nicht mehr aus: „aussondern empfohlen“ sperrt
 # nur, ausgesondert wird durch den Materialwart. „aussondern“ steht nur noch an Aussonderungen (Art „aussonderung“) und an

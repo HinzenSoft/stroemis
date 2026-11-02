@@ -156,7 +156,7 @@ def test_felder():
         for iid in (a1, a2):
             zuordnen(t, iid, t.person_id)
         sql(t.app, "UPDATE mat_item SET notes = 'Bemerkung-Geheimtext' WHERE id IN (?, ?)", (a1, a2))
-        r = t.k["pruefer"].post(f"/api/material/artikel/{a2}/sperren", json={"grund": "beschaedigung",
+        r = t.k["pruefer"].post(f"/api/material/artikel/{a2}/sperren", json={"grund": "rueckruf",
                                                                              "text": "Sperrgrund-Geheimtext"})
         assert r.status_code == 200, r.get_json()
         assert melden(t.person, a1, "Eigene Platzhaltermeldung").status_code == 201
@@ -173,7 +173,7 @@ def test_felder():
             assert k["notes"] == "Bemerkung-Geheimtext" and k["gliederung"] == "OG Musterstadt", k
             assert k["last_inspected_on"] is None
         gesperrt = next(k for k in d["artikel"] if k["id"] == a2)
-        assert gesperrt["lock_reason"] == "Beschädigung: Sperrgrund-Geheimtext", gesperrt
+        assert gesperrt["lock_reason"] == "Rückruf: Sperrgrund-Geheimtext", gesperrt
         zustand(t.app, a2, last_inspected_on="2025-01-15")
         assert next(k for k in t.person.get(LISTE).json["artikel"] if k["id"] == a2)["last_inspected_on"] == "2025-01-15"
         karte = next(k for k in d["artikel"] if k["id"] == a1)
