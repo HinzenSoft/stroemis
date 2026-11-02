@@ -1692,7 +1692,8 @@ def test_befunde():
         r = c1.put("/api/wiki/reorder", json={"items": [{"id": geheim["id"], "parent_id": None, "position": 0}]})
         assert r.status_code == 404 and "Geheimer" not in r.json["error"], r.get_json()
         offen = adm.post("/api/wiki/pages", json={"title": "Offener Plan", "content": "# Offener Plan"}).json["page"]
-        r = c1.put("/api/wiki/reorder", json={"items": [{"id": offen["id"], "parent_id": None, "position": 0}]})
+        # Eine andere Stelle – unverändert wäre kein Verschieben und bliebe ohne Prüfung (seit 02.11.2026).
+        r = c1.put("/api/wiki/reorder", json={"items": [{"id": offen["id"], "parent_id": None, "position": 5}]})
         assert r.status_code == 403 and "Offener" not in r.json["error"], r.get_json()
 
         # --- Elternseite ohne Leserecht: kein Orakel, kein Einhängen -------------------------
