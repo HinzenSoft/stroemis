@@ -334,6 +334,14 @@ input[type=radio], input[type=checkbox] { accent-color: var(--anthrazit); }
 .error { color: var(--rot); font-weight: 600; margin: 10px 0; }
 .notice { background: var(--grau-hell); border-left: 4px solid var(--gelb); padding: 10px 12px; margin: 12px 0; }
 .notice a { color: var(--rot-auf-flaeche); }
+/* Hinweiskästen über die ganze Breite (Entscheidung des Nutzers vom 01.11.2026, ersetzt V10 vom 27.10.2026): Der Kasten
+   nimmt die volle Breite seiner Spalte, sein Inhalt – Text und Knöpfe zusammen – bleibt höchstens 100ch breit (rund 120
+   Zeichen je Zeile, siehe material.css). Das übernimmt der Innenabstand rechts: Prozent zählen von der Breite der Spalte,
+   ch in der Schrift des Kastens; ist die Spalte schmaler, bleibt der eigene Abstand (--kasten-rand). So gilt es auch für
+   Text direkt im Kasten (p.notice), und ein Knopf bleibt neben seinem Text statt an den rechten Rand zu rücken. Wo die
+   Spalte schmaler als 100ch ist (Telefon, Tablet, Lesespalte der Strömipedia), ändert sich nichts; Dialoge bleiben, wie
+   sie sind. Eigene Kästen setzen den Innenabstand rechts deshalb nicht selbst, sondern über --kasten-rand. */
+:is(.notice, .mat-wikizeile):not(dialog *) { padding-right: max(var(--kasten-rand, 12px), calc(100% - 100ch)); }
 /* Text auf hellen Flächen (UI/UX A5, vorher nur in der Materialablage): Rot kommt auf --rot-hell, --grau-hell und den
    hellen Hinweisflächen nur auf 4,0–4,4 : 1, Grau auf 4,3–4,5 : 1 – unter WCAG AA (4,5 : 1). Links und Textknöpfe stehen
    dort im dunklen Rot (--rot-auf-flaeche, über 6 : 1), Nebentext in Anthrazit; auch beim Überfahren einer Tabellenzeile.

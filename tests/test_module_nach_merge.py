@@ -229,7 +229,8 @@ def test_stylesheet_regeln():
     assert ".vk-stempel { min-height: 44px; display: inline-flex; align-items: center; }" in pcss
     # Seit UI/UX vor dem Merge A10 auch das Katalogdetail; der Lehrgang endet bei 1 600 px.
     assert ".pruef[data-ansicht=liste], .pruef[data-ansicht=kataloge], .pruef[data-ansicht=katalog] { max-width: 1280px; }" in pcss
-    assert ".pruef :is(.help, .notice) { max-width: 100ch; }" in pcss   # seit UI/UX D12 auch div.help und .notice
+    # Seit UI/UX D12 auch div.help; Hinweiskästen seit dem 01.11.2026 über die ganze Breite (test_material_textbreite).
+    assert ".pruef .help { max-width: 100ch; }" in pcss and ".pruef :is(.help, .notice)" not in pcss
     assert "ghost" not in pcss
     admin = lies("app/templates/admin.html")
     assert '<col style="width:11%"><col style="width:12%"><col style="width:12%">' in admin

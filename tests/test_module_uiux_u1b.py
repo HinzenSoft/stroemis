@@ -317,7 +317,7 @@ def test_d12_hygiene():
                 'style="margin-top:8px"', 'style="margin-top:10px"', 'style="justify-content:center'):
         assert alt not in js, alt
     assert ".abgesetzt { margin-top: 14px; }" in lies(APP_CSS)
-    assert ".pruef :is(.help, .notice) { max-width: 100ch; }" in lies(RK_CSS)
+    assert ".pruef .help { max-width: 100ch; }" in lies(RK_CSS)      # Hinweiskästen seit 01.11.2026 ganz breit
     print("D12 bestanden.")
 
 

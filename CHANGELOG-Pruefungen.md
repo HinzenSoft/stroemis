@@ -4,6 +4,14 @@ Erweiterung von strömis.de um Lehrgänge, Teilnehmende, Voraussetzungen, Prüfu
 Stoppuhr, Nachprüfungen, Medien und eine Mängelübersicht für Feedbackrunden – nur für Nutzer mit dem neuen
 Zusatzrecht „Prüfer“.
 
+## Nachtrag (01.11.2026): Hinweiskästen über die ganze Breite
+
+Entscheidung des Nutzers „Kästen über die ganze Breite“ (ersetzt aus V10 „der Kasten darf schmaler sein“): Hinweiskästen
+(`.notice`, etwa „2 Voraussetzungen sind noch nicht erfüllt.“ in der Bewertung je Teilnehmende) laufen über die volle
+Breite der Spalte, ihr Inhalt bleibt höchstens 100ch (rund 120 Zeichen je Zeile) – über die gemeinsame Regel in app.css
+(Einzelheiten: CHANGELOG-Material.md, gleichnamiger Abschnitt). pruefungen.css begrenzt nur noch die Hilfetexte
+(`.pruef .help`). Bei 1280 px endete der Kasten vorher 391 px vor dem rechten Rand der Spalte, ab 1780 px 726 px.
+
 ## Gerätetest 01.11.2026 – Teil 3 (Riegenkarten)
 
 Wunsch des Nutzers: „Nimm diesen UI/UX Test und setze die Findings um.“ (Gerätetest auf Pixel 8 Pro, Pixel 10 Pro Fold,
