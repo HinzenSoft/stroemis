@@ -134,9 +134,10 @@ def test_folgen_der_seitenbaum_regeln_auf_den_materialbaum():
     # Die Regeln stehen nach denen in app.css (gleiche Spezifität, material.css kommt später) – die Seite lädt beide.
     seite = lies("app/material/templates/material/seite.html")
     assert "url_for('material.static', filename='material.css')" in seite
-    # Der Seitenbaum der Strömipedia bleibt unverändert.
+    # Der Seitenbaum der Strömipedia bleibt unverändert (seit dem 02.11.2026 am Finger 36 statt 44 px hoch –
+    # test_wiki_baum_kompakt.py; der Ordnerbaum hält seine 44 px über .mat-tree .tg/.mat-tree a in material.css).
     app_css = lies("app/static/css/app.css")
-    for regel in (".tree { margin-right: -12px; }", ".tree .tg { width: 44px; height: 44px; margin: 0 -10px;",
+    for regel in (".tree { margin-right: -12px; }", ".tree .tg { width: 44px; height: 36px; margin: 0 -10px;",
                   ".tree .row { align-items: flex-start; }", ".tree > ul > li > .row > a { font-weight: 600;"):
         assert regel in app_css, regel
 

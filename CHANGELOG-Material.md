@@ -72,6 +72,7 @@ Geschichte stehen. Schemaversion nach der Nachbesserung vor dem Merge: 30; mit d
 | Kleinigkeiten aus dem Artikel-Nachzug | Strömipedia: Sprung zum Anker bleibt oben, auch wenn Bilder darüber nachladen, Gliederung markiert den angesprungenen Abschnitt; Editor meldet entzogene Berechtigung als „keine Berechtigung mehr“; Vorlagen auch über „+“ und „Erste Seite anlegen“; Ersteller und Bearbeiter nur mit Stufe (Server); Riegenkarten: Leistungsdialog bei eingefrorenen Bewertungen nur zum Lesen mit Satz und ausgegrautem „Speichern“, Hilfetext Ausbilder; Ankerplätze: „Bild bearbeiten“ speichert nur Geändertes; Materialablage: „verloren“ in Meine PSA, Rückruf-Dialog „wegen Rückruf sperren“; alle Module: Anleitung als „i“ an der Überschrift statt Textlink „Anleitung“ und blauem Hinweiskasten; Karten der Strömipedia-Übersicht mittig wie auf der Startseite | gebaut 02.11.2026 (kein Schemaschritt), freigegeben 02.11.2026 |
 | Menüeintrag „Anleitung zur Strömipedia“ entfernt | „⋯“ einer Seite der Strömipedia ohne „Anleitung zur Strömipedia“; Thema `seite` aus `app/anleitung.py` | gebaut 02.11.2026 (kein Schemaschritt), freigegeben 02.11.2026 |
 | Bearbeitungsfreigabe an Mitglieder samt Unterseiten | „Bearbeiten erlauben“ wirkt für Mitglieder wie für Redakteure auch auf die Unterseiten (vorher genau diese Seite) | gebaut 02.11.2026 (kein Schemaschritt), freigegeben 02.11.2026 |
+| Seitenbaum am Finger kompakter | Seitenbaum der Strömipedia (auch Lesemodus) am Finger: Zeilen 36 statt 44 px, Umbruchzeilen mit Zeilenhöhe 1,25 und 6 px Polster, feine Linien zwischen den Einträgen und eine kräftigere vor jedem Abschnitt statt Abstand; „⋯“ nur in der Zeile der geöffneten Seite, die übrigen Titel werden breiter; mit der Maus und im Ordnerbaum der Materialablage unverändert | gebaut 02.11.2026 (kein Schemaschritt), Zweig seitenbaum-kompakt |
 | Text der Hinweiskästen über die ganze Breite | Inhalt der Hinweiskästen (`.notice`, `.mat-wikizeile`), Hilfetexte darin, Mangel- und Sperr-Banner und Liste „Gemeldete Mängel“ nicht mehr auf 100ch begrenzt | gebaut 02.11.2026 (kein Schemaschritt), freigegeben 02.11.2026 |
 | Freigaben je Person, Ordnerbild neben dem Namen | Reiter „Freigaben“: eine Zeile je Person in allen drei Listen, EIN „Ändern“ → Dialog „Rechte ändern“ (neuer Endpunkt je Person und Ordner, eine Transaktion), „Entziehen“ nimmt alle Rechte der Person dort, „… hat hier schon: …“ beim Anlegen; Ordnerfoto links neben Name und Knopfzeile (96 px, Telefon 64 px) | gebaut 02.11.2026 (kein Schemaschritt), freigegeben 02.11.2026 |
 | Suchzeile in der Strömipedia | Unter 1024 px (außer im Editor) klebt oben im Inhalt eine Zeile „☰“ + „Artikel suchen“ wie in der Materialablage; Treffer als Liste darunter über dem Text (Tippen/Enter öffnet, Esc/daneben/Zurück schließt); ersetzt „☰ Seiten“, das „☰“ der Kopfzeile einer Seite und das Suchfeld in der Schublade; die Kopfzeile klebt direkt darunter | gebaut 02.11.2026 (kein Schemaschritt) |
@@ -4510,6 +4511,51 @@ Einträge und verschiedenen Ebenen angeht, vor allem auch dem Ausklappsymbol.“
 - Import nur über „⋯“ neben „Neue Seite“; der Dialog beginnt mit „– oberste Ebene –“ (keine Vorwahl der offenen Seite).
 - Die oberste Ebene steht fett in `--schwarz` mit 6 px Abstand zwischen den Abschnitten.
 - Die Schublade am Telefon ist bis 360 px breit.
+
+Am Finger seit dem 02.11.2026 kompakter (36 statt 44 px, Trennlinien, „⋯“ nur an der geöffneten Seite) – Abschnitt
+„Seitenbaum am Finger kompakter“.
+
+## Seitenbaum am Finger kompakter (Wunsch des Nutzers, 02.11.2026)
+
+Stand: gebaut 02.11.2026 (kein Schemaschritt), Zweig `seitenbaum-kompakt`.
+
+Wunsch des Nutzers zu einem Telefonfoto der Seiten-Schublade (Produktion), wörtlich: „Kann der vertikale Abstand reduziert
+werden? Der Baum ist schwer zu lesen. Die einzelnen Einträge ggf. anders voneinander abheben bzw. trennen als große
+Abstände.“ Entscheidungen des Nutzers (beide die Empfehlung):
+1. **„36 px mit Trennlinien“**: Zeilen 36 statt 44 px, Umbruchzeilen enger (Zeilenhöhe 1,25, Polster 6 px), feine Linie
+   zwischen den Einträgen, Abschnitte (oberste Ebene) mit kräftigerer Linie darüber. Weicht für den Baum bewusst von der
+   44-px-Regel ab (WCAG AA mit 24 px bleibt erfüllt).
+2. **„⋯ nur an der offenen Seite“**: Am Finger steht „⋯“ nur in der Zeile der gerade geöffneten Seite; für eine andere
+   Seite tippt man sie erst an. Die Titel bekommen die frei werdende Breite.
+
+- **Nur am Finger** (`pointer: coarse`, Telefon wie Tablet, app.css im Block „Wiki und Nutzerverwaltung am Finger“): mit
+  der Maus ist der Baum pixelgleich wie vorher. Gilt für den Seitenbaum der Strömipedia und den Baum des Lesemodus
+  (public.js, dieselben Klassen; dort gibt es kein „⋯“). Der Ordner- und Kategorienbaum der Materialablage (`.mat-tree`)
+  bleibt bei 44 px ohne Linien – die neuen Regeln greifen nur unter `.tree > ul` (dort liegt die Liste der Strömipedia in
+  einer eigenen `<ul>`), und material.css hält Klappknopf und Namen weiter auf 44 px (gemessen: unverändert).
+- **Zeilen**: mindestens 36 px; ein einzeiliger Titel steht mittig in genau 36 px, ein umbrochener läuft mit Zeilenhöhe 1,25
+  und 6 px Polster oben und unten (zwei Zeilen 48 px, vorher 66 px; eine Zeile vorher 45 px). Klappzeichen und „⋯“ sind
+  44 px breit und 36 px hoch (Tippfläche auf Höhe der ersten Titelzeile). Einzug, Führungslinien, fette oberste
+  Ebene und die Markierung der geöffneten Seite (weiß, rote Linie links) bleiben.
+- **Trennlinien** statt Abstand (vorher 1 px Rand je Eintrag und 6 px zwischen den Abschnitten): eine feine Linie
+  (`--linie`, 1 px) über jeder Zeile außer der ersten ihrer Liste; zwischen einer aufgeklappten Seite und ihrer ersten
+  Unterseite liegt sie unter der Elternzeile. Jede Linie hängt an ihrer Zeile – sie beginnt an deren Kante rechts der
+  Führungslinie des Einzugs („│ ───“), die Führungslinien laufen ungebrochen durch, und keine Linie läuft durch ein
+  Klappzeichen. Vor jedem weiteren Abschnitt der obersten Ebene eine kräftigere Linie (2 px `--linie`, wie der Trenner
+  in Menüs) über die volle Breite.
+- **„⋯“ nur an der geöffneten Seite**: in allen übrigen Zeilen kein „⋯“ und kein freigehaltener Platz – der Titel wird
+  46 px breiter. Der Knopf bleibt dort unsichtbar im Dokument (Muster `.nur-vorlesen`), damit Tastatur und
+  Vorlesehilfe ihn weiter erreichen: Hat er oder der Titel seiner Zeile den Tastaturfokus (`:focus-visible`), steht er
+  wieder da (vorwärts wie rückwärts mit Tab gemessen). Beim Wechsel der Seite zeichnet wiki.js den Baum neu – „⋯“
+  wandert mit. Mit der Maus wie bisher beim Darüberfahren.
+- Gemessen (Chromium, DEMO-Baum mit fünf Abschnitten, langen Titeln und drei Ebenen, offene Seite in der dritten Ebene,
+  21 sichtbare Zeilen): ganz sichtbare Einträge in der Schublade Telefon 360 px 11 → 14, 390 px 13 → 17, Tablet hochkant
+  768 px 16 → 21 (alle), Tablet quer 1180 px mit Touch 12 → 15; Höhe des Baums 1129–1149 → 858–870 px; „⋯“ 21 → 1;
+  Rechner 1280 px unverändert (Foto pixelgleich). Tippen auf Titel (36 px hoch), Klappzeichen (44 × 36) und „⋯“ (44 × 36)
+  trifft jeweils das Element; Menü, Merkliste, Suche, Schublade und Suchzeile wie vorher.
+- Tests: `tests/test_wiki_baum_kompakt.py` (neu – Regeln im Finger-Block, 36 px, Trennlinien nur an der Zeile, „⋯“ nur
+  aktiv und nicht `display: none`, Maus unverändert, Ordnerbaum bleibt, Doku); angepasst `test_wiki_seitenbaum.py`
+  (Finger-Regeln 36 statt 44 px) und `test_material_nachtrag_sammel.py` (Klappknopf der Strömipedia 44 × 36).
 
 ## Verweise auf die Anleitung in der Strömipedia (Wunsch des Nutzers, 28.10.2026; gebaut 01.11.2026)
 

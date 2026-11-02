@@ -2742,14 +2742,14 @@ dialog.us-dlg { width: min(640px, 96vw); }
 /* Wiki und Nutzerverwaltung am Finger (Geräte-Prüfung vom 22.10.2026, Nachbesserung C1 in P4-L1): Tippziele unter
    44 px auf 44 px – nur bei grobem Zeiger, am Rechner bleibt alles wie es war. Wiki: Kopfknöpfe (☰, 💬, Teilen, ⋯ –
    waren 30 px), Umschalter Lesen/Bearbeiten (26 px), „Neue Seite“ und Papierkorb über dem Seitenbaum (28 px), „☰ Seiten“,
-   die Zeilenknöpfe im Seitenbaum (+ und ⋯, 20 px) und die Reiter. Nutzerverwaltung: Kopfknöpfe (36 px), Reiter (29 px),
-   die Auswahlfelder der Rechte-Matrix (26–33 px) und die Zeilenknöpfe „Bearbeiten“, „Reset-Mail“, „Löschen“ (28 px). */
+   die Zeilenknöpfe im Seitenbaum (+ und ⋯, 20 px; seit dem 02.11.2026 44 × 36 px wie die Zeile, siehe unten) und die
+   Reiter. Nutzerverwaltung: Kopfknöpfe (36 px), Reiter (29 px), die Auswahlfelder der Rechte-Matrix (26–33 px) und die Zeilenknöpfe „Bearbeiten“, „Reset-Mail“, „Löschen“ (28 px). */
 @media (pointer: coarse) {
   .wiki-head .kopfknopf { width: 44px; height: 44px; }
   .wiki-head .mode-toggle button { min-height: 44px; min-width: 44px; padding: 9px 12px; }
   .wiki-side .btn-row .btn.small, .wiki-menu-btn { min-height: 44px; min-width: 44px; padding: 9px 12px; }
-  .tree .row-add, .tree .row-menu { width: 44px; height: 44px; margin-left: 0; }
-  .tree .row { min-height: 44px; }
+  .tree .row-add, .tree .row-menu { width: 44px; height: 36px; margin-left: 0; }
+  .tree .row { min-height: 36px; }
   /* Der Kopfknopf ☰ schrumpfte in der Kopfzeile (flex-wrap: nowrap) auf 15 px – nicht mehr; passen die Knöpfe mit
      44 px nicht mehr in die Zeile (Telefon hochkant), brechen sie in eine zweite um. */
   .wiki-head .kopfknopf { flex: none; }
@@ -2777,10 +2777,11 @@ dialog.us-dlg { width: min(640px, 96vw); }
      44 × 44 px Tippfläche über einer nur 24 px breiten Spalte – je 10 px ragen links in die Einrückung und rechts über den
      Rand des Titels (darüber gelegt); vorher nahm der Knopf volle 44 px je Ebene, und tiefe Titel brachen nach 9 Zeichen um.
      Klappzeichen und „⋯“ stehen auf Höhe der ersten Titelzeile; je Ebene 18 px Einzug (vorher 21) – das Klappzeichen
-     der Unterseite steht dann knapp vor dem Titel der Elternseite. */
+     der Unterseite steht dann knapp vor dem Titel der Elternseite. Seit dem 02.11.2026 sind Klappzeichen und „⋯“ nur
+     noch 36 px hoch wie die Zeile (Seitenbaum am Finger kompakter, unten). */
   .tree { --baum-spalte: 24px; --baum-einzug: 18px; }
   .tree .row { align-items: flex-start; }
-  .tree .tg { width: 44px; height: 44px; margin: 0 -10px; position: relative; z-index: 1; }
+  .tree .tg { width: 44px; height: 36px; margin: 0 -10px; position: relative; z-index: 1; }
   /* Der Baum reicht in den rechten Innenrand der Leiste (12 px): „⋯“ steht am Rand, so viel mehr Platz für jeden Titel.
      Die Liste selbst wird breiter, nicht nur der Knopf – sonst ragte „⋯“ aus seiner Zeile (Geräte-Prüfung, U). */
   .tree { margin-right: -12px; }
@@ -2793,8 +2794,28 @@ dialog.us-dlg { width: min(640px, 96vw); }
      oberste Ebene rückt seit dem Auftrag Seitenbaum überall nicht ein (Grundregel oben). Links 8 px statt 6: Der
      Klappknopf ragt 10 px über den Rand des Titels und darf den ersten Buchstaben nicht abdecken. */
   .tree .row-add { display: none; }
-  .tree a { padding-top: 12px; padding-bottom: 12px; padding-left: 8px; }
-  .tree .baum-titel { white-space: normal; text-overflow: clip; overflow-wrap: break-word; hyphens: auto; }
+  .tree a { padding-top: 6px; padding-bottom: 6px; padding-left: 8px; }
+  .tree .baum-titel { white-space: normal; text-overflow: clip; overflow-wrap: break-word; hyphens: auto; flex-basis: 0; }
+  /* Seitenbaum am Finger kompakter (Nutzer 02.11.2026: „Der Baum ist schwer zu lesen“ – entschieden „36 px mit
+     Trennlinien“ und „⋯ nur an der offenen Seite“): Zeilen 36 statt 44 px – bewusste Ausnahme von der 44-px-Regel, WCAG
+     2.5.8 (24 px) bleibt erfüllt. Ein einzeiliger Titel steht mittig in genau 36 px, ein umbrochener läuft mit
+     Zeilenhöhe 1,25 und 6 px Polster (flex-wrap nur, damit align-content mittig setzen darf; der Titel bleibt mit
+     flex-basis 0 neben dem Symbol). Statt Abstand trennt eine feine Linie jede Zeile von der vorigen; zwischen einer
+     aufgeklappten Seite und ihrer ersten Unterseite liegt sie unter der Elternzeile. So beginnt jede Linie an der
+     Kante ihrer Zeile, rechts von der Führungslinie des Einzugs („│ ───“), und läuft nie durch ein Klappzeichen; vor
+     jedem weiteren Abschnitt der obersten Ebene steht eine kräftigere Linie statt der 6 px Luft. Nur im Seitenbaum der
+     Strömipedia (dort liegt die Liste in einer eigenen <ul> unter .tree) – der Ordnerbaum der Materialablage (.mat-tree)
+     bleibt bei 44 px. */
+  .tree > ul a { min-height: 36px; line-height: 1.25; flex-wrap: wrap; align-content: center; }
+  .tree > ul li, .tree > ul > li + li { margin: 0; }
+  .tree > ul li + li > .row { border-top: 1px solid var(--linie); }
+  .tree > ul li:not(.leaf, .collapsed) > .row { border-bottom: 1px solid var(--linie); }
+  .tree > ul > li + li > .row { border-top: 2px solid var(--linie); }
+  /* „⋯“ nur in der Zeile der geöffneten Seite – für eine andere Seite tippt man sie erst an, und ihr Titel bekommt die
+     Breite. In den übrigen Zeilen bleibt der Knopf unsichtbar für Tastatur und Vorlesehilfe erreichbar (Muster
+     .nur-vorlesen); hat er oder der Titel seiner Zeile den Tastaturfokus, steht er wieder da. */
+  .tree .row:not(:has(> a.active, :focus-visible)) > .row-menu { position: absolute; width: 1px; height: 1px; margin: -1px;
+    overflow: hidden; clip-path: inset(50%); opacity: 0; }
 }
 /* Wiki-Kopfzeile am Telefon: ☰, Umschalter, 💬, Teilen und ⋯ passten mit 44 px bei 344–360 px nicht in eine Zeile,
    „⋯“ stand allein in einer zweiten (Kopf 108 statt 62 px). „Teilen“ ist selten – am Telefon steht es im ⋯-Menü
