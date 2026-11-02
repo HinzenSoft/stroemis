@@ -184,11 +184,10 @@ def test_uebrige_module_statisch():
     for datei in ("app/static/js/wiki.js", "app/static/js/public.js"):
         t = lies(datei)
         assert '!e.target.closest("#wiki-menu")' in t and 'e.target.id !== "wiki-menu"' not in t, datei
-    for vorlage in ("app/templates/wiki_lesemodus.html", "app/templates/public.html"):
-        assert 'id="wiki-menu"><span aria-hidden="true">☰</span> Seiten</button>' in lies(vorlage), vorlage
-    # Strömipedia seit der Suchzeile (02.11.2026): nur „☰“ zu sehen, „Seiten“ zum Vorlesen.
-    assert 'id="wiki-menu"><span aria-hidden="true">☰</span><span class="nur-vorlesen">Seiten</span></button>' in lies(
-        "app/templates/wiki.html")
+    # Strömipedia, Lesemodus und public.html seit der Suchzeile (02.11.2026): nur „☰“ zu sehen, „Seiten“ zum Vorlesen.
+    for vorlage in ("app/templates/wiki.html", "app/templates/wiki_lesemodus.html", "app/templates/public.html"):
+        assert 'id="wiki-menu"><span aria-hidden="true">☰</span><span class="nur-vorlesen">Seiten</span></button>' in lies(
+            vorlage), vorlage
     print("Übrige Module (statisch) bestanden.")
 
 

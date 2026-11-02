@@ -119,12 +119,11 @@ def test_b14_schubladen():
     assert 'S.schubladeZustand(side, "#wiki-menu, #pg-baum");' in lies("app/static/js/wiki.js")
     assert 'S.schubladeZustand(side, "#wiki-menu");' in lies("app/static/js/public.js")
     # Seit der Suchzeile (02.11.2026, test_wiki_suchzeile.py) trägt nur noch die Leiste des Editors ein eigenes „☰“; in der
-    # Strömipedia steht „☰“ in der Suchzeile („Seiten“ nur zum Vorlesen), im Lesemodus weiter „☰ Seiten“.
+    # Strömipedia steht „☰“ in der Suchzeile („Seiten“ nur zum Vorlesen) – seit dem 02.11.2026 auch im Lesemodus.
     assert lies("app/static/js/wiki.js").count('aria-controls="wiki-side" aria-expanded="${side.classList.contains("open")}"') == 1
-    assert ('aria-controls="wiki-side" aria-expanded="false" id="wiki-menu"><span aria-hidden="true">☰</span><span '
-            'class="nur-vorlesen">Seiten</span></button>') in lies("app/templates/wiki.html")
-    assert ('aria-controls="wiki-side" aria-expanded="false" id="wiki-menu"><span aria-hidden="true">☰</span> Seiten</button>'
-            in lies("app/templates/wiki_lesemodus.html"))
+    for vorlage in ("app/templates/wiki.html", "app/templates/wiki_lesemodus.html"):
+        assert ('aria-controls="wiki-side" aria-expanded="false" id="wiki-menu"><span aria-hidden="true">☰</span><span '
+                'class="nur-vorlesen">Seiten</span></button>') in lies(vorlage), vorlage
     assert 'if (leiste.inert) leiste.setAttribute("aria-hidden", "true"); else leiste.removeAttribute("aria-hidden");' in lies(
         "app/material/static/material.js")
 

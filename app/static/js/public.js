@@ -8,8 +8,12 @@
   // Zurück schließt die offene Schublade (UI/UX vor dem Merge, A1) – im Lesemodus mit common.js, die öffentliche Seite hat es nicht.
   if (window.S && S.klassenVerlauf && side) {
     S.klassenVerlauf(side, "open", () => side.classList.remove("open"), () => getComputedStyle(side).position === "fixed");
-    // Zugeklappt inert und aria-hidden, „☰ Seiten“ mit aria-expanded (Gerätetest B14).
+    // Zugeklappt inert und aria-hidden, „☰“ mit aria-expanded (Gerätetest B14).
     if (S.schubladeZustand) S.schubladeZustand(side, "#wiki-menu");
+  } else if (side && $("#wiki-menu")) {
+    // public.html ohne common.js: „☰“ trägt seit der Suchzeile (02.11.2026) aria-expanded – es folgt der Schublade.
+    new MutationObserver(() => $("#wiki-menu").setAttribute("aria-expanded", String(side.classList.contains("open"))))
+      .observe(side, { attributes: true, attributeFilter: ["class"] });
   }
   const lesemodus = shell.dataset.modus === "lesemodus";
   /* Seiten liegen unter prefix + slug, die Übersicht unter start. Im Lesemodus sind das /stroemipedia/… und
@@ -58,7 +62,12 @@
     if (push) history.pushState({ slug }, "", adresse(slug) + ziel.slice(slug.length));
     show(slug);
   }
-  window.addEventListener("popstate", () => show(slugAusPfad()));
+  /* Ein Schritt im Verlauf zeigt eine andere Seite – die Trefferliste der Suchzeile gehört nicht dazu. (Im Lesemodus
+     schließt Zurück sie schon vorher als eigener Schritt, S.klassenVerlauf; public.html hat common.js nicht.) */
+  window.addEventListener("popstate", () => {
+    if (zeilenSuche) zeilenSuche.schliessen();
+    show(slugAusPfad());
+  });
 
   /* Klappzeichen wie im Seitenbaum der internen Strömipedia (wiki.js): ein gezeichneter Winkel, hier immer aufgeklappt
      (nach unten gedreht, app.css) – der öffentliche Baum klappt nicht. */
@@ -181,27 +190,22 @@
     wire(content);
   }
 
-  /* Suche im öffentlichen Bereich */
+  /* Artikel suchen – im Feld über dem Seitenbaum und unter 1024 px in der Suchzeile oben im Inhalt (wiki_lesemodus.html,
+     public.html; wie in der Strömipedia seit dem 02.11.2026, für den Lesemodus vom Nutzer am selben Tag bestätigt).
+     Dieselbe Logik wie dort (MD.sucheVerdrahten, MD.suchzeileEinrichten in markdown.js), nur über /api/public/search:
+     Gefunden werden ausschließlich freigegebene Seiten. */
   const searchInput = $("#wiki-search"), searchResults = $("#search-results");
-  let searchTimer;
-  if (searchInput) searchInput.addEventListener("input", () => {
-    clearTimeout(searchTimer);
-    const q = searchInput.value.trim();
-    if (q.length < 2) { searchResults.classList.add("hidden"); searchResults.innerHTML = ""; return; }
-    searchTimer = setTimeout(async () => {
-      let d;
-      try { d = await get(`/api/public/search?q=${encodeURIComponent(q)}`); } catch (e) { return; }
-      searchResults.classList.remove("hidden");
-      searchResults.innerHTML = d.results.length
-        ? d.results.map((r) => `<li><a href="${prefix}${esc(r.slug)}">${esc(r.title)}</a>${r.snippet ? `<div class="snip">${esc(r.snippet)}</div>` : ""}</li>`).join("")
-        : '<li class="muted">Keine Treffer.</li>';
-      searchResults.querySelectorAll("a").forEach((a) => a.addEventListener("click", (e) => {
-        e.preventDefault(); side.classList.remove("open");
-        searchResults.classList.add("hidden"); searchInput.value = "";
-        navigate(a.getAttribute("href").slice(prefix.length));
-      }));
-    }, 250);
-  });
+  const artikelsuche = {
+    suchen: async (q) => (await get(`/api/public/search?q=${encodeURIComponent(q)}`)).results,
+    adresse: (slug) => prefix + slug,
+    oeffnen: (href) => navigate(href.slice(prefix.length)),      // navigate schließt auch die Schublade
+    // Im Lesemodus mit der Meldung aus common.js; public.html lädt common.js nicht – dort bleibt es still wie bisher.
+    fehler: (text) => { if (window.S && S.toast) S.toast(text, true); },
+  };
+  MD.sucheVerdrahten(searchInput, searchResults, artikelsuche);
+  const suchzeile = $("#wiki-suchzeile");
+  const zeilenSuche = suchzeile && MD.sucheVerdrahten($("#zeilen-suche"), $("#zeilen-treffer"), { ...artikelsuche, zeile: suchzeile });
+  const zeileSteht = MD.suchzeileEinrichten(shell, suchzeile, zeilenSuche, searchInput);
 
   $("#wiki-menu").addEventListener("click", () => side.classList.toggle("open"));
   // Tippen daneben oder Escape schließt die Schublade – wie im angemeldeten Wiki.
@@ -209,12 +213,18 @@
     if (side.classList.contains("open") && !side.contains(e.target) && !e.target.closest("#wiki-menu")) side.classList.remove("open");
   }, true);
   document.addEventListener("keydown", (e) => { if (e.key === "Escape") side.classList.remove("open"); });
-  /* Suchfeld der Startseite: /stroemipedia?suche=<Begriff> – wie in wiki.js (sucheAusAdresse). */
+  /* Suchfeld der Startseite: /stroemipedia?suche=<Begriff> – wie in wiki.js (sucheAusAdresse): unter 1024 px ins Feld
+     der Suchzeile, deren Liste dann aufgeht (bis zum 02.11.2026 öffnete sich dafür die Schublade). */
   function sucheAusAdresse() {
     const q = new URLSearchParams(location.search).get("suche");
     if (q === null || !searchInput) return;
     history.replaceState(history.state, "", location.pathname + location.hash);
     if (!q.trim()) return;
+    if (zeileSteht()) {
+      zeilenSuche.feld.value = q.trim();
+      zeilenSuche.feld.dispatchEvent(new Event("input"));
+      return;
+    }
     searchInput.value = q.trim();
     if (getComputedStyle(side).position === "fixed") side.classList.add("open");
     searchInput.dispatchEvent(new Event("input"));
