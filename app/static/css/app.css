@@ -1087,9 +1087,7 @@ progress { width: 100%; height: 10px; accent-color: var(--rot); }
   .wiki-side { position: fixed; left: 0; top: var(--topbar); bottom: 0; width: min(360px, 90vw); transform: translateX(-105%); transition: transform .2s, visibility 0s .2s; visibility: hidden; z-index: 1100; box-shadow: var(--schatten-leiste); height: auto; }
   .wiki-side.open { transform: translateX(0); visibility: visible; transition: transform .2s; }
   .wiki-menu-btn { display: inline-flex; }
-  /* Sobald eine Seite offen ist, sitzt der Baum-Knopf in der Kopfzeile – die eigene Zeile
-     „☰ Seiten“ darüber entfällt und gibt dem Text 40 px zurück. */
-  .wiki-main:has(.wiki-head .baum-knopf) > .wiki-menu-btn { display: none; }
+  /* „☰“ in der Artikel-Leiste gibt es nur noch im Editor; sonst steht es in der Suchzeile (unten). */
   .wiki-head .kopfknopf.baum-knopf { display: inline-flex; }
   /* Hinter der offenen Schublade dunkelt die Seite ab – man sieht, dass sie darüber liegt, und
      ein Tippen daneben schließt sie (der Klick-Handler in wiki.js sieht „außerhalb“). */
@@ -1097,6 +1095,38 @@ progress { width: 100%; height: 10px; accent-color: var(--rot); }
     content: ""; position: fixed; inset: var(--topbar) 0 0 0; background: var(--abdunkeln-leicht); z-index: 1090;
   }
 }
+/* Suchzeile (Wunsch vom 02.11.2026: „eine ähnliche Leiste wie bei der Materialablage, die Suche soll Artikel suchen,
+   Zeile soll mitscrollen“; wiki.html, wiki.js sucheVerdrahten): Unter 1024 px steht oben im Inhalt eine Zeile mit „☰“
+   (öffnet den Seitenbaum; „Seiten“ nur zum Vorlesen) und dem Feld „Artikel suchen“, das die restliche Breite füllt. Sie
+   klebt unter der Kopfleiste wie die Suchzeile der Materialablage und ersetzt den Knopf „☰ Seiten“, das „☰“ in der
+   Artikel-Leiste und in der Schublade das Suchfeld über dem Baum (kein Feld doppelt). Die Treffer liegen als Liste
+   darunter über dem Text und rollen in sich. Im Editor steht sie nicht – dort bleiben „☰“ in seiner Leiste und die
+   Suche in der Schublade; ab 1024 px bleibt alles wie zuvor (Lesemodus: unverändert „☰ Seiten“). */
+.wiki-suchzeile { display: none; }
+@media (max-width: 1023px) {
+  body:not(.editing) .wiki-suchzeile {
+    display: flex; align-items: stretch; gap: 6px; position: sticky; top: var(--topbar); z-index: 45;
+    background: var(--weiss); margin: -28px 0 12px; padding: 8px 0;      /* bündig unter der Kopfleiste, wie geklebt */
+  }
+  .wiki-suchzeile > .wiki-menu-btn { flex: none; padding-left: 12px; padding-right: 12px; justify-content: center; align-items: center; }
+  .wiki-suchzeile > input[type=search] { flex: 1 1 auto; min-width: 0; margin: 0; }
+  body:not(.editing) .wiki-shell:has(.wiki-suchzeile) .wiki-side > :is(#wiki-search, #search-results) { display: none; }
+  /* Die Artikel-Leiste klebt direkt darunter: --wiki-suchzeile ist die gemessene Höhe der Zeile (wiki.js; 0, wo sie
+     nicht steht) – ohne Lücke und ohne Überdeckung, auch gedreht und mit größerer Schrift. */
+  body:not(.editing) .wiki-head { top: calc(var(--topbar) + var(--wiki-suchzeile, 0px)); }
+}
+.wiki-suchzeile > .zeilen-treffer {
+  position: absolute; top: 100%; left: 0; right: 0; margin: 0; max-height: var(--treffer-hoehe, 60vh);
+  overflow-y: auto; overscroll-behavior: contain; background: var(--weiss); border: 1px solid var(--linie);
+  border-radius: var(--radius); box-shadow: var(--schatten-menue);
+}
+.zeilen-treffer li:last-child { border-bottom: 0; }
+/* Wenig Höhe und offene Tastatur (--topbar 0): Die Zeile klebt allein am oberen Rand – das Feld, in das man tippt,
+   bleibt zu sehen –, die Artikel-Leiste rollt mit (unten); etwas weniger Luft wie in der Materialablage. */
+@media (max-height: 500px) and (max-width: 1023px) {
+  body:not(.editing) .wiki-suchzeile { padding: 4px 0; }
+}
+
 @media (max-width: 640px) {
   /* Der Pfad schrumpfte auf dem Telefon auf „Lang…“ – der Titel steht ohnehin direkt darunter. */
   .wiki-head:has(.btn-row) .krumen { display: none; }
@@ -1562,7 +1592,7 @@ details.accordion .accordion-body > :first-child { margin-top: 0; } details.acco
 
 /* --- Druckansicht ----------------------------------------------------------------- */
 @media print {
-  .bauchbinde, .wiki-side, .wiki-rail, .comment-fab, .wiki-menu-btn, .btn-row,
+  .bauchbinde, .wiki-side, .wiki-rail, .comment-fab, .wiki-menu-btn, .wiki-suchzeile, .btn-row,
   .ed-bubble, .ed-slash, .ed-ctx, #toast, .code-copy, .h-anchor, .page-icon,
   .th-sort, .praesenz, .rundknopf, .cbadge, .mode-toggle, .kopfknopf, .lesemodus-hinweis { display: none !important; }
   mark.cq { background: none; color: inherit; }
@@ -1907,8 +1937,9 @@ details:is(.menue, .mat-menue, .zeilenmenue)[open] > summary::after { transform:
 /* Sprungziele (Inhaltsverzeichnis, Kommentaranker) dürfen nicht unter der klebenden
    Bauchbinde und Kopfzeile landen – auch im Editor (seit dem Gerätetest 01.11.2026 springt das Inhaltsverzeichnis auch
    dort am Telefon). 72 statt 60 px: Die Leiste ist am Finger 62 px hoch, die Überschrift lag 2 px darunter. */
+/* Unter 1024 px kommt in der Leseansicht die Suchzeile darüber (--wiki-suchzeile, sonst 0). */
 .wiki-content h1, .wiki-content h2, .wiki-content h3, .wiki-content h4,
-.wiki-content h5, .wiki-content h6, .wiki-content [id],
+.wiki-content h5, .wiki-content h6, .wiki-content [id] { scroll-margin-top: calc(var(--topbar) + var(--wiki-suchzeile, 0px) + 72px); }
 .wiki-editor .toastui-editor-contents :is(h1, h2, h3, h4, h5, h6) { scroll-margin-top: calc(var(--topbar) + 72px); }
 /* Der Knopf in der Kopfzeile blendet die Gliederung aus; die rechte Spur behält ihre
    Breite, damit sich der Text dabei nicht verschiebt. */
@@ -2753,7 +2784,7 @@ dialog.us-dlg { width: min(640px, 96vw); }
   /* Der Baum reicht in den rechten Innenrand der Leiste (12 px): „⋯“ steht am Rand, so viel mehr Platz für jeden Titel.
      Die Liste selbst wird breiter, nicht nur der Knopf – sonst ragte „⋯“ aus seiner Zeile (Geräte-Prüfung, U). */
   .tree { margin-right: -12px; }
-  .wiki-side input[type=search] { min-height: 44px; }
+  .wiki-side input[type=search], .wiki-suchzeile > input[type=search] { min-height: 44px; }
   details.accordion > summary { min-height: 44px; display: flex; align-items: center; }
   /* Seitenbaum in der festen 260-px-Leiste (Telefon quer, Fold aufgeklappt, Tablet quer): Klappdreieck, „+“ und „⋯“
      mit je 44 px ließen dem Titel 52 px – alle Unterseiten hießen „Unt…“ (Browserprüfung P4-L1, B1). Je Zeile bleibt
@@ -2796,9 +2827,10 @@ dialog.us-dlg { width: min(640px, 96vw); }
    hängt an der Höhe, nicht an der Breite: Ein Tablet quer mit Tastatur ist nicht höher als ein Telefon. */
 @media (max-height: 500px) {
   .wiki-head, .wiki-head.editing-head { position: static; }
-  /* Sprungziele: Die Leiste liegt nicht mehr darüber, höchstens die Bauchbinde. */
+  /* Sprungziele: Die Leiste liegt nicht mehr darüber, höchstens die Bauchbinde (und unter 1024 px die Suchzeile). */
   .wiki-content h1, .wiki-content h2, .wiki-content h3, .wiki-content h4, .wiki-content h5, .wiki-content h6,
-  .wiki-content [id], .wiki-editor .toastui-editor-contents :is(h1, h2, h3, h4, h5, h6) { scroll-margin-top: calc(var(--topbar) + 8px); }
+  .wiki-content [id] { scroll-margin-top: calc(var(--topbar) + var(--wiki-suchzeile, 0px) + 8px); }
+  .wiki-editor .toastui-editor-contents :is(h1, h2, h3, h4, h5, h6) { scroll-margin-top: calc(var(--topbar) + 8px); }
 }
 html.tastatur .wiki-head, html.tastatur .wiki-head.editing-head { position: static; }
 /* Nutzerverwaltung zwischen 861 und 1100 px (Fold aufgeklappt, Tablet hochkant): Die Knöpfe „Bearbeiten“ und
