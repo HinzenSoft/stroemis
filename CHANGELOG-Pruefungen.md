@@ -811,3 +811,17 @@ Siehe CHANGELOG-Material.md, „Lieferung nach dem Merge, Teil B“.
 - Das Schloss eingefrorener Personen: title je Zeile bleibt, dazu ein „i“ an „Teilnehmende“ und „Bewertung“, sobald
   jemand eingefroren ist.
 Siehe CHANGELOG-Material.md, „Info-„i“ app-weit“.
+
+## Nachtrag (02.11.2026): Nachbesserung aus der zweiten Durchsicht vor dem Merge
+
+- **Kontosuche** (`GET /api/pruefungen/nutzer`): Name als Teil, E-Mail-Adresse nur ganz – als Teil ließ sie sich Zeichen
+  für Zeichen erraten. Ohne Treffer nach einem „@“ sagt die Suche, dass die Adresse nur vollständig zählt.
+- **Import-Vorschau:** je Ausbilder nur der Name des zugeordneten Kontos und „schon eingetragen“, keine Kontokennung.
+- **Lehrgang kopieren:** nur Ausbilder mit passendem Konto (aktiv, Stufe); die übrigen nennt die Meldung nach dem
+  Kopieren („Nicht übernommen – kein Konto mit Riegenkarten-Stufe: …“), der Dialog sagt „Referierende mit
+  Riegenkarten-Stufe“.
+- **Leitung:** Wer sich als Leitung im Dialog das Kennzeichen nimmt, bleibt Leitung in der eigenen Zeile (keine zweite).
+- **Schritt 34:** Das Startprotokoll nennt jede Verknüpfung (Lehrgang, Freitext → Konto) und die Summe getrennt nach
+  verknüpft, zusammengelegt und entfernt; Vorschau vor dem Merge mit `scripts/vor_merge_riegenkarten.py`.
+- **Leitstelle:** „Inhalte“ zählt angelegte Lehrgänge und eigene Kataloge; der Löschdialog nennt die Kataloge.
+Siehe CHANGELOG-Material.md, „Nachbesserung aus der zweiten Durchsicht vor dem Merge“.

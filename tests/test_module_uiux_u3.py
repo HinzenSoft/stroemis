@@ -200,7 +200,7 @@ def test_c4_c8_einstellungen_und_info():
         assert alt not in ein, alt
     # Info-Grenzfälle: Datenschutzsatz und ISC-Anleitung sichtbar, kein „i“ mehr.
     wiki = lies(WIKI)
-    assert '<h3 class="abgesetzt">Lesen einschränken</h3>\n      <p class="help">Normalerweise darf jeder Angemeldete' in wiki
+    assert '<h3 class="abgesetzt">Lesen einschränken</h3>\n      <p class="help">Normalerweise liest jeder mit Stufe in der Strömipedia' in wiki
     assert 'info("Lesen einschränken"' not in wiki
     rk = lies(RK)
     assert '<p class="help import-isc">Aus dem ISC: unter <strong>Dokumente → Checkliste Voraussetzungen (Excel)</strong>' in rk
