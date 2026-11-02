@@ -144,7 +144,7 @@ def test_b7_b8_b9_artikel_und_pruefungen():
     assert 'const empfZeile = empf ? `<p class="mat-banner-zeile">Empfohlen von ' in js
     # Am Titel nur die Statusmarke (seit 01.11.2026 bei einem verloren gemeldeten Artikel „verloren“).
     assert ('<h1><span class="mat-inv">${esc(a.inventory_no)}</span> ${verloren ? \'<span class="mat-status s-gesperrt '
-            'gross">verloren</span>\' : statusMarke(a.status, true)}</h1>') in js
+            'gross">verloren</span>\' : statusMarke(a.status, true)}${anleitungKopf("artikel")}</h1>') in js   # „i“ seit 02.11.
     assert "const JOURNAL_KURZ = 5;" in js and "journalHtml(a.journal, true, JOURNAL_KURZ)" in js
     assert 'aria-expanded="false" aria-controls="mat-journal">Alle ${eintraege.length} Einträge anzeigen</button>' in js
     seite = abschnitt(js, "const prueferHinweisSeite = () =>", ";\n")

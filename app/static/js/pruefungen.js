@@ -147,6 +147,9 @@
   const KRITERIEN_INFO = "Zusätzlich zur Beschreibung: einzeln abhakbare Punkte.";
   // Wortgleich mit api_pruefungen.KRITERIEN_EINGEFROREN.
   const KRITERIEN_EINGEFROREN = "Zu dieser Leistung gibt es Bewertungen von Personen mit vermerktem Lehrgangsergebnis – deren Prüfungsdaten sind eingefroren, deshalb lassen sich die Kriterien nicht mehr anlegen, ändern, umsortieren oder löschen. Die Lehrgangsleitung kann das Ergebnis aufheben.";
+  // Der ganze Leistungsdialog (Kleinigkeiten 02.11.2026): Bezeichnung, Zeitansatz und Beschreibung sperrt der Server mit
+  // derselben Bedingung wie die Kriterien (api_pruefungen.update_leistung, _LEISTUNG_BETROFFEN) – änderbar bleibt nichts.
+  const LEISTUNG_EINGEFROREN = "Zu dieser Leistung gibt es Bewertungen von Personen mit vermerktem Lehrgangsergebnis – deren Prüfungsdaten sind eingefroren, deshalb lassen sich Bezeichnung, Zeitansatz, Beschreibung und Kriterien nicht mehr ändern. Die Lehrgangsleitung kann das Ergebnis aufheben.";
   const eingefrorenInfo = (tns) => (tns.some((t) => t.eingefroren) ? info("eingefroren", `Eingefroren (Schloss am Namen): ${esc(EINGEFROREN)}${mehrDazu("eingefroren")}`) : "");
 
   /* --- Teilnehmende: Bild, Schloss, Ergebnis ------------------------------------------------ */
@@ -519,7 +522,7 @@
       </select>
       <label>Lehrgangsleitung und Referierende${info("Lehrgangsleitung und Referierende", `Mehrere Personen können Lehrgangsleitung sein – dafür den Haken „Leitung“ setzen. Die Leitung darf den Lehrgang
         bearbeiten, Stammdaten pflegen, Prüfungen löschen und das Lehrgangsergebnis vermerken; alle anderen prüfen und haken ab.${mehrDazu("ausbilder")}`)}</label>
-      <p class="help">Ausbilder ist nur, wer ein Konto mit Stufe in den Riegenkarten hat – suche die Person über Namen oder E-Mail-Adresse.</p>
+      <p class="help">Ausbilder ist nur, wer ein Konto mit Stufe in den Riegenkarten hat – suche die Person über Namen oder vollständige E-Mail-Adresse.</p>
       <div class="ausb-liste" id="ausb-liste">${(lg.ausbilder || []).map((a) => ausbilderZeileHtml(a)).join("")}</div>
       <datalist id="ausb-funktionen"><option value="Referierende:r"><option value="Seiltechnik"><option value="Wasser"><option value="Helfer:in"></datalist>
       <div class="btn-row"><button type="button" class="btn secondary small" id="ausb-plus"><span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Person<span class="k-anlegen"> anlegen</span></span></button></div>
@@ -627,7 +630,7 @@
   function renderListe() {
     S.titel([], "pruefungen");
     root.innerHTML = `
-      <div class="page-head"><h1>Riegenkarten</h1>${anleitungKopf("uebersicht")}
+      <div class="page-head"><h1>Riegenkarten${anleitungKopf("uebersicht", { satz: "Wie Lehrgänge, Bewertung und Kataloge in den Riegenkarten funktionieren, erklärt die Anleitung." })}</h1>
         ${darfAnlegen() ? `<div class="btn-row"><button class="btn secondary" data-act="lg-import">Import</button>
           <a class="btn secondary" href="/riegenkarten/kataloge">Kataloge</a>
           <button class="btn" data-act="lg-neu"><span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Lehrgang<span class="k-anlegen"> anlegen</span></span></button></div>` : ""}</div>
@@ -783,7 +786,7 @@
     const ls = k.leistungen || [];
     S.titel(k.titel, "pruefungen");
     root.innerHTML = `<a class="zurueck" href="/riegenkarten/kataloge">← Alle Kataloge</a>
-      <div class="page-head"><h1>${esc(k.titel)}</h1>${anleitungKopf("katalog")}
+      <div class="page-head"><h1>${esc(k.titel)}${anleitungKopf("katalog")}</h1>
         ${admin ? `<div class="btn-row">${S.menue({ art: "zeilenmenue", klein: false, eintraege: [
           { text: "Bearbeiten", attrs: `data-act="kat-edit" data-id="${k.id}"` },
           { text: "Löschen", attrs: `data-act="kat-del" data-id="${k.id}"` }] })}</div>` : ""}</div>
@@ -993,7 +996,7 @@
     const datum = lg.datum_von || lg.datum_bis ? esc(spanne(lg.datum_von, lg.datum_bis)) : "";
     root.innerHTML = `
       <a class="zurueck" href="/riegenkarten">← Alle Lehrgänge</a>
-      <div class="page-head"><h1>${esc(lg.titel)}</h1>${anleitungKopf("lehrgang")}
+      <div class="page-head"><h1>${esc(lg.titel)}${anleitungKopf("lehrgang")}</h1>
         ${lg.darf_leiten ? `<div class="btn-row">${S.menue({ klein: false, eintraege: [
           { text: "Bearbeiten", attrs: `data-act="lg-edit" data-id="${lg.id}"` },
           { text: "Import", attrs: `data-act="lg-import-in" data-id="${lg.id}"` }] })}</div>` : ""}</div>
@@ -1631,14 +1634,15 @@
   /* Die Kriterienliste einer BESTEHENDEN Leistung – ein eigener, per outerHTML ersetzbarer Rahmen,
      damit ein Antippen (anlegen/umbenennen/umsortieren/löschen) nur diesen Ausschnitt neu zeichnet
      und nicht den ganzen Dialog: Sonst gingen unfertig getippte Bezeichnung/Beschreibung verloren. */
-  function kriterienListeHtml(l) {
+  function kriterienListeHtml(l, ohneSatz) {
     const ks = l.kriterien || [];
     // Eingefrorene Bewertungen an der Leistung (kriterien_eingefroren vom Server, Entscheidung des Nutzers vom
     // 01.11.2026): die Kriterien nur zum Lesen, ein Satz statt „Kriterium anlegen“ – der Server lehnt mit 409 ab.
+    // ohneSatz: Der Dialog war schon beim Öffnen eingefroren, den Grund nennt der Satz über der Knopfzeile.
     if (l.kriterien_eingefroren) {
       return `<div id="krit-wrap">
         ${ks.length ? `<ul class="vor-liste krit-fest">${ks.map((k) => `<li>${esc(k.bezeichnung)}</li>`).join("")}</ul>` : ""}
-        <p class="help krit-gesperrt">${esc(KRITERIEN_EINGEFROREN)}</p>
+        ${ohneSatz ? (ks.length ? "" : '<p class="leerzustand">Keine Kriterien.</p>') : `<p class="help krit-gesperrt">${esc(KRITERIEN_EINGEFROREN)}</p>`}
       </div>`;
     }
     return `<div id="krit-wrap">
@@ -1652,24 +1656,31 @@
     </div>`;
   }
 
+  /* Eingefroren (kriterien_eingefroren schon beim Öffnen): Alles steht nur zum Lesen da, die Beschreibung als Text statt
+     im Editor; „Speichern“ ist ausgegraut (aria-disabled, fokussierbar), der Grund steht als Satz über der Knopfzeile –
+     vorher scheiterte „Speichern“ erst mit 409 (Kleinigkeiten 02.11.2026, Bitte bestätigen 3 der Modul-Nachträge). */
   function leistungDialog(l) {
     l = l || {};
     const neu = !l.id;
+    const fest = !neu && !!l.kriterien_eingefroren;
+    const nurLesen = fest ? " readonly" : "";
     dialogOeffnen(`<h2>${neu ? "Prüfungsleistung anlegen" : "Prüfungsleistung bearbeiten"}</h2>
       <label for="pl-bez">Bezeichnung</label>
-      <input type="text" id="pl-bez" value="${esc(l.bezeichnung)}" placeholder="z. B. Wurfsackwurf auf Ziel, Aufbau Flaschenzug 3:1" required>
+      <input type="text" id="pl-bez" value="${esc(l.bezeichnung)}" placeholder="z. B. Wurfsackwurf auf Ziel, Aufbau Flaschenzug 3:1" required${nurLesen}>
       <label for="pl-zeit">Zeitansatz${info("Zeitansatz", ZEITANSATZ_INFO + mehrDazu("zeitansatz"))} (mm:ss oder 300 für 3:00) – leer lassen, wenn es keine Sollzeit gibt</label>
       <input type="text" id="pl-zeit" class="zeitfeld" inputmode="numeric" placeholder="mm:ss" autocomplete="off"
-             value="${l.zeitansatz_sekunden != null ? fmtZeit(l.zeitansatz_sekunden) : ""}">
+             value="${l.zeitansatz_sekunden != null ? fmtZeit(l.zeitansatz_sekunden) : ""}"${nurLesen}>
       <label>Beschreibung – Ablauf</label>
-      <div id="pl-editor"></div>
+      ${fest ? `<div class="md pl-fest">${l.beschreibung_md ? md(l.beschreibung_md) : '<p class="leerzustand">Keine Beschreibung.</p>'}</div>`
+        : '<div id="pl-editor"></div>'}
       <label>Kriterienliste (optional)${info("Kriterienliste", `${KRITERIEN_INFO} Im Bewertungsdialog lässt sich jeder Punkt antippen –
         nicht bewertet, ✅ erfüllt, ❌ nicht erfüllt.${mehrDazu("kriterienliste")}`)}</label>
-      ${neu ? '<div id="krit-wrap"></div>' : kriterienListeHtml(l)}
+      ${neu ? '<div id="krit-wrap"></div>' : kriterienListeHtml(l, fest)}
+      ${fest ? `<p class="help knopfgrund" id="pl-grund" aria-live="polite">${esc(LEISTUNG_EINGEFROREN)}</p>` : ""}
       <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button>
-        <button class="btn" id="pl-save" type="button">${neu ? "Anlegen" : "Speichern"}</button></div>`,
+        <button class="btn" id="pl-save" type="button"${fest ? ' aria-disabled="true" aria-describedby="pl-grund"' : ""}>${neu ? "Anlegen" : "Speichern"}</button></div>`,
       (dlg, body) => {
-        const holen = mdEditorEinrichten(dlg, body, "#pl-editor", l.beschreibung_md, "pl-md");
+        const holen = fest ? () => l.beschreibung_md : mdEditorEinrichten(dlg, body, "#pl-editor", l.beschreibung_md, "pl-md");
         fokus($("#pl-bez", body));
         // Neu: die Kriterien sind nur ein lokaler Entwurf, bis die Leistung selbst existiert.
         // Bestehend: jede Änderung persistiert sofort über die eigenen Kriterien-Endpunkte.
@@ -1744,6 +1755,14 @@
         $("#pl-save", body).onclick = async (ev) => {
           const knopf = ev.currentTarget;
           if (knopf.disabled) return;
+          // Ausgegraut: Ein Klick hebt nur den Grund hervor und lässt ihn erneut vorlesen (wie in der Materialablage).
+          if (knopf.getAttribute("aria-disabled") === "true") {
+            const grund = $("#pl-grund", body);
+            grund.classList.add("betont");
+            grund.textContent = "";
+            setTimeout(() => { grund.textContent = LEISTUNG_EINGEFROREN; }, 50);
+            return;
+          }
           const bez = $("#pl-bez", body).value.trim();
           if (!bez) return S.feldFehler($("#pl-bez", body), "Bitte eine Bezeichnung angeben.");
           const z = zeitLesen($("#pl-zeit", body).value);

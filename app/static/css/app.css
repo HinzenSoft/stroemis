@@ -1155,15 +1155,8 @@ progress { width: 100%; height: 10px; accent-color: var(--rot); }
   text-align: left; cursor: pointer; }
 @media (hover: hover) and (pointer: fine) { .lnk:hover { text-decoration: underline; } }
 @media (pointer: coarse) { .lnk { padding-top: 14px; padding-bottom: 14px; margin-top: -14px; margin-bottom: -14px; } }
-/* Anleitung in der Strömipedia (Nachtrag vom 01.11.2026, S.anleitung.kopf in common.js): der Textlink „Anleitung“ direkt
-   hinter der Überschrift einer Ansicht – wie .mat-kopf-anleitung der Materialablage; die Knöpfe des Kopfs bleiben
-   rechts. inline-block: Die 44 px unter Touch (.lnk) rechnen mit der Zeilenhöhe. */
-.kopf-anleitung { display: inline-block; flex: none; }
-:is(.page-head, .wiki-head) > .kopf-anleitung { margin-right: auto; }
-.panel-head > .kopf-anleitung { align-self: center; }
-/* Am Finger hält der Link seine 44 px im Fluss (ohne die negativen Ränder von .lnk): Bricht die Knopfzeile des Kopfs
-   unter Titel und Link um, lag seine Fläche sonst 3–6 px über „Kataloge“ bzw. „Mehr“ (st-geraete „K“, 01.11.2026). */
-@media (pointer: coarse) { .page-head > .kopf-anleitung { margin-top: 0; margin-bottom: 0; } }
+/* Anleitung in der Strömipedia (S.anleitung.kopf in common.js): seit dem 02.11.2026 ein „i“ in der Überschrift (das
+   Muster .info) statt des Textlinks „Anleitung“ dahinter – keine eigenen Regeln mehr. */
 /* „Neue Seite“ mit Vorlagen (wiki.js neueSeite): eine Zeile je Wahl. */
 fieldset.vorlagen-wahl { border: 1px solid var(--linie); padding: 4px 12px 8px; margin: 12px 0 4px; max-height: 50vh; overflow: auto; }
 fieldset.vorlagen-wahl legend { font-weight: 700; padding: 0 4px; }
@@ -1501,9 +1494,19 @@ details.accordion .accordion-body > :first-child { margin-top: 0; } details.acco
   .wiki-shell.uebersicht > .wiki-main { grid-column: 2 / -1; }
   .wiki-shell.uebersicht > .wiki-rail { display: none; }
 }
-.wiki-karten { list-style: none; margin: 0 0 8px; padding: 0; display: grid; gap: 12px;
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 240px), 1fr)); }
-.wiki-karte { border: 1px solid var(--linie); padding: 10px 14px 12px; min-width: 0; overflow-wrap: break-word; }
+/* Eine Regel für alle drei Stellen (Kleinigkeiten 02.11.2026, Nutzer: „Hier die boxen auch zentriert damit es einheitlich
+   ist“): feste Spaltenbreite wie die Kacheln der Startseite, volle Reihen füllen die Breite, eine nicht volle Reihe steht
+   MITTIG (vorher Raster mit auto-fill: der Rest links, rechts leer). Die Spaltenzahl folgt der Breite der Liste selbst
+   (Container „karten“ – gilt so auf der Übersicht, im Lesemodus und auf der Startseite gleich), mit denselben Grenzen
+   wie das frühere auto-fill ab 240 px: 2 Spalten ab 492 px, 3 ab 744, 4 ab 996, 5 ab 1248 (n × 240 + (n − 1) × 12). */
+.wiki-karten { list-style: none; margin: 0 0 8px; padding: 0; container: karten / inline-size;
+  display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; }
+.wiki-karte { --spalten: 1; flex: 0 0 calc((100% - (var(--spalten) - 1) * 12px) / var(--spalten));
+  border: 1px solid var(--linie); padding: 10px 14px 12px; min-width: 0; overflow-wrap: break-word; }
+@container karten (min-width: 492px) { .wiki-karte { --spalten: 2; } }
+@container karten (min-width: 744px) { .wiki-karte { --spalten: 3; } }
+@container karten (min-width: 996px) { .wiki-karte { --spalten: 4; } }
+@container karten (min-width: 1248px) { .wiki-karte { --spalten: 5; } }
 .wiki-karte > :is(h2, h3) { font-size: 1.05rem; margin: 0; border: 0; padding: 0; }
 .wiki-karte > :is(h2, h3) a, .wiki-karte li a { text-decoration: none; }
 @media (hover: hover) and (pointer: fine) { .wiki-karte a:hover { text-decoration: underline; } }
@@ -2957,17 +2960,16 @@ main.start { container: start / inline-size; }
 .start-suche { display: flex; gap: 6px; flex: 1 1 330px; max-width: 420px; margin-left: auto; }
 .start-suche input { flex: 1 1 auto; min-width: 0; }
 @container start (max-width: 559px) { .start-suche { flex-basis: 100%; max-width: none; margin-left: 0; } }
-/* Kacheln und Karten der Startseite: feste Spaltenbreite (--spalten), eine nicht volle Reihe steht MITTIG statt links
-   mit leeren Spalten daneben (Nutzer 02.11.2026: „zentriert, wenn nicht so viele angezeigt werden, dass die ganze Breite
-   genutzt wird“) – etwa zwei Module eines Materialwarts am Rechner oder die fünfte Kachel auf dem Tablet. */
-.start-kacheln, .start-wiki .wiki-karten { --spalten: 1; display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; }
+/* Kacheln der Startseite: feste Spaltenbreite (--spalten), eine nicht volle Reihe steht MITTIG statt links mit leeren
+   Spalten daneben (Nutzer 02.11.2026: „zentriert, wenn nicht so viele angezeigt werden, dass die ganze Breite genutzt
+   wird“) – etwa zwei Module eines Materialwarts am Rechner oder die fünfte Kachel auf dem Tablet. Die Karten der
+   Strömipedia darunter folgen seit den Kleinigkeiten vom 02.11.2026 der gemeinsamen Regel für .wiki-karten (oben). */
+.start-kacheln { --spalten: 1; display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; }
 .start-kacheln { margin: 0 0 6px; }
-.start-kacheln > .start-kachel, .start-wiki .wiki-karten > .wiki-karte {
-  flex: 0 0 calc((100% - (var(--spalten) - 1) * 12px) / var(--spalten)); }
-@container start (min-width: 560px) { .start-kacheln, .start-wiki .wiki-karten { --spalten: 2; } }
-@container start (min-width: 744px) { .start-wiki .wiki-karten { --spalten: 3; } }
+.start-kacheln > .start-kachel { flex: 0 0 calc((100% - (var(--spalten) - 1) * 12px) / var(--spalten)); }
+@container start (min-width: 560px) { .start-kacheln { --spalten: 2; } }
 @container start (min-width: 1100px) {
-  .start-kacheln, .start-wiki .wiki-karten { --spalten: 4; }
+  .start-kacheln { --spalten: 4; }
   .start-kacheln[data-anzahl="5"] { --spalten: 5; }
 }
 .start-kachel { min-width: 0; padding: 10px 14px 12px; border: 1px solid var(--linie); border-top: 4px solid var(--anthrazit);

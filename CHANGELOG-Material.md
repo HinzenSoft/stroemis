@@ -69,6 +69,7 @@ Geschichte stehen. Schemaversion nach der Nachbesserung vor dem Merge: 30; mit d
 | Verlust melden statt Sperren | Artikelseite: „Verlust melden“ (Menü „Mehr“ des Prüfers, Dialog ohne Grundauswahl) statt „Sperren“; ohne Prüfung sperrt der Server nur noch mit „verlust“ und „rueckruf“, „sturz“/„beschaedigung“ 400 mit Hinweis auf „Mangel melden“; ältere Sperren bleiben lesbar; Banner und Marke „verloren“ am Artikel | gebaut 01.11.2026 (kein Schemaschritt), Zweig verlust |
 | Nachbesserung aus der zweiten Durchsicht vor dem Merge | Strömipedia: Verschieben nur, wer die Seite in den Papierkorb legen darf (Entscheidung des Nutzers), kein „+“/„Unterseite anlegen“/„Duplizieren“ im freigegebenen Abschnitt, Editor hält bei 403 an; Riegenkarten: Kontosuche nur mit ganzer E-Mail-Adresse, Kopie nur mit passenden Ausbildern, keine zweite Leitungszeile; Anmeldung springt zum Ziel, alte Bildlinks der Subdomain; „Zurück“ nach dem Abmelden; Leitstelle: Inhalte mit Lehrgängen/Katalogen, Freigabe-Toast; Schritt 34 protokolliert jede Verknüpfung; README „Inbetriebnahme“ (Merge-Befehl, Kontrollen) und Werkzeug `scripts/vor_merge_riegenkarten.py` | gebaut 02.11.2026 (kein Schemaschritt, Schema bleibt 34), zur Freigabe |
 | Startseite über alle Module | „/“ für jedes Konto mit Modul: Kacheln je Modul mit Zahlen, die zum Handeln führen (Materialablage wie ihre Übersicht), „Zuletzt besucht“ und „Neu und geändert“ über die Module, Abschnitte der Strömipedia als Karten (auch auf ihrer Übersicht und im Lesemodus), Suchfeld der Strömipedia; Logo und Anmeldung führen dorthin | gebaut 02.11.2026 (kein Schemaschritt, Merker in `mat_meta`), Fotos vor dem Push |
+| Kleinigkeiten aus dem Artikel-Nachzug | Strömipedia: Sprung zum Anker bleibt oben, auch wenn Bilder darüber nachladen, Gliederung markiert den angesprungenen Abschnitt; Editor meldet entzogene Berechtigung als „keine Berechtigung mehr“; Vorlagen auch über „+“ und „Erste Seite anlegen“; Ersteller und Bearbeiter nur mit Stufe (Server); Riegenkarten: Leistungsdialog bei eingefrorenen Bewertungen nur zum Lesen mit Satz und ausgegrautem „Speichern“, Hilfetext Ausbilder; Ankerplätze: „Bild bearbeiten“ speichert nur Geändertes; Materialablage: „verloren“ in Meine PSA, Rückruf-Dialog „wegen Rückruf sperren“; alle Module: Anleitung als „i“ an der Überschrift statt Textlink „Anleitung“ und blauem Hinweiskasten; Karten der Strömipedia-Übersicht mittig wie auf der Startseite | gebaut 02.11.2026 (kein Schemaschritt) |
 
 ## Abgleich mit dem Bestand (vor Lieferung 1)
 
@@ -10891,3 +10892,106 @@ bleibt 34). Zweig `startseite` auf `sammel`.
 `test_module_pwa_kontakt.py` (die frühere Startweiche und „Zur Strömipedia“), `test_material_ueberblick.py` (die
 Führungskraft „nur lesend“: die Merker „start:…“ in `mat_meta` zählen wie der Lebenslauf-Zähler nicht als Änderung –
 das Öffnen einer Artikelseite merkt sie für „Zuletzt besucht“).
+
+## Kleinigkeiten aus dem Artikel-Nachzug (02.11.2026)
+
+Freigabe des Nutzers „umsetzen“ für die Liste planung/wiki-module/kleinigkeiten_nach_artikeln.md (Punkte 1–10, Belege in
+den Berichten der vier Artikel); Auftrag planung/wiki-module/auftrag_kleinigkeiten.md. Kein Schemaschritt. Alle Module.
+
+**Strömipedia**
+1. **Sprung zum Anker** (`markdown.js scrollToHash`): Bilder über dem Ziel haben vor dem Laden keine Höhe
+   (`loading="lazy"`, die Maße kennt der Text nicht); laden sie nach dem Sprung, schoben sie die Überschrift nach unten –
+   die Verankerung des Browsers fing das nur zum Teil ab. Neu `ankerHalten`: Jedes fertig geladene (oder gescheiterte)
+   Bild über dem Ziel richtet es erneut oben aus – nur solange niemand selbst rollt, tippt oder eine Taste drückt
+   (`wheel`, `touchstart`, `pointerdown`, `keydown`), der Anker in der Adresse derselbe ist und höchstens 10 s. Bildmaße
+   vorab setzen ginge nur mit gespeicherten Maßen je Bild (Schema) – nicht nötig. Die Gliederung (`tocScrollspy`)
+   nimmt als Grenze den Sprungabstand der Überschriften (`scroll-margin-top` + 8 px, mindestens 120 px) statt fest
+   120 px: Ein Sprung legt die Überschrift bei 124 px ab (Kopfleiste 52 + 72), markiert war deshalb der Abschnitt davor.
+   **Gemessen** (Artikel „Riegenkarten“ der Lieferung 6906e13, 1280 × 900, Zwischenspeicher aus, Abstand der Überschrift
+   zum oberen Rand 5 s nach dem Laden; als Redakteurin und im Lesemodus gleich): `#katalogseite` 296 → 124,
+   `#stoppuhr` 754 → 124, `#kriterienliste` 551 → 124, `#eingefroren` 319 → 124, `#leitung-und-referierende-eintragen`
+   754 → 124, `#die-lehrgangsseite` 124 → 124; markiert war jedes Mal ein anderer Abschnitt, jetzt das Ziel. Bei
+   390 × 844 (Telefon) nachher ebenso alle 124 mit dem Ziel markiert. Gegenprobe mit gedrosseltem Netz: Wer nach dem
+   Sprung selbst rollt, bleibt, wo er hingerollt hat.
+2. **Herzschlag im Editor:** Wird beim Schreiben die Bearbeitungsfreigabe entzogen, meldete der nächste Herzschlag
+   „Die Verbindung war zu lange unterbrochen – inzwischen bearbeitet Jemand anderes die Seite“. `POST /api/wiki/praesenz`
+   liefert jetzt `darf_schreiben` (= `can_edit`); `false` führt in denselben Weg wie das 403 des Speicherns
+   (`bearbeitungVerweigert`: nichts mehr speichern, Text bleibt, Rückfrage beim Verlassen): Toast „Du darfst diese Seite
+   nicht mehr bearbeiten. Dein Text steht noch im Editor – kopiere ihn, bevor du die Seite verlässt.“, Stand „Keine
+   Berechtigung mehr“ (mit ungespeicherten Änderungen „Nicht gespeichert – keine Berechtigung mehr“). Ist die Stufe ganz
+   weg, antwortet der Herzschlag 403 – derselbe Weg mit der Meldung des Servers („Für dein Konto ist die Strömipedia
+   nicht freigeschaltet. …“). „… bearbeitet jetzt“ bleibt für den Fall, dass wirklich jemand anderes den Schreibplatz hat.
+3. **Vorlagen auch über „+“ und „Erste Seite anlegen“:** Beide rufen jetzt `neueSeite(parentId)` wie „Neue Seite“ und
+   „Unterseite anlegen“ (Dialog „Neue Seite“ mit „Beginnen mit“, ohne Vorlagen gleich der leere Editor); „+“ schließt
+   dabei die Schublade wie „Neue Seite“. Am Finger gibt es das „+“ im Baum nicht (dort „⋯“ → „Unterseite anlegen“). Eine
+   Empfehlung – Bitte des Nutzers um Bestätigung steht aus.
+4. **Ersteller und Bearbeiter nur mit Stufe:** `PUT /api/wiki/pages/<id>/creator` nimmt nur Konten mit Stufe in der
+   Strömipedia (wie die Auswahl „Ersteller ändern“, `users_for_sharing`), sonst 400 „Dieses Konto hat keine Stufe in der
+   Strömipedia und kann nicht Ersteller werden. …“ (bleibt der Ersteller derselbe, ändert sich nichts).
+   `PUT …/editors` lehnt neu gewählte Konten ohne Stufe mit 400 ab („Ein gewähltes Konto hat …“ bzw. „n gewählte
+   Konten haben keine Stufe in der Strömipedia – ohne sie wirkt die Freigabe nicht. …“) statt sie still zu speichern;
+   wer schon freigegeben ist und die Stufe verloren hat, bleibt stehen, bis man ihn abwählt (der Dialog zeigt ihn mit
+   Vermerk und schickt ihn mit). Die Meldungen nennen keine Namen (sonst verrieten sie zu jeder Kennung den Namen).
+   Offene Kontoanfragen und deaktivierte Konten fallen wie bisher still heraus.
+5. **README:** „In den Papierkorb oder endgültig löschen kann ein Mitglied …“ → „… ein Redakteur nur eigene Seiten und nur
+   Teilbäume ohne Seiten anderer Ersteller; ein Mitglied löscht keine Seiten …“ (`can_delete`).
+
+**Riegenkarten** (Nachtrag in CHANGELOG-Pruefungen.md)
+6. Hilfetext im Ausbilder-Dialog: „suche die Person über Namen oder vollständige E-Mail-Adresse“.
+7. **Leistungsdialog bei eingefrorenen Bewertungen:** `update_leistung` sperrt Bezeichnung, Beschreibung und Zeitansatz
+   mit derselben Bedingung wie die Kriterien (`_LEISTUNG_BETROFFEN`) – an einer solchen Leistung ist nichts mehr
+   änderbar. Ist `kriterien_eingefroren` beim Öffnen gesetzt, stehen Bezeichnung und Zeitansatz schreibgeschützt da, die
+   Beschreibung als Text statt im Editor, die Kriterien als Liste; über der Knopfzeile der Satz „Zu dieser Leistung gibt
+   es Bewertungen von Personen mit vermerktem Lehrgangsergebnis – deren Prüfungsdaten sind eingefroren, deshalb lassen
+   sich Bezeichnung, Zeitansatz, Beschreibung und Kriterien nicht mehr ändern. Die Lehrgangsleitung kann das Ergebnis
+   aufheben.“; „Speichern“ ist ausgegraut (`aria-disabled`, fokussierbar, `aria-describedby` auf den Satz) – ein Klick
+   hebt den Satz hervor und schickt nichts. Vorher scheiterte „Speichern“ erst mit 409. Wird während der Dialog offen
+   ist ein Ergebnis vermerkt, bleibt die 409 mit Klartext.
+
+**Ankerplätze**
+8. **„Bild bearbeiten“** schickt nur die Felder, die im Formular geändert wurden (`bildAenderungen` gegen den Stand beim
+   Öffnen; die Position wie bisher nur bei Änderung). Vorher schrieb jedes Speichern „Höhe ü. NN“ auf eine Nachkommastelle
+   gerundet und die Aufnahmezeit ohne Sekunden zurück – auch wenn man nur den Titel änderte. Leere Zahlenfelder gehen wie
+   bisher als „löschen“ hinaus.
+
+**Materialablage**
+9. **Meine PSA:** Ein verloren gemeldeter Artikel trägt am Titel der Karte die Marke „verloren“ wie auf der Artikelseite
+   (vorher „gesperrt“).
+10. **Rückruf-Dialog:** Titel „M-… wegen Rückruf sperren“, Knopf „Wegen Rückruf sperren“, Toast „M-… wegen Rückruf
+    gesperrt“ (vorher „M-… sperren“, „Sperren“, „gesperrt“). Der Banner-Knopf bleibt „Sperren (Rückruf)“.
+
+**Alle Module (Nachtrag Punkt 11, Wunsch des Nutzers: „Füge die Anleitungen einheitlich in einem i bei der Überschrift
+hinzu“)**
+11. **Anleitung als „i“ an der Überschrift:** Der Textlink „Anleitung“ hinter der Überschrift (`S.anleitung.kopf` in
+    common.js für Strömipedia, Ankerplätze, Riegenkarten; `anleitungKopf` in material.js) wird ein Info-„i“ IN der
+    Überschrift (`S.info`, Muster der Designsprache: Darüberfahren, Fokus, Antippen mit 44 px, Esc): ein Satz, worum es
+    geht, und der Link „Anleitung in der Strömipedia öffnen“ (neuer Tab; in der Strömipedia selbst im selben Tab). Ziele,
+    Anker und Rechte unverändert (app/anleitung.py, nur freigegebene Seiten); ohne Ziel kein „i“. Der blaue Hinweiskasten
+    „Anleitung zur Materialablage“ oben auf der Übersicht entfällt – sein Satz steht jetzt im „i“ an „Materialablage“;
+    das Willkommen beim ersten Besuch bleibt (Satz „Den Weg dorthin findest du jederzeit im „i“ an der Überschrift der
+    Übersicht.“). Stellen: Strömipedia-Übersicht, Seitenleiste der Ankerplätze (Alben, Album), Riegenkarten
+    (Lehrgangsliste, Lehrgangsseite, Katalogseite), Materialablage (Übersicht und die 15 Seiten mit bisherigem Textlink:
+    Prüfungen, Abgeschlossene Prüfdurchgänge, Ordner, Jahresbericht ×2, Artikel, Katalog, Produkt, Formular, Suche,
+    Prüfung beginnen, Prüfung, Prüfdurchgang, Produktmeldungen, Meine PSA). Keine dieser Überschriften hatte schon ein „i“
+    (die mit „i“ – etwa „Bestand“, „Artikel anlegen“, „Änderungsanträge“, „Prüfungsleistungskataloge“ – tragen den Link
+    wie bisher als „Mehr dazu in der Strömipedia“). Unverändert: Menüeinträge („Anleitung zur Strömipedia“ im „⋯“ einer
+    Seite, „Anleitung zum Editor“), „Mehr dazu in der Strömipedia“ in den übrigen „i“ und in der Hilfe-Box von „Echtheit
+    prüfen“. Weg: die Regeln für den Textlink (`.kopf-anleitung` in app.css, die Lehrgangszeile in pruefungen.css,
+    `.mat-kopf-anleitung` bis auf „Echtheit prüfen“, `.mat-anleitung-hinweis` in material.css).
+
+**Strömipedia (Nachtrag Punkt 12, Nutzer: „Hier die boxen auch zentriert damit es einheitlich ist“)**
+12. **Karten der Übersicht mittig:** Eine gemeinsame Regel für `.wiki-karten` (Übersicht, Lesemodus, Startseite): Flex mit
+    fester Spaltenbreite (`--spalten`) wie die Kacheln der Startseite, eine nicht volle Reihe steht mittig; die
+    Spaltenzahl folgt der Breite der Liste selbst (Container `karten`) mit den Grenzen des früheren auto-fill ab 240 px:
+    2 ab 492 px, 3 ab 744, 4 ab 996, 5 ab 1248. **Gemessen** (Breite der Liste / Karte, Rand der letzten Reihe links |
+    rechts): Übersicht 1280: 853 / 276, vorher 0 | 577 → nachher 288 | 288; 1920: 1180 / 286, 0 | 298 → 149 | 149; Tablet
+    800: 737 / 363, 0 | 375 → 187 | 187; Telefon 390: 358 / 358, eine Spalte wie vorher. Lesemodus 1280: 0 | 288 →
+    144 | 144; 1920: 0 | 894 → 447 | 447; 800: 0 | 375 → 187 | 187. Startseite unverändert (1280/1920: 4 + 2 mittig,
+    800: 3 + 3, 390: eine Spalte); bei einer Liste von 492–559 px stehen dort jetzt 2 statt 1 Karte, von 996–1099 px 4
+    statt 3 (vorher eigene Grenzen 560/744/1100 der Startseite).
+
+**Tests**: neu `tests/test_module_kleinigkeiten.py` (Ankersprung und Gliederung mit node nachgestellt, Herzschlag mit
+`darf_schreiben` und 403, Ersteller und Bearbeiter, Leistungsdialog, `bildAenderungen` mit node und der Server ohne
+Rundungsverlust, Texte); angepasst `test_module_anleitung.py` (`kriterienListeHtml(l, ohneSatz)`, „i“ statt Textlink),
+`test_material_anleitung.py` und `test_material_textbreite.py` (kein Hinweiskasten mehr), `test_module_startseite.py`
+(Karten über die gemeinsame Regel) und `test_material_verlust_melden.py` (Texte des Rückruf-Dialogs).

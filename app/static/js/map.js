@@ -165,18 +165,13 @@
   }
 
   /* --- Seitenleiste ------------------------------------------------------ */
-  /* thema: „Anleitung“ in der Strömipedia hinter dem Titel der Leiste (Nachtrag vom 01.11.2026, S.anleitung; nur, wenn
-     das Konto die Seite lesen darf) – die Liste der Alben führt zum Artikel „Ankerplätze“, ein Album zu „Alben“. Die
+  /* thema: Anleitung in der Strömipedia als „i“ am Titel der Leiste (Nachtrag vom 01.11.2026, S.anleitung; seit dem
+     02.11.2026 „i“ statt Textlink; nur, wenn das Konto die Seite lesen darf) – die Liste der Alben führt zum Artikel „Ankerplätze“, ein Album zu „Alben“. Die
      Karte selbst hat keinen Seitenkopf: In der Werkzeugleiste ist am Telefon kein Platz, und „Alben“ ist ein Tipp. */
   function openPanel(title, html, liste, thema) {
     panelTitle.textContent = title;
-    const alt = $("#panel-anleitung");
-    if (alt) alt.remove();
     const link = thema ? S.anleitung.kopf(thema) : "";
-    if (link) {
-      panelTitle.insertAdjacentHTML("afterend", link);
-      panelTitle.nextElementSibling.id = "panel-anleitung";
-    }
+    if (link) panelTitle.insertAdjacentHTML("beforeend", link);
     panelBody.innerHTML = html;
     // Fuß mit den Kontaktadressen (_fuss.html): Unter der Vollbild-Karte hätte er keinen Platz – er stünde außerhalb des
     // Bilds oder läge über der Karte. Er kommt ans Ende des Panels, wo man ohnehin liest (Alben, Album).
@@ -853,6 +848,21 @@
     return i >= 0 && n ? `${art} ${i + 1} von ${n}` : `${art} ohne Titel`;
   }
 
+  /* „Bild bearbeiten“ schickt nur, was im Formular geändert wurde (Kleinigkeiten 02.11.2026): Manche Felder zeigen den
+     Wert gekürzt – „Höhe ü. NN“ auf eine Nachkommastelle, die Aufnahmezeit ohne Sekunden –, und jedes Speichern schrieb
+     bisher die gekürzte Fassung zurück, auch wenn man nur den Titel geändert hatte. Verglichen wird mit dem, was das
+     Formular beim Öffnen zeigte; leere Zahlenfelder gehen als null (löschen) hinaus. Die Position regelt der Aufrufer. */
+  const BILD_FELDER = { title: "#p-title", note: "#p-note", details: "#p-details", taken_at: "#p-taken",
+                        height_m: "#p-height", altitude: "#p-alt" };
+  function bildAenderungen(anfang, jetzt) {
+    const body = {};
+    for (const k of Object.keys(BILD_FELDER)) {
+      if (jetzt[k] === anfang[k]) continue;
+      body[k] = (k === "height_m" || k === "altitude") && !jetzt[k] ? null : jetzt[k];
+    }
+    return body;
+  }
+
   function openLightbox(i) {
     state.lbIndex = i;
     renderLightbox();
@@ -936,13 +946,12 @@
     if (next) next.onclick = () => { state.lbIndex = (state.lbIndex + 1) % a.photos.length; renderLightbox(); };
 
     if (editing) {
+      const g = (id) => lbBody.querySelector(id).value.trim();
+      const formular = () => Object.fromEntries(Object.entries(BILD_FELDER).map(([k, sel]) => [k, g(sel)]));
+      const anfang = formular();
       $("#p-cancel").onclick = () => renderLightbox(false);
       $("#p-save").onclick = async () => {
-        const g = (id) => lbBody.querySelector(id).value.trim();
-        const body = {
-          title: g("#p-title"), note: g("#p-note"), details: g("#p-details"), taken_at: g("#p-taken"),
-          height_m: g("#p-height") || null, altitude: g("#p-alt") || null,
-        };
+        const body = bildAenderungen(anfang, formular());
         const lat = g("#p-lat").replace(",", "."), lon = g("#p-lon").replace(",", ".");
         // Die Position geht nur mit, wenn sie im Formular geändert wurde: Erst dann ist sie „(manuell)“ – sonst bleibt die
         // Herkunft (aus dem Bild) stehen, auch wenn man nur den Titel ändert (Entscheidung des Nutzers vom 01.11.2026).

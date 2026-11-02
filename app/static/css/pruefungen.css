@@ -447,6 +447,11 @@ dialog.pruef-dlg { width: min(720px, 96vw); }
 .medien-knopf { width: 100%; justify-content: center; min-height: 48px; white-space: normal; }
 .pruef-dlg .up-stand { margin-top: 8px; }
 .pruef-dlg .up-stand progress { margin-top: 4px; }
+/* Leistungsdialog bei eingefrorenen Bewertungen (Kleinigkeiten 02.11.2026): die Beschreibung als Text statt im Editor,
+   der Grund des ausgegrauten „Speichern“ als Satz über der Knopfzeile – wie .mat-knopfgrund in der Materialablage. */
+#dlg .pl-fest { border: 1px solid var(--linie); border-radius: var(--radius); padding: 6px 10px; }
+#dlg .knopfgrund { margin: 10px 0 0; color: var(--anthrazit); }
+#dlg .knopfgrund.betont { font-weight: 700; color: var(--rot-auf-flaeche); }
 
 /* --- Mängel / Feedback -------------------------------------------------------------------- */
 .maengel-filter { display: grid; grid-template-columns: 1fr 1fr auto; gap: 8px 10px; align-items: end; margin: 0 0 14px; }
@@ -563,12 +568,6 @@ body:has(.pruef.druck) #toast { top: 12px; }
   .pruef[data-ansicht=lehrgang] .page-head { flex-wrap: nowrap; align-items: flex-start; }
   .pruef[data-ansicht=lehrgang] .page-head h1 { min-width: 0; }
   .pruef[data-ansicht=lehrgang] .page-head .btn-row { width: auto; flex: none; margin-left: auto; }
-  /* „Anleitung“ (Nachtrag 01.11.2026) steht dort unter dem Titel, „Mehr“ bleibt daneben – sonst nähme der Link dem
-     Titel die Breite (drei Zeilen am Telefon). */
-  .pruef[data-ansicht=lehrgang] .page-head:has(> .kopf-anleitung) { display: grid; grid-template-columns: minmax(0, 1fr) auto;
-    gap: 2px 8px; align-items: start; }
-  .pruef[data-ansicht=lehrgang] .page-head > .kopf-anleitung { grid-row: 2; grid-column: 1; justify-self: start; margin: 0; }
-  .pruef[data-ansicht=lehrgang] .page-head > .btn-row { grid-row: 1; grid-column: 2; }
   .pruef .abschnittskopf .btn-row { margin-left: 0; width: 100%; }
   .pruef .abschnittskopf .btn-row .btn { flex: 1 1 auto; justify-content: center; }
   .tn-desktop { display: none; }

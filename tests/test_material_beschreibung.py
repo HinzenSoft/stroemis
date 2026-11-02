@@ -444,7 +444,8 @@ def test_oberflaeche_statisch():
                    # Artikellisten (23.10.2026): der Name als roter Link auf den Artikel, Zusatz und Nummer grau dahinter.
                    '<a class="mat-produktname" href="/materialablage/artikel/${a.id}" tabindex="-1">${nameHtml(a, true)}</a>'
                    '${zusatzHtml(a)}${artNrKurz(a.article_no)}',
-                   '<h1>${nameHtml(p)}${zusatzHtml(p)} ${demoMarke(p.demo)}</h1>',
+                   # seit dem 02.11.2026 mit dem „i“ der Anleitung in der Überschrift (test_module_kleinigkeiten.py)
+                   '<h1>${nameHtml(p)}${zusatzHtml(p)} ${demoMarke(p.demo)}${anleitungKopf("produkt")}</h1>',
                    "<strong>${nameHtml(pr.produkt)}</strong>${zusatzHtml(pr.produkt)}${artNrHtml(",
                    '<a href="/materialablage/katalog/produkt/${p.id}">${nameHtml(p)}</a>${zusatzHtml(p)}'
                    '${artNrHtml(p.article_no)}',

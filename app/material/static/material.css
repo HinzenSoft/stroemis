@@ -2070,29 +2070,11 @@ dialog .mat-knopfgrund { margin: 10px 0 0; }
 /* … ebenso der Satz unter den gemeldeten Mängeln im Dialog „Prüfung festschreiben“ (Gerätetest FT10; über die id, weil
    die Liste der hellen Flächen in app.css Nebentext dort mit hoher Spezifität anthrazit setzt). */
 #fs-maengel-hilfe.betont { color: var(--rot-auf-flaeche); font-weight: 700; }
-/* Anleitung in der Strömipedia (Wunsch vom 28.10.2026, material.js anleitungKopf/anleitungHinweis): der Textlink
-   „Anleitung“ direkt hinter der Überschrift – die Knöpfe des Kopfs bleiben rechts; an Artikel und Produkt neben der
-   Nummer bzw. dem Namen. Auf der Übersicht dauerhaft der Hinweis: blau wie eine Info (kein Rot – das bleibt der
-   Hauptaktion und „nicht verwenden“), kräftiger Rand, großer Titel; schmal nur Titel und Knopf. */
-/* inline-block: Die 44 px unter Touch (.lnk) rechnen mit der Zeilenhöhe – als reines Inline neben der Nummer des Artikels
-   blieb die Fläche bei 43 px. */
-.mat-kopf-anleitung { display: inline-block; }
-.page-head > .mat-kopf-anleitung { margin-right: auto; }
-.mat-artikeltitel > h1:has(+ .mat-kopf-anleitung) { display: inline-block; margin-right: 12px; }
-.mat-artikeltitel .mat-kopf-anleitung + .btn-row { margin-top: 12px; }
-/* Über die ganze Breite wie jeder Hinweiskasten (app.css): den Innenabstand rechts gibt die Regel dort, hier nur sein
-   Mindestmaß (--kasten-rand). Text und Knopf bleiben zusammen höchstens 100ch breit, der Knopf direkt neben dem Satz. */
-.notice.mat-anleitung-hinweis { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px;
-  margin: 0 0 20px; padding-block: 14px; padding-left: 16px; --kasten-rand: 16px;
-  background: var(--co-info-fl); border: 2px solid var(--wasser); border-left-width: 8px; }
-.mat-anleitung-hinweis p { flex: 1 1 32ch; margin: 0; }
-.mat-anleitung-hinweis strong { color: var(--wasser); font-size: 1.15rem; }
-/* Der Knopf darf umbrechen: „Anleitung in der Strömipedia öffnen“ ist am Fold (344 px) breiter als der Kasten. */
-.mat-anleitung-hinweis .btn { max-width: 100%; white-space: normal; }
-@container mat-seite (max-width: 600px) {
-  .mat-anleitung-zusatz { display: none; }
-  .notice.mat-anleitung-hinweis { padding-block: 10px; padding-left: 12px; --kasten-rand: 12px; }
-}
+/* Anleitung in der Strömipedia (Wunsch vom 28.10.2026): seit dem 02.11.2026 ein „i“ in der Überschrift (material.js
+   anleitungKopf, Muster .info) statt des Textlinks „Anleitung“ dahinter und des blauen Hinweiskastens auf der Übersicht.
+   Bleibt: „Mehr dazu in der Strömipedia“ auf der Seite „Echtheit prüfen“ (pruefen.html) – inline-block, damit die 44 px
+   unter Touch (.lnk) mit der Zeilenhöhe rechnen. */
+.mat-kopf-anleitung.lnk { display: inline-block; }
 
 /* Bestandsimport: Satz zur Kontaktadresse (material.js importKontakt, Wunsch vom 28.10.2026 Punkt 4) – am Telefon die kurze
    Fassung in einer Zeile. */

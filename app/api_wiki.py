@@ -86,6 +86,12 @@ NUR_REDAKTION_VERSCHIEBEN = "Seiten verschieben dürfen Redakteure und die Wiki-
 # fremde Seite unter eine eigene lesebeschränkte hängen und wäre für alle anderen verschwunden.
 NUR_ERSTELLER_VERSCHIEBEN = ("Verschieben darf nur, wer die Seite auch in den Papierkorb legen darf – ihr Ersteller oder "
                              "die Wiki-Verwaltung.")
+# Ersteller und Bearbeiter nur mit Stufe in der Strömipedia – wie die Auswahl in den Dialogen (users_for_sharing); ohne
+# Stufe wirken weder die Rechte des Erstellers noch eine Freigabe (Kleinigkeiten 02.11.2026).
+OHNE_STUFE_ERSTELLER = ("Dieses Konto hat keine Stufe in der Strömipedia und kann nicht Ersteller werden. Die Stufe "
+                        "vergibt die Plattform-Verwaltung in der Leitstelle.")
+OHNE_STUFE_BEARBEITER = ("%s keine Stufe in der Strömipedia – ohne sie wirkt die Freigabe nicht. Die Stufe vergibt die "
+                         "Plattform-Verwaltung in der Leitstelle.")
 
 
 def can_edit(page, user=None):
@@ -1225,7 +1231,8 @@ def praesenz():
     if not can_read(p):
         return jsonify(error="Keine Berechtigung"), 403
     uid = current_user()["id"]
-    will_schreiben = d.get("modus") == "schreiben" and can_edit(p)
+    darf_schreiben = can_edit(p)
+    will_schreiben = d.get("modus") == "schreiben" and darf_schreiben
 
     modus = "lesen"
     if will_schreiben:
@@ -1249,7 +1256,10 @@ def praesenz():
 
     andere = _praesenz_liste(p["id"], reiter)
     schreiber = next((a for a in andere if a["modus"] == "schreiben"), None)
-    return jsonify(modus=modus, version=p["version"],
+    # darf_schreiben trennt im Editor die beiden Gründe für „lesen“: Jemand anderes hat den Schreibplatz, oder das Recht
+    # zum Bearbeiten ist weg (Stufe entzogen, Freigabe entfernt) – dann meldet der Editor „keine Berechtigung mehr“ wie
+    # beim 403 des Speicherns, nicht „… bearbeitet jetzt“ (Kleinigkeiten 02.11.2026).
+    return jsonify(modus=modus, version=p["version"], darf_schreiben=darf_schreiben,
                    schreiber=None if not schreiber else {
                        "user_id": schreiber["user_id"], "name": schreiber["user_name"], "seit": schreiber["seit"]},
                    andere=[{"user_id": a["user_id"], "name": a["user_name"], "modus": a["modus"]}
@@ -1344,10 +1354,14 @@ def set_creator(pid):
     if not isinstance(uid, int) and not (isinstance(uid, str) and uid.isdigit()):
         return jsonify(error="Kein Nutzer angegeben."), 400
     # Nur freigeschaltete Konten: Eine offene Kontoanfrage soll keine Seite erben.
-    neu_u = db.query("SELECT id, name FROM users WHERE id = ? AND active = 1 AND status = 'active'",
-                     (int(uid),), one=True)
+    neu_u = db.query("SELECT id, name, recht_wiki, recht_verwaltung FROM users WHERE id = ? AND active = 1 "
+                     "AND status = 'active'", (int(uid),), one=True)
     if not neu_u:
         return jsonify(error="Unbekannter oder nicht freigeschalteter Nutzer."), 400
+    # Und nur Konten mit Stufe in der Strömipedia – wie die Auswahl im Dialog (users_for_sharing); ohne Stufe wirkten die
+    # Rechte des Erstellers nicht (Kleinigkeiten 02.11.2026). Bleibt der Ersteller derselbe, ändert sich nichts.
+    if neu_u["id"] != p["created_by"] and not nutzt("wiki", neu_u):
+        return jsonify(error=OHNE_STUFE_ERSTELLER), 400
     if neu_u["id"] != p["created_by"]:
         with db.transaction():
             db.execute("UPDATE wiki_pages SET created_by = ? WHERE id = ?", (neu_u["id"], pid))
@@ -1740,6 +1754,20 @@ def set_editors(pid):
         return jsonify(error="user_ids muss eine Liste sein."), 400
     ids = {int(x) for x in roh if isinstance(x, int) or (isinstance(x, str) and x.isdigit())}
     ids.discard(p["created_by"])
+    # Neu freigegeben wird nur, wer eine Stufe in der Strömipedia hat – wie die Auswahl im Dialog; vorher landete ein Konto
+    # ohne Stufe still in der Liste, und die Freigabe wirkte nicht (Kleinigkeiten 02.11.2026). Wer schon freigegeben ist
+    # und die Stufe inzwischen verloren hat, bleibt stehen, bis ihn jemand abwählt (der Dialog zeigt ihn mit Vermerk).
+    # Die Meldung nennt keine Namen – sonst verriete sie zu jeder Kennung den Namen, auch für Konten, die die Auswahl nicht zeigt.
+    bisher = {r["user_id"] for r in db.query("SELECT user_id FROM wiki_editors WHERE page_id = ?", (pid,))}
+    ohne_stufe = 0
+    for uid in ids - bisher:
+        u = db.query("SELECT recht_wiki, recht_verwaltung FROM users WHERE id = ? AND active = 1 AND status = 'active'",
+                     (uid,), one=True)
+        if u and not nutzt("wiki", u):
+            ohne_stufe += 1
+    if ohne_stufe:
+        return jsonify(error=OHNE_STUFE_BEARBEITER % ("Ein gewähltes Konto hat" if ohne_stufe == 1
+                                                      else f"{ohne_stufe} gewählte Konten haben")), 400
     with db.transaction():
         db.execute("DELETE FROM wiki_editors WHERE page_id = ?", (pid,))
         for uid in ids:

@@ -133,11 +133,12 @@ def test_oberflaeche():
     assert 'data-act="sperren"' not in js and "SPERRGRUND" not in js and "sd-grund" not in js
     dlg = abschnitt(js, "function sperrDialog(a, grund, text) {", "\n  }\n")
     assert "<select" not in dlg
-    assert '${esc(a.inventory_no)} ${verlust ? "als verloren melden" : "sperren"}</h2>' in dlg
+    # Rückruf im Titel, Knopf und Toast (Kleinigkeiten 02.11.2026, test_kleinigkeiten_artikel.py).
+    assert '${esc(a.inventory_no)} ${verlust ? "als verloren melden" : "wegen Rückruf sperren"}</h2>' in dlg
     assert '<label for="sd-text">Was ist passiert?</label><input type="text" id="sd-text" maxlength="300"' in dlg
-    assert '<button class="btn" id="sd-ok" type="button">${verlust ? "Verlust melden" : "Sperren"}</button>' in dlg
+    assert '<button class="btn" id="sd-ok" type="button">${verlust ? "Verlust melden" : "Wegen Rückruf sperren"}</button>' in dlg
     assert 'body: { grund, text: $("#sd-text", body).value }' in dlg
-    assert 'toast(`${a.inventory_no} ${verlust ? "als verloren gemeldet" : "gesperrt"}`)' in dlg
+    assert 'toast(`${a.inventory_no} ${verlust ? "als verloren gemeldet" : "wegen Rückruf gesperrt"}`)' in dlg
     folge = abschnitt(js, "const VERLUST_FOLGE = ", ";\n")
     for teil in ("gesperrt", "zählt als verloren", "Taucht er wieder auf: nicht verwenden", "Freiprüfung",
                  "Der Materialwart kann ihn mit dem Grund „Verlust“ sofort aussondern."):
