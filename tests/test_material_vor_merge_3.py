@@ -77,7 +77,8 @@ def test_seitentitel_vom_server():
         mat = c.get("/materialablage/katalog").text
         assert '<span aria-hidden="true">☰</span><span class="mat-side-auf-text"> Ordner</span>' in mat
         wiki = k["adm"].get("/stroemipedia").text
-        assert '<span aria-hidden="true">☰</span> Seiten' in wiki and ">☰ Seiten<" not in wiki
+        # Seit der Suchzeile (02.11.2026) nur „☰“ zu sehen, „Seiten“ zum Vorlesen (test_wiki_suchzeile.py).
+        assert '<span aria-hidden="true">☰</span><span class="nur-vorlesen">Seiten</span>' in wiki and ">☰ Seiten<" not in wiki
     print("Seitentitel und Vorlagen bestanden.")
 
 
@@ -183,8 +184,11 @@ def test_uebrige_module_statisch():
     for datei in ("app/static/js/wiki.js", "app/static/js/public.js"):
         t = lies(datei)
         assert '!e.target.closest("#wiki-menu")' in t and 'e.target.id !== "wiki-menu"' not in t, datei
-    for vorlage in ("app/templates/wiki.html", "app/templates/wiki_lesemodus.html", "app/templates/public.html"):
+    for vorlage in ("app/templates/wiki_lesemodus.html", "app/templates/public.html"):
         assert 'id="wiki-menu"><span aria-hidden="true">☰</span> Seiten</button>' in lies(vorlage), vorlage
+    # Strömipedia seit der Suchzeile (02.11.2026): nur „☰“ zu sehen, „Seiten“ zum Vorlesen.
+    assert 'id="wiki-menu"><span aria-hidden="true">☰</span><span class="nur-vorlesen">Seiten</span></button>' in lies(
+        "app/templates/wiki.html")
     print("Übrige Module (statisch) bestanden.")
 
 

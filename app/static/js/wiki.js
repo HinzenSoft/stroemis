@@ -150,12 +150,12 @@
     };
   };
 
-  /* Unterkante der Leisten, die beim Rollen oben kleben (Bauchbinde, Artikel-Leiste) – 0, wenn keine klebt (Höhe bis
+  /* Unterkante der Leisten, die beim Rollen oben kleben (Bauchbinde, Suchzeile, Artikel-Leiste) – 0, wenn keine klebt (Höhe bis
      500 px, offene Tastatur: dann rollen sie mit, siehe app.css). Was darunter liegt, ist verdeckt: Der Cursor des Editors
      und das „/“-Menü halten sich davon fern (Gerätetest 01.11.2026, Q1/S1, FT12). */
   const verdeckteHoehe = () => {
     let unten = 0;
-    document.querySelectorAll(".bauchbinde, .wiki-head").forEach((el) => {
+    document.querySelectorAll(".bauchbinde, .wiki-suchzeile, .wiki-head").forEach((el) => {
       const lage = getComputedStyle(el).position;
       if (lage !== "sticky" && lage !== "fixed") return;
       const r = el.getBoundingClientRect();
@@ -1097,7 +1097,6 @@
     const pubBadge = p.effective_public ? '<span class="badge pubbadge" title="Lesen auch Angemeldete ohne Freischaltung für die Strömipedia">für alle Angemeldeten</span>' : "";
     content.innerHTML = `
       <div class="wiki-head">
-        <button class="btn secondary small kopfknopf baum-knopf" id="pg-baum" type="button" title="Seiten" aria-label="Seitenbaum" aria-controls="wiki-side" aria-expanded="${side.classList.contains("open")}">☰</button>
         ${krumenPfad(crumbs, p)}
         <div class="btn-row">
           ${p.can_edit ? `<div class="mode-toggle" role="group" aria-label="Ansicht wechseln">
@@ -1131,7 +1130,6 @@
     $("#pg-comment").onclick = () => commentDialog("");
     if ($("#pg-icon")) $("#pg-icon").onclick = () => iconDialog(p.id, p.icon || "");
     tocKnopfVerdrahten();
-    const baum = $("#pg-baum"); if (baum) baum.onclick = () => side.classList.toggle("open");
     $("#pg-more").onclick = (e) => pageMenu(e.currentTarget, p);
     const sh = $("#pg-share"); if (sh) sh.onclick = () => shareDialog(p);
     loadBacklinks(p);
@@ -5590,23 +5588,130 @@
     return out.join("");
   }
 
-  let searchTimer;
-  searchInput.addEventListener("input", () => {
-    clearTimeout(searchTimer);
-    const q = searchInput.value.trim();
-    if (q.length < 2) { searchResults.classList.add("hidden"); searchResults.innerHTML = ""; return; }
-    searchTimer = setTimeout(async () => {
-      try {
-        const d = await api(`/api/wiki/search?q=${encodeURIComponent(q)}`);
-        if (searchInput.value.trim() !== q) return;     // inzwischen weitergetippt oder geleert
-        searchResults.classList.remove("hidden");
-        searchResults.innerHTML = d.results.length
-          ? d.results.map((r) => `<li><a href="/stroemipedia/${esc(r.slug)}">${esc(r.title)}</a>${r.snippet ? `<div class="snip">${esc(r.snippet)}</div>` : ""}</li>`).join("")
-          : '<li class="muted">Keine Treffer.</li>';
-        searchResults.querySelectorAll("a").forEach((a) => a.addEventListener("click", (e) => { e.preventDefault(); side.classList.remove("open"); navigate(slugAus(a.getAttribute("href"))); }));
-      } catch (e) { toast(e.message, true); }
-    }, 250);
-  });
+  /* Artikel suchen: eine Logik für das Feld über dem Seitenbaum und – unter 1024 px – das Feld in der Suchzeile oben im
+     Inhalt (Wunsch vom 02.11.2026, „wie bei der Materialablage“; wiki.html). Gesucht wird ab zwei Zeichen, 250 ms nach
+     dem letzten Tippen; Enter öffnet den ersten Treffer (ist die Suche noch unterwegs, nach ihrer Antwort), ↓/↑ wandern
+     durch die Liste, Esc führt zurück ins Feld. „schwebend“ (Suchzeile): Die Liste liegt über dem Text, reicht höchstens
+     bis zur Unterkante des sichtbaren Bereichs und schließt mit Esc, Tippen daneben, Zurück (S.klassenVerlauf an der
+     Zeile) und beim Öffnen eines Treffers; Antippen des Felds zeigt die Treffer zum stehenden Begriff wieder. */
+  function sucheVerdrahten(feld, liste, { zeile = null } = {}) {
+    if (!feld || !liste) return null;
+    let lauf = null, stand = "";              // stand: der Begriff, zu dem die Liste gerade gehört
+    const offen = () => !liste.classList.contains("hidden");
+    const hoeheBegrenzen = () => {
+      if (!zeile || !offen()) return;
+      const vv = window.visualViewport;
+      const unten = vv ? vv.offsetTop + vv.height : window.innerHeight;
+      zeile.style.setProperty("--treffer-hoehe", Math.max(120, Math.floor(unten - zeile.getBoundingClientRect().bottom - 8)) + "px");
+    };
+    const zeigen = (an) => {
+      liste.classList.toggle("hidden", !an);
+      if (!zeile) return;
+      zeile.classList.toggle("treffer-auf", an);
+      hoeheBegrenzen();
+    };
+    const leeren = () => { stand = ""; liste.innerHTML = ""; zeigen(false); };
+    async function suchen(q) {
+      const d = await api(`/api/wiki/search?q=${encodeURIComponent(q)}`);
+      if (feld.value.trim() !== q) return false;     // inzwischen weitergetippt oder geleert
+      stand = q;
+      liste.innerHTML = d.results.length
+        ? d.results.map((r) => `<li><a href="/stroemipedia/${esc(r.slug)}">${esc(r.title)}</a>${r.snippet ? `<div class="snip">${esc(r.snippet)}</div>` : ""}</li>`).join("")
+        : '<li class="muted">Keine Treffer.</li>';
+      liste.scrollTop = 0;
+      zeigen(true);
+      return true;
+    }
+    const oeffnen = (a) => {
+      if (zeile) { zeigen(false); feld.blur(); }     // Liste und Bildschirmtastatur gehen zu, der Artikel kommt
+      side.classList.remove("open");
+      navigate(slugAus(a.getAttribute("href")));
+    };
+    feld.addEventListener("input", () => {
+      clearTimeout(lauf);
+      const q = feld.value.trim();
+      if (q.length < 2) { leeren(); return; }
+      lauf = setTimeout(() => suchen(q).catch((e) => toast(e.message, true)), 250);
+    });
+    feld.addEventListener("keydown", async (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        const q = feld.value.trim();
+        if (q.length < 2) return;
+        clearTimeout(lauf);
+        try { if (stand !== q && !(await suchen(q))) return; } catch (err) { toast(err.message, true); return; }
+        const a = liste.querySelector("a");
+        if (a) oeffnen(a);
+      } else if (e.key === "ArrowDown" && offen() && liste.querySelector("a")) {
+        e.preventDefault();
+        liste.querySelector("a").focus();
+      } else if (e.key === "Escape" && zeile && offen()) {
+        e.preventDefault();                            // nur die Liste schließen – der Begriff bleibt stehen
+        zeigen(false);
+      }
+    });
+    liste.addEventListener("click", (e) => {
+      const a = e.target.closest("a");
+      if (!a) return;
+      e.preventDefault();
+      oeffnen(a);
+    });
+    liste.addEventListener("keydown", (e) => {
+      const links = [...liste.querySelectorAll("a")];
+      const i = links.indexOf(document.activeElement);
+      if (i < 0) return;
+      if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+        e.preventDefault();
+        const n = i + (e.key === "ArrowDown" ? 1 : -1);
+        if (n < 0) feld.focus(); else if (links[n]) links[n].focus();
+      } else if (e.key === "Escape") {
+        e.preventDefault();
+        feld.focus();
+        if (zeile) zeigen(false);                      // nach dem Fokus – der zeigte die Treffer sonst wieder
+      }
+    });
+    if (zeile) {
+      const wieder = () => { if (!offen() && stand && stand === feld.value.trim() && liste.firstChild) zeigen(true); };
+      feld.addEventListener("focus", wieder);
+      feld.addEventListener("click", wieder);          // auch, wenn das Feld den Fokus noch hat
+      // Tippen daneben schließt – auch auf „☰“, das gleich den Seitenbaum öffnet.
+      document.addEventListener("pointerdown", (e) => {
+        if (offen() && !feld.contains(e.target) && !liste.contains(e.target)) zeigen(false);
+      }, true);
+      // Tab aus Feld und Liste hinaus schließt ebenfalls.
+      zeile.addEventListener("focusout", (e) => {
+        if (offen() && e.relatedTarget && !feld.contains(e.relatedTarget) && !liste.contains(e.relatedTarget)) zeigen(false);
+      });
+      S.klassenVerlauf(zeile, "treffer-auf", () => zeigen(false), () => zeile.getClientRects().length > 0);
+      const nachziehen = () => requestAnimationFrame(hoeheBegrenzen);
+      window.addEventListener("resize", nachziehen);
+      window.addEventListener("scroll", nachziehen, { passive: true });
+      if (window.visualViewport) window.visualViewport.addEventListener("resize", nachziehen);
+    }
+    return { feld, schliessen: () => { if (offen()) zeigen(false); } };
+  }
+  sucheVerdrahten(searchInput, searchResults);
+  const suchzeile = $("#wiki-suchzeile");
+  const zeilenSuche = suchzeile && sucheVerdrahten($("#zeilen-suche"), $("#zeilen-treffer"), { zeile: suchzeile });
+  const zeileSteht = () => Boolean(zeilenSuche && suchzeile.getClientRects().length);
+  if (zeilenSuche) {
+    /* Die Artikel-Leiste klebt direkt unter der Suchzeile, Sprungziele landen unter beiden (app.css): --wiki-suchzeile
+       trägt ihre Höhe – 0, wo sie nicht steht (ab 1024 px, im Editor). Gemessen statt fest, damit Drehen und größere
+       Schrift keine Lücke und keine Überdeckung lassen. */
+    const hoehe = () => shell.style.setProperty("--wiki-suchzeile", suchzeile.getBoundingClientRect().height + "px");   // ungerundet
+    if (window.ResizeObserver) new ResizeObserver(hoehe).observe(suchzeile, { box: "border-box" });
+    hoehe();
+    /* Über die Grenze von 1024 px gedreht oder gezogen: Der Begriff wandert ins Feld, das jetzt zu sehen ist, und die
+       Liste der Suchzeile schließt (sie hielte sonst einen Verlaufseintrag, ohne zu sehen zu sein). */
+    const grenze = window.matchMedia("(max-width: 1023px)");
+    grenze.addEventListener("change", () => {
+      zeilenSuche.schliessen();
+      const [von, nach] = grenze.matches ? [searchInput, zeilenSuche.feld] : [zeilenSuche.feld, searchInput];
+      if (!von || !nach || !von.value.trim() || nach.value.trim()) return;
+      nach.value = von.value;
+      nach.dispatchEvent(new Event("input"));
+    });
+  }
 
   /* ======================================================================
      Start
@@ -5667,13 +5772,19 @@
   }, true);
 
   /* Suchfeld der Startseite (start.html): /stroemipedia?suche=<Begriff> – der Begriff kommt ins Suchfeld über dem Baum und
-     sucht wie getippt; ist der Baum eine Schublade (unter 1024 px), geht sie dafür auf. Der Parameter verschwindet aus der
-     Adresse, sonst suchte jedes Neuladen erneut. Dieselbe Regel im Lesemodus (public.js). */
+     sucht wie getippt; unter 1024 px ins Feld der Suchzeile, deren Liste dann aufgeht (bis zum 02.11.2026 öffnete sich
+     dafür die Schublade). Der Parameter verschwindet aus der Adresse, sonst suchte jedes Neuladen erneut. Dieselbe Regel
+     im Lesemodus (public.js). */
   function sucheAusAdresse() {
     const q = new URLSearchParams(location.search).get("suche");
     if (q === null) return;
     history.replaceState(history.state, "", location.pathname + location.hash);
     if (!q.trim()) return;
+    if (zeileSteht()) {
+      zeilenSuche.feld.value = q.trim();
+      zeilenSuche.feld.dispatchEvent(new Event("input"));
+      return;
+    }
     searchInput.value = q.trim();
     if (getComputedStyle(side).position === "fixed") side.classList.add("open");
     searchInput.dispatchEvent(new Event("input"));

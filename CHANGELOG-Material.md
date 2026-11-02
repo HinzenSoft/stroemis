@@ -74,6 +74,7 @@ Geschichte stehen. Schemaversion nach der Nachbesserung vor dem Merge: 30; mit d
 | Bearbeitungsfreigabe an Mitglieder samt Unterseiten | „Bearbeiten erlauben“ wirkt für Mitglieder wie für Redakteure auch auf die Unterseiten (vorher genau diese Seite) | gebaut 02.11.2026 (kein Schemaschritt) |
 | Text der Hinweiskästen über die ganze Breite | Inhalt der Hinweiskästen (`.notice`, `.mat-wikizeile`), Hilfetexte darin, Mangel- und Sperr-Banner und Liste „Gemeldete Mängel“ nicht mehr auf 100ch begrenzt | gebaut 02.11.2026 (kein Schemaschritt) |
 | Freigaben je Person, Ordnerbild neben dem Namen | Reiter „Freigaben“: eine Zeile je Person in allen drei Listen, EIN „Ändern“ → Dialog „Rechte ändern“ (neuer Endpunkt je Person und Ordner, eine Transaktion), „Entziehen“ nimmt alle Rechte der Person dort, „… hat hier schon: …“ beim Anlegen; Ordnerfoto links neben Name und Knopfzeile (96 px, Telefon 64 px) | gebaut 02.11.2026 (kein Schemaschritt), zur Freigabe |
+| Suchzeile in der Strömipedia | Unter 1024 px (außer im Editor) klebt oben im Inhalt eine Zeile „☰“ + „Artikel suchen“ wie in der Materialablage; Treffer als Liste darunter über dem Text (Tippen/Enter öffnet, Esc/daneben/Zurück schließt); ersetzt „☰ Seiten“, das „☰“ der Kopfzeile einer Seite und das Suchfeld in der Schublade; die Kopfzeile klebt direkt darunter | gebaut 02.11.2026 (kein Schemaschritt) |
 
 ## Abgleich mit dem Bestand (vor Lieferung 1)
 
@@ -11112,3 +11113,51 @@ Verwalter Nr. 3/4, eigene Zeile, Leser 403, fremd/unbekannt 404 gleich, Systemor
 `_entwuerfe_und_erinnerung` (offene Entwürfe, Erinnerungslog bleibt, Antwort ohne Liste nach Selbstherabsetzung),
 `test_person_oberflaeche_statisch`; Kennung `uid` in den Rundumtests (`test_material_trennung`, `_stufen`,
 `_ueberblick`); `test_module_info_i` M31 an den Personenzähler angepasst.
+
+## Suchzeile in der Strömipedia (Wunsch des Nutzers, 02.11.2026)
+
+Wunsch des Nutzers, wörtlich: „Bau eine ähnliche leiste in der strömipedia wie bei der materialablage, die Suche soll
+Artikel suchen. Zeile soll mit scrollen wie bei materialablage.“ – dazu Telefonfotos der Strömipedia-Übersicht („☰ Seiten“
+als eigener Knopf) und der Materialablage (klebende Zeile „☰“ + Nummernsuche).
+
+- **Wo:** unter 1024 px (dieselbe Grenze wie die Schublade des Seitenbaums und die Suchzeile der Materialablage – Telefon,
+  Tablet hochkant, Foldable) in allen Ansichten der Strömipedia außer dem Editor: Übersicht, Seite lesen, „Seite nicht
+  gefunden“, leere Strömipedia; Papierkorb und Verlauf sind Dialoge darüber. Ab 1024 px bleibt alles wie zuvor (Suchfeld
+  oben in der Seitenleiste). Der Lesemodus (Konten ohne Stufe, public.js) ist unverändert („☰ Seiten“).
+- **Aufbau** (wiki.html `#wiki-suchzeile`, app.css): links „☰“ – derselbe Knopf `#wiki-menu`, der die Schublade öffnet,
+  sichtbar nur das Zeichen, zugänglicher Name „Seiten“, `aria-controls`/`aria-expanded` wie bisher –, rechts das Feld
+  „Artikel suchen“ (Platzhalter und Name), das die restliche Breite füllt; keine Lupe, kein Absendeknopf, `role="search"`.
+  Sie **ersetzt** den Knopf „☰ Seiten“ über dem Inhalt und das „☰“ in der Kopfzeile einer gelesenen Seite (kein zweites
+  „☰“); im Editor bleibt dessen „☰“. In der Schublade fällt das Suchfeld über dem Baum weg, solange die Zeile steht (im
+  Editor bleibt es dort – dort gibt es keine Zeile).
+- **Suche** (wiki.js `sucheVerdrahten`): eine Funktion für das Feld über dem Baum und das Feld der Zeile – dieselbe
+  Schnittstelle `/api/wiki/search`, ab zwei Zeichen, 250 ms nach dem letzten Tippen, „Keine Treffer.“ wie bisher. Die
+  Treffer (Titel und Ausschnitt, am Finger je Titel 44 px) liegen als Liste direkt unter der Zeile über dem Text, höchstens
+  bis zur Unterkante des sichtbaren Bereichs (auch mit Bildschirmtastatur), mit eigenem Bildlauf. Tippen auf einen Treffer
+  öffnet die Seite, schließt Liste und Tastatur; **Enter** öffnet den ersten Treffer (läuft die Suche noch, nach ihrer
+  Antwort); **↓** führt in die Liste, ↑/↓ wandern, ↑ am Anfang zurück ins Feld; **Esc**, Tippen daneben (auch auf „☰“),
+  Tab hinaus und **Zurück** (`S.klassenVerlauf`, wie Dialoge und Schubladen) schließen die Liste, der Begriff bleibt
+  stehen; ein Tipp ins Feld zeigt die Treffer dazu wieder. Über dem Baum gelten Enter, Pfeile und Esc ebenso (neu), die
+  Liste bleibt dort im Fluss wie bisher.
+- **Kleben:** Die Zeile klebt unter der Kopfleiste (`position: sticky; top: var(--topbar)`, weißer Grund), wie in der
+  Materialablage bündig darunter schon vor dem Rollen. Die Kopfzeile einer Seite (Pfad, Teilen, ⋯, Bearbeiten) klebt
+  direkt darunter: `top: calc(var(--topbar) + var(--wiki-suchzeile))`, wobei wiki.js die Höhe der Zeile misst
+  (ResizeObserver, Rahmenmaß; 0, wo sie nicht steht) – ohne Lücke und ohne Überdeckung, auch nach Drehen und bei größerer
+  Schrift. Sprungziele (Gliederung, Anker in der Adresse) rechnen die Zeile mit (`scroll-margin-top` der Überschriften wie
+  bisher, plus `--wiki-suchzeile`); der Scrollspy der Gliederung folgt dem Wert von selbst. Cursor und „/“-Menü des
+  Editors zählen sie in `verdeckteHoehe` mit (im Editor steht sie nicht).
+- **Wenig Höhe** (bis 500 px, offene Tastatur – `--topbar` 0): Die Zeile klebt allein am oberen Rand (4 statt 8 px Luft,
+  wie in der Materialablage) – das Feld, in das man tippt, bleibt zu sehen; die Kopfzeile der Seite rollt wie bisher mit.
+- **Startseite:** Der Suchbegriff (`/stroemipedia?suche=…`) landet unter 1024 px im Feld der Zeile, deren Liste aufgeht –
+  die Schublade bleibt zu (bisher öffnete sie sich dafür).
+- **Über die Grenze gedreht** (Tablet 820 ↔ 1180): Ein Begriff wandert ins dann sichtbare Feld, die Liste der Zeile
+  schließt (sie hielte sonst einen Verlaufseintrag, ohne zu sehen zu sein).
+- Druckansicht ohne Zeile.
+- **Gemessen** (Chromium, Touch, DEMO-Daten): siehe planung/wiki-suchzeile/bericht.md – Zeile 60 px, Kopfzeile darunter
+  60 px; am Telefon 360 × 740 belegen Kopfleiste, Zeile und Kopfzeile zusammen 172 px (23 %), 390 × 844 ebenfalls 172 px
+  (20 %).
+- Tests: `tests/test_wiki_suchzeile.py` (neu – Aufbau, Regeln, kein doppeltes Suchfeld, Editor ohne Zeile, eine
+  Suchfunktion, Schnittstelle unverändert, Lesemodus ohne Zeile); angepasst: `test_geraetetest_teil1.py`
+  (`test_b14_schubladen`: nur noch das „☰“ des Editors in wiki.js, Knopf der Zeile in wiki.html, Lesemodus wie bisher) und
+  `test_material_vor_merge_3.py` (`test_seitentitel_vom_server`, statische Prüfung der übrigen Module: „☰“ mit „Seiten“
+  zum Vorlesen in wiki.html).

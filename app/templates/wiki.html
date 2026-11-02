@@ -19,7 +19,15 @@
     <ul class="tree" id="tree"></ul>
   </aside>
   <main class="wiki-main" id="wiki-main">
-    <button class="btn secondary small wiki-menu-btn" aria-controls="wiki-side" aria-expanded="false" id="wiki-menu"><span aria-hidden="true">☰</span> Seiten</button>
+    {# Suchzeile (Wunsch vom 02.11.2026, wie in der Materialablage): unter 1024 px klebt oben im Inhalt „☰“ (öffnet den
+       Seitenbaum, „Seiten“ nur zum Vorlesen) neben dem Feld „Artikel suchen“; die Treffer liegen als Liste darunter über
+       dem Text. Ab 1024 px und im Editor steht sie nicht (app.css); gesucht wird wie über dem Baum (wiki.js
+       sucheVerdrahten). #}
+    <div class="wiki-suchzeile" id="wiki-suchzeile" role="search">
+      <button class="btn secondary small wiki-menu-btn" type="button" aria-controls="wiki-side" aria-expanded="false" id="wiki-menu"><span aria-hidden="true">☰</span><span class="nur-vorlesen">Seiten</span></button>
+      <input type="search" id="zeilen-suche" placeholder="Artikel suchen" aria-label="Artikel suchen" autocomplete="off" enterkeyhint="search" aria-controls="zeilen-treffer">
+      <ul class="search-results zeilen-treffer hidden" id="zeilen-treffer" aria-label="Gefundene Artikel"></ul>
+    </div>
     <div id="wiki-content"></div>
   </main>
   <aside class="wiki-rail" id="wiki-rail">
