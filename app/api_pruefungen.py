@@ -51,6 +51,11 @@ EINGEFROREN_LOESCHEN = ("Für diese Person ist das Lehrgangsergebnis vermerkt �
 EINGEFROREN_DEFINITION = ("Dazu gibt es Bewertungen oder Haken von Personen mit vermerktem Lehrgangsergebnis – deren "
                           "Prüfungsdaten sind eingefroren, deshalb lässt sich das weder ändern noch löschen. Die "
                           "Lehrgangsleitung kann das Ergebnis aufheben.")
+# Kriterien einer Leistung, an der eingefrorene Bewertungen hängen (Entscheidung des Nutzers vom 01.11.2026): weder
+# anlegen noch ändern, umsortieren oder löschen – die Kriterienliste ist Teil dessen, woran bewertet wurde.
+KRITERIEN_EINGEFROREN = ("Zu dieser Leistung gibt es Bewertungen von Personen mit vermerktem Lehrgangsergebnis – deren "
+                         "Prüfungsdaten sind eingefroren, deshalb lassen sich die Kriterien nicht mehr anlegen, ändern, "
+                         "umsortieren oder löschen. Die Lehrgangsleitung kann das Ergebnis aufheben.")
 BILD_GEAENDERT = "Das Profilbild wurde zwischenzeitlich anderswo geändert. Bitte die Seite neu laden."
 # Ausbilder nur mit Konto (Wunsch des Nutzers, 01.11.2026: „entweder Personen haben einen Account und mindestens das
 # Recht Mitglied, oder machen keine Lehrgänge“). Passend ist ein aktives Konto mit Stufe in den Riegenkarten (oder der
@@ -163,12 +168,14 @@ def _redaktion(meldung=NUR_REDAKTION):
         raise Abgelehnt(meldung, 403)
 
 
-def _leitung_ergaenzen(ausbilder):
+def _leitung_ergaenzen(ausbilder, auch_verwaltung=False):
     """Wer einen Lehrgang anlegt, wird seine Leitung – sonst könnte er ihn gleich danach nicht mehr
-    bearbeiten. Administratoren brauchen den Eintrag nicht; wer sich selbst schon als Leitung
-    eingetragen hat, bekommt keinen zweiten."""
+    bearbeiten. Administratoren brauchen den Eintrag nicht (im Dialog steht die Zeile trotzdem vorbelegt);
+    wer sich selbst schon als Leitung eingetragen hat, bekommt keinen zweiten. auch_verwaltung: Import als
+    neuer Lehrgang – dort gibt es keinen Dialog, und wer importiert, wird Leitung wie beim Anlegen über den
+    Dialog, auch mit Stufe Verwaltung (Entscheidung des Nutzers vom 01.11.2026)."""
     uid, name = _ich()
-    if verwaltet("pruefungen") or any(a_uid == uid and leit for a_uid, _, _, leit in ausbilder):
+    if (verwaltet("pruefungen") and not auch_verwaltung) or any(a_uid == uid and leit for a_uid, _, _, leit in ausbilder):
         return ausbilder
     return [(uid, name, "", 1)] + list(ausbilder)
 
@@ -196,14 +203,19 @@ _VORAUSSETZUNG_BETROFFEN = ("SELECT 1 FROM pruef_voraussetzung_status s WHERE s.
                             "AND s.voraussetzung_id = ?")
 
 
-def _eingefroren_betroffen_pruefen(bedingung, args):
+def _eingefroren_betroffen(bedingung, args):
+    """Hat eine Person mit vermerktem Ergebnis Bewertungen oder Haken an dieser Definition?"""
+    return bool(db.query(f"SELECT 1 FROM pruef_teilnehmer t WHERE t.ergebnis IS NOT NULL AND EXISTS ({bedingung}) LIMIT 1",
+                         args, one=True))
+
+
+def _eingefroren_betroffen_pruefen(bedingung, args, meldung=EINGEFROREN_DEFINITION):
     """Leistungen, Kriterien und Voraussetzungen gehören zu den eingefrorenen Prüfungsdaten: Was eine
     Person mit vermerktem Ergebnis abgelegt oder nachgewiesen hat, darf hinterher weder anders heißen
     noch verschwinden. Verweigert, sobald eine eingefrorene Person Bewertungen oder Haken daran hat.
     Der Lehrgang als Ganzes bleibt löschbar – das tut die Leitung bewusst und vollständig."""
-    if db.query(f"SELECT 1 FROM pruef_teilnehmer t WHERE t.ergebnis IS NOT NULL AND EXISTS ({bedingung}) LIMIT 1",
-                args, one=True):
-        raise Abgelehnt(EINGEFROREN_DEFINITION, 409)
+    if _eingefroren_betroffen(bedingung, args):
+        raise Abgelehnt(meldung, 409)
 
 
 def _bild_url(datei):
@@ -501,10 +513,13 @@ def _kriterien_liste(roh):
 
 def _leistung_json_voll(p):
     """_leistung_json plus die Kriterienliste – nur für Leistungen IM Lehrgang. Ein Katalog hat
-    keine Versuche, an denen sich ein Kriterium abhaken ließe, und bleibt bei _leistung_json."""
+    keine Versuche, an denen sich ein Kriterium abhaken ließe, und bleibt bei _leistung_json.
+    kriterien_eingefroren: An der Leistung hängen eingefrorene Bewertungen – die Oberfläche zeigt die
+    Kriterien dann nur an, mit einem Satz statt „Kriterium anlegen“ (KRITERIEN_EINGEFROREN)."""
     out = _leistung_json(p)
     out["kriterien"] = [_kriterium_json(k) for k in db.query(
         "SELECT * FROM pruef_kriterien WHERE leistung_id = ? ORDER BY sortierung, id", (p["id"],))]
+    out["kriterien_eingefroren"] = _eingefroren_betroffen(_LEISTUNG_BETROFFEN, (p["id"],))
     return out
 
 
@@ -1344,8 +1359,12 @@ def create_kriterium(lid):
     bez = sfield(json_body(), "bezeichnung").strip()[:300]
     if not bez:
         raise Abgelehnt("Bitte eine Bezeichnung angeben.")
-    kid = db.execute("INSERT INTO pruef_kriterien (leistung_id, bezeichnung, sortierung) VALUES (?,?,?)",
-                     (lid, bez, _naechste_sortierung_kriterien(lid)))
+    # Eingefrorene Bewertungen an der Leistung: kein neues Kriterium (Entscheidung des Nutzers vom 01.11.2026). Prüfen
+    # und Schreiben unter der Schreibsperre – sonst könnte zwischen beiden ein Ergebnis vermerkt werden.
+    with db.transaction(sofort=True):
+        _eingefroren_betroffen_pruefen(_LEISTUNG_BETROFFEN, (lid,), KRITERIEN_EINGEFROREN)
+        kid = db.execute("INSERT INTO pruef_kriterien (leistung_id, bezeichnung, sortierung) VALUES (?,?,?)",
+                         (lid, bez, _naechste_sortierung_kriterien(lid)))
     return jsonify(kriterium=_kriterium_json(_kriterium(kid))), 201
 
 
@@ -1358,7 +1377,7 @@ def update_kriterium(kid):
     if not bez:
         raise Abgelehnt("Bitte eine Bezeichnung angeben.")
     # Die Kriterienliste gehört zur Bewertung jeder Person, die die Leistung abgelegt hat.
-    _eingefroren_betroffen_pruefen(_LEISTUNG_BETROFFEN, (k["leistung_id"],))
+    _eingefroren_betroffen_pruefen(_LEISTUNG_BETROFFEN, (k["leistung_id"],), KRITERIEN_EINGEFROREN)
     db.execute("UPDATE pruef_kriterien SET bezeichnung = ? WHERE id = ?", (bez, kid))
     return jsonify(kriterium=_kriterium_json(_kriterium(kid)))
 
@@ -1368,7 +1387,7 @@ def update_kriterium(kid):
 def delete_kriterium(kid):
     k = _kriterium(kid)
     _leitung(_leistung(k["leistung_id"])["lehrgang_id"])
-    _eingefroren_betroffen_pruefen(_LEISTUNG_BETROFFEN, (k["leistung_id"],))
+    _eingefroren_betroffen_pruefen(_LEISTUNG_BETROFFEN, (k["leistung_id"],), KRITERIEN_EINGEFROREN)
     db.execute("DELETE FROM pruef_kriterien WHERE id = ?", (kid,))
     return jsonify(ok=True)
 
@@ -1379,6 +1398,8 @@ def reihenfolge_kriterien(lid):
     l = _leistung(lid)
     _leitung(l["lehrgang_id"])
     ids = _id_liste(json_body().get("ids"))
+    # Umsortieren ändert die Liste, die eingefrorene Bewertungen zeigen – wie Ändern und Löschen gesperrt (01.11.2026).
+    _eingefroren_betroffen_pruefen(_LEISTUNG_BETROFFEN, (lid,), KRITERIEN_EINGEFROREN)
     with db.transaction():
         for i, kid in enumerate(ids):
             db.execute("UPDATE pruef_kriterien SET sortierung = ? WHERE id = ? AND leistung_id = ?", (i, kid, lid))
@@ -1904,7 +1925,7 @@ def import_vorschau():
     for v in ergebnis["voraussetzungen"]:
         v["vorhanden"] = imp.normalisiert(v["bezeichnung"]) in vorhandene
     # Für einen neuen Lehrgang steht die importierende Person schon als Leitung darin (_leitung_ergaenzen).
-    bisher = _ausbilder_bisher(lehrgang["id"]) if lehrgang else {a[0] for a in _leitung_ergaenzen([])}
+    bisher = _ausbilder_bisher(lehrgang["id"]) if lehrgang else {a[0] for a in _leitung_ergaenzen([], auch_verwaltung=True)}
     _, ergebnis["ausbilder_nicht_uebernommen"] = _ausbilder_aus_datei(ergebnis, bisher)
     return jsonify(**ergebnis)
 
@@ -1920,7 +1941,7 @@ def import_uebernehmen():
     ergebnis = _analysieren(f, zuordnung)
     kopf = dict(ergebnis.get("lehrgang") or {})
     warnungen = list(ergebnis.get("warnungen") or [])
-    bisher = _ausbilder_bisher(lehrgang["id"]) if lehrgang else {a[0] for a in _leitung_ergaenzen([])}
+    bisher = _ausbilder_bisher(lehrgang["id"]) if lehrgang else {a[0] for a in _leitung_ergaenzen([], auch_verwaltung=True)}
     neue_ausbilder, nicht_uebernommen = _ausbilder_aus_datei(ergebnis, bisher)
     if not ergebnis.get("teilnehmer") and not neue_ausbilder:
         raise Abgelehnt(" ".join(["Es gibt nichts zu übernehmen."] + warnungen + (
@@ -1937,7 +1958,7 @@ def import_uebernehmen():
                 "created_by, created_by_name, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
                 (titel, (kopf.get("nummer") or "")[:60], von, bis,
                  (kopf.get("ort") or "")[:200], "", "geplant", uid, name, ts, ts))
-            _ausbilder_schreiben(lid, _leitung_ergaenzen([]))
+            _ausbilder_schreiben(lid, _leitung_ergaenzen([], auch_verwaltung=True))
         else:
             lid = lehrgang["id"]
             # Leere Lehrgangsfelder aus der Datei füllen, gefüllte nicht anfassen. Das Datumspaar

@@ -1804,11 +1804,16 @@ def test_sicherheit():
         gesperrt(pr.delete(f"/api/pruefungen/leistungen/{wurf['id']}", headers=H))
         gesperrt(pr.put(f"/api/pruefungen/kriterien/{griff['id']}", json={"bezeichnung": "Griff (neu)"}))
         gesperrt(pr.delete(f"/api/pruefungen/kriterien/{griff['id']}", headers=H))
+        # Seit dem 01.11.2026 (Entscheidung des Nutzers) auch kein neues Kriterium und kein Umsortieren der Kriterien.
+        gesperrt(pr.post(f"/api/pruefungen/leistungen/{wurf['id']}/kriterien", json={"bezeichnung": "Ziel"}))
+        gesperrt(pr.put(f"/api/pruefungen/leistungen/{wurf['id']}/kriterien/reihenfolge", json={"ids": [griff["id"]]}))
+        assert next(l for l in pr.get(f"/api/pruefungen/lehrgaenge/{lid}").json["lehrgang"]["leistungen"]
+                    if l["id"] == wurf["id"])["kriterien_eingefroren"] is True
         gesperrt(pr.put(f"/api/pruefungen/voraussetzungen/{drsa['id']}", json={"bezeichnung": "DRSA Silber"}))
         gesperrt(pr.delete(f"/api/pruefungen/voraussetzungen/{drsa['id']}", headers=H))
         # Nicht betroffen: Definitionen ohne Daten eingefrorener Personen, andere Personen, Umsortieren.
         assert pr.put(f"/api/pruefungen/leistungen/{knoten['id']}", json={"bezeichnung": "Knoten (neu)"}).status_code == 200
-        assert pr.post(f"/api/pruefungen/leistungen/{wurf['id']}/kriterien", json={"bezeichnung": "Ziel"}).status_code == 201
+        assert pr.post(f"/api/pruefungen/leistungen/{knoten['id']}/kriterien", json={"bezeichnung": "Ziel"}).status_code == 201
         assert pr.put(f"/api/pruefungen/voraussetzungen/{eh['id']}", json={"bezeichnung": "EH-Kurs"}).status_code == 200
         assert pr.delete(f"/api/pruefungen/voraussetzungen/{eh['id']}", headers=H).status_code == 200
         assert pr.put(f"/api/pruefungen/lehrgaenge/{lid}/leistungen/reihenfolge", json={"ids": [knoten["id"], wurf["id"]]}).status_code == 200
@@ -1818,11 +1823,13 @@ def test_sicherheit():
         assert [t["id"] for t in det["teilnehmer"]] == [anna["id"]]
         w = next(l for l in det["leistungen"] if l["id"] == wurf["id"])
         assert w["bezeichnung"] == "Wurf" and w["zeitansatz_sekunden"] is None, w
-        assert [k["bezeichnung"] for k in w["kriterien"]] == ["Griff", "Ziel"], w["kriterien"]
+        assert [k["bezeichnung"] for k in w["kriterien"]] == ["Griff"], w["kriterien"]
+        assert next(l for l in det["leistungen"] if l["id"] == knoten["id"])["kriterien_eingefroren"] is False
         assert [v["bezeichnung"] for v in det["voraussetzungen"]] == ["DRSA"]
         # Ergebnis aufgehoben: alles wieder erlaubt.
         assert pr.put(f"/api/pruefungen/teilnehmer/{anna['id']}/ergebnis", json={"ergebnis": None}).status_code == 200
         assert pr.put(f"/api/pruefungen/leistungen/{wurf['id']}", json={"bezeichnung": "Wurf (neu)"}).status_code == 200
+        assert pr.post(f"/api/pruefungen/leistungen/{wurf['id']}/kriterien", json={"bezeichnung": "Ziel"}).status_code == 201
         assert pr.delete(f"/api/pruefungen/kriterien/{griff['id']}", headers=H).status_code == 200
         assert pr.delete(f"/api/pruefungen/voraussetzungen/{drsa['id']}", headers=H).status_code == 200
         assert pr.delete(f"/api/pruefungen/teilnehmer/{anna['id']}", headers=H).status_code == 200

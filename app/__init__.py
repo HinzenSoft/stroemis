@@ -4,6 +4,7 @@ import os
 import random
 import secrets
 import base64
+import json
 import tempfile
 import time
 from datetime import date, timedelta
@@ -16,9 +17,9 @@ from werkzeug.exceptions import Forbidden, HTTPException, InternalServerError
 from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.security import safe_join
 
-from . import (api_admin, api_albums, api_pruefungen, api_wiki, auth, db, einstellungen, material, medienpflege, module,
-               pwa)
-from .images import AVATAR_MAX_BYTES, EMBED_EXT, VIDEO_EXT, slide_variante
+from . import (anleitung, api_admin, api_albums, api_pruefungen, api_wiki, auth, db, einstellungen, material, medienpflege,
+               module, pwa)
+from .images import AVATAR_MAX_BYTES, EMBED_EXT, MEDIEN_ACCEPT, VIDEO_EXT, slide_variante
 
 
 def _env_bool(name, default=False):
@@ -138,6 +139,12 @@ def _load_secret(data_dir):
 pages = Blueprint("pages", __name__)
 
 
+def _anleitung(modul):
+    """Die Adressen der Anleitung in der Strömipedia, die das Konto lesen darf (app/anleitung.py), als JSON für
+    data-anleitung am Rahmen der Seite – S.anleitung (common.js) liest sie dort."""
+    return json.dumps(anleitung.verweise(modul), ensure_ascii=False)
+
+
 @pages.get("/")
 @auth.page_login_required
 def index():
@@ -146,7 +153,7 @@ def index():
     eigener Stufe geht ihm vor. Die Materialablage öffnet sich nur mit Stufe UND Namen (rechte.zugang) – ein namenloses
     Konto von früher landete sonst auf ihrer Fehlerseite."""
     if auth.nutzt("wiki"):
-        return render_template("wiki.html", user=auth.current_user(), slug="")
+        return render_template("wiki.html", user=auth.current_user(), slug="", anleitung=_anleitung("wiki"))
     from .material.services import rechte as mat_rechte
     for modul in ("karte", "pruefungen", "material", "verwaltung"):
         if mat_rechte.zugang() if modul == "material" else auth.nutzt(modul):
@@ -161,7 +168,8 @@ def index():
 @pages.get("/ankerplaetze")
 @auth.page_modul_required("karte")
 def karte():
-    return render_template("index.html", user=auth.current_user())
+    # accept der Dateiauswahl aus der Liste des Servers (images.MEDIEN_ACCEPT) – map.js prüft Abgelegtes daran.
+    return render_template("index.html", user=auth.current_user(), anleitung=_anleitung("karte"), accept=MEDIEN_ACCEPT)
 
 
 def _wiki(slug):
@@ -170,7 +178,7 @@ def _wiki(slug):
     Teils (public.js), der nur /api/public abfragt. Was „öffentlich“ ist, entscheidet so weiter eine Stelle
     (api_wiki.is_public), und keine interne Schnittstelle musste dafür aufgehen – die bleiben bei wiki_required."""
     if auth.nutzt("wiki"):
-        return render_template("wiki.html", user=auth.current_user(), slug=slug)
+        return render_template("wiki.html", user=auth.current_user(), slug=slug, anleitung=_anleitung("wiki"))
     if auth.wiki_lesemodus():
         return render_template("wiki_lesemodus.html", user=auth.current_user(), slug=slug)
     abort(403, description=auth.KEIN_ZUGANG["wiki"])
@@ -316,7 +324,8 @@ def _pruefungen_seite(ansicht, lehrgang_id=None, katalog_id=None):
     if lehrgang_id is not None and not api_pruefungen._sichtbar(lehrgang_id):
         abort(404)
     return render_template("pruefungen.html", user=auth.current_user(), ansicht=ansicht,
-                           lehrgang_id=lehrgang_id, katalog_id=katalog_id)
+                           lehrgang_id=lehrgang_id, katalog_id=katalog_id,
+                           anleitung=_anleitung("pruefungen") if ansicht != "druck" else "{}")
 
 
 @pages.get("/riegenkarten")
