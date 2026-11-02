@@ -14,7 +14,7 @@
   color: var(--anthrazit); background: var(--grau-hell); border-radius: var(--radius-pille); padding: 0 6px; font-weight: 400; }
 @media (pointer: coarse) { .mf-teil > summary { padding: 11px 0; } }
 
-/* „+ Freigabe“: Person, Anker, Vorlage, Enden, Notiz */
+/* „+ Freigabe“: Person, Anker, Rolle, Gültigkeit, Notiz */
 .mf-personwahl { position: relative; }
 .mf-treffer { list-style: none; margin: 4px 0 0; padding: 0; border: 1px solid var(--linie); max-height: 240px; overflow: auto; }
 .mf-treffer[hidden] { display: none; }
@@ -31,7 +31,8 @@
 .mf-gewaehlt .lnk { margin-left: auto; }
 .mf-vorlagen { border: 0; padding: 0; margin: 12px 0 0; min-width: 0; }
 .mf-vorlagen legend { font-weight: 700; padding: 0; margin-bottom: 4px; }
-/* Je Vorlage eine Kachel mit Erklärung – nebeneinander, so viele hineinpassen, am Telefon untereinander. */
+/* Je Rolle eine Karte mit Kurztext – nebeneinander, so viele hineinpassen, am Telefon untereinander (auch im Dialog
+   „Rechte ändern“). */
 .mf-vorlagen { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 230px), 1fr)); gap: 6px; }
 .mf-vorlagen legend { grid-column: 1 / -1; }
 .mf-vorlage { display: flex; gap: 8px; align-items: flex-start; border: 1px solid var(--linie); padding: 8px 10px; margin: 0;
@@ -42,15 +43,36 @@
 .mf-vorlage:has(input:checked) { border-color: var(--rot); box-shadow: inset 0 0 0 1px var(--rot); }
 .mf-vorlage:has(input:disabled) { opacity: .55; cursor: default; }
 .mf-vorlage:has(input:focus-visible) { outline: 3px solid var(--gelb); outline-offset: 2px; }
-.mf-quali { margin-top: 6px; }
-.mf-einzeln, .mf-enden { margin-top: 8px; }
-.mf-einzeln[hidden], .mf-enden > [hidden], .mf-quali[hidden] { display: none; }
-.mf-pruefen-wahl { margin-top: 30px; }
-.mf-enden .mat-datum { max-width: 11em; }
-.mf-enden .mat-datum[hidden] { display: none; }
-.mf-enden label.inline { margin: 0 0 4px; }
-/* „dauerhaft“ gibt es nicht immer (eigenes Ende, externer Prüfer) – hidden muss gegen label.inline (inline-flex) gewinnen. */
-.mf-enden label.inline[hidden] { display: none; }
+/* Warum eine Rolle nicht geht: unter den Karten, je Grund ein Satz (nicht im „i“). */
+.mf-gruende { margin: 6px 0 0; }
+.mf-gruende[hidden] { display: none; }
+.mf-grund-satz { display: block; }
+.mf-grund-satz + .mf-grund-satz { margin-top: 2px; }
+
+/* Gültigkeit „● dauerhaft ○ bis [TT.MM.JJJJ]“ (seit 02.11.2026 statt „… bis“ mit Kästchen „dauerhaft“): eine Zeile, die
+   am Telefon umbrechen darf – „bis“ und das Datumsfeld bleiben zusammen. Wo „dauerhaft“ nicht geht (eigenes Ende,
+   externer Prüfer), fehlt es samt dem Auswahlpunkt vor „bis“. hidden muss gegen display: flex gewinnen. */
+.mf-gueltig { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 16px; margin: 12px 0 0; }
+.mf-gueltig[hidden], .mf-gueltig-hilfe[hidden] { display: none; }
+.mf-gueltig-titel { display: inline-flex; align-items: center; gap: 4px; font-weight: 600; }
+.mf-gueltig label.inline { margin: 0; }
+.mf-bis { display: inline-flex; align-items: center; gap: 8px; }
+.mf-gueltig .mat-datum { width: 9.5em; }
+.mf-gueltig.nur-bis .mf-dauerhaft, .mf-gueltig.nur-bis .mf-bis input[type="radio"] { display: none; }
+.mf-gueltig-hilfe { margin: 4px 0 0; }
+/* „Einzeln“: Grundrecht und Prüffreigabe untereinander, je mit ihrer Gültigkeit. */
+.mf-einzeln { margin-top: 4px; }
+.mf-einzeln[hidden] { display: none; }
+.mf-einzel-teil { border-top: 1px solid var(--linie); margin-top: 12px; }
+.mf-einzel-teil > label:first-child, .mf-einzel-teil > .mfp-titel:first-child { margin-top: 8px; }
+.mf-einzel-teil > .feld-gruppe:first-child { margin-top: 6px; }
+.mf-einzel-teil select { max-width: 20em; }
+@media (pointer: coarse) {
+  /* 44 px am Finger: die Karte „Einzeln“ (ohne Kurztext), die Auswahlpunkte der Gültigkeit und das Kästchen. */
+  .mf-vorlage { min-height: 44px; }
+  .mf-gueltig label.inline, .mf-einzel-teil label.inline { min-height: 44px; }
+  .mf-gueltig .mat-datum { min-height: 44px; }
+}
 .mf-notiz { margin-top: 10px; }
 .mf-notiz > summary { cursor: pointer; font-weight: 600; padding: 4px 0; }
 @media (pointer: coarse) { .mf-notiz > summary { padding: 11px 0; } }   /* 44 px (Browserprüfung vor dem Merge, B3) */
@@ -123,16 +145,13 @@ tr.mf-alt td { color: var(--grau); }
 .mf-meine-recht { color: var(--grau); font-size: var(--fs-klein); }
 .mf-kopf { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; }
 
-/* „Freigabe anlegen“ für eine Person, die am Anker schon Rechte hat: der Satz mit „Rechte ändern“ über den Vorlagen. */
+/* „Freigabe anlegen“ für eine Person, die am Anker schon Rechte hat: der Satz mit „Rechte ändern“ über den Rollen. */
 .mf-schon { margin: 12px 0 0; }
 .mf-schon[hidden] { display: none; }
 
-/* Dialog „Rechte ändern“ (freigaben.js, personDialog): Grundrecht und Prüffreigabe je ein Abschnitt, darunter ihr Ende. */
-.mfp-teil { margin-top: 12px; padding-top: 4px; border-top: 1px solid var(--linie); }
+/* Dialog „Rechte ändern“ (freigaben.js, personDialog): dieselben Rollenkarten und dieselbe Gültigkeit wie „Freigabe
+   anlegen“; unter „Einzeln“ ein Recht, das man nicht ändern darf, als Text (Titel und Satz). */
 .mfp-titel { font-weight: 600; margin: 12px 0 4px; }
 .mfp-fest { margin: 0 0 4px; }
-.mfp-ende { margin: 4px 0 0; }
-.mfp-ende .mat-datum { max-width: 11em; }
-.mfp-ende label.inline { margin: 0 0 4px; }
-/* hidden muss gegen label.inline (inline-flex) und die Felder gewinnen. */
-.mfp-ende[hidden], .mfp-teil label.inline[hidden], .mfp-teil .mat-datum[hidden], .mfp-teil .help[hidden] { display: none; }
+.mf-unter .mf-vorlagen { margin-top: 14px; }
+.mf-unter .mf-notiz { margin-top: 14px; }

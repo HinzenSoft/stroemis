@@ -1,14 +1,15 @@
 /* Freigaben je Ordner (Phase 2 · Lieferung 1, Abschnitt 4.2): der Reiter „Freigaben“ im Dialog „Ordner bearbeiten“ mit
-   Vorlagen (Führungskraft, Materialwart, Prüfer, Externer Prüfer …), den Listen „Hier vergeben“, „Geerbt von oben“,
-   „In Unterordnern“ und „Verlauf“, dem Knopf „Alle Prüffreigaben verlängern“ – dazu der Hinweis „Meine
-   Freigaben“ auf der Übersicht. Seit dem 02.11.2026 (Wunsch des Nutzers) eine Zeile je Person in allen drei Listen
-   (geerbt und unten je Person und Ordner) mit EINEM „Ändern“ – Dialog „Rechte ändern“ für Grundrecht, Prüffreigabe
-   und Notiz, gespeichert in einer Transaktion (PUT …/freigaben/person/<konto>) – und „Entziehen“ für alle Rechte der
-   Person dort; Verlauf, „Meine Freigaben“ und die Leitstelle bleiben je Freigabe. Stellt window.MatFreigaben bereit:
+   Rollen (Führungskraft, Materialwart, Prüfer, Externer Prüfer …; bis 02.11.2026 „Vorlagen“), den Listen „Hier
+   vergeben“, „Geerbt von oben“, „In Unterordnern“ und „Verlauf“, dem Knopf „Alle Prüffreigaben verlängern“ – dazu der
+   Hinweis „Meine Freigaben“ auf der Übersicht. Seit dem 02.11.2026 (Wunsch des Nutzers) eine Zeile je Person in allen drei Listen
+   (geerbt und unten je Person und Ordner) mit EINEM „Ändern“ – Dialog „Rechte ändern“ mit denselben Rollenkarten wie
+   „Freigabe anlegen“ (seltene Fälle unter „Einzeln“), Gültigkeit und Notiz, gespeichert in einer Transaktion
+   (PUT …/freigaben/person/<konto>) – und „Entziehen“ für alle Rechte der Person dort; Verlauf, „Meine Freigaben“ und
+   die Leitstelle bleiben je Freigabe. Stellt window.MatFreigaben bereit:
      inhalt(element, ordner, optionen?)  füllt element (den Reiter) mit Hinweis, „Freigabe anlegen“ und den Listen; Dialog,
                                 Reiter und Knopfzeile („Schließen“) gehören material.js. ordner: das Objekt der
                                 Ordneransicht (oder seine Kennung). optionen:
-                                  vorlage    „materialwart“ usw. (?freigaben=<vorlage> nach „Gliederung anlegen“) oder
+                                  vorlage    die Rolle „materialwart“ usw. (?freigaben=<rolle> nach „Gliederung anlegen“) oder
                                              „verlaengern“ (springt zum Knopf „Alle Prüffreigaben verlängern“)
                                   fokus      nach dem Laden ins Formular (bzw. auf „verlängern“) – sonst bleibt der
                                              Fokus, wo er ist (etwa auf dem Reiter)
@@ -30,25 +31,41 @@
   const RECHT = { lesen: "lesen", verwalten: "verwalten", pruefen: "prüfen" };
   // Link auf die Anleitung in der Strömipedia am Ende einer Info – nur, wer sie lesen darf (material.js, MatAnleitung).
   const mehrDazu = (thema) => (window.MatAnleitung ? window.MatAnleitung.mehrDazu(thema) : "");
-  // Die Vorlagen des Reiters: ein Grundrecht (dauerhaft, wenn man selbst dauerhaft verwaltet) und/oder eine
-  // Prüffreigabe. Befristet ist nur noch der externe Prüfer; wer lesen oder verwalten mitbekommt, prüft dauerhaft
-  // (pruefDauer: „dauerhaft“ vorgewählt – angeboten nur, wer selbst dauerhaft verwaltet). „Einzeln“ lässt alles frei.
-  const VORLAGEN = [
-    { k: "fuehrungskraft", t: "Führungskraft", grund: "lesen", pruefen: false,
-      text: "lesen – Bestand, Protokolle, Export, Lebensläufe und Journal ansehen, Mängel melden (sperrt)" },
-    { k: "materialwart", t: "Materialwart", grund: "verwalten", pruefen: false,
-      text: "verwalten – Ordner und Artikel pflegen, aussondern, Freigaben vergeben; prüfen nur mit eigener Prüffreigabe" },
-    { k: "pruefer", t: "Prüfer", grund: "lesen", pruefen: true, pruefDauer: true, text: "lesen und prüfen" },
-    { k: "materialwart_pruefer", t: "Materialwart und Prüfer", grund: "verwalten", pruefen: true, pruefDauer: true,
-      text: "verwalten und prüfen" },
-    { k: "extern", t: "Externer Prüfer", grund: null, pruefen: true,
-      text: "nur prüfen bis … – die Prüfsicht: Artikel und Prüfungen, kein Export, kein Journal; höchstens 24 Monate" },
-    { k: "einzeln", t: "Einzeln", grund: null, pruefen: false, text: "Grundrecht und Prüffreigabe frei wählen" },
+  /* Die Rollen (Nutzer 02.11.2026, „Rollen wie beim Anlegen“): dieselben Karten in „Freigabe anlegen“ und „Rechte
+     ändern“ – ein Grundrecht und/oder eine Prüffreigabe. Die Gültigkeit einer Rolle gilt fürs Grundrecht; wer lesen
+     oder verwalten mitbekommt, prüft dauerhaft und damit, solange das Grundrecht gilt (wer selbst nur befristet
+     verwaltet, vergibt das Prüfen nur bis zum selben Tag). Befristet ist nur der externe Prüfer. „Einzeln“ lässt
+     Grundrecht und Prüffreigabe frei, je mit eigener Gültigkeit. kurz steht auf der Karte, lang im „i“ an „Rolle“. */
+  const ROLLEN = [
+    { k: "fuehrungskraft", t: "Führungskraft", grund: "lesen", pruefen: false, kurz: "ansehen, Mängel melden",
+      lang: "lesen – Bestand, Protokolle, Export, Lebensläufe und Journal ansehen, Mängel melden (sperrt)" },
+    { k: "materialwart", t: "Materialwart", grund: "verwalten", pruefen: false, kurz: "Ordner und Artikel pflegen",
+      lang: "verwalten – Ordner und Artikel pflegen, aussondern, Freigaben vergeben; prüfen nur mit eigener Prüffreigabe" },
+    { k: "materialwart_pruefer", t: "Materialwart und Prüfer", grund: "verwalten", pruefen: true,
+      kurz: "wie Materialwart, dazu prüfen", lang: "verwalten und prüfen – das Prüfen gilt, solange verwalten gilt" },
+    { k: "pruefer", t: "Prüfer", grund: "lesen", pruefen: true, kurz: "ansehen und prüfen",
+      lang: "lesen und prüfen – das Prüfen gilt, solange lesen gilt" },
+    { k: "extern", t: "Externer Prüfer", grund: null, pruefen: true, kurz: "nur prüfen, höchstens 24 Monate",
+      lang: "nur prüfen, mit Enddatum – die Prüfsicht: Artikel und Prüfungen, kein Export, kein Journal; höchstens 24 Monate" },
+    { k: "einzeln", t: "Einzeln", grund: null, pruefen: false, kurz: "",
+      lang: "Grundrecht (lesen oder verwalten) und Prüffreigabe frei wählen, je mit eigener Gültigkeit – für seltene Fälle" },
   ];
+  const rolleMit = (k) => ROLLEN.find((r) => r.k === k);
   const OHNE_QUALIFIKATION = "Prüfen erst mit Häkchen durch die Verwaltung und Urkundennummer im Profil.";
   const OHNE_GRUNDRECHT = "Dauerhaft prüft nur, wer hier auch lesen oder verwalten hat – sonst wirkt die Prüffreigabe nicht.";
-  // Hilfe unter „Prüfen bis“, wenn „dauerhaft“ gewählt ist.
-  const PRUEFEN_DAUERHAFT = "Gilt, solange die Person hier lesen oder verwalten hat – nur externe Prüfer brauchen ein Enddatum.";
+  // Sätze unter den Rollenkarten: warum eine Rolle nicht geht (rollenGruende).
+  const EIGENE_NEU = "Dir selbst vergibst du keine Prüffreigabe – das macht ein anderer Verwalter oder die Material-Verwaltung.";
+  const FEST_ROLLE = "Ein Recht der Person reicht weiter als dein eigenes Verwalten – ändern kannst du nur unter „Einzeln“, was dort frei ist.";
+  const EIGENE_MEHR = "Mehr Rechte gibt dir ein anderer Verwalter oder die Material-Verwaltung.";
+  const NUR_PV_HERAB = "Herabsetzen und entziehen nur über die Material-Verwaltung – sonst verwaltet hier niemand so lange wie du.";
+  const OHNE_ZUGANG_MEHR = "Mehr Rechte erst, wenn das Konto aktiv ist und Zugang zur Materialablage hat – den gibt die Plattform-Verwaltung.";
+  // Die Erklärungen hinter den „i“ an „Rolle“ und „Gültig“ – mit dem Link in die Strömipedia.
+  const rollenInfo = () => ROLLEN.map((r) => `<span class="info-absatz"><strong>${esc(r.t)}:</strong> ${esc(r.lang)}</span>`).join("")
+    + mehrDazu("freigaben");
+  const gueltigInfo = () => "<span class=\"info-absatz\">„dauerhaft“ gilt, bis jemand die Freigabe ändert oder entzieht; „bis“ "
+    + "schließt den letzten Tag ein: „bis 31.12.“ gilt den ganzen 31.12.</span><span class=\"info-absatz\">Bei einer Rolle "
+    + "gilt sie für lesen bzw. verwalten – das Prüfen dazu gilt, solange dieses Grundrecht gilt. Nur externe Prüfer brauchen "
+    + "ein Enddatum, höchstens 24 Monate.</span>" + mehrDazu("freigaben");
 
   const plural = S.plural;              // „1 Bild“, „3 Bilder“ – app-weit in common.js (UI/UX vor dem Merge, A11)
   const fokus = (el) => { if (el && !window.matchMedia("(pointer: coarse)").matches) el.focus(); };
@@ -231,6 +248,152 @@
   // Die Person zum Schlüssel „ordner:konto“ aus allen drei Listen.
   const personZu = (d, k) => personen(d.direkt.concat(d.geerbt, d.unten)).find((p) => p.k === k) || null;
 
+  /* --- Rollen und Gültigkeit (gemeinsam für „Freigabe anlegen“ und „Rechte ändern“) ------------------------------
+     Rollenkarten als Radiogruppe (id: Kennung der Gruppe, name: Name der Knöpfe); darunter, warum eine Rolle nicht
+     geht – als Satz, nicht im „i“. */
+  const rollenHtml = (id, name) => `<fieldset class="mf-vorlagen" id="${id}"><legend>Rolle${info("Rolle", rollenInfo())}</legend>
+      ${ROLLEN.map((r) => `<label class="mf-vorlage"><input type="radio" name="${name}" value="${r.k}">
+        <span><strong>${esc(r.t)}</strong>${r.kurz ? `<span class="small">${esc(r.kurz)}</span>` : ""}</span></label>`).join("")}
+    </fieldset><p class="help mf-gruende" id="${id}-gruende" hidden></p>`;
+
+  // gruende: {rolle: Satz} – diese Rollen sind ausgegraut; je Satz eine Zeile mit den Rollen davor (ihre Knöpfe verweisen
+  // mit aria-describedby darauf). Eine gewählte Rolle, die nicht mehr geht, verliert die Wahl.
+  function gruendeZeigen(gruppe, gruende) {
+    const je = new Map();
+    const satz = gruppe.nextElementSibling;
+    $$('input[type="radio"]', gruppe).forEach((r) => {
+      const g = gruende[r.value] || "";
+      r.disabled = !!g;
+      if (g && r.checked) r.checked = false;
+      if (g) { if (!je.has(g)) je.set(g, []); je.get(g).push(`„${rolleMit(r.value).t}“`); }
+      if (g) r.setAttribute("aria-describedby", satz.id); else r.removeAttribute("aria-describedby");
+    });
+    // Gilt ein Grund für alle Rollen außer „Einzeln“, steht nur der Satz da.
+    const html = Array.from(je, ([g, rollen]) => `<span class="mf-grund-satz">${rollen.length < ROLLEN.length - 1
+      ? `${esc(rollen.join(", "))}: ` : ""}${esc(g)}</span>`).join("");
+    if (satz.innerHTML !== html) satz.innerHTML = html;
+    satz.hidden = !je.size;
+  }
+
+  /* Die Rolle zu den heutigen Rechten einer Person an einem Ordner (g Grundrecht, pf Prüffreigabe, je Zeile der Liste
+     oder null): lesen → Führungskraft, verwalten → Materialwart, dazu dauerhaft prüfen → Prüfer bzw. Materialwart und
+     Prüfer, nur befristet prüfen → Externer Prüfer; alles andere (befristet prüfen mit Grundrecht, dauerhaft prüfen
+     ohne Grundrecht hier) → „Einzeln“. */
+  function rolleZu(g, pf) {
+    if (g && pf) return pf.bis !== null ? "einzeln" : g.recht === "verwalten" ? "materialwart_pruefer" : "pruefer";
+    if (g) return g.recht === "verwalten" ? "materialwart" : "fuehrungskraft";
+    if (pf) return pf.bis !== null ? "extern" : "einzeln";
+    return null;
+  }
+
+  /* Warum eine Rolle im Dialog nicht geht – {rolle: Satz}. Ausgegraut wird, was der Server ohnehin ablehnte: ein Recht,
+     das man nicht ändern darf (Nr. 4, x.fest – dann nur „Einzeln“), mehr für sich selbst (Nr. 5; x.eigen, nicht für die
+     Material-Verwaltung), die eigene letzte Verwalterfreigabe herabsetzen oder entziehen (Nr. 7, entziehbar false), mehr
+     für ein Konto ohne Zugang (Nr. 12) und eine neue oder längere Prüffreigabe ohne Qualifikation (Nr. 8). Das Datum
+     prüft der Server. */
+  function rollenGruende(g, pf, x) {
+    const out = {};
+    ROLLEN.forEach((r) => {
+      if (r.k === "einzeln") return;
+      const grundMehr = !!r.grund && (!g || (g.recht === "lesen" && r.grund === "verwalten"));
+      const pruefMehr = r.pruefen && (!pf || (r.k !== "extern" && pf.bis !== null));
+      let grund = "";
+      if (x.fest) grund = FEST_ROLLE;
+      else if (x.eigen && pruefMehr && !pf) grund = EIGENE_NEU;
+      else if (x.eigen && (grundMehr || pruefMehr)) grund = EIGENE_MEHR;
+      else if (g && g.entziehbar === false && r.grund !== "verwalten") grund = NUR_PV_HERAB;
+      else if ((grundMehr || pruefMehr) && x.ohneZugang) grund = OHNE_ZUGANG_MEHR;
+      else if (pruefMehr && !x.qualifiziert) grund = OHNE_QUALIFIKATION;
+      if (grund) out[r.k] = grund;
+    });
+    return out;
+  }
+
+  /* Was eine Rolle an die Schnittstelle schickt – Server und Schnittstelle bleiben, wie sie sind. bis: die Gültigkeit der
+     Rolle (null = dauerhaft); pruefDauer: das Prüfen der Rollen mit Grundrecht darf dauerhaft sein (es gilt dann,
+     solange das Grundrecht gilt) – wer selbst nur befristet verwaltet, gibt es bis zum selben Tag; der externe Prüfer
+     prüft bis zum Datum. rolleAnlegen für POST …/freigaben; rolleAendern für PUT …/freigaben/person/<konto> mit den
+     heutigen Rechten g und pf – was die Rolle nicht hat, wird entzogen. */
+  const pruefBis = (r, bis, pruefDauer) => (r.k === "extern" || (bis !== null && !pruefDauer) ? bis : null);
+  const rolleAnlegen = (r, bis, pruefDauer) => ({ grundrecht: r.grund, grund_bis: r.grund ? bis : null, pruefen: r.pruefen,
+    pruefen_bis: r.pruefen ? pruefBis(r, bis, pruefDauer) : null });
+  function rolleAendern(r, bis, pruefDauer, g, pf) {
+    const out = {};
+    if (r.grund) out.grundrecht = { recht: r.grund, bis };
+    else if (g) out.grundrecht = null;
+    if (r.pruefen) out.pruefen = { bis: pruefBis(r, bis, pruefDauer) };
+    else if (pf) out.pruefen = null;
+    return out;
+  }
+
+  /* Gültigkeit als Radiogruppe „dauerhaft / bis [Datum]“ (Nutzer 02.11.2026) – das Datumsfeld steht immer da, Tippen
+     hinein wählt „bis“. name: wofür, fürs Vorlesen und für Fehlermeldungen („Gültig“, „Grundrecht gültig“ …); mitInfo:
+     das „i“ an „Gültig“ (bei den Rollen). Wo „dauerhaft“ nicht geht, fehlt es (Klasse nur-bis). */
+  const gueltigHtml = (id, name, mitInfo) => `<div class="mf-gueltig feld-gruppe" id="${id}" role="radiogroup" aria-label="${esc(name)}">
+      <span class="mf-gueltig-titel"><span aria-hidden="true">Gültig</span>${mitInfo ? info("Gültig", gueltigInfo()) : ""}</span>
+      <label class="inline mf-dauerhaft"><input type="radio" name="${id}" value="dauerhaft"> dauerhaft</label>
+      <span class="mf-bis"><label class="inline"><input type="radio" name="${id}" value="bis"> bis</label>${datumFeld(`${id}-bis`, "", `${name} bis`)}</span>
+    </div><p class="help mf-gueltig-hilfe" id="${id}-hilfe" hidden></p>`;
+
+  // „Einzeln“: Grundrecht und Prüffreigabe untereinander, je mit eigener Gültigkeit (p: Vorsilbe der Kennungen).
+  const einzelnHtml = (p, grund, pruef) => `<div class="mf-einzeln" id="${p}-einzeln" hidden>
+      <div class="mf-einzel-teil">${grund}</div><div class="mf-einzel-teil">${pruef}</div></div>`;
+
+  // Ein Fehler mit dem Feld, an dem er stehen soll (S.feldFehler).
+  const feldFehlerAn = (feld, text) => Object.assign(new Error(text), { feld });
+
+  /* Steuerung einer Gültigkeitszeile. vorschlag(): das Datum, das „bis“ bekommt, wenn das Feld beim Wählen leer ist;
+     geaendert: nach jeder Wahl. */
+  function gueltig(wurzel, id, vorschlag, geaendert) {
+    const gruppe = $("#" + id, wurzel);
+    const dauer = $('input[value="dauerhaft"]', gruppe);
+    const bisWahl = $('input[value="bis"]', gruppe);
+    const feld = $(`#${id}-bis`, wurzel);
+    const hilfeEl = $(`#${id}-hilfe`, wurzel);
+    const name = gruppe.getAttribute("aria-label");
+    const nurBis = () => gruppe.classList.contains("nur-bis");
+    const bisNehmen = () => {
+      if (bisWahl.checked) return;
+      bisWahl.checked = true;
+      if (geaendert) geaendert();
+    };
+    // Tippen oder Schreiben ins Feld wählt „bis“ – nicht schon der Fokus: Wer mit Tab durchgeht, ändert nichts.
+    feld.addEventListener("pointerdown", bisNehmen);
+    feld.addEventListener("input", bisNehmen);
+    [dauer, bisWahl].forEach((r) => r.addEventListener("change", () => {
+      if (bisWahl.checked && !feld.value && vorschlag) feld.value = fmtTag(vorschlag());
+      if (geaendert) geaendert();
+    }));
+    return {
+      gruppe, feld,
+      // wert: null (dauerhaft) oder ein ISO-Tag (bis, mit Datum).
+      setzen(wert) {
+        if (wert === null) { dauer.checked = true; feld.value = ""; } else { bisWahl.checked = true; feld.value = fmtTag(wert); }
+        feld.classList.remove("ungueltig");
+      },
+      // „dauerhaft“ anbieten oder nicht; ohne bleibt „bis“ (mit Vorschlag, wenn das Feld leer ist).
+      erlauben(geht) {
+        gruppe.classList.toggle("nur-bis", !geht);
+        if (!geht && !bisWahl.checked) { bisWahl.checked = true; if (!feld.value && vorschlag) feld.value = fmtTag(vorschlag()); }
+      },
+      hilfe(text) { hilfeEl.textContent = text || ""; hilfeEl.hidden = !text; },
+      zeigen(an) { gruppe.hidden = !an; if (!an) hilfeEl.hidden = true; },
+      dauerhaft: () => dauer.checked && !nurBis(),
+      // null (dauerhaft) oder das Datum – ohne gültiges Datum ein Fehler am Feld.
+      wert() {
+        if (dauer.checked && !nurBis()) return null;
+        let v;
+        try { v = datumWert(feld, name + " bis"); } catch (e) { throw feldFehlerAn(feld, e.message); }
+        if (!v) throw feldFehlerAn(feld, `Bitte ein Datum angeben${nurBis() ? "" : " – oder „dauerhaft“"}.`);
+        return v;
+      },
+      // Wohin eine Ablehnung des Servers zum Ende gehört: ans Datumsfeld, wenn „bis“ gewählt ist, sonst an „dauerhaft“.
+      fehlerZiel: () => (dauer.checked && !nurBis() ? dauer : feld),
+    };
+  }
+  // Ablehnungen des Servers, die das Ende betreffen (24 Monate, Vergangenheit, länger als das eigene Verwalten, dauerhaft).
+  const UM_DAS_ENDE = /Enddatum|Monate|Vergangenheit|[Ll]änger|[Dd]auerhaft/;
+
   /* --- „Freigabe anlegen“ ------------------------------------------------------------------------------------------ */
   function formHtml(d) {
     return `<details class="mf-teil mf-neu" open><summary><span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Freigabe<span class="k-anlegen"> anlegen</span></span></summary>
@@ -246,28 +409,13 @@
       <select id="mf-anker">${d.anker_wahl.map((a) => `<option value="${a.id}"${a.id === d.anker_vorgabe ? " selected" : ""}>${esc(a.pfad)}</option>`).join("")}</select>
       <div class="help">… und alle Ordner darunter.</div>
       <p class="notice mf-schon" id="mf-schon" hidden></p>
-      <fieldset class="mf-vorlagen"><legend>Vorlage</legend>
-        ${VORLAGEN.map((v) => `<label class="mf-vorlage"><input type="radio" name="mf-vorlage" value="${v.k}">
-          <span><strong>${esc(v.t)}</strong><span class="small">${esc(v.text)}</span></span></label>`).join("")}
-      </fieldset>
-      <p class="help mf-quali" id="mf-quali" hidden>${esc(OHNE_QUALIFIKATION)}</p>
-      <div class="mf-einzeln" id="mf-einzeln" hidden>
-        <div class="field-row">
-          <div><label for="mf-grund">Grundrecht</label><select id="mf-grund"><option value="">–</option><option value="lesen">lesen</option>
-            <option value="verwalten">verwalten</option></select></div>
-          <div><label class="inline mf-pruefen-wahl"><input type="checkbox" id="mf-pruefen"> Prüffreigabe</label></div>
-        </div>
-      </div>
-      <div class="field-row mf-enden">
-        <div id="mf-grund-ende" hidden><label for="mf-grund-bis">Grundrecht bis</label>
-          <label class="inline" id="mf-dauerhaft-wahl"><input type="checkbox" id="mf-dauerhaft" checked> dauerhaft</label>
-          ${datumFeld("mf-grund-bis", "", "Grundrecht bis")}
-          <div class="help" id="mf-grund-hilfe"></div></div>
-        <div id="mf-pruefen-ende" hidden><label for="mf-pruefen-bis">Prüfen bis</label>
-          <label class="inline" id="mf-pruefen-dauerhaft-wahl" hidden><input type="checkbox" id="mf-pruefen-dauerhaft"> dauerhaft</label>
-          ${datumFeld("mf-pruefen-bis", "", "Prüfen bis")}
-          <div class="help" id="mf-pruefen-hilfe"></div></div>
-      </div>
+      ${rollenHtml("mf-rollen", "mf-vorlage")}
+      ${einzelnHtml("mf", `<label for="mf-grund">Grundrecht</label><select id="mf-grund"><option value="">–</option>
+          <option value="lesen">lesen</option><option value="verwalten">verwalten</option></select>
+          ${gueltigHtml("mf-grund-g", "Grundrecht gültig")}`,
+        `<div class="feld-gruppe"><label class="inline"><input type="checkbox" id="mf-pruefen"> Prüffreigabe</label></div>
+          ${gueltigHtml("mf-pruefen-g", "Prüffreigabe gültig")}`)}
+      ${gueltigHtml("mf-gueltig", "Gültig", true)}
       <details class="mf-notiz"><summary>Notiz</summary>
         <input type="text" id="mf-notiz" maxlength="200" aria-label="Notiz" aria-describedby="mf-notiz-hilfe">
         <div class="help" id="mf-notiz-hilfe">Eine Zeile, höchstens 200 Zeichen – sehen nur Verwalter dieses Ordners und die
@@ -276,24 +424,24 @@
     </details>`;
   }
 
-  /* Der Zustand des Formulars: gewählte Person, Vorlage und Anker – daraus folgen die sichtbaren Felder, die Vorgaben
-     für „bis“ und welche Vorlagen gehen (prüfen nur mit Qualifikation; „dauerhaft“ nur, wer selbst dauerhaft
-     verwaltet – beim Prüfen dazu nur, wo die Person ein Grundrecht bekommt oder schon hat, nie beim externen Prüfer). */
+  /* Der Zustand des Formulars: gewählte Person, Rolle und Anker – daraus folgen die sichtbaren Felder, die Vorgaben
+     der Gültigkeit und welche Rollen gehen (prüfen nur mit Qualifikation; „dauerhaft“ nur, wer selbst dauerhaft
+     verwaltet – unter „Einzeln“ beim Prüfen dazu nur, wo die Person ein Grundrecht bekommt oder schon hat; der externe
+     Prüfer nur mit Enddatum). */
   function formVerdrahten(body, stand, nachher) {
     const feld = (id) => $("#" + id, body);
     let person = null;
     let suchzeit = null;
     let suchlauf = 0;
     const anker = () => stand.daten.anker_wahl.find((a) => a.id === +feld("mf-anker").value) || stand.daten.anker_wahl[0];
-    const vorlage = () => VORLAGEN.find((v) => v.k === (($('input[name="mf-vorlage"]:checked', body) || {}).value));
-    const pruefenEnde = () => frueher(frueher(stand.daten.grenzen.vorgabe_bis, stand.daten.grenzen.pruefen_max), anker().ende);
-
-    function wunsch() {
-      const v = vorlage();
-      if (!v) return { grund: null, pruefen: false };
-      if (v.k === "einzeln") return { grund: feld("mf-grund").value || null, pruefen: feld("mf-pruefen").checked };
-      return { grund: v.grund, pruefen: v.pruefen };
-    }
+    const rolle = () => rolleMit(($('input[name="mf-vorlage"]:checked', body) || {}).value);
+    const grenzen = stand.daten.grenzen;
+    const pruefenEnde = () => frueher(frueher(grenzen.vorgabe_bis, grenzen.pruefen_max), anker().ende);
+    // Ohne „dauerhaft“: das eigene Ende – bei einer Rolle mit Prüfen höchstens 24 Monate (das Prüfen endet mit).
+    const rolleEnde = () => { const v = rolle(); return v && v.pruefen ? frueher(anker().ende, grenzen.pruefen_max) : anker().ende; };
+    const gRolle = gueltig(body, "mf-gueltig", () => (rolle() && rolle().k === "extern" ? pruefenEnde() : rolleEnde() || pruefenEnde()), () => zeigen());
+    const gGrund = gueltig(body, "mf-grund-g", () => anker().ende || pruefenEnde(), () => zeigen());
+    const gPruef = gueltig(body, "mf-pruefen-g", pruefenEnde, () => zeigen());
 
     // Hat die gewählte Person am Anker oder darüber schon ein gültiges Grundrecht? Die Material-Verwaltung hat es
     // überall (grundrecht_ueberall aus der Personensuche), sonst aus den Listen (direkt und geerbt decken den Ordner und
@@ -307,7 +455,7 @@
         && f.gueltig && oben.has(f.ordner.id));
     }
 
-    // Hat die gewählte Person am gewählten Anker schon Rechte, sagt es der Satz über den Vorlagen – mit „Rechte ändern“
+    // Hat die gewählte Person am gewählten Anker schon Rechte, sagt es der Satz über den Rollen – mit „Rechte ändern“
     // (Dialog der Person). „Freigabe erteilen“ bleibt möglich und ändert wie bisher die vorhandene Zeile derselben Art.
     // Neu gezeichnet nur, wenn sich der Satz ändert – sonst verlöre ein fokussiertes „Rechte ändern“ den Fokus.
     function schonZeigen() {
@@ -327,51 +475,55 @@
       const a = anker();
       schonZeigen();
       const quali = !person || person.qualifiziert;
-      $$('input[name="mf-vorlage"]', body).forEach((r) => {
-        const v = VORLAGEN.find((x) => x.k === r.value);
-        r.disabled = v.pruefen && !quali;
-        if (r.disabled && r.checked) r.checked = false;
-      });
+      gruendeZeigen(feld("mf-rollen"), quali ? {} : Object.fromEntries(ROLLEN.filter((v) => v.pruefen).map((v) => [v.k, OHNE_QUALIFIKATION])));
       feld("mf-pruefen").disabled = !quali;
       if (!quali) feld("mf-pruefen").checked = false;
-      feld("mf-quali").hidden = quali;
-      feld("mf-einzeln").hidden = !(vorlage() && vorlage().k === "einzeln");
-      const w = wunsch();
-      feld("mf-grund-ende").hidden = !w.grund;
-      feld("mf-pruefen-ende").hidden = !w.pruefen;
-      // Dauerhaft nur, wer hier selbst dauerhaft verwaltet; sonst endet das Grundrecht spätestens mit dem eigenen.
+      const v = rolle();
+      const einzeln = !!v && v.k === "einzeln";
+      feld("mf-einzeln").hidden = !einzeln;
+      // Dauerhaft nur, wer hier selbst dauerhaft verwaltet; sonst endet alles spätestens mit dem eigenen Verwalten.
       const dauerhaftGeht = a.ende === null;
-      feld("mf-dauerhaft-wahl").hidden = !dauerhaftGeht;
-      if (!dauerhaftGeht) feld("mf-dauerhaft").checked = false;
-      feld("mf-grund-bis").hidden = feld("mf-dauerhaft").checked;
-      feld("mf-grund-hilfe").textContent = dauerhaftGeht ? "" : `Du verwaltest hier bis ${fmtTag(a.ende)} – länger vergibst du nichts.`;
-      // Prüfen dauerhaft: dazu ein Grundrecht – aus dieser Vorlage (bzw. „Einzeln“ mit Grundrecht) oder schon vorhanden.
-      // Der externe Prüfer braucht immer ein Enddatum.
-      const v = vorlage();
-      const pruefDauerGeht = dauerhaftGeht && w.pruefen && !!v && v.k !== "extern" && (!!w.grund || grundrechtDort(a));
-      feld("mf-pruefen-dauerhaft-wahl").hidden = !pruefDauerGeht;
-      if (!pruefDauerGeht) feld("mf-pruefen-dauerhaft").checked = false;
-      const pruefDauer = feld("mf-pruefen-dauerhaft").checked;
-      feld("mf-pruefen-bis").hidden = pruefDauer;
-      feld("mf-pruefen-hilfe").textContent = pruefDauer ? PRUEFEN_DAUERHAFT
-        : `Spätestens ${fmtTag(frueher(stand.daten.grenzen.pruefen_max, a.ende))} – höchstens 24 Monate`
-          + (a.ende ? " und nicht länger als deine eigene Verwalterfreigabe." : ".");
+      const eigenesEnde = dauerhaftGeht ? "" : `Du verwaltest hier bis ${fmtTag(a.ende)} – länger vergibst du nichts.`;
+      const spaetestens = `Spätestens ${fmtTag(frueher(grenzen.pruefen_max, a.ende))} – höchstens 24 Monate`
+        + (a.ende ? " und nicht länger als deine eigene Verwalterfreigabe." : ".");
+      gRolle.zeigen(!!v && !einzeln);
+      if (v && !einzeln) {
+        gRolle.erlauben(v.k !== "extern" && dauerhaftGeht);
+        gRolle.hilfe(v.k === "extern" ? spaetestens
+          : eigenesEnde + (eigenesEnde && v.pruefen ? " Das Prüfen endet am selben Tag – höchstens 24 Monate." : ""));
+      }
+      // „Einzeln“: Grundrecht und Prüffreigabe je mit eigener Zeile. Prüfen dauerhaft nur mit Grundrecht – hier gewählt
+      // oder schon vorhanden.
+      const grund = feld("mf-grund").value;
+      const pruefen = feld("mf-pruefen").checked;
+      gGrund.zeigen(einzeln && !!grund);
+      gGrund.erlauben(dauerhaftGeht);
+      gGrund.hilfe(eigenesEnde);
+      gPruef.zeigen(einzeln && pruefen);
+      gPruef.erlauben(dauerhaftGeht && (!!grund || grundrechtDort(a)));
+      gPruef.hilfe(gPruef.dauerhaft() ? "" : spaetestens);
+      if (!einzeln) { gGrund.hilfe(""); gPruef.hilfe(""); }
     }
 
-    // Vorgaben je Anker: dauerhaft, wo man selbst dauerhaft verwaltet, sonst das eigene Ende; prüfen bis zum 31.12. des
-    // Folgejahres, gekappt.
+    // Vorgaben je Anker und Art der Rolle: dauerhaft, wo man selbst dauerhaft verwaltet, sonst das eigene Ende; der
+    // externe Prüfer und „Einzeln“ beim Prüfen: der 31.12. des Folgejahres, gekappt.
+    let art = null;
+    function rolleVorgabe() {
+      const v = rolle();
+      art = v && v.k === "extern" ? "extern" : "grund";
+      gRolle.setzen(art === "extern" ? pruefenEnde() : anker().ende === null ? null : rolleEnde());
+    }
     function vorgabenSetzen() {
       const a = anker();
-      feld("mf-pruefen-bis").value = fmtTag(pruefenEnde());
-      feld("mf-dauerhaft").checked = a.ende === null;
-      feld("mf-grund-bis").value = a.ende === null ? "" : fmtTag(a.ende);
-      ["mf-pruefen-bis", "mf-grund-bis"].forEach((id) => feld(id).classList.remove("ungueltig"));
+      rolleVorgabe();
+      gGrund.setzen(a.ende === null ? null : a.ende);
+      gPruef.setzen(pruefenEnde());
     }
-    // Vorlage gewechselt: „dauerhaft“ beim Prüfen vorwählen, wo die Vorlage es vorsieht (Prüfer, Materialwart und
-    // Prüfer); angeboten wird es nur, wo es geht (zeigen).
-    function vorlageGewechselt() {
-      const v = vorlage();
-      feld("mf-pruefen-dauerhaft").checked = !!(v && v.pruefDauer);
+    // Rolle gewechselt: Die Gültigkeit bleibt, wie man sie gesetzt hat – nur zwischen externem Prüfer (Enddatum) und den
+    // übrigen Rollen gilt wieder die Vorgabe.
+    function rolleGewechselt() {
+      const v = rolle();
+      if ((v && v.k === "extern" ? "extern" : "grund") !== art) rolleVorgabe();
       zeigen();
     }
 
@@ -420,9 +572,7 @@
       else if (knoepfe.length) knoepfe[0].focus();
     });
     feld("mf-anker").addEventListener("change", () => { vorgabenSetzen(); zeigen(); });
-    feld("mf-dauerhaft").addEventListener("change", () => { if (!feld("mf-dauerhaft").checked && !feld("mf-grund-bis").value) feld("mf-grund-bis").value = fmtTag(pruefenEnde()); zeigen(); });
-    feld("mf-pruefen-dauerhaft").addEventListener("change", () => { if (!feld("mf-pruefen-dauerhaft").checked && !feld("mf-pruefen-bis").value) feld("mf-pruefen-bis").value = fmtTag(pruefenEnde()); zeigen(); });
-    $$('input[name="mf-vorlage"]', body).forEach((x) => x.addEventListener("change", vorlageGewechselt));
+    $$('input[name="mf-vorlage"]', body).forEach((x) => x.addEventListener("change", rolleGewechselt));
     $$("#mf-grund, #mf-pruefen", body).forEach((x) => x.addEventListener("change", zeigen));
 
     feld("mf-erteilen").addEventListener("click", async (ev) => {
@@ -430,26 +580,23 @@
       if (knopf.disabled) return;
       // Fehler am Feld (UI/UX vor dem Merge, A2): Satz darunter, Fokus darauf.
       if (!person) { S.feldFehler(feld("mf-person"), "Bitte zuerst eine Person wählen."); return; }
-      if (!vorlage()) { S.feldFehler($('input[name="mf-vorlage"]', body), "Bitte eine Vorlage wählen."); return; }
-      const w = wunsch();
-      if (!w.grund && !w.pruefen) { S.feldFehler(feld("mf-grund"), "Bitte ein Grundrecht, eine Prüffreigabe oder beides wählen."); return; }
+      const v = rolle();
+      if (!v) { S.feldFehler($('input[name="mf-vorlage"]:not(:disabled)', body), "Bitte eine Rolle wählen."); return; }
       // pruefen: true mit pruefen_bis null heißt dauerhaft – ob das geht, entscheidet der Server (Grundrecht am Anker).
-      const daten = { user_id: person.id, grundrecht: w.grund, grund_bis: null, pruefen: w.pruefen, pruefen_bis: null };
-      let datumFeld = null;
+      const daten = { user_id: person.id, grundrecht: null, grund_bis: null, pruefen: false, pruefen_bis: null };
+      let zeile = gRolle;
       try {
-        if (w.grund && !feld("mf-dauerhaft").checked) {
-          datumFeld = feld("mf-grund-bis");
-          daten.grund_bis = datumWert(datumFeld, "Grundrecht bis");
-          if (!daten.grund_bis) throw new Error("Bitte ein Enddatum für das Grundrecht angeben – oder „dauerhaft“.");
+        if (v.k === "einzeln") {
+          daten.grundrecht = feld("mf-grund").value || null;
+          daten.pruefen = feld("mf-pruefen").checked;
+          if (!daten.grundrecht && !daten.pruefen) throw feldFehlerAn(feld("mf-grund"), "Bitte ein Grundrecht, eine Prüffreigabe oder beides wählen.");
+          if (daten.grundrecht) { zeile = gGrund; daten.grund_bis = gGrund.wert(); }
+          if (daten.pruefen) { zeile = gPruef; daten.pruefen_bis = gPruef.wert(); }
+        } else {
+          // Die eine Zeile gilt fürs Grundrecht; dauerhaft prüfen nur, wer selbst dauerhaft verwaltet (rolleAnlegen).
+          Object.assign(daten, rolleAnlegen(v, gRolle.wert(), anker().ende === null));
         }
-        if (w.pruefen && !feld("mf-pruefen-dauerhaft").checked) {
-          datumFeld = feld("mf-pruefen-bis");
-          daten.pruefen_bis = datumWert(datumFeld, "Prüfen bis");
-          if (!daten.pruefen_bis) {
-            throw new Error(`Bitte ein Enddatum für die Prüffreigabe angeben${feld("mf-pruefen-dauerhaft-wahl").hidden ? "" : " – oder „dauerhaft“"}.`);
-          }
-        }
-      } catch (e) { S.feldFehler(datumFeld, e.message); return; }
+      } catch (e) { S.feldFehler(e.feld, e.message); return; }
       const notiz = feld("mf-notiz").value.trim();
       if (notiz) daten.notiz = notiz;
       knopf.disabled = true;
@@ -461,7 +608,10 @@
         feld("mf-person").value = "";
         feld("mf-notiz").value = "";
         await nachher();
-      } catch (e) { S.fehlschlag(knopf, e, body); }
+      } catch (e) {
+        // Eine Ablehnung zum Ende (24 Monate, Vergangenheit, länger als das eigene Verwalten) steht an der Gültigkeit.
+        S.fehlschlag(knopf, e, UM_DAS_ENDE.test(String((e && e.message) || "")) ? zeile.fehlerZiel() : body);
+      }
       finally { knopf.disabled = false; }
     });
 
@@ -470,7 +620,7 @@
       if (r) r.checked = true;
     }
     vorgabenSetzen();
-    vorlageGewechselt();
+    zeigen();
     return { zeigen };
   }
 
@@ -483,12 +633,13 @@
 
   /* --- „Rechte ändern“, Entziehen, Verlängern -----------------------------------------------------------------
      Der Dialog bearbeitet alle Rechte einer Person an einem Ordner (Grundrecht und Prüffreigabe) und speichert sie über
-     PUT …/ordner/<anker>/freigaben/person/<konto> in EINER Transaktion – alles oder nichts. Lehnt der Server ab,
-     bleibt der Dialog mit allen Eingaben offen; die Meldung beginnt mit „„Grundrecht“: “ bzw. „„Prüffreigabe“: “ und
-     steht am Feld dieses Rechts. Ein Recht, das man nicht ändern darf (reicht weiter als das eigene Verwalten, Nr. 4),
-     steht nur als Text da und wird nicht mitgeschickt. */
-  const EIGENE_NEU = "Dir selbst vergibst du keine Prüffreigabe – das macht ein anderer Verwalter oder die Material-Verwaltung.";
-  const NUR_PV = "Entziehen nur über die Material-Verwaltung – sonst verwaltet hier niemand so lange wie du.";
+     PUT …/ordner/<anker>/freigaben/person/<konto> in EINER Transaktion – alles oder nichts. Seit dem 02.11.2026 (Nutzer:
+     „Rollen wie beim Anlegen“) wählt man eine Rolle mit EINER Gültigkeit, vorgewählt die zu den heutigen Rechten;
+     seltene Fälle unter „Einzeln“ (Grundrecht und Prüffreigabe je mit eigener Gültigkeit). Die Rolle wird hier auf
+     grundrecht/pruefen abgebildet – Server und Schnittstelle sind dieselben. Lehnt der Server ab, bleibt der Dialog mit
+     allen Eingaben offen; die Meldung beginnt mit „„Grundrecht“: “ bzw. „„Prüffreigabe“: “ und steht an der Gültigkeit
+     (Ende betroffen) bzw. an der Rolle oder dem Feld unter „Einzeln“. Ein Recht, das man nicht ändern darf (reicht
+     weiter als das eigene Verwalten, Nr. 4), steht unter „Einzeln“ nur als Text da und wird nicht mitgeschickt. */
   const sichtbar = (el) => !!el && el.getClientRects().length > 0;
 
   // Hat das Konto über dem Anker ein gültiges Grundrecht (oder ist es Material-Verwaltung)? Dann darf eine Prüffreigabe
@@ -511,129 +662,165 @@
     const ende = (anker || d.anker_wahl[0] || {}).ende;
     const selbstDauerhaft = ende === null || ende === undefined;
     const pruefenEnde = frueher(frueher(d.grenzen.vorgabe_bis, d.grenzen.pruefen_max), ende);
+    // Die eigene Zeile nur verkürzen, herabsetzen, entziehen (Nr. 5) – nicht für die Material-Verwaltung (Nr. 1).
+    const eigen = p.eigen && !d.alles;
     const grundFrei = !g || g.aenderbar;
     const pruefFrei = !pf || pf.aenderbar;
+    // „dauerhaft“ gibt nur, wer selbst dauerhaft verwaltet – die eigene Zeile nur, wenn sie es schon ist (dann auch
+    // ohne das, damit sie unverändert bleiben kann).
+    const grundDauerGeht = eigen ? !!(g && g.bis === null) : selbstDauerhaft;
+    const pruefDauerGeht = eigen ? !!(pf && pf.bis === null) : selbstDauerhaft;
+    // Vorgewählt: die Rolle zu den heutigen Rechten; passt keine oder ist ein Recht nicht änderbar, „Einzeln“.
+    const start = grundFrei && pruefFrei ? rolleZu(g, pf) || "einzeln" : "einzeln";
+    const gruende = rollenGruende(g, pf, { fest: !grundFrei || !pruefFrei, eigen, qualifiziert: !!p.konto.qualifiziert,
+      ohneZugang: p.konto.aktiv === false || p.konto.zugang === false });
+    const eigenesEnde = selbstDauerhaft ? "" : `Du verwaltest hier bis ${fmtTag(ende)} – länger vergibst du nichts.`;
+    const spaetestens = `Spätestens ${fmtTag(frueher(d.grenzen.pruefen_max, ende))} – höchstens 24 Monate`
+      + (selbstDauerhaft ? "." : " und nicht länger als deine eigene Verwalterfreigabe.");
     const fest = (f) => `<p class="mfp-fest"><strong>${esc(rechtText(f))}</strong> – ändern kann es nur, wer mindestens so lange verwaltet, oder die Material-Verwaltung.</p>`;
-    // Grundrecht: Die eigene Zeile nur herabsetzen (verwalten → lesen) oder entziehen, neu gibt es für sich selbst keins.
-    // „–“ fehlt, wenn das Entziehen an Nr. 7 scheitert (eigene letzte Verwalterfreigabe).
+    // „Einzeln“ – Grundrecht: die eigene Zeile nur herabsetzen (verwalten → lesen) oder entziehen, neu gibt es für sich
+    // selbst keins. Scheitert das Entziehen an Nr. 7 (eigene letzte Verwalterfreigabe), fehlen „–“ und „lesen“.
     let grundHtml;
     if (!grundFrei) {
       grundHtml = `<p class="mfp-titel">Grundrecht</p>${fest(g)}`;
-    } else if (p.eigen && !g) {
+    } else if (eigen && !g) {
       grundHtml = '<p class="mfp-titel">Grundrecht</p><p class="help">Keins – ein Grundrecht vergibt dir ein anderer Verwalter oder die Material-Verwaltung.</p>';
     } else {
-      const wahl = (p.eigen ? (g.recht === "verwalten" ? ["lesen", "verwalten"] : ["lesen"]) : ["lesen", "verwalten"]);
       const ohne = !(g && g.entziehbar === false);
-      const grundDauerGeht = selbstDauerhaft && (!p.eigen || (g && g.bis === null));
+      const wahl = !ohne ? ["verwalten"] : eigen ? (g.recht === "verwalten" ? ["lesen", "verwalten"] : ["lesen"]) : ["lesen", "verwalten"];
       grundHtml = `<label for="mfp-grund">Grundrecht</label>
         <select id="mfp-grund">${ohne ? `<option value=""${g ? "" : " selected"}>–</option>` : ""}${wahl.map((r) => `<option value="${r}"${g && g.recht === r ? " selected" : ""}>${RECHT[r]}</option>`).join("")}</select>
-        ${ohne ? "" : `<p class="help">${esc(NUR_PV)}</p>`}
-        <div class="mfp-ende" id="mfp-grund-ende"><label for="mfp-grund-bis">Grundrecht bis</label>
-          ${grundDauerGeht ? `<label class="inline"><input type="checkbox" id="mfp-grund-dauerhaft"${!g || g.bis === null ? " checked" : ""}> dauerhaft</label>` : ""}
-          ${datumFeld("mfp-grund-bis", g && g.bis ? g.bis : (selbstDauerhaft ? pruefenEnde : ende), "Grundrecht bis")}
-          ${selbstDauerhaft ? "" : `<div class="help">Du verwaltest hier bis ${fmtTag(ende)} – länger vergibst du nichts.</div>`}</div>
-        <p class="help" id="mfp-traegt" hidden>${esc(g ? traegtText(g) : "")}</p>`;
+        ${ohne ? "" : `<p class="help">${esc(NUR_PV_HERAB)}</p>`}
+        ${gueltigHtml("mfp-grund-g", "Grundrecht gültig")}`;
     }
-    // Prüffreigabe: neu nur mit Qualifikation und nicht für sich selbst (Nr. 5, 8). „dauerhaft“ nur, wer selbst
-    // dauerhaft verwaltet (die eigene nur, wenn sie es schon ist) – und nur mit Grundrecht (im Dialog gewählt, darüber
-    // vorhanden) oder wenn sie schon dauerhaft ist.
+    // Prüffreigabe: neu nur mit Qualifikation und nicht für sich selbst (Nr. 5, 8).
     let pruefHtml;
     if (!pruefFrei) {
       pruefHtml = `<p class="mfp-titel">Prüffreigabe</p>${fest(pf)}`;
     } else {
-      const neuGesperrt = !pf && (p.eigen || !p.konto.qualifiziert);
+      const neuGesperrt = !pf && (eigen || !p.konto.qualifiziert);
       pruefHtml = `<div class="feld-gruppe"><label class="inline"><input type="checkbox" id="mfp-pruefen"${pf ? " checked" : ""}${neuGesperrt ? " disabled" : ""}> Prüffreigabe</label></div>
-        ${neuGesperrt ? `<p class="help">${esc(p.eigen ? EIGENE_NEU : OHNE_QUALIFIKATION)}</p>` : ""}
-        <div class="mfp-ende" id="mfp-pruefen-ende"><label for="mfp-pruefen-bis">Prüfen bis</label>
-          <label class="inline" id="mfp-pruefen-dauer-wahl"><input type="checkbox" id="mfp-pruefen-dauerhaft"${pf && pf.bis === null ? " checked" : ""}> dauerhaft</label>
-          ${datumFeld("mfp-pruefen-bis", pf && pf.bis ? pf.bis : pruefenEnde, "Prüfen bis")}
-          <div class="help" id="mfp-pruefen-hilfe"></div></div>
-        <p class="help" id="mfp-ohne-grund" hidden>${esc(OHNE_GRUNDRECHT)}</p>`;
+        ${neuGesperrt ? `<p class="help">${esc(eigen ? EIGENE_NEU : OHNE_QUALIFIKATION)}</p>` : ""}
+        ${gueltigHtml("mfp-pruefen-g", "Prüffreigabe gültig")}`;
     }
-    // Die Notiz: EIN Feld für die Person an diesem Ordner, gespeichert auf jedes Recht, das man hier ändern darf.
+    // Die Notiz: EIN Feld für die Person an diesem Ordner, gespeichert auf jedes Recht, das man hier ändern darf –
+    // zugeklappt wie beim Anlegen, offen, wenn es eine gibt.
     const mitNotiz = p.rechte.filter((f) => "notiz" in f && f.aenderbar);
-    const notiz = g && mitNotiz.includes(g) ? g.notiz : (mitNotiz[0] || {}).notiz;
+    const notiz = (g && mitNotiz.includes(g) ? g.notiz : (mitNotiz[0] || {}).notiz) || "";
     const abweichend = g && pf && mitNotiz.length === 2 && (g.notiz || "") !== (pf.notiz || "")
       ? `<div class="help">${pf.notiz ? `Die Prüffreigabe hatte die Notiz „${esc(pf.notiz)}“` : "Die Prüffreigabe hatte keine Notiz"} – beim Speichern gilt diese eine Notiz für beide.</div>` : "";
     unterDialog(`<h2>Rechte ändern</h2>
       <p>${personHtml(p.konto)} · ${esc(p.ordner.pfad)}</p>
-      ${p.eigen ? '<p class="help">Deine eigenen Rechte kannst du nur verkürzen, herabsetzen oder entziehen.</p>' : ""}
-      <div class="mfp-teil">${grundHtml}</div>
-      <div class="mfp-teil">${pruefHtml}</div>
-      ${mitNotiz.length ? `<label for="mfp-notiz">Notiz</label><input type="text" id="mfp-notiz" maxlength="200" value="${esc(notiz || "")}">
-        ${abweichend}<div class="help">Sehen nur Verwalter dieses Ordners und die Material-Verwaltung – die Person selbst nur, wenn sie hier
-          mitverwaltet. Keine sensiblen Angaben.</div>` : ""}
+      ${eigen ? '<p class="help">Deine eigenen Rechte kannst du nur verkürzen, herabsetzen oder entziehen.</p>' : ""}
+      ${rollenHtml("mfp-rollen", "mfp-rolle")}
+      ${gueltigHtml("mfp-gueltig", "Gültig", true)}
+      ${einzelnHtml("mfp", grundHtml, pruefHtml)}
+      <p class="help" id="mfp-traegt" hidden>${esc(g ? traegtText(g) : "")}</p>
+      <p class="help" id="mfp-ohne-grund" hidden>${esc(OHNE_GRUNDRECHT)}</p>
+      ${mitNotiz.length ? `<details class="mf-notiz"${notiz || abweichend ? " open" : ""}><summary>Notiz</summary>
+        <input type="text" id="mfp-notiz" maxlength="200" aria-label="Notiz" aria-describedby="mfp-notiz-hilfe" value="${esc(notiz)}">
+        ${abweichend}<div class="help" id="mfp-notiz-hilfe">Sehen nur Verwalter dieses Ordners und die Material-Verwaltung – die Person selbst nur, wenn sie hier
+          mitverwaltet. Keine sensiblen Angaben.</div></details>` : ""}
       <div class="dlg-actions"><button class="btn secondary" type="button" data-close>Abbrechen</button>
         <button class="btn" type="button" id="mfp-ok">Speichern</button></div>`, (dlg, body) => {
       const feld = (id) => $("#" + id, body);
       const grundWahl = feld("mfp-grund");
-      const grundDauer = feld("mfp-grund-dauerhaft");
       const pruefWahl = feld("mfp-pruefen");
-      const pruefDauer = feld("mfp-pruefen-dauerhaft");
-      // Das Grundrecht nach dem Dialog: gewählt, oder unverändert, wo man es nicht ändern darf.
-      const grundDanach = () => (grundWahl ? grundWahl.value : (g ? g.recht : ""));
+      const rolle = () => rolleMit(($('input[name="mfp-rolle"]:checked', body) || {}).value);
+      // Ohne „dauerhaft“ endet eine Rolle mit dem eigenen Verwalten – mit Prüfen höchstens nach 24 Monaten.
+      const rolleEnde = () => { const v = rolle(); return v && v.pruefen ? frueher(ende, d.grenzen.pruefen_max) : ende; };
+      const gRolle = gueltig(body, "mfp-gueltig", () => ((rolle() && rolle().k === "extern") || selbstDauerhaft ? pruefenEnde : rolleEnde()), () => zeigen());
+      const gGrund = grundWahl ? gueltig(body, "mfp-grund-g", () => (selbstDauerhaft ? pruefenEnde : ende), () => zeigen()) : null;
+      const gPruef = pruefWahl ? gueltig(body, "mfp-pruefen-g", () => pruefenEnde, () => zeigen()) : null;
+      // Das Grundrecht nach dem Dialog: aus der Rolle, unter „Einzeln“ gewählt – oder unverändert, wo man es nicht
+      // ändern darf.
+      const einzeln = () => rolle().k === "einzeln";
+      const grundDanach = () => (!einzeln() ? rolle().grund || "" : grundWahl ? grundWahl.value : (g ? g.recht : ""));
+
       function zeigen() {
-        if (grundWahl) {
-          feld("mfp-grund-ende").hidden = !grundWahl.value;
-          feld("mfp-grund-bis").hidden = !!(grundDauer && grundDauer.checked);
-          // Was an diesem Grundrecht hängt, sagt der Dialog, sobald es wegfällt oder ein Ende bekommt.
-          feld("mfp-traegt").hidden = !(g && g.traegt_pruefen && (!grundWahl.value || !(grundDauer && grundDauer.checked)));
+        const v = rolle();
+        const ez = v.k === "einzeln";
+        feld("mfp-einzeln").hidden = !ez;
+        gRolle.zeigen(!ez);
+        if (!ez) {
+          gRolle.erlauben(v.k !== "extern" && grundDauerGeht);
+          gRolle.hilfe(v.k === "extern" ? spaetestens
+            : eigen && g && g.bis ? `Deine Freigabe läuft bis ${fmtTag(g.bis)} – länger geht nicht.`
+              : eigenesEnde + (eigenesEnde && v.pruefen ? " Das Prüfen endet am selben Tag – höchstens 24 Monate." : ""));
         }
-        if (pruefWahl) {
-          feld("mfp-pruefen-ende").hidden = !pruefWahl.checked;
-          const dauerGeht = selbstDauerhaft && (!p.eigen || (pf && pf.bis === null))
-            && (!!grundDanach() || grundrechtOben(p, d) || (pf && pf.bis === null));
-          feld("mfp-pruefen-dauer-wahl").hidden = !dauerGeht;
-          if (!dauerGeht) pruefDauer.checked = false;
-          feld("mfp-pruefen-bis").hidden = pruefDauer.checked;
-          feld("mfp-pruefen-hilfe").textContent = pruefDauer.checked ? PRUEFEN_DAUERHAFT
-            : `Spätestens ${fmtTag(frueher(d.grenzen.pruefen_max, ende))} – höchstens 24 Monate`
-              + (selbstDauerhaft ? "." : " und nicht länger als deine eigene Verwalterfreigabe.");
-          feld("mfp-ohne-grund").hidden = !(pruefWahl.checked && pruefDauer.checked && !grundDanach() && !grundrechtOben(p, d));
+        if (gGrund) {
+          gGrund.zeigen(ez && !!grundWahl.value);
+          gGrund.erlauben(grundDauerGeht);
+          gGrund.hilfe(ez && grundWahl.value ? eigenesEnde : "");
         }
+        if (gPruef) {
+          // Prüfen dauerhaft nur mit Grundrecht (hier gewählt oder darüber) – oder wenn sie es schon ist.
+          gPruef.zeigen(ez && pruefWahl.checked);
+          gPruef.erlauben(pruefDauerGeht && (!!grundDanach() || grundrechtOben(p, d) || !!(pf && pf.bis === null)));
+          gPruef.hilfe(ez && pruefWahl.checked && !gPruef.dauerhaft() ? spaetestens : "");
+        }
+        // Was an diesem Grundrecht hängt, sagt der Dialog, sobald es wegfällt oder ein Ende bekommt.
+        const dauerDanach = !ez ? gRolle.dauerhaft() : gGrund ? gGrund.dauerhaft() : !!(g && g.bis === null);
+        feld("mfp-traegt").hidden = !(g && g.traegt_pruefen && grundFrei && (!grundDanach() || !dauerDanach));
+        feld("mfp-ohne-grund").hidden = !(ez && pruefWahl && pruefWahl.checked && gPruef.dauerhaft() && !grundDanach() && !grundrechtOben(p, d));
       }
-      [grundWahl, grundDauer, pruefWahl, pruefDauer].forEach((x) => { if (x) x.addEventListener("change", zeigen); });
+
+      // Vorbelegung wie heute: die Rolle, ihre Gültigkeit (fürs Grundrecht, beim externen Prüfer fürs Prüfen); unter
+      // „Einzeln“ jedes Recht mit seinem Ende.
+      $(`input[name="mfp-rolle"][value="${start}"]`, body).checked = true;
+      gruendeZeigen(feld("mfp-rollen"), gruende);
+      gRolle.setzen(start === "extern" ? pf.bis : g ? g.bis : grundDauerGeht ? null : rolleEnde());
+      let art = start === "extern" ? "extern" : "grund";
+      if (gGrund) gGrund.setzen(g ? g.bis : grundDauerGeht ? null : (selbstDauerhaft ? pruefenEnde : ende));
+      if (gPruef) gPruef.setzen(pf ? pf.bis : pruefenEnde);
+      $$('input[name="mfp-rolle"]', body).forEach((r) => r.addEventListener("change", () => {
+        // Zwischen externem Prüfer (Enddatum fürs Prüfen) und den übrigen Rollen (Gültigkeit fürs Grundrecht) gilt wieder
+        // die Vorgabe; sonst bleibt, was man gesetzt hat.
+        const neu = rolle().k === "extern" ? "extern" : "grund";
+        if (neu !== art) {
+          art = neu;
+          gRolle.setzen(art === "extern" ? (pf && pf.bis) || pruefenEnde : g ? g.bis : grundDauerGeht ? null : rolleEnde());
+        }
+        zeigen();
+      }));
+      [grundWahl, pruefWahl].forEach((x) => { if (x) x.addEventListener("change", zeigen); });
       zeigen();
+
+      // Was gespeichert wird – je Recht wie die Schnittstelle es will (Rolle: rolleAendern); ein Recht, das man nicht
+      // ändern darf, fehlt.
+      function daten() {
+        const v = rolle();
+        if (v.k !== "einzeln") return rolleAendern(v, gRolle.wert(), pruefDauerGeht, g, pf);
+        const out = {};
+        if (grundWahl) {
+          if (grundWahl.value) out.grundrecht = { recht: grundWahl.value, bis: gGrund.wert() };
+          else if (g) out.grundrecht = null;
+        }
+        if (pruefWahl && !pruefWahl.disabled) {
+          if (pruefWahl.checked) out.pruefen = { bis: gPruef.wert() };
+          else if (pf) out.pruefen = null;
+        }
+        return out;
+      }
+      // Bleibt alles, wie es ist (Rolle, Ende, Notiz), schließt „Speichern“ ohne Anfrage.
+      const gleich = (w, alt) => (w === undefined || (w === null ? !alt : !!alt && (!w.recht || w.recht === alt.recht) && w.bis === alt.bis));
+      const unveraendert = (x) => gleich(x.grundrecht, g) && gleich(x.pruefen, pf) && (!("notiz" in x) || x.notiz === notiz);
 
       feld("mfp-ok").onclick = async (ev) => {
         const knopf = ev.currentTarget;
         if (knopf.disabled) return;
-        const daten = {};
-        let datum = null;
-        try {
-          if (grundWahl) {
-            if (grundWahl.value) {
-              let bis = null;
-              if (!(grundDauer && grundDauer.checked)) {
-                datum = feld("mfp-grund-bis");
-                bis = datumWert(datum, "Grundrecht bis");
-                if (!bis) throw new Error(`Bitte ein Enddatum für das Grundrecht angeben${grundDauer ? " – oder „dauerhaft“" : ""}.`);
-              }
-              daten.grundrecht = { recht: grundWahl.value, bis };
-            } else if (g) daten.grundrecht = null;
-          }
-          if (pruefWahl && !pruefWahl.disabled) {
-            if (pruefWahl.checked) {
-              let bis = null;
-              if (!pruefDauer.checked) {
-                datum = feld("mfp-pruefen-bis");
-                bis = datumWert(datum, "Prüfen bis");
-                if (!bis) {
-                  throw new Error(`Bitte ein Enddatum für die Prüffreigabe angeben${feld("mfp-pruefen-dauer-wahl").hidden ? "" : " – oder „dauerhaft“"}.`);
-                }
-              }
-              daten.pruefen = { bis };
-            } else if (pf) daten.pruefen = null;
-          }
-        } catch (e) { S.feldFehler(datum, e.message); return; }
-        if (feld("mfp-notiz")) daten.notiz = feld("mfp-notiz").value.trim();
-        if (!("grundrecht" in daten) && !("pruefen" in daten)) {
-          // Nichts gewählt und nichts da: Hinweis am Grundrecht statt einer leeren Anfrage.
+        let x;
+        try { x = daten(); } catch (e) { S.feldFehler(e.feld, e.message); return; }
+        if (feld("mfp-notiz")) x.notiz = feld("mfp-notiz").value.trim();
+        if (!("grundrecht" in x) && !("pruefen" in x)) {
+          // Unter „Einzeln“ nichts gewählt und nichts da: Hinweis am Grundrecht statt einer leeren Anfrage.
           S.feldFehler(grundWahl || pruefWahl, "Bitte ein Grundrecht, eine Prüffreigabe oder beides wählen – oder „Abbrechen“.");
           return;
         }
-        // Fällt ein Recht weg, vorher fragen (Entziehen vernichtet nichts – neu erteilen geht jederzeit).
-        const weg = [g && daten.grundrecht === null ? g : null, pf && daten.pruefen === null ? pf : null].filter(Boolean);
+        if (unveraendert(x)) { dlg.close(); return; }
+        // Fällt ein Recht weg (etwa „Materialwart und Prüfer“ → „Materialwart“), vorher fragen – Entziehen vernichtet
+        // nichts, neu erteilen geht jederzeit.
+        const weg = [g && x.grundrecht === null ? g : null, pf && x.pruefen === null ? pf : null].filter(Boolean);
         if (weg.length) {
           const text = `${weg.map((f) => `„${RECHT[f.recht] || f.recht}“`).join(" und ")} von ${p.konto.name} an ${p.ordner.pfad} entziehen?`
             + (p.eigen ? " Es ist deine eigene Freigabe." : "") + (weg.includes(g) && g.traegt_pruefen ? ` ${traegtText(g)}` : "");
@@ -641,17 +828,26 @@
         }
         knopf.disabled = true;
         try {
-          const r = await api(`${API}/ordner/${p.ordner.id}/freigaben/person/${p.konto.id}`, { method: "PUT", body: daten });
+          const r = await api(`${API}/ordner/${p.ordner.id}/freigaben/person/${p.konto.id}`, { method: "PUT", body: x });
           dlg.close();
           toast(`${p.konto.name}: Rechte geändert`);
           stand.hinweis = offenHinweis(r, p);
           await nachher();
         } catch (e) {
-          // Die Meldung nennt das Recht – an dessen Datumsfeld (wenn sichtbar), sonst an seiner Auswahl.
-          const m = String((e && e.message) || "").match(/^„(Grundrecht|Prüffreigabe)“/);
-          const ziel = !m ? null : m[1] === "Grundrecht"
-            ? (sichtbar(feld("mfp-grund-bis")) ? feld("mfp-grund-bis") : grundWahl)
-            : (sichtbar(feld("mfp-pruefen-bis")) ? feld("mfp-pruefen-bis") : pruefWahl);
+          // Die Meldung nennt das Recht: Geht es um das Ende, steht sie an der Gültigkeit, sonst an der Rolle bzw. unter
+          // „Einzeln“ an der Auswahl dieses Rechts; eine zur Notiz am Notizfeld.
+          const text = String((e && e.message) || "");
+          const m = text.match(/^„(Grundrecht|Prüffreigabe|Notiz)“/);
+          const ez = einzeln();
+          let ziel = null;
+          if (m && m[1] === "Notiz" && feld("mfp-notiz")) {
+            feld("mfp-notiz").closest("details").open = true;
+            ziel = feld("mfp-notiz");
+          } else if (m) {
+            const zeile = !ez ? gRolle : m[1] === "Grundrecht" ? gGrund : gPruef;
+            const wahl = !ez ? $('input[name="mfp-rolle"]:checked', body) : m[1] === "Grundrecht" ? grundWahl : pruefWahl;
+            ziel = zeile && UM_DAS_ENDE.test(text) && sichtbar(zeile.gruppe) ? zeile.fehlerZiel() : wahl;
+          }
           S.fehlschlag(knopf, e, ziel || body);
         }
       };
@@ -761,7 +957,7 @@
   /* „Verlängern“ aus dem Ablaufhinweis im Ordnerkopf. Er zählt alles, was hier und in Unterordnern in 30 Tagen
      abläuft – auch Grundrechte, die „Alle Prüffreigaben verlängern“ nicht betrifft. Läuft eine befristete
      Prüffreigabe ab, die man ändern darf, geht es zu diesem Knopf; sonst zur Personenzeile mit der ersten ablaufenden
-     Freigabe (ihr Abschnitt geht auf, der Fokus auf ihr „Ändern“). Läuft inzwischen nichts mehr ab, zum Knopf, sonst wie ohne Vorlage. */
+     Freigabe (ihr Abschnitt geht auf, der Fokus auf ihr „Ändern“). Läuft inzwischen nichts mehr ab, zum Knopf, sonst wie ohne Rolle. */
   function zumAblauf(el, d, mitFokus) {
     const bald = (f) => f.laeuft_ab_in_tagen !== null && f.laeuft_ab_in_tagen !== undefined;
     const knopf = $("#mf-verlaengern", el);

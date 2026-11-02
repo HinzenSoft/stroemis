@@ -2384,7 +2384,7 @@
           }
           dlg.close();
           // Eine neue Gliederung braucht als Erstes ihren Materialwart: „Ordner bearbeiten“ öffnet dort im Reiter
-          // „Freigaben“ mit dieser Vorlage.
+          // „Freigaben“ mit der Rolle „Materialwart“.
           location.href = `/materialablage/ordner/${oid}${oben ? "?freigaben=materialwart" : ""}`;
         } catch (e) { S.fehlschlag(knopf, e, body); }
       };
