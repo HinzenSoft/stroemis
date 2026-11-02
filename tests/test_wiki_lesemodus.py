@@ -139,16 +139,17 @@ def test_lesen():
             assert "Du siehst die Seiten der Strömipedia, die für alle Angemeldeten freigegeben sind." in r.text and 'data-modus="lesemodus"' in r.text
             assert "js/public.js" in r.text and "js/wiki.js" not in r.text and "toastui" not in r.text
             ohne_merkmal(r.text, w["merkmale"], adresse)
-        # Startseite ohne jedes Modul: der Lesemodus statt der Sackgasse; mit Spots führt sie wie bisher dorthin.
-        r = leser.get("/")
-        assert r.status_code == 302 and r.headers["Location"].endswith("/ankerplaetze")
-        # Mit dem Modul Material (Vorgabe neuer Konten) führt sie dorthin, ohne jedes Modul in den Lesemodus.
-        assert w["adm"].put(f"/api/admin/users/{w['leser_id']}", json={"rechte": {"karte": 0}}).status_code == 200
-        r = leser.get("/")
-        assert r.status_code == 302 and r.headers["Location"].endswith("/materialablage")
-        assert w["adm"].put(f"/api/admin/users/{w['leser_id']}", json={"rechte": {"material": 0}}).status_code == 200
-        r = leser.get("/")
-        assert r.status_code == 302 and r.headers["Location"].endswith("/stroemipedia")
+        # Startseite (seit dem 02.11.2026 über alle Module, app/start.py): Mit Spots, mit dem Modul Material (Vorgabe neuer
+        # Konten) und ohne jedes Modul die Startseite – die Strömipedia darin als Kachel des Lesemodus.
+        for stufen, module in (({}, ["wiki", "karte", "material"]), ({"karte": 0}, ["wiki", "material"]),
+                               ({"material": 0}, ["wiki"])):
+            if stufen:
+                assert w["adm"].put(f"/api/admin/users/{w['leser_id']}", json={"rechte": stufen}).status_code == 200
+            r = leser.get("/")
+            assert r.status_code == 200 and 'id="start-inhalt"' in r.text, stufen
+            d = leser.get("/api/start").json
+            assert [k["modul"] for k in d["kacheln"]] == module and d["lesemodus"], (stufen, d["kacheln"])
+            ohne_merkmal(json.dumps(d, ensure_ascii=False), w["merkmale"], f"/api/start {stufen}")
         # Der Reiter steht auch auf anderen Seiten und führt nach /stroemipedia (nicht auf die Startseite).
         assert '<a href="/stroemipedia" class="">Strömipedia</a>' in leser.get("/profil").text
 
@@ -312,7 +313,7 @@ def test_unveraendert():
             r = c.get("/stroemipedia")
             assert r.status_code == 200 and "js/wiki.js" in r.text and 'data-modus="lesemodus"' not in r.text, name
             assert "für alle Angemeldeten freigegeben sind" not in r.text, name
-            assert '<a href="/" class="active">Strömipedia</a>' in r.text, name
+            assert '<a href="/stroemipedia" class="active">Strömipedia</a>' in r.text, name
             assert c.get("/").status_code == 200, name
             assert intern["slug"] in {p["slug"] for p in c.get("/api/wiki/tree").json["pages"]}, name
             assert c.get(f"/api/wiki/pages/{intern['slug']}").status_code == 200, name

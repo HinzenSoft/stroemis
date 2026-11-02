@@ -129,7 +129,8 @@ def test_a8_tippflaechen():
     assert ".map-shell .leaflet-control-layers label { display: flex; align-items: center; min-height: 44px; margin: 0; }" in touch
     assert ".map-shell .leaflet-control-layers-expanded .leaflet-control-layers-toggle { display: block; }" in touch
     assert ".pruef table.list td a.titel::after { content: \"\"; position: absolute; inset: -14px -4px; }" in touch
-    assert ".home-baum li > a { display: flex; align-items: center; min-height: 44px; }" in touch
+    # Die Übersicht der Strömipedia zeigt seit dem 02.11.2026 Karten statt der Liste (.home-baum) – dieselbe Zeilenhöhe.
+    assert ".wiki-karte > :is(h2, h3) > a, .wiki-karte li > a { display: flex; align-items: center; min-height: 44px; }" in touch
     assert ".fav-list a { min-height: 44px; padding: 12px 6px; }" in touch
     assert ".home-cols li > a { display: flex; flex-wrap: wrap; align-items: center; column-gap: .3em; min-height: 44px; }" in touch
     assert '<span class="muted small"> · ${fmtDate(meta(r), true)}</span></a></li>' in lies("app/static/js/wiki.js")

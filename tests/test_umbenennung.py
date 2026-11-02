@@ -142,18 +142,19 @@ def test_neue_adressen_wie_die_alten():
             assert w.get(pfad).status_code == 403, pfad
             assert w.get(pfad.replace("/riegenkarten", "/pruefungen").replace("/ankerplaetze", "/karte")
                          .replace("/leitstelle", "/admin"), follow_redirects=True).status_code == 403, pfad
-        assert w.get("/").headers["Location"] == "/materialablage"
-        # Startweiche je Modul.
-        for mail, rechte, ziel in (("nur-karte@example.org", {"karte": 1, "material": 0}, "/ankerplaetze"),
-                                   ("nur-rk@example.org", {"pruefungen": 1, "material": 0}, "/riegenkarten")):
+        # Startseite über alle Module (02.11.2026, app/start.py) statt der früheren Startweiche: „/“ zeigt jedem Konto
+        # seine Module als Kacheln – ohne jedes Modul die Strömipedia im Lesemodus.
+        kacheln = lambda c: [x["modul"] for x in c.get("/api/start").json["kacheln"]]  # noqa: E731
+        assert w.get("/").status_code == 200 and kacheln(w) == ["wiki", "material"]
+        for mail, rechte, ziel, module in (("nur-karte@example.org", {"karte": 1, "material": 0}, "/ankerplaetze", ["wiki", "karte"]),
+                                           ("nur-rk@example.org", {"pruefungen": 1, "material": 0}, "/riegenkarten",
+                                            ["wiki", "pruefungen"])):
             c, _ = neues_konto(app, mail, rechte=rechte)
             r = c.get("/")
-            assert r.status_code == 302 and r.headers["Location"] == ziel, (mail, r.headers.get("Location"))
+            assert r.status_code == 200 and kacheln(c) == module, (mail, kacheln(c))
             assert c.get(ziel).status_code == 200
-        # Ohne jedes Modul: Lesemodus unter /stroemipedia.
         c, _ = neues_konto(app, "nichts@example.org", stufe=0)
-        r = c.get("/")
-        assert r.status_code == 302 and r.headers["Location"].endswith("/stroemipedia"), r.headers.get("Location")
+        assert c.get("/").status_code == 200 and kacheln(c) == ["wiki"]
         assert 'data-modus="lesemodus"' in c.get("/stroemipedia").text
         # Fremde Gegenstände bleiben unter der neuen Adresse, was sie waren (404 wie unbekannt).
         assert k["nutzer"].get("/materialablage/artikel/999999").status_code == 403    # ohne Stufe: kein Zugang
@@ -174,7 +175,7 @@ def test_namen_in_der_oberflaeche():
         voll, _ = neues_konto(app, "voll@example.org", name="Voll Platzhalter",
                               rechte={"verwaltung": 3, "material": 3, "wiki": 3, "karte": 3, "pruefungen": 3})
         nav = _nav(voll.get("/profil").text)
-        for name, pfad in (("Strömipedia", "/"), ("Ankerplätze", "/ankerplaetze"), ("Riegenkarten", "/riegenkarten"),
+        for name, pfad in (("Strömipedia", "/stroemipedia"), ("Ankerplätze", "/ankerplaetze"), ("Riegenkarten", "/riegenkarten"),
                            ("Materialablage", "/materialablage"), ("Leitstelle", "/leitstelle")):
             assert re.search(rf'<a href="{re.escape(pfad)}" class="[^"]*">{name}</a>', nav), (name, nav)
         for alt in (">Wiki<", ">Spots<", ">Prüfungen<", ">Material<", ">Verwaltung<"):
@@ -184,7 +185,7 @@ def test_namen_in_der_oberflaeche():
                                           "Profil")]
         assert stellen == sorted(stellen), stellen
         # Die Materialablage nennt seit Runde 3 vor dem Merge die Ansicht vorn (test_material_vor_merge_3, V2).
-        for pfad, titel in (("/", "Strömipedia"), ("/stroemipedia", "Strömipedia"), ("/ankerplaetze", "Ankerplätze"),
+        for pfad, titel in (("/", "Start"), ("/stroemipedia", "Strömipedia"), ("/ankerplaetze", "Ankerplätze"),
                             ("/riegenkarten", "Riegenkarten"), ("/materialablage", "Übersicht – Materialablage"),
                             ("/leitstelle", "Leitstelle")):
             html = voll.get(pfad).text

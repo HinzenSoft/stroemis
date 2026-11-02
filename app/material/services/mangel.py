@@ -255,14 +255,21 @@ def offene_artikel():
     return g.mat_mangel_offen
 
 
+def anzahl_offen():
+    """Die Zahl „gesamt“ des Kastens „Gemeldete Mängel“ (offene_liste) ohne die Zeilen – auch für die Kachel der
+    Materialablage auf der Startseite (app/start.py): offene Meldungen im eigenen Bereich, nach denen noch kein Prüfer
+    geprüft hat."""
+    return db.query(f"SELECT COUNT(*) AS n FROM mat_defect_report d JOIN mat_item i ON i.id = d.item_id "
+                    f"WHERE {UNGEPRUEFT} AND {rechte.artikel_filter('i')}", one=True)["n"]
+
+
 def offene_liste():
     """Für den Kasten „Gemeldete Mängel“ der Übersicht: offene Meldungen im eigenen Bereich, nach denen noch kein Prüfer
     geprüft hat (UNGEPRUEFT – nach „instandsetzen“ fällt die Zeile heraus, Marke und Banner bleiben), neueste zuerst,
     höchstens LISTE_MAX. Liefert (Zeilen, gesamt). Kurztext, Fotozahl und Melder je Zeile nur für Prüfer und
     Materialwart des Artikels und den Melder selbst (darf_inhalt, eigen) – sonst nur Artikel und Tag (inhalt false)."""
     bedingung = f"WHERE {UNGEPRUEFT} AND {rechte.artikel_filter('i')}"
-    gesamt = db.query(f"SELECT COUNT(*) AS n FROM mat_defect_report d JOIN mat_item i ON i.id = d.item_id {bedingung}",
-                      one=True)["n"]
+    gesamt = anzahl_offen()
     rows = db.query("SELECT d.*, i.inventory_no, i.folder_id, i.origin_folder_id, i.lock_state, p.manufacturer, p.model, "
                     "p.description AS product_description FROM mat_defect_report d JOIN mat_item i ON i.id = d.item_id "
                     f"JOIN mat_product p ON p.id = i.product_id {bedingung} ORDER BY d.created_at DESC, d.id DESC "

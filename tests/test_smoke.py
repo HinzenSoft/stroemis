@@ -42,6 +42,13 @@ def make_app(tmp):
     return app
 
 
+def kacheln(c):
+    """Die Module der Startseite (app/start.py) für dieses Konto, in der Reihenfolge der Kacheln."""
+    r = c.get("/api/start")
+    assert r.status_code == 200, r.get_json()
+    return [k["modul"] for k in r.json["kacheln"]]
+
+
 def jpeg(with_gps):
     img = Image.new("RGB", (640, 480), (200, 30, 30))
     exif = Image.Exif()
@@ -1860,7 +1867,8 @@ def test_rechte():
         assert adm.post(f"/api/admin/users/{neu_id}/approve", json={}).status_code == 200
         assert neu.post("/api/auth/login", json={"email": "neu@example.org", "password": "passwort1"}).status_code == 200
         assert neu.get("/api/me").json["user"]["rechte"] == {"karte": 0, "wiki": 0, "pruefungen": 0, "material": 1, "verwaltung": 0}
-        assert neu.get("/").headers["Location"].endswith("/materialablage")
+        # Startseite über alle Module (02.11.2026): die Materialablage als Kachel, die Strömipedia im Lesemodus.
+        assert neu.get("/").status_code == 200 and kacheln(neu) == ["wiki", "material"]
         assert neu.get("/materialablage").status_code == 200 and neu.get("/api/material/start").status_code == 200
         assert neu.get("/ankerplaetze").status_code == 403 and neu.get("/api/map").status_code == 403
         assert 'data-modus="lesemodus"' in neu.get("/stroemipedia").text and neu.get("/api/wiki/tree").status_code == 403
@@ -1887,7 +1895,7 @@ def test_rechte():
                        content_type="multipart/form-data").json["url"]
         assert c1.get(bild).status_code == 200
         assert adm.put(f"/api/admin/users/{uid1}", json={"rechte": {"wiki": 0}}).status_code == 200
-        assert c1.get("/").status_code == 302 and c1.get("/").headers["Location"].endswith("/ankerplaetze")
+        assert c1.get("/").status_code == 200 and kacheln(c1) == ["wiki", "karte"]
         for adresse in ("/stroemipedia", f"/stroemipedia/{seite['slug']}"):
             r = c1.get(adresse)
             assert r.status_code == 200 and "js/public.js" in r.text and 'data-modus="lesemodus"' in r.text, adresse
@@ -1896,27 +1904,25 @@ def test_rechte():
         assert c1.get(f"/api/wiki/pages/{seite['slug']}").status_code == 403
         assert c1.get(bild).status_code == 403
         assert c1.get("/api/map").status_code == 200 and c1.get("/ankerplaetze").status_code == 200
-        # Auch die Spots zu: kein Modul mehr – die Startseite führt in den Lesemodus des Wikis statt ins Leere.
+        # Auch die Spots zu: kein Modul mehr – die Startseite zeigt die Strömipedia im Lesemodus statt ins Leere.
         assert adm.put(f"/api/admin/users/{uid1}", json={"rechte": {"karte": 0}}).status_code == 200
         assert c1.get("/api/map").status_code == 403 and c1.get("/ankerplaetze").status_code == 403
-        r = c1.get("/")
-        assert r.status_code == 302 and r.headers["Location"].endswith("/stroemipedia"), (r.status_code, r.headers.get("Location"))
+        assert c1.get("/").status_code == 200 and kacheln(c1) == ["wiki"]
         # … mit Kopfleiste: Profil und Abmelden bleiben erreichbar, der Reiter „Wiki“ führt in den Lesemodus.
         seite = c1.get("/stroemipedia").get_data(as_text=True)
         assert 'id="logout"' in seite and 'href="/profil"' in seite and '<a href="/stroemipedia"' in seite, seite[-600:]
         assert "für alle Angemeldeten freigegeben" in seite
         fehler = c1.get("/riegenkarten").get_data(as_text=True)              # ebenso die Fehlerseite ohne Recht
-        assert 'id="logout"' in fehler and '<a href="/stroemipedia">Zur Strömipedia</a>' in fehler, fehler[-600:]
+        assert 'id="logout"' in fehler and '<a href="/">Zur Startseite</a>' in fehler, fehler[-600:]
         assert c1.get("/profil").status_code == 200                      # das Profil bleibt immer
-        # Nur die Materialablage: Die Startseite führt dorthin, nicht in den Lesemodus. Den Zugang gibt die Stufe
-        # (seit Schritt 10 wieder); das Häkchen „Produktkatalogpfleger“ gibt es nicht mehr.
+        # Nur die Materialablage: Die Startseite zeigt sie als Kachel. Den Zugang gibt die Stufe (seit Schritt 10 wieder);
+        # das Häkchen „Produktkatalogpfleger“ gibt es nicht mehr.
         assert adm.put(f"/api/admin/users/{uid1}", json={"rechte": {"material": 1}}).status_code == 200
-        r = c1.get("/")
-        assert r.status_code == 302 and r.headers["Location"].endswith("/materialablage"), (r.status_code, r.headers.get("Location"))
+        assert kacheln(c1) == ["wiki", "material"]
         r = adm.put(f"/api/admin/users/{uid1}", json={"mat_katalog": True})
         assert r.status_code == 400 and "Produktkatalogpfleger" in r.json["error"], r.get_json()
         assert adm.put(f"/api/admin/users/{uid1}", json={"rechte": {"material": 0}}).status_code == 200
-        assert c1.get("/").headers["Location"].endswith("/stroemipedia")
+        assert kacheln(c1) == ["wiki"]
 
         # Verwaltung im Wiki: fremde Seiten bearbeiten und veröffentlichen, aber keine Nutzer.
         c2, uid2 = member("b@example.org")

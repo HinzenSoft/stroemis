@@ -135,14 +135,15 @@ def _bezug_seite(art, kennung_wert):
     return None if sichtbar else b.meldung
 
 
-def _seite(ansicht, katalog_seite=False, warnung=None, bezug=None, willkommen=False, **daten):
+def _seite(ansicht, katalog_seite=False, warnung=None, bezug=None, willkommen=False, besuch=None, **daten):
     """Eine Seite des Moduls. Ohne Anmeldung zur Anmeldung, ohne Modulzugang die Fehlerseite 403 mit dem Grund
     (zugang_meldung). bezug: („artikel“ | „ordner“ | „pruefung“ | „durchgang“, Kennung) – was das Konto nicht sehen
     darf, antwortet vor dem Zeichnen wie Unbekanntes mit der Fehlerseite 404, ohne Banner, ohne Daten. warnung: eine
     Funktion, die erst danach gefragt wird – ihr Hinweis steht schon im HTML. Katalogseiten brauchen nur den
     Modulzugang (katalog_seite). Jede Seite bekommt die Verweise auf die Anleitung in der Strömipedia mit, die das
     Konto lesen darf (anleitung.verweise); willkommen (nur die Übersicht): beim allerersten Besuch der Dialog
-    „Willkommen in der Materialablage“."""
+    „Willkommen in der Materialablage“. besuch (nur die Artikelseite): erst wenn das Konto den Gegenstand sehen darf, für
+    „Zuletzt besucht“ der Startseite gemerkt (app/start.py)."""
     u = current_user()
     if not u:
         return redirect(url_for("pages.login", next=request.full_path.rstrip("?")))
@@ -152,6 +153,9 @@ def _seite(ansicht, katalog_seite=False, warnung=None, bezug=None, willkommen=Fa
         fehlt = _bezug_seite(*bezug)
         if fehlt:
             return _fehlerseite(404, fehlt)
+    if besuch:
+        from ..start import ziel_merken
+        ziel_merken(*besuch)
     return render_template("material/seite.html", user=u, active="material", ansicht=ansicht,
                            daten=json.dumps(daten, ensure_ascii=False), darf=json.dumps(darf_alles()),
                            warnung=warnung() if warnung else None,
@@ -214,7 +218,8 @@ def artikel_seite(iid):
     globale Suche (globalsuche.angebot), bietet die Seite sie an – „suche“ in den Daten; sonst bleibt q unbeachtet."""
     q = (request.args.get("q") or "").strip()
     weiter = {"suche": q} if q and current_user() and zugang() and globalsuche.angebot(q) else {}
-    return _seite("artikel", bezug=("artikel", iid), warnung=lambda: ueberblick.warnung(iid), id=iid, **weiter)
+    return _seite("artikel", bezug=("artikel", iid), warnung=lambda: ueberblick.warnung(iid), besuch=("material", iid),
+                  id=iid, **weiter)
 
 
 @seiten.get("/materialablage/artikel/<int:iid>/pruefung/neu")

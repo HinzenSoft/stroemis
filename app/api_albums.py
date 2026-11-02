@@ -14,7 +14,7 @@ from datetime import datetime
 
 from flask import Blueprint, current_app, jsonify, request
 
-from . import db
+from . import db, start
 from .auth import current_user, eingabefehler_abfangen, json_body, karte_required, schreibt, verwaltet
 from .images import delete_photo_files, store_upload
 
@@ -260,6 +260,7 @@ def get_album(aid):
         return jsonify(error="Album nicht gefunden"), 404
     out = album_json(a, _album_photos(aid))
     out["can_edit"] = can_edit(a["owner_id"])
+    start.ziel_merken("karte", aid)          # „Zuletzt besucht“ der Startseite
     return jsonify(album=out)
 
 

@@ -14,7 +14,7 @@ from flask import Blueprint, current_app, jsonify, request
 
 from . import db
 from .auth import (MITGLIED, VERWALTUNG, avatar_url, current_user, eingabefehler_abfangen, json_body, nutzt, schreibt,
-                   verwaltet, wiki_required)
+                   verwaltet, wiki_lesemodus, wiki_required)
 from .images import EMBED_EXT, crop_wiki_image, fehlerart, rotate_wiki_image, store_wiki_file, wiki_endung
 from .mailer import send_mail
 
@@ -1996,14 +1996,61 @@ def _public_page_json(p):
 
 @public_bp.get("/index")
 def public_index():
-    """Alle freigegebenen Einstiegsseiten (Seiten, die selbst freigegeben sind)."""
-    rows = db.query("SELECT id, title, slug, public_children, updated_at, parent_id, is_public, read_restricted "
-                    "FROM wiki_pages WHERE is_public = 1 AND deleted_at IS NULL ORDER BY position, title COLLATE NOCASE")
-    # Eine freigegebene Seite, die inzwischen unter einem beschränkten Abschnitt liegt, ist nicht
-    # mehr erreichbar (is_public) – dann gehört auch ihr Titel nicht in die Liste.
+    """Alle freigegebenen Einstiegsseiten (Seiten, die selbst freigegeben sind) – seit der Startseite über alle Module
+    (02.11.2026) als Abschnitte mit der Zahl ihrer Seiten und den ersten Unterseiten (abschnitte), für die Karten der
+    Übersicht im Lesemodus. Eine freigegebene Seite, die inzwischen unter einem beschränkten Abschnitt liegt, ist nicht
+    mehr erreichbar (is_public) – dann gehört auch ihr Titel nicht in die Liste."""
+    return jsonify(pages=abschnitte(sichtbare_seiten(lesemodus=True), lesemodus=True, kinder_max=UEBERSICHT_KINDER))
+
+
+# --- Abschnitte als Karten (Startseite über alle Module, 02.11.2026) --------------------------------------------------
+# Die Startseite (app/start.py) und die Übersicht des Lesemodus zeigen die obersten Abschnitte als Karten: Titel, Zahl der
+# Seiten, die ersten Unterseiten. Welche Seiten zählen, entscheiden dieselben Regeln wie Seitenbaum und Lesemodus.
+UEBERSICHT_KINDER = 6          # Unterseiten je Karte auf der Übersicht der Strömipedia (wiki.js zeigt ebenso viele)
+_ABSCHNITT_SPALTEN = ("id, title, slug, icon, parent_id, created_by, updated_by, created_at, updated_at, is_public, "
+                      "public_children, read_restricted")
+
+
+def sichtbare_seiten(lesemodus=False):
+    """Alle Seiten außerhalb des Papierkorbs, die das angemeldete Konto sieht, in der Reihenfolge des Seitenbaums: mit Stufe,
+    was es lesen darf (readable, wie /tree), im Lesemodus, was für alle Angemeldeten freigegeben ist
+    (_oeffentlich_laut_karte, wie /api/public)."""
+    rows = db.query(f"SELECT {_ABSCHNITT_SPALTEN} FROM wiki_pages WHERE deleted_at IS NULL "
+                    "ORDER BY position, title COLLATE NOCASE")
+    if not lesemodus:
+        return readable(rows)
     karte = _seitenkarte() if rows else {}
-    return jsonify(pages=[{k: r[k] for k in ("id", "title", "slug", "public_children", "updated_at")}
-                          for r in rows if _oeffentlich_laut_karte(r, karte)])
+    return [r for r in rows if _oeffentlich_laut_karte(r, karte)]
+
+
+def abschnitte(rows, lesemodus=False, kinder_max=3):
+    """Die obersten Abschnitte aus rows (sichtbare_seiten): je Abschnitt Titel, Symbol, die Zahl seiner Seiten (er selbst
+    und alles darunter, soweit sichtbar), die Zahl der direkten Unterseiten und die ersten kinder_max davon. Mit Stufe die
+    Seiten der obersten Ebene; im Lesemodus die freigegebenen Einstiegsseiten (is_public) – Unterseiten nur, wenn der
+    Einstieg samt Unterseiten freigegeben ist, sonst zeigt auch der Leser nur die Seite selbst."""
+    kinder = {}
+    for r in rows:
+        kinder.setdefault(r["parent_id"], []).append(r)
+
+    def darunter(pid):
+        n, offen, gesehen = 0, [pid], {pid}
+        while offen:
+            for k in kinder.get(offen.pop(), []):
+                if k["id"] not in gesehen:
+                    gesehen.add(k["id"])
+                    n += 1
+                    offen.append(k["id"])
+        return n
+
+    out = []
+    for w in ([r for r in rows if r["is_public"]] if lesemodus else kinder.get(None, [])):
+        mit = not lesemodus or bool(w["public_children"])
+        unter = kinder.get(w["id"], []) if mit else []
+        out.append({"id": w["id"], "title": w["title"], "slug": w["slug"], "icon": w["icon"],
+                    "public_children": w["public_children"], "updated_at": w["updated_at"],
+                    "seiten": 1 + (darunter(w["id"]) if mit else 0), "kinder": len(unter),
+                    "unterseiten": [{"title": k["title"], "slug": k["slug"], "icon": k["icon"]} for k in unter[:kinder_max]]})
+    return out
 
 
 def _seitenkarte():
@@ -2072,6 +2119,12 @@ def public_page(slug):
     p = _get_page(slug)
     if not p or not is_public(p):
         return jsonify(error="Diese Seite ist nicht für alle Angemeldeten freigegeben."), 404
+    # Besuch vermerken wie get_page – „Zuletzt besucht“ der Startseite (app/start.py) auch im Lesemodus. Nicht bei
+    # leise=1: So holt der Leser die Quellseiten eingebauter Abschnitte (public.js), das ist kein Besuch.
+    if not request.args.get("leise") and wiki_lesemodus():
+        db.execute("INSERT INTO wiki_views (user_id, page_id, seen_at) VALUES (?,?,?) "
+                   "ON CONFLICT(user_id, page_id) DO UPDATE SET seen_at = excluded.seen_at",
+                   (current_user()["id"], p["id"], db.now()))
     root = public_root(p)
     tree_rows = []
     if root and root["public_children"]:
