@@ -1155,6 +1155,20 @@ progress { width: 100%; height: 10px; accent-color: var(--rot); }
   text-align: left; cursor: pointer; }
 @media (hover: hover) and (pointer: fine) { .lnk:hover { text-decoration: underline; } }
 @media (pointer: coarse) { .lnk { padding-top: 14px; padding-bottom: 14px; margin-top: -14px; margin-bottom: -14px; } }
+/* Anleitung in der Strömipedia (Nachtrag vom 01.11.2026, S.anleitung.kopf in common.js): der Textlink „Anleitung“ direkt
+   hinter der Überschrift einer Ansicht – wie .mat-kopf-anleitung der Materialablage; die Knöpfe des Kopfs bleiben
+   rechts. inline-block: Die 44 px unter Touch (.lnk) rechnen mit der Zeilenhöhe. */
+.kopf-anleitung { display: inline-block; flex: none; }
+:is(.page-head, .wiki-head) > .kopf-anleitung { margin-right: auto; }
+.panel-head > .kopf-anleitung { align-self: center; }
+/* Am Finger hält der Link seine 44 px im Fluss (ohne die negativen Ränder von .lnk): Bricht die Knopfzeile des Kopfs
+   unter Titel und Link um, lag seine Fläche sonst 3–6 px über „Kataloge“ bzw. „Mehr“ (st-geraete „K“, 01.11.2026). */
+@media (pointer: coarse) { .page-head > .kopf-anleitung { margin-top: 0; margin-bottom: 0; } }
+/* „Neue Seite“ mit Vorlagen (wiki.js neueSeite): eine Zeile je Wahl. */
+fieldset.vorlagen-wahl { border: 1px solid var(--linie); padding: 4px 12px 8px; margin: 12px 0 4px; max-height: 50vh; overflow: auto; }
+fieldset.vorlagen-wahl legend { font-weight: 700; padding: 0 4px; }
+fieldset.vorlagen-wahl label.inline { display: flex; margin: 4px 0; }
+@media (pointer: coarse) { fieldset.vorlagen-wahl label.inline { min-height: 44px; } }
 mark.cq { background: var(--markierung); padding: 0 1px; cursor: pointer; border-bottom: 2px solid var(--gelb); }
 .cbadge { cursor: pointer; font-size: .8em; margin-right: 2px; }
 .comment-fab { position: absolute; z-index: 1150; background: var(--anthrazit); color: var(--weiss); border: 0; border-radius: var(--radius); padding: 6px 12px; font: inherit; font-weight: 600; font-size: var(--fs-klein); cursor: pointer; box-shadow: var(--schatten-menue); }

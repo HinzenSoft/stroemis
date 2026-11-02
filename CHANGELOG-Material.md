@@ -10666,3 +10666,73 @@ Kein Schemaschritt.
   `test_material_bericht.py`, `test_material_export.py`, `test_material_mangel.py`, `test_material_meine_psa.py`,
   `test_material_setprotokolle.py`, `test_material_ueberblick.py` (Helfer `sperren` mit Vorgabe „rueckruf“) und
   `test_material_uiux_u2.py` (B6: Menüeinträge).
+
+## Anleitungsverweise und Nachträge aus den Modul-Artikeln (01.11.2026)
+
+Auftrag planung/wiki-module/auftrag_module_nachtraege.md: Die Strömipedia-Artikel „Strömipedia“, „Ankerplätze“ und
+„Riegenkarten“ (Stand 8404c8c, an den Nutzer ausgeliefert) brachten je eine Tabelle „Themen für Anleitungsverweise“ und
+Befunde mit; dazu vier Entscheidungen des Nutzers vom 01.11.2026. Kein Schemaschritt.
+
+**A – Anleitungsverweise** (Freigabe: planung/wiki-module/plan_anleitungsverweise.md)
+- Die Suche der Materialablage (Titel im Teilbaum unter der Wurzel, Anker über die Kennung der Überschrift wie
+  `markdown.js buildToc`, nur wer die Seite lesen darf, fehlt sie, kein Link) steht jetzt allgemein in `app/anleitung.py`
+  (`aufloesen(wurzel, themen, user)`; `TABELLEN` = eine Wurzel und eine Themen-Tabelle je Modul). Die Materialablage
+  ruft sie mit ihrer Tabelle (`app/material/services/anleitung.py`: `WURZEL`, `THEMEN`, Willkommen) und verhält sich wie
+  vorher. Zwischenspeicher der Kennungen je Seite jetzt nach Stand **und Adresse** (eine Kennung kann nach dem
+  endgültigen Löschen neu vergeben werden).
+- Strömipedia, Ankerplätze und Riegenkarten bekommen `data-anleitung` (nur, was das Konto lesen darf); `S.anleitung`
+  (common.js: `url`, `mehrDazu`, `kopf`) zeichnet „Anleitung“ und „Mehr dazu in der Strömipedia“. Kein Willkommen, kein
+  Hinweiskasten. Die Stellen (Titel und Anker in README „Verweise auf die Anleitung“): Strömipedia – „Anleitung“ auf der
+  Übersicht, „Anleitung zur Strömipedia“ im „⋯“ einer Seite, „Anleitung zum Editor“ im „⋯“ des Editors, „Mehr dazu“ in
+  den fünf „i“ (Papierkorb, Bearbeiten erlauben, Textfarbe, Abschnitt einbinden, Spalten einfügen); kein Link zeigt auf
+  die gerade offene Seite (der Artikel „Strömipedia“ liegt in der Strömipedia). Ankerplätze – „Anleitung“ im Kopf der
+  Seitenleiste (Liste der Alben, Album), „Mehr dazu“ im „i“ Album. Riegenkarten – „Anleitung“ hinter dem Titel von
+  Lehrgangsliste, Lehrgangsseite (am Telefon unter dem Titel, „Mehr“ bleibt daneben) und Katalogseite, „Mehr dazu“ in
+  allen sieben „i“. Weggelassen: Karte ohne Kopf (Werkzeugleiste am Telefon voll), Dialoge ohne „i“, Lesemodus der
+  Strömipedia, Druckansichten.
+- **Nur freigegebene Seiten** (Entscheidung des Nutzers vom 01.11.2026 nach der Sicherheitsprüfung, Befund 2 in
+  planung/pruefung-merge2/bericht_sicherheit.md, Probe p18_anleitung): Als Wurzel und Themenseite zählt in allen vier
+  Modulen – auch in der Materialablage, auch für Hinweis und Willkommen – nur eine Seite, die für alle Angemeldeten
+  freigegeben ist (selbst oder geerbt, `api_wiki.is_public`). Vorher konnte jeder Redakteur die Verweise umlenken: mit
+  einer eigenen, neueren Seite „Materialablage“ samt Unterseite oder mit einer Unterseite `position: -5` unter dem echten
+  Artikel. Freigeben darf nur die Wiki-Verwaltung, und in einem freigegebenen Abschnitt legt nur sie Seiten an – beides
+  ist damit zu. Mehrere freigegebene Wurzeln gleichen Titels: die neueste mit Unterseiten. **Folge:** Die Artikel werden
+  erst nach „Teilen“ → „Für alle Angemeldeten freigeben“ (samt Unterseiten) verlinkt; ein interner Artikel bekommt
+  keine Verweise mehr – auch nicht für die Wiki-Verwaltung. Tests: `test_material_anleitung.py` (neu
+  `test_umlenken_durch_redakteure_geht_nicht`, die übrigen mit freigegebenem Artikel), `test_module_anleitung.py`.
+- Alle 93 Zeilen der drei Tabellen (33/28/32) gegen die Artikel geprüft: statisch und nach dem Import der drei ZIPs im
+  Browser (`buildToc` = `kennungen` auf allen 24 Seiten); übernommen sind die 25 Themen mit einer Stelle in der Oberfläche.
+
+**B – Entscheidungen des Nutzers**
+- **Vorlagen beim Anlegen:** „Neue Seite“ und „Unterseite anlegen“ fragen „Beginnen mit“ – Leer oder eine Seite mit „Als
+  Vorlage anbieten“, die das Konto lesen darf (`/api/wiki/templates`, bisher ungenutzt). Der Inhalt (ohne Titelzeile)
+  wird in den Editor kopiert, angelegt wird mit „Anlegen“; Bilder und Anhänge wie beim Duplizieren (dieselben Dateien,
+  `sync_page_files`). Ohne Vorlagen öffnet der Editor gleich wie bisher.
+- **Import als neuer Lehrgang:** Wer importiert, wird Leitung – auch mit Stufe Verwaltung (`_leitung_ergaenzen(…,
+  auch_verwaltung=True)`, Vorschau und Übernehmen).
+- **Kriterien eingefrorener Leistungen:** Hängen eingefrorene Bewertungen an einer Leistung, lehnt der Server neue
+  Kriterien (Prüfen und Schreiben unter der Schreibsperre) und das Umsortieren mit 409 und `KRITERIEN_EINGEFROREN` ab;
+  Ändern und Löschen waren schon gesperrt und bekommen denselben Satz. `leistungen[].kriterien_eingefroren` im Lehrgang;
+  der Dialog zeigt die Kriterien dann nur zum Lesen und den Satz statt „Kriterium anlegen“.
+- **Bild bearbeiten:** „(manuell)“ nur, wenn die Position im Formular geändert wurde – sonst geht sie gar nicht mit, und
+  der Server lässt die Herkunft stehen, wenn eine unveränderte Position ankommt.
+
+**C – Fehler aus den Artikeln**
+- Strömipedia: Der Editor einer neuen Seite zeigt keine Kommentare der zuvor gelesenen Seite mehr (auch keine, die erst
+  danach eintreffen).
+- Riegenkarten: „mangelhaft Kriterien 2/3“ läuft in „je Leistung“ nicht mehr über die Zelle (Büroklammer und
+  Kriterienstand als `inline-block`, sie brechen um). Import-Vorschau: „Spalten und Zuordnung“ mit Abstand zu den
+  Datumsfeldern (`h3.abgesetzt`).
+- Ankerplätze: „Album-Position übernehmen“ gibt es nur mit einer echten Albumposition; nach jedem Platzieren rechnet die
+  Seite sie wie der Server neu (Mittelpunkt der Bilder mit Position) – vorher schickte der Knopf nach dem ersten Bild
+  `lat/lon = null` (= Position entfernen) und meldete „Position gespeichert“; `state.letztePos` ist weg. Dialogtext „Alle
+  mit Zugang zu den Ankerplätzen können es sehen.“ Dateiauswahl und Ablegen nehmen genau die Endungen des Servers
+  (`images.MEDIEN_ACCEPT`, mit Medientypen für Kamera und Galerie) – kein GIF, BMP, AVIF mehr.
+
+**D – Doku:** README (Editor: Markdown-Zeichen wirken beim Tippen nicht; Riegenkarten: Lehrgänge ab Redakteur, Kataloge
+ab Redakteur mit eigenen, kein Eingabedialog beim Lehrgangsergebnis, „Kriterien 1/2“, Medien an Konten, die den Lehrgang
+sehen; Vorlagen; Ankerplätze; Verweise auf die Anleitung), `docs/Editor - Bedienung und Kuerzel.md` (Schublade unter
+1024 px, Inhaltsverzeichnis im „⋯“, „Ersteller ändern“ für die Wiki-Verwaltung).
+
+- Tests: `tests/test_module_anleitung.py` (neu); angepasst `tests/test_material_anleitung.py` (nur freigegebene Seiten), `tests/test_pruefungen.py` (neue Kriterien an eingefrorenen
+  Leistungen jetzt 409) und `tests/test_module_info_i.py` (Infos mit „Mehr dazu“, Dialogtext der Ankerplätze).

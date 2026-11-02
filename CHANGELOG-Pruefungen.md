@@ -4,6 +4,18 @@ Erweiterung von strömis.de um Lehrgänge, Teilnehmende, Voraussetzungen, Prüfu
 Stoppuhr, Nachprüfungen, Medien und eine Mängelübersicht für Feedbackrunden – nur für Nutzer mit dem neuen
 Zusatzrecht „Prüfer“.
 
+## Anleitungsverweise und Nachträge aus den Modul-Artikeln (01.11.2026)
+
+Teil des gleichnamigen Abschnitts in CHANGELOG-Material.md (alle Module); hier, was die Riegenkarten betrifft. Kein Schema.
+- „Anleitung“ hinter dem Titel von Lehrgangsliste, Lehrgangsseite und Katalogseite, „Mehr dazu in der Strömipedia“ in
+  den sieben „i“ – Ziele im Artikel „Riegenkarten“ (Titel und Anker in README „Verweise auf die Anleitung“).
+- Import als neuer Lehrgang: Wer importiert, wird Leitung – auch mit Stufe Verwaltung (Entscheidung des Nutzers).
+- Kriterien einer Leistung mit eingefrorenen Bewertungen: neu anlegen und umsortieren jetzt wie Ändern und Löschen 409
+  (`KRITERIEN_EINGEFROREN`); `leistungen[].kriterien_eingefroren`; der Dialog zeigt die Kriterien nur zum Lesen und einen
+  Satz statt „Kriterium anlegen“ (Entscheidung des Nutzers).
+- „je Leistung“: „mangelhaft Kriterien 2/3“ bricht in der Zelle um statt über den Rand zu laufen; Import-Vorschau mit
+  Abstand über „Spalten und Zuordnung“.
+
 ## Nachtrag (01.11.2026): Hinweiskästen über die ganze Breite
 
 Entscheidung des Nutzers „Kästen über die ganze Breite“ (ersetzt aus V10 „der Kasten darf schmaler sein“): Hinweiskästen

@@ -27,6 +27,14 @@ class BildFehler(ValueError):
 
 ALLOWED_EXT = {".jpg", ".jpeg", ".png", ".webp", ".heic", ".heif", ".tif", ".tiff"}
 VIDEO_EXT = {".mp4", ".m4v", ".mov", ".webm"}
+# Dateiauswahl der Ankerplätze (accept in index.html, Nachtrag vom 01.11.2026): genau die Endungen, die der Server
+# annimmt (ALLOWED_EXT, VIDEO_EXT), dazu ihre Medientypen – mit ihnen bietet ein Telefon Kamera und Galerie an.
+# Vorher „image/*,video/*“: GIF, BMP und AVIF ließen sich wählen, und der Server lehnte sie ab.
+_MEDIENTYPEN = {".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png", ".webp": "image/webp",
+                ".heic": "image/heic", ".heif": "image/heif", ".tif": "image/tiff", ".tiff": "image/tiff",
+                ".mp4": "video/mp4", ".m4v": "video/x-m4v", ".mov": "video/quicktime", ".webm": "video/webm"}
+MEDIEN_ACCEPT = ",".join(sorted({_MEDIENTYPEN[e] for e in ALLOWED_EXT | VIDEO_EXT if e in _MEDIENTYPEN})
+                         + sorted(ALLOWED_EXT | VIDEO_EXT))
 # Anhänge, die unverändert abgelegt und im Artikel verlinkt werden (Handbücher, Listen, Tracks).
 # Bewusst ohne ausführbare Formate.
 AUDIO_EXT = {".mp3", ".m4a", ".ogg", ".oga", ".wav"}

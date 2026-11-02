@@ -1106,3 +1106,35 @@ window.S.stufe = (modul) => {
   const u = window.STROEMIS && window.STROEMIS.user;
   return (u && u.rechte && u.rechte[modul]) | 0;
 };
+
+/* Anleitung in der Strömipedia für Strömipedia, Ankerplätze und Riegenkarten (Nachtrag vom 01.11.2026, wie in der
+   Materialablage): Der Server gibt der Seite die Adressen mit, die das Konto lesen darf (app/anleitung.py, data-anleitung
+   am Rahmen der Seite: {Thema: Adresse}); fehlt ein Thema, gibt es keinen Link – kein toter Link, keine Meldung, das „i“
+   behält seinen Text. mehrDazu(thema) ist der letzte Absatz einer Info, kopf(thema) der Textlink „Anleitung“ hinter der
+   Überschrift einer Ansicht. Beide öffnen einen neuen Tab (ein offener Dialog, die Karte, eine laufende Stoppuhr bleiben
+   stehen) – außer kopf(thema, { neuerTab: false }) in der Strömipedia selbst. ausser: die Seite der Strömipedia, die
+   gerade offen ist (Adresse ohne /stroemipedia/) – auf sie zeigt kein Link. */
+window.S.anleitung = (function () {
+  let tabelle = null;
+  const lesen = () => {
+    if (tabelle) return tabelle;
+    const el = document.querySelector("[data-anleitung]");
+    try { tabelle = JSON.parse((el && el.dataset.anleitung) || "{}") || {}; } catch (e) { tabelle = {}; }
+    return tabelle;
+  };
+  function url(thema, opt) {
+    const u = typeof lesen()[thema] === "string" ? lesen()[thema] : "";
+    const ausser = opt && opt.ausser;
+    if (u && ausser && decodeURIComponent(u.split("#")[0]) === `/stroemipedia/${ausser}`) return "";
+    return u;
+  }
+  const mehrDazu = (thema, opt) => (url(thema, opt) ? `<span class="info-absatz"><a href="${window.S.esc(url(thema, opt))}"
+    target="_blank" rel="noopener">Mehr dazu in der Strömipedia</a></span>` : "");
+  const kopf = (thema, opt) => {
+    const u = url(thema, opt);
+    if (!u) return "";
+    const tab = opt && opt.neuerTab === false ? "" : ' target="_blank" rel="noopener"';
+    return `<a class="lnk kopf-anleitung" href="${window.S.esc(u)}"${tab}>Anleitung<span class="nur-vorlesen"> in der Strömipedia</span></a>`;
+  };
+  return { url, mehrDazu, kopf };
+})();

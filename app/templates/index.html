@@ -6,7 +6,7 @@
 <link rel="stylesheet" href="{{ url_for('static', filename='vendor/markercluster/MarkerCluster.css') }}">
 {% endblock %}
 {% block body %}
-<main class="map-shell">
+<main class="map-shell" data-anleitung="{{ anleitung or '{}' }}">
   {# Die Karte füllt die Seite; die Überschrift ist nur für Vorlesehilfen da (Browserprüfung vor dem Merge, V6). #}
   <h1 class="nur-vorlesen">{{ modul.name.karte }}</h1>
   {# Die Werkzeugleiste steht vor der Karte: Tab erreicht Filter, „Alben“ und „Album anlegen“ zuerst – so, wie man sie oben
@@ -36,7 +36,7 @@
 </main>
 <dialog id="dlg"><div class="dlg-body" id="dlg-body"></div></dialog>
 <dialog id="lightbox" class="lightbox"><div class="lb" id="lb-body"></div></dialog>
-<input type="file" id="file-input" accept="image/*,video/*,.heic,.heif,.mp4,.mov,.m4v,.webm" multiple class="hidden">
+<input type="file" id="file-input" accept="{{ accept }}" multiple class="hidden">
 {% endblock %}
 {% block scripts %}
 <script src="{{ url_for('static', filename='vendor/leaflet/leaflet.js') }}"></script>

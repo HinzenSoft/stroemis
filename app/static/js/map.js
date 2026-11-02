@@ -165,8 +165,18 @@
   }
 
   /* --- Seitenleiste ------------------------------------------------------ */
-  function openPanel(title, html, liste) {
+  /* thema: „Anleitung“ in der Strömipedia hinter dem Titel der Leiste (Nachtrag vom 01.11.2026, S.anleitung; nur, wenn
+     das Konto die Seite lesen darf) – die Liste der Alben führt zum Artikel „Ankerplätze“, ein Album zu „Alben“. Die
+     Karte selbst hat keinen Seitenkopf: In der Werkzeugleiste ist am Telefon kein Platz, und „Alben“ ist ein Tipp. */
+  function openPanel(title, html, liste, thema) {
     panelTitle.textContent = title;
+    const alt = $("#panel-anleitung");
+    if (alt) alt.remove();
+    const link = thema ? S.anleitung.kopf(thema) : "";
+    if (link) {
+      panelTitle.insertAdjacentHTML("afterend", link);
+      panelTitle.nextElementSibling.id = "panel-anleitung";
+    }
     panelBody.innerHTML = html;
     // Fuß mit den Kontaktadressen (_fuss.html): Unter der Vollbild-Karte hätte er keinen Platz – er stünde außerhalb des
     // Bilds oder läge über der Karte. Er kommt ans Ende des Panels, wo man ohnehin liest (Alben, Album).
@@ -232,13 +242,13 @@
     if (!state.alben.length) {
       return openPanel("Alben", `<div class="leerzustand"><strong>Noch keine Alben</strong>${darfAnlegen
         ? "Lege ein Album an und lade Bilder hoch – Bilder mit Geotag erscheinen sofort auf der Karte."
-        : "Sobald jemand ein Album anlegt, steht es hier."}</div>`, true);
+        : "Sobald jemand ein Album anlegt, steht es hier."}</div>`, true, "uebersicht");
     }
     // Die Zahl der Treffer ist die einzige Ansage (role=status); die Liste selbst liest die Leiste nicht bei jedem
     // Tastendruck vor (aria-live="off" in der Leiste, die sonst „polite“ ist).
     openPanel("Alben", `<p class="help alben-sortierung" id="al-sortierung"></p>
       <p class="meta" id="al-zahl" role="status"></p>
-      <ul class="album-list" id="al-liste" aria-live="off"></ul>`, true);
+      <ul class="album-list" id="al-liste" aria-live="off"></ul>`, true, "uebersicht");
     listeZeichnen();
     // Hat der Browser den Standort schon freigegeben, sortiert die Liste gleich nach Entfernung – ohne Rückfrage.
     if (!state.standort && (await ortungsRecht()) === "granted") standortSuchen(false);
@@ -381,7 +391,7 @@
         </button>`).join("")}</div>`
         : `<div class="leerzustand"><strong>Noch keine Bilder</strong>${a.can_edit ? "Lade Bilder hoch – Geotags werden automatisch ausgelesen." : ""}</div>`}
       <div class="meta abgesetzt">Angelegt von ${esc(a.owner_name || "")}${a.owner_gliederung ? " (" + esc(a.owner_gliederung) + ")" : ""}, zuletzt geändert ${fmtDate(a.updated_at, true)}</div>
-    `);
+    `, false, "album");
     panelBody.querySelectorAll(".photo-grid button").forEach((b) => b.addEventListener("click", () => openLightbox(+b.dataset.i)));
     const hi = panelBody.querySelector(".photo-grid .hi");
     if (hi) hi.scrollIntoView({ block: "center" });
@@ -412,8 +422,10 @@
   function albumDialog(a) {
     a = a || { category: "seil" };
     const isNew = !a.id;
-    dialog(`<h2>${isNew ? "Album anlegen" : "Album bearbeiten"}${S.info("Album", "Ein Album ist ein Übungsobjekt oder ein Übungsgewässer.")}</h2>
-      <p class="help">Alle angemeldeten Nutzer können es sehen.</p>
+    // Wer es sieht: alle Konten mit Stufe in den Ankerplätzen (karte_required) – nicht jedes angemeldete Konto
+    // (Nachtrag vom 01.11.2026; neue Konten starten seit dem 18.10.2026 ohne Zugriff).
+    dialog(`<h2>${isNew ? "Album anlegen" : "Album bearbeiten"}${S.info("Album", `Ein Album ist ein Übungsobjekt oder ein Übungsgewässer.${S.anleitung.mehrDazu(isNew ? "album_neu" : "album_bearbeiten")}`)}</h2>
+      <p class="help">Alle mit Zugang zu den Ankerplätzen können es sehen.</p>
       <label for="al-title">Titel</label><input type="text" id="al-title" value="${esc(a.title)}" placeholder="z. B. Wehr Musterstadt, Brücke B12" required>
       <label for="al-cat">Art</label>
       <select id="al-cat">
@@ -589,11 +601,13 @@
   }
 
   /* --- Einwurf: Dateien auf die Karte ziehen ------------------------------ */
-  /* Was der Browser hier annimmt, entscheidet dieselbe Liste wie beim Dateidialog (accept
-     des versteckten Eingabefelds) – nur eben am Dateinamen, denn eine gezogene HEIC-Datei
-     kommt ohne brauchbaren MIME-Typ an. */
-  const ANNEHMBAR = /\.(jpe?g|png|gif|webp|tiff?|bmp|heic|heif|avif|mp4|m4v|mov|webm)$/i;
-  const ablage = (dateien) => Array.from(dateien).filter((f) => ANNEHMBAR.test(f.name) || /^(image|video)\//.test(f.type));
+  /* Was der Browser hier annimmt, entscheidet dieselbe Liste wie beim Dateidialog: die Endungen im accept des
+     versteckten Eingabefelds, und die kommen vom Server (images.MEDIEN_ACCEPT – Nachtrag vom 01.11.2026; vorher nahmen
+     beide auch GIF, BMP und AVIF an, die der Server ablehnt). Geprüft wird am Dateinamen, denn eine gezogene HEIC-Datei
+     kommt ohne brauchbaren MIME-Typ an – und der Server entscheidet ebenfalls nach der Endung. */
+  const ENDUNGEN = new Set(fileInput.accept.split(",").map((x) => x.trim().toLowerCase()).filter((x) => x.startsWith(".")));
+  const endung = (name) => { const m = /\.[^.]+$/.exec(String(name || "")); return m ? m[0].toLowerCase() : ""; };
+  const ablage = (dateien) => Array.from(dateien).filter((f) => ENDUNGEN.has(endung(f.name)));
   const abstandText = (m) => (m < 1000 ? `${Math.round(m / 10) * 10} m` : `${(m / 1000).toFixed(1).replace(".", ",")} km`);
 
   function einwurfDialog(files) {
@@ -692,7 +706,7 @@
     ablageWeg();
     if (state.locating) return toast("Erst die Position setzen oder abbrechen – dann Dateien ablegen.", true);
     const files = ablage(e.dataTransfer.files);
-    if (!files.length) return toast("Darunter war kein Bild und kein Video.", true);
+    if (!files.length) return toast("Darunter war kein Bild und kein Video, das sich hochladen lässt (JPEG, PNG, WebP, HEIC, TIFF, MP4, MOV, M4V, WebM).", true);
     if (zuAlbum) uploadFiles(state.album.id, files);
     else einwurfDialog(files);
   });
@@ -716,7 +730,10 @@
     const p = state.locateQueue.shift();
     if (!p) return finishLocate();
     state.locating = p;
-    const albumPos = !!state.letztePos || (state.album && state.album.lat != null);
+    // Die Albumposition ist der Mittelpunkt der Bilder mit Position (api_albums.album_json) – setLocation führt sie nach,
+    // sobald ein Bild dieses Albums platziert ist. Ohne sie gibt es den Knopf nicht (vorher stand er nach dem ersten
+    // Bild da, schickte aber „keine Position“ und meldete „Position gespeichert“ – Befund aus dem Artikel, 01.11.2026).
+    const albumPos = !!(state.album && state.album.lat != null && state.album.lon != null);
     const rest = state.locateQueue.length;
     const nr = state.album ? state.album.photos.findIndex((x) => x.id === p.id) : -1;
     banner.classList.remove("hidden");
@@ -798,13 +815,28 @@
   }
 
   async function setLocation(p, lat, lon) {
+    // Ohne Ziel nichts schicken: „lat/lon = null“ hieße für den Server „Position entfernen“.
+    if (lat == null || lon == null) return toast("Keine Position zum Übernehmen – bitte auf die Karte tippen.", true);
     try {
       await api(`/api/photos/${p.id}`, { method: "PUT", body: { lat, lon } });
-      // Ab jetzt gibt es eine Albumposition – auch wenn das Album beim Öffnen noch keine hatte.
-      state.letztePos = [lat, lon];
+      albumPositionNachfuehren(p.id, lat, lon);
       toast("Position gespeichert");
       nextLocate();
     } catch (e) { toast(e.message, true); }
+  }
+
+  /* Nach dem Platzieren: das Bild im geöffneten Album trägt seine Position, und die Albumposition ist wieder der
+     Mittelpunkt aller Bilder mit Position – wie der Server sie beim nächsten Laden rechnet (api_albums.album_json). So
+     übernimmt „Album-Position übernehmen“ beim nächsten Bild eine echte Position, auch wenn das Album beim Öffnen noch
+     keine hatte; ein anderes Album erbt nichts davon. */
+  function albumPositionNachfuehren(photoId, lat, lon) {
+    const a = state.album;
+    const bild = a && (a.photos || []).find((x) => x.id === photoId);
+    if (!bild) return;
+    bild.lat = lat; bild.lon = lon;
+    const mit = a.photos.filter((x) => x.lat != null && x.lon != null);
+    a.lat = mit.length ? mit.reduce((n, x) => n + x.lat, 0) / mit.length : null;
+    a.lon = mit.length ? mit.reduce((n, x) => n + x.lon, 0) / mit.length : null;
   }
 
   /* --- Bild-Detail ------------------------------------------------------- */
@@ -912,7 +944,11 @@
           height_m: g("#p-height") || null, altitude: g("#p-alt") || null,
         };
         const lat = g("#p-lat").replace(",", "."), lon = g("#p-lon").replace(",", ".");
-        if (lat || lon) { body.lat = lat; body.lon = lon; } else { body.lat = null; body.lon = null; }
+        // Die Position geht nur mit, wenn sie im Formular geändert wurde: Erst dann ist sie „(manuell)“ – sonst bleibt die
+        // Herkunft (aus dem Bild) stehen, auch wenn man nur den Titel ändert (Entscheidung des Nutzers vom 01.11.2026).
+        if (lat !== String(p.lat ?? "") || lon !== String(p.lon ?? "")) {
+          if (lat || lon) { body.lat = lat; body.lon = lon; } else { body.lat = null; body.lon = null; }
+        }
         try {
           const r = await api(`/api/photos/${p.id}`, { method: "PUT", body });
           a.photos[state.lbIndex] = Object.assign({}, p, r.photo);

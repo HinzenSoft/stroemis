@@ -38,15 +38,17 @@ Hat inzwischen jemand anders gespeichert, hört das automatische Schreiben auf u
 der Kopfzeile – dann hilft nur neu laden.
 
 Rechts steht in beiden Ansichten das Inhaltsverzeichnis, von Überschrift 1 bis Überschrift 5.
-Wird das Fenster schmaler, rückt die Leiste unter den Artikel – Kommentare und Angaben zur Seite
-bleiben damit erreichbar; das Inhaltsverzeichnis entfällt dort, weil es am Fuß der Seite nichts
-mehr nützt, und sein Knopf in der Kopfzeile geht mit. Unterhalb von 800 Pixeln – Telefon und
-Tablet im Hochformat – wird zusätzlich der Seitenbaum zur Schublade: Der Knopf **☰** in der
-Kopfzeile fährt ihn ein und aus, ein Tippen daneben schließt ihn wieder.
+Bis 1180 Pixel Breite rückt die Leiste unter den Artikel – Kommentare und Angaben zur Seite
+bleiben damit erreichbar. Das Inhaltsverzeichnis steht dann im Menü **⋯** (beim Lesen wie beim
+Bearbeiten) und öffnet sich als Dialog über dem Text; ein Tipp auf einen Abschnitt schließt ihn und
+springt dorthin. Weicht am Tablet quer der Knopf des Inhaltsverzeichnisses in **⋯** aus, blendet
+derselbe Eintrag die Gliederung rechts ein oder aus. Unter 1024 Pixeln – Telefon und Tablet im
+Hochformat – wird zusätzlich der Seitenbaum zur Schublade: Der Knopf **☰** in der Kopfzeile fährt
+ihn ein und aus, ein Tippen daneben schließt ihn wieder.
 
 Unter der Überschrift steht, wer die Seite angelegt hat, davor sein Profilbild. Ein Klick darauf
 zeigt den Ersteller und alle Mitwirkenden – also alle, von denen eine Fassung im Verlauf steht.
-Der Administration steht dort zusätzlich *Ersteller ändern …* offen: Wer die Gliederung verlässt,
+Der Wiki-Verwaltung steht dort zusätzlich *Ersteller ändern* offen: Wer die Gliederung verlässt,
 soll nicht Ersteller bleiben. Mit dem Namen wechseln auch die Rechte an der Seite – löschen und
 Bearbeiter freigeben. Daneben ein Knopf **i**. Er öffnet rechts die Angaben zur
 Seite: wer sie angelegt und zuletzt geändert hat, wann das war, Wörter, Zeichen, geschätzte

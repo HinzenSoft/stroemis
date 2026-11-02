@@ -6,6 +6,10 @@
    Alles läuft auf einer Seite; welche Ansicht gemeint ist, sagt data-ansicht am <main>. */
 (function () {
   const { esc, api, toast, dialog, fmtDate, info } = S;
+  /* Anleitung in der Strömipedia (Nachtrag vom 01.11.2026, app/anleitung.py, S.anleitung in common.js): „Anleitung“
+     hinter der Überschrift der Lehrgangsliste, eines Lehrgangs und eines Katalogs, „Mehr dazu in der Strömipedia“ am Ende
+     der Infos („i“). Ohne Leserecht an der Seite gibt es keinen Link. */
+  const { mehrDazu, kopf: anleitungKopf } = S.anleitung;
   const root = document.getElementById("pruef");
   if (!root) return;
   const ANSICHT = root.dataset.ansicht || "liste";
@@ -141,7 +145,9 @@
      bleibt das title für die Maus). */
   const ZEITANSATZ_INFO = "Mit Zeitansatz zeigt der Bewertungsdialog eine Stoppuhr mit Sollzeit. Über das Bestehen entscheidet sie nicht.";
   const KRITERIEN_INFO = "Zusätzlich zur Beschreibung: einzeln abhakbare Punkte.";
-  const eingefrorenInfo = (tns) => (tns.some((t) => t.eingefroren) ? info("eingefroren", `Eingefroren (Schloss am Namen): ${esc(EINGEFROREN)}`) : "");
+  // Wortgleich mit api_pruefungen.KRITERIEN_EINGEFROREN.
+  const KRITERIEN_EINGEFROREN = "Zu dieser Leistung gibt es Bewertungen von Personen mit vermerktem Lehrgangsergebnis – deren Prüfungsdaten sind eingefroren, deshalb lassen sich die Kriterien nicht mehr anlegen, ändern, umsortieren oder löschen. Die Lehrgangsleitung kann das Ergebnis aufheben.";
+  const eingefrorenInfo = (tns) => (tns.some((t) => t.eingefroren) ? info("eingefroren", `Eingefroren (Schloss am Namen): ${esc(EINGEFROREN)}${mehrDazu("eingefroren")}`) : "");
 
   /* --- Teilnehmende: Bild, Schloss, Ergebnis ------------------------------------------------ */
   // Ein Eintrag der Mängelliste kennt nur id/name/vorname – Bild, Kommentar und Ergebnis kommen
@@ -510,7 +516,7 @@
         ${Object.keys(STATUS).map((s) => `<option value="${s}" ${(lg.status || "geplant") === s ? "selected" : ""}>${STATUS[s][0]}</option>`).join("")}
       </select>
       <label>Lehrgangsleitung und Referierende${info("Lehrgangsleitung und Referierende", `Mehrere Personen können Lehrgangsleitung sein – dafür den Haken „Leitung“ setzen. Die Leitung darf den Lehrgang
-        bearbeiten, Stammdaten pflegen, Prüfungen löschen und das Lehrgangsergebnis vermerken; alle anderen prüfen und haken ab.`)}</label>
+        bearbeiten, Stammdaten pflegen, Prüfungen löschen und das Lehrgangsergebnis vermerken; alle anderen prüfen und haken ab.${mehrDazu("ausbilder")}`)}</label>
       <p class="help">Ausbilder ist nur, wer ein Konto mit Stufe in den Riegenkarten hat – suche die Person über Namen oder E-Mail-Adresse.</p>
       <div class="ausb-liste" id="ausb-liste">${(lg.ausbilder || []).map((a) => ausbilderZeileHtml(a)).join("")}</div>
       <datalist id="ausb-funktionen"><option value="Referierende:r"><option value="Seiltechnik"><option value="Wasser"><option value="Helfer:in"></datalist>
@@ -518,7 +524,7 @@
       <div class="feld-kopf"><label for="lg-besch">Beschreibung / Bemerkungen</label>${diktatKnopf("lg-besch")}</div>
       <textarea id="lg-besch" placeholder="Ablauf, Treffpunkt, Besonderheiten …">${esc(lg.beschreibung)}</textarea>
       ${neu && kataloge.length ? `<label for="lg-katalog">Prüfungsleistungen aus Katalog übernehmen (optional)${info("Prüfungsleistungen aus Katalog", `Die Leistungen werden einmalig in diesen Lehrgang kopiert – eine spätere Änderung am Katalog wirkt sich nicht mehr
-        aus. Weitere Leistungen lassen sich jederzeit einzeln ergänzen, auch während der Lehrgang schon läuft.`)}</label>
+        aus. Weitere Leistungen lassen sich jederzeit einzeln ergänzen, auch während der Lehrgang schon läuft.${mehrDazu("katalog_vorlage")}`)}</label>
       <select id="lg-katalog"><option value="">– Keine Vorlage, leer beginnen –</option>
         ${kataloge.map((k) => `<option value="${k.id}">${esc(k.titel)} (${plural(k.leistungen_anzahl, "Leistung", "Leistungen")})</option>`).join("")}</select>` : ""}
       <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button>
@@ -616,7 +622,7 @@
   function renderListe() {
     S.titel([], "pruefungen");
     root.innerHTML = `
-      <div class="page-head"><h1>Riegenkarten</h1>
+      <div class="page-head"><h1>Riegenkarten</h1>${anleitungKopf("uebersicht")}
         ${darfAnlegen() ? `<div class="btn-row"><button class="btn secondary" data-act="lg-import">Import</button>
           <a class="btn secondary" href="/riegenkarten/kataloge">Kataloge</a>
           <button class="btn" data-act="lg-neu"><span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Lehrgang<span class="k-anlegen"> anlegen</span></span></button></div>` : ""}</div>
@@ -692,7 +698,7 @@
     S.titel("Prüfungsleistungskataloge", "pruefungen");
     root.innerHTML = `<a class="zurueck" href="/riegenkarten">← Alle Lehrgänge</a>
       <div class="page-head"><h1>Prüfungsleistungskataloge${info("Prüfungsleistungskataloge", `Ein Katalog ist eine Vorlage: Seine Prüfungsleistungen lassen sich beim Anlegen eines Lehrgangs
-        einmalig übernehmen. Spätere Änderungen am Katalog wirken sich nicht mehr auf schon angelegte Lehrgänge aus.`)}</h1>
+        einmalig übernehmen. Spätere Änderungen am Katalog wirken sich nicht mehr auf schon angelegte Lehrgänge aus.${mehrDazu("kataloge_info")}`)}</h1>
         ${darfAnlegen() ? '<div class="btn-row"><button class="btn" data-act="kat-neu"><span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Katalog<span class="k-anlegen"> anlegen</span></span></button></div>' : ""}</div>
       <div id="kat-liste"><p class="help">Wird geladen …</p></div>`;
     const ziel = $("#kat-liste");
@@ -772,7 +778,7 @@
     const ls = k.leistungen || [];
     S.titel(k.titel, "pruefungen");
     root.innerHTML = `<a class="zurueck" href="/riegenkarten/kataloge">← Alle Kataloge</a>
-      <div class="page-head"><h1>${esc(k.titel)}</h1>
+      <div class="page-head"><h1>${esc(k.titel)}</h1>${anleitungKopf("katalog")}
         ${admin ? `<div class="btn-row">${S.menue({ art: "zeilenmenue", klein: false, eintraege: [
           { text: "Bearbeiten", attrs: `data-act="kat-edit" data-id="${k.id}"` },
           { text: "Löschen", attrs: `data-act="kat-del" data-id="${k.id}"` }] })}</div>` : ""}</div>
@@ -789,13 +795,13 @@
     dialogOeffnen(`<h2>${neu ? "Prüfungsleistung anlegen" : "Prüfungsleistung bearbeiten"}</h2>
       <label for="kl-bez">Bezeichnung</label>
       <input type="text" id="kl-bez" value="${esc(l.bezeichnung)}" placeholder="z. B. Wurfsackwurf auf Ziel, Aufbau Flaschenzug 3:1" required>
-      <label for="kl-zeit">Zeitansatz${info("Zeitansatz", ZEITANSATZ_INFO)} (mm:ss oder 300 für 3:00) – leer lassen, wenn es keine Sollzeit gibt</label>
+      <label for="kl-zeit">Zeitansatz${info("Zeitansatz", ZEITANSATZ_INFO + mehrDazu("zeitansatz"))} (mm:ss oder 300 für 3:00) – leer lassen, wenn es keine Sollzeit gibt</label>
       <input type="text" id="kl-zeit" class="zeitfeld" inputmode="numeric" placeholder="mm:ss" autocomplete="off"
              value="${l.zeitansatz_sekunden != null ? fmtZeit(l.zeitansatz_sekunden) : ""}">
       <label>Beschreibung – Ablauf</label>
       <div id="kl-editor"></div>
       <label>Kriterienliste (optional)${info("Kriterienliste", `${KRITERIEN_INFO} Wird beim Anlegen eines Lehrgangs aus diesem Katalog
-        als Vorlage in die neue Prüfungsleistung kopiert.`)}</label>
+        als Vorlage in die neue Prüfungsleistung kopiert.${mehrDazu("kriterienliste")}`)}</label>
       ${neu ? '<div id="krit-wrap"></div>' : kriterienListeHtml(l)}
       <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button>
         <button class="btn" id="kl-save" type="button">${neu ? "Anlegen" : "Speichern"}</button></div>`,
@@ -982,7 +988,7 @@
     const datum = lg.datum_von || lg.datum_bis ? esc(spanne(lg.datum_von, lg.datum_bis)) : "";
     root.innerHTML = `
       <a class="zurueck" href="/riegenkarten">← Alle Lehrgänge</a>
-      <div class="page-head"><h1>${esc(lg.titel)}</h1>
+      <div class="page-head"><h1>${esc(lg.titel)}</h1>${anleitungKopf("lehrgang")}
         ${lg.darf_leiten ? `<div class="btn-row">${S.menue({ klein: false, eintraege: [
           { text: "Bearbeiten", attrs: `data-act="lg-edit" data-id="${lg.id}"` },
           { text: "Import", attrs: `data-act="lg-import-in" data-id="${lg.id}"` }] })}</div>` : ""}</div>
@@ -1622,6 +1628,14 @@
      und nicht den ganzen Dialog: Sonst gingen unfertig getippte Bezeichnung/Beschreibung verloren. */
   function kriterienListeHtml(l) {
     const ks = l.kriterien || [];
+    // Eingefrorene Bewertungen an der Leistung (kriterien_eingefroren vom Server, Entscheidung des Nutzers vom
+    // 01.11.2026): die Kriterien nur zum Lesen, ein Satz statt „Kriterium anlegen“ – der Server lehnt mit 409 ab.
+    if (l.kriterien_eingefroren) {
+      return `<div id="krit-wrap">
+        ${ks.length ? `<ul class="vor-liste krit-fest">${ks.map((k) => `<li>${esc(k.bezeichnung)}</li>`).join("")}</ul>` : ""}
+        <p class="help krit-gesperrt">${esc(KRITERIEN_EINGEFROREN)}</p>
+      </div>`;
+    }
     return `<div id="krit-wrap">
       ${ks.length ? `<ul class="vor-liste">${ks.map((k, i) => `<li data-kid="${k.id}">
         <input type="text" value="${esc(k.bezeichnung)}" data-krit-bez aria-label="Kriterium">
@@ -1639,13 +1653,13 @@
     dialogOeffnen(`<h2>${neu ? "Prüfungsleistung anlegen" : "Prüfungsleistung bearbeiten"}</h2>
       <label for="pl-bez">Bezeichnung</label>
       <input type="text" id="pl-bez" value="${esc(l.bezeichnung)}" placeholder="z. B. Wurfsackwurf auf Ziel, Aufbau Flaschenzug 3:1" required>
-      <label for="pl-zeit">Zeitansatz${info("Zeitansatz", ZEITANSATZ_INFO)} (mm:ss oder 300 für 3:00) – leer lassen, wenn es keine Sollzeit gibt</label>
+      <label for="pl-zeit">Zeitansatz${info("Zeitansatz", ZEITANSATZ_INFO + mehrDazu("zeitansatz"))} (mm:ss oder 300 für 3:00) – leer lassen, wenn es keine Sollzeit gibt</label>
       <input type="text" id="pl-zeit" class="zeitfeld" inputmode="numeric" placeholder="mm:ss" autocomplete="off"
              value="${l.zeitansatz_sekunden != null ? fmtZeit(l.zeitansatz_sekunden) : ""}">
       <label>Beschreibung – Ablauf</label>
       <div id="pl-editor"></div>
       <label>Kriterienliste (optional)${info("Kriterienliste", `${KRITERIEN_INFO} Im Bewertungsdialog lässt sich jeder Punkt antippen –
-        nicht bewertet, ✅ erfüllt, ❌ nicht erfüllt.`)}</label>
+        nicht bewertet, ✅ erfüllt, ❌ nicht erfüllt.${mehrDazu("kriterienliste")}`)}</label>
       ${neu ? '<div id="krit-wrap"></div>' : kriterienListeHtml(l)}
       <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button>
         <button class="btn" id="pl-save" type="button">${neu ? "Anlegen" : "Speichern"}</button></div>`,
@@ -1657,6 +1671,9 @@
         const kritEntwurf = neu ? kriterienEntwurfEinrichten(body) : null;
         if (!neu) {
           const kritBinden = () => {
+            if (!$("#krit-neu-go", body)) return;          // eingefroren: nur zum Lesen
+            // 409: Inzwischen ist an der Leistung ein Ergebnis vermerkt – der Rahmen zeigt danach den Satz.
+            const gesperrt = (e) => { if (e && e.status === 409) kritNachziehen(); };
             const anlegen = async () => {
               const feld = $("#krit-neu-text", body);
               const bez = feld.value.trim();
@@ -1666,7 +1683,7 @@
                 await kritNachziehen();
                 $("#krit-neu-text", body).focus();
                 toast("Kriterium angelegt");
-              } catch (e) { toast(schreibFehler(e).message, true); }
+              } catch (e) { toast(schreibFehler(e).message, true); gesperrt(e); }
             };
             $("#krit-neu-go", body).onclick = anlegen;
             $("#krit-neu-text", body).addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); anlegen(); } });
@@ -1678,7 +1695,7 @@
                 if (!bez) { inp.value = alt; return; }
                 if (bez === alt) return;
                 try { await api(`${API}/kriterien/${kid}`, { method: "PUT", body: { bezeichnung: bez } }); await kritNachziehen(); toast("Umbenannt"); }
-                catch (e) { inp.value = alt; toast(e.message, true); }
+                catch (e) { inp.value = alt; toast(e.message, true); gesperrt(e); }
               });
               inp.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); inp.blur(); } });
             });
@@ -1702,7 +1719,7 @@
                 }
                 await kritNachziehen();
                 toast(b.hasAttribute("data-krit-del") ? "Kriterium gelöscht" : "Reihenfolge gespeichert");
-              } catch (err) { toast(schreibFehler(err).message, true); }
+              } catch (err) { toast(schreibFehler(err).message, true); gesperrt(err); }
             });
           };
           // Nach jeder Änderung: frischen Stand holen (auch für die Seite hinter dem Dialog – der
@@ -1711,7 +1728,7 @@
             try {
               await loadDetail();
               const frisch = (state.lehrgang.leistungen || []).find((x) => x.id === l.id);
-              if (frisch) l.kriterien = frisch.kriterien;
+              if (frisch) { l.kriterien = frisch.kriterien; l.kriterien_eingefroren = frisch.kriterien_eingefroren; }
             } catch (e) { /* lokaler Stand bleibt, falls das Nachladen scheitert */ }
             $("#krit-wrap", body).outerHTML = kriterienListeHtml(l);
             kritBinden();
@@ -2529,7 +2546,7 @@
         <p class="help import-isc">Aus dem ISC: unter <strong>Dokumente → Checkliste Voraussetzungen (Excel)</strong> die Option
           <strong>„Allgemeine Lehrgangsinformationen mit ausgeben“</strong> wählen und die erzeugte Excel-Datei hier hochladen.</p>
         <div class="import-schritt import-datei">
-          <label for="imp-datei">Datei (.xlsx)${info("Datei", "Kopfzeilen über der Tabelle, verbundene Zellen und Leerzeilen am Ende sind kein Problem. Spalten mit „ja/nein“ oder Daten werden als Voraussetzungen erkannt.")}</label>
+          <label for="imp-datei">Datei (.xlsx)${info("Datei", `Kopfzeilen über der Tabelle, verbundene Zellen und Leerzeilen am Ende sind kein Problem. Spalten mit „ja/nein“ oder Daten werden als Voraussetzungen erkannt.${mehrDazu("import_datei")}`)}</label>
           <input type="file" id="imp-datei" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">
           ${datei ? `<div class="help">Gewählt: ${esc(datei.name)}</div>` : ""}
         </div>
@@ -2580,7 +2597,7 @@
               <div><label for="imp-von">Datum von</label><input type="date" id="imp-von" value="${esc(lgd.datum_von || "")}"></div>
               <div><label for="imp-bis">Datum bis</label><input type="date" id="imp-bis" value="${esc(lgd.datum_bis || "")}"></div>
             </div></div>`}
-        <h3>Spalten und Zuordnung</h3>
+        <h3 class="abgesetzt">Spalten und Zuordnung</h3>
         <p class="help">Die Zuordnung wurde aus den Spaltentiteln erkannt und lässt sich hier korrigieren – die Vorschau rechnet dann neu.</p>
         <table class="import-spalten"><thead><tr><th>Spalte</th><th>Beispiele</th><th>Zuordnung</th></tr></thead>
           <tbody>${(v.spalten || []).map((s) => `<tr>

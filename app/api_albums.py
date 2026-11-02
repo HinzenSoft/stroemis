@@ -535,7 +535,10 @@ def update_photo(pid):
                 return jsonify(error="Ungültige Koordinaten."), 400
             if not (-90 <= lat <= 90 and -180 <= lon <= 180):
                 return jsonify(error="Koordinaten außerhalb des gültigen Bereichs."), 400
-            vals["lat"], vals["lon"], vals["geo_source"] = lat, lon, "manual"
+            # „(manuell)“ nur, wenn sich die Position wirklich ändert (Entscheidung des Nutzers vom 01.11.2026): Schickt
+            # ein Formular die alte Position unverändert mit, bleibt die Herkunft (Geotag aus dem Bild) stehen.
+            if (lat, lon) != (p["lat"], p["lon"]):
+                vals["lat"], vals["lon"], vals["geo_source"] = lat, lon, "manual"
     if "sort" in d:
         try:
             vals["sort"] = int(d["sort"])
