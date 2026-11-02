@@ -72,6 +72,7 @@ Geschichte stehen. Schemaversion nach der Nachbesserung vor dem Merge: 30; mit d
 | Kleinigkeiten aus dem Artikel-Nachzug | Strömipedia: Sprung zum Anker bleibt oben, auch wenn Bilder darüber nachladen, Gliederung markiert den angesprungenen Abschnitt; Editor meldet entzogene Berechtigung als „keine Berechtigung mehr“; Vorlagen auch über „+“ und „Erste Seite anlegen“; Ersteller und Bearbeiter nur mit Stufe (Server); Riegenkarten: Leistungsdialog bei eingefrorenen Bewertungen nur zum Lesen mit Satz und ausgegrautem „Speichern“, Hilfetext Ausbilder; Ankerplätze: „Bild bearbeiten“ speichert nur Geändertes; Materialablage: „verloren“ in Meine PSA, Rückruf-Dialog „wegen Rückruf sperren“; alle Module: Anleitung als „i“ an der Überschrift statt Textlink „Anleitung“ und blauem Hinweiskasten; Karten der Strömipedia-Übersicht mittig wie auf der Startseite | gebaut 02.11.2026 (kein Schemaschritt) |
 | Menüeintrag „Anleitung zur Strömipedia“ entfernt | „⋯“ einer Seite der Strömipedia ohne „Anleitung zur Strömipedia“; Thema `seite` aus `app/anleitung.py` | gebaut 02.11.2026 (kein Schemaschritt) |
 | Bearbeitungsfreigabe an Mitglieder samt Unterseiten | „Bearbeiten erlauben“ wirkt für Mitglieder wie für Redakteure auch auf die Unterseiten (vorher genau diese Seite) | gebaut 02.11.2026 (kein Schemaschritt) |
+| Text der Hinweiskästen über die ganze Breite | Inhalt der Hinweiskästen (`.notice`, `.mat-wikizeile`) und Hilfetexte darin nicht mehr auf 100ch begrenzt | gebaut 02.11.2026 (kein Schemaschritt) |
 
 ## Abgleich mit dem Bestand (vor Lieferung 1)
 
@@ -11027,3 +11028,18 @@ redakteure“. Löst Entscheidung 2B vom 01.11.2026 ab (Mitglied: genau diese Se
 - **Tests**: `test_rechte_redakteur.py` – Mitglied mit Freigabe bearbeitet die Unterseite (Seite und Baum), verschiebt
   und löscht sie nicht.
 - **Artikel**: „Strömipedia“ (Rollen und Rechte, Teilen und Freigaben) beim nächsten Nachzug anpassen.
+
+## Text der Hinweiskästen über die ganze Breite (02.11.2026)
+
+Wunsch des Nutzers (mit einem Bild der Übersicht der Materialablage bei rund 2000 px, Kasten „1 offener
+Änderungsantrag …“ brach nach etwa der Hälfte um): „Text soll über die Breite vom Bildschirm gehen“. Ergänzt
+„Hinweiskästen über die ganze Breite“ vom 01.11.2026. Kein Schemaschritt.
+
+- `app.css`: Die eine Regel der Kästen setzt rechts nur noch den eigenen Abstand (`--kasten-rand`, Vorgabe 12 px) statt
+  `max(…, 100% - 100ch)` – Text und Knöpfe im Kasten nutzen die ganze Breite der Spalte (ein Knopf, der bisher neben
+  seinem Text stand, rückt in breiten Fenstern mit). Dialoge unverändert.
+- `material.css`: Die 100ch-Regel für Hilfetexte (`.help`, `p.small`, `p.muted`, `.mat-bericht-fuss`) gilt nicht mehr
+  in einem Kasten (`:not(.notice, .notice *, .mat-wikizeile *)`); außerhalb von Kästen bleibt sie (Entscheidung V10).
+- Unverändert: Hilfetexte ohne Kasten, Leitstelle und Riegenkarten (100ch), Lesebreite der Strömipedia, roter
+  Mangel-Banner und Liste „Gemeldete Mängel“ (Text je 100ch).
+- **Tests**: `test_material_textbreite.py` (Regel und Gegenprobe).

@@ -1269,7 +1269,7 @@ table.list.mat-artikel tr:has(.mat-wahl-art:checked) { background: var(--co-info
    und Tabellen“ aus V10) – die Regel dafür steht in app.css bei .notice. Die Stammdatenwerte bleiben am breiten
    Bildschirm schmaler (--mat-lesemass). */
 #mat-inhalt .mat-daten dd { max-width: var(--mat-lesemass); }
-:where(#mat-inhalt, #mat-side) :is(.help, p.small, p.muted, .mat-bericht-fuss):not(.notice) { max-width: 100ch; }
+:where(#mat-inhalt, #mat-side) :is(.help, p.small, p.muted, .mat-bericht-fuss):not(.notice, .notice *, .mat-wikizeile *) { max-width: 100ch; }
 
 /* Ordnerwahl (Dialog „verschieben nach …“): Ein langer Name bricht um, die Art-Marke daneben bleibt ganz. */
 .mat-wahl label .mat-art { flex: none; }

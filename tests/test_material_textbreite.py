@@ -6,17 +6,18 @@ Zeile; ch ist die Breite der Ziffer „0“, Text ist im Schnitt schmaler) – k
 Hilfetexte der Leitstelle ebenso. Der lange Fließtext im Wiki behält seine Lesebreite (app.css, --lesebreite).
 
 Hinweiskästen (.notice, die Zeile zur Prüfanleitung .mat-wikizeile) laufen seit dem 01.11.2026 über die ganze Breite
-ihrer Spalte (Entscheidung des Nutzers, ersetzt „der Kasten darf schmaler sein als Felder und Tabellen“ aus V10): Kein
-Kasten hat eine Höchstbreite, sein Inhalt bleibt höchstens 100ch breit – über EINE Regel in app.css, die den
-Innenabstand rechts aus der Breite der Spalte rechnet. Damit sie wirkt, setzt keine spätere Regel den Innenabstand
-rechts eines Kastens selbst (eigenes Mindestmaß über --kasten-rand)."""
+ihrer Spalte (Entscheidung des Nutzers, ersetzt „der Kasten darf schmaler sein als Felder und Tabellen“ aus V10), seit
+dem 02.11.2026 auch ihr Text (Nutzer: „Text soll über die Breite vom Bildschirm gehen“; vorher Inhalt höchstens 100ch):
+Kein Kasten und kein Hilfetext darin hat eine Höchstbreite – EINE Regel in app.css setzt nur den eigenen Abstand rechts.
+Damit sie wirkt, setzt keine spätere Regel den Innenabstand rechts eines Kastens selbst (eigener Abstand über
+--kasten-rand)."""
 import os
 import re
 
 WURZEL = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 TEXTKLASSEN = re.compile(r"\.(notice|help|muted|mat-text|mat-wikizeile)\b|p\.small\b|\.mat-bericht-fuss\b")
-REGEL_120 = ":where(#mat-inhalt, #mat-side) :is(.help, p.small, p.muted, .mat-bericht-fuss):not(.notice) { max-width: 100ch; }"
-REGEL_KASTEN = ":is(.notice, .mat-wikizeile):not(dialog *) { padding-right: max(var(--kasten-rand, 12px), calc(100% - 100ch)); }"
+REGEL_120 = ":where(#mat-inhalt, #mat-side) :is(.help, p.small, p.muted, .mat-bericht-fuss):not(.notice, .notice *, .mat-wikizeile *) { max-width: 100ch; }"
+REGEL_KASTEN = ":is(.notice, .mat-wikizeile):not(dialog *) { padding-right: var(--kasten-rand, 12px); }"
 KASTEN = re.compile(r"\.(notice|mat-wikizeile|mat-anleitung-hinweis)\b")
 # Alle Stylesheets, die auf Seiten mit Hinweiskästen geladen werden (app.css zuerst, dann die der Module).
 BLAETTER = ("app/static/css/app.css", "app/static/css/pruefungen.css", "app/material/static/material.css",
@@ -72,8 +73,9 @@ def test_texte_hoechstens_120_zeichen():
     print("Texte höchstens 120 Zeichen bestanden.")
 
 
-def test_kaesten_ganze_breite_inhalt_100ch():
-    """Ein Kasten hat keine Höchstbreite (und keine feste Breite), sein Inhalt höchstens 100ch – über die eine Regel."""
+def test_kaesten_und_ihr_text_ganze_breite():
+    """Ein Kasten hat keine Höchstbreite (und keine feste Breite), sein Text auch nicht – über die eine Regel."""
+    assert "100% - 100ch" not in lesen("app/static/css/app.css")
     app_css = lesen("app/static/css/app.css")
     assert app_css.count(REGEL_KASTEN) == 1
     # Die Regel steht direkt hinter der Grundregel des Kastens; nur die setzt den Innenabstand als Kurzform.
@@ -102,4 +104,4 @@ def test_kaesten_ganze_breite_inhalt_100ch():
 
 if __name__ == "__main__":
     test_texte_hoechstens_120_zeichen()
-    test_kaesten_ganze_breite_inhalt_100ch()
+    test_kaesten_und_ihr_text_ganze_breite()
