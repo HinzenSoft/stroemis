@@ -439,6 +439,10 @@ def test_oberflaeche_texte_und_muster():
     teil = css[css.index("Startseite über alle Module (Wunsch vom 02.11.2026"):]
     assert "#" not in re.sub(r"/\*.*?\*/", "", teil, flags=re.S).replace("#pending", ""), "keine freien Farbwerte"
     assert "@container start (min-width: 1100px)" in teil and "@container start (min-width: 740px)" in teil
+    # Eine nicht volle Reihe Kacheln bzw. Karten steht mittig (Nutzer 02.11.2026), feste Spaltenbreite über --spalten.
+    assert ".start-kacheln, .start-wiki .wiki-karten { --spalten: 1; display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; }" in teil
+    assert "flex: 0 0 calc((100% - (var(--spalten) - 1) * 12px) / var(--spalten));" in teil
+    assert ".start-kacheln[data-anzahl=\"5\"] { --spalten: 5; }" in teil
     # Surface Duo nebeneinander: die Startseite ganz in der rechten Hälfte (nichts auf der Falz).
     assert "main.page.breit.start { max-width: env(viewport-segment-width 1 0); margin-left: env(viewport-segment-left 1 0);" in teil
     # Suchtreffer der Strömipedia am Finger 44 px – das Suchfeld der Startseite führt am Telefon direkt dorthin.

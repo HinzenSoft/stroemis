@@ -2957,11 +2957,18 @@ main.start { container: start / inline-size; }
 .start-suche { display: flex; gap: 6px; flex: 1 1 330px; max-width: 420px; margin-left: auto; }
 .start-suche input { flex: 1 1 auto; min-width: 0; }
 @container start (max-width: 559px) { .start-suche { flex-basis: 100%; max-width: none; margin-left: 0; } }
-.start-kacheln { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; margin: 0 0 6px; }
-@container start (min-width: 560px) { .start-kacheln { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+/* Kacheln und Karten der Startseite: feste Spaltenbreite (--spalten), eine nicht volle Reihe steht MITTIG statt links
+   mit leeren Spalten daneben (Nutzer 02.11.2026: „zentriert, wenn nicht so viele angezeigt werden, dass die ganze Breite
+   genutzt wird“) – etwa zwei Module eines Materialwarts am Rechner oder die fünfte Kachel auf dem Tablet. */
+.start-kacheln, .start-wiki .wiki-karten { --spalten: 1; display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; }
+.start-kacheln { margin: 0 0 6px; }
+.start-kacheln > .start-kachel, .start-wiki .wiki-karten > .wiki-karte {
+  flex: 0 0 calc((100% - (var(--spalten) - 1) * 12px) / var(--spalten)); }
+@container start (min-width: 560px) { .start-kacheln, .start-wiki .wiki-karten { --spalten: 2; } }
+@container start (min-width: 860px) { .start-wiki .wiki-karten { --spalten: 3; } }
 @container start (min-width: 1100px) {
-  .start-kacheln { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-  .start-kacheln[data-anzahl="5"] { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+  .start-kacheln, .start-wiki .wiki-karten { --spalten: 4; }
+  .start-kacheln[data-anzahl="5"] { --spalten: 5; }
 }
 .start-kachel { min-width: 0; padding: 10px 14px 12px; border: 1px solid var(--linie); border-top: 4px solid var(--anthrazit);
   background: var(--weiss); }
