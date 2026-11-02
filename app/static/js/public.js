@@ -165,7 +165,8 @@
     const leer = lesemodus ? "Derzeit sind keine Seiten für alle Angemeldeten freigegeben." : "Derzeit sind keine Seiten freigegeben.";
     /* Die Einstiegsseiten als Karten wie auf der Übersicht der Strömipedia (wiki.js) und der Startseite: Titel, Zahl der
        Seiten, die ersten Unterseiten (/api/public/index, api_wiki.abschnitte) – vorher eine Liste. */
-    const seite = (s) => `<a href="${prefix}${esc(s.slug)}">${esc(s.title)}</a>`;
+    // Mit dem Symbol der Seite wie auf der Startseite und der Übersicht der Strömipedia (wiki.js).
+    const seite = (s) => `<a href="${prefix}${esc(s.slug)}">${s.icon ? esc(s.icon) + " " : ""}${esc(s.title)}</a>`;
     const karte = (p) => {
       const mehr = (p.kinder || 0) - (p.unterseiten || []).length;
       return `<li class="wiki-karte"><h2>${seite(p)}</h2>
