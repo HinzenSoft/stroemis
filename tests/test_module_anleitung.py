@@ -117,7 +117,8 @@ def test_hilfen_in_common_und_kein_link_auf_die_offene_seite():
     assert 'const anleitungUrl = (thema) => S.anleitung.url(thema, { ausser: offeneSeite() });' in wiki
     assert 'const mehrDazu = (thema) => S.anleitung.mehrDazu(thema, { ausser: offeneSeite() });' in wiki
     assert '<h1>Strömipedia${S.anleitung.kopf("uebersicht", { neuerTab: false,' in wiki       # in der Anwendung
-    assert 'if (a === "anleitung") return navigate(slugAus(anleitungUrl("seite")));' in wiki
+    # „Anleitung zur Strömipedia“ im „⋯“ einer Seite entfällt (Nutzer 02.11.2026) – die Anleitung steht im „i“ der Übersicht.
+    assert 'data-a="anleitung"' not in wiki and 'anleitungUrl("seite")' not in wiki
     css = lesen("app/static/css/app.css")
     assert ".kopf-anleitung {" not in css and "> .kopf-anleitung" not in css         # das „i“ braucht keine eigene Regel
 
@@ -153,7 +154,7 @@ def test_aufloesung_je_modul_mit_den_rechten_der_stroemipedia():
 
         v = verweise(red, "/stroemipedia")
         assert v["uebersicht"] == f"/stroemipedia/{w['slug']}"
-        assert v["seite"] == f"/stroemipedia/{lf['slug']}#kopfzeile-einer-seite"
+        assert "seite" not in v                                                 # Menüeintrag entfallen (02.11.2026)
         assert v["editor"] == f"/stroemipedia/{ed['slug']}"
         assert v["textfarbe"] == f"/stroemipedia/{ed['slug']}#auswahlleiste"
         assert v["abschnitt_einbinden"] == f"/stroemipedia/{ed['slug']}"        # Überschrift nur im Codeblock

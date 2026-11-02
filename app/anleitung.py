@@ -39,13 +39,13 @@ TIEFE_MAX = 6             # Ebenen unter der Wurzel, die gesucht werden (die Art
 SEITEN_MAX = 500          # Seiten im Teilbaum, die höchstens gelesen werden
 
 # Modul → (Wurzel, Themen). Die Stellen in der Oberfläche: wiki.js, map.js und pruefungen.js über S.anleitung
-# (common.js); „Anleitung“ steht im Seitenkopf, „Mehr dazu in der Strömipedia“ am Ende einer vorhandenen Info („i“).
+# (common.js); die Anleitung steht als „i“ an der Überschrift, „Mehr dazu in der Strömipedia“ am Ende einer vorhandenen
+# Info („i“).
 TABELLEN = {
     "wiki": ("Strömipedia", {
-        # „Anleitung“ im Kopf der Übersicht – nie auf der Seite, auf die sie zeigt (wiki.js anleitungFuer)
+        # „i“ an der Überschrift der Übersicht – nie auf der Seite, auf die sie zeigt (wiki.js anleitungFuer)
         "uebersicht": ("Strömipedia", ""),
-        # „Anleitung zur Strömipedia“ im Menü „⋯“ einer Seite und „Anleitung zum Editor“ im „⋯“ des Editors
-        "seite": ("Lesen und Finden", "kopfzeile-einer-seite"),
+        # „Anleitung zum Editor“ im „⋯“ des Editors („Anleitung zur Strömipedia“ im „⋯“ einer Seite entfiel am 02.11.2026)
         "editor": ("Der Editor", ""),
         # „Mehr dazu in der Strömipedia“ am Ende einer Info („i“)
         "papierkorb": ("Papierkorb, Export und Import", "papierkorb"),

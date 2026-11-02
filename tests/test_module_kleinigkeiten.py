@@ -338,9 +338,9 @@ def test_11_anleitung_als_i_an_der_ueberschrift():
     for pfad in ("app/material/static/material.js", "app/static/js/pruefungen.js"):
         for h1 in re.findall(r"<h1>.*?</h1>", lesen(pfad)):
             assert not ("anleitungKopf(" in h1 and re.search(r"\b(?:infoKnopf|info)\(", h1)), h1[:120]
-    # Menüeinträge und „Mehr dazu“ bleiben.
+    # „Anleitung zum Editor“ und „Mehr dazu“ bleiben; „Anleitung zur Strömipedia“ im „⋯“ einer Seite entfiel (Nutzer 02.11.2026).
     wiki = lesen("app/static/js/wiki.js")
-    assert "Anleitung zur Strömipedia" in wiki and "Anleitung zum Editor" in wiki
+    assert "Anleitung zur Strömipedia" not in wiki and "Anleitung zum Editor" in wiki
     assert 'target="_blank" rel="noopener">Mehr dazu in der Strömipedia</a></span>' in common
     css = lesen("app/static/css/app.css") + lesen("app/static/css/pruefungen.css") + lesen("app/material/static/material.css")
     assert "mat-anleitung-hinweis" not in css and "> .kopf-anleitung" not in css and ".mat-kopf-anleitung.lnk { display: inline-block; }" in css

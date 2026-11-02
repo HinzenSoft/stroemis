@@ -70,6 +70,7 @@ Geschichte stehen. Schemaversion nach der Nachbesserung vor dem Merge: 30; mit d
 | Nachbesserung aus der zweiten Durchsicht vor dem Merge | Strömipedia: Verschieben nur, wer die Seite in den Papierkorb legen darf (Entscheidung des Nutzers), kein „+“/„Unterseite anlegen“/„Duplizieren“ im freigegebenen Abschnitt, Editor hält bei 403 an; Riegenkarten: Kontosuche nur mit ganzer E-Mail-Adresse, Kopie nur mit passenden Ausbildern, keine zweite Leitungszeile; Anmeldung springt zum Ziel, alte Bildlinks der Subdomain; „Zurück“ nach dem Abmelden; Leitstelle: Inhalte mit Lehrgängen/Katalogen, Freigabe-Toast; Schritt 34 protokolliert jede Verknüpfung; README „Inbetriebnahme“ (Merge-Befehl, Kontrollen) und Werkzeug `scripts/vor_merge_riegenkarten.py` | gebaut 02.11.2026 (kein Schemaschritt, Schema bleibt 34), zur Freigabe |
 | Startseite über alle Module | „/“ für jedes Konto mit Modul: Kacheln je Modul mit Zahlen, die zum Handeln führen (Materialablage wie ihre Übersicht), „Zuletzt besucht“ und „Neu und geändert“ über die Module, Abschnitte der Strömipedia als Karten (auch auf ihrer Übersicht und im Lesemodus), Suchfeld der Strömipedia; Logo und Anmeldung führen dorthin | gebaut 02.11.2026 (kein Schemaschritt, Merker in `mat_meta`), Fotos vor dem Push |
 | Kleinigkeiten aus dem Artikel-Nachzug | Strömipedia: Sprung zum Anker bleibt oben, auch wenn Bilder darüber nachladen, Gliederung markiert den angesprungenen Abschnitt; Editor meldet entzogene Berechtigung als „keine Berechtigung mehr“; Vorlagen auch über „+“ und „Erste Seite anlegen“; Ersteller und Bearbeiter nur mit Stufe (Server); Riegenkarten: Leistungsdialog bei eingefrorenen Bewertungen nur zum Lesen mit Satz und ausgegrautem „Speichern“, Hilfetext Ausbilder; Ankerplätze: „Bild bearbeiten“ speichert nur Geändertes; Materialablage: „verloren“ in Meine PSA, Rückruf-Dialog „wegen Rückruf sperren“; alle Module: Anleitung als „i“ an der Überschrift statt Textlink „Anleitung“ und blauem Hinweiskasten; Karten der Strömipedia-Übersicht mittig wie auf der Startseite | gebaut 02.11.2026 (kein Schemaschritt) |
+| Menüeintrag „Anleitung zur Strömipedia“ entfernt | „⋯“ einer Seite der Strömipedia ohne „Anleitung zur Strömipedia“; Thema `seite` aus `app/anleitung.py` | gebaut 02.11.2026 (kein Schemaschritt) |
 
 ## Abgleich mit dem Bestand (vor Lieferung 1)
 
@@ -10995,3 +10996,17 @@ hinzu“)**
 Rundungsverlust, Texte); angepasst `test_module_anleitung.py` (`kriterienListeHtml(l, ohneSatz)`, „i“ statt Textlink),
 `test_material_anleitung.py` und `test_material_textbreite.py` (kein Hinweiskasten mehr), `test_module_startseite.py`
 (Karten über die gemeinsame Regel) und `test_material_verlust_melden.py` (Texte des Rückruf-Dialogs).
+
+## Menüeintrag „Anleitung zur Strömipedia“ entfernt (02.11.2026)
+
+Wunsch des Nutzers (mit einem Bild des Menüs „⋯“ einer Seite): „Entferne „Anleitung zur Strömipedia““. Kein
+Schemaschritt.
+
+- `wiki.js` (`pageMenu`): Eintrag und Handler `data-a="anleitung"` entfallen. Die Anleitung erreicht man über das „i“ an
+  der Überschrift der Übersicht; „Anleitung zum Editor“ im „⋯“ des Editors und „Mehr dazu in der Strömipedia“ in den
+  übrigen „i“ bleiben.
+- `app/anleitung.py`: Thema `seite` („Lesen und Finden“ `#kopfzeile-einer-seite`) aus `TABELLEN["wiki"]` entfernt – die
+  Überschrift „Kopfzeile einer Seite“ ist damit kein Ziel der App mehr; Kommentare auf das „i“ nachgezogen.
+- README „Verweise auf die Anleitung“ angepasst.
+- **Tests**: `test_module_anleitung.py` (kein Eintrag, kein Thema `seite`), `test_module_kleinigkeiten.py`.
+- **Artikel**: „Strömipedia“ (Seiten „Strömipedia“ und „Lesen und Finden“) beim nächsten Nachzug anpassen.

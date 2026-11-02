@@ -1211,7 +1211,6 @@
       <button type="button" data-a="export">Als Markdown herunterladen</button>
       <button type="button" data-a="exportzip">Abschnitt als ZIP herunterladen</button>
       <button type="button" data-a="print">Drucken / als PDF sichern</button>
-      ${anleitungUrl("seite") ? '<button type="button" data-a="anleitung">Anleitung zur Strömipedia</button>' : ""}
       ${p.can_edit ? `<button type="button" data-a="template">${p.is_template ? "Nicht mehr als Vorlage" : "Als Vorlage anbieten"}</button>` : ""}
       ${p.can_duplicate ? '<button type="button" data-a="dup">Duplizieren</button>' : ""}
       ${p.can_delete ? '<button type="button" data-a="del" class="danger">In den Papierkorb</button>' : ""}`;
@@ -1224,7 +1223,6 @@
       close();
       if (a === "share") return shareDialog(p);
       if (a === "toc") return tocAusMenue();
-      if (a === "anleitung") return navigate(slugAus(anleitungUrl("seite")));
       if (a === "history") return showHistory(p);
       if (a === "fav") return toggleFavorite(p.id, !p.favorite);
       if (a === "watch") {
