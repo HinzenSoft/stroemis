@@ -41,39 +41,39 @@ Geschichte stehen. Schemaversion nach der Nachbesserung vor dem Merge: 30; mit d
 | Feinschliff aus den Wiki-Fragen | „Deine PSA“ auch in Ordnern mit „Erinnerungsmails aus“ (E2 B), Verlauf des Kontos im Nutzerdialog der Leitstelle (E3 A), geerbtes generisches Formular in der Kategorie (K9), Texte (K19, K21, T, E1, E6), README | gebaut 26.10.2026, freigegeben, auf dev |
 | Katalog am Telefon (26.10.2026) | „☰ Kategorien“ links in der mitlaufenden Suchzeile der Katalogliste; keine Nummernsuche in den Katalogansichten | gebaut 26.10.2026 (kein Schemaschritt), bestätigt wie gebaut (Nutzer 26.10.2026), auf dev (vor dem Merge geprüft) |
 | Nachbesserung vor dem Merge (Schritt 30) | R1 Rückruf nach Änderungsantrag, Rückruf ohne Mailserver, DEMO-Konten nicht als Material-Verwaltung, „Bald fällig“ 0–365, Unveränderlichkeit gegen SQL von Hand (Schritt 30), Jahresbericht ohne Bildlauf, Fokus nach Esc, Tippflächen, Toast unter Touch, README/CHANGELOG für den Merge | gebaut 26.10.2026, bestätigt wie gebaut (Nutzer 26.10.2026), auf dev (vor dem Merge geprüft) |
-| Nachbesserung vor dem Merge – übrige Module | Leitstelle: Rechte-Felder im Nutzerdialog (F1), Fokus in langen Dialogen; Strömipedia: ein Verlaufseintrag je Link (N1), Emoji-Raster mit einem Tab-Stopp (N4), Rollennamen in Meldungen (N5), Schrägstrich am Adressende und Kleinigkeiten (N6), Export → Import gleichnamiger Geschwister | gebaut 26.10.2026 (kein Schemaschritt), auf dev (vor dem Merge geprüft) |
+| Nachbesserung vor dem Merge – übrige Module | Leitstelle: Rechte-Felder im Nutzerdialog (F1), Fokus in langen Dialogen; Strömipedia: ein Verlaufseintrag je Link (N1), Emoji-Raster mit einem Tab-Stopp (N4), Rollennamen in Meldungen (N5), Schrägstrich am Adressende und Kleinigkeiten (N6), Export → Import gleichnamiger Geschwister | gebaut 26.10.2026 (kein Schemaschritt), auf dev (vor dem Merge geprüft), freigegeben 02.11.2026 |
 | Lebenslauf frisch, Melder und Mangelbeschreibung | Jeder Abruf eines Lebenslaufs (und der übrigen Dateien auf Abruf) mit eigener Adresse und Uhrzeit im Namen – gegen die alte Datei auf Android-Telefonen; „Mangel gemeldet“ im Lebenslauf mit Name und Beschreibung für Prüfer, Materialwart und den Melder selbst | gebaut 26.10.2026, bestätigt wie gebaut (Nutzer 26.10.2026), auf dev (vor dem Merge geprüft) |
-| Nachbesserung vor dem Merge, Runde 2 | Rückruf: nur eine Prüfung, deren Entwurf nach Rückruf bzw. Antrag begann, erledigt ihn (N-A1); „Bald fällig“ aus der `.env` nur 0–365, sonst Warnung und Vorgabe 30; README zur Inbetriebnahme (Prüfformulare neu anlegen, Kontrollen) | gebaut 26.10.2026 (kein Schemaschritt), zur Freigabe |
-| Nachbesserung vor dem Merge, Runde 3 | Tippflächen Brotkrumen und „Deine Meldungen“ (B-1, B-2); Katalog am Telefon kompakt, Liste nach der Kategoriewahl oben, Zurück an dieselbe Stelle (V1, V3); Seitentitel je Ansicht in allen Modulen (V2); Leitstelle: Hilfe zugeklappt, Zeilenmenü, E-Mail-Umbruch, Reiter als Linie (V5); Ankerplätze „+ Album“ (V6); „☰“ nicht vorgelesen (V8); eine Linie unter den Reitern (V9); Dialog-Reiter quer (V11); Kontrast in den Riegenkarten (V13); Nachtrag: Nummernsuche am Telefon zu, Reiter in eigener Zeile (V4), Sperrgrund im Mangel-Banner (V7), Hinweis- und Hilfetexte höchstens rund 120 Zeichen je Zeile (V10), Mangelbeschreibung im Verlauf am Artikel | gebaut 26./27.10.2026 (kein Schemaschritt), zur Freigabe |
-| Prüfsumme für den Lebenslauf (Schritt 31) | Jeder Abruf eines Lebenslaufs mit Kennung L-<Jahr>-<Nr> und Prüfsummen-Stempel, verzeichnet ohne Konto; die Prüfseite erkennt ihn; kein „nicht festgeschrieben“ mehr im Lebenslauf | gebaut 27.10.2026 (Schema 31), zur Freigabe |
-| Liste nach dem Merge – Teil A (Schritt 32) | Lebenslauf: Kennung nach dem Zurückspielen nie doppelt, HEAD ohne Eintrag, Abrufbremse; Prüfseite „Protokoll oder Lebenslauf prüfen“; REPLACE ohne recursive_triggers verdrängt nichts Geschütztes; Rückruf nach Antrag wieder offen (gesagt), Rückruf-Text nach dem Stand beim Versand; Journal am Telefon als Karten, Mangeltext und Reiter; Verbesserungen der Browserberichte (Artikelseite „Mehr“, Prüfungen, Katalogimport, Meine PSA …) | gebaut 27.10.2026 (Schema 32), zur Freigabe |
-| Reste vor dem finalen Test | Langer Mangeltext im Banner mit „Weiterlesen“; Brotkrumen am Telefon in einer Zeile (lange Glieder mit „…“, ab vier Gliedern „…“ für den Mittelteil); Knopf „Produktmeldungen“; Ergebnisseite ohne „Ergebnis / Ergebnis“; Fokus im Unterschrift-Dialog auf Zeichenfläche bzw. Titel | gebaut 27.10.2026 (kein Schemaschritt, Schema bleibt 32), zur Freigabe |
-| Abgeschlossene Prüfdurchgänge nur bei Bedarf | Menü „Prüfdurchgänge“ auf „Prüfungen“ (anlegen, abgeschlossene); eigene Seite je Jahr mit Ordner- und Titelfilter; dazu „i“ hinter „Prüfsumme“, Namen als Einheit, kein „…“ in Knopftexten (alle Module), „Änderung beantragen“ neben „Stammdaten“, Export-Text | gebaut 27.10.2026 (kein Schemaschritt, Schema bleibt 32), zur Freigabe |
-| Seitenumbrüche in den PDF-Protokollen | Keine Waisen am Seitenende: Überschrift, Tabellenkopf und die ersten vier Zeilen zusammen, die letzten drei zusammen, kurze Listen ungeteilt; Prüfprotokoll: Abschluss (Ergebnis bis Unterschrift) immer ab neuer Seite, Fotos als Anlage danach, Herstellerdokumente ohne zerhackte Spalten; Aussonderungsprotokoll: Abschluss zusammen | gebaut 27.10.2026 (kein Schemaschritt, nur neue PDFs), zur Freigabe |
-| Info-„i“ app-weit | Erklärsätze unter Überschriften und Feldern hinter ein „i“ am Begriff (55 Stellen in allen Modulen), `S.info` und Jinja-Makro, ein „i“ je Liste für Marken; „Seiten aus ZIP importieren“ im Seitenbaum der Strömipedia | gebaut 27.10.2026 (kein Schemaschritt, Schema bleibt 32), zur Freigabe |
-| Letzte offene Punkte | Datenschutzsätze an einem „i“ auf eine Zeile; Strömipedia: „Neue Seite“ und „⋯“ (Papierkorb, Import) über dem Baum, Blatt-Symbol statt kursivem „i“ für „Angaben zur Seite“, Fehlerart beim Ablegen von Dateien; eine Abschnittsaktion neben der Überschrift (Protokoll, Sammelprotokoll, Prüfformular, Herstellerdokumente); Leitstelle: Marken in der Hilfe-Box statt im „i“ | gebaut 27.10.2026 (kein Schemaschritt, Schema bleibt 32), zur Freigabe |
-| UI/UX vor dem Merge – U1a Verhalten | Zurück schließt Dialoge, Schubladen und Großansichten; Fehler am Feld; ein Menübaustein (ein Eintrag → Knopf, kurze Einträge, im Bild); Rückfragen mit Gegenstand, Nicht-Endgültiges ohne „danger“; Mehrzahl; Export mit Uhrzeit; deutsche Fehlerseiten; Bewegung reduzieren; Beschriftungen; Dialogfuß; Bedienzeichen ✕ ↑ ↓ app-weit | gebaut 27.10.2026 (kein Schemaschritt), Zweig uiux-1a |
-| UI/UX vor dem Merge – U3 übrige Module | Hinweis „Entwicklungsserver“ nach jeder Anmeldung auf dev; Anmeldung am Telefon Formular zuerst; Leitstelle: Überschrift „Leitstelle“, Einstellungen gegliedert und ohne Entwicklersprache; 403 führt in den eigenen Bereich; Riegenkarten breitenbegrenzt, Reiter ohne Verlaufseintrag, Knöpfe mit Wort; Ankerplätze und Strömipedia: eine rote Hauptaktion, Löschen in Dialog/Menü, Tastatur, benannte Knöpfe; Listen und Schublade nach der Inhaltsbreite, Doppelbildschirm | gebaut 27.10.2026 (kein Schemaschritt), Zweig uiux-3 |
-| UI/UX vor dem Merge – U2 Materialablage | Ultrawide als Gruppe; ausgegraute Hauptknöpfe fokussierbar mit Grund darüber; Abschlussleiste niedrig (Grund und nächste Prüfung im Festschreib-Dialog); Mangel je Rolle; weniger Knöpfe (Dokumente, Formular, Prüfer); Empfehlung im Banner; Journal gekürzt; „Echtheit prüfen“; Radiogruppen; Fehlerzustand mit „Neu laden“; Kleinigkeiten | gebaut 27.10.2026 (kein Schemaschritt), Zweig uiux-2 |
-| Suchzeile auf Übersicht und Prüfungen | Am Telefon und Tablet hochkant „☰“ und die Nummernsuche als Artikelsuche in einer klebenden Suchzeile oben im Inhalt wie im Katalog, ohne Lupe; Entscheidung V4 für diese beiden Seiten abgelöst | gebaut 28.10.2026 (kein Schemaschritt), zur Freigabe |
-| Suchzeile auf allen Seiten | Dieselbe Suchzeile auch im Bestand (Bestand, Ordner, Artikel, Artikel anlegen, Anträge, Jahresbericht, Bestandsimport) und auf den übrigen Seiten der Prüfungen (Prüfdurchgang, Abgeschlossene Prüfdurchgänge, Prüfung beginnen) sowie auf der Trefferseite – nirgends mehr „☰ + Lupe“ am Telefon; Entscheidung V4 ganz abgelöst; Prüfung und Katalog unverändert | gebaut 28.10.2026 (kein Schemaschritt), zur Freigabe |
-| Seitenbaum der Strömipedia | „Seiten aus ZIP importieren“ nur noch im „⋯“ über dem Baum; Klappzeichen als gezeichneter Winkel in fester Spalte, gleichmäßiger Einzug mit Führungslinien, oberste Ebene fett, Titel mit hängendem Umbruch, am Finger 44-px-Tippfläche ohne Platzverlust, Schublade bis 360 px | gebaut 28.10./01.11.2026 (kein Schemaschritt), zur Freigabe |
-| Verweise auf die Anleitung | „Mehr dazu in der Strömipedia“ in 28 Infos (drei neu), „Anleitung“ hinter der Überschrift der übrigen Seiten, Hinweis oben auf der Übersicht, „Willkommen in der Materialablage“ beim ersten Besuch – alles nur für Konten, die die Zielseite lesen dürfen | gebaut 01.11.2026 (kein Schemaschritt), Zweig wikiverweise, zur Freigabe |
-| PWA und Kontaktadressen | strömis.de als App installierbar (Manifest, Service Worker, Maskottchen auf Rot, ohne Netz nur eine Hinweisseite, „App installieren“ im Profil); Kontaktadressen als Einstellung (Leitstelle → Einstellungen, Gruppe „Seite“) im Fuß jeder Seite, im Hinweis „Entwicklungsserver“ und vor dem Bestandsimport | gebaut 01.11.2026 (kein Schemaschritt), Zweig pwakontakt, zur Freigabe |
-| Stufe Redakteur (Schritt 33) | Rechte-Matrix mit „Redakteur“ in Strömipedia, Ankerplätzen und Riegenkarten (Mitglied liest bzw. bewertet in eigenen Lehrgängen, Redakteur legt eigene Inhalte an, Verwaltung alles); eine Skala 0/1/2/3 in allen Spalten, Schritt 33 hebt Verwaltung 2 → 3; Riegenkarten: Sichtbarkeit nur eigener Lehrgänge (404), eigene Kataloge; dazu: keine Strömipedia ohne Anmeldung mehr | gebaut 01.11.2026 (Schema 33), Zweig redakteur, nicht auf dev |
-| Ausbilder nur mit Konto (Schritt 34) | Riegenkarten: Ausbilder sind Konten mit Stufe ≥ Mitglied (Suche nach Name/E-Mail, Server lehnt anderes mit Zeile ab), Excel-Import ordnet per E-Mail bzw. eindeutigem Namen zu und listet „nicht übernommen“, Schritt 34 verknüpft oder entfernt den Freitext-Bestand ohne Text in der Beschreibung (nur Startprotokoll), Konten ohne Stufe als „ohne Zugriff“ markiert | gebaut 01.11.2026 (Schema 34), Zweig ausbilder, nicht auf dev |
-| Gerätetest 01.11.2026 – Teil 5 (Ankerplätze, Leitstelle, Profil) | Ankerplätze: Suchfeld über der Karte und Liste „in der Nähe“ (B8), Standortmeldungen je Fall (FT2), Liste nach dem Löschen frisch und Satz für Alben ohne Position (FT8), keine Ziffern-Dateinamen als Bildname (FT5), Hochlade-Ergebnis sichtbar (FT4); Leitstelle: Suche, Rollenfilter und zugeklappte Karten (B6), Spaltenköpfe mit Trennstellen (Q2), Satz zur Prüffreigabe am Häkchen „Prüfer“ (M4) | gebaut 01.11.2026 (kein Schemaschritt), Zweig gt-karte-leit, nicht auf dev |
-| Gerätetest 01.11.2026 – Teil 2 (Strömipedia) | Speicherstand sofort („Ungespeichert“, „Speichert …“, „Gespeichert 13:02“, Live-Region); „/“-Menü im sichtbaren Bereich (höchstens 40 %, über dem Cursor); Artikel-Leiste einzeilig (Pfad kürzt sich, „Teilen“/„Inhaltsverzeichnis“ am Finger in „⋯“), unter 500 px Höhe nicht klebend, Cursor nicht unter den Leisten; Inhaltsverzeichnis in „⋯“ als Dialog; Aufgabenlisten-Kästchen 24 px mit Namen; Kommentar als Blatt über dem Artikel; numerische Dateinamen nicht als Alternativtext; Erfolgsmeldungen für Hochladen und Kommentare | gebaut 01.11.2026 (kein Schemaschritt), Zweig gt-wiki, nicht auf dev |
-| Gerätetest 01.11.2026 – Teil 4 (Materialablage) | Prüfdurchgang: Suche nach Nummer/Name und „QR-Code scannen“ über der Liste, Vorgabe „offen“, eine Zählweise in Kopf, Filtern und Grund, Meldung nach Ausnehmen/Einbeziehen; Abschlussleiste der Prüfung beim Scrollen eingeklappt; ausgegrautes „Festschreiben“ führt zum fehlenden Schritt; Filter der Prüfungen mit aria-pressed, Links der Übersicht springen zur Liste; Bestandsbaum am Telefon nur „überfällig“; ein Platzhalter der Nummernsuche | gebaut 01.11.2026 (kein Schemaschritt), zur Freigabe |
-| Hinweiskästen über die ganze Breite | Hinweiskästen (`.notice`, Zeile zur Prüfanleitung) laufen in allen Modulen über die volle Breite ihrer Spalte, ihr Inhalt – Text und Knöpfe – bleibt höchstens 100ch (rund 120 Zeichen) breit, der Knopf neben seinem Text; ersetzt V10 „der Kasten darf schmaler sein“ | gebaut 01.11.2026 (kein Schemaschritt), Zweig kaesten, zur Freigabe |
-| Verlust melden statt Sperren | Artikelseite: „Verlust melden“ (Menü „Mehr“ des Prüfers, Dialog ohne Grundauswahl) statt „Sperren“; ohne Prüfung sperrt der Server nur noch mit „verlust“ und „rueckruf“, „sturz“/„beschaedigung“ 400 mit Hinweis auf „Mangel melden“; ältere Sperren bleiben lesbar; Banner und Marke „verloren“ am Artikel | gebaut 01.11.2026 (kein Schemaschritt), Zweig verlust |
-| Nachbesserung aus der zweiten Durchsicht vor dem Merge | Strömipedia: Verschieben nur, wer die Seite in den Papierkorb legen darf (Entscheidung des Nutzers), kein „+“/„Unterseite anlegen“/„Duplizieren“ im freigegebenen Abschnitt, Editor hält bei 403 an; Riegenkarten: Kontosuche nur mit ganzer E-Mail-Adresse, Kopie nur mit passenden Ausbildern, keine zweite Leitungszeile; Anmeldung springt zum Ziel, alte Bildlinks der Subdomain; „Zurück“ nach dem Abmelden; Leitstelle: Inhalte mit Lehrgängen/Katalogen, Freigabe-Toast; Schritt 34 protokolliert jede Verknüpfung; README „Inbetriebnahme“ (Merge-Befehl, Kontrollen) und Werkzeug `scripts/vor_merge_riegenkarten.py` | gebaut 02.11.2026 (kein Schemaschritt, Schema bleibt 34), zur Freigabe |
-| Startseite über alle Module | „/“ für jedes Konto mit Modul: Kacheln je Modul mit Zahlen, die zum Handeln führen (Materialablage wie ihre Übersicht), „Zuletzt besucht“ und „Neu und geändert“ über die Module, Abschnitte der Strömipedia als Karten (auch auf ihrer Übersicht und im Lesemodus), Suchfeld der Strömipedia; Logo und Anmeldung führen dorthin | gebaut 02.11.2026 (kein Schemaschritt, Merker in `mat_meta`), Fotos vor dem Push |
-| Kleinigkeiten aus dem Artikel-Nachzug | Strömipedia: Sprung zum Anker bleibt oben, auch wenn Bilder darüber nachladen, Gliederung markiert den angesprungenen Abschnitt; Editor meldet entzogene Berechtigung als „keine Berechtigung mehr“; Vorlagen auch über „+“ und „Erste Seite anlegen“; Ersteller und Bearbeiter nur mit Stufe (Server); Riegenkarten: Leistungsdialog bei eingefrorenen Bewertungen nur zum Lesen mit Satz und ausgegrautem „Speichern“, Hilfetext Ausbilder; Ankerplätze: „Bild bearbeiten“ speichert nur Geändertes; Materialablage: „verloren“ in Meine PSA, Rückruf-Dialog „wegen Rückruf sperren“; alle Module: Anleitung als „i“ an der Überschrift statt Textlink „Anleitung“ und blauem Hinweiskasten; Karten der Strömipedia-Übersicht mittig wie auf der Startseite | gebaut 02.11.2026 (kein Schemaschritt) |
-| Menüeintrag „Anleitung zur Strömipedia“ entfernt | „⋯“ einer Seite der Strömipedia ohne „Anleitung zur Strömipedia“; Thema `seite` aus `app/anleitung.py` | gebaut 02.11.2026 (kein Schemaschritt) |
-| Bearbeitungsfreigabe an Mitglieder samt Unterseiten | „Bearbeiten erlauben“ wirkt für Mitglieder wie für Redakteure auch auf die Unterseiten (vorher genau diese Seite) | gebaut 02.11.2026 (kein Schemaschritt) |
-| Text der Hinweiskästen über die ganze Breite | Inhalt der Hinweiskästen (`.notice`, `.mat-wikizeile`), Hilfetexte darin, Mangel- und Sperr-Banner und Liste „Gemeldete Mängel“ nicht mehr auf 100ch begrenzt | gebaut 02.11.2026 (kein Schemaschritt) |
-| Freigaben je Person, Ordnerbild neben dem Namen | Reiter „Freigaben“: eine Zeile je Person in allen drei Listen, EIN „Ändern“ → Dialog „Rechte ändern“ (neuer Endpunkt je Person und Ordner, eine Transaktion), „Entziehen“ nimmt alle Rechte der Person dort, „… hat hier schon: …“ beim Anlegen; Ordnerfoto links neben Name und Knopfzeile (96 px, Telefon 64 px) | gebaut 02.11.2026 (kein Schemaschritt), zur Freigabe |
+| Nachbesserung vor dem Merge, Runde 2 | Rückruf: nur eine Prüfung, deren Entwurf nach Rückruf bzw. Antrag begann, erledigt ihn (N-A1); „Bald fällig“ aus der `.env` nur 0–365, sonst Warnung und Vorgabe 30; README zur Inbetriebnahme (Prüfformulare neu anlegen, Kontrollen) | gebaut 26.10.2026 (kein Schemaschritt), freigegeben 02.11.2026 |
+| Nachbesserung vor dem Merge, Runde 3 | Tippflächen Brotkrumen und „Deine Meldungen“ (B-1, B-2); Katalog am Telefon kompakt, Liste nach der Kategoriewahl oben, Zurück an dieselbe Stelle (V1, V3); Seitentitel je Ansicht in allen Modulen (V2); Leitstelle: Hilfe zugeklappt, Zeilenmenü, E-Mail-Umbruch, Reiter als Linie (V5); Ankerplätze „+ Album“ (V6); „☰“ nicht vorgelesen (V8); eine Linie unter den Reitern (V9); Dialog-Reiter quer (V11); Kontrast in den Riegenkarten (V13); Nachtrag: Nummernsuche am Telefon zu, Reiter in eigener Zeile (V4), Sperrgrund im Mangel-Banner (V7), Hinweis- und Hilfetexte höchstens rund 120 Zeichen je Zeile (V10), Mangelbeschreibung im Verlauf am Artikel | gebaut 26./27.10.2026 (kein Schemaschritt), freigegeben 02.11.2026 |
+| Prüfsumme für den Lebenslauf (Schritt 31) | Jeder Abruf eines Lebenslaufs mit Kennung L-<Jahr>-<Nr> und Prüfsummen-Stempel, verzeichnet ohne Konto; die Prüfseite erkennt ihn; kein „nicht festgeschrieben“ mehr im Lebenslauf | gebaut 27.10.2026 (Schema 31), freigegeben 02.11.2026 |
+| Liste nach dem Merge – Teil A (Schritt 32) | Lebenslauf: Kennung nach dem Zurückspielen nie doppelt, HEAD ohne Eintrag, Abrufbremse; Prüfseite „Protokoll oder Lebenslauf prüfen“; REPLACE ohne recursive_triggers verdrängt nichts Geschütztes; Rückruf nach Antrag wieder offen (gesagt), Rückruf-Text nach dem Stand beim Versand; Journal am Telefon als Karten, Mangeltext und Reiter; Verbesserungen der Browserberichte (Artikelseite „Mehr“, Prüfungen, Katalogimport, Meine PSA …) | gebaut 27.10.2026 (Schema 32), freigegeben 02.11.2026 |
+| Reste vor dem finalen Test | Langer Mangeltext im Banner mit „Weiterlesen“; Brotkrumen am Telefon in einer Zeile (lange Glieder mit „…“, ab vier Gliedern „…“ für den Mittelteil); Knopf „Produktmeldungen“; Ergebnisseite ohne „Ergebnis / Ergebnis“; Fokus im Unterschrift-Dialog auf Zeichenfläche bzw. Titel | gebaut 27.10.2026 (kein Schemaschritt, Schema bleibt 32), freigegeben 02.11.2026 |
+| Abgeschlossene Prüfdurchgänge nur bei Bedarf | Menü „Prüfdurchgänge“ auf „Prüfungen“ (anlegen, abgeschlossene); eigene Seite je Jahr mit Ordner- und Titelfilter; dazu „i“ hinter „Prüfsumme“, Namen als Einheit, kein „…“ in Knopftexten (alle Module), „Änderung beantragen“ neben „Stammdaten“, Export-Text | gebaut 27.10.2026 (kein Schemaschritt, Schema bleibt 32), freigegeben 02.11.2026 |
+| Seitenumbrüche in den PDF-Protokollen | Keine Waisen am Seitenende: Überschrift, Tabellenkopf und die ersten vier Zeilen zusammen, die letzten drei zusammen, kurze Listen ungeteilt; Prüfprotokoll: Abschluss (Ergebnis bis Unterschrift) immer ab neuer Seite, Fotos als Anlage danach, Herstellerdokumente ohne zerhackte Spalten; Aussonderungsprotokoll: Abschluss zusammen | gebaut 27.10.2026 (kein Schemaschritt, nur neue PDFs), freigegeben 02.11.2026 |
+| Info-„i“ app-weit | Erklärsätze unter Überschriften und Feldern hinter ein „i“ am Begriff (55 Stellen in allen Modulen), `S.info` und Jinja-Makro, ein „i“ je Liste für Marken; „Seiten aus ZIP importieren“ im Seitenbaum der Strömipedia | gebaut 27.10.2026 (kein Schemaschritt, Schema bleibt 32), freigegeben 02.11.2026 |
+| Letzte offene Punkte | Datenschutzsätze an einem „i“ auf eine Zeile; Strömipedia: „Neue Seite“ und „⋯“ (Papierkorb, Import) über dem Baum, Blatt-Symbol statt kursivem „i“ für „Angaben zur Seite“, Fehlerart beim Ablegen von Dateien; eine Abschnittsaktion neben der Überschrift (Protokoll, Sammelprotokoll, Prüfformular, Herstellerdokumente); Leitstelle: Marken in der Hilfe-Box statt im „i“ | gebaut 27.10.2026 (kein Schemaschritt, Schema bleibt 32), freigegeben 02.11.2026 |
+| UI/UX vor dem Merge – U1a Verhalten | Zurück schließt Dialoge, Schubladen und Großansichten; Fehler am Feld; ein Menübaustein (ein Eintrag → Knopf, kurze Einträge, im Bild); Rückfragen mit Gegenstand, Nicht-Endgültiges ohne „danger“; Mehrzahl; Export mit Uhrzeit; deutsche Fehlerseiten; Bewegung reduzieren; Beschriftungen; Dialogfuß; Bedienzeichen ✕ ↑ ↓ app-weit | gebaut 27.10.2026 (kein Schemaschritt), Zweig uiux-1a, freigegeben 02.11.2026 |
+| UI/UX vor dem Merge – U3 übrige Module | Hinweis „Entwicklungsserver“ nach jeder Anmeldung auf dev; Anmeldung am Telefon Formular zuerst; Leitstelle: Überschrift „Leitstelle“, Einstellungen gegliedert und ohne Entwicklersprache; 403 führt in den eigenen Bereich; Riegenkarten breitenbegrenzt, Reiter ohne Verlaufseintrag, Knöpfe mit Wort; Ankerplätze und Strömipedia: eine rote Hauptaktion, Löschen in Dialog/Menü, Tastatur, benannte Knöpfe; Listen und Schublade nach der Inhaltsbreite, Doppelbildschirm | gebaut 27.10.2026 (kein Schemaschritt), Zweig uiux-3, freigegeben 02.11.2026 |
+| UI/UX vor dem Merge – U2 Materialablage | Ultrawide als Gruppe; ausgegraute Hauptknöpfe fokussierbar mit Grund darüber; Abschlussleiste niedrig (Grund und nächste Prüfung im Festschreib-Dialog); Mangel je Rolle; weniger Knöpfe (Dokumente, Formular, Prüfer); Empfehlung im Banner; Journal gekürzt; „Echtheit prüfen“; Radiogruppen; Fehlerzustand mit „Neu laden“; Kleinigkeiten | gebaut 27.10.2026 (kein Schemaschritt), Zweig uiux-2, freigegeben 02.11.2026 |
+| Suchzeile auf Übersicht und Prüfungen | Am Telefon und Tablet hochkant „☰“ und die Nummernsuche als Artikelsuche in einer klebenden Suchzeile oben im Inhalt wie im Katalog, ohne Lupe; Entscheidung V4 für diese beiden Seiten abgelöst | gebaut 28.10.2026 (kein Schemaschritt), freigegeben 02.11.2026 |
+| Suchzeile auf allen Seiten | Dieselbe Suchzeile auch im Bestand (Bestand, Ordner, Artikel, Artikel anlegen, Anträge, Jahresbericht, Bestandsimport) und auf den übrigen Seiten der Prüfungen (Prüfdurchgang, Abgeschlossene Prüfdurchgänge, Prüfung beginnen) sowie auf der Trefferseite – nirgends mehr „☰ + Lupe“ am Telefon; Entscheidung V4 ganz abgelöst; Prüfung und Katalog unverändert | gebaut 28.10.2026 (kein Schemaschritt), freigegeben 02.11.2026 |
+| Seitenbaum der Strömipedia | „Seiten aus ZIP importieren“ nur noch im „⋯“ über dem Baum; Klappzeichen als gezeichneter Winkel in fester Spalte, gleichmäßiger Einzug mit Führungslinien, oberste Ebene fett, Titel mit hängendem Umbruch, am Finger 44-px-Tippfläche ohne Platzverlust, Schublade bis 360 px | gebaut 28.10./01.11.2026 (kein Schemaschritt), freigegeben 02.11.2026 |
+| Verweise auf die Anleitung | „Mehr dazu in der Strömipedia“ in 28 Infos (drei neu), „Anleitung“ hinter der Überschrift der übrigen Seiten, Hinweis oben auf der Übersicht, „Willkommen in der Materialablage“ beim ersten Besuch – alles nur für Konten, die die Zielseite lesen dürfen | gebaut 01.11.2026 (kein Schemaschritt), Zweig wikiverweise, freigegeben 02.11.2026 |
+| PWA und Kontaktadressen | strömis.de als App installierbar (Manifest, Service Worker, Maskottchen auf Rot, ohne Netz nur eine Hinweisseite, „App installieren“ im Profil); Kontaktadressen als Einstellung (Leitstelle → Einstellungen, Gruppe „Seite“) im Fuß jeder Seite, im Hinweis „Entwicklungsserver“ und vor dem Bestandsimport | gebaut 01.11.2026 (kein Schemaschritt), Zweig pwakontakt, freigegeben 02.11.2026 |
+| Stufe Redakteur (Schritt 33) | Rechte-Matrix mit „Redakteur“ in Strömipedia, Ankerplätzen und Riegenkarten (Mitglied liest bzw. bewertet in eigenen Lehrgängen, Redakteur legt eigene Inhalte an, Verwaltung alles); eine Skala 0/1/2/3 in allen Spalten, Schritt 33 hebt Verwaltung 2 → 3; Riegenkarten: Sichtbarkeit nur eigener Lehrgänge (404), eigene Kataloge; dazu: keine Strömipedia ohne Anmeldung mehr | gebaut 01.11.2026 (Schema 33), Zweig redakteur, auf dev und main, freigegeben 02.11.2026 |
+| Ausbilder nur mit Konto (Schritt 34) | Riegenkarten: Ausbilder sind Konten mit Stufe ≥ Mitglied (Suche nach Name/E-Mail, Server lehnt anderes mit Zeile ab), Excel-Import ordnet per E-Mail bzw. eindeutigem Namen zu und listet „nicht übernommen“, Schritt 34 verknüpft oder entfernt den Freitext-Bestand ohne Text in der Beschreibung (nur Startprotokoll), Konten ohne Stufe als „ohne Zugriff“ markiert | gebaut 01.11.2026 (Schema 34), Zweig ausbilder, auf dev und main, freigegeben 02.11.2026 |
+| Gerätetest 01.11.2026 – Teil 5 (Ankerplätze, Leitstelle, Profil) | Ankerplätze: Suchfeld über der Karte und Liste „in der Nähe“ (B8), Standortmeldungen je Fall (FT2), Liste nach dem Löschen frisch und Satz für Alben ohne Position (FT8), keine Ziffern-Dateinamen als Bildname (FT5), Hochlade-Ergebnis sichtbar (FT4); Leitstelle: Suche, Rollenfilter und zugeklappte Karten (B6), Spaltenköpfe mit Trennstellen (Q2), Satz zur Prüffreigabe am Häkchen „Prüfer“ (M4) | gebaut 01.11.2026 (kein Schemaschritt), Zweig gt-karte-leit, auf dev und main, freigegeben 02.11.2026 |
+| Gerätetest 01.11.2026 – Teil 2 (Strömipedia) | Speicherstand sofort („Ungespeichert“, „Speichert …“, „Gespeichert 13:02“, Live-Region); „/“-Menü im sichtbaren Bereich (höchstens 40 %, über dem Cursor); Artikel-Leiste einzeilig (Pfad kürzt sich, „Teilen“/„Inhaltsverzeichnis“ am Finger in „⋯“), unter 500 px Höhe nicht klebend, Cursor nicht unter den Leisten; Inhaltsverzeichnis in „⋯“ als Dialog; Aufgabenlisten-Kästchen 24 px mit Namen; Kommentar als Blatt über dem Artikel; numerische Dateinamen nicht als Alternativtext; Erfolgsmeldungen für Hochladen und Kommentare | gebaut 01.11.2026 (kein Schemaschritt), Zweig gt-wiki, auf dev und main, freigegeben 02.11.2026 |
+| Gerätetest 01.11.2026 – Teil 4 (Materialablage) | Prüfdurchgang: Suche nach Nummer/Name und „QR-Code scannen“ über der Liste, Vorgabe „offen“, eine Zählweise in Kopf, Filtern und Grund, Meldung nach Ausnehmen/Einbeziehen; Abschlussleiste der Prüfung beim Scrollen eingeklappt; ausgegrautes „Festschreiben“ führt zum fehlenden Schritt; Filter der Prüfungen mit aria-pressed, Links der Übersicht springen zur Liste; Bestandsbaum am Telefon nur „überfällig“; ein Platzhalter der Nummernsuche | gebaut 01.11.2026 (kein Schemaschritt), freigegeben 02.11.2026 |
+| Hinweiskästen über die ganze Breite | Hinweiskästen (`.notice`, Zeile zur Prüfanleitung) laufen in allen Modulen über die volle Breite ihrer Spalte, ihr Inhalt – Text und Knöpfe – bleibt höchstens 100ch (rund 120 Zeichen) breit, der Knopf neben seinem Text; ersetzt V10 „der Kasten darf schmaler sein“ | gebaut 01.11.2026 (kein Schemaschritt), Zweig kaesten, freigegeben 02.11.2026 |
+| Verlust melden statt Sperren | Artikelseite: „Verlust melden“ (Menü „Mehr“ des Prüfers, Dialog ohne Grundauswahl) statt „Sperren“; ohne Prüfung sperrt der Server nur noch mit „verlust“ und „rueckruf“, „sturz“/„beschaedigung“ 400 mit Hinweis auf „Mangel melden“; ältere Sperren bleiben lesbar; Banner und Marke „verloren“ am Artikel | gebaut 01.11.2026 (kein Schemaschritt), Zweig verlust, freigegeben 02.11.2026 |
+| Nachbesserung aus der zweiten Durchsicht vor dem Merge | Strömipedia: Verschieben nur, wer die Seite in den Papierkorb legen darf (Entscheidung des Nutzers), kein „+“/„Unterseite anlegen“/„Duplizieren“ im freigegebenen Abschnitt, Editor hält bei 403 an; Riegenkarten: Kontosuche nur mit ganzer E-Mail-Adresse, Kopie nur mit passenden Ausbildern, keine zweite Leitungszeile; Anmeldung springt zum Ziel, alte Bildlinks der Subdomain; „Zurück“ nach dem Abmelden; Leitstelle: Inhalte mit Lehrgängen/Katalogen, Freigabe-Toast; Schritt 34 protokolliert jede Verknüpfung; README „Inbetriebnahme“ (Merge-Befehl, Kontrollen) und Werkzeug `scripts/vor_merge_riegenkarten.py` | gebaut 02.11.2026 (kein Schemaschritt, Schema bleibt 34), freigegeben 02.11.2026 |
+| Startseite über alle Module | „/“ für jedes Konto mit Modul: Kacheln je Modul mit Zahlen, die zum Handeln führen (Materialablage wie ihre Übersicht), „Zuletzt besucht“ und „Neu und geändert“ über die Module, Abschnitte der Strömipedia als Karten (auch auf ihrer Übersicht und im Lesemodus), Suchfeld der Strömipedia; Logo und Anmeldung führen dorthin | gebaut 02.11.2026 (kein Schemaschritt, Merker in `mat_meta`), Fotos vor dem Push, freigegeben 02.11.2026 |
+| Kleinigkeiten aus dem Artikel-Nachzug | Strömipedia: Sprung zum Anker bleibt oben, auch wenn Bilder darüber nachladen, Gliederung markiert den angesprungenen Abschnitt; Editor meldet entzogene Berechtigung als „keine Berechtigung mehr“; Vorlagen auch über „+“ und „Erste Seite anlegen“; Ersteller und Bearbeiter nur mit Stufe (Server); Riegenkarten: Leistungsdialog bei eingefrorenen Bewertungen nur zum Lesen mit Satz und ausgegrautem „Speichern“, Hilfetext Ausbilder; Ankerplätze: „Bild bearbeiten“ speichert nur Geändertes; Materialablage: „verloren“ in Meine PSA, Rückruf-Dialog „wegen Rückruf sperren“; alle Module: Anleitung als „i“ an der Überschrift statt Textlink „Anleitung“ und blauem Hinweiskasten; Karten der Strömipedia-Übersicht mittig wie auf der Startseite | gebaut 02.11.2026 (kein Schemaschritt), freigegeben 02.11.2026 |
+| Menüeintrag „Anleitung zur Strömipedia“ entfernt | „⋯“ einer Seite der Strömipedia ohne „Anleitung zur Strömipedia“; Thema `seite` aus `app/anleitung.py` | gebaut 02.11.2026 (kein Schemaschritt), freigegeben 02.11.2026 |
+| Bearbeitungsfreigabe an Mitglieder samt Unterseiten | „Bearbeiten erlauben“ wirkt für Mitglieder wie für Redakteure auch auf die Unterseiten (vorher genau diese Seite) | gebaut 02.11.2026 (kein Schemaschritt), freigegeben 02.11.2026 |
+| Text der Hinweiskästen über die ganze Breite | Inhalt der Hinweiskästen (`.notice`, `.mat-wikizeile`), Hilfetexte darin, Mangel- und Sperr-Banner und Liste „Gemeldete Mängel“ nicht mehr auf 100ch begrenzt | gebaut 02.11.2026 (kein Schemaschritt), freigegeben 02.11.2026 |
+| Freigaben je Person, Ordnerbild neben dem Namen | Reiter „Freigaben“: eine Zeile je Person in allen drei Listen, EIN „Ändern“ → Dialog „Rechte ändern“ (neuer Endpunkt je Person und Ordner, eine Transaktion), „Entziehen“ nimmt alle Rechte der Person dort, „… hat hier schon: …“ beim Anlegen; Ordnerfoto links neben Name und Knopfzeile (96 px, Telefon 64 px) | gebaut 02.11.2026 (kein Schemaschritt), freigegeben 02.11.2026 |
 
 ## Abgleich mit dem Bestand (vor Lieferung 1)
 
@@ -4277,6 +4277,15 @@ Oberfläche (material.js, material.css, seite.html), kein Schemaschritt, keine n
 - Tests: `tests/test_material_geraetetest4.py` (neu, statisch); `test_material_suchzeile.py`, `test_material_l5.py`, `test_material_mangel.py`,
   `test_material_uiux_u2.py` an den einen Platzhalter und den neuen Grundsatz angepasst.
 
+**Bestätigt am 02.11.2026** (Nutzer: „Alles offene bestätigen“ – die offenen „Bitte bestätigen“ aus
+`planung/geraetetest/bericht_teil4.md`, wie gebaut):
+- T2: ein Platzhalter „Inventar-, Serien-, Herstellernr.“ überall, auch am Rechner statt „Nummer suchen“.
+- Auf der Durchgangsseite am Telefon zwei Suchfelder: oben die Nummernsuche (ganzer Bestand, öffnet den Artikel), über
+  der Liste „Nummer oder Name“ (blendet nur in diesem Durchgang aus).
+- QR-Code als Foto mit der Kamera, keine Live-Kamera in der Seite (`camera=()` bleibt).
+- B13: Am Telefon im Bestandsbaum keine Ordnerart-Marke und „DEMO“ nur am obersten DEMO-Ordner.
+- Die Abschlussleiste der Prüfung klebt auch am Rechner eingeklappt (erste Zeile), nicht nur am Finger.
+
 ## PWA und Kontaktadressen (Wünsche des Nutzers, 28.10.2026; gebaut 01.11.2026)
 
 Wünsche des Nutzers, wörtlich: „Füge zur Aufgabenliste die Möglichkeit hinzu, die Webseite als PWA zu installieren“ und
@@ -4353,6 +4362,17 @@ außen, Tokens wie app.css), Einstellungen (Gruppe, Prüfung, leer, Zurücksetze
 angemeldet, 403, 404, öffentliche Strömipedia, Ersatz-Fehlerseite), dev-Hinweis aus der Einstellung, Bestandsimport-Satz,
 Profil-Abschnitt „App“, CSS (Druck, Karte, Touch).
 
+**Bestätigt am 02.11.2026** (Nutzer: „Alles offene bestätigen“ – die offenen „Bitte bestätigen“ aus
+`planung/material-phase4/bericht_pwakontakt.md`, wie gebaut):
+- Der Fuß steht auf kurzen Seiten direkt unter dem Inhalt, nicht am Fensterrand.
+- Am Telefon unter 420 px ist der Fuß zweizeilig (44-px-Tippflächen).
+- „App installieren“ ist der letzte Abschnitt im Profil (nicht im Menü „Mehr“), mit dem Text „strömis.de lässt sich wie
+  eine App auf den Startbildschirm legen: eigenes Fenster, ohne Adressleiste. Ohne Netz zeigt sie nur einen Hinweis.“
+- Die Symbole: Maskottchen 90 % („any“) bzw. 70 % („maskable“), auf dev mit gelber Marke „dev“.
+- Statusleiste unter iOS „default“ (helle Leiste über der roten Kopfleiste).
+- Die öffentlichen Seiten haben kein Manifest und keinen Worker; der Kurzbefehl „Leitstelle“ steht für alle im
+  Manifest.
+
 ## Sammelstand 01.11.2026 – Nacharbeiten der Zusammenführung
 
 Suchzeile 2, Seitenbaum, Verweise auf die Anleitung, PWA/Kontaktadressen und Stufe Redakteur zusammengeführt. Danach:
@@ -4395,6 +4415,10 @@ werkzeug/bericht-5bf9fbf.md, Punkt 2).
 - Tests: `tests/test_material_nachtrag_sammel.py` (neu – Klappzeichen gleich in wiki.js/public.js/material.js, mit Node.js
   gerendert sichtbar im Ordner- und Kategorienbaum, CSS-Regeln samt Media-Block, CHANGELOG- und README-Satz).
 
+**Bestätigt am 02.11.2026** (Nutzer: „Alles offene bestätigen“ – die offenen „Bitte bestätigen“ aus
+`planung/material-phase4/bericht_nachtrag_sammel.md`, wie gebaut):
+- Die oberste Ebene im Materialbaum bleibt normal, nicht fett wie im Seitenbaum.
+
 ## Hinweiskästen über die ganze Breite (01.11.2026)
 
 Entscheidung des Nutzers vom 01.11.2026: „Kästen über die ganze Breite“ – ersetzt aus V10 (27.10.2026) „der Kasten darf
@@ -4431,6 +4455,13 @@ reichten.
   eine Kastenregel, kein Kasten mit Höchstbreite oder eigener Breite, kein späterer Innenabstand rechts an einem Kasten
   in app.css, pruefungen.css, material.css, freigaben.css und global.css), angepasst `tests/test_module_nach_merge.py` und
   `tests/test_module_uiux_u1b.py` (Riegenkarten-Regel).
+
+**Bestätigt am 02.11.2026** (Nutzer: „Alles offene bestätigen“ – die offenen „Bitte bestätigen“ aus
+`planung/kaesten/bericht_kaesten.md`, wie gebaut):
+- Die Regel gilt app-weit für Hinweiskästen, nicht nur in Materialablage und Riegenkarten.
+- Hinweise in Dialogen bleiben ohne 100ch-Grenze, auch im 1100 px breiten Dialog.
+- (Der Knopf des Anleitungshinweises ist überholt: Den Hinweiskasten gibt es seit „Kleinigkeiten aus dem
+  Artikel-Nachzug“, Punkt 11, nicht mehr.)
 
 ## Seitenbaum der Strömipedia (Wunsch des Nutzers, 28.10.2026)
 
@@ -4472,6 +4503,12 @@ Einträge und verschiedenen Ebenen angeht, vor allem auch dem Ausklappsymbol.“
 - Tests: `tests/test_wiki_seitenbaum.py` (neu – Menüeinträge ohne Import, Klappknopf mit SVG und aria, Titelspanne,
   CSS-Regeln samt Media-Block, Knopfzeile je Recht); `test_wiki_import.py` (Import nur im Menü über dem Baum, Dialog
   ohne Vorwahl).
+
+**Bestätigt am 02.11.2026** (Nutzer: „Alles offene bestätigen“ – die offenen „Bitte bestätigen“ aus
+`planung/material-phase4/bericht_seitenbaum.md`, wie gebaut):
+- Import nur über „⋯“ neben „Neue Seite“; der Dialog beginnt mit „– oberste Ebene –“ (keine Vorwahl der offenen Seite).
+- Die oberste Ebene steht fett in `--schwarz` mit 6 px Abstand zwischen den Abschnitten.
+- Die Schublade am Telefon ist bis 360 px breit.
 
 ## Verweise auf die Anleitung in der Strömipedia (Wunsch des Nutzers, 28.10.2026; gebaut 01.11.2026)
 
@@ -4520,6 +4557,14 @@ Entscheidung vom 28.10.2026 auf die Frage „Wer soll die Verweise sehen?“: **
   ohne Leserecht, Lesebeschränkung, Lesemodus mit öffentlicher Seite, fehlende Seite und Überschrift, Papierkorb,
   „Echtheit prüfen“, Willkommen genau einmal je Konto, nicht ohne Leserecht, Merker beim Löschen, Reihenfolge mit dem
   dev-Hinweis, Hinweis dauerhaft, jedes benutzte Thema in der Tabelle).
+
+**Bestätigt am 02.11.2026** (Nutzer: „Alles offene bestätigen“ – die offenen „Bitte bestätigen“ aus
+`planung/material-phase4/bericht_wikiverweise.md`, wie gebaut):
+- Das Willkommen mit zwei Sätzen und den Knöpfen „Später“ und „Zur Anleitung“.
+- Die drei neuen „i“ mit Texten aus dem Artikel: „Gemeldete Mängel“, „Laufende Prüfdurchgänge“, „Art“.
+- Alle Links öffnen einen neuen Tab.
+- (Lage und Text des Hinweiskastens und der Textlink „Anleitung“ sind überholt: Seit „Kleinigkeiten aus dem
+  Artikel-Nachzug“, Punkt 11, steht die Anleitung im „i“ an der Überschrift.)
 
 ## Suchzeile auf Übersicht und Prüfungen (Wunsch des Nutzers, 28.10.2026)
 
@@ -4572,6 +4617,14 @@ Liste „Filter“): „Beim Bestand das gleiche“.
   die Navigation dort eng wird, auf dem Doppelbildschirm.
 - Tests: `tests/test_material_suchzeile.py` – je Ansicht Zeile ja/nein (17 Seiten, drei Konten), Prüfung und Katalog wie
   bisher, Bedingung statt Liste in seite.html.
+
+**Bestätigt am 02.11.2026** (Nutzer: „Alles offene bestätigen“ – die offenen „Bitte bestätigen“ aus
+`planung/material-phase4/bericht_suchzeile2.md`, wie gebaut):
+- Bestand am Telefon: die Zeile nur mit dem Suchfeld, ohne „☰“.
+- Der Hinweis „Artikel aus einem anderen Bereich“ nach einem QR-Scan bekommt die Suchzeile.
+- Die Prüfung bleibt ohne Zeile (am Telefon ohne Suche).
+- Aus der ersten Suchzeile: Die Zeile steht unter den Reitern, gesucht wird mit Enter (der Knopf „Suchen“ ist in der
+  Zeile verborgen). Den Platzhalter hat der Gerätetest Teil 4 (T2) vereinheitlicht.
 
 ## Letzte offene Punkte (Auftrag des Nutzers, 27.10.2026)
 
@@ -4692,12 +4745,17 @@ nachher unter `planung/material-phase4/proben_rest2/`)
 neben der Überschrift; Leitstelle: Marken in „Hilfe: Rechte je Modul“.
 
 **Bitte bestätigen**
+
+Am 02.11.2026 hat der Nutzer alle offenen Punkte wie gebaut bestätigt („Alles offene bestätigen“). Nr. 1 hat der
+Nachtrag darunter schon entschieden.
+
 1. „Papierkorb“ jetzt im Menü „⋯“ statt als Knopf – auch für Mitglieder ohne Import (dann ein Eintrag im Menü). Die
    einfachere CSS-Lösung (engere Knöpfe) hätte bei 344–390 px gereicht, nicht aber in der Tablet-Seitenleiste (260 px).
 2. Im Prüfdurchgang heißt der Knopf neben „Sammelprotokoll“ „Protokoll (PDF)“ (mit „Sammelprotokoll (PDF)“ bräche er bei
-   390 px unter die Überschrift); bei 344 px steht er trotzdem direkt darunter.
-3. Bestandsimport: „i“ am Titel und „Welche Listen passen?“ bleiben getrennt (siehe 7).
+   390 px unter die Überschrift); bei 344 px steht er trotzdem direkt darunter. **Bestätigt am 02.11.2026.**
+3. Bestandsimport: „i“ am Titel und „Welche Listen passen?“ bleiben getrennt (siehe 7). **Bestätigt am 02.11.2026.**
 4. Die Fehlerart „Dateityp nicht lesbar“ gilt auch für eine Datei mit Bild-Endung, deren Inhalt kein Bild ist.
+   **Bestätigt am 02.11.2026.**
 
 
 **Nachtrag (Nutzer, 27.10.2026, „Für Mitglieder als Knopf“):** Über dem Seitenbaum steht „⋯“ (Papierkorb, Seiten aus ZIP
@@ -4827,7 +4885,12 @@ test_material_antrag, test_material_stammdaten, test_wiki_import (Menü im Seite
   einer Liste – kein „i“.
 
 **Bitte bestätigen**
-1. Die Abweichungen oben (M8, M16, M20, M28, M30, R9, Marken).
+
+Am 02.11.2026 hat der Nutzer alle offenen Punkte wie gebaut bestätigt („Alles offene bestätigen“). Nr. 2 und 3 sind
+überholt: Die oberste Ebene importiert man über das Menü „⋯“ neben „Neue Seite“, „Angaben zur Seite“ steht hinter dem
+Blatt-Symbol (siehe „Letzte offene Punkte“).
+
+1. Die Abweichungen oben (M8, M16, M20, M28, M30, R9, Marken). **Bestätigt am 02.11.2026.**
 2. Grauer Knopf „Importieren“ neben „Papierkorb“ für die oberste Ebene (nur Wiki-Verwaltung); am Telefon bricht er in
    eine zweite Zeile.
 3. Das bisherige runde „i“ der Strömipedia („Angaben zur Seite“, kursives i im Seitenkopf) bleibt, wie es ist – es öffnet
@@ -4950,13 +5013,17 @@ Artikel, die Knöpfe zitieren), „Änderung beantragen“ neben „Stammdaten�
 
 ### Bitte bestätigen
 
+Am 02.11.2026 hat der Nutzer alle offenen Punkte wie gebaut bestätigt („Alles offene bestätigen“). Nr. 1 ist überholt:
+Ohne Anlegerecht steht seit „UI/UX vor dem Merge“ (A3) ein Knopf „Abgeschlossene Prüfdurchgänge“.
+
 1. **Menü mit nur einem Eintrag** für Konten ohne Anlegerecht (wie im Auftrag) – sonst gilt im Modul „bleibt nur eine
    Funktion, steht sie als Knopf da“; Alternative: dann ein Knopf „Abgeschlossene Prüfdurchgänge“.
-2. **Jahre zum Aufklappen** (neuestes offen) statt einer Jahreswahl; Ordnerfilter über den **Zweig** (ein Durchgang über
-   die ganze Gliederung erscheint beim Filter auf ein Fahrzeug nicht).
-3. **Umbenennungen ohne „…“:** „Verschieben“, „Zuordnen“ (Mehrfachauswahl) und „Alle Prüffreigaben verlängern“.
-4. **„i“ nur an Protokoll und Sammelprotokoll**, nicht an Herstellerdokumenten/Anhängen; an der Sammelprotokoll-Zeile
-   ersetzt es den Link „auf der Prüfseite prüfen“.
+2. **Jahre zum Aufklappen – bestätigt am 02.11.2026** (neuestes offen) statt einer Jahreswahl; Ordnerfilter über den
+   **Zweig** (ein Durchgang über die ganze Gliederung erscheint beim Filter auf ein Fahrzeug nicht).
+3. **Umbenennungen ohne „…“ – bestätigt am 02.11.2026:** „Verschieben“, „Zuordnen“ (Mehrfachauswahl) und „Alle
+   Prüffreigaben verlängern“.
+4. **„i“ nur an Protokoll und Sammelprotokoll – bestätigt am 02.11.2026**, nicht an Herstellerdokumenten/Anhängen; an
+   der Sammelprotokoll-Zeile ersetzt es den Link „auf der Prüfseite prüfen“.
 
 ## Seitenumbrüche in den PDF-Protokollen (27.10.2026)
 
@@ -5022,9 +5089,13 @@ Jahresbericht).
   Vorlagen: die ersten beiden schlagen an.
 
 **Bitte bestätigen:**
-1. Fotos zu den Prüfpunkten als Anlage hinter der Unterschrift (statt vor dem Abschluss).
-2. Aussonderungsprotokoll ohne festen Umbruch, nur „Abschluss zusammen“.
-3. Ein Sammelprotokoll kann durch die Regeln eine Seite länger werden (Probe S-2026-000002: 4 → 5 Seiten).
+
+Am 02.11.2026 hat der Nutzer alle offenen Punkte wie gebaut bestätigt („Alles offene bestätigen“).
+
+1. Fotos zu den Prüfpunkten als Anlage hinter der Unterschrift (statt vor dem Abschluss). **Bestätigt am 02.11.2026.**
+2. Aussonderungsprotokoll ohne festen Umbruch, nur „Abschluss zusammen“. **Bestätigt am 02.11.2026.**
+3. Ein Sammelprotokoll kann durch die Regeln eine Seite länger werden (Probe S-2026-000002: 4 → 5 Seiten). **Bestätigt
+   am 02.11.2026.**
 
 ## Reste vor dem finalen Test (27.10.2026)
 
@@ -5073,11 +5144,16 @@ lange Beschreibung kommt ganz an. Angepasst: `test_material_vor_merge_3.py` (pfa
 
 ### Bitte bestätigen
 
-1. **„Weiterlesen“ nur auf der Artikelseite** (wie im Auftrag); im Hinweis „GEMELDETER MANGEL“ der Prüfung steht der Text
-   weiter ganz – der Prüfer soll ihn vor dem Prüfen lesen. Ab 600 Zeichen, eingeklappt rund 400.
-2. **„Produktmeldungen“ am Telefon:** Für die Material-Verwaltung bei 344/360 px drei statt zwei Knopfzeilen im
-   Katalogkopf. Alternative: am Telefon nur „Meldungen“ (dann wieder zwei Begriffe) – empfohlen ist, es so zu lassen.
-3. **Brotkrumen ab vier Gliedern** am Telefon mit „…“ für den Mittelteil (ein Tipp zeigt alles), sonst Kürzung je Glied.
+Am 02.11.2026 hat der Nutzer alle offenen Punkte wie gebaut bestätigt („Alles offene bestätigen“).
+
+1. **„Weiterlesen“ nur auf der Artikelseite – bestätigt am 02.11.2026** (wie im Auftrag); im Hinweis „GEMELDETER MANGEL“
+   der Prüfung steht der Text weiter ganz – der Prüfer soll ihn vor dem Prüfen lesen. Ab 600 Zeichen, eingeklappt rund
+   400.
+2. **„Produktmeldungen“ am Telefon – bestätigt am 02.11.2026, bleibt so:** Für die Material-Verwaltung bei 344/360 px
+   drei statt zwei Knopfzeilen im Katalogkopf. Alternative: am Telefon nur „Meldungen“ (dann wieder zwei Begriffe) –
+   empfohlen ist, es so zu lassen.
+3. **Brotkrumen ab vier Gliedern – bestätigt am 02.11.2026** am Telefon mit „…“ für den Mittelteil (ein Tipp zeigt
+   alles), sonst Kürzung je Glied.
 
 ## Liste nach dem Merge – Teil A: Materialablage, Lebenslauf, Sicherheit (Schritt 32, 27.10.2026)
 
@@ -5191,16 +5267,20 @@ Journal `antrag_bestaetigt` mit `nachher.rueckruf_wieder_offen`; `produkt.rueckr
 
 ### Bitte bestätigen
 
-1. **Zählerdatei unter `pdf/lebenslauf/`** (statt einer Datei direkt unter `data/`): nur so übersteht sie das
-   Zurückspielen laut README, das `pdf/` ergänzt und den Rest überschreibt. Alternative: Datei unter `data/` und im Befehl
-   zum Zurückspielen ein `--exclude` dafür.
-2. **Bremse 60 Lebensläufe je Konto und Viertelstunde** (die Prüfseite hat 20 je Adresse).
-3. **Artikelseite „Mehr“:** „Verschieben …“ und „Lebenslauf (PDF)“ einen Tipp tiefer; „Bearbeiten“ bleibt sichtbar. Der
-   allgemeine Hinweis „Prüfen dürfen Prüfer mit Urkundennummer …“ steht nicht mehr auf jeder Artikelseite.
+Am 02.11.2026 hat der Nutzer alle offenen Punkte wie gebaut bestätigt („Alles offene bestätigen“). Nr. 4 ist mit „Reste
+vor dem finalen Test“ entschieden („Weiterlesen“ ab 600 Zeichen).
+
+1. **Zählerdatei unter `pdf/lebenslauf/` – bestätigt am 02.11.2026, bleibt dort** (statt einer Datei direkt unter
+   `data/`): nur so übersteht sie das Zurückspielen laut README, das `pdf/` ergänzt und den Rest überschreibt.
+   Alternative: Datei unter `data/` und im Befehl zum Zurückspielen ein `--exclude` dafür.
+2. **Bremse 60 Lebensläufe je Konto und Viertelstunde – bestätigt am 02.11.2026** (die Prüfseite hat 20 je Adresse).
+3. **Artikelseite „Mehr“ – bestätigt am 02.11.2026:** „Verschieben …“ und „Lebenslauf (PDF)“ einen Tipp tiefer;
+   „Bearbeiten“ bleibt sichtbar. Der allgemeine Hinweis „Prüfen dürfen Prüfer mit Urkundennummer …“ steht nicht mehr auf
+   jeder Artikelseite.
 4. **Langer Mangeltext im Banner** am Telefon nicht eingeklappt (nur die Zeilenlänge begrenzt) – soll ab etwa 600 Zeichen
    ein „Weiterlesen“ kommen?
-5. **Rückrufe von vor Schritt 32** sagen nicht mehr „Es ging keine Mail hinaus“ nach dem heutigen Mailserver, sondern
-   stehen wie vor der Nachbesserung (Zählung bzw. allgemeiner Satz).
+5. **Rückrufe von vor Schritt 32 – bestätigt am 02.11.2026** sagen nicht mehr „Es ging keine Mail hinaus“ nach dem
+   heutigen Mailserver, sondern stehen wie vor der Nachbesserung (Zählung bzw. allgemeiner Satz).
 
 ## Nachbesserung vor dem Merge, Runde 3 (26.10.2026)
 
@@ -5298,17 +5378,25 @@ Nachtrag (unten).
 
 ### Bitte bestätigen
 
-1. **Leitstelle, Zeilenmenü:** „Reset-Mail senden“ und „Löschen …“ stehen hinter „Mehr“ (ein Tipp mehr), „Bearbeiten“
-   bleibt sichtbar. Alternative: drei graue Knöpfe je Zeile.
-2. **Reiter der Leitstelle als Linie** (wie die Modulnavigation der Materialablage). Die Reiter in den Dialogen der
-   Materialablage („Ordner“/„Freigaben“, „Produkt“/„Bestandteile“) bleiben wie bisher rot hinterlegt.
-3. **Katalog:** Dokumente der Kategorie unter 1024 px zugeklappt, am Rechner offen; die Zahl steht im Aufklapper.
+Am 02.11.2026 hat der Nutzer alle offenen Punkte wie gebaut bestätigt („Alles offene bestätigen“). Nr. 4 und 6 sind
+überholt (Ankerplätze: Gerätetest Teil 5 mit Suchfeld und Liste; V4: „Suchzeile auf Übersicht und Prüfungen“ samt
+Nachtrag); die Reiter in den Dialogen der Materialablage (Nr. 2) sind seit „UI/UX vor dem Merge“ (D8) ebenfalls eine
+Linie.
+
+1. **Leitstelle, Zeilenmenü – bestätigt am 02.11.2026, bleibt „Mehr“:** „Reset-Mail senden“ und „Löschen …“ stehen
+   hinter „Mehr“ (ein Tipp mehr), „Bearbeiten“ bleibt sichtbar. Alternative: drei graue Knöpfe je Zeile.
+2. **Reiter der Leitstelle als Linie – bestätigt am 02.11.2026** (wie die Modulnavigation der Materialablage). Die
+   Reiter in den Dialogen der Materialablage („Ordner“/„Freigaben“, „Produkt“/„Bestandteile“) bleiben wie bisher rot
+   hinterlegt.
+3. **Katalog – bestätigt am 02.11.2026:** Dokumente der Kategorie unter 1024 px zugeklappt, am Rechner offen; die Zahl
+   steht im Aufklapper.
 4. **Ankerplätze am Telefon:** Die Werkzeuge stehen in zwei Zeilen („+ Album“ in der zweiten) statt in einer rollenden.
-5. **Zurück in den Katalog** stellt auch nach dem Neuladen der Seite die Stelle wieder her (wie der Browser sonst auch).
+5. **Zurück in den Katalog – bestätigt am 02.11.2026** stellt auch nach dem Neuladen der Seite die Stelle wieder her
+   (wie der Browser sonst auch).
 6. **V4:** Am Telefon stehen die Reiter in einer eigenen Zeile unter „☰“ und Lupe (statt seitlich zu rollen); auf der
    Trefferseite steht die Suche mit dem Begriff offen.
-7. **V7:** Wortlaut „Außerdem gesperrt: <Grund>.“ im Mangel-Banner.
-8. **V10:** `100ch` statt `120ch` (gemessen rund 120 statt 145 Zeichen je Zeile).
+7. **V7 – bestätigt am 02.11.2026:** Wortlaut „Außerdem gesperrt: <Grund>.“ im Mangel-Banner.
+8. **V10 – bestätigt am 02.11.2026:** `100ch` statt `120ch` (gemessen rund 120 statt 145 Zeichen je Zeile).
 
 ## Prüfsumme für den Lebenslauf (Schritt 31, 27.10.2026)
 
@@ -5362,11 +5450,14 @@ Festschreibung“. Zweig `ll-summe` ab vor-merge 8da606a.
 
 ### Bitte bestätigen
 
-1. **Artikel als Inventarnummer** statt Kennung mit Fremdschlüssel: Ein falsch angelegter Artikel ohne Prüfung bleibt
-   löschbar, auch wenn jemand seinen Lebenslauf abgerufen hat; die Prüfseite erkennt den Lebenslauf danach weiter (ohne
-   Link).
-2. **Jeder Abruf zählt**, auch einer, den der Browser von sich aus wiederholt (Vorabladen, erneutes Öffnen): Er bekommt
-   eine eigene Kennung. Die Nummern sind deshalb kein Maß dafür, wie oft ein Lebenslauf „weitergegeben“ wurde.
+Am 02.11.2026 hat der Nutzer alle offenen Punkte wie gebaut bestätigt („Alles offene bestätigen“).
+
+1. **Artikel als Inventarnummer – bestätigt am 02.11.2026** statt Kennung mit Fremdschlüssel: Ein falsch angelegter
+   Artikel ohne Prüfung bleibt löschbar, auch wenn jemand seinen Lebenslauf abgerufen hat; die Prüfseite erkennt den
+   Lebenslauf danach weiter (ohne Link).
+2. **Jeder Abruf zählt – bestätigt am 02.11.2026**, auch einer, den der Browser von sich aus wiederholt (Vorabladen,
+   erneutes Öffnen): Er bekommt eine eigene Kennung. Die Nummern sind deshalb kein Maß dafür, wie oft ein Lebenslauf
+   „weitergegeben“ wurde.
 
 ## Nachbesserung vor dem Merge, Runde 2 (26.10.2026)
 
@@ -5417,12 +5508,15 @@ keine Oberflächenänderung. Zweig `vm-rest`.
 
 ### Bitte bestätigen
 
-1. **Folge von N-A1:** Wer einen Entwurf vor dem Rückruf begonnen hat, muss nach dem Festschreiben noch einmal prüfen,
-   damit der Rückruf für den Artikel erledigt ist – auch wenn er die Prüfseite zwischendurch neu geladen und den
-   Hinweis gesehen hat (der Server kennt nur den Beginn des Entwurfs). Alternative wäre, Anträge auf Seriennummer bei
-   offenem Entwurf wie beim Produktwechsel mit 409 abzulehnen; der Rückruf-Fall bliebe dann offen.
-2. **Leitstelle bei unbrauchbarem `.env`-Wert:** Anzeige „30 (Vorgabe)“ statt des Rohwerts – der Rohwert steht nur in
-   der Warnung im Log.
+Am 02.11.2026 hat der Nutzer alle offenen Punkte wie gebaut bestätigt („Alles offene bestätigen“).
+
+1. **Folge von N-A1 – bestätigt am 02.11.2026, so gebaut (kein 409 bei offenem Entwurf):** Wer einen Entwurf vor dem
+   Rückruf begonnen hat, muss nach dem Festschreiben noch einmal prüfen, damit der Rückruf für den Artikel erledigt ist
+   – auch wenn er die Prüfseite zwischendurch neu geladen und den Hinweis gesehen hat (der Server kennt nur den Beginn
+   des Entwurfs). Alternative wäre, Anträge auf Seriennummer bei offenem Entwurf wie beim Produktwechsel mit 409
+   abzulehnen; der Rückruf-Fall bliebe dann offen.
+2. **Leitstelle bei unbrauchbarem `.env`-Wert – bestätigt am 02.11.2026:** Anzeige „30 (Vorgabe)“ statt des Rohwerts –
+   der Rohwert steht nur in der Warnung im Log.
 
 ## Nachbesserung vor dem Merge – Materialablage, Sicherheit, Doku, Betrieb (26.10.2026)
 
@@ -5518,15 +5612,20 @@ z. B. `GET /api/admin/users/<id>/journal`), dazu die beiden neuen Punkte: „☰
 31 app-weiten Änderungen (Liste: `bericht_pruefung_vor_merge_ablauf_module.md`, Abschnitt 1).
 
 ### Offen (Bitte bestätigen)
+
+Am 02.11.2026 hat der Nutzer alle offenen Punkte wie gebaut bestätigt („Alles offene bestätigen“). Nr. 1 hat der Nutzer
+schon am 26.10.2026 entschieden: Neuanlage in der Produktion (README „Inbetriebnahme in der Produktion“).
+
 1. **Prüfformulare in die Produktion**: Die Katalog-ZIPs enthalten keine. Einen Export nur der Formulare gibt es nicht;
    ein ganzer Katalog-Export von dev bringt die Formulare und alle dev-Korrekturen an Produkten mit (was sich ändern
    würde, zeigt der Probelauf vorher). Bitte entscheiden: Export von dev nach dem Einspielen der ZIPs, ein eigener Formular-Export (Bau) oder
    Neuanlage in der Produktion.
-2. **R1 auch bei einer späteren, gleichen Änderung**: Gezählt wird ab dem letzten bestätigten Antrag auf Produkt oder
-   Seriennummer, auch wenn erst ein früherer ihn in den Rückruf brachte (eine Prüfung dazwischen zählt dann nicht) –
-   die strengere, einfache Regel.
-3. **Konto- und Prüfpunktverweise** über den Befund hinaus (Schritt 30): Durchgang (eröffnet/abgeschlossen von),
-   ausgenommen von, hochgeladen von, Prüfpunkt einer Befundzeile – nur noch auf NULL (Probe p05 hatte sie gezeigt).
+2. **R1 auch bei einer späteren, gleichen Änderung – bestätigt am 02.11.2026**: Gezählt wird ab dem letzten bestätigten
+   Antrag auf Produkt oder Seriennummer, auch wenn erst ein früherer ihn in den Rückruf brachte (eine Prüfung dazwischen
+   zählt dann nicht) – die strengere, einfache Regel.
+3. **Konto- und Prüfpunktverweise – bestätigt am 02.11.2026** über den Befund hinaus (Schritt 30): Durchgang
+   (eröffnet/abgeschlossen von), ausgenommen von, hochgeladen von, Prüfpunkt einer Befundzeile – nur noch auf NULL
+   (Probe p05 hatte sie gezeigt).
 
 **Tests.** `tests/test_material_vor_merge.py` (neu): R1 mit und ohne Zwischenprüfung, per Seriennummer und per
 Produktwechsel (Banner, Marke, Übersicht, Lebenslauf-PDF, Prüfung danach erledigt, Ablehnung ändert nichts); Rückruf
@@ -9994,9 +10093,11 @@ Riegenkarten: CHANGELOG-Pruefungen.md, Nachtrag vom 26.10.2026. Zweig `vm-module
   liegen in `Übung-<slug>/`. Bisher landeten sie im Ordner des ersten, und der Import hängte beide Unterseiten dort ein.
 - Tests: `tests/test_module_vor_merge.py` (neu), `tests/test_umbenennung.py` (Schrägstrich-Fälle, kein offener Sprung),
   `tests/test_wiki_import.py` (Rundweg mit gleichnamigen Geschwistern, Wortlaut der Import-Meldung).
-- Bitte bestätigen: (1) Rechte-Felder im Dialog drei plus zwei statt fünf in einer Reihe; (2) „Wiki-Verwaltung“ bzw.
-  „Plattform-Verwaltung“ in den Meldungen, „Verwaltung der Riegenkarten“ in den Riegenkarten; (3) der Fokus aufs erste
-  Feld gilt für alle Dialoge über `S.dialog`, nicht nur für den Nutzerdialog.
+- Am 02.11.2026 hat der Nutzer alle offenen Punkte wie gebaut bestätigt („Alles offene bestätigen“).
+- Bitte bestätigen: (1) Rechte-Felder im Dialog drei plus zwei statt fünf in einer Reihe – **bestätigt am
+  02.11.2026**; (2) „Wiki-Verwaltung“ bzw. „Plattform-Verwaltung“ in den Meldungen, „Verwaltung der Riegenkarten“ in
+  den Riegenkarten – **bestätigt am 02.11.2026**; (3) der Fokus aufs erste Feld gilt für alle Dialoge über
+  `S.dialog`, nicht nur für den Nutzerdialog – **bestätigt am 02.11.2026**.
 
 ## Lieferung nach dem Merge, Teil B – übrige Module (27.10.2026)
 
@@ -10066,12 +10167,15 @@ Teil B: Strömipedia, Ankerplätze, Riegenkarten, Leitstelle, Anmeldung. Kein Sc
 - Tests: `tests/test_module_nach_merge.py` (neu: Export-Kollision mit dem Fall aus q06, Export ohne Titelzeile samt Import,
   Seitentitel ohne Namen, Knopfsprache, Sprunglink, Reset-Mail, Stylesheet-Regeln), `tests/test_material_vor_merge_3.py`
   („Reset-Mail senden …“).
+- Am 02.11.2026 hat der Nutzer alle offenen Punkte wie gebaut bestätigt („Alles offene bestätigen“). (4) ist überholt:
+  Die Prüfungsleistungen haben seit „UI/UX vor dem Merge“ (D3) die Knöpfe ↑/↓.
 - Bitte bestätigen: (1) Kopf der Strömipedia bleibt eine Symbolleiste (Sprechblase, Teilen, ☰, ⋯ grau umrandet) – Text
-  statt Symbol bräuchte am Telefon eine zweite Zeile; (2) 👍/👎 in der Bewertungswahl und die Zustandszeichen in der
-  Matrix bleiben; (3) Album-Panel „Bilder / Videos hochladen“ grau, weil „Album anlegen“ daneben die rote Hauptaktion
-  ist; (4) Prüfungsleistungen verschieben über „Mehr → Nach oben/Nach unten“ statt eigener Pfeilknöpfe; (5) Reset-Mail
-  mit Rückfrage; (6) Strömipedia-Seitenleiste: „Neue Seite“ bleibt rot (Hauptaktion), der Umschalter „Lesen“ ist ein
-  Zustand, keine Aktion.
+  statt Symbol bräuchte am Telefon eine zweite Zeile – **bestätigt am 02.11.2026**; (2) 👍/👎 in der Bewertungswahl und
+  die Zustandszeichen in der Matrix bleiben – **bestätigt am 02.11.2026**; (3) Album-Panel „Bilder / Videos hochladen“
+  grau, weil „Album anlegen“ daneben die rote Hauptaktion ist – **bestätigt am 02.11.2026**; (4) Prüfungsleistungen
+  verschieben über „Mehr → Nach oben/Nach unten“ statt eigener Pfeilknöpfe; (5) Reset-Mail mit Rückfrage – **bestätigt
+  am 02.11.2026**; (6) Strömipedia-Seitenleiste: „Neue Seite“ bleibt rot (Hauptaktion), der Umschalter „Lesen“ ist ein
+  Zustand, keine Aktion – **bestätigt am 02.11.2026**.
 
 ## UI/UX vor dem Merge (27.10.2026)
 
@@ -10416,6 +10520,13 @@ es wegen des Schemaschritts und der Umnummerierung, die auch die Materialablage 
   test_pruefungen, test_wiki_lesemodus, test_wiki_import, test_wiki_seitenbaum, test_umbenennung, test_module_* und die
   Material-Tests, die die Verwaltung als 2 setzten.
 
+**Bestätigt am 02.11.2026** (Nutzer: „Alles offene bestätigen“ – die offenen „Bitte bestätigen“ aus
+`planung/rechte-redakteur/bericht_bau.md`, wie gebaut):
+- Begriff „Für alle Angemeldeten freigeben“, Marke „für alle Angemeldeten“, im Baum 🌐 statt „öffentlich“.
+- Die Subdomain `wiki.strömis.de` bleibt als Einstieg (leitet zur Anmeldung auf strömis.de) und bleibt im Caddy-Block.
+- (Überholt: Mitglied mit Bearbeitungsfreigabe „genau diese Seite“ – siehe „Bearbeitungsfreigabe an Mitglieder samt
+  Unterseiten“; Mitglieder ohne Lehrgänge mit Freitext-Ausbildern – siehe „Ausbilder nur mit Konto“.)
+
 ## Ausbilder nur mit Konto (Schritt 34, 01.11.2026)
 
 Wunsch des Nutzers (01.11.2026): „Entferne die Freitext-Ausbilder in der Riegenkarte, entweder Personen haben einen
@@ -10451,6 +10562,15 @@ es wegen des Schemaschritts.
   nach dem Übernehmen. Leitstelle: Hilfe „Rechte je Modul“ und Hinweis der Matrix ergänzt.
 - Tests: `tests/test_rechte_ausbilder.py` (neu); angepasst: test_pruefungen (Konten statt Freitext), test_rechte_redakteur
   (Schema 34, kein Freitext-Lehrgang mehr), test_pruefungen_import (`email` am Ausbilder).
+
+**Bestätigt am 02.11.2026** (Nutzer: „Alles offene bestätigen“ – die offenen „Bitte bestätigen“ aus
+`planung/rechte-redakteur/bericht_ausbilder.md`, wie gebaut):
+- Die Druckansichten (Mängelübersicht, je Teilnehmende) nennen Leitung und Referierende – neu, vorher gar keine
+  Ausbilder.
+- Die Kontosuche gibt es nur für Redakteure und Leitungen; sie sucht auch über die E-Mail-Adresse, ohne sie anzuzeigen
+  (seit der zweiten Durchsicht nur die ganze Adresse). Zwei gleichnamige Konten ohne Gliederung sind in der Trefferliste
+  nicht zu unterscheiden – Gliederung pflegen oder Namen eindeutig machen.
+- Konto löschen trägt es aus allen Lehrgängen aus; Bewertungen behalten den Namen.
 
 ## Gerätetest 01.11.2026 – Teil 1 (Anmeldung und Gemeinsames)
 
@@ -10498,6 +10618,14 @@ Querschnitts-Abschnitte stehen. Kein Schemaschritt.
   Messskript des Tests aufruft; nichts geändert.
 - Tests: `tests/test_geraetetest_teil1.py` (neu).
 
+**Bestätigt am 02.11.2026** (Nutzer: „Alles offene bestätigen“ – die offenen „Bitte bestätigen“ aus
+`planung/geraetetest/bericht_teil1.md`, wie gebaut):
+- Q1 gilt auch am Rechner: Bis 500 px Fensterhöhe klebt die Kopfleiste auch mit Maus nicht.
+- B1: Die Slideshow bleibt am Telefon (erst geladen, wenn sie ins Bild kommt, als WebP) – sie fällt nicht weg.
+- B9: „Passwort anzeigen“ als Häkchen unter dem Feld statt eines Augen-Symbols im Feld.
+- Der Seitenbaum-Knopf heißt für Vorlesehilfen „Seitenbaum“ (aufgeklappt/zugeklappt über `aria-expanded`).
+- Der Toast bleibt nach dem Ausblenden als leere, unsichtbare Live-Region geöffnet.
+
 ## Gerätetest 01.11.2026 – Teil 5 (Ankerplätze, Leitstelle, Profil)
 
 Auftrag planung/geraetetest/auftrag_geraetetest.md, Teil 5 („Nimm diesen UI/UX Test und setze die Findings um“; Befunde
@@ -10544,6 +10672,13 @@ nachgestellt (Bericht planung/geraetetest/bericht_teil5.md). Betrifft nicht die 
   Prüffreigabe hat.
 - Tests: `tests/test_module_geraetetest_t5.py` (neu); angepasst: `tests/test_umbenennung.py` (Spaltenköpfe ohne
   Trennstellen gelesen).
+
+**Bestätigt am 02.11.2026** (Nutzer: „Alles offene bestätigen“ – die offenen „Bitte bestätigen“ aus
+`planung/geraetetest/bericht_teil5.md`, wie gebaut):
+- Die Albensuche sucht in Titel, Beschreibung und Gliederung des Ansprechpartners (kein Ortsfeld, keine Adresssuche).
+- Die Albenliste sortiert „in der Nähe“ bzw. alphabetisch, nicht mehr nach „zuletzt geändert“.
+- Q2 mit weichen Trennstellen („Material-/ablage“) statt Kurztiteln mit title.
+- Der Satz M4 unter dem Häkchen „Prüfer“ mit Link auf „Bestand“.
 
 ## Gerätetest 01.11.2026 – Teil 2 (Strömipedia)
 
@@ -10593,6 +10728,11 @@ wiki.js, markdown.js und app.css; kein Schemaschritt.
   „Kommentar gelöscht“ – vorher still.
 - Tests: `tests/test_wiki_geraetetest.py` (neu, statisch).
 
+**Bestätigt am 02.11.2026** (Nutzer: „Alles offene bestätigen“ – die offenen „Bitte bestätigen“ aus
+`planung/geraetetest/bericht_teil2.md`, wie gebaut):
+- T1: „Kommentieren“ bleibt am Finger als Knopf in der Leiste; nur „Teilen“ und „Inhaltsverzeichnis“ weichen in „⋯“
+  aus.
+
 ## Gerätetest 01.11.2026 – Teil X (Querschnitt)
 
 Wunsch des Nutzers (01.11.2026): „Nimm diesen UI/UX Test und setze die Findings um.“ Auftrag
@@ -10640,6 +10780,15 @@ vorher/nachher: planung/geraetetest/bericht_teilx.md. Betrifft alle Module; kein
   `test_module_uiux_u3.py` und `test_material_geraetetest4.py` (erwartete noch den Toast vor Teil 1 – auf dem Sammelstand
   401853e rot). Die 44-px-Flächen der kompakten Matrix gelten nur unter `pointer: coarse` (Knopfsprache).
 
+**Bestätigt am 02.11.2026** (Nutzer: „Alles offene bestätigen“ – die offenen „Bitte bestätigen“ aus
+`planung/geraetetest/bericht_teilx.md`, wie gebaut):
+- F1: Die Nutzertabelle rollt zwischen 760 und 1 100 px Inhalt in ihrem Rahmen seitwärts (Name klebt links), statt dort
+  Karten zu zeigen.
+- Marken (Status-Pillen, „DEMO“, Zähler, Ordnerart) bleiben 11,8 px (`--fs-marke`).
+- Q3: Die Matrix quer zeigt bis 500 px Höhe keine Gliederung unter dem Namen und kein „wer/wann“ in den Zellen.
+- Navigation 15 px: Auf der Materialablage steht bei 360–448 px ein Punkt weniger in der Leiste, bei 344 px nur der
+  aktive Punkt und „Mehr“.
+
 ## Verlust melden statt Sperren (01.11.2026)
 
 Entscheidung des Nutzers (01.11.2026) zum Menü „Mehr“ der Artikelseite, wie es ein Prüfer sieht („Sperren“, „Mangel
@@ -10680,6 +10829,15 @@ Kein Schemaschritt.
   `test_material_bericht.py`, `test_material_export.py`, `test_material_mangel.py`, `test_material_meine_psa.py`,
   `test_material_setprotokolle.py`, `test_material_ueberblick.py` (Helfer `sperren` mit Vorgabe „rueckruf“) und
   `test_material_uiux_u2.py` (B6: Menüeinträge).
+
+**Bestätigt am 02.11.2026** (Nutzer: „Alles offene bestätigen“ – die offenen „Bitte bestätigen“ aus
+`planung/kaesten/bericht_verlust.md`, wie gebaut):
+- Marke „verloren“ am Titel und der Bannertext „als verloren gemeldet (…). Taucht er wieder auf …“.
+- Der Rückruf-Dialog hat kein Auswahlfeld, der Grund steht fest auf „Rückruf“.
+- Der Menüsatz heißt „Sperrt den Artikel als verloren.“ (parallel zu „Sperrt den Artikel.“).
+- Platzhalter „z. B. nach der Übung nicht mehr da“.
+- (Die Marke in „Meine PSA“ ist überholt: Seit „Kleinigkeiten aus dem Artikel-Nachzug“, Punkt 9, trägt die Karte
+  „verloren“.)
 
 ## Anleitungsverweise und Nachträge aus den Modul-Artikeln (01.11.2026)
 
@@ -10750,6 +10908,14 @@ sehen; Vorlagen; Ankerplätze; Verweise auf die Anleitung), `docs/Editor - Bedie
 
 - Tests: `tests/test_module_anleitung.py` (neu); angepasst `tests/test_material_anleitung.py` (nur freigegebene Seiten), `tests/test_pruefungen.py` (neue Kriterien an eingefrorenen
   Leistungen jetzt 409) und `tests/test_module_info_i.py` (Infos mit „Mehr dazu“, Dialogtext der Ankerplätze).
+
+**Bestätigt am 02.11.2026** (Nutzer: „Alles offene bestätigen“ – die offenen „Bitte bestätigen“ aus
+`planung/wiki-module/bericht_module_nachtraege.md`, wie gebaut):
+- Eine Seite aus einer lesebeschränkten Vorlage übernimmt die Lesebeschränkung nicht (anders als Duplizieren) – sie
+  bekommt, was an ihrem Platz gilt.
+- Auch das Umsortieren der Kriterien an Leistungen mit eingefrorenen Bewertungen ist gesperrt.
+- (Überholt bzw. später gebaut: der Leistungsdialog – „Kleinigkeiten“, Punkt 7; die Anleitung im Seitenmenü –
+  „Menüeintrag „Anleitung zur Strömipedia“ entfernt“; „Höhe ü. NN“ – „Kleinigkeiten“, Punkt 8.)
 
 ## Nachbesserung aus der zweiten Durchsicht vor dem Merge (02.11.2026)
 
@@ -10853,6 +11019,16 @@ zum parallelen Bau „module-nachtraege“ und sind hier nicht angefasst.
   angepasst `tests/test_rechte_ausbilder.py` (Suche mit ganzer Adresse, Protokoll von Schritt 34) und
   `tests/test_pruefungen.py` (Suche, Vorschau ohne Kennung).
 
+**Bestätigt am 02.11.2026** (Nutzer: „Alles offene bestätigen“ – die offenen „Bitte bestätigen“ aus
+`planung/pruefung-merge2/bericht_nachbesserung.md`, wie gebaut):
+- Ziehen „darunter“ hängt die Seite ans Ende, ohne die übrigen Unterseiten umzunummerieren.
+- „Zurück“ nach dem Abmelden über `pageshow` statt `Cache-Control: no-store`.
+- Die Import-Vorschau der Riegenkarten nennt weiter den Namen des Kontos, und die Entscheidung vom 01.11.2026 („gehört
+  die Adresse zu einem Konto, entscheidet nur dieses“) bleibt – damit bleibt auch der Restfall aus dem Bericht (Adresse
+  eines Kontos ohne Riegenkarten-Stufe neben einem eindeutigen Namen); kein Umbau auf „nur über die Adresse“.
+- Die Spalte „Inhalte“ der Leitstelle nennt Lehrgänge und Kataloge nur, wenn es welche gibt.
+- Der Löschdialog nennt den Halbsatz zur Alleinleitung immer, nicht nur, wenn er zutrifft.
+
 ## Startseite über alle Module (02.11.2026)
 
 Wunsch des Nutzers (zum Bild der damaligen Startseite = Übersicht der Strömipedia): „Gibts aus Design Sicht eine
@@ -10898,6 +11074,16 @@ bleibt 34). Zweig `startseite` auf `sammel`.
 Führungskraft „nur lesend“: die Merker „start:…“ in `mat_meta` zählen wie der Lebenslauf-Zähler nicht als Änderung –
 das Öffnen einer Artikelseite merkt sie für „Zuletzt besucht“).
 
+**Bestätigt am 02.11.2026** (Nutzer: „Alles offene bestätigen“ – die offenen „Bitte bestätigen“ aus
+`planung/startseite/bericht_startseite.md`, wie gebaut):
+- Die Kachel der Materialablage hat bis zu fünf Zeilen – zu den vier genannten Zahlen „neu (Eingangsprüfung)“.
+- Ein Besuch endet nach 30 Minuten ohne Aufruf der Startseite; eigene Änderungen zählen nicht als „neu seit deinem
+  letzten Besuch“.
+- Die Riegenkarten-Zahlen „laufende Lehrgänge / Leistungen noch nicht abgenommen / offene Mängel“ bleiben; die
+  Lehrgangsliste bekommt keinen Statusfilter (Nutzer: „reicht so“).
+- Die Startseite gilt auch für Konten im Lesemodus (alle neuen Konten).
+- Die Karten der Strömipedia-Übersicht zeigen sechs Unterseiten und „… n weitere“.
+
 ## Kleinigkeiten aus dem Artikel-Nachzug (02.11.2026)
 
 Freigabe des Nutzers „umsetzen“ für die Liste planung/wiki-module/kleinigkeiten_nach_artikeln.md (Punkte 1–10, Belege in
@@ -10929,7 +11115,7 @@ den Berichten der vier Artikel); Auftrag planung/wiki-module/auftrag_kleinigkeit
 3. **Vorlagen auch über „+“ und „Erste Seite anlegen“:** Beide rufen jetzt `neueSeite(parentId)` wie „Neue Seite“ und
    „Unterseite anlegen“ (Dialog „Neue Seite“ mit „Beginnen mit“, ohne Vorlagen gleich der leere Editor); „+“ schließt
    dabei die Schublade wie „Neue Seite“. Am Finger gibt es das „+“ im Baum nicht (dort „⋯“ → „Unterseite anlegen“). Eine
-   Empfehlung – Bitte des Nutzers um Bestätigung steht aus.
+   Empfehlung – **bestätigt am 02.11.2026** („Alles offene bestätigen“).
 4. **Ersteller und Bearbeiter nur mit Stufe:** `PUT /api/wiki/pages/<id>/creator` nimmt nur Konten mit Stufe in der
    Strömipedia (wie die Auswahl „Ersteller ändern“, `users_for_sharing`), sonst 400 „Dieses Konto hat keine Stufe in der
    Strömipedia und kann nicht Ersteller werden. …“ (bleibt der Ersteller derselbe, ändert sich nichts).
@@ -11000,6 +11186,16 @@ hinzu“)**
 Rundungsverlust, Texte); angepasst `test_module_anleitung.py` (`kriterienListeHtml(l, ohneSatz)`, „i“ statt Textlink),
 `test_material_anleitung.py` und `test_material_textbreite.py` (kein Hinweiskasten mehr), `test_module_startseite.py`
 (Karten über die gemeinsame Regel) und `test_material_verlust_melden.py` (Texte des Rückruf-Dialogs).
+
+**Bestätigt am 02.11.2026** (Nutzer: „Alles offene bestätigen“ – die offenen „Bitte bestätigen“ aus
+`planung/wiki-module/bericht_kleinigkeiten.md`, wie gebaut):
+- Punkt 3: „+“ im Baum und „Erste Seite anlegen“ bieten wie „Neue Seite“ die Vorlagen an (oben vermerkt).
+- Punkt 7: Der Leistungsdialog bei eingefrorenen Bewertungen steht ganz zum Lesen da, mit ausgegrautem „Speichern“ –
+  so bleibt es (kein „Schließen“ statt „Speichern“).
+- Punkt 11: die Sätze in den „i“ – auf den Unterseiten allgemein „Wie diese Seite funktioniert, erklärt die Anleitung in
+  der Strömipedia.“, eigene Sätze nur auf den drei Modul-Übersichten.
+- Punkt 12: die gemeinsamen Grenzen der Karten (2 Spalten ab 492 px, 3 ab 744, 4 ab 996, 5 ab 1248).
+- Punkt 10: Der Banner-Knopf bleibt „Sperren (Rückruf)“.
 
 ## Menüeintrag „Anleitung zur Strömipedia“ entfernt (02.11.2026)
 
@@ -11081,7 +11277,8 @@ Schemaschritt, kein neues Journal-Ereignis.
   in der Oberfläche, Schlüssel `ordner:konto`). Spalten Person | Rechte | Notiz | Vergeben: je Recht eine Textzeile
   „verwalten (dauerhaft)“, „prüfen (bis 31.12.2027)“ mit Zustandsmarke und ggf. „Qualifikation fehlt“; abweichende
   Notizen bzw. Vergeben je Recht mit dem Recht davor; grau nur, wenn alle Rechte abgelaufen sind. Zähler im Kopf zählen
-  Personen, der Ablaufhinweis weiter Freigaben. Karten (Inhalt ≤ 840 px) ohne Halbspalten, „Rechte:“ über den Rechten.
+  diese Zeilen – in „Hier vergeben“ Personen, in „Geerbt von oben“ und „In Unterordnern“ Person und Ordner –, der
+  Ablaufhinweis weiter Freigaben. Karten (Inhalt ≤ 840 px) ohne Halbspalten, „Rechte:“ über den Rechten.
 - EIN „Ändern“ (sobald ein Recht änderbar ist) öffnet **„Rechte ändern“**: Grundrecht „–“/lesen/verwalten mit „Grundrecht
   bis“ (dauerhaft nur, wer selbst dauerhaft verwaltet), Häkchen „Prüffreigabe“ mit „Prüfen bis“ (dauerhaft nur mit
   Grundrecht im Dialog oder darüber), eine Notiz; eigene Zeile nur verkürzen/herabsetzen/entziehen (nur Optionen bis
@@ -11095,7 +11292,10 @@ Schemaschritt, kein neues Journal-Ereignis.
   an diesem Ordner.
 - „Freigabe anlegen“: Hat die gewählte Person am gewählten Anker schon Rechte, steht über den Vorlagen „… hat hier
   schon: …“ mit Textknopf „Rechte ändern“ (Dialog der Person); „Freigabe erteilen“ bleibt möglich.
-- „Verlängern“ aus dem Ordnerkopf springt zur Personenzeile mit der ablaufenden Freigabe (Fokus auf ihr „Ändern“).
+- „Verlängern“ aus dem Ordnerkopf springt zum Knopf „Alle Prüffreigaben verlängern“, wenn unter den ablaufenden
+  Freigaben eine befristete Prüffreigabe ist, die man ändern darf (ebenso, wenn inzwischen nichts mehr abläuft);
+  sonst zur Personenzeile der ersten ablaufenden Freigabe – eine änderbare zuerst – in „Hier vergeben“ oder „In
+  Unterordnern“ (der Abschnitt geht auf, Fokus auf ihr „Ändern“, ohne „Ändern“ auf die Zeile).
 
 **Ordnerseite (material.js/.css)**
 - Mit Foto steht es im Seitenkopf links neben Überschrift und Knopfzeile (`ordnerKopf`, `.page-head.mat-mit-bild`,
@@ -11112,3 +11312,10 @@ Verwalter Nr. 3/4, eigene Zeile, Leser 403, fremd/unbekannt 404 gleich, Systemor
 `_entwuerfe_und_erinnerung` (offene Entwürfe, Erinnerungslog bleibt, Antwort ohne Liste nach Selbstherabsetzung),
 `test_person_oberflaeche_statisch`; Kennung `uid` in den Rundumtests (`test_material_trennung`, `_stufen`,
 `_ueberblick`); `test_module_info_i` M31 an den Personenzähler angepasst.
+
+**Bestätigt am 02.11.2026** (Nutzer: „Alles offene bestätigen“ – die offenen „Bitte bestätigen“ aus
+`planung/freigaben-person/bericht.md`, wie gebaut):
+- Am Telefon steht im Ordnerkopf die Knopfzeile unter Bild und Name (Abweichung 1 vom Entwurf).
+- Die Zustandsmarke „gültig“ steht je Recht – bei zwei Rechten zweimal –, statt nur Abweichendes zu markieren.
+- Öffnet „Rechte ändern“ aus dem Hinweis „… hat hier schon“ an einem Oberordner (Rechte in „Geerbt von oben“), zeigt der
+  Dialog kein Notizfeld; die Notiz bleibt unverändert.

@@ -73,6 +73,14 @@ Vale V12X, Galaxy Tab S6 Lite; Auftrag planung/geraetetest/auftrag_geraetetest.m
   Kriterien), Voraussetzung und Kriterium angelegt/gelöscht, „Lehrgang angelegt“. „Umbenannt“ (Voraussetzung) gab es
   schon.
 
+**Bestätigt am 02.11.2026** (Nutzer: „Alles offene bestätigen“ – die offenen „Bitte bestätigen“ aus
+`planung/geraetetest/bericht_teil3.md`, wie gebaut):
+- W1: der Wortlaut „Wird gespeichert …“ bzw. nach zehn Sekunden „Noch nicht gespeichert – keine Antwort vom Server“,
+  ohne Abbruch der hängenden Anfrage.
+- B3: „Bearbeiten“ und „Import“ stehen auch am Rechner im Menü „Mehr“.
+- B2: Karten mit offenen Voraussetzungen stehen aufgeklappt.
+- W4: der Zustand im Namen („Kriterium: nicht erfüllt“) statt `aria-pressed="mixed"`.
+
 ## Nachtrag (01.11.2026): Ausbilder nur noch mit Konto
 
 Wunsch des Nutzers: „Entferne die Freitext-Ausbilder in der Riegenkarte, entweder Personen haben einen Account und
@@ -810,7 +818,7 @@ Aus der Durchsicht vor dem Merge dev → main (bericht_pruefung_vor_merge_browse
   „Kataloge pflegt nur die Verwaltung der Riegenkarten.“, Leerzustand der Kataloge „Die Verwaltung der Riegenkarten legt
   sie an.“ – die Stufe „Verwaltung“ in den Riegenkarten (die Plattform-Verwaltung hat sie überall). Bitte bestätigen:
   „Verwaltung der Riegenkarten“ statt eines neuen Rollennamens („Riegenkarten-Verwaltung“ steht nicht in der
-  Designsprache).
+  Designsprache) – **bestätigt am 02.11.2026** (Nutzer: „Alles offene bestätigen“).
 - Tests: `tests/test_module_vor_merge.py` (Meldungen über die Schnittstelle, Editor-Einstellungen statisch),
   `tests/test_pruefungen.py` (Wortlaut der Katalog-Meldung); Browserprobe Chromium 1280 und Touch 390: Esc aus
   „Bezeichnung“ und aus der Beschreibung schließt, Fokus zurück auf „+ Prüfungsleistung anlegen“ bzw. „Bearbeiten“.
