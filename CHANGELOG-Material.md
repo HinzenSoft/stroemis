@@ -11160,4 +11160,5 @@ als eigener Knopf) und der Materialablage (klebende Zeile „☰“ + Nummernsuc
   Suchfunktion, Schnittstelle unverändert, Lesemodus ohne Zeile); angepasst: `test_geraetetest_teil1.py`
   (`test_b14_schubladen`: nur noch das „☰“ des Editors in wiki.js, Knopf der Zeile in wiki.html, Lesemodus wie bisher) und
   `test_material_vor_merge_3.py` (`test_seitentitel_vom_server`, statische Prüfung der übrigen Module: „☰“ mit „Seiten“
-  zum Vorlesen in wiki.html).
+  zum Vorlesen in wiki.html) und `test_module_nach_merge.py` (`test_knopfsprache_alte_module`: 6 statt 7 Kopfknöpfe in
+  wiki.js). Die 44 px des „☰“ gelten nur am Finger (bestehende Regel für `.wiki-menu-btn`; `test_module_uiux_u1b` A15).

@@ -1108,7 +1108,7 @@ progress { width: 100%; height: 10px; accent-color: var(--rot); }
     display: flex; align-items: stretch; gap: 6px; position: sticky; top: var(--topbar); z-index: 45;
     background: var(--weiss); margin: -28px 0 12px; padding: 8px 0;      /* bündig unter der Kopfleiste, wie geklebt */
   }
-  .wiki-suchzeile > .wiki-menu-btn { flex: none; min-width: 44px; justify-content: center; align-items: center; }
+  .wiki-suchzeile > .wiki-menu-btn { flex: none; padding-left: 12px; padding-right: 12px; justify-content: center; align-items: center; }
   .wiki-suchzeile > input[type=search] { flex: 1 1 auto; min-width: 0; margin: 0; }
   body:not(.editing) .wiki-shell:has(.wiki-suchzeile) .wiki-side > :is(#wiki-search, #search-results) { display: none; }
   /* Die Artikel-Leiste klebt direkt darunter: --wiki-suchzeile ist die gemessene Höhe der Zeile (wiki.js; 0, wo sie

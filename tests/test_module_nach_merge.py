@@ -176,7 +176,8 @@ def test_knopfsprache_alte_module():
     # Kopfleiste der Strömipedia: Sprechblase als Symbol statt Emoji, grau umrandet.
     wiki = lies("app/static/js/wiki.js")
     assert 'aria-label="Kommentieren">${I.kommentar}</button>' in wiki and "kommentar: ico(" in wiki
-    assert wiki.count('class="btn secondary small kopfknopf') == 7
+    # 6 seit der Suchzeile (02.11.2026): Das „☰“ der Leseansicht steht in der Suchzeile, nur der Editor hat seins.
+    assert wiki.count('class="btn secondary small kopfknopf') == 6
     print("Knopfsprache bestanden.")
 
 

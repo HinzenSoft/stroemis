@@ -77,9 +77,9 @@ def test_regeln():
     regel = abschnitt(teil, "  body:not(.editing) .wiki-suchzeile {", "}")
     for teilregel in ("display: flex;", "position: sticky; top: var(--topbar);", "background: var(--weiss);", "z-index: 45;"):
         assert teilregel in regel, teilregel
-    # Das Feld füllt den Rest, „☰“ bleibt 44 px breit.
+    # Das Feld füllt den Rest, „☰“ wächst nicht mit (44 × 44 px nur am Finger, Regel für .wiki-menu-btn unten).
     assert ".wiki-suchzeile > input[type=search] { flex: 1 1 auto; min-width: 0; margin: 0; }" in teil
-    assert ".wiki-suchzeile > .wiki-menu-btn { flex: none; min-width: 44px;" in teil
+    assert ".wiki-suchzeile > .wiki-menu-btn { flex: none; padding-left: 12px; padding-right: 12px;" in teil
     # Kein doppeltes Suchfeld: In der Schublade fällt das Feld über dem Baum weg, solange die Zeile steht.
     assert ("body:not(.editing) .wiki-shell:has(.wiki-suchzeile) .wiki-side > :is(#wiki-search, #search-results) "
             "{ display: none; }") in teil
