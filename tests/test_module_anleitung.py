@@ -48,6 +48,10 @@ def start(tmp):
     return app, adm
 
 
+def freigeben(adm, s, unterseiten=True):
+    ok(adm.put(f"/api/wiki/pages/{s['id']}/share", json={"is_public": True, "public_children": unterseiten}))
+
+
 def seite(adm, titel, inhalt, eltern=None):
     d = {"title": titel, "content": inhalt}
     if eltern:
@@ -136,6 +140,15 @@ def test_aufloesung_je_modul_mit_den_rechten_der_stroemipedia():
         lg = seite(adm, "Lehrgänge", "# Lehrgänge\n\n## Die Lehrgangsseite\n", r["id"])
         # Gleichnamige Seite in einem anderen Artikel: zählt nicht (nur der Teilbaum unter der Wurzel).
         seite(adm, "Alben", "# Alben\n\n## Album in der Seitenleiste\n", r["id"])
+        # Nicht freigegeben: keine Links – für niemanden (Entscheidung nach der Sicherheitsprüfung, 01.11.2026).
+        for c in (red, adm, ohne):
+            assert verweise(c, "/ankerplaetze") == {} and verweise(c, "/riegenkarten") == {}
+        assert verweise(red, "/stroemipedia") == {} and verweise(adm, "/stroemipedia") == {}
+        # Strömipedia einzeln freigegeben („Teilen und Freigaben“ bleibt lesebeschränkt), die beiden anderen samt Unterseiten.
+        for s in (w, lf, ed):
+            freigeben(adm, s, unterseiten=False)
+        freigeben(adm, a)
+        freigeben(adm, r)
 
         v = verweise(red, "/stroemipedia")
         assert v["uebersicht"] == f"/stroemipedia/{w['slug']}"
@@ -143,9 +156,9 @@ def test_aufloesung_je_modul_mit_den_rechten_der_stroemipedia():
         assert v["editor"] == f"/stroemipedia/{ed['slug']}"
         assert v["textfarbe"] == f"/stroemipedia/{ed['slug']}#auswahlleiste"
         assert v["abschnitt_einbinden"] == f"/stroemipedia/{ed['slug']}"        # Überschrift nur im Codeblock
-        assert "bearbeiten_erlauben" not in v                                  # lesebeschränkt
+        assert "bearbeiten_erlauben" not in v                                  # lesebeschränkt = nie freigegeben
         assert "papierkorb" not in v                                           # Seite fehlt
-        assert verweise(adm, "/stroemipedia")["bearbeiten_erlauben"].endswith("#bearbeiten-erlauben")   # Wiki-Verwaltung
+        assert verweise(adm, "/stroemipedia") == v                              # auch für die Wiki-Verwaltung
         assert verweise(red, f"/stroemipedia/{lf['slug']}") == v               # jede Seite der Strömipedia dasselbe
 
         k = verweise(red, "/ankerplaetze")
@@ -156,10 +169,12 @@ def test_aufloesung_je_modul_mit_den_rechten_der_stroemipedia():
         assert p == {"uebersicht": f"/stroemipedia/{r['slug']}", "lehrgang": f"/stroemipedia/{lg['slug']}#die-lehrgangsseite",
                      "ausbilder": f"/stroemipedia/{lg['slug']}", "katalog_vorlage": f"/stroemipedia/{lg['slug']}"}, p
         assert verweise(red, "/riegenkarten/kataloge") == p
-        # Ohne Stufe in der Strömipedia (Lesemodus): nur Freigegebenes – erst nichts, dann der freigegebene Artikel.
-        assert verweise(ohne, "/ankerplaetze") == {} and verweise(ohne, "/riegenkarten") == {}
-        ok(adm.put(f"/api/wiki/pages/{a['id']}/share", json={"is_public": True, "public_children": True}))
-        assert verweise(ohne, "/ankerplaetze") == k and verweise(ohne, "/riegenkarten") == {}
+        # Ohne Stufe in der Strömipedia (Lesemodus): dasselbe – es zählen ohnehin nur freigegebene Seiten.
+        assert verweise(ohne, "/ankerplaetze") == k and verweise(ohne, "/riegenkarten") == p
+        # Eine nicht freigegebene Unterseite (Redakteur, eigene Wurzel nur selbst freigegeben) lenkt nicht um.
+        freigeben(adm, a, unterseiten=False)
+        assert verweise(red, "/ankerplaetze") == {"uebersicht": f"/stroemipedia/{a['slug']}"}
+        freigeben(adm, a)
         # Wurzel im Papierkorb: keine Links mehr.
         ok(adm.delete(f"/api/wiki/pages/{a['id']}", headers=H))
         assert verweise(red, "/ankerplaetze") == {}
@@ -173,7 +188,10 @@ def test_materialablage_wie_vorher():
         m = seite(adm, "Materialablage", "# Materialablage\n\nPlatzhalter\n")
         pr = seite(adm, "Prüfung", "# Prüfung\n\n## Prüfung starten\n", m["id"])
         seite(adm, "Strömipedia", "# Strömipedia\n")
-        seite(adm, "Prüfung", "# Prüfung\n\n## Prüfung starten\n")                # gleichnamig, außerhalb
+        aussen = seite(adm, "Prüfung", "# Prüfung\n\n## Prüfung starten\n")      # gleichnamig, außerhalb
+        assert verweise(leser, "/materialablage/pruefungen") == {}
+        freigeben(adm, m)
+        freigeben(adm, aussen)
         v = verweise(leser, "/materialablage/pruefungen")
         assert v["uebersicht"] == f"/stroemipedia/{m['slug']}"
         assert v["pruefung_neu"] == f"/stroemipedia/{pr['slug']}#pruefung-starten"

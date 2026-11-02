@@ -10,10 +10,19 @@ ZIP-Import, und der Import bildet die Adresse aus dem Titel (api_wiki.unique_slu
 kommt nur an die Adresse, wenn die Seite eine Überschrift mit genau dieser Kennung hat (wie markdown.js buildToc sie
 bildet) – sonst führt der Link an den Anfang der Seite.
 
-Rechte (Entscheidung des Nutzers vom 28.10.2026, „Nur wer lesen darf“): Jede Seite einzeln mit den Regeln der
-Strömipedia (wikiverweis.darf_lesen – Stufe in der Strömipedia: can_read samt Lesebeschränkung; Lesemodus: nur
-freigegebene Seiten). Gibt es die Seite nicht, liegt sie im Papierkorb oder darf das Konto sie nicht lesen, fehlt der
-Schlüssel – kein Link, kein Titel, keine Meldung. An den Rechten der Strömipedia ändert sich nichts.
+Nur freigegebene Seiten (Entscheidung des Nutzers vom 01.11.2026 nach der Sicherheitsprüfung, Befund 2 in
+planung/pruefung-merge2/bericht_sicherheit.md): Als Wurzel und als Themenseite zählt nur eine Seite, die für alle
+Angemeldeten freigegeben ist – selbst oder über einen Abschnitt darüber (api_wiki.is_public; eine lesebeschränkte nie).
+Freigeben darf nur die Wiki-Verwaltung, und in einem freigegebenen Abschnitt legt nur sie Seiten an oder verschiebt
+dorthin. Vorher konnte jeder Redakteur die Verweise umlenken – mit einer eigenen, neueren Seite „Materialablage“ oder
+einer Unterseite mit kleiner position unter dem echten Artikel. Gibt es mehrere freigegebene Wurzeln gleichen Titels,
+gewinnt die neueste mit Unterseiten. Der Artikel wird also erst verlinkt, wenn die Wiki-Verwaltung ihn über „Teilen“ →
+„Für alle Angemeldeten freigeben“ (samt Unterseiten) freigibt.
+
+Rechte (Entscheidung des Nutzers vom 28.10.2026, „Nur wer lesen darf“): Zusätzlich jede Seite einzeln mit den Regeln
+der Strömipedia (wikiverweis.darf_lesen) – bei freigegebenen Seiten heißt das: jedes angemeldete Konto. Gibt es die
+Seite nicht, ist sie nicht freigegeben, liegt sie im Papierkorb oder darf das Konto sie nicht lesen, fehlt der Schlüssel
+– kein Link, kein Titel, keine Meldung. An den Rechten der Strömipedia ändert sich nichts.
 
 Die Materialablage hat ihre Tabelle samt Willkommen weiter in app/material/services/anleitung.py; die Tabellen der drei
 übrigen Module stehen hier (TABELLEN). Titel und Überschriften der Tabellen dürfen sich in den Artikeln nicht unbemerkt
@@ -129,17 +138,30 @@ def _hat_anker(seite, anker):
 _SPALTEN = "id, title, slug, parent_id, created_by, is_public, public_children, read_restricted, deleted_at, updated_at"
 
 
+def _freigegeben(seite):
+    """Für alle Angemeldeten freigegeben – selbst oder über einen Abschnitt darüber, nie lesebeschränkt."""
+    from .api_wiki import is_public
+    return is_public(seite)
+
+
 def _wurzeln(wurzel):
-    """Kandidaten für die oberste Artikelseite: Titel wurzel, nicht im Papierkorb, keine Vorlage – zuerst die mit
-    Unterseiten (ein gleichnamiger Einzelartikel ist nicht gemeint), dann die neueste (ein späterer Import)."""
+    """Kandidaten für die oberste Artikelseite: Titel wurzel, nicht im Papierkorb, keine Vorlage, für alle Angemeldeten
+    freigegeben – zuerst die mit Unterseiten (ein gleichnamiger Einzelartikel ist nicht gemeint), dann die neueste (ein
+    späterer Import)."""
+    return [w for w in _wurzeln_alle(wurzel) if _freigegeben(w)]
+
+
+def _wurzeln_alle(wurzel):
     return db.query(f"SELECT {_SPALTEN}, EXISTS (SELECT 1 FROM wiki_pages k WHERE k.parent_id = p.id AND k.deleted_at IS NULL)"
                     " AS hat_kinder FROM wiki_pages p WHERE title = ? AND deleted_at IS NULL AND is_template = 0 "
                     "ORDER BY hat_kinder DESC, id DESC", (wurzel,))
 
 
 def _teilbaum(wurzel):
-    """Titel → Seite im Teilbaum unter der Wurzel (ohne Papierkorb und Vorlagen); bei gleichem Titel die höhere Ebene,
-    dann die vordere Stelle."""
+    """Titel → Seite im Teilbaum unter der Wurzel (ohne Papierkorb und Vorlagen, nur freigegebene Seiten); bei gleichem
+    Titel die höhere Ebene, dann die vordere Stelle. Eine nicht freigegebene Seite zählt nicht – auch nicht mit kleiner
+    position vor der echten –, ihre Unterseiten werden trotzdem durchsucht (sie sind dann ebenfalls nicht freigegeben,
+    außer über einen eigenen Abschnitt der Wiki-Verwaltung)."""
     seiten, ebene, tiefe = {}, [wurzel["id"]], 0
     gelesen = 0
     while ebene and tiefe < TIEFE_MAX and gelesen < SEITEN_MAX:
@@ -148,7 +170,8 @@ def _teilbaum(wurzel):
                           f"AND is_template = 0 ORDER BY position, id LIMIT ?", (*ebene, SEITEN_MAX - gelesen))
         gelesen += len(zeilen)
         for z in zeilen:
-            seiten.setdefault(z["title"].strip(), z)
+            if z["title"].strip() not in seiten and _freigegeben(z):
+                seiten[z["title"].strip()] = z
         ebene, tiefe = [z["id"] for z in zeilen], tiefe + 1
     return seiten
 
@@ -180,10 +203,9 @@ def aufloesen(wurzel_titel, themen, user=None):
     if schluessel in speicher:
         return speicher[schluessel]
     out = {}
-    # Die erste lesbare Wurzel; ist keine lesbar, trotzdem ihr Teilbaum – eine einzeln freigegebene Unterseite zählt
-    # (die Wurzel selbst prüft die Schleife unten wie jede Seite).
+    # Die neueste freigegebene Wurzel mit Unterseiten (die Leserechte prüft die Schleife unten wie für jede Seite).
     kandidaten = _wurzeln(wurzel_titel)
-    wurzel = next((w for w in kandidaten if darf_lesen(w, user)), kandidaten[0] if kandidaten else None)
+    wurzel = kandidaten[0] if kandidaten else None
     if wurzel:
         seiten = _teilbaum(wurzel)
         seiten[wurzel_titel] = wurzel       # eine gleichnamige Unterseite ist nicht die Wurzel

@@ -13,7 +13,11 @@ Strömipedia (wikiverweis.darf_lesen – Stufe in der Strömipedia: can_read sam
 öffentliche Seiten). Gibt es die Seite nicht, liegt sie im Papierkorb oder darf das Konto sie nicht lesen, fehlt der
 Schlüssel – kein Link, kein Titel, keine Meldung. An den Rechten der Strömipedia ändert sich nichts.
 
-Die Suche (Titel im Teilbaum, Anker, Leserecht) ist seit dem 01.11.2026 allgemein für alle Module mit eigenem Artikel
+Seit dem 01.11.2026 (Entscheidung des Nutzers nach der Sicherheitsprüfung) zählen nur Seiten, die für alle Angemeldeten
+freigegeben sind – die Wurzel und jede Themenseite, auch für Willkommen und Hinweis; vorher konnte jeder Redakteur die
+Verweise mit einer eigenen Seite „Materialablage“ umlenken. Einzelheiten in app/anleitung.py.
+
+Die Suche (Titel im Teilbaum, Anker, Freigabe, Leserecht) ist seit dem 01.11.2026 allgemein für alle Module mit eigenem Artikel
 (app/anleitung.py, aufloesen); hier stehen nur Wurzel, Themen-Tabelle und das Willkommen der Materialablage.
 
 Willkommen: je Konto einmal, gemerkt in mat_meta (Schlüssel „willkommen:<Konto>“, Wert der Zeitpunkt) – ohne

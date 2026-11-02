@@ -10610,6 +10610,16 @@ Befunde mit; dazu vier Entscheidungen des Nutzers vom 01.11.2026. Kein Schemasch
   Lehrgangsliste, Lehrgangsseite (am Telefon unter dem Titel, „Mehr“ bleibt daneben) und Katalogseite, „Mehr dazu“ in
   allen sieben „i“. Weggelassen: Karte ohne Kopf (Werkzeugleiste am Telefon voll), Dialoge ohne „i“, Lesemodus der
   Strömipedia, Druckansichten.
+- **Nur freigegebene Seiten** (Entscheidung des Nutzers vom 01.11.2026 nach der Sicherheitsprüfung, Befund 2 in
+  planung/pruefung-merge2/bericht_sicherheit.md, Probe p18_anleitung): Als Wurzel und Themenseite zählt in allen vier
+  Modulen – auch in der Materialablage, auch für Hinweis und Willkommen – nur eine Seite, die für alle Angemeldeten
+  freigegeben ist (selbst oder geerbt, `api_wiki.is_public`). Vorher konnte jeder Redakteur die Verweise umlenken: mit
+  einer eigenen, neueren Seite „Materialablage“ samt Unterseite oder mit einer Unterseite `position: -5` unter dem echten
+  Artikel. Freigeben darf nur die Wiki-Verwaltung, und in einem freigegebenen Abschnitt legt nur sie Seiten an – beides
+  ist damit zu. Mehrere freigegebene Wurzeln gleichen Titels: die neueste mit Unterseiten. **Folge:** Die Artikel werden
+  erst nach „Teilen“ → „Für alle Angemeldeten freigeben“ (samt Unterseiten) verlinkt; ein interner Artikel bekommt
+  keine Verweise mehr – auch nicht für die Wiki-Verwaltung. Tests: `test_material_anleitung.py` (neu
+  `test_umlenken_durch_redakteure_geht_nicht`, die übrigen mit freigegebenem Artikel), `test_module_anleitung.py`.
 - Alle 93 Zeilen der drei Tabellen (33/28/32) gegen die Artikel geprüft: statisch und nach dem Import der drei ZIPs im
   Browser (`buildToc` = `kennungen` auf allen 24 Seiten); übernommen sind die 25 Themen mit einer Stelle in der Oberfläche.
 
@@ -10644,5 +10654,5 @@ ab Redakteur mit eigenen, kein Eingabedialog beim Lehrgangsergebnis, „Kriterie
 sehen; Vorlagen; Ankerplätze; Verweise auf die Anleitung), `docs/Editor - Bedienung und Kuerzel.md` (Schublade unter
 1024 px, Inhaltsverzeichnis im „⋯“, „Ersteller ändern“ für die Wiki-Verwaltung).
 
-- Tests: `tests/test_module_anleitung.py` (neu); angepasst `tests/test_pruefungen.py` (neue Kriterien an eingefrorenen
+- Tests: `tests/test_module_anleitung.py` (neu); angepasst `tests/test_material_anleitung.py` (nur freigegebene Seiten), `tests/test_pruefungen.py` (neue Kriterien an eingefrorenen
   Leistungen jetzt 409) und `tests/test_module_info_i.py` (Infos mit „Mehr dazu“, Dialogtext der Ankerplätze).
