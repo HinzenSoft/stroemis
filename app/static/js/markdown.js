@@ -940,9 +940,13 @@ window.MD = (function () {
       // liegt bei 0 und galt damit immer als „gerade gelesen“.
       const sichtbar = heads.filter((h) => h.getClientRects().length);
       if (!sichtbar.length) return;
+      // Die Grenze folgt dem Abstand, mit dem ein Sprung die Überschrift oben ablegt (scroll-margin-top, app.css:
+      // Kopfleiste + 72 px = 124 px). Mit fest 120 px galt die eben angesprungene Überschrift noch nicht als erreicht,
+      // markiert war der Abschnitt davor (Kleinigkeiten 02.11.2026). Ohne Kopfleiste (wenig Höhe) bleibt es bei 120.
+      const grenze = Math.max(120, (parseFloat(getComputedStyle(sichtbar[0]).scrollMarginTop) || 0) + 8);
       let active = sichtbar[0];
       for (const h of sichtbar) {
-        if (h.getBoundingClientRect().top <= 120) active = h; else break;
+        if (h.getBoundingClientRect().top <= grenze) active = h; else break;
       }
       links.forEach((a) => a.classList.remove("active"));
       const hit = links.get(active.id);
@@ -960,7 +964,37 @@ window.MD = (function () {
     const t = root.querySelector(`[id="${CSS.escape(id)}"]`) || document.getElementById(id);
     if (!t) return false;
     t.scrollIntoView({ block: "start" });
+    ankerHalten(root, t, id);
     return true;
+  }
+
+  /* Bilder über dem Ziel haben vor dem Laden keine Höhe (loading="lazy", die Maße kennt der Text nicht). Laden sie nach
+     dem Sprung, schieben sie die Überschrift nach unten – die Verankerung des Browsers fängt das nur zum Teil ab (Artikel
+     „Riegenkarten“: 4 von 10 Verweisen landeten 170 bis 630 px zu tief, Kleinigkeiten 02.11.2026). Darum richtet jedes
+     fertige Bild über dem Ziel es erneut oben aus – nur solange niemand selbst rollt, tippt oder eine Taste drückt, der
+     Anker noch derselbe ist und höchstens 10 s lang. */
+  function ankerHalten(root, t, id) {
+    const offen = Array.from(root.querySelectorAll("img"))
+      .filter((i) => !i.complete && (i.compareDocumentPosition(t) & Node.DOCUMENT_POSITION_FOLLOWING));
+    if (!offen.length) return;
+    const SELBST = ["wheel", "touchstart", "pointerdown", "keydown"];
+    let rest = offen.length;
+    let frist = null;
+    function ende() {
+      rest = 0;
+      clearTimeout(frist);
+      SELBST.forEach((art) => window.removeEventListener(art, ende, true));
+      offen.forEach((i) => { i.removeEventListener("load", fertig); i.removeEventListener("error", fertig); });
+    }
+    function fertig() {
+      if (!rest) return;
+      if (!t.isConnected || entziffern((location.hash || "").slice(1)) !== id) { ende(); return; }
+      t.scrollIntoView({ block: "start" });
+      if (--rest === 0) ende();
+    }
+    SELBST.forEach((art) => window.addEventListener(art, ende, { capture: true, passive: true }));
+    offen.forEach((i) => { i.addEventListener("load", fertig); i.addEventListener("error", fertig); });
+    frist = setTimeout(ende, 10000);
   }
 
   function tocHtml(items) {

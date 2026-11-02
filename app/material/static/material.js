@@ -3316,19 +3316,21 @@
      nicht btn danger: Eine Freiprüfung hebt die Sperre wieder auf (Entscheidung vom 23.10.2026, L2b). */
   const VERLUST_FOLGE = "Der Artikel wird gesperrt, zählt als verloren und wandert nach „Gesperrt“ seiner Gliederung. Taucht er wieder auf: nicht verwenden – zurück bringt ihn nur eine Freiprüfung mit „einsatzbereit“. Der Materialwart kann ihn mit dem Grund „Verlust“ sofort aussondern.";
   const RUECKRUF_FOLGE = "Sperren wegen eines Rückrufs des Herstellers. Der Artikel wandert nach „Gesperrt“ seiner Gliederung; zurück bringt ihn nur eine Freiprüfung mit „einsatzbereit“.";
+  // Der Rückruf steht im Titel, im Knopf und im Toast (Kleinigkeiten 02.11.2026: vorher nur „M-… sperren“ / „Sperren“ –
+  // der Dialog sagte erst im Satz darunter, warum).
   function sperrDialog(a, grund, text) {
     const verlust = grund === "verlust";
-    dialog(`<h2>${esc(a.inventory_no)} ${verlust ? "als verloren melden" : "sperren"}</h2>
+    dialog(`<h2>${esc(a.inventory_no)} ${verlust ? "als verloren melden" : "wegen Rückruf sperren"}</h2>
       <p class="help">${esc(verlust ? VERLUST_FOLGE : RUECKRUF_FOLGE)}</p>
       <label for="sd-text">Was ist passiert?</label><input type="text" id="sd-text" maxlength="300"${verlust ? ' placeholder="z. B. nach der Übung nicht mehr da"' : ""} value="${esc(text || "")}">
-      <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button><button class="btn" id="sd-ok" type="button">${verlust ? "Verlust melden" : "Sperren"}</button></div>`,
+      <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button><button class="btn" id="sd-ok" type="button">${verlust ? "Verlust melden" : "Wegen Rückruf sperren"}</button></div>`,
     (dlg, body) => {
       $("#sd-ok", body).onclick = async (ev) => {
         const knopf = ev.currentTarget;
         knopf.disabled = true;
         try {
           await api(`${API}/artikel/${a.id}/sperren`, { method: "POST", body: { grund, text: $("#sd-text", body).value } });
-          dlg.close(); toast(`${a.inventory_no} ${verlust ? "als verloren gemeldet" : "gesperrt"}`); zeigen(artikel);
+          dlg.close(); toast(`${a.inventory_no} ${verlust ? "als verloren gemeldet" : "wegen Rückruf gesperrt"}`); zeigen(artikel);
         } catch (e) { S.fehlschlag(knopf, e, body); }
       };
     });
@@ -8361,7 +8363,9 @@
     ? ` – davon ${k.dringend} nicht einsatzbereit` : ""}. <a href="/materialablage/meine-psa">Meine PSA ansehen →</a></p>` : "");
 
   /* Eine Karte in „Meine PSA“. Banner oben (Mangel, Sperre, überfällig, Lebensdauer, neu, DEMO) – mit dem, was die
-     Person tun soll; dann Bild, Nummern, Daten, Dokumente, Rückruf, die eigenen Meldungen und „Mangel melden“. */
+     Person tun soll; dann Bild, Nummern, Daten, Dokumente, Rückruf, die eigenen Meldungen und „Mangel melden“. Ein
+     verlorener Artikel trägt am Titel die Marke „verloren“ wie auf der Artikelseite, nicht „gesperrt“ (Kleinigkeiten
+     02.11.2026). */
   // Das Banner einer Karte – höchstens eins, das dringendste.
   function psaBanner(k) {
     if (k.mangel) return ["mat-mangel-banner", `Mangel gemeldet am ${S.fmtDate(k.mangel.seit)} – nicht verwenden. Bring sie deinem Materialwart; ein Prüfer muss sie ansehen.`];
@@ -8391,7 +8395,7 @@
         ${p.bild && p.vorschau ? bildLink(p.bild, p.bild, `Produktbild ${name}`, null, `<img class="mat-psa-bild" src="${esc(p.vorschau)}" alt="">`, `Produktbild groß zeigen: ${name}`)
           : '<div class="mat-psa-bild leer" aria-hidden="true">kein Bild</div>'}
         <div class="mat-psa-titel">
-          <h2 id="psa-${Number(k.id)}">${inv} ${statusMarke(k.status)}</h2>
+          <h2 id="psa-${Number(k.id)}">${inv} ${k.verloren ? '<span class="mat-status s-gesperrt">verloren</span>' : statusMarke(k.status)}</h2>
           <p class="mat-produktzeile"><strong>${nameHtml(p)}</strong>${zusatzHtml(p)}${artNrHtml(p.article_no)}</p>
           <p class="small">${nummerHtml("Seriennummer", k.serial_no)}${k.serial_generated ? ' <span class="muted">(vom System)</span>' : ""}</p>
         </div>

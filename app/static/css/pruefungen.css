@@ -447,6 +447,11 @@ dialog.pruef-dlg { width: min(720px, 96vw); }
 .medien-knopf { width: 100%; justify-content: center; min-height: 48px; white-space: normal; }
 .pruef-dlg .up-stand { margin-top: 8px; }
 .pruef-dlg .up-stand progress { margin-top: 4px; }
+/* Leistungsdialog bei eingefrorenen Bewertungen (Kleinigkeiten 02.11.2026): die Beschreibung als Text statt im Editor,
+   der Grund des ausgegrauten „Speichern“ als Satz über der Knopfzeile – wie .mat-knopfgrund in der Materialablage. */
+#dlg .pl-fest { border: 1px solid var(--linie); border-radius: var(--radius); padding: 6px 10px; }
+#dlg .knopfgrund { margin: 10px 0 0; color: var(--anthrazit); }
+#dlg .knopfgrund.betont { font-weight: 700; color: var(--rot-auf-flaeche); }
 
 /* --- Mängel / Feedback -------------------------------------------------------------------- */
 .maengel-filter { display: grid; grid-template-columns: 1fr 1fr auto; gap: 8px 10px; align-items: end; margin: 0 0 14px; }

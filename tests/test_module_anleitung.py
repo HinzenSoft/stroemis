@@ -263,7 +263,9 @@ def test_kriterien_eingefrorener_leistungen_in_der_oberflaeche():
     import app.api_pruefungen as ap
     js = lesen(JS["pruefungen"])
     assert f'const KRITERIEN_EINGEFROREN = "{ap.KRITERIEN_EINGEFROREN}";' in js
-    teil = js[js.index("  function kriterienListeHtml(l) {"):js.index("  function leistungDialog(l) {")]
+    # Seit den Kleinigkeiten vom 02.11.2026 mit „ohneSatz“: War der Dialog schon beim Öffnen eingefroren, nennt den Grund
+    # der Satz über der Knopfzeile (test_kleinigkeiten_artikel.py).
+    teil = js[js.index("  function kriterienListeHtml(l, ohneSatz) {"):js.index("  function leistungDialog(l) {")]
     gesperrt = teil[teil.index("if (l.kriterien_eingefroren) {"):teil.index("return `<div id=\"krit-wrap\">\n      ${ks.length")]
     assert '<p class="help krit-gesperrt">${esc(KRITERIEN_EINGEFROREN)}</p>' in gesperrt
     assert "krit-neu-go" not in gesperrt and "data-krit-bez" not in gesperrt and "data-krit-del" not in gesperrt

@@ -272,8 +272,9 @@
     }));
     treeEl.querySelectorAll(".row-add").forEach((b) => b.addEventListener("click", (e) => {
       e.stopPropagation();
-      const id = +b.closest("li").dataset.id;
-      if (leaveEditor()) openEditor({ parent_id: id });
+      // Wie „Neue Seite“ und „Unterseite anlegen“: leer oder aus einer Vorlage (Kleinigkeiten 02.11.2026).
+      side.classList.remove("open");
+      neueSeite(+b.closest("li").dataset.id);
     }));
     treeEl.querySelectorAll(".row-menu").forEach((b) => b.addEventListener("click", (e) => {
       e.stopPropagation();
@@ -500,23 +501,34 @@
     // keine Kennung – ihr Editor darf nicht die zuvor gelesene Seite für alle sperren.
     const wunsch = state.editor && state.editorSeite === p.id ? "schreiben" : "lesen";
     const lauf = ++state.pulsToken;
-    let d = null;
+    let d = null, abgewiesen = null;
     try {
       d = await api("/api/wiki/praesenz", { method: "POST",
         body: { reiter: REITER, page_id: p.id, modus: wunsch, ...extra } });
-    } catch (e) { /* Netz weg oder Seite fort – der nächste Herzschlag versucht es erneut */ }
+    } catch (e) {
+      // Netz weg oder Seite fort – der nächste Herzschlag versucht es erneut. 403: Lesen darf das Konto die Seite nicht
+      // mehr (Stufe entzogen, Seite eingeschränkt) – im Editor heißt das „keine Berechtigung mehr“.
+      if (e && e.status === 403) abgewiesen = e;
+    }
     // Ist inzwischen ein neuer Puls gestartet (Seitenwechsel, Editor auf), führt der die
     // Schleife – sonst liefen zwei Herzschläge nebeneinander, und die Antwort der vorigen
     // Seite färbte den Bearbeiten-Knopf der neuen.
     if (lauf !== state.pulsToken) return null;
     const takt = !state.editor && d && d.schreiber ? LIVE_MS : PULS_MS;
     state.pulsLauf = setTimeout(() => praesenzPuls(), takt);
+    if (abgewiesen && wunsch === "schreiben" && state.schreibrecht && state.current === p) {
+      state.schreibrecht = false;
+      bearbeitungVerweigert(abgewiesen.message);
+      return null;
+    }
     if (!d || state.current !== p) return null;
     state.praesenz = d;
     praesenzAnzeigen();
     if (wunsch === "schreiben" && d.modus !== "schreiben" && state.schreibrecht) {
       state.schreibrecht = false;
-      schreibrechtVerloren(d);
+      // Zwei Gründe für „lesen“: Das Recht ist weg (darf_schreiben false) – oder jemand anderes hat den Schreibplatz.
+      if (d.darf_schreiben === false) bearbeitungVerweigert("Du darfst diese Seite nicht mehr bearbeiten.");
+      else schreibrechtVerloren(d);
     } else if (d.modus === "schreiben") {
       state.schreibrecht = true;
     }
@@ -658,6 +670,21 @@
     if (st) { st.textContent = `${wer} bearbeitet jetzt – nicht mehr gespeichert`; st.classList.add("warn"); }
   }
 
+  /* Das Recht zum Bearbeiten ist weg, während der Editor offen ist (Stufe entzogen, Freigabe entfernt, Seite
+     eingeschränkt): derselbe Weg wie beim 403 des Speicherns (jetztSichern) – nichts wird mehr gespeichert, der Text
+     bleibt im Editor, wer geht, wird gefragt. Vorher meldete der Herzschlag hier „… bearbeitet Jemand anderes die
+     Seite“ (Kleinigkeiten 02.11.2026). */
+  function bearbeitungVerweigert(meldung) {
+    state.editorGesperrt = true;
+    state.editorVerweigert = true;
+    toast(`${meldung} Dein Text steht noch im Editor – kopiere ihn, bevor du die Seite verlässt.`, true);
+    const st = $("#ed-status");
+    if (st) {
+      st.textContent = state.dirty ? "Nicht gespeichert – keine Berechtigung mehr" : "Keine Berechtigung mehr";
+      st.classList.add("warn");
+    }
+  }
+
   async function schreibrechtHolen(p) {
     try {
       return await api("/api/wiki/praesenz", { method: "POST",
@@ -748,7 +775,7 @@
       }
       content.innerHTML = `<div class="leerzustand"><strong>Die Strömipedia ist noch leer</strong>Lege die erste Seite an.
         <div class="btn-row"><button class="btn" id="h-new">Erste Seite anlegen</button></div></div>`;
-      $("#h-new").onclick = () => openEditor({ parent_id: null });
+      $("#h-new").onclick = () => neueSeite(null);
       return;
     }
     /* Die Übersicht zeigt die obersten Abschnitte als Karten im Raster (Startseite über alle Module, 02.11.2026 – vorher
@@ -791,8 +818,8 @@
     wireLinks(box);
   }
 
-  /* „Neue Seite“ (Knopf über dem Baum, „Unterseite anlegen“): leer oder aus einer Vorlage (Entscheidung des Nutzers vom
-     01.11.2026). Vorlagen sind Seiten mit „Als Vorlage anbieten“ im „⋯“, die das Konto lesen darf (/api/wiki/templates).
+  /* „Neue Seite“ (Knopf über dem Baum, „Unterseite anlegen“, seit 02.11.2026 auch „+“ im Baum und „Erste Seite
+     anlegen“): leer oder aus einer Vorlage (Entscheidung des Nutzers vom 01.11.2026). Vorlagen sind Seiten mit „Als Vorlage anbieten“ im „⋯“, die das Konto lesen darf (/api/wiki/templates).
      Gibt es keine (oder antwortet der Server nicht), öffnet der Editor gleich leer – wie bisher. Gewählt wird im Dialog;
      erst „Weiter“ verlässt einen offenen Editor. Der Inhalt der Vorlage wird in den Editor der neuen Seite KOPIERT (ohne
      ihre Titelzeile – die neue Seite beginnt mit „Neue Seite“ wie leer); angelegt wird sie wie jede neue Seite mit
