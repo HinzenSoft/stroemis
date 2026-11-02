@@ -1077,6 +1077,249 @@ def test_braucht_a1_ordner_loeschen_journal():
     print("Ordner löschen schreibt freigabe_entfernt bestanden.")
 
 
+# --- „Rechte ändern“ je Person (02.11.2026): PUT /ordner/<fid>/freigaben/person/<uid> ------------------------------
+
+PERSON = "/api/material/ordner/{}/freigaben/person/{}"
+
+
+def grant_von(app, gid):
+    return zeilen(app, "SELECT * FROM mat_folder_grant WHERE id = ?", (gid,))[0]
+
+
+def person(c, fid, uid, **d):
+    return c.put(PERSON.format(fid, uid), json=d)
+
+
+def test_person_setzen():
+    """Grundrecht und Prüffreigabe einer Person in einem Aufruf anlegen, ändern, einzeln und beide entziehen: Die
+    Kennungen bleiben beim Ändern, unveränderte Rechte kommen nicht ins Journal, die Notiz nie (nur
+    „notiz_geaendert“); Journal je Zeile wie bisher – auch im Verlauf."""
+    with tempfile.TemporaryDirectory() as tmp:
+        app, k = umgebung(tmp)
+        adm, w = k["adm"], k["wart"]
+        gid, _ = gliederung(adm)
+        _, hid = neues_konto(app, "helfer@example.org", name="Helfer Test", mat_pruefer=True, urkundennummer="1012-0101")
+        vorher = len(journal(app, gid))
+
+        # Neu: verwalten dauerhaft und prüfen dauerhaft – das Grundrecht aus derselben Anfrage trägt die Prüffreigabe.
+        r = person(w, gid, hid, grundrecht={"recht": "verwalten", "bis": None}, pruefen={"bis": None},
+                   notiz="Testnotiz Person")
+        assert r.status_code == 200, r.get_json()
+        assert set(r.json) == {"freigaben", "liste", "offene_entwuerfe", "mail"} and r.json["offene_entwuerfe"] == 0
+        assert [(f["recht"], f["bis"], f["notiz"]) for f in r.json["freigaben"]] == [
+            ("verwalten", None, "Testnotiz Person"), ("pruefen", None, "Testnotiz Person")], r.get_json()
+        assert hid in {f["konto"]["id"] for f in r.json["liste"]["direkt"]}
+        g_id, p_id = grant(app, gid, hid, "verwalten")["id"], grant(app, gid, hid, "pruefen")["id"]
+        e = journal(app, gid)[vorher:]
+        assert [(x["action"], x["nachher"]["recht"], x["nachher"]["notiz_geaendert"]) for x in e] == [
+            ("freigabe_erteilt", "verwalten", True), ("freigabe_erteilt", "pruefen", True)], e
+
+        # Ändern: herabsetzen und befristen – dieselben Kennungen, je Zeile ein Eintrag.
+        r = person(w, gid, hid, grundrecht={"recht": "lesen", "bis": tag(100)}, pruefen={"bis": tag(50)},
+                   notiz="Testnotiz Person")
+        assert r.status_code == 200, r.get_json()
+        assert grant(app, gid, hid, "lesen")["id"] == g_id and grant(app, gid, hid, "pruefen")["id"] == p_id
+        assert (grant(app, gid, hid, "lesen")["valid_until"], grant(app, gid, hid, "pruefen")["valid_until"]) == (
+            tag(100), tag(50))
+        e = journal(app, gid)[vorher + 2:]
+        assert [(x["action"], x["vorher"]["recht"], x["nachher"]["recht"], x["nachher"]["bis"]) for x in e] == [
+            ("freigabe_geaendert", "verwalten", "lesen", tag(100)), ("freigabe_geaendert", "pruefen", "pruefen", tag(50))]
+        assert not any(x["nachher"].get("notiz_geaendert") for x in e)
+        # Dasselbe noch einmal: nichts geschrieben; „recht“ und „bis“ fehlen – bleiben.
+        n = len(journal(app, gid))
+        assert person(w, gid, hid, grundrecht={"recht": "lesen", "bis": tag(100)}, pruefen={"bis": tag(50)},
+                      notiz="Testnotiz Person").status_code == 200
+        assert person(w, gid, hid, grundrecht={}, pruefen={}).status_code == 200
+        assert len(journal(app, gid)) == n
+        # Nur die Notiz: gilt für beide Rechte – ins Journal nur „notiz_geaendert“.
+        r = person(w, gid, hid, notiz="Testnotiz zwei")
+        assert r.status_code == 200 and {f["notiz"] for f in r.json["freigaben"]} == {"Testnotiz zwei"}, r.get_json()
+        assert grant(app, gid, hid, "lesen")["note"] == grant(app, gid, hid, "pruefen")["note"] == "Testnotiz zwei"
+        assert [x["nachher"].get("notiz_geaendert") for x in journal(app, gid)[n:]] == [True, True]
+        # Mit einem Recht mitgeschickt: die Notiz gilt nur für das mitgeschickte.
+        assert person(w, gid, hid, pruefen={}, notiz="Testnotiz drei").status_code == 200
+        assert (grant(app, gid, hid, "lesen")["note"], grant(app, gid, hid, "pruefen")["note"]) == (
+            "Testnotiz zwei", "Testnotiz drei")
+
+        # Einzeln entziehen, dann das andere; ein nicht vorhandenes zu entziehen ist nichts zu tun.
+        r = person(w, gid, hid, pruefen=None)
+        assert r.status_code == 200 and r.json["freigaben"] == [] and grant(app, gid, hid, "pruefen") is None, r.get_json()
+        assert grant(app, gid, hid, "lesen")["id"] == g_id
+        n = len(journal(app, gid))
+        assert person(w, gid, hid, pruefen=None).status_code == 200 and len(journal(app, gid)) == n
+        assert person(w, gid, hid, grundrecht=None, pruefen=None).status_code == 200
+        assert not zeilen(app, "SELECT 1 FROM mat_folder_grant WHERE folder_id = ? AND user_id = ?", (gid, hid))
+        e = journal(app, gid)[n:]
+        assert [(x["action"], x["vorher"]["recht"], x["nachher"]) for x in e] == [("freigabe_entzogen", "lesen", None)], e
+
+        # Nichts mitgeschickt: 400; Unsinn je Recht mit Vorsatz.
+        r = person(w, gid, hid)
+        assert r.status_code == 400 and r.json["error"] == "Nichts zu ändern.", r.get_json()
+        r = person(w, gid, hid, grundrecht={"recht": "pruefen"})
+        assert r.status_code == 400 and r.json["error"].startswith("„Grundrecht“: "), r.get_json()
+        r = person(w, gid, hid, grundrecht="lesen")
+        assert r.status_code == 400 and r.json["error"].startswith("„Grundrecht“: "), r.get_json()
+        r = person(w, gid, hid, pruefen={})
+        assert r.status_code == 400 and r.json["error"].startswith("„Prüffreigabe“: ") and "„bis“" in r.json["error"]
+        r = person(w, gid, hid, grundrecht={"recht": "lesen", "bis": tag(-1)})
+        assert r.status_code == 400 and r.json["error"] == "„Grundrecht“: Das Enddatum liegt in der Vergangenheit."
+
+        # Die Notiz steht nirgends im Journal, auch nicht Name oder Adresse; der Verlauf nennt die Person je Zeile.
+        alles = json.dumps(zeilen(app, "SELECT * FROM mat_audit WHERE entity = 'folder'"), ensure_ascii=False, default=str)
+        assert "Testnotiz" not in alles and "helfer@example.org" not in alles and "Helfer Test" not in alles
+        v = [x for x in liste(w, gid)["verlauf"] if x["konto"] == "Helfer Test"]
+        assert len(v) == len(journal(app, gid)) - vorher, v
+    print("Rechte ändern je Person bestanden.")
+
+
+def test_person_setzen_alles_oder_nichts():
+    """Scheitert ein Recht, bleibt alles, wie es war – auch das schon geschriebene Grundrecht; die Meldung nennt das
+    Recht, an dessen Feld sie im Dialog steht."""
+    from app.material.services.interval import plus_monate
+    with tempfile.TemporaryDirectory() as tmp:
+        app, k = umgebung(tmp)
+        adm, w = k["adm"], k["wart"]
+        gid, _ = gliederung(adm)
+        _, ohne_id = neues_konto(app, "ohne-quali@example.org", name="Ohne Quali")
+        _, qid = neues_konto(app, "quali@example.org", name="Mit Quali", mat_pruefer=True, urkundennummer="1012-0102")
+        freigeben(adm, gid, ohne_id, "lesen")
+        q_grund = freigeben(adm, gid, qid, "verwalten")
+
+        def stand():
+            return zeilen(app, "SELECT * FROM mat_folder_grant ORDER BY id")
+        vorher, j = stand(), len(journal(app, gid))
+
+        # Grundrecht geändert, Prüffreigabe ohne Qualifikation: 409 am Feld „Prüffreigabe“, lesen bleibt lesen.
+        r = person(w, gid, ohne_id, grundrecht={"recht": "verwalten", "bis": None}, pruefen={"bis": tag(30)})
+        assert r.status_code == 409 and r.json["error"].startswith("„Prüffreigabe“: Prüffreigaben nur an Konten"), r.get_json()
+        # verwalten → lesen und prüfen länger als 24 Monate: 400, verwalten bleibt.
+        zu_lang = (plus_monate(_heute(), 24) + timedelta(days=1)).isoformat()
+        r = person(w, gid, qid, grundrecht={"recht": "lesen", "bis": None}, pruefen={"bis": zu_lang})
+        assert r.status_code == 400 and r.json["error"].startswith("„Prüffreigabe“: ") and "24 Monate" in r.json["error"]
+        # Grundrecht weg und prüfen neu dauerhaft: 400 (Nr. 8) – das Entziehen des Grundrechts rollt mit zurück.
+        r = person(w, gid, qid, grundrecht=None, pruefen={"bis": None})
+        assert r.status_code == 400 and r.json["error"].startswith("„Prüffreigabe“: Dauerhaft gibt es"), r.get_json()
+        # Die eigene letzte Verwalterfreigabe herabsetzen (Nr. 7): 409, auch die Notiz bleibt. qid verwaltet hier auch
+        # dauerhaft – der Materialwart muss dafür der letzte sein: erst qid auf lesen.
+        sql(app, "UPDATE mat_folder_grant SET permission = 'lesen' WHERE id = ?", (q_grund,))
+        vorher = stand()
+        r = person(w, gid, k["wart_id"], grundrecht={"recht": "lesen"}, notiz="Testnotiz neu")
+        assert r.status_code == 409 and r.json["error"].startswith("„Grundrecht“: Danach hätte die Gliederung"), r.get_json()
+        assert stand() == vorher and len(journal(app, gid)) == j
+        # Mit Grundrecht aus derselben Anfrage geht dauerhaft prüfen.
+        sql(app, "DELETE FROM mat_folder_grant WHERE id = ?", (q_grund,))
+        r = person(w, gid, qid, grundrecht={"recht": "lesen", "bis": None}, pruefen={"bis": None})
+        assert r.status_code == 200 and grant(app, gid, qid, "pruefen")["valid_until"] is None, r.get_json()
+        assert grant(app, gid, qid, "lesen")["valid_until"] is None
+    print("Rechte ändern – alles oder nichts bestanden.")
+
+
+def test_person_setzen_rechte():
+    """Wer was darf – je Recht dieselben Regeln wie beim Erteilen und Ändern (1.6): Material-Verwaltung überall (Nr. 8
+    gilt), befristeter Verwalter (Nr. 3/4), eigene Zeile (Nr. 5), Leser 403, fremde Gliederung 404 wie Unbekanntes,
+    Systemordner 409, Konten nach Nr. 12."""
+    with tempfile.TemporaryDirectory() as tmp:
+        app, k = umgebung(tmp)
+        adm, w, mv = k["adm"], k["wart"], k["katalog"]
+        gid, sys_a = gliederung(adm)
+        b, _ = gliederung(adm, "OG Nachbarstadt", standard=False)
+        _, hid = neues_konto(app, "helfer@example.org", name="Helfer Test", mat_pruefer=True, urkundennummer="1012-0103")
+        gast, gast_id = neues_konto(app, "gast@example.org", name="Gast Test", mat_pruefer=True, urkundennummer="1012-0104")
+        freigeben(adm, gid, gast_id, "verwalten", bis=tag(80))
+
+        # Material-Verwaltung: auch in B, dauerhaft; die Qualifikation (Nr. 8) gilt auch für sie.
+        r = person(mv, b, hid, grundrecht={"recht": "verwalten", "bis": None}, pruefen={"bis": None})
+        assert r.status_code == 200, r.get_json()
+        _, ohne_id = neues_konto(app, "ohne@example.org", name="Ohne Quali")
+        r = person(mv, b, ohne_id, pruefen={"bis": tag(30)})
+        assert r.status_code == 409 and r.json["error"].startswith("„Prüffreigabe“: "), r.get_json()
+        # Nur prüfen dauerhaft ohne Grundrecht – auch für sie 400.
+        r = person(mv, gid, hid, pruefen={"bis": None})
+        assert r.status_code == 400 and "nur zusammen mit lesen oder verwalten" in r.json["error"], r.get_json()
+
+        # Befristeter Verwalter: an den dauerhaften kommt er nicht heran (Nr. 4), dauerhaft vergibt er nicht (Nr. 3).
+        r = person(gast, gid, k["wart_id"], grundrecht={"recht": "verwalten", "bis": tag(10)})
+        assert r.status_code == 403 and r.json["error"].startswith("„Grundrecht“: Diese Freigabe reicht weiter"), r.get_json()
+        r = person(gast, gid, hid, grundrecht={"recht": "lesen", "bis": None})
+        assert r.status_code == 403 and "Dauerhaft vergibt nur" in r.json["error"], r.get_json()
+        r = person(gast, gid, hid, grundrecht={"recht": "lesen", "bis": tag(81)})
+        assert r.status_code == 403 and "eigene Verwalterfreigabe" in r.json["error"], r.get_json()
+        r = person(gast, gid, hid, grundrecht={"recht": "lesen", "bis": tag(80)}, pruefen={"bis": tag(20)})
+        assert r.status_code == 200, r.get_json()
+        # Die eigene Zeile: verlängern 403, sich selbst prüfen neu 403 (EIGENE_NEU), verkürzen geht.
+        r = person(gast, gid, gast_id, grundrecht={"bis": tag(90)})
+        assert r.status_code == 403 and "eigene Verwalterfreigabe" in r.json["error"], r.get_json()
+        eigen_lesen = freigeben(adm, ordner_neu(w, gid, "Lager"), gast_id, "lesen", bis=tag(20))
+        anker = grant_von(app, eigen_lesen)["folder_id"]
+        r = person(gast, anker, gast_id, grundrecht={"recht": "verwalten"})                # eigene heraufsetzen
+        assert r.status_code == 403 and r.json["error"] == "„Grundrecht“: Deine eigene Freigabe kannst du nur " \
+            "verkürzen, herabsetzen oder entziehen.", r.get_json()
+        r = person(gast, gid, gast_id, pruefen={"bis": tag(10)})
+        assert r.status_code == 403 and r.json["error"].startswith("„Prüffreigabe“: Dir selbst"), r.get_json()
+        assert person(gast, gid, gast_id, grundrecht={"bis": tag(60)}).status_code == 200
+        assert grant(app, gid, gast_id, "verwalten")["valid_until"] == tag(60)
+
+        # Leser 403; fremde Gliederung und Unbekanntes 404 gleich; Systemordner 409.
+        assert person(k["fuehrung"], gid, hid, grundrecht=None).status_code == 403
+        r1, r2 = person(w, b, hid, grundrecht=None), person(w, 999999, hid, grundrecht=None)
+        assert r1.status_code == r2.status_code == 404 and r1.json == r2.json, (r1.get_json(), r2.get_json())
+        r = person(w, sys_a["gesperrt"], hid, grundrecht={"recht": "lesen"})
+        assert r.status_code == 409 and "Gesperrt" in r.json["error"], r.get_json()
+        # Nr. 12: unbekannt und deaktiviert (ohne Rechte hier) – dieselbe 404.
+        _, inaktiv_id = neues_konto(app, "inaktiv@example.org", name="Inaktiv Test")
+        assert adm.put(f"/api/admin/users/{inaktiv_id}", json={"active": False}).status_code == 200
+        antworten = [person(w, gid, u, grundrecht={"recht": "lesen"}) for u in (999999, inaktiv_id)]
+        assert [r.status_code for r in antworten] == [404, 404] and antworten[0].json == antworten[1].json == {
+            "error": "Konto nicht gefunden."}, [r.get_json() for r in antworten]
+        # Ohne Zugang zum Modul: ausweiten 409, kürzen und entziehen gehen.
+        _, stufenlos_id = neues_konto(app, "stufenlos@example.org", name="Stufenlos Test", stufe=0)
+        freigeben(adm, gid, stufenlos_id, "lesen")
+        r = person(w, gid, stufenlos_id, grundrecht={"recht": "verwalten"})
+        assert r.status_code == 409 and "keinen Zugang zur Materialablage" in r.json["error"], r.get_json()
+        assert person(w, gid, stufenlos_id, grundrecht={"bis": tag(10)}).status_code == 200
+        assert person(w, gid, stufenlos_id, grundrecht=None).status_code == 200
+        # Deaktiviert mit Rechten hier: entziehen geht.
+        freigeben(adm, gid, inaktiv_id, "lesen")
+        assert person(w, gid, inaktiv_id, grundrecht=None, pruefen=None).status_code == 200
+        assert grant(app, gid, inaktiv_id, "lesen") is None
+        # Ohne Qualifikation: prüfen neu 409 – und das Grundrecht dazu entsteht auch nicht.
+        r = person(w, gid, ohne_id, grundrecht={"recht": "lesen"}, pruefen={"bis": tag(30)})
+        assert r.status_code == 409 and grant(app, gid, ohne_id, "lesen") is None, r.get_json()
+    print("Rechte ändern – wer was darf bestanden.")
+
+
+def test_person_setzen_entwuerfe_und_erinnerung():
+    """offene_entwuerfe wie beim Entziehen (nur wenn ein Recht wegfällt oder kürzer wird), „mail“ in der Antwort; das
+    Erinnerungslog einer geänderten Zeile bleibt (dieselbe Kennung)."""
+    with tempfile.TemporaryDirectory() as tmp:
+        app, k = umgebung(tmp)
+        adm, w = k["adm"], k["wart"]
+        ids = katalog_grund(adm)
+        pruef_formulare(k["katalog"], ids)
+        gid, _ = gliederung(adm)
+        lager = ordner_neu(w, gid, "Lager")
+        a = neuer_artikel(w, ids["hms"], lager)["id"]
+        assert starten(k["pruefer"], a).status_code == 201
+        pid = k["pruefer_id"]
+        pruefen = grant(app, gid, pid, "pruefen")
+        sql(app, "UPDATE mat_folder_grant SET valid_until = ? WHERE id = ?", (tag(20), pruefen["id"]))
+        sql(app, "INSERT INTO mat_reminder_log (item_id, grant_id, kind, due_on, konto_ref, sent_at) VALUES "
+                 "(NULL, ?, 'freigabe_ablauf', ?, ?, ?)", (pruefen["id"], tag(20), "testref", "2026-01-01T00:00:00"))
+        r = person(w, gid, pid, pruefen={"bis": tag(10)}, notiz="Testnotiz")
+        assert r.status_code == 200 and r.json["offene_entwuerfe"] == 0 and "mail" in r.json, r.get_json()
+        assert grant(app, gid, pid, "pruefen")["id"] == pruefen["id"]
+        assert zeilen(app, "SELECT grant_id FROM mat_reminder_log")[0]["grant_id"] == pruefen["id"]
+        r = person(w, gid, pid, grundrecht=None, pruefen=None)
+        assert r.status_code == 200 and r.json["offene_entwuerfe"] == 1, r.get_json()
+        assert zeilen(app, "SELECT 1 FROM mat_inspection WHERE item_id = ? AND completed_at IS NULL", (a,))
+        # Wer sich selbst herabsetzt, verwaltet danach nicht mehr – die Antwort hat dann keine Liste.
+        _, w2_id = neues_konto(app, "wart2@example.org", name="Wart Zwei")
+        freigeben(adm, gid, w2_id, "verwalten")
+        r = person(w, gid, k["wart_id"], grundrecht={"recht": "lesen"})
+        assert r.status_code == 200 and r.json["liste"] is None and r.json["freigaben"][0]["recht"] == "lesen", r.get_json()
+    print("Rechte ändern – Entwürfe und Erinnerungen bestanden.")
+
+
 if __name__ == "__main__":
     test_erteilen_aendern_entziehen()
     test_vorlagen_eine_transaktion()
@@ -1093,3 +1336,7 @@ if __name__ == "__main__":
     test_list_users_abfragen()
     test_liste_abfragen()
     test_braucht_a1_ordner_loeschen_journal()
+    test_person_setzen()
+    test_person_setzen_alles_oder_nichts()
+    test_person_setzen_rechte()
+    test_person_setzen_entwuerfe_und_erinnerung()
