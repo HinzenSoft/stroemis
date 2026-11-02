@@ -111,8 +111,7 @@ li.system > .mat-knoten .mat-knoten-name > a { font-weight: 400; color: var(--gr
 .mat-wahl { max-height: 55vh; overflow: auto; border: 1px solid var(--linie); padding: 6px 10px; margin-top: 8px; }
 .mat-wahl .mat-baum li { padding: 0; }
 
-.mat-ordnerkopf { display: flex; gap: 16px; align-items: flex-start; margin-bottom: 8px; }
-.mat-ordnerfoto { width: 120px; height: 120px; object-fit: cover; border: 1px solid var(--linie); }
+.mat-ordnerkopf { margin-bottom: 8px; }
 .mat-filter { flex-wrap: wrap; }
 
 /* Tabellen: Die Listen des Moduls teilen ihre Spalten nach dem Inhalt auf (Produktnamen sind lang,
@@ -1355,10 +1354,25 @@ table.list.mat-artikel tr:has(.mat-wahl-art:checked) { background: var(--co-info
    (material.js). Mit der Maus bleibt der Tooltip am Kästchen. */
 @media (hover: none) { td.mat-wahlspalte input:disabled { pointer-events: none; } }
 
-/* Ordnerfoto im Kopf: antippbar wie Produktbilder (Großansicht); ab Tablet-Breite größer. */
-.mat-ordnerkopf > .mat-bildlink { flex: none; display: block; }
-.mat-ordnerkopf > .mat-bildlink img { display: block; }
-@media (min-width: 768px) { .mat-ordnerfoto { width: 160px; height: 160px; } }
+/* Ordnerfoto links neben Überschrift und Knopfzeile (Wunsch des Nutzers vom 02.11.2026; material.js, ordnerKopf):
+   96 px, am Telefon (Inhalt bis 600 px) 64 px, quadratischer Ausschnitt der Vorschau (256 px – reicht auch bei doppelter
+   Pixeldichte), antippbar wie Produktbilder (Großansicht). Name und Knopfzeile stehen rechts daneben untereinander bzw.
+   nebeneinander, solange sie passen; ein langer Name bricht neben dem Bild um. Die Knopfzeile steht mittig neben dem
+   Bild statt an der Grundlinie. Am Telefon steht nur der Name neben dem Bild, die Knopfzeile darunter in voller Breite
+   (Gitter, die Titelgruppe löst sich dafür auf) – neben 64 px Bild blieben ihr sonst rund 260 px, die Knöpfe stünden
+   zweizeilig. Ohne Foto bleibt der Seitenkopf, wie er ist. */
+.page-head.mat-mit-bild { flex-wrap: nowrap; align-items: center; justify-content: flex-start; gap: 16px; }
+.mat-mit-bild > .mat-bildlink { flex: none; display: block; }
+.mat-ordnerfoto { display: block; width: 96px; height: 96px; object-fit: cover; border: 1px solid var(--linie); }
+.mat-ordnertitel { flex: 1 1 auto; min-width: 0; display: flex; flex-wrap: wrap; align-items: baseline;
+  justify-content: space-between; gap: 8px 12px; }
+.mat-ordnertitel > h1 { margin: 0; min-width: 0; }
+@container mat-seite (max-width: 600px) {
+  .page-head.mat-mit-bild { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 10px 12px; }
+  .mat-mit-bild > .mat-ordnertitel { display: contents; }
+  .mat-mit-bild > .mat-ordnertitel > .btn-row { grid-column: 1 / -1; }
+  .mat-ordnerfoto { width: 64px; height: 64px; }
+}
 
 /* hidden muss gewinnen, auch wo die Klasse display setzt („Produkt aus dem Katalog“, „Vorhandenes zuordnen“). */
 .mat-gewaehlt[hidden] { display: none; }
@@ -1415,7 +1429,8 @@ table.list.mat-artikel tr:has(.mat-wahl-art:checked) { background: var(--co-info
 table.list.mat-runde tr.mat-fremd td { color: var(--grau); }
 
 /* „Ordner bearbeiten“ mit den Reitern „Ordner“ und „Freigaben“ (material.js, reiterVerdrahten). So breit wie früher der
-   Dialog „Freigaben“ – seine Liste hat sieben Spalten –, und das in beiden Reitern, damit beim Wechsel nichts springt.
+   Dialog „Freigaben“ – seine Liste hatte sieben Spalten, seit dem 02.11.2026 fünf (eine Zeile je Person) –, und das in
+   beiden Reitern, damit beim Wechsel nichts springt.
    :where() hält die Regel so schwach wie „dialog“ selbst: Die Regeln für Fold mit zwei Hälften (dialog[open], app.css)
    gehen vor; am Telefon gilt die Breite aus app.css. */
 @media (min-width: 641px) { dialog:where(.mat-ordner-reiter) { width: min(920px, 96vw); } }

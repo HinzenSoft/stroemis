@@ -36,6 +36,18 @@ def freigabe_erteilen(fid):
                    mail=antrag.ohne_verwalter_nach_vorgang()), 201
 
 
+@api.put("/ordner/<int:fid>/freigaben/person/<int:uid>")
+@requires_folder("verwalten", "fid")
+def freigaben_person(fid, uid):
+    """Dialog „Rechte ändern“ (02.11.2026): Grundrecht und Prüffreigabe einer Person an diesem Ordner in EINER
+    Transaktion – alles oder nichts. Felder (jedes optional): grundrecht ({recht, bis} oder null), pruefen ({bis} oder
+    null), notiz. Antwort wie beim Erteilen, dazu offene_entwuerfe wie beim Entziehen."""
+    r = freigaben.person_setzen(fid, uid, json_body())
+    liste = freigaben.liste(fid) if sicht().darf("verwalten", fid) else None
+    return jsonify(freigaben=[freigaben.eintrag(gid) for gid in r["ids"]], liste=liste,
+                   offene_entwuerfe=r["offene_entwuerfe"], mail=antrag.ohne_verwalter_nach_vorgang())
+
+
 @api.post("/ordner/<int:fid>/freigaben/verlaengern")
 @requires_folder("verwalten", "fid")
 def freigaben_verlaengern(fid):

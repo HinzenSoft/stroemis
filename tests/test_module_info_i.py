@@ -65,7 +65,7 @@ STELLEN = [
     ("M28", MAT, 'zugeordnet${infoKnopf("Spalten", `Mehrere Spalten in der Bemerkung', "Mehrere Spalten in der Bemerkung"),
     ("M29", MAT, '<th>geändert${b.version === 2 ? infoKnopf("neu und geändert", "Eine geänderte Prüfliste', "Eine geänderte Prüfliste wird"),
     ("M30", FRG, '<label for="mf-anker">Gilt für${info("Gilt für", `Freigaben für', "!gelten dort und in allen Unterordnern, bis\n"),
-    ("M31", FRG, '<summary>Geerbt von oben <span class="mf-zahl">${d.geerbt.length}</span>${info("Geerbt von oben", "Freigaben an Oberordnern',
+    ("M31", FRG, '<summary>Geerbt von oben <span class="mf-zahl">${geerbt.length}</span>${info("Geerbt von oben", "Freigaben an Oberordnern',
      "Freigaben an Oberordnern gelten"),
     ("R1", RK, '<label>Lehrgangsleitung und Referierende${info("Lehrgangsleitung und Referierende", `Mehrere Personen', "Mehrere Personen können"),
     ("R2", RK, 'aus Katalog übernehmen (optional)${info("Prüfungsleistungen aus Katalog", `Die Leistungen werden einmalig', "Die Leistungen werden einmalig"),

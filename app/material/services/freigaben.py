@@ -33,6 +33,10 @@ Was eine Freigabe ist und wie sie wirkt, steht in rechte.py. Hier stehen die Reg
      ändern und entziehen gehen immer (_reicht_weiter).
  13  Nach jedem Schreiben rechte.sicht_verwerfen() – die Antwort zeigt schon den neuen Stand.
 
+Seit dem 02.11.2026 zeigt der Reiter eine Zeile je Person; ihr Dialog „Rechte ändern“ schreibt über person_setzen
+Grundrecht und Prüffreigabe einer Person an einem Ordner in EINER Transaktion – alles oder nichts, die Regeln je Recht
+wie oben, eine Ablehnung nennt das Recht („„Grundrecht“: …“, „„Prüffreigabe“: …“).
+
 Journal am Ordner, an dem die Freigabe verankert ist: freigabe_erteilt, freigabe_geaendert, freigabe_entzogen mit
 {"freigabe", "konto": {"ref"}, "recht", "bis"} – das Konto nur als pseudonymer Verweis (journal.konto_ref), der Name
 dessen, der handelt, steht wie immer in user_name."""
@@ -397,10 +401,20 @@ def aendern(gid, d):
     return gid
 
 
+def _offene_entwuerfe(uid, anker, ordner):
+    """Die Zahl offener Prüfungen des Kontos im Zweig des Ankers, die es (nach dem Schreiben) nicht mehr fortsetzen
+    darf – die gibt ein Verwalter unter Materialablage → Prüfungen → Offene Prüfungen frei."""
+    konto = _konto(uid)
+    zweig = _zweig(anker, ordner)
+    offen = db.query("SELECT i.* FROM mat_inspection x JOIN mat_item i ON i.id = x.item_id WHERE x.inspector_user_id = ? "
+                     "AND x.completed_at IS NULL", (uid,))
+    return sum(1 for i in offen if heimat(i) in zweig and not rechte.darf("pruefen", heimat(i), konto))
+
+
 def entziehen(gid):
     """DELETE /freigaben/<gid>. Liefert die Zahl offener Prüfungen des Kontos im Zweig des Ankers, die es danach nicht
-    mehr fortsetzen darf – die gibt ein Verwalter unter Materialablage → Prüfungen → Offene Prüfungen frei. Das gilt auch für
-    ein Grundrecht: An ihm kann eine dauerhafte Prüffreigabe hängen, die ohne es nicht mehr wirkt."""
+    mehr fortsetzen darf (_offene_entwuerfe). Das gilt auch für ein Grundrecht: An ihm kann eine dauerhafte
+    Prüffreigabe hängen, die ohne es nicht mehr wirkt."""
     ich, s = current_user(), rechte.sicht()
     alt = zeile(gid)
     ordner = _ordner_alle()
@@ -409,11 +423,105 @@ def entziehen(gid):
         _schreiben(s, ich, alt["folder_id"], alt, None, _konto(alt["user_id"]))
         _verwaltung_danach(vorher)
     rechte.sicht_verwerfen()
-    konto = _konto(alt["user_id"])
-    zweig = _zweig(alt["folder_id"], ordner)
-    offen = db.query("SELECT i.* FROM mat_inspection x JOIN mat_item i ON i.id = x.item_id WHERE x.inspector_user_id = ? "
-                     "AND x.completed_at IS NULL", (alt["user_id"],))
-    return sum(1 for i in offen if heimat(i) in zweig and not rechte.darf("pruefen", heimat(i), konto))
+    return _offene_entwuerfe(alt["user_id"], alt["folder_id"], ordner)
+
+
+# „Rechte ändern“ je Person (02.11.2026): Feld der Anfrage → Name, den eine Ablehnung voranstellt. freigaben.js findet
+# darüber das Feld im Dialog (S.fehlschlag, Beschriftung „Grundrecht“ bzw. „Prüffreigabe“).
+PERSON_TEILE = {"grundrecht": "Grundrecht", "pruefen": "Prüffreigabe"}
+NICHTS_ZU_AENDERN = "Nichts zu ändern."
+
+
+def _mit_vorsatz(teil, f, *args):
+    """f(*args); eine Ablehnung bekommt „„Grundrecht“: “ bzw. „„Prüffreigabe“: “ vorangestellt, derselbe Code."""
+    try:
+        return f(*args)
+    except Abgelehnt as e:
+        raise Abgelehnt(f"„{PERSON_TEILE[teil]}“: {e}", e.code) from None
+
+
+def _person_wunsch(d, teil, alt):
+    """Was die Anfrage für ein Recht der Person will: None (Feld fehlt – unberührt), "weg" (null – entziehen) oder
+    {"permission", "valid_until"}. „bis“ fehlt: das bisherige Ende; bei einem neuen Grundrecht dauerhaft wie beim
+    Erteilen, eine neue Prüffreigabe braucht es ausdrücklich (null heißt dauerhaft – nur mit Grundrecht, Nr. 8)."""
+    if teil not in d:
+        return None
+    w = d[teil]
+    if w is None:
+        return "weg"
+    if not isinstance(w, dict):
+        raise Abgelehnt("Bitte als Objekt angeben – mit „bis“" + (" und „recht“." if teil == "grundrecht" else ".")
+                        + " null entzieht.")
+    if teil == "grundrecht":
+        recht = auswahl(w.get("recht", alt["permission"] if alt else None), rechte.GRUNDRECHTE, "Grundrecht")
+    else:
+        recht = "pruefen"
+    if "bis" in w:
+        bis = _bis(w.get("bis"), recht)
+    elif alt is not None:
+        bis = alt["valid_until"]
+    elif recht == "pruefen":
+        raise Abgelehnt(PRUEFEN_BIS)
+    else:
+        bis = None
+    return {"permission": recht, "valid_until": bis}
+
+
+def person_setzen(fid, uid, d):
+    """PUT /ordner/<fid>/freigaben/person/<uid> – der Dialog „Rechte ändern“ (02.11.2026): alle Rechte einer Person an
+    einem Ordner in EINER Transaktion, alles oder nichts. Felder (jedes optional, fehlt = unberührt):
+      grundrecht  {"recht": „lesen“|„verwalten“, "bis": ISO|null} oder null (entziehen)
+      pruefen     {"bis": ISO|null} (null = dauerhaft) oder null (entziehen)
+      notiz       gilt für jedes mitgeschickte Recht, das danach besteht – ohne grundrecht und pruefen für alle
+                  vorhandenen Rechte der Person an diesem Ordner.
+    Zuerst das Grundrecht, dann die Prüffreigabe, je über _schreiben mit den Regeln je Recht (Nr. 3, 4, 5, 8, 12, eine
+    dauerhafte Prüffreigabe zählt das Grundrecht aus derselben Anfrage mit), danach Nr. 7. Unveränderte Rechte werden
+    weder geprüft noch geschrieben, ein nicht vorhandenes zu entziehen ist nichts zu tun. Eine Ablehnung nennt das Recht
+    („„Grundrecht“: …“, „„Prüffreigabe“: …“) und rollt alles zurück. Hat die Person hier noch nichts oder entsteht eine
+    neue Zeile, muss das Konto wählbar sein wie beim Erteilen (404 für unbekannte, deaktivierte und namenlose, 409 ohne
+    Zugang zum Modul); kürzen, herabsetzen, die Notiz und entziehen gehen sonst immer (Nr. 12). Kennungen bleiben
+    (UPDATE), damit auch Erinnerungslog und Mails. Liefert {"ids": geschriebene Zeilen, die es noch gibt,
+    "offene_entwuerfe": wie bei entziehen – gerechnet, wenn ein Recht wegfiel oder kürzer wurde}."""
+    ich, s = current_user(), rechte.sicht()
+    ordner = _ordner_alle()
+    _anker_pruefen(fid, ordner)
+    uid = kennung(uid, "Konto")
+    if not any(k in d for k in ("grundrecht", "pruefen", "notiz")):
+        raise Abgelehnt(NICHTS_ZU_AENDERN)
+    vorhanden = {}
+    for r in db.query("SELECT * FROM mat_folder_grant WHERE folder_id = ? AND user_id = ?", (fid, uid)):
+        vorhanden["pruefen" if r["permission"] == "pruefen" else "grundrecht"] = r
+    wunsch = {t: _mit_vorsatz(t, _person_wunsch, d, t, vorhanden.get(t)) for t in PERSON_TEILE}
+    notiz = _notiz(d) if "notiz" in d else None
+    nur_notiz = all(w is None for w in wunsch.values())
+    if not vorhanden or any(isinstance(w, dict) and t not in vorhanden for t, w in wunsch.items()):
+        konto = rechte.waehlbares_konto(uid, modulzugang=True)
+    else:
+        konto = _konto(uid)
+    ids, weniger = [], False
+    with db.transaction(sofort=True):
+        verwalten = (vorhanden.get("grundrecht") or {}).get("permission") == "verwalten" or (
+            isinstance(wunsch["grundrecht"], dict) and wunsch["grundrecht"]["permission"] == "verwalten")
+        vorher = _verwaltung_vorher(s, fid, ordner, noetig=verwalten)
+        for teil in PERSON_TEILE:                       # zuerst das Grundrecht – es trägt eine dauerhafte Prüffreigabe
+            alt, w = vorhanden.get(teil), wunsch[teil]
+            if w is None and not (nur_notiz and alt is not None and notiz is not None):
+                continue
+            if w == "weg":
+                if alt is not None:
+                    ids.append(_mit_vorsatz(teil, _schreiben, s, ich, fid, alt, None, konto))
+                    weniger = True
+                continue
+            neu = dict(w or {"permission": alt["permission"], "valid_until": alt["valid_until"]}, user_id=uid,
+                       note=notiz if notiz is not None else (alt["note"] if alt else ""))
+            if alt is not None and all(neu[k] == alt[k] for k in ("permission", "valid_until", "note")):
+                continue
+            ids.append(_mit_vorsatz(teil, _schreiben, s, ich, fid, alt, neu, konto))
+            weniger = weniger or (alt is not None and _spaeter(alt["valid_until"], neu["valid_until"]))
+        _mit_vorsatz("grundrecht", _verwaltung_danach, vorher)
+    rechte.sicht_verwerfen()
+    return {"ids": [gid for gid in ids if zeile(gid)],
+            "offene_entwuerfe": _offene_entwuerfe(uid, fid, ordner) if weniger else 0}
 
 
 def verlaengern(fid, d):

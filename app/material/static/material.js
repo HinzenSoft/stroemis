@@ -200,6 +200,15 @@
     target="_blank" rel="noopener" data-web="${esc(web)}" data-titel="${esc(titel || "")}"${gruppe ? ` data-gruppe="${esc(gruppe)}"` : ""}
     aria-label="${esc(label || (titel ? `Foto groß zeigen: ${titel}` : "Foto groß zeigen"))}">${bildHtml}</a>`;
 
+  /* Seitenkopf eines Ordners: Überschrift und Knopfzeile (inhalt). Hat der Ordner ein Foto, steht es links neben beiden
+     (Wunsch des Nutzers vom 02.11.2026) – 96 px, am Telefon 64 px (material.css, .mat-mit-bild), Klick oder Tippen
+     zeigt es groß. Das Bild steht außerhalb der Überschrift (die bleibt der Name, wie der Seitentitel). Ohne Foto wie
+     jeder Seitenkopf. */
+  const ordnerKopf = (d, inhalt) => (d.foto
+    ? `<div class="page-head mat-mit-bild">${bildLink(d.foto, d.original, `Ordnerfoto ${d.name}`, null, `<img class="mat-ordnerfoto" src="${esc(d.vorschau)}" alt="">`)}
+        <div class="mat-ordnertitel">${inhalt}</div></div>`
+    : `<div class="page-head">${inhalt}</div>`);
+
   function bildZeigen(link) {
     const gruppe = link.dataset.gruppe;
     const liste = gruppe ? $$(`a.mat-bildlink[data-gruppe="${CSS.escape(gruppe)}"]`) : [link];
@@ -2585,16 +2594,16 @@
         : "Ausgesonderte Artikel bleiben hier mit ihrem vollen Lebenslauf sichtbar, zählen aber nirgends mehr als Bestand und lassen sich nicht zurückholen.";
       seitenTitel(d.name);
       inhalt.innerHTML = `<div class="mat-pfad">${pfadHtml(['<a href="/materialablage/bestand">Bestand</a>', ...bc])}</div>
-        <div class="page-head"><h1>${schloss(d)}${esc(d.name)} ${system ? "" : `<span class="mat-art">${esc(ORDNERART[d.kind])}</span>`}${demoMarke(d.demo)}${anleitungKopf(system ? "ordner_system" : "ordner")}</h1>
+        ${ordnerKopf(d, `<h1>${schloss(d)}${esc(d.name)} ${system ? "" : `<span class="mat-art">${esc(ORDNERART[d.kind])}</span>`}${demoMarke(d.demo)}${anleitungKopf(system ? "ordner_system" : "ordner")}</h1>
           <div class="btn-row">${darfPflegen ? `<button class="btn secondary small" data-act="unterordner"><span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Unterordner<span class="k-anlegen"> anlegen</span></span></button>
             <a class="btn secondary small" href="/materialablage/artikel/neu?ordner=${d.id}"><span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Artikel<span class="k-anlegen"> anlegen</span></span></a>
             ${darfOben ? bearbeitenMenue : '<button class="btn secondary small" data-act="bearbeiten">Bearbeiten</button>'}` : ""}
-            ${darf.grund ? exportMenue(d, darfPflegen) : ""}</div></div>
+            ${darf.grund ? exportMenue(d, darfPflegen) : ""}</div>`)}
         ${darfPflegen ? '<div id="mat-freigaben-kopf"></div>' : ""}
         ${darfPflegen && d.nacharbeit ? `<p class="notice small">Aus einem Bestandsimport ${d.nacharbeit === 1 ? "wartet 1 Zeile" : `warten ${d.nacharbeit} Zeilen`} auf Nacharbeit.
           <a href="/materialablage/ordner/${d.id}/import#bi-nacharbeit">Nacharbeit öffnen</a></p>` : ""}
         ${system ? `<p class="notice">${systemText}${d.teilweise ? " Du siehst hier nur deine Artikel – die Gliederung selbst gehört nicht zu deinem Bereich." : ""}</p>` : ""}
-        ${d.foto || d.description || d.interval_months || erinnerungAus ? `<div class="mat-ordnerkopf">${d.foto ? bildLink(d.foto, d.original, `Ordnerfoto ${d.name}`, null, `<img class="mat-ordnerfoto" src="${esc(d.vorschau)}" alt="">`) : ""}
+        ${d.description || d.interval_months || erinnerungAus ? `<div class="mat-ordnerkopf">
           <div>${d.description ? `<p class="mat-text">${esc(d.description)}</p>` : ""}
           ${d.interval_months ? `<p class="small">Prüfintervall hier: höchstens ${d.interval_months} Monate.</p>` : ""}
           ${erinnerungAus ? `<p class="small">Erinnerungsmails aus${geerbtVon ? ` – geerbt von ${geerbtVon.sichtbar ? `<a href="/materialablage/ordner/${geerbtVon.id}">${esc(geerbtVon.pfad)}</a>` : esc(geerbtVon.pfad)}` : ""}</p>` : ""}</div></div>` : ""}

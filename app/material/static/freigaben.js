@@ -1,7 +1,10 @@
 /* Freigaben je Ordner (Phase 2 · Lieferung 1, Abschnitt 4.2): der Reiter „Freigaben“ im Dialog „Ordner bearbeiten“ mit
    Vorlagen (Führungskraft, Materialwart, Prüfer, Externer Prüfer …), den Listen „Hier vergeben“, „Geerbt von oben“,
    „In Unterordnern“ und „Verlauf“, dem Knopf „Alle Prüffreigaben verlängern“ – dazu der Hinweis „Meine
-   Freigaben“ auf der Übersicht. Stellt window.MatFreigaben bereit:
+   Freigaben“ auf der Übersicht. Seit dem 02.11.2026 (Wunsch des Nutzers) eine Zeile je Person in allen drei Listen
+   (geerbt und unten je Person und Ordner) mit EINEM „Ändern“ – Dialog „Rechte ändern“ für Grundrecht, Prüffreigabe
+   und Notiz, gespeichert in einer Transaktion (PUT …/freigaben/person/<konto>) – und „Entziehen“ für alle Rechte der
+   Person dort; Verlauf, „Meine Freigaben“ und die Leitstelle bleiben je Freigabe. Stellt window.MatFreigaben bereit:
      inhalt(element, ordner, optionen?)  füllt element (den Reiter) mit Hinweis, „Freigabe anlegen“ und den Listen; Dialog,
                                 Reiter und Knopfzeile („Schließen“) gehören material.js. ordner: das Objekt der
                                 Ordneransicht (oder seine Kennung). optionen:
@@ -117,39 +120,76 @@
       ${k.aktiv === false ? ' <span class="badge grey">deaktiviert</span>' : ""}`;
   }
 
+  /* Eine Zeile je Person (Wunsch des Nutzers vom 02.11.2026): Die Antwort des Servers hat je Recht eine Zeile – hier
+     werden sie je Person UND Anker-Ordner zusammengefasst (Schlüssel „ordner:konto“). Eine Person hat an einem Ordner
+     höchstens ein Grundrecht und eine Prüffreigabe; das Grundrecht steht zuerst. In „Hier vergeben“ ist das eine Zeile
+     je Person, in „Geerbt von oben“ und „In Unterordnern“ eine je Person und Ordner. */
+  function personen(liste) {
+    const je = new Map();
+    liste.forEach((f) => {
+      const k = `${f.ordner.id}:${f.konto.id}`;
+      if (!je.has(k)) je.set(k, { k, ordner: f.ordner, konto: f.konto, eigen: f.eigen, rechte: [] });
+      je.get(k).rechte.push(f);
+    });
+    return Array.from(je.values()).map((p) => {
+      p.rechte.sort((a, b) => (a.recht === "pruefen") - (b.recht === "pruefen"));
+      p.grund = p.rechte.find((f) => f.recht !== "pruefen") || null;
+      p.pruef = p.rechte.find((f) => f.recht === "pruefen") || null;
+      return p;
+    });
+  }
+  // „verwalten (dauerhaft)“, „prüfen (bis 31.12.2027)“
+  const rechtText = (f) => `${RECHT[f.recht] || f.recht} (${f.bis ? `bis ${fmtTag(f.bis)}` : "dauerhaft"})`;
+  const rechteText = (p) => p.rechte.map(rechtText).join(", ");
+  // „Entziehen“ in der Zeile nimmt alle Rechte – nur, wenn jedes davon gelingt (änderbar, Nr. 7 vorab gerechnet).
+  const ganzEntziehbar = (p) => p.rechte.every((f) => f.aenderbar && f.entziehbar !== false);
+
   // art: „direkt“ (hier vergeben), „geerbt“ (von oben, nur lesbar), „unten“ (in Unterordnern, mit Pfad).
-  function zeileHtml(f, art) {
-    // Ohne Zugang zum Modul sagt der Zustand den Grund – die Marke nur, wenn allein die Qualifikation fehlt.
-    const quali = f.recht === "pruefen" && f.konto.zugang !== false && !f.konto.qualifiziert ? ' <span class="badge">Qualifikation fehlt</span>' : "";
-    const ordner = art === "geerbt" ? `<div class="small muted">geerbt von ${esc(f.ordner.pfad)}</div>`
-      : art === "unten" ? `<div class="small muted">${esc(f.ordner.pfad)}</div>` : "";
+  function zeileHtml(p, art) {
+    const ordner = art === "geerbt" ? `<div class="small muted">geerbt von ${esc(p.ordner.pfad)}</div>`
+      : art === "unten" ? `<div class="small muted">${esc(p.ordner.pfad)}</div>` : "";
+    // Je Recht eine Textzeile mit seiner Zustandsmarke. Ohne Zugang zum Modul sagt der Zustand den Grund – die Marke
+    // „Qualifikation fehlt“ nur, wenn allein die Qualifikation fehlt.
+    const rechte = p.rechte.map((f) => `<div class="mf-recht"><span>${esc(rechtText(f))}</span> ${zustand(f)}${
+      f.recht === "pruefen" && f.konto.zugang !== false && !f.konto.qualifiziert ? ' <span class="badge">Qualifikation fehlt</span>' : ""}</div>`).join("");
+    // Notiz einmal; weichen die beiden ab (Altbestand), beide mit dem Recht davor.
+    const notizen = p.rechte.filter((f) => "notiz" in f);
+    const verschieden = notizen.length > 1 && notizen[0].notiz !== notizen[1].notiz;
+    const notiz = verschieden
+      ? notizen.map((f) => `<div><span class="muted">${esc(RECHT[f.recht] || f.recht)}:</span> ${f.notiz ? esc(f.notiz) : "–"}</div>`).join("")
+      : (notizen.length && notizen[0].notiz ? esc(notizen[0].notiz) : '<span class="muted">–</span>');
+    // Vergeben einmal, wenn beide Rechte von derselben Person am selben Tag stammen, sonst je Recht.
+    const vonText = (f) => `${esc(f.vergeben_von || "")}${f.seit ? ` am ${esc(S.fmtDate(f.seit))}` : ""}`;
+    const einmal = p.rechte.every((f) => vonText(f) === vonText(p.rechte[0]));
+    const vergeben = einmal ? vonText(p.rechte[0])
+      : p.rechte.map((f) => `<div><span class="muted">${esc(RECHT[f.recht] || f.recht)}:</span> ${vonText(f)}</div>`).join("");
     let knoepfe = "";
+    let nurVerwaltung = "";
     if (art === "geerbt") {
       // Geerbtes ändert man dort, wo es vergeben ist – wer jenen Ordner verwaltet, springt hin.
-      if (f.aenderbar) knoepfe = `<button class="btn secondary small" type="button" data-act="dort" data-ordner="${f.ordner.id}">Dort öffnen</button>`;
-    } else if (f.aenderbar) {
-      // „Entziehen“ nur, wenn es gelingt: Die eigene Verwalterfreigabe bleibt, solange sonst niemand die Gliederung so
-      // lange verwaltet (1.6 Nr. 7) – dann steht statt des Knopfs, wer helfen kann.
-      knoepfe = `<button class="btn secondary small" type="button" data-act="aendern" data-id="${f.id}">Ändern</button>
-        ${f.entziehbar === false ? "" : `<button class="btn secondary small" type="button" data-act="entziehen" data-id="${f.id}">Entziehen</button>`}`;
+      if (p.rechte.some((f) => f.aenderbar)) knoepfe = `<button class="btn secondary small" type="button" data-act="dort" data-ordner="${p.ordner.id}">Dort öffnen</button>`;
+    } else if (p.rechte.some((f) => f.aenderbar)) {
+      // EIN „Ändern“ für alle Rechte der Person. „Entziehen“ nur, wenn es gelingt: Die eigene Verwalterfreigabe bleibt,
+      // solange sonst niemand die Gliederung so lange verwaltet (1.6 Nr. 7) – dann steht statt des Knopfs, wer helfen kann.
+      knoepfe = `<button class="btn secondary small" type="button" data-act="aendern" data-person="${p.k}">Ändern</button>
+        ${ganzEntziehbar(p) ? `<button class="btn secondary small" type="button" data-act="entziehen" data-person="${p.k}">Entziehen</button>` : ""}`;
+      if (p.rechte.some((f) => f.aenderbar && f.entziehbar === false)) {
+        nurVerwaltung = '<div class="small muted mf-nur-pv">Entziehen nur über die Material-Verwaltung – sonst verwaltet hier niemand so lange wie du.</div>';
+      }
     }
-    const nurVerwaltung = art !== "geerbt" && f.aenderbar && f.entziehbar === false
-      ? '<div class="small muted mf-nur-pv">Entziehen nur über die Material-Verwaltung – sonst verwaltet hier niemand so lange wie du.</div>' : "";
-    return `<tr data-zeile="${f.id}"${f.gueltig ? "" : ' class="mf-alt"'}>
-      <td data-l="Person" class="mf-k-person">${personHtml(f.konto)}${f.eigen ? ' <span class="badge grey">du</span>' : ""}${quali}${ordner}</td>
-      <td data-l="Recht" class="mf-k-halb">${esc(RECHT[f.recht] || f.recht)}</td>
-      <td data-l="bis" class="mf-k-halb">${bisText(f.bis)}</td>
-      <td data-l="Zustand">${zustand(f)}</td>
-      ${art === "geerbt" ? "" : `<td data-l="Notiz" class="mf-notiztext">${f.notiz ? esc(f.notiz) : '<span class="muted">–</span>'}</td>`}
-      <td data-l="Vergeben" class="small">${esc(f.vergeben_von || "")}${f.seit ? ` am ${esc(S.fmtDate(f.seit))}` : ""}</td>
+    return `<tr data-person="${p.k}"${p.rechte.every((f) => !f.gueltig) ? ' class="mf-alt"' : ""}>
+      <td data-l="Person" class="mf-k-person">${personHtml(p.konto)}${p.eigen ? ' <span class="badge grey">du</span>' : ""}${ordner}</td>
+      <td data-l="Rechte" class="mf-rechte">${rechte}</td>
+      ${art === "geerbt" ? "" : `<td data-l="Notiz" class="mf-notiztext">${notiz}</td>`}
+      <td data-l="Vergeben" class="small">${vergeben}</td>
       <td class="tabelle-aktionen"><div class="btn-row">${knoepfe}</div>${nurVerwaltung}</td></tr>`;
   }
 
   function tabelleHtml(liste, art, leerText) {
     if (!liste.length) return `<p class="leerzustand">${esc(leerText)}</p>`;
-    return `<table class="list mf-tabelle"><thead><tr><th>Person</th><th>Recht</th><th>bis</th><th>Zustand</th>
+    return `<table class="list mf-tabelle"><thead><tr><th>Person</th><th>Rechte</th>
       ${art === "geerbt" ? "" : "<th>Notiz</th>"}<th>Vergeben</th><th></th></tr></thead>
-      <tbody>${liste.map((f) => zeileHtml(f, art)).join("")}</tbody></table>`;
+      <tbody>${liste.map((p) => zeileHtml(p, art)).join("")}</tbody></table>`;
   }
 
   function verlaufHtml(liste) {
@@ -174,16 +214,22 @@
   function listenHtml(d) {
     // Verlängern betrifft nur befristete – dauerhafte laufen nicht ab.
     const pruefzeilen = d.direkt.concat(d.unten).filter((f) => f.recht === "pruefen" && f.bis && f.aenderbar);
+    // Die Zahl im Kopf zählt Zeilen, also Personen; der Ablaufhinweis zählt weiter Freigaben (einzelne Enddaten).
+    const direkt = personen(d.direkt);
+    const geerbt = personen(d.geerbt);
+    const unten = personen(d.unten);
     return `${d.laeuft_ab ? `<p class="notice mf-ablauf">${plural(d.laeuft_ab, "Freigabe läuft", "Freigaben laufen")} in den nächsten 30 Tagen ab.</p>` : ""}
-      <details class="mf-teil" open><summary>Hier vergeben <span class="mf-zahl">${d.direkt.length}</span></summary>
+      <details class="mf-teil" open><summary>Hier vergeben <span class="mf-zahl">${direkt.length}</span></summary>
         ${pruefzeilen.length ? '<div class="btn-row mf-verl-reihe"><button class="btn secondary small" type="button" data-act="verlaengern" id="mf-verlaengern">Alle Prüffreigaben verlängern</button></div>' : ""}
-        ${tabelleHtml(d.direkt, "direkt", "An diesem Ordner selbst ist nichts vergeben.")}</details>
-      <details class="mf-teil"><summary>Geerbt von oben <span class="mf-zahl">${d.geerbt.length}</span>${info("Geerbt von oben", "Freigaben an Oberordnern gelten auch hier. Ändern lassen sie sich nur dort, wo sie vergeben sind.")}</summary>
-        ${tabelleHtml(d.geerbt, "geerbt", "Nichts geerbt.")}</details>
-      <details class="mf-teil"><summary>In Unterordnern <span class="mf-zahl">${d.unten.length}</span></summary>
-        ${tabelleHtml(d.unten, "unten", "In den Unterordnern ist nichts eigens vergeben.")}</details>
+        ${tabelleHtml(direkt, "direkt", "An diesem Ordner selbst ist nichts vergeben.")}</details>
+      <details class="mf-teil"><summary>Geerbt von oben <span class="mf-zahl">${geerbt.length}</span>${info("Geerbt von oben", "Freigaben an Oberordnern gelten auch hier. Ändern lassen sie sich nur dort, wo sie vergeben sind.")}</summary>
+        ${tabelleHtml(geerbt, "geerbt", "Nichts geerbt.")}</details>
+      <details class="mf-teil"><summary>In Unterordnern <span class="mf-zahl">${unten.length}</span></summary>
+        ${tabelleHtml(unten, "unten", "In den Unterordnern ist nichts eigens vergeben.")}</details>
       <details class="mf-teil"><summary>Verlauf</summary>${verlaufHtml(d.verlauf)}</details>`;
   }
+  // Die Person zum Schlüssel „ordner:konto“ aus allen drei Listen.
+  const personZu = (d, k) => personen(d.direkt.concat(d.geerbt, d.unten)).find((p) => p.k === k) || null;
 
   /* --- „Freigabe anlegen“ ------------------------------------------------------------------------------------------ */
   function formHtml(d) {
@@ -199,6 +245,7 @@
       <label for="mf-anker">Gilt für${info("Gilt für", `Freigaben für „${esc(d.ordner.pfad)}“ gelten dort und in allen Unterordnern, bis einschließlich zum letzten Tag. Rechte addieren sich; weiter unten lässt sich nichts entziehen.${mehrDazu("freigaben")}`)}</label>
       <select id="mf-anker">${d.anker_wahl.map((a) => `<option value="${a.id}"${a.id === d.anker_vorgabe ? " selected" : ""}>${esc(a.pfad)}</option>`).join("")}</select>
       <div class="help">… und alle Ordner darunter.</div>
+      <p class="notice mf-schon" id="mf-schon" hidden></p>
       <fieldset class="mf-vorlagen"><legend>Vorlage</legend>
         ${VORLAGEN.map((v) => `<label class="mf-vorlage"><input type="radio" name="mf-vorlage" value="${v.k}">
           <span><strong>${esc(v.t)}</strong><span class="small">${esc(v.text)}</span></span></label>`).join("")}
@@ -260,8 +307,25 @@
         && f.gueltig && oben.has(f.ordner.id));
     }
 
+    // Hat die gewählte Person am gewählten Anker schon Rechte, sagt es der Satz über den Vorlagen – mit „Rechte ändern“
+    // (Dialog der Person). „Freigabe erteilen“ bleibt möglich und ändert wie bisher die vorhandene Zeile derselben Art.
+    // Neu gezeichnet nur, wenn sich der Satz ändert – sonst verlöre ein fokussiertes „Rechte ändern“ den Fokus.
+    function schonZeigen() {
+      const el = feld("mf-schon");
+      const p = person ? personZu(stand.daten, `${anker().id}:${person.id}`) : null;
+      const html = p ? `${esc(p.konto.name)} hat hier schon: ${esc(rechteText(p))}.${p.rechte.some((f) => f.aenderbar)
+        ? ' <button class="lnk" type="button" data-act="person-dialog">Rechte ändern</button>' : ""}` : "";
+      el.hidden = !p;
+      if (el.dataset.stand === html) return;
+      el.dataset.stand = html;
+      el.innerHTML = html;
+      const b = $("button", el);
+      if (b) b.addEventListener("click", () => { const q = personZu(stand.daten, p.k); if (q) personDialog(q, stand, nachher); });
+    }
+
     function zeigen() {
       const a = anker();
+      schonZeigen();
       const quali = !person || person.qualifiziert;
       $$('input[name="mf-vorlage"]', body).forEach((r) => {
         const v = VORLAGEN.find((x) => x.k === r.value);
@@ -417,71 +481,199 @@
       : `Daran hängen ${f.traegt_pruefen} dauerhafte Prüffreigaben von ${f.konto.name} – ohne dieses Grundrecht wirken sie nicht mehr.`)
     : "");
 
-  /* --- Ändern, Entziehen, Verlängern ------------------------------------------------------------------------- */
-  function aendernDialog(f, stand, nachher) {
-    const anker = stand.daten.anker_wahl.find((a) => a.id === f.ordner.id);
+  /* --- „Rechte ändern“, Entziehen, Verlängern -----------------------------------------------------------------
+     Der Dialog bearbeitet alle Rechte einer Person an einem Ordner (Grundrecht und Prüffreigabe) und speichert sie über
+     PUT …/ordner/<anker>/freigaben/person/<konto> in EINER Transaktion – alles oder nichts. Lehnt der Server ab,
+     bleibt der Dialog mit allen Eingaben offen; die Meldung beginnt mit „„Grundrecht“: “ bzw. „„Prüffreigabe“: “ und
+     steht am Feld dieses Rechts. Ein Recht, das man nicht ändern darf (reicht weiter als das eigene Verwalten, Nr. 4),
+     steht nur als Text da und wird nicht mitgeschickt. */
+  const EIGENE_NEU = "Dir selbst vergibst du keine Prüffreigabe – das macht ein anderer Verwalter oder die Material-Verwaltung.";
+  const NUR_PV = "Entziehen nur über die Material-Verwaltung – sonst verwaltet hier niemand so lange wie du.";
+  const sichtbar = (el) => !!el && el.getClientRects().length > 0;
+
+  // Hat das Konto über dem Anker ein gültiges Grundrecht (oder ist es Material-Verwaltung)? Dann darf eine Prüffreigabe
+  // auch ohne Grundrecht hier dauerhaft sein. Aus den Listen geschätzt – verbindlich entscheidet der Server.
+  function grundrechtOben(p, d) {
+    if (p.pruef && p.pruef.grundrecht_dort && !p.grund) return true;
+    const oben = p.ordner.id === d.ordner.id ? d.geerbt : d.direkt.concat(d.geerbt);
+    return oben.some((f) => f.konto.id === p.konto.id && f.recht !== "pruefen" && f.gueltig && f.ordner.id !== p.ordner.id);
+  }
+  // Hinweis nach dem Speichern: offene Prüfungen, die die Person nicht mehr fortsetzen darf.
+  const offenHinweis = (r, p) => (r.offene_entwuerfe ? `${plural(r.offene_entwuerfe, "offene Prüfung", "offene Prüfungen")} von ${esc(p.konto.name)} – unter
+    <a href="/materialablage/pruefungen">Prüfungen</a> → „Offene Prüfungen“ mit „Reservierung aufheben“.` : "");
+
+  function personDialog(p, stand, nachher) {
+    const d = stand.daten;
+    const g = p.grund;
+    const pf = p.pruef;
+    const anker = d.anker_wahl.find((a) => a.id === p.ordner.id);
     // Das eigene Ende am Anker – für Zeilen in Unterordnern das an diesem Ordner (dort gilt mindestens dasselbe).
-    const ende = (anker || stand.daten.anker_wahl[0] || {}).ende;
-    const grund = f.recht !== "pruefen";
-    // Dauerhaft nur, wer selbst dauerhaft verwaltet (die eigene Zeile nur, wenn sie es schon ist); eine Prüffreigabe
-    // dazu nur, wo die Person am Anker ein Grundrecht hat – eine schon dauerhafte lässt sich hier auf ein Datum setzen.
-    const dauerhaftGeht = (ende === null || ende === undefined) && (!f.eigen || f.bis === null)
-      && (grund || f.grundrecht_dort || f.bis === null);
-    const pruefHilfe = `Spätestens ${fmtTag(frueher(stand.daten.grenzen.pruefen_max, ende))} – höchstens 24 Monate.`;
-    unterDialog(`<h2>Freigabe ändern</h2>
-      <p>${personHtml(f.konto)} · ${esc(f.ordner.pfad)}</p>
-      ${f.eigen ? '<p class="help">Deine eigene Freigabe kannst du nur verkürzen, herabsetzen oder entziehen.</p>' : ""}
-      <label for="mfa-recht">Recht</label>
-      <select id="mfa-recht">${(grund ? ["lesen", "verwalten"] : ["pruefen"]).map((r) => `<option value="${r}"${r === f.recht ? " selected" : ""}>${RECHT[r]}</option>`).join("")}</select>
-      <label for="mfa-bis">bis</label>
-      ${dauerhaftGeht ? `<label class="inline"><input type="checkbox" id="mfa-dauerhaft"${f.bis === null ? " checked" : ""}> dauerhaft</label>` : ""}
-      ${datumFeld("mfa-bis", f.bis || (grund ? "" : stand.daten.grenzen.vorgabe_bis), "bis")}
-      ${grund ? (f.traegt_pruefen ? `<div class="help">${esc(traegtText(f))}</div>` : "") : `<div class="help" id="mfa-hilfe">${esc(pruefHilfe)}</div>`}
-      ${!grund && f.bis === null && f.grundrecht_dort === false ? `<p class="help">${esc(OHNE_GRUNDRECHT)}</p>` : ""}
-      ${"notiz" in f ? `<label for="mfa-notiz">Notiz</label><input type="text" id="mfa-notiz" maxlength="200" value="${esc(f.notiz || "")}">
-        <div class="help">Sehen nur Verwalter dieses Ordners und die Material-Verwaltung – die Person selbst nur, wenn sie hier
+    const ende = (anker || d.anker_wahl[0] || {}).ende;
+    const selbstDauerhaft = ende === null || ende === undefined;
+    const pruefenEnde = frueher(frueher(d.grenzen.vorgabe_bis, d.grenzen.pruefen_max), ende);
+    const grundFrei = !g || g.aenderbar;
+    const pruefFrei = !pf || pf.aenderbar;
+    const fest = (f) => `<p class="mfp-fest"><strong>${esc(rechtText(f))}</strong> – ändern kann es nur, wer mindestens so lange verwaltet, oder die Material-Verwaltung.</p>`;
+    // Grundrecht: Die eigene Zeile nur herabsetzen (verwalten → lesen) oder entziehen, neu gibt es für sich selbst keins.
+    // „–“ fehlt, wenn das Entziehen an Nr. 7 scheitert (eigene letzte Verwalterfreigabe).
+    let grundHtml;
+    if (!grundFrei) {
+      grundHtml = `<p class="mfp-titel">Grundrecht</p>${fest(g)}`;
+    } else if (p.eigen && !g) {
+      grundHtml = '<p class="mfp-titel">Grundrecht</p><p class="help">Keins – ein Grundrecht vergibt dir ein anderer Verwalter oder die Material-Verwaltung.</p>';
+    } else {
+      const wahl = (p.eigen ? (g.recht === "verwalten" ? ["lesen", "verwalten"] : ["lesen"]) : ["lesen", "verwalten"]);
+      const ohne = !(g && g.entziehbar === false);
+      const grundDauerGeht = selbstDauerhaft && (!p.eigen || (g && g.bis === null));
+      grundHtml = `<label for="mfp-grund">Grundrecht</label>
+        <select id="mfp-grund">${ohne ? `<option value=""${g ? "" : " selected"}>–</option>` : ""}${wahl.map((r) => `<option value="${r}"${g && g.recht === r ? " selected" : ""}>${RECHT[r]}</option>`).join("")}</select>
+        ${ohne ? "" : `<p class="help">${esc(NUR_PV)}</p>`}
+        <div class="mfp-ende" id="mfp-grund-ende"><label for="mfp-grund-bis">Grundrecht bis</label>
+          ${grundDauerGeht ? `<label class="inline"><input type="checkbox" id="mfp-grund-dauerhaft"${!g || g.bis === null ? " checked" : ""}> dauerhaft</label>` : ""}
+          ${datumFeld("mfp-grund-bis", g && g.bis ? g.bis : (selbstDauerhaft ? pruefenEnde : ende), "Grundrecht bis")}
+          ${selbstDauerhaft ? "" : `<div class="help">Du verwaltest hier bis ${fmtTag(ende)} – länger vergibst du nichts.</div>`}</div>
+        <p class="help" id="mfp-traegt" hidden>${esc(g ? traegtText(g) : "")}</p>`;
+    }
+    // Prüffreigabe: neu nur mit Qualifikation und nicht für sich selbst (Nr. 5, 8). „dauerhaft“ nur, wer selbst
+    // dauerhaft verwaltet (die eigene nur, wenn sie es schon ist) – und nur mit Grundrecht (im Dialog gewählt, darüber
+    // vorhanden) oder wenn sie schon dauerhaft ist.
+    let pruefHtml;
+    if (!pruefFrei) {
+      pruefHtml = `<p class="mfp-titel">Prüffreigabe</p>${fest(pf)}`;
+    } else {
+      const neuGesperrt = !pf && (p.eigen || !p.konto.qualifiziert);
+      pruefHtml = `<div class="feld-gruppe"><label class="inline"><input type="checkbox" id="mfp-pruefen"${pf ? " checked" : ""}${neuGesperrt ? " disabled" : ""}> Prüffreigabe</label></div>
+        ${neuGesperrt ? `<p class="help">${esc(p.eigen ? EIGENE_NEU : OHNE_QUALIFIKATION)}</p>` : ""}
+        <div class="mfp-ende" id="mfp-pruefen-ende"><label for="mfp-pruefen-bis">Prüfen bis</label>
+          <label class="inline" id="mfp-pruefen-dauer-wahl"><input type="checkbox" id="mfp-pruefen-dauerhaft"${pf && pf.bis === null ? " checked" : ""}> dauerhaft</label>
+          ${datumFeld("mfp-pruefen-bis", pf && pf.bis ? pf.bis : pruefenEnde, "Prüfen bis")}
+          <div class="help" id="mfp-pruefen-hilfe"></div></div>
+        <p class="help" id="mfp-ohne-grund" hidden>${esc(OHNE_GRUNDRECHT)}</p>`;
+    }
+    // Die Notiz: EIN Feld für die Person an diesem Ordner, gespeichert auf jedes Recht, das man hier ändern darf.
+    const mitNotiz = p.rechte.filter((f) => "notiz" in f && f.aenderbar);
+    const notiz = g && mitNotiz.includes(g) ? g.notiz : (mitNotiz[0] || {}).notiz;
+    const abweichend = g && pf && mitNotiz.length === 2 && (g.notiz || "") !== (pf.notiz || "")
+      ? `<div class="help">${pf.notiz ? `Die Prüffreigabe hatte die Notiz „${esc(pf.notiz)}“` : "Die Prüffreigabe hatte keine Notiz"} – beim Speichern gilt diese eine Notiz für beide.</div>` : "";
+    unterDialog(`<h2>Rechte ändern</h2>
+      <p>${personHtml(p.konto)} · ${esc(p.ordner.pfad)}</p>
+      ${p.eigen ? '<p class="help">Deine eigenen Rechte kannst du nur verkürzen, herabsetzen oder entziehen.</p>' : ""}
+      <div class="mfp-teil">${grundHtml}</div>
+      <div class="mfp-teil">${pruefHtml}</div>
+      ${mitNotiz.length ? `<label for="mfp-notiz">Notiz</label><input type="text" id="mfp-notiz" maxlength="200" value="${esc(notiz || "")}">
+        ${abweichend}<div class="help">Sehen nur Verwalter dieses Ordners und die Material-Verwaltung – die Person selbst nur, wenn sie hier
           mitverwaltet. Keine sensiblen Angaben.</div>` : ""}
       <div class="dlg-actions"><button class="btn secondary" type="button" data-close>Abbrechen</button>
-        <button class="btn" type="button" id="mfa-ok">Speichern</button></div>`, (dlg, body) => {
-      const bis = $("#mfa-bis", body);
-      const dauer = $("#mfa-dauerhaft", body);
-      const hilfe = $("#mfa-hilfe", body);
-      const zeigen = () => {
-        bis.hidden = !!(dauer && dauer.checked);
-        if (hilfe) hilfe.textContent = dauer && dauer.checked ? PRUEFEN_DAUERHAFT : pruefHilfe;
-      };
-      if (dauer) dauer.addEventListener("change", zeigen);
+        <button class="btn" type="button" id="mfp-ok">Speichern</button></div>`, (dlg, body) => {
+      const feld = (id) => $("#" + id, body);
+      const grundWahl = feld("mfp-grund");
+      const grundDauer = feld("mfp-grund-dauerhaft");
+      const pruefWahl = feld("mfp-pruefen");
+      const pruefDauer = feld("mfp-pruefen-dauerhaft");
+      // Das Grundrecht nach dem Dialog: gewählt, oder unverändert, wo man es nicht ändern darf.
+      const grundDanach = () => (grundWahl ? grundWahl.value : (g ? g.recht : ""));
+      function zeigen() {
+        if (grundWahl) {
+          feld("mfp-grund-ende").hidden = !grundWahl.value;
+          feld("mfp-grund-bis").hidden = !!(grundDauer && grundDauer.checked);
+          // Was an diesem Grundrecht hängt, sagt der Dialog, sobald es wegfällt oder ein Ende bekommt.
+          feld("mfp-traegt").hidden = !(g && g.traegt_pruefen && (!grundWahl.value || !(grundDauer && grundDauer.checked)));
+        }
+        if (pruefWahl) {
+          feld("mfp-pruefen-ende").hidden = !pruefWahl.checked;
+          const dauerGeht = selbstDauerhaft && (!p.eigen || (pf && pf.bis === null))
+            && (!!grundDanach() || grundrechtOben(p, d) || (pf && pf.bis === null));
+          feld("mfp-pruefen-dauer-wahl").hidden = !dauerGeht;
+          if (!dauerGeht) pruefDauer.checked = false;
+          feld("mfp-pruefen-bis").hidden = pruefDauer.checked;
+          feld("mfp-pruefen-hilfe").textContent = pruefDauer.checked ? PRUEFEN_DAUERHAFT
+            : `Spätestens ${fmtTag(frueher(d.grenzen.pruefen_max, ende))} – höchstens 24 Monate`
+              + (selbstDauerhaft ? "." : " und nicht länger als deine eigene Verwalterfreigabe.");
+          feld("mfp-ohne-grund").hidden = !(pruefWahl.checked && pruefDauer.checked && !grundDanach() && !grundrechtOben(p, d));
+        }
+      }
+      [grundWahl, grundDauer, pruefWahl, pruefDauer].forEach((x) => { if (x) x.addEventListener("change", zeigen); });
       zeigen();
-      $("#mfa-ok", body).onclick = async (ev) => {
+
+      feld("mfp-ok").onclick = async (ev) => {
         const knopf = ev.currentTarget;
         if (knopf.disabled) return;
-        const daten = { recht: $("#mfa-recht", body).value };
+        const daten = {};
+        let datum = null;
         try {
-          daten.bis = dauer && dauer.checked ? null : datumWert(bis, "bis") || null;
-          if (daten.bis === null && !(dauer && dauer.checked)) throw new Error("Bitte ein Enddatum angeben.");
-        } catch (e) { S.feldFehler(bis, e.message); return; }
-        if ($("#mfa-notiz", body)) daten.notiz = $("#mfa-notiz", body).value.trim();
+          if (grundWahl) {
+            if (grundWahl.value) {
+              let bis = null;
+              if (!(grundDauer && grundDauer.checked)) {
+                datum = feld("mfp-grund-bis");
+                bis = datumWert(datum, "Grundrecht bis");
+                if (!bis) throw new Error(`Bitte ein Enddatum für das Grundrecht angeben${grundDauer ? " – oder „dauerhaft“" : ""}.`);
+              }
+              daten.grundrecht = { recht: grundWahl.value, bis };
+            } else if (g) daten.grundrecht = null;
+          }
+          if (pruefWahl && !pruefWahl.disabled) {
+            if (pruefWahl.checked) {
+              let bis = null;
+              if (!pruefDauer.checked) {
+                datum = feld("mfp-pruefen-bis");
+                bis = datumWert(datum, "Prüfen bis");
+                if (!bis) {
+                  throw new Error(`Bitte ein Enddatum für die Prüffreigabe angeben${feld("mfp-pruefen-dauer-wahl").hidden ? "" : " – oder „dauerhaft“"}.`);
+                }
+              }
+              daten.pruefen = { bis };
+            } else if (pf) daten.pruefen = null;
+          }
+        } catch (e) { S.feldFehler(datum, e.message); return; }
+        if (feld("mfp-notiz")) daten.notiz = feld("mfp-notiz").value.trim();
+        if (!("grundrecht" in daten) && !("pruefen" in daten)) {
+          // Nichts gewählt und nichts da: Hinweis am Grundrecht statt einer leeren Anfrage.
+          S.feldFehler(grundWahl || pruefWahl, "Bitte ein Grundrecht, eine Prüffreigabe oder beides wählen – oder „Abbrechen“.");
+          return;
+        }
+        // Fällt ein Recht weg, vorher fragen (Entziehen vernichtet nichts – neu erteilen geht jederzeit).
+        const weg = [g && daten.grundrecht === null ? g : null, pf && daten.pruefen === null ? pf : null].filter(Boolean);
+        if (weg.length) {
+          const text = `${weg.map((f) => `„${RECHT[f.recht] || f.recht}“`).join(" und ")} von ${p.konto.name} an ${p.ordner.pfad} entziehen?`
+            + (p.eigen ? " Es ist deine eigene Freigabe." : "") + (weg.includes(g) && g.traegt_pruefen ? ` ${traegtText(g)}` : "");
+          if (!(await confirm(text, "Entziehen", "", { endgueltig: false }))) return;
+        }
         knopf.disabled = true;
         try {
-          await api(`${API}/freigaben/${f.id}`, { method: "PUT", body: daten });
+          const r = await api(`${API}/ordner/${p.ordner.id}/freigaben/person/${p.konto.id}`, { method: "PUT", body: daten });
           dlg.close();
-          toast("Freigabe geändert");
+          toast(`${p.konto.name}: Rechte geändert`);
+          stand.hinweis = offenHinweis(r, p);
           await nachher();
-        } catch (e) { S.fehlschlag(knopf, e, body); }
+        } catch (e) {
+          // Die Meldung nennt das Recht – an dessen Datumsfeld (wenn sichtbar), sonst an seiner Auswahl.
+          const m = String((e && e.message) || "").match(/^„(Grundrecht|Prüffreigabe)“/);
+          const ziel = !m ? null : m[1] === "Grundrecht"
+            ? (sichtbar(feld("mfp-grund-bis")) ? feld("mfp-grund-bis") : grundWahl)
+            : (sichtbar(feld("mfp-pruefen-bis")) ? feld("mfp-pruefen-bis") : pruefWahl);
+          S.fehlschlag(knopf, e, ziel || body);
+        }
       };
     });
   }
 
-  async function entziehen(f, stand, nachher) {
-    const text = `Freigabe „${RECHT[f.recht] || f.recht}“ von ${f.konto.name} an ${f.ordner.pfad} entziehen?`
-      + (f.eigen ? " Es ist deine eigene." : "") + (f.traegt_pruefen ? ` ${traegtText(f)}` : "");
+  // „Entziehen“ in der Personenzeile: alle Rechte der Person an diesem Ordner, nach einer Rückfrage, die sie nennt.
+  async function personEntziehen(p, stand, nachher) {
+    // Was am Grundrecht hängt, ohne die Prüffreigabe hier – die geht mit.
+    const traegt = p.grund ? Object.assign({}, p.grund, { traegt_pruefen: p.grund.traegt_pruefen - (p.pruef && p.pruef.bis === null ? 1 : 0) }) : null;
+    const text = `${p.rechte.map((f) => `„${RECHT[f.recht] || f.recht}“`).join(" und ")} von ${p.konto.name} an ${p.ordner.pfad} entziehen?`
+      + (p.eigen ? ` ${p.rechte.length > 1 ? "Es sind deine eigenen Rechte." : "Es ist deine eigene Freigabe."}` : "")
+      + (traegt && traegt.traegt_pruefen > 0 ? ` ${traegtText(traegt)}` : "");
     // Entziehen löscht nichts Unwiederbringliches – neu erteilen geht jederzeit (A4: Rückfrage ohne „Endgültig“).
     if (!(await confirm(text, "Entziehen", "", { endgueltig: false }))) return;
+    const daten = {};
+    if (p.grund) daten.grundrecht = null;
+    if (p.pruef) daten.pruefen = null;
     try {
-      const r = await api(`${API}/freigaben/${f.id}`, { method: "DELETE" });
-      stand.hinweis = r.offene_entwuerfe ? `${plural(r.offene_entwuerfe, "offene Prüfung", "offene Prüfungen")} von ${esc(f.konto.name)} – unter
-        <a href="/materialablage/pruefungen">Prüfungen</a> → „Offene Prüfungen“ mit „Reservierung aufheben“.` : "";
-      toast("Freigabe entzogen");
+      const r = await api(`${API}/ordner/${p.ordner.id}/freigaben/person/${p.konto.id}`, { method: "PUT", body: daten });
+      stand.hinweis = offenHinweis(r, p);
+      toast(`${p.konto.name}: ${p.rechte.length > 1 ? "Rechte" : "Freigabe"} entzogen`);
       await nachher();
     } catch (e) { toast(e.message, true); }
   }
@@ -548,16 +740,17 @@
       const offen = $$("details.mf-teil", $("#mf-listen", el)).map((x) => x.open);
       $("#mf-listen", el).innerHTML = listenHtml(stand.daten);
       $$("details.mf-teil", $("#mf-listen", el)).forEach((x, i) => { if (offen[i] !== undefined) x.open = offen[i]; });
+      form.zeigen();                        // „… hat hier schon: …“ nach dem neuen Stand
     }
 
-    formVerdrahten(el, stand, neuLaden);
+    const form = formVerdrahten(el, stand, neuLaden);
     $("#mf-listen", el).addEventListener("click", (e) => {
       const b = e.target.closest("button[data-act]");
       if (!b) return;
-      const alle = stand.daten.direkt.concat(stand.daten.geerbt, stand.daten.unten);
-      const f = alle.find((x) => x.id === +b.dataset.id);
-      if (b.dataset.act === "aendern" && f) aendernDialog(f, stand, neuLaden);
-      else if (b.dataset.act === "entziehen" && f) entziehen(f, stand, neuLaden);
+      // Ändern und Entziehen betreffen die Person (Schlüssel „ordner:konto“), nicht eine einzelne Freigabe.
+      const p = b.dataset.person ? personZu(stand.daten, b.dataset.person) : null;
+      if (b.dataset.act === "aendern" && p) personDialog(p, stand, neuLaden);
+      else if (b.dataset.act === "entziehen" && p) personEntziehen(p, stand, neuLaden);
       else if (b.dataset.act === "verlaengern") verlaengernDialog(stand, neuLaden);
       else if (b.dataset.act === "dort") dort(+b.dataset.ordner);
     });
@@ -567,8 +760,8 @@
 
   /* „Verlängern“ aus dem Ablaufhinweis im Ordnerkopf. Er zählt alles, was hier und in Unterordnern in 30 Tagen
      abläuft – auch Grundrechte, die „Alle Prüffreigaben verlängern“ nicht betrifft. Läuft eine befristete
-     Prüffreigabe ab, die man ändern darf, geht es zu diesem Knopf; sonst zur ersten ablaufenden Zeile (ihr Abschnitt
-     geht auf, der Fokus auf ihr „Ändern“). Läuft inzwischen nichts mehr ab, zum Knopf, sonst wie ohne Vorlage. */
+     Prüffreigabe ab, die man ändern darf, geht es zu diesem Knopf; sonst zur Personenzeile mit der ersten ablaufenden
+     Freigabe (ihr Abschnitt geht auf, der Fokus auf ihr „Ändern“). Läuft inzwischen nichts mehr ab, zum Knopf, sonst wie ohne Vorlage. */
   function zumAblauf(el, d, mitFokus) {
     const bald = (f) => f.laeuft_ab_in_tagen !== null && f.laeuft_ab_in_tagen !== undefined;
     const knopf = $("#mf-verlaengern", el);
@@ -580,7 +773,8 @@
       knopf.scrollIntoView({ block: "center" });
     } else {
       const [f, teil] = zeilen.find(([x]) => x.aenderbar) || zeilen[0] || [];
-      const zeile = f && teil ? $(`tr[data-zeile="${f.id}"]`, teil) : null;
+      // Die Zeile der Person, zu der die ablaufende Freigabe gehört.
+      const zeile = f && teil ? $(`tr[data-person="${f.ordner.id}:${f.konto.id}"]`, teil) : null;
       if (zeile) {
         teil.open = true;
         zeile.scrollIntoView({ block: "center" });

@@ -351,6 +351,7 @@ def test_fuehrungskraft_nur_lesen():
             "kid": ids["gurte"], "did": did, "iid": a1["id"], "mid": mid, "aid": aid, "ruid": ruid, "anid": 999999, "token": token,
             "jahr": h.year,                                 # Jahresbericht (P4-L1): bericht-<jahr>.pdf, -pruefungen-<jahr>.csv
             "gid": freigabe, "mfid": 999999, "sid": 999999,      # Set-Protokoll (Schritt 27)
+            "uid": k["wart_id"],                            # „Rechte ändern“ je Person (02.11.2026)
             "art": "web", "dateiname": bild.rsplit("/", 1)[1], "filename": "material.js",
             ("produkte", "pid"): ids["gurt"], ("produkt", "pid"): ids["gurt"],
             ("pruefungen", "pid"): entwurf, ("pruefung", "pid"): fest, ("punkte", "rid"): punkt,
