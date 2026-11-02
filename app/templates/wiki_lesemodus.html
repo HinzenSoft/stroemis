@@ -13,8 +13,16 @@
     <ul class="tree" id="tree"></ul>
   </aside>
   <main class="wiki-main" id="wiki-main">
+    {# Suchzeile wie in der internen Strömipedia (wiki.html; für den Lesemodus vom Nutzer am 02.11.2026 bestätigt): unter
+       1024 px klebt oben im Inhalt „☰“ (öffnet den Seitenbaum, „Seiten“ nur zum Vorlesen) neben dem Feld „Artikel
+       suchen“; die Treffer liegen als Liste darunter über dem Text. Ab 1024 px steht sie nicht (app.css); gesucht wird
+       über /api/public/search wie im Feld über dem Baum (public.js, MD.sucheVerdrahten). #}
+    <div class="wiki-suchzeile" id="wiki-suchzeile" role="search">
+      <button class="btn secondary small wiki-menu-btn" type="button" aria-controls="wiki-side" aria-expanded="false" id="wiki-menu"><span aria-hidden="true">☰</span><span class="nur-vorlesen">Seiten</span></button>
+      <input type="search" id="zeilen-suche" placeholder="Artikel suchen" aria-label="Artikel suchen" autocomplete="off" enterkeyhint="search" aria-controls="zeilen-treffer">
+      <ul class="search-results zeilen-treffer hidden" id="zeilen-treffer" aria-label="Gefundene Artikel"></ul>
+    </div>
     <p class="lesemodus-hinweis" role="note">Du siehst die Seiten der Strömipedia, die für alle Angemeldeten freigegeben sind. Für alle übrigen schaltet dich die Plattform-Verwaltung frei.</p>
-    <button class="btn secondary small wiki-menu-btn" aria-controls="wiki-side" aria-expanded="false" id="wiki-menu"><span aria-hidden="true">☰</span> Seiten</button>
     <div id="wiki-content"></div>
   </main>
   <aside class="wiki-rail" id="wiki-rail"><nav class="toc" id="toc" aria-label="Inhalt"></nav></aside>

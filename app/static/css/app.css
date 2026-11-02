@@ -1096,12 +1096,13 @@ progress { width: 100%; height: 10px; accent-color: var(--rot); }
   }
 }
 /* Suchzeile (Wunsch vom 02.11.2026: „eine ähnliche Leiste wie bei der Materialablage, die Suche soll Artikel suchen,
-   Zeile soll mitscrollen“; wiki.html, wiki.js sucheVerdrahten): Unter 1024 px steht oben im Inhalt eine Zeile mit „☰“
+   Zeile soll mitscrollen“; wiki.html, markdown.js sucheVerdrahten): Unter 1024 px steht oben im Inhalt eine Zeile mit „☰“
    (öffnet den Seitenbaum; „Seiten“ nur zum Vorlesen) und dem Feld „Artikel suchen“, das die restliche Breite füllt. Sie
    klebt unter der Kopfleiste wie die Suchzeile der Materialablage und ersetzt den Knopf „☰ Seiten“, das „☰“ in der
    Artikel-Leiste und in der Schublade das Suchfeld über dem Baum (kein Feld doppelt). Die Treffer liegen als Liste
    darunter über dem Text und rollen in sich. Im Editor steht sie nicht – dort bleiben „☰“ in seiner Leiste und die
-   Suche in der Schublade; ab 1024 px bleibt alles wie zuvor (Lesemodus: unverändert „☰ Seiten“). */
+   Suche in der Schublade; ab 1024 px bleibt alles wie zuvor. Seit dem 02.11.2026 auch im Lesemodus und in public.html
+   (wiki_lesemodus.html, public.js – Suche über /api/public) mit denselben Regeln; „☰ Seiten“ gibt es nicht mehr. */
 .wiki-suchzeile { display: none; }
 @media (max-width: 1023px) {
   body:not(.editing) .wiki-suchzeile {
@@ -1111,7 +1112,7 @@ progress { width: 100%; height: 10px; accent-color: var(--rot); }
   .wiki-suchzeile > .wiki-menu-btn { flex: none; padding-left: 12px; padding-right: 12px; justify-content: center; align-items: center; }
   .wiki-suchzeile > input[type=search] { flex: 1 1 auto; min-width: 0; margin: 0; }
   body:not(.editing) .wiki-shell:has(.wiki-suchzeile) .wiki-side > :is(#wiki-search, #search-results) { display: none; }
-  /* Die Artikel-Leiste klebt direkt darunter: --wiki-suchzeile ist die gemessene Höhe der Zeile (wiki.js; 0, wo sie
+  /* Die Artikel-Leiste klebt direkt darunter: --wiki-suchzeile ist die gemessene Höhe der Zeile (markdown.js; 0, wo sie
      nicht steht) – ohne Lücke und ohne Überdeckung, auch gedreht und mit größerer Schrift. */
   body:not(.editing) .wiki-head { top: calc(var(--topbar) + var(--wiki-suchzeile, 0px)); }
 }

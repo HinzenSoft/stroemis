@@ -5588,130 +5588,20 @@
     return out.join("");
   }
 
-  /* Artikel suchen: eine Logik für das Feld über dem Seitenbaum und – unter 1024 px – das Feld in der Suchzeile oben im
-     Inhalt (Wunsch vom 02.11.2026, „wie bei der Materialablage“; wiki.html). Gesucht wird ab zwei Zeichen, 250 ms nach
-     dem letzten Tippen; Enter öffnet den ersten Treffer (ist die Suche noch unterwegs, nach ihrer Antwort), ↓/↑ wandern
-     durch die Liste, Esc führt zurück ins Feld. „schwebend“ (Suchzeile): Die Liste liegt über dem Text, reicht höchstens
-     bis zur Unterkante des sichtbaren Bereichs und schließt mit Esc, Tippen daneben, Zurück (S.klassenVerlauf an der
-     Zeile) und beim Öffnen eines Treffers; Antippen des Felds zeigt die Treffer zum stehenden Begriff wieder. */
-  function sucheVerdrahten(feld, liste, { zeile = null } = {}) {
-    if (!feld || !liste) return null;
-    let lauf = null, stand = "";              // stand: der Begriff, zu dem die Liste gerade gehört
-    const offen = () => !liste.classList.contains("hidden");
-    const hoeheBegrenzen = () => {
-      if (!zeile || !offen()) return;
-      const vv = window.visualViewport;
-      const unten = vv ? vv.offsetTop + vv.height : window.innerHeight;
-      zeile.style.setProperty("--treffer-hoehe", Math.max(120, Math.floor(unten - zeile.getBoundingClientRect().bottom - 8)) + "px");
-    };
-    const zeigen = (an) => {
-      liste.classList.toggle("hidden", !an);
-      if (!zeile) return;
-      zeile.classList.toggle("treffer-auf", an);
-      hoeheBegrenzen();
-    };
-    const leeren = () => { stand = ""; liste.innerHTML = ""; zeigen(false); };
-    async function suchen(q) {
-      const d = await api(`/api/wiki/search?q=${encodeURIComponent(q)}`);
-      if (feld.value.trim() !== q) return false;     // inzwischen weitergetippt oder geleert
-      stand = q;
-      liste.innerHTML = d.results.length
-        ? d.results.map((r) => `<li><a href="/stroemipedia/${esc(r.slug)}">${esc(r.title)}</a>${r.snippet ? `<div class="snip">${esc(r.snippet)}</div>` : ""}</li>`).join("")
-        : '<li class="muted">Keine Treffer.</li>';
-      liste.scrollTop = 0;
-      zeigen(true);
-      return true;
-    }
-    const oeffnen = (a) => {
-      if (zeile) { zeigen(false); feld.blur(); }     // Liste und Bildschirmtastatur gehen zu, der Artikel kommt
-      side.classList.remove("open");
-      navigate(slugAus(a.getAttribute("href")));
-    };
-    feld.addEventListener("input", () => {
-      clearTimeout(lauf);
-      const q = feld.value.trim();
-      if (q.length < 2) { leeren(); return; }
-      lauf = setTimeout(() => suchen(q).catch((e) => toast(e.message, true)), 250);
-    });
-    feld.addEventListener("keydown", async (e) => {
-      if (e.key === "Enter") {
-        e.preventDefault();
-        const q = feld.value.trim();
-        if (q.length < 2) return;
-        clearTimeout(lauf);
-        try { if (stand !== q && !(await suchen(q))) return; } catch (err) { toast(err.message, true); return; }
-        const a = liste.querySelector("a");
-        if (a) oeffnen(a);
-      } else if (e.key === "ArrowDown" && offen() && liste.querySelector("a")) {
-        e.preventDefault();
-        liste.querySelector("a").focus();
-      } else if (e.key === "Escape" && zeile && offen()) {
-        e.preventDefault();                            // nur die Liste schließen – der Begriff bleibt stehen
-        zeigen(false);
-      }
-    });
-    liste.addEventListener("click", (e) => {
-      const a = e.target.closest("a");
-      if (!a) return;
-      e.preventDefault();
-      oeffnen(a);
-    });
-    liste.addEventListener("keydown", (e) => {
-      const links = [...liste.querySelectorAll("a")];
-      const i = links.indexOf(document.activeElement);
-      if (i < 0) return;
-      if (e.key === "ArrowDown" || e.key === "ArrowUp") {
-        e.preventDefault();
-        const n = i + (e.key === "ArrowDown" ? 1 : -1);
-        if (n < 0) feld.focus(); else if (links[n]) links[n].focus();
-      } else if (e.key === "Escape") {
-        e.preventDefault();
-        feld.focus();
-        if (zeile) zeigen(false);                      // nach dem Fokus – der zeigte die Treffer sonst wieder
-      }
-    });
-    if (zeile) {
-      const wieder = () => { if (!offen() && stand && stand === feld.value.trim() && liste.firstChild) zeigen(true); };
-      feld.addEventListener("focus", wieder);
-      feld.addEventListener("click", wieder);          // auch, wenn das Feld den Fokus noch hat
-      // Tippen daneben schließt – auch auf „☰“, das gleich den Seitenbaum öffnet.
-      document.addEventListener("pointerdown", (e) => {
-        if (offen() && !feld.contains(e.target) && !liste.contains(e.target)) zeigen(false);
-      }, true);
-      // Tab aus Feld und Liste hinaus schließt ebenfalls.
-      zeile.addEventListener("focusout", (e) => {
-        if (offen() && e.relatedTarget && !feld.contains(e.relatedTarget) && !liste.contains(e.relatedTarget)) zeigen(false);
-      });
-      S.klassenVerlauf(zeile, "treffer-auf", () => zeigen(false), () => zeile.getClientRects().length > 0);
-      const nachziehen = () => requestAnimationFrame(hoeheBegrenzen);
-      window.addEventListener("resize", nachziehen);
-      window.addEventListener("scroll", nachziehen, { passive: true });
-      if (window.visualViewport) window.visualViewport.addEventListener("resize", nachziehen);
-    }
-    return { feld, schliessen: () => { if (offen()) zeigen(false); } };
-  }
-  sucheVerdrahten(searchInput, searchResults);
+  /* Artikel suchen – im Feld über dem Seitenbaum und unter 1024 px in der Suchzeile oben im Inhalt (Wunsch vom
+     02.11.2026, „wie bei der Materialablage“; wiki.html): Die Logik steht in markdown.js (MD.sucheVerdrahten,
+     MD.suchzeileEinrichten), seit dem 02.11.2026 gemeinsam mit dem Lesemodus (public.js). Hier nur, woher die Treffer
+     kommen und wie ein Treffer aufgeht. */
+  const artikelsuche = {
+    suchen: async (q) => (await api(`/api/wiki/search?q=${encodeURIComponent(q)}`)).results,
+    adresse: (slug) => SEITEN + slug,
+    oeffnen: (href) => { side.classList.remove("open"); navigate(slugAus(href)); },
+    fehler: (text) => toast(text, true),
+  };
+  MD.sucheVerdrahten(searchInput, searchResults, artikelsuche);
   const suchzeile = $("#wiki-suchzeile");
-  const zeilenSuche = suchzeile && sucheVerdrahten($("#zeilen-suche"), $("#zeilen-treffer"), { zeile: suchzeile });
-  const zeileSteht = () => Boolean(zeilenSuche && suchzeile.getClientRects().length);
-  if (zeilenSuche) {
-    /* Die Artikel-Leiste klebt direkt unter der Suchzeile, Sprungziele landen unter beiden (app.css): --wiki-suchzeile
-       trägt ihre Höhe – 0, wo sie nicht steht (ab 1024 px, im Editor). Gemessen statt fest, damit Drehen und größere
-       Schrift keine Lücke und keine Überdeckung lassen. */
-    const hoehe = () => shell.style.setProperty("--wiki-suchzeile", suchzeile.getBoundingClientRect().height + "px");   // ungerundet
-    if (window.ResizeObserver) new ResizeObserver(hoehe).observe(suchzeile, { box: "border-box" });
-    hoehe();
-    /* Über die Grenze von 1024 px gedreht oder gezogen: Der Begriff wandert ins Feld, das jetzt zu sehen ist, und die
-       Liste der Suchzeile schließt (sie hielte sonst einen Verlaufseintrag, ohne zu sehen zu sein). */
-    const grenze = window.matchMedia("(max-width: 1023px)");
-    grenze.addEventListener("change", () => {
-      zeilenSuche.schliessen();
-      const [von, nach] = grenze.matches ? [searchInput, zeilenSuche.feld] : [zeilenSuche.feld, searchInput];
-      if (!von || !nach || !von.value.trim() || nach.value.trim()) return;
-      nach.value = von.value;
-      nach.dispatchEvent(new Event("input"));
-    });
-  }
+  const zeilenSuche = suchzeile && MD.sucheVerdrahten($("#zeilen-suche"), $("#zeilen-treffer"), { ...artikelsuche, zeile: suchzeile });
+  const zeileSteht = MD.suchzeileEinrichten(shell, suchzeile, zeilenSuche, searchInput);
 
   /* ======================================================================
      Start

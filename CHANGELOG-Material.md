@@ -74,7 +74,7 @@ Geschichte stehen. Schemaversion nach der Nachbesserung vor dem Merge: 30; mit d
 | Bearbeitungsfreigabe an Mitglieder samt Unterseiten | „Bearbeiten erlauben“ wirkt für Mitglieder wie für Redakteure auch auf die Unterseiten (vorher genau diese Seite) | gebaut 02.11.2026 (kein Schemaschritt), freigegeben 02.11.2026 |
 | Text der Hinweiskästen über die ganze Breite | Inhalt der Hinweiskästen (`.notice`, `.mat-wikizeile`), Hilfetexte darin, Mangel- und Sperr-Banner und Liste „Gemeldete Mängel“ nicht mehr auf 100ch begrenzt | gebaut 02.11.2026 (kein Schemaschritt), freigegeben 02.11.2026 |
 | Freigaben je Person, Ordnerbild neben dem Namen | Reiter „Freigaben“: eine Zeile je Person in allen drei Listen, EIN „Ändern“ → Dialog „Rechte ändern“ (neuer Endpunkt je Person und Ordner, eine Transaktion), „Entziehen“ nimmt alle Rechte der Person dort, „… hat hier schon: …“ beim Anlegen; Ordnerfoto links neben Name und Knopfzeile (96 px, Telefon 64 px) | gebaut 02.11.2026 (kein Schemaschritt), freigegeben 02.11.2026 |
-| Suchzeile in der Strömipedia | Unter 1024 px (außer im Editor) klebt oben im Inhalt eine Zeile „☰“ + „Artikel suchen“ wie in der Materialablage; Treffer als Liste darunter über dem Text (Tippen/Enter öffnet, Esc/daneben/Zurück schließt); ersetzt „☰ Seiten“, das „☰“ der Kopfzeile einer Seite und das Suchfeld in der Schublade; die Kopfzeile klebt direkt darunter | gebaut 02.11.2026 (kein Schemaschritt) |
+| Suchzeile in der Strömipedia | Unter 1024 px (außer im Editor) klebt oben im Inhalt eine Zeile „☰“ + „Artikel suchen“ wie in der Materialablage; Treffer als Liste darunter über dem Text (Tippen/Enter öffnet, Esc/daneben/Zurück schließt); ersetzt „☰ Seiten“, das „☰“ der Kopfzeile einer Seite und das Suchfeld in der Schublade; die Kopfzeile klebt direkt darunter; dieselbe Zeile im Lesemodus (Konten ohne Stufe) und in public.html, gesucht über `/api/public/search` (eine Suchlogik in markdown.js) | gebaut 02.11.2026 (kein Schemaschritt); Lesemodus bestätigt am 02.11.2026: ja, gebaut 02.11.2026 |
 
 ## Abgleich mit dem Bestand (vor Lieferung 1)
 
@@ -11330,14 +11330,15 @@ als eigener Knopf) und der Materialablage (klebende Zeile „☰“ + Nummernsuc
 - **Wo:** unter 1024 px (dieselbe Grenze wie die Schublade des Seitenbaums und die Suchzeile der Materialablage – Telefon,
   Tablet hochkant, Foldable) in allen Ansichten der Strömipedia außer dem Editor: Übersicht, Seite lesen, „Seite nicht
   gefunden“, leere Strömipedia; Papierkorb und Verlauf sind Dialoge darüber. Ab 1024 px bleibt alles wie zuvor (Suchfeld
-  oben in der Seitenleiste). Der Lesemodus (Konten ohne Stufe, public.js) ist unverändert („☰ Seiten“).
+  oben in der Seitenleiste). Der Lesemodus (Konten ohne Stufe, public.js) blieb zunächst bei „☰ Seiten“ – „Bitte
+  bestätigen“ – bestätigt am 02.11.2026: ja; siehe „Nachtrag: Lesemodus und öffentliche Ansicht“ unten.
 - **Aufbau** (wiki.html `#wiki-suchzeile`, app.css): links „☰“ – derselbe Knopf `#wiki-menu`, der die Schublade öffnet,
   sichtbar nur das Zeichen, zugänglicher Name „Seiten“, `aria-controls`/`aria-expanded` wie bisher –, rechts das Feld
   „Artikel suchen“ (Platzhalter und Name), das die restliche Breite füllt; keine Lupe, kein Absendeknopf, `role="search"`.
   Sie **ersetzt** den Knopf „☰ Seiten“ über dem Inhalt und das „☰“ in der Kopfzeile einer gelesenen Seite (kein zweites
   „☰“); im Editor bleibt dessen „☰“. In der Schublade fällt das Suchfeld über dem Baum weg, solange die Zeile steht (im
   Editor bleibt es dort – dort gibt es keine Zeile).
-- **Suche** (wiki.js `sucheVerdrahten`): eine Funktion für das Feld über dem Baum und das Feld der Zeile – dieselbe
+- **Suche** (wiki.js `sucheVerdrahten`, seit dem Nachtrag unten `MD.sucheVerdrahten` in markdown.js): eine Funktion für das Feld über dem Baum und das Feld der Zeile – dieselbe
   Schnittstelle `/api/wiki/search`, ab zwei Zeichen, 250 ms nach dem letzten Tippen, „Keine Treffer.“ wie bisher. Die
   Treffer (Titel und Ausschnitt, am Finger je Titel 44 px) liegen als Liste direkt unter der Zeile über dem Text, höchstens
   bis zur Unterkante des sichtbaren Bereichs (auch mit Bildschirmtastatur), mit eigenem Bildlauf. Tippen auf einen Treffer
@@ -11369,3 +11370,40 @@ als eigener Knopf) und der Materialablage (klebende Zeile „☰“ + Nummernsuc
   `test_material_vor_merge_3.py` (`test_seitentitel_vom_server`, statische Prüfung der übrigen Module: „☰“ mit „Seiten“
   zum Vorlesen in wiki.html) und `test_module_nach_merge.py` (`test_knopfsprache_alte_module`: 6 statt 7 Kopfknöpfe in
   wiki.js). Die 44 px des „☰“ gelten nur am Finger (bestehende Regel für `.wiki-menu-btn`; `test_module_uiux_u1b` A15).
+
+### Nachtrag: Lesemodus und öffentliche Ansicht (02.11.2026)
+
+Frage aus dem Bericht des Baus (planung/wiki-suchzeile/bericht.md): „Wer angemeldet ist, aber keine Stufe in der
+Strömipedia hat, sieht den Lesemodus. Dort steht weiter „☰ Seiten“ ohne die Suchzeile. Soll er sie auch bekommen?“ –
+bestätigt am 02.11.2026: ja.
+
+- **Lesemodus** (wiki_lesemodus.html): dieselbe Zeile `#wiki-suchzeile` wie in wiki.html, Zeichen für Zeichen („☰“ mit
+  „Seiten“ zum Vorlesen, „Artikel suchen“, Liste `#zeilen-treffer`), zuoberst im Inhalt – über dem Hinweis „Du siehst
+  die Seiten der Strömipedia, die für alle Angemeldeten freigegeben sind …“, damit sie bündig unter der Kopfleiste klebt;
+  der Hinweis rollt mit dem Text. Sie ersetzt „☰ Seiten“ und in der Schublade das Suchfeld über dem Baum. Gleiches
+  Verhalten wie intern: Liste unter der Zeile, Enter öffnet den ersten Treffer, ↑/↓, Esc, Tippen daneben und Zurück
+  schließen, Kopfzeile der Seite klebt darunter, Sprungziele unter beiden Leisten, wenig Höhe und offene Tastatur wie
+  intern (die Regeln in app.css gelten unverändert für alle Leser). Ab 1024 px unverändert.
+- **Gesucht** wird weiter über `/api/public/search` – nur freigegebene Seiten; an der Schnittstelle ist nichts geändert.
+- **Eine Suchlogik für beide Leser:** `sucheVerdrahten` und das Einrichten der Zeile (gemessene Höhe
+  `--wiki-suchzeile`, Wechsel über die 1024-px-Grenze) stehen jetzt in markdown.js (`MD.sucheVerdrahten`,
+  `MD.suchzeileEinrichten`) – markdown.js laden wiki.html, wiki_lesemodus.html und public.html, common.js dagegen nicht
+  public.html. wiki.js und public.js geben nur noch mit, woher die Treffer kommen (`/api/wiki/search` bzw.
+  `/api/public/search`), wohin ein Treffer zeigt und wie er aufgeht. Zurück schließt die Liste über `S.klassenVerlauf`,
+  wo common.js geladen ist. Neu in public.js: Fehler der Suche meldet im Lesemodus der Toast (bisher still); ein Schritt im
+  Verlauf auf eine andere Seite schließt die Trefferliste.
+- **Startseite:** `/stroemipedia?suche=…` landet im Lesemodus unter 1024 px im Feld der Zeile (Liste offen, Schublade zu)
+  wie intern.
+- **public.html** (öffentliche Ansicht ohne Anmeldung, derselbe Leser public.js) bekommt dieselbe Zeile, damit beide Leser
+  gleich bleiben. Die Vorlage wird seit dem 01.11.2026 von keiner Route mehr gezeichnet (`/oeffentlich/…` leitet zur
+  Anmeldung bzw. in den Lesemodus). Dort ohne common.js: Zurück geht wie bei der Schublade eine Seite zurück (die Liste
+  schließt dabei), „☰“ führt `aria-expanded` über einen eigenen Beobachter nach.
+- **Gemessen** (Chromium, DEMO-Daten, Lesemodus und gerenderte public.html; planung/wiki-suchzeile/bericht_lesemodus.md):
+  wie intern – Zeile 60 px unter der 52-px-Kopfleiste, „☰“ 44 × 44 und Feld 44 hoch am Finger, Kopfzeile der Seite direkt
+  darunter (112–148 px), Anker unter beiden Leisten; Gerätematrix (Chromium, Firefox, WebKit; 19 Geräte, Übersicht und
+  lange Seite, Konto im Lesemodus) ohne Befund.
+- Tests: `tests/test_wiki_suchzeile.py` erweitert (Aufbau in wiki_lesemodus.html und public.html wie in wiki.html, eine
+  Suchlogik in markdown.js für wiki.js und public.js, Startseiten-Suche in beiden Lesern, Seitenaufrufe im Lesemodus mit
+  `/api/public/search` vor und nach der Freigabe, `/oeffentlich/` leitet weiter, public.html gerendert mit Zeile);
+  angepasst: `test_geraetetest_teil1.py` (`test_b14_schubladen`: „☰“ mit „Seiten“ zum Vorlesen auch im Lesemodus) und
+  `test_material_vor_merge_3.py` (statische Prüfung der übrigen Module: dasselbe für wiki_lesemodus.html und public.html).
