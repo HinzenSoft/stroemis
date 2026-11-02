@@ -186,7 +186,9 @@ def test_pruefungen():
         namen = [n["name"] for n in nutzer]
         assert "Petra Prüferin" in namen and "Erwin Extern" in namen and namen == sorted(namen, key=str.lower), namen
         assert "Frieda Fremd" not in namen and "Rainer Redakteur" not in namen, namen   # ohne Stufe
-        assert [n["name"] for n in pr.get("/api/pruefungen/nutzer?q=einer@exam").json["nutzer"]] == ["Nur Einer"]
+        # Die E-Mail-Adresse zählt nur ganz (zweite Durchsicht vor dem Merge, Sicherheitsbefund 3).
+        assert [n["name"] for n in pr.get("/api/pruefungen/nutzer?q=Einer@Example.org").json["nutzer"]] == ["Nur Einer"]
+        assert pr.get("/api/pruefungen/nutzer?q=einer@exam").json["nutzer"] == []
 
         # --- 3. Lehrgang anlegen: Validierung ---------------------------------------------------
         r = pr.post("/api/pruefungen/lehrgaenge", json={"nummer": "2026-0001"})
@@ -878,7 +880,8 @@ def test_import():
         assert len(v["ausbilder"]) == 1, v["ausbilder"]
         hat_felder(v["ausbilder"][0], "name", "funktion", "zeile", "konto")
         assert v["ausbilder"][0]["name"] == "Lena Leitung" and v["ausbilder"][0]["funktion"] == "Lehrgangsleitung"
-        assert v["ausbilder"][0]["zeile"] == 14 and v["ausbilder"][0]["konto"] == {"id": lena_id, "name": "Lena Leitung", "eingetragen": False}
+        # Ohne Kontokennung: die Vorschau nennt nur, wer es wird und ob schon eingetragen (zweite Durchsicht vor dem Merge).
+        assert v["ausbilder"][0]["zeile"] == 14 and v["ausbilder"][0]["konto"] == {"name": "Lena Leitung", "eingetragen": False}
         assert "email" not in v["ausbilder"][0] and v["ausbilder_nicht_uebernommen"] == [], v
         warn = " | ".join(v["warnungen"]).lower()
         assert len(v["warnungen"]) >= 2, v["warnungen"]

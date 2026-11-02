@@ -13,8 +13,8 @@ from urllib.parse import unquote
 from flask import Blueprint, current_app, jsonify, request
 
 from . import db
-from .auth import (avatar_url, current_user, eingabefehler_abfangen, json_body, nutzt, schreibt, verwaltet,
-                   wiki_required)
+from .auth import (MITGLIED, VERWALTUNG, avatar_url, current_user, eingabefehler_abfangen, json_body, nutzt, schreibt,
+                   verwaltet, wiki_required)
 from .images import EMBED_EXT, crop_wiki_image, fehlerart, rotate_wiki_image, store_wiki_file, wiki_endung
 from .mailer import send_mail
 
@@ -80,6 +80,12 @@ NUR_REDAKTION = "Seiten anlegen dürfen Redakteure und die Wiki-Verwaltung."
 NUR_REDAKTION_DATEIEN = ("Dateien hochladen dürfen Redakteure, die Wiki-Verwaltung und Mitglieder, die eine Seite "
                          "bearbeiten dürfen.")
 NUR_REDAKTION_VERSCHIEBEN = "Seiten verschieben dürfen Redakteure und die Wiki-Verwaltung."
+# Verschieben (anderer Elternteil oder andere Stelle unter demselben) darf nur, wer die Seite auch in den Papierkorb legen
+# dürfte (can_delete: Ersteller ab Redakteur, Wiki-Verwaltung) – Entscheidung des Nutzers vom 01.11.2026 nach der zweiten
+# Durchsicht vor dem Merge. Eine Bearbeitungsfreigabe reicht zum Bearbeiten, nicht zum Umhängen: Sonst ließe sich eine
+# fremde Seite unter eine eigene lesebeschränkte hängen und wäre für alle anderen verschwunden.
+NUR_ERSTELLER_VERSCHIEBEN = ("Verschieben darf nur, wer die Seite auch in den Papierkorb legen darf – ihr Ersteller oder "
+                             "die Wiki-Verwaltung.")
 
 
 def can_edit(page, user=None):
@@ -411,8 +417,12 @@ def page_json(p):
     out["can_delete"] = can_delete(p)
     out["can_share"] = can_delete(p)      # Freigabe zum Bearbeiten: Ersteller ab Redakteur oder Wiki-Verwaltung
     out["can_publish"] = verwaltet("wiki")       # Veröffentlichen: nur die Wiki-Verwaltung
-    # Unterseite anlegen, Duplizieren, Verschieben: ab Redakteur – die Oberfläche rechnet die Stufe nicht selbst nach.
-    out["can_create"] = schreibt("wiki")
+    # Unterseite anlegen und Duplizieren: ab Redakteur, in einem für alle Angemeldeten freigegebenen Abschnitt nur die
+    # Wiki-Verwaltung (wie create_page/duplicate_page) – die Oberfläche rechnet Stufe und Abschnitt nicht selbst nach.
+    # Duplizieren legt die Kopie neben die Seite, zählt also der Abschnitt der Elternseite (Rechte-Befund B1).
+    verwaltung = verwaltet("wiki")
+    out["can_create"] = schreibt("wiki") and (verwaltung or not inherits_public(p["id"]))
+    out["can_duplicate"] = schreibt("wiki") and (verwaltung or not inherits_public(p["parent_id"]))
     if out["can_share"]:
         out["editors"] = _editors(p["id"])
     out["comment_count"] = db.query("SELECT COUNT(*) AS n FROM wiki_comments WHERE page_id = ? AND resolved = 0",
@@ -534,20 +544,41 @@ def tree():
     return jsonify(pages=rows)
 
 
+def _freigegebene_abschnitte(rows):
+    """Die Kennungen der Baumzeilen, unter denen eine neue Seite für alle Angemeldeten lesbar wäre – inherits_public für
+    den ganzen Baum auf einmal: die Seite selbst oder ein Vorfahr ist samt Unterseiten freigegeben."""
+    eltern = {r["id"]: r["parent_id"] for r in rows}
+    abschnitte = {r["id"] for r in rows if r["is_public"] and r["public_children"]}
+    out = set()
+    for r in rows:
+        cur, gesehen = r["id"], set()
+        while cur is not None and cur not in gesehen:
+            if cur in abschnitte:
+                out.add(r["id"])
+                break
+            gesehen.add(cur)
+            cur = eltern.get(cur)
+    return out
+
+
 def _baum_rechte(rows):
-    """can_edit und can_delete je Baumzeile – dieselben Regeln wie can_edit/can_delete, aber für den ganzen Baum mit
-    einer Abfrage der eigenen Freigaben statt einer Ahnenkette je Seite. So zeigt das Zeilenmenü nur, was geht."""
+    """can_edit, can_delete und can_create je Baumzeile – dieselben Regeln wie can_edit/can_delete/page_json, aber für den
+    ganzen Baum mit einer Abfrage der eigenen Freigaben statt einer Ahnenkette je Seite. So zeigt das Zeilenmenü nur, was
+    geht: can_create (Unterseite anlegen, „+“) nicht in einem für alle Angemeldeten freigegebenen Abschnitt, außer für die
+    Wiki-Verwaltung (Rechte-Befund B1); Duplizieren richtet sich nach can_create der Elternzeile (wiki.js)."""
     me = current_user()
     if verwaltet("wiki", me):
         for r in rows:
-            r["can_edit"] = r["can_delete"] = True
+            r["can_edit"] = r["can_delete"] = r["can_create"] = True
         return
     redaktion = schreibt("wiki", me)
     frei = {f["page_id"] for f in db.query("SELECT page_id FROM wiki_editors WHERE user_id = ?", (me["id"],))}
     eltern = {r["id"]: r["parent_id"] for r in rows}
+    abschnitte = _freigegebene_abschnitte(rows) if redaktion else set()
     for r in rows:
         eigen = redaktion and r["created_by"] == me["id"]
         r["can_delete"] = eigen
+        r["can_create"] = redaktion and r["id"] not in abschnitte
         if eigen or r["id"] in frei:
             r["can_edit"] = True
             continue
@@ -787,6 +818,8 @@ def update_page(pid):
         if parent_id != p["parent_id"] and not schreibt("wiki"):
             # Ein Mitglied mit Freigabe bearbeitet die Seite, es ordnet den Baum nicht um.
             return jsonify(error=NUR_REDAKTION_VERSCHIEBEN), 403
+        if parent_id != p["parent_id"] and not can_delete(p):
+            return jsonify(error=NUR_ERSTELLER_VERSCHIEBEN), 403
         if parent_id is not None:
             if parent_id == pid or _is_descendant(pid, parent_id):
                 return jsonify(error="Eine Seite kann nicht unter sich selbst einsortiert werden."), 400
@@ -799,7 +832,14 @@ def update_page(pid):
             return jsonify(error=BESCHRAENKUNG_VERLASSEN), 403
         vals["parent_id"] = parent_id
     if "position" in d:
-        vals["position"] = int(d.get("position") or 0)
+        position = int(d.get("position") or 0)
+        # Dieselbe Regel wie /reorder: Die Stelle im Baum ändert nur, wer die Seite verschieben darf (Rechte-Befund B4 –
+        # vorher ging das hier auch für ein Mitglied mit Freigabe durch).
+        if position != p["position"] and not schreibt("wiki"):
+            return jsonify(error=NUR_REDAKTION_VERSCHIEBEN), 403
+        if position != p["position"] and not can_delete(p):
+            return jsonify(error=NUR_ERSTELLER_VERSCHIEBEN), 403
+        vals["position"] = position
     if not vals:
         return jsonify(page=page_json(p))
     uid = current_user()["id"]
@@ -1367,7 +1407,9 @@ def duplicate_page(pid):
 @wiki_required
 def reorder():
     """Seitenbaum umsortieren: Liste aus {id, parent_id, position}.
-    Verschieben darf nur, wer die jeweilige Seite bearbeiten darf."""
+    Verschieben darf nur, wer die jeweilige Seite auch in den Papierkorb legen darf (can_delete,
+    NUR_ERSTELLER_VERSCHIEBEN). Einträge, die Elternteil und Stelle behalten, bleiben unberührt –
+    so lässt sich die eigene Seite neben fremde ziehen, solange deren Stelle gleich bleibt."""
     if not schreibt("wiki"):
         return jsonify(error=NUR_REDAKTION_VERSCHIEBEN), 403
     items = json_body().get("items") or []
@@ -1386,8 +1428,10 @@ def reorder():
         # sich über durchprobierte Kennungen auslesen, wie die beschränkten Seiten heißen.
         if not page or not can_read(page):
             return jsonify(error="Seite nicht gefunden."), 404
-        if not can_edit(page):
-            return jsonify(error="Diese Seite darfst du nicht verschieben."), 403
+        if parent_id == page["parent_id"] and position == page["position"]:
+            continue                                    # bleibt, wo sie ist – nichts zu schreiben, nichts zu prüfen
+        if not can_delete(page):
+            return jsonify(error=NUR_ERSTELLER_VERSCHIEBEN), 403
         if parent_id is not None:
             if parent_id == cid or _is_descendant(cid, parent_id):
                 return jsonify(error="Eine Seite kann nicht unter sich selbst einsortiert werden."), 400
@@ -1674,7 +1718,11 @@ def import_pages():
 @bp.get("/users")
 @wiki_required
 def users_for_sharing():
-    rows = db.query("SELECT id, name, gliederung FROM users WHERE active = 1 AND status = 'active' "
+    """Konten für „Bearbeiten erlauben“: nur aktive mit Stufe in der Strömipedia (Mitglied oder mehr, die
+    Plattform-Verwaltung hat sie überall) – ohne Stufe wirkte eine Freigabe nicht (Rechte-Hinweis H1). Wer schon
+    freigegeben ist und seine Stufe verloren hat, steht in page_json „editors“ und bleibt im Dialog abwählbar."""
+    rows = db.query(f"SELECT id, name, gliederung FROM users WHERE active = 1 AND status = 'active' "
+                    f"AND (recht_wiki >= {MITGLIED} OR recht_verwaltung >= {VERWALTUNG}) "
                     "ORDER BY name COLLATE NOCASE")
     return jsonify(users=rows)
 

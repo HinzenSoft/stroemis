@@ -145,13 +145,17 @@ def list_users():
         "SELECT u.*, (SELECT COUNT(*) FROM albums a WHERE a.owner_id = u.id) AS album_count, "
         "(SELECT COUNT(*) FROM photos p WHERE p.owner_id = u.id) AS photo_count, "
         # Artikel, die der Nutzer angelegt hat – ohne den Papierkorb, der zählt nicht als Inhalt.
-        "(SELECT COUNT(*) FROM wiki_pages w WHERE w.created_by = u.id AND w.deleted_at IS NULL) AS page_count "
+        "(SELECT COUNT(*) FROM wiki_pages w WHERE w.created_by = u.id AND w.deleted_at IS NULL) AS page_count, "
+        # Riegenkarten (Rechte-Hinweis H5, für Schritt 7 der Inbetriebnahme): angelegte Lehrgänge und eigene Kataloge.
+        "(SELECT COUNT(*) FROM pruef_lehrgaenge l WHERE l.created_by = u.id) AS lehrgang_count, "
+        "(SELECT COUNT(*) FROM pruef_kataloge k WHERE k.created_by = u.id) AS katalog_count "
         "FROM users u ORDER BY (u.status = 'pending') DESC, u.created_at")
     zahlen = mat_freigaben.zahlen_je_konto()
     out = []
     for r in rows:
         u = public_user(r)
-        u["album_count"], u["photo_count"], u["page_count"] = r["album_count"], r["photo_count"], r["page_count"]
+        for k in ("album_count", "photo_count", "page_count", "lehrgang_count", "katalog_count"):
+            u[k] = r[k]
         u["last_login"] = r["last_login"]
         u["mat_freigaben"] = zahlen.get(r["id"], (0,))[0]
         out.append(u)
@@ -407,7 +411,10 @@ def approve_user(uid):
                            f"Du kannst dich jetzt anmelden:\n\n{cfg['BASE_URL'].rstrip('/')}/login\n")
     except Exception as exc:
         current_app.logger.error("Freigabe-Mail an %s fehlgeschlagen: %s", u["email"], exc)
-    return jsonify(user=public_user(db.query("SELECT * FROM users WHERE id = ?", (uid,), one=True)), mailed=bool(mailed))
+    # mailserver: ob überhaupt einer eingerichtet ist – die Leitstelle unterscheidet so „keine E-Mail: kein Mailserver“
+    # von „Versand gescheitert“ (Rechte-Hinweis H6; mailed ist in beiden Fällen false).
+    return jsonify(user=public_user(db.query("SELECT * FROM users WHERE id = ?", (uid,), one=True)), mailed=bool(mailed),
+                   mailserver=bool(cfg.get("SMTP_HOST")))
 
 
 @bp.post("/users/<int:uid>/reject")

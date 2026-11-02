@@ -728,20 +728,23 @@ def _dateien_loeschen(dateien):
 @bp.get("/nutzer")
 @pruefer_required
 def nutzer():
-    """?q= – Konten, die Ausbilder sein können (_PASSEND: aktiv, Stufe in den Riegenkarten), deren Name oder E-Mail-Adresse
-    q enthält (ab KONTOSUCHE_MIN Zeichen, Groß/klein egal, auch bei Umlauten), höchstens KONTOSUCHE_MAX. Nur Kennung,
-    Name und Gliederung – die E-Mail-Adresse geht nicht hinaus (sie ist nur Anzeigename eines Kontos ohne Namen, wie
-    überall). Suchen darf, wer Ausbilder einträgt: ab Redakteur (Lehrgang anlegen) oder als Leitung eines Lehrgangs."""
+    """?q= – Konten, die Ausbilder sein können (_PASSEND: aktiv, Stufe in den Riegenkarten), deren Name q enthält oder
+    deren E-Mail-Adresse q ist (ab KONTOSUCHE_MIN Zeichen, Groß/klein egal, auch bei Umlauten), höchstens KONTOSUCHE_MAX.
+    Nur Kennung, Name und Gliederung – die E-Mail-Adresse geht nicht hinaus (sie ist nur Anzeigename eines Kontos ohne
+    Namen, wie überall). Die Adresse zählt nur ganz: Als Teilstring ließ sie sich über die Ja/Nein-Treffer Zeichen für
+    Zeichen zurückgewinnen (Sicherheitsbefund 3 der zweiten Durchsicht vor dem Merge). Suchen darf, wer Ausbilder
+    einträgt: ab Redakteur (Lehrgang anlegen) oder als Leitung eines Lehrgangs."""
     if not schreibt("pruefungen") and not db.query(
             "SELECT 1 FROM pruef_ausbilder WHERE user_id = ? AND ist_leitung = 1", (current_user()["id"],), one=True):
         raise Abgelehnt(NUR_AUSBILDER_WAEHLEN, 403)
     q = (request.args.get("q") or "").strip()[:80]
     if len(q) < KONTOSUCHE_MIN:
         raise Abgelehnt(f"Bitte mindestens {KONTOSUCHE_MIN} Zeichen des Namens oder der E-Mail-Adresse eingeben.")
-    such = _namensschluessel(q)
+    such, adresse = _namensschluessel(q), unicodedata.normalize("NFKC", q).casefold()
     treffer = [u for u in db.query(f"SELECT u.id, u.name, u.email, u.gliederung FROM users u WHERE {_PASSEND} "
                                    "ORDER BY u.name COLLATE NOCASE, u.id")
-               if such in _namensschluessel(u["name"]) or such in (u["email"] or "").casefold()]
+               if such in _namensschluessel(u["name"])
+               or adresse == unicodedata.normalize("NFKC", (u["email"] or "").strip()).casefold()]
     return jsonify(nutzer=[{"id": u["id"], "name": _kontoname(u), "gliederung": u["gliederung"] or ""}
                            for u in treffer[:KONTOSUCHE_MAX]], mehr=len(treffer) > KONTOSUCHE_MAX)
 
@@ -819,6 +822,23 @@ def _ausbilder_liste(roh, bisher=()):
     return out
 
 
+def _eigene_zeile_leitet(ausbilder):
+    """Hat sich die bearbeitende Leitung im Dialog das Kennzeichen „Leitung“ genommen, bleibt sie Leitung (siehe
+    update_lehrgang) – und zwar in ihrer eigenen Zeile mit ihrer Funktion. Vorher setzte _leitung_ergaenzen eine zweite
+    Zeile derselben Person davor (Rechte-Hinweis H2). Die Verwaltung braucht keine Leitung; steht die Person gar nicht in
+    der Liste, ergänzt _leitung_ergaenzen sie wie bisher."""
+    if verwaltet("pruefungen"):
+        return ausbilder
+    uid = current_user()["id"]
+    eigene = [i for i, a in enumerate(ausbilder) if a[0] == uid]
+    if not eigene or any(ausbilder[i][3] for i in eigene):
+        return ausbilder
+    out = list(ausbilder)
+    a_uid, name, funktion, _ = out[eigene[0]]
+    out[eigene[0]] = (a_uid, name, funktion, 1)
+    return out
+
+
 def _ausbilder_bisher(lid):
     return {a["user_id"] for a in db.query("SELECT user_id FROM pruef_ausbilder WHERE lehrgang_id = ? "
                                            "AND user_id IS NOT NULL", (lid,))}
@@ -868,7 +888,7 @@ def create_lehrgang():
     d = json_body()
     vals = _lehrgang_felder(d, neu=True)
     _zeitraum_pruefen(vals["datum_von"], vals["datum_bis"])
-    ausbilder = _leitung_ergaenzen(_ausbilder_liste(d.get("ausbilder")))
+    ausbilder = _leitung_ergaenzen(_eigene_zeile_leitet(_ausbilder_liste(d.get("ausbilder"))))
     # Katalog als Vorlage (optional): seine Leistungen werden gleich unten hineinkopiert, nicht
     # verlinkt – wie bei kopieren(). Erst hier nachschlagen, damit ein unbekannter Katalog den
     # Lehrgang gar nicht erst halb anlegt.
@@ -913,7 +933,7 @@ def update_lehrgang(lid):
     _zeitraum_pruefen(vals.get("datum_von", alt["datum_von"]), vals.get("datum_bis", alt["datum_bis"]))
     # Die Liste wird komplett ersetzt: So ist „Zeile entfernt“ im Dialog eindeutig. Die bearbeitende
     # Leitung bleibt dabei eingetragen – wer sich selbst vergisst, stünde sonst sofort ohne Rechte da.
-    ausbilder = (_leitung_ergaenzen(_ausbilder_liste(d.get("ausbilder"), _ausbilder_bisher(lid)))
+    ausbilder = (_leitung_ergaenzen(_eigene_zeile_leitet(_ausbilder_liste(d.get("ausbilder"), _ausbilder_bisher(lid))))
                  if "ausbilder" in d else None)
     with db.transaction():
         if vals:
@@ -945,7 +965,10 @@ def delete_lehrgang(lid):
 def kopieren(lid):
     """Vorlage für den nächsten Durchgang: Stammdaten, Ausbilder, Voraussetzungs-Definitionen und
     Leistungen kommen mit – Teilnehmende, Haken, Bewertungen und Medien nicht. Die Lehrgangsnummer
-    wird geleert: Sie bezeichnet eine Durchführung, nicht den Lehrgangstyp."""
+    wird geleert: Sie bezeichnet eine Durchführung, nicht den Lehrgangstyp. Ausbilder sind in der
+    Kopie neu eingetragen und folgen deshalb der Regel beim Anlegen: nur passende Konten (aktiv, Stufe
+    in den Riegenkarten), Name aus dem Konto; die übrigen nennt die Antwort (ausbilder_nicht_uebernommen,
+    Rechte-Befund B3 – vorher kamen auch Konten ohne Stufe oder deaktivierte mit)."""
     alt = _lehrgang(lid)
     _leitung(lid)
     _redaktion()
@@ -960,9 +983,19 @@ def kopieren(lid):
             "INSERT INTO pruef_lehrgaenge (titel, nummer, datum_von, datum_bis, ort, beschreibung, status, "
             "created_by, created_by_name, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
             (titel, "", von, bis, alt["ort"], alt["beschreibung"], "geplant", uid, name, ts, ts))
-        for a in db.query("SELECT * FROM pruef_ausbilder WHERE lehrgang_id = ? ORDER BY sortierung, id", (lid,)):
+        nicht_uebernommen, stelle = [], 0
+        for a in db.query("SELECT a.user_id, a.name AS eintrag, a.funktion, a.ist_leitung, u.id, u.name, u.email, "
+                          "u.active, u.status, u.recht_pruefungen, u.recht_verwaltung FROM pruef_ausbilder a "
+                          "LEFT JOIN users u ON u.id = a.user_id WHERE a.lehrgang_id = ? ORDER BY a.sortierung, a.id",
+                          (lid,)):
+            if a["id"] is None or _ohne_zugriff(a):
+                nicht_uebernommen.append({"name": _kontoname(a) if a["id"] is not None else a["eintrag"],
+                                          "funktion": a["funktion"] or ""})
+                continue
             db.execute("INSERT INTO pruef_ausbilder (lehrgang_id, user_id, name, funktion, ist_leitung, sortierung) "
-                       "VALUES (?,?,?,?,?,?)", (neu, a["user_id"], a["name"], a["funktion"], a["ist_leitung"], a["sortierung"]))
+                       "VALUES (?,?,?,?,?,?)", (neu, a["user_id"], _kontoname(a), a["funktion"], a["ist_leitung"],
+                                                stelle))
+            stelle += 1
         for v in db.query("SELECT * FROM pruef_voraussetzungen WHERE lehrgang_id = ? ORDER BY sortierung, id", (lid,)):
             db.execute("INSERT INTO pruef_voraussetzungen (lehrgang_id, bezeichnung, sortierung) VALUES (?,?,?)",
                        (neu, v["bezeichnung"], v["sortierung"]))
@@ -975,7 +1008,7 @@ def kopieren(lid):
             for k in db.query("SELECT * FROM pruef_kriterien WHERE leistung_id = ? ORDER BY sortierung, id", (p["id"],)):
                 db.execute("INSERT INTO pruef_kriterien (leistung_id, bezeichnung, sortierung) VALUES (?,?,?)",
                           (neue_leistung, k["bezeichnung"], k["sortierung"]))
-    return jsonify(lehrgang=_lehrgang_detail(neu)), 201
+    return jsonify(lehrgang=_lehrgang_detail(neu), ausbilder_nicht_uebernommen=nicht_uebernommen), 201
 
 
 # --- 4.3 Teilnehmende --------------------------------------------------------
@@ -1876,7 +1909,9 @@ def _ausbilder_aus_datei(ergebnis, bisher):
     ausbilder = ergebnis.get("ausbilder") or []
     for a, u in zip(ausbilder, _ausbilder_zuordnen(ausbilder)):
         funktion = (a.get("funktion") or "").strip()[:80]
-        a["konto"] = {"id": u["id"], "name": _kontoname(u), "eingetragen": u["id"] in bisher} if u else None
+        # Nur, was die Vorschau zum Zuordnen braucht: wer es wird (Name des Kontos) und ob er schon im Lehrgang steht –
+        # keine Kennung, keine Adresse (Sicherheitsbefund 3 der zweiten Durchsicht vor dem Merge).
+        a["konto"] = {"name": _kontoname(u), "eingetragen": u["id"] in bisher} if u else None
         a.pop("email", None)                         # bleibt in der Datei, geht nicht zurück
         if not u:
             nicht.append({"name": (a.get("name") or "").strip()[:120], "funktion": funktion})

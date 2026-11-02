@@ -64,8 +64,10 @@ class Feld:
 # Eine Mailadresse, wie sie im Fuß jeder Seite und im Hinweis „Entwicklungsserver“ als mailto-Link steht: ein „@“,
 # davor und danach nichts, was einen Link oder eine Kopfzeile aufbräche (Leerraum, Spitzklammern, Anführungszeichen,
 # „?“, „&“, „#“, „%“, Komma, Semikolon), hinten ein Punkt in der Domain. Umlaute in der Domain sind erlaubt
-# (verwalter@strömis.de).
-_ADRESSE_RE = re.compile(r"^[^@\s<>\"'(),;:?&#%\\]+@[^@\s<>\"'(),;:?&#%\\/]+\.[^@\s<>\"'(),;:?&#%\\/.]{2,}$")
+# (verwalter@strömis.de). Steuerzeichen (NUL, DEL, C1) zählen wie Leerraum – \s allein ließ „a@b.de\x00“ durch
+# (Sicherheitshinweis der zweiten Durchsicht vor dem Merge).
+_ADRESSE_RE = re.compile(r"^[^@\s\x00-\x1f\x7f-\x9f<>\"'(),;:?&#%\\]+@[^@\s\x00-\x1f\x7f-\x9f<>\"'(),;:?&#%\\/]+"
+                         r"\.[^@\s\x00-\x1f\x7f-\x9f<>\"'(),;:?&#%\\/.]{2,}$")
 
 
 def _adresse(roh):

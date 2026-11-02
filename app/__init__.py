@@ -381,7 +381,12 @@ def _safe_next(value):
 
 
 def _auth_page(mode):
-    if auth.current_user() and mode in ("login", "register"):
+    # Schon angemeldet: die Anmeldeseite springt gleich zum Ziel – alte Links der Subdomain und Lesezeichen mit
+    # ?next= landen so auf der Seite bzw. Datei, nicht auf der Startseite (Sicherheitsbefund 4 der zweiten Durchsicht
+    # vor dem Merge). _safe_next lässt nur seiteneigene Ziele zu.
+    if auth.current_user() and mode == "login":
+        return redirect(_safe_next(request.args.get("next")))
+    if auth.current_user() and mode == "register":
         return redirect(url_for("pages.index"))
     # Der Reset-Token steht im Fragment der Adresse und erreicht den Server nie – ihn liest auth.js.
     return render_template("login.html", mode=mode, next=_safe_next(request.args.get("next")),
@@ -767,7 +772,14 @@ def create_app():
     def unauthorized(_e):
         if request.path.startswith("/api/"):
             return jsonify(error="Nicht angemeldet"), 401
-        return redirect(url_for("pages.login", next=request.path))
+        ziel = url_for("pages.login", next=request.path)
+        # Auf der früheren Wiki-Subdomain (Bild- und Medienlinks, /media/… geht dort unverändert durch) gibt es keine
+        # Sitzung: zur Anmeldung unter BASE_URL mit Rücksprung auf die Datei – wie _frueher_oeffentlich für Seiten.
+        # Relativ landete /login wieder auf der Subdomain, wurde dort zu /oeffentlich/login und nach der Anmeldung zu
+        # „Seite nicht gefunden“ (Migrationsbefund 2 der zweiten Durchsicht vor dem Merge).
+        if request.environ.get("stroemis.wiki_host"):
+            ziel = current_app.config["BASE_URL"].rstrip("/") + ziel
+        return redirect(ziel)
 
     # Alle übrigen Fehler (400, 405, 429, 500 …): eine deutsche Seite mit Kopfleiste und Weg zurück statt Werkzeugs
     # englischer Standardseite; Schnittstellen antworten weiter mit JSON (UI/UX vor dem Merge, A13). Ein eigener Text
