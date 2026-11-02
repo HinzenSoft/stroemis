@@ -156,6 +156,12 @@
   // schmale Spalte, bricht sie am „@“ (V5), erst ein Teil, der allein nicht passt, im Wort.
   const mailUmbruch = (mail) => `<span class="name-einheit">${S.esc(mail).replace(/@/, "<wbr>@")}</span>`;
 
+  /* Spalte „Inhalte“: Artikel, Alben und Bilder immer, Lehrgänge (angelegt) und Kataloge der Riegenkarten nur, wenn es
+     welche gibt – für Schritt 7 der Inbetriebnahme („wer Lehrgänge anlegen soll, bekommt Redakteur“, Rechte-Hinweis H5). */
+  const inhalte = (u) => [`${u.page_count} Artikel`, mehrzahl(u.album_count, "Album", "Alben"),
+    mehrzahl(u.photo_count, "Bild", "Bilder"), u.lehrgang_count ? mehrzahl(u.lehrgang_count, "Lehrgang", "Lehrgänge") : "",
+    u.katalog_count ? mehrzahl(u.katalog_count, "Katalog", "Kataloge") : ""].filter(Boolean).join(", ");
+
   async function load() {
     try { users = (await S.api("/api/admin/users")).users; }
     catch (e) { S.toast("Die Nutzerliste ließ sich nicht laden: " + e.message, true); return; }
@@ -175,7 +181,7 @@
         <td class="u-rollen">${rollenMarken(u)}</td>
         ${MODULE.map((m) => `<td class="recht" data-l="${m.t}" data-modul="${m.k}">${rechtZelle(m, u)}</td>`).join("")}
         <td class="small" data-l="Zuletzt da">${letzterLogin(u)}</td>
-        <td class="small" data-l="Inhalte">${u.page_count} Artikel, ${mehrzahl(u.album_count, "Album", "Alben")}, ${mehrzahl(u.photo_count, "Bild", "Bilder")}</td>
+        <td class="small" data-l="Inhalte">${inhalte(u)}</td>
         <td class="tabelle-aktionen"><div class="btn-row">
           <button class="btn secondary small" data-act="edit">Bearbeiten</button>
           ${S.menue({ art: "zeilenmenue", eintraege: [{ text: "Reset-Mail senden", kurz: "Reset-Mail", attrs: 'data-act="reset"' },
@@ -244,7 +250,10 @@
     try {
       if (b.dataset.act === "approve") {
         const r = await S.api(`/api/admin/users/${id}/approve`, { method: "POST", body: {} });
-        S.toast(r.mailed ? `${u.name} freigegeben – E-Mail verschickt` : `${u.name} freigegeben (keine E-Mail: kein Mailserver eingerichtet)`);
+        // Ohne Mailserver geht keine Mail, mit einem kann der Versand scheitern – beides ist mailed: false (Rechte-Hinweis H6).
+        S.toast(r.mailed ? `${u.name} freigegeben – E-Mail verschickt`
+          : r.mailserver ? `${u.name} freigegeben – die E-Mail ließ sich nicht verschicken („Testmail senden“ zeigt, woran es liegt)`
+            : `${u.name} freigegeben (keine E-Mail: kein Mailserver eingerichtet)`, !r.mailed && !!r.mailserver);
       } else {
         if (!(await S.confirm(`Anfrage von ${u.name} ablehnen und löschen?`, "Ablehnen"))) return;
         await S.api(`/api/admin/users/${id}/reject`, { method: "POST", body: {} });
@@ -618,7 +627,7 @@
 
   function loeschDialog(u) {
     S.dialog(`<h2>Nutzer löschen</h2>
-      <p>${S.esc(u.name || u.email)} (${S.esc(u.email)}) löschen? Alben, Bilder und Seiten der Strömipedia bleiben erhalten und gehen auf dich über. Aus den Lehrgängen der Riegenkarten wird das Konto als Ausbilder ausgetragen – seine Bewertungen behalten den Namen.</p>
+      <p>${S.esc(u.name || u.email)} (${S.esc(u.email)}) löschen? Alben, Bilder, Seiten der Strömipedia und Kataloge der Riegenkarten bleiben erhalten und gehen auf dich über. Aus den Lehrgängen der Riegenkarten wird das Konto als Ausbilder ausgetragen – seine Bewertungen behalten den Namen; einen Lehrgang, den es allein geleitet hat, pflegt danach nur die Verwaltung der Riegenkarten.</p>
       <div id="u-folgen"><p class="help">Folgen in der Materialablage werden ermittelt …</p></div>
       <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button>
         <button class="btn danger" id="u-del" type="button">Löschen</button></div>`,

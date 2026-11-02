@@ -394,8 +394,8 @@
      Lehrgang anlegen / bearbeiten
      ========================================================================================== */
   /* Ausbilder sind Konten mit Stufe in den Riegenkarten (Wunsch des Nutzers vom 01.11.2026) – einen freien Namen gibt es
-     nicht mehr. Je Zeile sucht man die Person über Name oder E-Mail-Adresse (GET /nutzer?q=, ab 2 Zeichen; der Server
-     liefert nur passende Konten), Funktion und „Leitung“ bleiben je Ausbilder. Ein schon eingetragenes Konto ohne Zugriff
+     nicht mehr. Je Zeile sucht man die Person über Name oder vollständige E-Mail-Adresse (GET /nutzer?q=, ab 2 Zeichen;
+     der Server liefert nur passende Konten, eine Adresse nur als Ganzes – zweite Durchsicht vor dem Merge), Funktion und „Leitung“ bleiben je Ausbilder. Ein schon eingetragenes Konto ohne Zugriff
      bleibt stehen und ist markiert (OHNE_ZUGRIFF); neu wählen lässt es sich nicht. Eine andere Person: Zeile entfernen
      (✕) und eine neue anlegen. */
   const OHNE_ZUGRIFF = {
@@ -413,7 +413,7 @@
         ${a.zugriff === false ? `<p class="help ausb-ohne">${esc(OHNE_ZUGRIFF[a.ohne_zugriff] || OHNE_ZUGRIFF.stufe)}</p>` : ""}`;
     }
     return `<input type="search" class="ausb-suche" placeholder="Name oder E-Mail" autocomplete="off" enterkeyhint="search"
-        aria-label="Person suchen – Name oder E-Mail-Adresse, ab 2 Zeichen">
+        aria-label="Person suchen – Name oder vollständige E-Mail-Adresse, ab 2 Zeichen">
       <ul class="ausb-treffer" aria-label="Gefundene Konten" hidden></ul>`;
   }
 
@@ -471,7 +471,9 @@
       treffer.innerHTML = konten.length
         ? konten.map((k) => `<li><button type="button" class="ausb-konto" data-id="${k.id}">${kontoHtml(k)}</button></li>`).join("")
           + (r.mehr ? '<li class="ausb-treffer-leer">Mehr als 20 – bitte genauer.</li>' : "")
-        : `<li class="ausb-treffer-leer">${(r.nutzer || []).length ? "Schon eingetragen." : "Niemand gefunden – Ausbilder brauchen ein Konto mit Stufe in den Riegenkarten (die vergibt die Plattform-Verwaltung)."}</li>`;
+        : `<li class="ausb-treffer-leer">${(r.nutzer || []).length ? "Schon eingetragen."
+          : q.includes("@") ? "Niemand gefunden – eine E-Mail-Adresse zählt nur vollständig; oder such nach dem Namen."
+            : "Niemand gefunden – Ausbilder brauchen ein Konto mit Stufe in den Riegenkarten (die vergibt die Plattform-Verwaltung)."}</li>`;
       treffer.hidden = false;
       $$("button.ausb-konto", treffer).forEach((b) => b.addEventListener("click", () => waehlen(z, konten.find((k) => k.id === +b.dataset.id))));
     }
@@ -574,7 +576,7 @@
      Liste nicht zu finden. */
   function kopierenDialog(lg) {
     dialogOeffnen(`<h2>Lehrgang kopieren</h2>
-      <p class="help">Übernommen werden Titel, Ort, Referierende, Beschreibung, Voraussetzungen und alle
+      <p class="help">Übernommen werden Titel, Ort, Referierende mit Riegenkarten-Stufe, Beschreibung, Voraussetzungen und alle
         Prüfungsleistungen. Teilnehmende, Häkchen, Bewertungen und Medien bleiben beim Original.</p>
       <label for="kp-titel">Titel des neuen Lehrgangs</label>
       <input type="text" id="kp-titel" value="${esc(lg.titel)} (Kopie)">
@@ -593,7 +595,10 @@
           knopf.disabled = true;
           try {
             const r = await api(`${API}/lehrgaenge/${lg.id}/kopieren`, { method: "POST", body: d });
-            meldungMerken(`Kopie „${r.lehrgang.titel}“ angelegt`);
+            // Ausbilder ohne passendes Konto (keine Stufe, deaktiviert) kommen nicht mit (Rechte-Befund B3) – der Satz nennt sie.
+            const nicht = r.ausbilder_nicht_uebernommen || [];
+            meldungMerken(`Kopie „${r.lehrgang.titel}“ angelegt`
+              + (nicht.length ? `. ${NICHT_UEBERNOMMEN}${nicht.map((a) => a.name).join(", ")}` : ""));
             location.href = `/riegenkarten/${r.lehrgang.id}#leistungen`;
           } catch (e) { S.fehlschlag(knopf, e, body); }
         };

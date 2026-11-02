@@ -5636,7 +5636,11 @@
        sofort. Bis der Server es bestätigt, liegt es außerdem in diesem Fenster (sessionStorage) und wird beim nächsten
        Laden nachgetragen – aber nur, wenn am Server noch der Stand von vorher steht. */
     const TIPP_MS = 800;
-    const ABLAGE = `stroemis-mat-pruefung-${DATEN.id}`;      // „stroemis-“: Abmelden räumt es weg (common.js)
+    /* „stroemis-“: Abmelden räumt es weg (common.js). Die Kontokennung gehört in den Schlüssel: Läuft die Sitzung ab und
+       meldet sich im selben Fenster ein anderes Konto an, trägt es den Stand des ersten nicht nach (Sicherheitshinweis der
+       zweiten Durchsicht vor dem Merge). Ein Stand unter dem alten Schlüssel ohne Konto wird nicht mehr gelesen (das
+       Abmelden räumt ihn weg). */
+    const ABLAGE = `stroemis-mat-pruefung-${(window.STROEMIS && STROEMIS.user && STROEMIS.user.id) || 0}-${DATEN.id}`;
     const felder = new Map();        // "26:notiz", "26:wert", "bem" → { wert, bestaetigt, timer, unterwegs, laut, fehler }
     let ersetzt = false;             // punktErsetzen tauscht gerade eine Karte aus – deren Fokuswechsel ist kein Verlassen
     const schluessel = (el) => (el.id === "pr-bem" ? "bem" : `${el.dataset.rid}:${el.matches(".mat-pnotiz") ? "notiz" : "wert"}`);
