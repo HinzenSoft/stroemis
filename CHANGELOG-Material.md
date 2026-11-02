@@ -71,6 +71,7 @@ Geschichte stehen. Schemaversion nach der Nachbesserung vor dem Merge: 30; mit d
 | Startseite über alle Module | „/“ für jedes Konto mit Modul: Kacheln je Modul mit Zahlen, die zum Handeln führen (Materialablage wie ihre Übersicht), „Zuletzt besucht“ und „Neu und geändert“ über die Module, Abschnitte der Strömipedia als Karten (auch auf ihrer Übersicht und im Lesemodus), Suchfeld der Strömipedia; Logo und Anmeldung führen dorthin | gebaut 02.11.2026 (kein Schemaschritt, Merker in `mat_meta`), Fotos vor dem Push |
 | Kleinigkeiten aus dem Artikel-Nachzug | Strömipedia: Sprung zum Anker bleibt oben, auch wenn Bilder darüber nachladen, Gliederung markiert den angesprungenen Abschnitt; Editor meldet entzogene Berechtigung als „keine Berechtigung mehr“; Vorlagen auch über „+“ und „Erste Seite anlegen“; Ersteller und Bearbeiter nur mit Stufe (Server); Riegenkarten: Leistungsdialog bei eingefrorenen Bewertungen nur zum Lesen mit Satz und ausgegrautem „Speichern“, Hilfetext Ausbilder; Ankerplätze: „Bild bearbeiten“ speichert nur Geändertes; Materialablage: „verloren“ in Meine PSA, Rückruf-Dialog „wegen Rückruf sperren“; alle Module: Anleitung als „i“ an der Überschrift statt Textlink „Anleitung“ und blauem Hinweiskasten; Karten der Strömipedia-Übersicht mittig wie auf der Startseite | gebaut 02.11.2026 (kein Schemaschritt) |
 | Menüeintrag „Anleitung zur Strömipedia“ entfernt | „⋯“ einer Seite der Strömipedia ohne „Anleitung zur Strömipedia“; Thema `seite` aus `app/anleitung.py` | gebaut 02.11.2026 (kein Schemaschritt) |
+| Freigaben je Person, Ordnerbild neben dem Namen | Reiter „Freigaben“: eine Zeile je Person in allen drei Listen, EIN „Ändern“ → Dialog „Rechte ändern“ (neuer Endpunkt je Person und Ordner, eine Transaktion), „Entziehen“ nimmt alle Rechte der Person dort, „… hat hier schon: …“ beim Anlegen; Ordnerfoto links neben Name und Knopfzeile (96 px, Telefon 64 px) | gebaut 02.11.2026 (kein Schemaschritt), zur Freigabe |
 
 ## Abgleich mit dem Bestand (vor Lieferung 1)
 
@@ -9875,6 +9876,7 @@ oder Plattform-Verwaltung).
 | `POST /api/material/ordner/<id>/freigaben` (`user_id`, `grundrecht`: `lesen`\|`verwalten`\|`null`, `grund_bis`, `pruefen`, `pruefen_bis`, `notiz`) | Materialwart am Ordner | Grundrecht und/oder Prüffreigabe in einem Schritt anlegen oder ändern, ganz oder gar nicht → 201 `freigaben`, `liste`; Prüffreigabe ohne Ende (`pruefen`: true, `pruefen_bis` leer) nur mit Grundrecht am Anker oder darüber, sonst 400; 404 „Konto nicht gefunden.“ für unbekannte, deaktivierte und namenlose Konten, 409 ohne Qualifikation, an Systemordnern oder ohne verbleibenden Verwalter (Phase 2) |
 | `POST /api/material/ordner/<id>/freigaben/verlaengern` (`bis`) | Materialwart am Ordner | alle befristeten Prüffreigaben im Zweig, die man ändern darf (auch bis zu 90 Tage abgelaufene) → `verlaengert`, `uebersprungen` (Konto, Ordner, Grund) (Phase 2) |
 | `PUT /api/material/freigaben/<id>` (`recht`, `bis` – `null` = unbefristet, bei Prüffreigaben nur mit Grundrecht –, `notiz`), `DELETE …/<id>` | Materialwart am Ordner der Freigabe | Freigabe ändern bzw. entziehen; DELETE liefert `offene_entwuerfe` (Phase 2). Ausweiten (anderes Recht als verwalten → lesen, späteres Ende) nur für Konten mit Modulzugang, sonst 409 |
+| `PUT /api/material/ordner/<id>/freigaben/person/<konto>` (`grundrecht`: `{recht, bis}`\|`null`, `pruefen`: `{bis}`\|`null`, `notiz` – jedes optional) | Materialwart am Ordner | Dialog „Rechte ändern“ (02.11.2026): alle Rechte einer Person am Ordner in einer Transaktion, Regeln je Recht wie beim Erteilen und Ändern, Fehler mit Vorsatz „„Grundrecht“: “/„„Prüffreigabe“: “ → `freigaben`, `liste`, `offene_entwuerfe`, `mail`; nichts mitgeschickt 400 |
 | `GET /api/material/freigaben/meine` | angemeldet, auch ohne Modulzugang | eigene Freigaben (gültige und im letzten Jahr abgelaufene) mit Pfad, `recht`, `bis`, `gueltig`, `wirkt`, `wirkt_nicht` (Grund oder `null`), `grundrecht_dort`, `laeuft_ab_in_tagen` und `verwalter` (bis zu drei Namen) – ohne Notiz; dazu `zugang`, `qualifiziert` (wirkt nur mit Zugang), `alles` (Material-Verwaltung) (Phase 2) |
 | `GET /api/material/freigaben?user_id=` | Plattform-Verwaltung | alle Freigaben eines Kontos mit Notiz (Nutzerverwaltung) (Phase 2) |
 | `GET /api/material/nutzer?q=&zweck=` (ab 3 Zeichen) | verwalten irgendwo oder Material-Verwaltung | Personensuche: `zweck=freigabe` (Vorgabe) nur Konten mit Zugang zum Modul (Stufe Mitglied oder Verwaltung), `zweck=zuordnung` alle; höchstens 20 aktive Konten mit Namen, je `id`, `name`, `gliederung`, `qualifiziert` (wirkt nur mit Stufe), `grundrecht_ueberall` (Material-Verwaltung) – keine E-Mail, keine Urkundennummer; `mehr` (Phase 2, `zweck` seit der Modulstufe) |
@@ -11010,3 +11012,68 @@ Schemaschritt.
 - README „Verweise auf die Anleitung“ angepasst.
 - **Tests**: `test_module_anleitung.py` (kein Eintrag, kein Thema `seite`), `test_module_kleinigkeiten.py`.
 - **Artikel**: „Strömipedia“ (Seiten „Strömipedia“ und „Lesen und Finden“) beim nächsten Nachzug anpassen.
+
+## Freigaben je Person, Ordnerbild neben dem Namen (02.11.2026)
+
+Wünsche des Nutzers: „Wäre es möglich die Rechte je Person gesammelt darzustellen?“ (gewählt: „Eine Zeile je Person“
+mit EINEM „Ändern“) und „Das Bild sollte links neben dem Namen stehen“ (Ordnerseite). Bauentwurf
+`planung/freigaben-person/entwurf.md`, Entscheidungen vom 02.11.2026: 1 A, 2 A, 3 A, 4 A, 5 B, 6 A. Kein
+Schemaschritt, kein neues Journal-Ereignis.
+
+**Server**
+- Neu `PUT /api/material/ordner/<fid>/freigaben/person/<uid>` (`requires_folder("verwalten", "fid")`, Dienst
+  `freigaben.person_setzen`): Felder `grundrecht` (`{"recht", "bis"}` oder `null` = entziehen), `pruefen` (`{"bis"}`,
+  `null` als bis = dauerhaft; `null` = entziehen), `notiz` – jedes optional, fehlt = unberührt. „bis“ fehlt: das
+  bisherige Ende, bei einem neuen Grundrecht dauerhaft wie beim Erteilen; eine neue Prüffreigabe braucht „bis“. Die
+  Notiz gilt für jedes mitgeschickte Recht, das danach besteht – ohne `grundrecht` und `pruefen` für alle vorhandenen.
+- **Alles oder nichts** in einer Transaktion: zuerst das Grundrecht, dann die Prüffreigabe, je über `_schreiben` mit
+  den Regeln je Recht (1.6 Nr. 3, 4, 5, 8, 12 – ein Grundrecht aus derselben Anfrage trägt eine dauerhafte
+  Prüffreigabe, eines, das die Anfrage wegnimmt, nicht mehr), danach Nr. 7. Ablehnungen tragen den Vorsatz
+  „„Grundrecht“: “ bzw. „„Prüffreigabe“: “ und denselben Code; danach ist nichts geschrieben.
+- Unveränderte Rechte werden weder geprüft noch geschrieben (kein Journaleintrag); ein nicht vorhandenes zu entziehen
+  ist nichts zu tun; nichts mitgeschickt → 400 „Nichts zu ändern.“. Kennungen bleiben (UPDATE) – Erinnerungslog und
+  -mails unberührt; Journal je Zeile wie bisher (`freigabe_erteilt|geaendert|entzogen`, Notiz nur als
+  `notiz_geaendert`).
+- Konto: Hat die Person am Ordner noch nichts oder entsteht eine neue Zeile, wählbar wie beim Erteilen (404 für
+  unbekannt, deaktiviert, ohne Namen; 409 ohne Zugang zum Modul); kürzen, herabsetzen, Notiz und entziehen gehen sonst
+  immer. Gliederungstrennung wie die übrigen Freigabe-Routen (fremd 404 wie unbekannt, sichtbar ohne verwalten 403).
+- Antwort wie beim Erteilen (`freigaben`, `liste` solange man noch verwaltet, `mail`) und `offene_entwuerfe` wie beim
+  Entziehen (gerechnet, wenn ein Recht wegfällt oder kürzer wird; Berechnung als `_offene_entwuerfe` für beide).
+- Die bisherigen Endpunkte bleiben (Leitstelle, Verlängern, Tests); die Leseantwort `GET …/freigaben` ist unverändert.
+
+**Oberfläche (Reiter „Freigaben“, freigaben.js/.css)**
+- Eine Zeile je Person in „Hier vergeben“, je Person und Ordner in „Geerbt von oben“ und „In Unterordnern“ (gruppiert
+  in der Oberfläche, Schlüssel `ordner:konto`). Spalten Person | Rechte | Notiz | Vergeben: je Recht eine Textzeile
+  „verwalten (dauerhaft)“, „prüfen (bis 31.12.2027)“ mit Zustandsmarke und ggf. „Qualifikation fehlt“; abweichende
+  Notizen bzw. Vergeben je Recht mit dem Recht davor; grau nur, wenn alle Rechte abgelaufen sind. Zähler im Kopf zählen
+  Personen, der Ablaufhinweis weiter Freigaben. Karten (Inhalt ≤ 840 px) ohne Halbspalten, „Rechte:“ über den Rechten.
+- EIN „Ändern“ (sobald ein Recht änderbar ist) öffnet **„Rechte ändern“**: Grundrecht „–“/lesen/verwalten mit „Grundrecht
+  bis“ (dauerhaft nur, wer selbst dauerhaft verwaltet), Häkchen „Prüffreigabe“ mit „Prüfen bis“ (dauerhaft nur mit
+  Grundrecht im Dialog oder darüber), eine Notiz; eigene Zeile nur verkürzen/herabsetzen/entziehen (nur Optionen bis
+  zum eigenen Recht, keine eigene neue Prüffreigabe), „–“ fehlt bei der eigenen letzten Verwalterfreigabe; ein Recht,
+  das man nicht ändern darf, steht nur als Text da und wird nicht mitgeschickt. Fällt ein Recht weg, fragt der Dialog
+  vorher (`{ endgueltig: false }`, mit „Daran hängt …“). Lehnt der Server ab, bleibt der Dialog mit allen Eingaben
+  offen, die Meldung steht am Datumsfeld bzw. an der Auswahl des genannten Rechts. Erfolg: Toast „…: Rechte geändert“,
+  Hinweis zu offenen Prüfungen wie beim Entziehen.
+- **„Entziehen“** in der Zeile (nur, wenn jedes Recht entziehbar ist; sonst der Satz „Entziehen nur über die
+  Material-Verwaltung …“) nimmt nach der Rückfrage „„lesen“ und „prüfen“ von … an … entziehen?“ alle Rechte der Person
+  an diesem Ordner.
+- „Freigabe anlegen“: Hat die gewählte Person am gewählten Anker schon Rechte, steht über den Vorlagen „… hat hier
+  schon: …“ mit Textknopf „Rechte ändern“ (Dialog der Person); „Freigabe erteilen“ bleibt möglich.
+- „Verlängern“ aus dem Ordnerkopf springt zur Personenzeile mit der ablaufenden Freigabe (Fokus auf ihr „Ändern“).
+
+**Ordnerseite (material.js/.css)**
+- Mit Foto steht es im Seitenkopf links neben Überschrift und Knopfzeile (`ordnerKopf`, `.page-head.mat-mit-bild`,
+  `.mat-ordnertitel`), außerhalb des `<h1>`: 96 × 96 px, Inhalt bis 600 px (`mat-seite`) 64 × 64 px mit der
+  Knopfzeile darunter in voller Breite; quadratischer Ausschnitt der Vorschau, Klick/Tippen öffnet die Großansicht wie
+  bisher. Ohne Foto unverändert. Der Kasten darunter (Beschreibung, Prüfintervall, Erinnerungsmails aus) ohne Bild; die
+  Regeln 120/160 px entfallen. Artikel- und Produktseite unverändert (Frage 6 A).
+
+**Tests**: `test_material_freigaben.py` – `test_person_setzen` (anlegen, ändern mit gleichen Kennungen, unverändert
+ohne Journal, nur Notiz, einzeln und beide entziehen, Vorsätze), `_alles_oder_nichts` (Prüffreigabe ohne
+Qualifikation, > 24 Monate, Grundrecht weg + dauerhaft prüfen, letzte Verwalterfreigabe – jeweils nichts geschrieben;
+dauerhaft mit Grundrecht aus derselben Anfrage), `_rechte` (Material-Verwaltung auch in B mit Nr. 8, befristeter
+Verwalter Nr. 3/4, eigene Zeile, Leser 403, fremd/unbekannt 404 gleich, Systemordner 409, Konten nach Nr. 12),
+`_entwuerfe_und_erinnerung` (offene Entwürfe, Erinnerungslog bleibt, Antwort ohne Liste nach Selbstherabsetzung),
+`test_person_oberflaeche_statisch`; Kennung `uid` in den Rundumtests (`test_material_trennung`, `_stufen`,
+`_ueberblick`); `test_module_info_i` M31 an den Personenzähler angepasst.
