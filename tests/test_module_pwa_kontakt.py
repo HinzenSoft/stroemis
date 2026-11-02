@@ -97,7 +97,7 @@ def test_manifest():
                 assert bild.mode == "RGB"               # ohne Durchsicht: das Rot reicht bis an den Rand
         # Kurzbefehle zu allen fünf Modulen unter ihren neuen Adressen.
         assert [(s["name"], s["url"]) for s in m["shortcuts"]] == [
-            ("Strömipedia", "/"), ("Ankerplätze", "/ankerplaetze"), ("Riegenkarten", "/riegenkarten"),
+            ("Strömipedia", "/stroemipedia"), ("Ankerplätze", "/ankerplaetze"), ("Riegenkarten", "/riegenkarten"),
             ("Materialablage", "/materialablage"), ("Leitstelle", "/leitstelle")]
         # Ohne Anmeldung, ohne Datenbank (ist_statisch), nach jedem Deploy sofort neu.
         assert r.headers["Cache-Control"] == "no-cache"

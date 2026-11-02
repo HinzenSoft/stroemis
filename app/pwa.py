@@ -80,7 +80,7 @@ def manifest_daten():
         "src": f"/static/img/pwa/symbol{'-maskable' if zweck == 'maskable' else ''}-{groesse}{zusatz}.png",
         "sizes": f"{groesse}x{groesse}", "type": "image/png", "purpose": zweck}
     kurz = [{"name": module.NAME[m], "short_name": module.NAME[m],
-             "url": "/" if m == "wiki" else module.PFAD[m],
+             "url": module.PFAD[m],
              "icons": [{"src": f"/static/img/pwa/symbol-96{zusatz}.png", "sizes": "96x96", "type": "image/png"}]}
             for m in ("wiki", "karte", "pruefungen", "material", "verwaltung")]
     return {

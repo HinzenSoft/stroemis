@@ -281,14 +281,16 @@ def _url(regel, kennungen):
 def _stand(app):
     """Alle Zeilen der Modultabellen und die Unterschrift der Führungskraft – vorher und nachher gleich. Ausgenommen das
     Verzeichnis ausgegebener Lebensläufe samt Zähler (Schritt 31): Jeder Abruf – auch ein lesender – verzeichnet Kennung,
-    Inventarnummer, Stand und Prüfsummen, ohne Konto (test_material_lebenslauf_summe)."""
+    Inventarnummer, Stand und Prüfsummen, ohne Konto (test_material_lebenslauf_summe). Ebenso die Merker der Startseite
+    in mat_meta („start:…“, app/start.py): Das Öffnen einer Artikelseite merkt sie für „Zuletzt besucht“ des Kontos –
+    das ist kein Eingriff in die Materialablage."""
     with app.app_context():
         from app import db
         tabellen = [r["name"] for r in db.query("SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE 'mat\\_%' "
                                                  "ESCAPE '\\' AND name NOT LIKE '%fts%' AND name <> 'mat_lebenslauf' "
                                                  "ORDER BY name")]
         out = {t: db.query(f"SELECT * FROM {t} ORDER BY rowid") for t in tabellen}
-        out["mat_meta"] = [z for z in out["mat_meta"] if not z["schluessel"].startswith("lebenslauf_zaehler_")]
+        out["mat_meta"] = [z for z in out["mat_meta"] if not z["schluessel"].startswith(("lebenslauf_zaehler_", "start:"))]
         out["users"] = db.query("SELECT id, recht_material, mat_pruefer, mat_katalog, urkundennummer, signature_png "
                                 "FROM users ORDER BY id")
         return out

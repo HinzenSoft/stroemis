@@ -165,16 +165,15 @@ def test_c1_c5_anmeldung_und_texte():
         assert "Ankerplätze" in gruppen and "Karte" not in gruppen, gruppen
         # Probemail nennt die Leitstelle (ohne Mailserver wird nichts verschickt, der Text steht im Code).
         assert "in der Leitstelle von {cfg['SITE_NAME']}" in lies("app/api_admin.py")
-        # 403: der Weg führt in den eigenen Bereich.
+        # 403: der Weg führt in den eigenen Bereich – seit dem 02.11.2026 die Startseite über alle Module, die genau die
+        # Module des Kontos zeigt (auch ohne jedes Modul: dort die Strömipedia im Lesemodus).
         matv, _ = _konto(app, adm, "matv@example.org", "Material Platzhalter", {"material": 3, "wiki": 0})
-        r = matv.get("/ankerplaetze")
-        assert r.status_code == 403 and '<a href="/materialablage">Zur Materialablage</a>' in r.get_data(as_text=True)
         mitglied, _ = _konto(app, adm, "mit@example.org", "Mitglied Platzhalter", {"wiki": 1, "material": 0})
-        r = mitglied.get("/leitstelle")
-        assert r.status_code == 403 and '<a href="/">Zur Strömipedia</a>' in r.get_data(as_text=True)
         keiner, _ = _konto(app, adm, "keiner@example.org", "Ohne Platzhalter", {"wiki": 0, "material": 0})
-        r = keiner.get("/riegenkarten")
-        assert r.status_code == 403 and '<a href="/stroemipedia">Zur Strömipedia</a>' in r.get_data(as_text=True)
+        for c, pfad in ((matv, "/ankerplaetze"), (mitglied, "/leitstelle"), (keiner, "/riegenkarten")):
+            r = c.get(pfad)
+            assert r.status_code == 403 and '<a href="/">Zur Startseite</a>' in r.get_data(as_text=True), pfad
+            assert "Zur Strömipedia" not in r.get_data(as_text=True)
     for pfad, alt in (("app/material/services/rechte.py", "„Prüfer“ in der Nutzerverwaltung"),
                       ("app/material/services/wikiverweis.py", "(Nutzerverwaltung)."),
                       ("app/material/services/zuruecksetzen.py", "über die Nutzerverwaltung löschen"),

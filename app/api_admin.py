@@ -3,7 +3,7 @@ import secrets
 
 from flask import Blueprint, current_app, jsonify
 
-from . import db, einstellungen, medienpflege
+from . import db, einstellungen, medienpflege, start
 from .auth import (EMAIL_RE, MIN_PW, MODULE, STUFEN_JE_MODUL, VERWALTUNG, VORGABE_NEU, admin_required, can_reset,
                    clear_attempts, current_user, eingabefehler_abfangen, json_body, public_user, send_reset_mail)
 from .images import delete_avatar
@@ -338,6 +338,8 @@ def delete_user(uid):
         # über ON DELETE SET NULL als Freitext-Ausbilder stehen, die es nicht mehr gibt. Was es geprüft hat, steht mit
         # Namen an den Bewertungen und bleibt.
         db.execute("DELETE FROM pruef_ausbilder WHERE user_id = ?", (uid,))
+        # Startseite: letzter Besuch und „Zuletzt besucht“ (Merker in mat_meta, app/start.py) gehen mit dem Konto.
+        start.konto_vergessen(uid)
         db.execute("DELETE FROM users WHERE id = ?", (uid,))
     # Erst nach dem Festschreiben: Bricht die Umschreibung ab, bleibt das Konto samt Bild stehen.
     delete_avatar(current_app.config["MEDIA_DIR"], bild)

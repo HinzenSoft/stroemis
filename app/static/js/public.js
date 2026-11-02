@@ -76,6 +76,7 @@
 
   async function show(slug) {
     if (!slug) return home();
+    shell.classList.remove("uebersicht");
     let d;
     try { d = await get(`/api/public/pages/${encodeURIComponent(slug)}`); }
     catch (e) {
@@ -125,7 +126,8 @@
       stopSpy = MD.tocScrollspy(art, tocEl);
     };
     MD.enhance(art, { children: (d.tree || []).filter((t) => t.parent_id === p.id), prefix,
-                      holeSeite: (slug) => get(`/api/public/pages/${encodeURIComponent(slug)}`).then((r) => r.page),
+                      // leise: Die Quellseite eines eingebauten Abschnitts ist kein Besuch („Zuletzt besucht“ der Startseite).
+                      holeSeite: (slug) => get(`/api/public/pages/${encodeURIComponent(slug)}?leise=1`).then((r) => r.page),
                       /* Eingebundener Text trifft erst nach dem Zeichnen ein. Ohne dieselbe
                          Behandlung führten seine internen Links auf /stroemipedia/… und damit zur
                          Anmeldung, und seine Überschriften fehlten im Verzeichnis. */
@@ -161,9 +163,21 @@
       ? "Freigegebene Inhalte aus der Strömungsrettung."
       : `Freigegebene Inhalte aus der Strömungsrettung. Für alles Weitere: <a href="${STROEMIS.baseUrl}/login">anmelden</a>.`;
     const leer = lesemodus ? "Derzeit sind keine Seiten für alle Angemeldeten freigegeben." : "Derzeit sind keine Seiten freigegeben.";
+    /* Die Einstiegsseiten als Karten wie auf der Übersicht der Strömipedia (wiki.js) und der Startseite: Titel, Zahl der
+       Seiten, die ersten Unterseiten (/api/public/index, api_wiki.abschnitte) – vorher eine Liste. */
+    // Mit dem Symbol der Seite wie auf der Startseite und der Übersicht der Strömipedia (wiki.js).
+    const seite = (s) => `<a href="${prefix}${esc(s.slug)}">${s.icon ? esc(s.icon) + " " : ""}${esc(s.title)}</a>`;
+    const karte = (p) => {
+      const mehr = (p.kinder || 0) - (p.unterseiten || []).length;
+      return `<li class="wiki-karte"><h2>${seite(p)}</h2>
+        <p class="wiki-karte-zahl">${p.seiten === 1 ? "1 Seite" : `${Number(p.seiten)} Seiten`}</p>
+        ${(p.unterseiten || []).length ? `<ul>${p.unterseiten.map((u) => `<li>${seite(u)}</li>`).join("")}${mehr > 0
+          ? `<li class="wiki-karte-mehr"><a href="${prefix}${esc(p.slug)}">… ${mehr} weitere<span class="nur-vorlesen"> ${mehr === 1 ? "Unterseite" : "Unterseiten"} von ${esc(p.title)}</span></a></li>` : ""}</ul>` : ""}</li>`;
+    };
+    if (lesemodus) shell.classList.add("uebersicht");
     content.innerHTML = `<h1 class="seitentitel">${titel}</h1>
       <p class="help">${einleitung}</p>
-      <div class="wiki-content">${pages.length ? `<ul>${pages.map((p) => `<li><a href="${prefix}${esc(p.slug)}">${esc(p.title)}</a>${p.public_children ? ' <span class="muted small">(mit Unterseiten)</span>' : ""}</li>`).join("")}</ul>` : `<p class="muted">${leer}</p>`}</div>`;
+      ${pages.length ? `<ul class="wiki-karten">${pages.map(karte).join("")}</ul>` : `<p class="muted">${leer}</p>`}`;
     wire(content);
   }
 
@@ -195,5 +209,15 @@
     if (side.classList.contains("open") && !side.contains(e.target) && !e.target.closest("#wiki-menu")) side.classList.remove("open");
   }, true);
   document.addEventListener("keydown", (e) => { if (e.key === "Escape") side.classList.remove("open"); });
-  show(shell.dataset.slug || slugAusPfad());
+  /* Suchfeld der Startseite: /stroemipedia?suche=<Begriff> – wie in wiki.js (sucheAusAdresse). */
+  function sucheAusAdresse() {
+    const q = new URLSearchParams(location.search).get("suche");
+    if (q === null || !searchInput) return;
+    history.replaceState(history.state, "", location.pathname + location.hash);
+    if (!q.trim()) return;
+    searchInput.value = q.trim();
+    if (getComputedStyle(side).position === "fixed") side.classList.add("open");
+    searchInput.dispatchEvent(new Event("input"));
+  }
+  Promise.resolve(show(shell.dataset.slug || slugAusPfad())).then(sucheAusAdresse);
 })();

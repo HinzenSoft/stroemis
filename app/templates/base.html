@@ -26,7 +26,9 @@
     {# Die Reiter folgen der Rechte-Matrix (auth.MODULE); jede Route prüft das Recht zusätzlich selbst. #}
     {# Namen und Adressen aus app/module.py (Umbenennung 26.10.2026); die Schlüssel (rechte.wiki …) bleiben. #}
     {# Ohne Stufe in der Strömipedia bleibt der Reiter: Er führt in den Lesemodus mit den für alle Angemeldeten freigegebenen Seiten (auth.wiki_lesemodus). #}
-    {% if rechte.wiki %}<a href="/" class="{% if active == 'wiki' %}active{% endif %}">{{ modul.name.wiki }}</a>{% elif wiki_lesemodus %}<a href="{{ modul.pfad.wiki }}" class="{% if active == 'wiki' %}active{% endif %}">{{ modul.name.wiki }}</a>{% endif %}
+    {# Seit der Startseite über alle Module (02.11.2026) führt nur das Logo nach „/“ – einen Reiter „Start“ gibt es nicht, auf der
+       Startseite ist keiner aktiv; „Strömipedia“ führt immer nach /stroemipedia. #}
+    {% if rechte.wiki or wiki_lesemodus %}<a href="{{ modul.pfad.wiki }}" class="{% if active == 'wiki' %}active{% endif %}">{{ modul.name.wiki }}</a>{% endif %}
     {% if rechte.karte %}<a href="{{ modul.pfad.karte }}" class="{% if active == 'map' %}active{% endif %}">{{ modul.name.karte }}</a>{% endif %}
     {% if rechte.pruefungen %}<a href="{{ modul.pfad.pruefungen }}" class="{% if active == 'pruefungen' %}active{% endif %}">{{ modul.name.pruefungen }}</a>{% endif %}
     {% if material_zugang %}<a href="{{ modul.pfad.material }}" class="{% if active == 'material' %}active{% endif %}">{{ modul.name.material }}</a>{% endif %}

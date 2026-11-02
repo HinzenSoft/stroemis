@@ -18,7 +18,7 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.security import safe_join
 
 from . import (anleitung, api_admin, api_albums, api_pruefungen, api_wiki, auth, db, einstellungen, material, medienpflege,
-               module, pwa)
+               module, pwa, start)
 from .images import AVATAR_MAX_BYTES, EMBED_EXT, MEDIEN_ACCEPT, VIDEO_EXT, slide_variante
 
 
@@ -148,18 +148,12 @@ def _anleitung(modul):
 @pages.get("/")
 @auth.page_login_required
 def index():
-    """Startseite ist die Strömipedia (Modul wiki) – oder das erste Modul, das die Rechte-Matrix dem Konto öffnet.
-    Ohne jedes Modul der Lesemodus der Strömipedia (die öffentlichen Seiten) statt einer Sackgasse; ein Modul mit
-    eigener Stufe geht ihm vor. Die Materialablage öffnet sich nur mit Stufe UND Namen (rechte.zugang) – ein namenloses
-    Konto von früher landete sonst auf ihrer Fehlerseite."""
-    if auth.nutzt("wiki"):
-        return render_template("wiki.html", user=auth.current_user(), slug="", anleitung=_anleitung("wiki"))
-    from .material.services import rechte as mat_rechte
-    for modul in ("karte", "pruefungen", "material", "verwaltung"):
-        if mat_rechte.zugang() if modul == "material" else auth.nutzt(modul):
-            return redirect(module.PFAD[modul])
-    if auth.wiki_lesemodus():
-        return redirect(url_for("pages.wiki"))
+    """Startseite über alle Module (app/start.py, Wunsch vom 02.11.2026): je Modul eine Kachel, „Zuletzt besucht“, „Neu und
+    geändert“ und die Abschnitte der Strömipedia – für jedes Konto mit mindestens einem Modul, „Meine PSA“ oder dem
+    Lesemodus der Strömipedia. Bis dahin war „/“ die Strömipedia (sie liegt unverändert unter /stroemipedia) bzw. eine
+    Weiterleitung ins erste Modul. Ohne jedes davon die Hinweisseite statt einer Sackgasse."""
+    if start.zugang():
+        return render_template("start.html", user=auth.current_user())
     # Mit Kopfleiste (user): Profil und Abmelden bleiben erreichbar – ohne sie saß man auf der Fehlerseite fest.
     return render_template("error.html", user=auth.current_user(), code=403, message="Für dein Konto ist noch kein "
                            "Bereich freigeschaltet. Bitte wende dich an die Plattform-Verwaltung."), 403
@@ -323,6 +317,8 @@ def _pruefungen_seite(ansicht, lehrgang_id=None, katalog_id=None):
         abort(403, description=api_pruefungen.NUR_REDAKTION_KATALOG)
     if lehrgang_id is not None and not api_pruefungen._sichtbar(lehrgang_id):
         abort(404)
+    if ansicht == "lehrgang":
+        start.ziel_merken("pruefungen", lehrgang_id)          # „Zuletzt besucht“ der Startseite
     return render_template("pruefungen.html", user=auth.current_user(), ansicht=ansicht,
                            lehrgang_id=lehrgang_id, katalog_id=katalog_id,
                            anleitung=_anleitung("pruefungen") if ansicht != "druck" else "{}")
@@ -611,6 +607,7 @@ def create_app():
     app.register_blueprint(api_pruefungen.bp)
     app.register_blueprint(pages)
     app.register_blueprint(pwa.bp)
+    app.register_blueprint(start.bp)
     app.add_template_filter(mailto, "mailto")
 
     # Bestandsvideos, die noch nicht jeder Browser abspielt, werden im Hintergrund gewandelt.
@@ -739,6 +736,8 @@ def create_app():
                 # Die Zahlen der Stufen für Vergleiche in Vorlagen (rechte.wiki >= stufe.redakteur) – wie S.STUFE.
                 "stufe": {"mitglied": auth.MITGLIED, "redakteur": auth.REDAKTEUR, "verwaltung": auth.VERWALTUNG},
                 "wiki_lesemodus": auth.wiki_lesemodus(),
+                # Hat das Konto die Startseite (app/start.py)? Für den Weg zurück auf den Fehlerseiten.
+                "startseite": start.zugang() if auth.current_user() else False,
                 "material_zugang": material_zugang(),
                 # Sichtbare Modulnamen und Seitenadressen (app/module.py) für Reiter, Titel und Links.
                 "modul": {"name": module.NAME, "pfad": module.PFAD},

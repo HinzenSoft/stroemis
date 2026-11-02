@@ -469,7 +469,8 @@
   /* ======================================================================
      Navigation
      ====================================================================== */
-  // Startseite „/“ oder „/stroemipedia“ → „“; „/stroemipedia/<slug>“ und (vor der Umbenennung) „/wiki/<slug>“ → Slug.
+  // Übersicht „/stroemipedia“ → „“ („/“ ist seit dem 02.11.2026 die Startseite über alle Module, dort läuft wiki.js nicht);
+  // „/stroemipedia/<slug>“ und (vor der Umbenennung) „/wiki/<slug>“ → Slug.
   function slugFromPath() { return MD.entziffern(location.pathname.replace(/^\/(?:(?:stroemipedia|wiki)(?:\/|$))?/, "")); }
 
   function navigate(ziel, push = true) {
@@ -686,6 +687,7 @@
   async function show(slug) {
     hideFab();
     if (!slug) return showHome();
+    shell.classList.remove("uebersicht");
     // Zwei schnelle Klicks: Die Antwort der ZULETZT gewählten Seite gehört auf den Schirm,
     // auch wenn die der ersten später eintrifft.
     const lauf = ++state.ladeLauf;
@@ -749,25 +751,26 @@
       $("#h-new").onclick = () => openEditor({ parent_id: null });
       return;
     }
-    /* Die Übersicht zeigt jeden Abschnitt mit allem, was darunter liegt – nicht nur die erste
-       Ebene. Tiefer als drei Stufen wird nicht mehr aufgefächert: Dort steht stattdessen, wie
-       viele Seiten noch folgen, und der Weg dorthin führt über den Abschnitt selbst. */
-    const HOME_TIEFE = 3;
+    /* Die Übersicht zeigt die obersten Abschnitte als Karten im Raster (Startseite über alle Module, 02.11.2026 – vorher
+       eine lange Liste bis in die dritte Ebene): Titel, Zahl der Seiten (der Abschnitt und alles darunter) und die ersten
+       Unterseiten; hat er mehr, führt „… n weitere“ zum Abschnitt. Alles Weitere steht im Seitenbaum links. Dieselben
+       Karten zeigen die Startseite (start.js) und der Lesemodus (public.js); die Breite nutzt die Übersicht ganz, die
+       Lesebreite gilt nur für Fließtext (.wiki-shell.uebersicht in app.css). */
+    const KARTE_KINDER = 6;          // wie api_wiki.UEBERSICHT_KINDER (Lesemodus)
     const zaehleUnter = (pid) => children(pid).reduce((n, k) => n + 1 + zaehleUnter(k.id), 0);
     const eintrag = (p) => `<a href="/stroemipedia/${esc(p.slug)}">${p.icon ? esc(p.icon) + " " : ""}${esc(p.title)}</a>`;
-    const zweig = (pid, tiefe) => {
-      const kids = children(pid);
-      if (!kids.length) return "";
-      if (tiefe >= HOME_TIEFE) {
-        const n = kids.reduce((sum, k) => sum + 1 + zaehleUnter(k.id), 0);
-        return `<ul class="home-tiefer"><li class="muted">… ${n} weitere ${n === 1 ? "Seite" : "Seiten"}</li></ul>`;
-      }
-      return `<ul>${kids.map((k) => `<li>${eintrag(k)}${zweig(k.id, tiefe + 1)}</li>`).join("")}</ul>`;
+    const karte = (r) => {
+      const kids = children(r.id);
+      const mehr = kids.length - KARTE_KINDER;
+      return `<li class="wiki-karte"><h2>${eintrag(r)}</h2>
+        <p class="wiki-karte-zahl">${esc(S.plural(1 + zaehleUnter(r.id), "Seite", "Seiten"))}</p>
+        ${kids.length ? `<ul>${kids.slice(0, KARTE_KINDER).map((k) => `<li>${eintrag(k)}</li>`).join("")}${mehr > 0
+          ? `<li class="wiki-karte-mehr"><a href="/stroemipedia/${esc(r.slug)}">… ${mehr} weitere<span class="nur-vorlesen"> ${mehr === 1 ? "Unterseite" : "Unterseiten"} von ${esc(r.title)}</span></a></li>` : ""}</ul>` : ""}</li>`;
     };
+    shell.classList.add("uebersicht");
     content.innerHTML = `<div class="wiki-head"><h1>Strömipedia</h1>${S.anleitung.kopf("uebersicht", { neuerTab: false })}</div>
       <div class="wiki-meta">${S.plural(state.pages.length, "Seite", "Seiten")} · Wissen für die Strömungsrettung und seiltechnische Rettung</div>
-      <div class="wiki-content home-baum">${roots.map((r) =>
-        `<h2>${eintrag(r)}</h2>${zweig(r.id, 1)}`).join("")}</div>
+      <ul class="wiki-karten">${roots.map(karte).join("")}</ul>
       <div class="home-cols" id="home-recent"></div>`;
     wireLinks(content);
     loadRecent();
@@ -4764,6 +4767,7 @@
   };
 
   function openEditor(p) {
+    shell.classList.remove("uebersicht");
     if (state.spy) { try { state.spy(); } catch (e) { /* egal */ } state.spy = null; }
     const isNew = !p.id;
     editorCleanup.forEach((fn) => { try { fn(); } catch (e) { /* egal */ } });
@@ -5636,5 +5640,18 @@
         && !e.target.closest("#pg-baum")) side.classList.remove("open");
   }, true);
 
-  loadTree().then(() => show(shell.dataset.slug || slugFromPath())).catch((e) => toast(e.message, true));
+  /* Suchfeld der Startseite (start.html): /stroemipedia?suche=<Begriff> – der Begriff kommt ins Suchfeld über dem Baum und
+     sucht wie getippt; ist der Baum eine Schublade (unter 1024 px), geht sie dafür auf. Der Parameter verschwindet aus der
+     Adresse, sonst suchte jedes Neuladen erneut. Dieselbe Regel im Lesemodus (public.js). */
+  function sucheAusAdresse() {
+    const q = new URLSearchParams(location.search).get("suche");
+    if (q === null) return;
+    history.replaceState(history.state, "", location.pathname + location.hash);
+    if (!q.trim()) return;
+    searchInput.value = q.trim();
+    if (getComputedStyle(side).position === "fixed") side.classList.add("open");
+    searchInput.dispatchEvent(new Event("input"));
+  }
+
+  loadTree().then(() => show(shell.dataset.slug || slugFromPath())).then(sucheAusAdresse).catch((e) => toast(e.message, true));
 })();

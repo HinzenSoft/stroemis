@@ -465,21 +465,20 @@ def test_meldung_ohne_stufe():
 
 
 def test_namenlos_startseite():
-    """Ein namenloses Konto von früher mit Stufe Mitglied (Schritt 10 setzt auch solche auf 1): Die Startseite führt
-    nicht in die Fehlerseite des Moduls, sondern in den Lesemodus des Wikis, und die Kopfleiste zeigt „Material“ nicht –
-    beides erst mit Namen. /materialablage selbst sagt, was fehlt."""
+    """Ein namenloses Konto von früher mit Stufe Mitglied (Schritt 10 setzt auch solche auf 1): Die Startseite (seit dem
+    02.11.2026 über alle Module) zeigt keine Kachel der Materialablage, nur den Lesemodus des Wikis, und die Kopfleiste
+    zeigt „Material“ nicht – beides erst mit Namen. /materialablage selbst sagt, was fehlt."""
     with tempfile.TemporaryDirectory() as tmp:
         app, k = umgebung(tmp)
         uid = _konto_sql(app, "namenlos@example.org", name="", recht_material=1, recht_wiki=0, recht_karte=0)
         c = anmelden(app, "namenlos@example.org", "passwort1")
-        r = c.get("/")
-        assert r.status_code == 302 and r.headers["Location"].endswith("/stroemipedia"), (r.status_code, r.headers)
+        kacheln = lambda: [x["modul"] for x in c.get("/api/start").json["kacheln"]]  # noqa: E731
+        assert c.get("/").status_code == 200 and kacheln() == ["wiki"]
         assert 'href="/materialablage"' not in c.get("/profil").get_data(as_text=True)
         r = c.get("/materialablage")
         assert r.status_code == 403 and "braucht dein Konto einen Namen" in r.get_data(as_text=True)
         sql(app, "UPDATE users SET name = 'Namenlos Test' WHERE id = ?", (uid,))
-        r = c.get("/")
-        assert r.status_code == 302 and r.headers["Location"].endswith("/materialablage"), (r.status_code, r.headers)
+        assert kacheln() == ["wiki", "material"]
         assert 'href="/materialablage"' in c.get("/profil").get_data(as_text=True)
         assert c.get("/materialablage").status_code == 200
     print("Namenloses Konto: Startseite bestanden.")
