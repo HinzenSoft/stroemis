@@ -7,19 +7,13 @@
   <h1>{{ ueberschrift }}</h1>
   {% if ueberschrift != code %}<p class="muted small">Fehler {{ code }}</p>{% endif %}
   <p>{{ message }}</p>
-  {# Der Weg zurück führt in einen Bereich, den das Konto hat (UI/UX vor dem Merge C5 – vorher führte „Zur Strömipedia“ jedes
-     Konto ohne Stufe dort in den Lesemodus, auch die Material-Verwaltung und Einsatzkräfte mit eigener PSA): zuerst die
-     Strömipedia mit Stufe, dann die Materialablage, „Meine PSA“, Ankerplätze, Riegenkarten, zuletzt der Lesemodus und das
-     Profil. Eine Fehlerseite unter /materialablage (Bericht, Ordner, Artikel, Dateien des Moduls) führt mit Modulzugang zur
-     Übersicht der Materialablage (Browserprüfung P4-L1). Ohne Anmeldung: zur Startseite. #}
+  {# Der Weg zurück führt in einen Bereich, den das Konto hat (UI/UX vor dem Merge C5): Eine Fehlerseite unter /materialablage
+     (Bericht, Ordner, Artikel, Dateien des Moduls) führt mit Modulzugang zur Übersicht der Materialablage (Browserprüfung
+     P4-L1); sonst seit dem 02.11.2026 zur Startseite über alle Module (app/start.py) – sie zeigt genau die Module des
+     Kontos. Ohne Startseite (kein Bereich freigeschaltet) zum Profil, ohne Anmeldung zur Startseite (die Anmeldung davor). #}
   <p>{% if user and material_zugang and (request.path == "/materialablage" or request.path.startswith("/materialablage/")) %}<a href="/materialablage">Zur Übersicht der Materialablage</a>
-  {%- elif user and rechte.wiki %}<a href="/">Zur Strömipedia</a>
-  {%- elif user and material_zugang %}<a href="{{ modul.pfad.material }}">Zur Materialablage</a>
-  {%- elif user and meine_psa %}<a href="{{ modul.pfad.material }}/meine-psa">Zu „Meine PSA“</a>
-  {%- elif user and rechte.karte %}<a href="{{ modul.pfad.karte }}">Zu den Ankerplätzen</a>
-  {%- elif user and rechte.pruefungen %}<a href="{{ modul.pfad.pruefungen }}">Zu den Riegenkarten</a>
-  {%- elif user and wiki_lesemodus %}<a href="{{ modul.pfad.wiki }}">Zur Strömipedia</a>
+  {%- elif user and startseite %}<a href="/">Zur Startseite</a>
   {%- elif user %}<a href="/profil">Zum Profil</a>
-  {%- else %}<a href="/">Zur Strömipedia</a>{% endif %}</p>
+  {%- else %}<a href="/">Zur Startseite</a>{% endif %}</p>
 </main>
 {% endblock %}

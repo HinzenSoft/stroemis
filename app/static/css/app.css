@@ -1488,15 +1488,27 @@ details.accordion .accordion-body > :first-child { margin-top: 0; } details.acco
 .fav-list a { display: block; padding: 3px 6px; color: inherit; text-decoration: none; border-radius: var(--radius); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 @media (hover: hover) and (pointer: fine) { .fav-list a:hover { background: var(--grau-hell); } }
 
-/* --- Startseite: zuletzt besucht / geändert ---------------------------------------- */
-/* Übersicht des Wikis: Abschnitt, darunter seine Seiten und deren Unterseiten. Enger gesetzt
-   als ein Artikel – es ist ein Verzeichnis, kein Fließtext. */
-.home-baum ul { list-style: none; margin: .2em 0 1.4em; padding-left: 14px; border-left: 1px solid var(--linie); }
-.home-baum ul ul { margin: .15em 0 .3em; }
-.home-baum li { padding: 2px 0; }
-.home-baum li a { text-decoration: none; }
-@media (hover: hover) and (pointer: fine) { .home-baum li a:hover { text-decoration: underline; } }
-.home-baum .home-tiefer li { font-size: var(--fs-klein); }
+/* --- Übersicht der Strömipedia: Abschnitte als Karten, zuletzt besucht / geändert ---------- */
+/* Die obersten Abschnitte als Karten im Raster (Startseite über alle Module, 02.11.2026 – vorher eine Liste bis in die
+   dritte Ebene): Titel, Zahl der Seiten, die ersten Unterseiten. Dieselben Karten auf der Übersicht der Strömipedia
+   (wiki.js), im Lesemodus (public.js) und auf der Startseite (start.js). Ein Verzeichnis, kein Fließtext: Die Übersicht
+   nutzt die Breite – die Lesebreite gilt nur für Artikel. Ab 1181 px reicht die Textspalte über die leere rechte Spur
+   (dort steht auf der Übersicht nichts), begrenzt wie die breiten Seiten (.page.breit). */
+.wiki-shell.uebersicht > .wiki-main { max-width: calc(1180px + 2 * var(--lesepad)); }
+@media (min-width: 1181px) {
+  .wiki-shell.uebersicht > .wiki-main { grid-column: 2 / -1; }
+  .wiki-shell.uebersicht > .wiki-rail { display: none; }
+}
+.wiki-karten { list-style: none; margin: 0 0 8px; padding: 0; display: grid; gap: 12px;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 240px), 1fr)); }
+.wiki-karte { border: 1px solid var(--linie); padding: 10px 14px 12px; min-width: 0; overflow-wrap: break-word; }
+.wiki-karte > :is(h2, h3) { font-size: 1.05rem; margin: 0; border: 0; padding: 0; }
+.wiki-karte > :is(h2, h3) a, .wiki-karte li a { text-decoration: none; }
+@media (hover: hover) and (pointer: fine) { .wiki-karte a:hover { text-decoration: underline; } }
+.wiki-karte-zahl { margin: 2px 0 6px; color: var(--grau); font-size: var(--fs-klein); }
+.wiki-karte ul { list-style: none; margin: 0; padding: 0; }
+.wiki-karte li { padding: 2px 0; font-size: var(--fs-mittel); }
+.wiki-karte li.wiki-karte-mehr { font-size: var(--fs-klein); }
 
 .home-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; margin-top: 18px; }
 @media (max-width: 700px) { .home-cols { grid-template-columns: 1fr; } }
@@ -2844,12 +2856,12 @@ html.tastatur .wiki-head, html.tastatur .wiki-head.editing-head { position: stat
   .map-shell .leaflet-control-layers-selector { width: 20px; height: 20px; margin: 0 8px 0 0; }
   /* Listenlinks am Finger (UI/UX A8): Lehrgangs- und Katalogtitel der Riegenkarten bekommen eine unsichtbare Fläche von
      45 px, ohne dass die Zeilen höher werden (sie stehen weit genug auseinander – Muster der Materialablage, material.css).
-     Die dichten Listen der Strömipedia (Übersicht, „Zuletzt …“, Merkliste) stehen am Finger wie der Seitenbaum in Zeilen
+     Die dichten Listen der Strömipedia (Karten der Übersicht, „Zuletzt …“, Merkliste) stehen am Finger wie der Seitenbaum in Zeilen
      von 44 px, die ganze Zeile ist der Link – dort ginge eine Fläche nur auf Kosten der Nachbarzeile. */
   .pruef table.list td a.titel { position: relative; }
   .pruef table.list td a.titel::after { content: ""; position: absolute; inset: -14px -4px; }
-  .home-baum li { padding: 0; }
-  .home-baum li > a { display: flex; align-items: center; min-height: 44px; }
+  .wiki-karte li { padding: 0; }
+  .wiki-karte > :is(h2, h3) > a, .wiki-karte li > a { display: flex; align-items: center; min-height: 44px; }
   .fav-list a { min-height: 44px; padding: 12px 6px; }   /* Block mit „…“ am Ende bleibt */
   .home-cols li { padding: 0; }
   .home-cols li > a { display: flex; flex-wrap: wrap; align-items: center; column-gap: .3em; min-height: 44px; }
@@ -2927,4 +2939,61 @@ main.leitstelle, main.pruef { container: liste / inline-size; }
 @media (horizontal-viewport-segments: 2) {
   main.page.breit.leitstelle, main.pruef[data-ansicht], main.page.profil-seite {
     max-width: env(viewport-segment-width 1 0); margin-left: env(viewport-segment-left 1 0); margin-right: 0; }
+}
+
+/* ============================================================================
+   Startseite über alle Module (Wunsch vom 02.11.2026; start.html, start.js, app/start.py)
+   ============================================================================ */
+/* Kopf: „Hallo, Name“ und das Suchfeld der Strömipedia. Darunter je Modul eine Kachel im Muster der Kacheln der Übersicht
+   der Materialablage (.mat-kachel: Rahmen, Kante oben, große Zahl – jede Zeile ein Link auf die passende Ansicht), dann
+   „Zuletzt besucht“ und „Neu und geändert“, zuletzt die Abschnitte der Strömipedia als Karten (.wiki-karten). Die Spalten
+   richten sich nach der Breite des Inhalts (Container „start“, wie „liste“ der Leitstelle): Kacheln 1 – 2 – 4 (mit fünf
+   Modulen 5) ab 560 bzw. 1100 px, Listen nebeneinander ab 740 px (Fenster rund 800 px). Breite wie .page.breit. */
+main.start { container: start / inline-size; }
+.start-kopf { align-items: center; }
+.start-kopf h1 { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.start-suche { display: flex; gap: 6px; flex: 1 1 330px; max-width: 420px; margin-left: auto; }
+.start-suche input { flex: 1 1 auto; min-width: 0; }
+@container start (max-width: 559px) { .start-suche { flex-basis: 100%; max-width: none; margin-left: 0; } }
+.start-kacheln { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; margin: 0 0 6px; }
+@container start (min-width: 560px) { .start-kacheln { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@container start (min-width: 1100px) {
+  .start-kacheln { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .start-kacheln[data-anzahl="5"] { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+}
+.start-kachel { min-width: 0; padding: 10px 14px 12px; border: 1px solid var(--linie); border-top: 4px solid var(--anthrazit);
+  background: var(--weiss); }
+.start-kachel h2 { font-size: 1.05rem; margin: 0 0 4px; }
+.start-kachel h2 a { color: var(--anthrazit); text-decoration: none; }
+.start-zeilen { list-style: none; margin: 0; padding: 0; }
+.start-zeile { display: flex; align-items: baseline; gap: 8px; padding: 3px 0; color: var(--anthrazit); text-decoration: none; }
+.start-zeile strong { flex: none; min-width: 1.6em; font-family: var(--font-marke); font-size: 1.45rem; line-height: 1.15; }
+.start-zeile span { min-width: 0; font-size: var(--fs-mittel); overflow-wrap: break-word; }
+/* Zahlen, die drängen (überfällig, Mängel, nicht einsatzbereit), zusätzlich rot – das Wort daneben sagt es schon. */
+.start-zeile.dringend strong { color: var(--rot); }
+@media (hover: hover) and (pointer: fine) {
+  .start-kachel h2 a:hover, .start-zeile:hover span { text-decoration: underline; }
+  .start-zeile:hover { color: var(--anthrazit); }
+}
+.start-ruhig { margin: 4px 0 0; color: var(--grau); font-size: var(--fs-mittel); }
+.start-listen { display: grid; grid-template-columns: minmax(0, 1fr); column-gap: 28px; }
+@container start (min-width: 740px) { .start-listen { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.start-listen > .section { margin-bottom: 0; }
+.start-liste ul { list-style: none; margin: 0; padding: 0; }
+.start-liste li { border-bottom: 1px solid var(--linie); }
+.start-liste li:last-child { border-bottom: 0; }
+.start-liste li > a { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; column-gap: 12px;
+  padding: 5px 0; text-decoration: none; }
+.start-titel { min-width: 0; overflow-wrap: anywhere; }
+.start-zusatz, .start-meta { color: var(--grau); font-size: var(--fs-klein); }
+.start-meta { margin-left: auto; white-space: nowrap; }
+@media (hover: hover) and (pointer: fine) { .start-liste li > a:hover .start-titel { text-decoration: underline; } }
+.start-wiki .abschnittskopf > .start-alle { text-decoration: none; padding: 0 2px; }
+@media (hover: hover) and (pointer: fine) { .start-wiki .abschnittskopf > .start-alle:hover { text-decoration: underline; } }
+@media (pointer: coarse) {
+  .start-kachel h2 a { display: inline-flex; align-items: center; min-height: 44px; }
+  .start-zeile { align-items: center; min-height: 44px; }
+  .start-liste li > a { align-items: center; min-height: 44px; }
+  .start-wiki .abschnittskopf > .start-alle { display: inline-flex; align-items: center; justify-content: center;
+    min-width: 44px; min-height: 44px; }
 }

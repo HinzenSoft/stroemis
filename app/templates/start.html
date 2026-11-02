@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{# Startseite über alle Module (Wunsch vom 02.11.2026, app/start.py). Kein Reiter ist aktiv – hierher führt das Logo. #}
+{% set active = 'start' %}
+{% block title %}Start – strömis.de{% endblock %}
+{% block body %}
+{# Den Rahmen zeichnet der Server, den Inhalt start.js aus GET /api/start (nach den Rechten des Kontos gefiltert). Ohne
+   Erklärtexte: Kacheln und Listen sagen selbst, wohin sie führen. #}
+<main class="page breit start" id="start">
+  <div class="page-head start-kopf">
+    <h1>{% if user.name %}Hallo, {{ user.name }}{% else %}Willkommen{% endif %}</h1>
+    {# Das Suchfeld der Strömipedia – nur mit Zugang oder im Lesemodus; es führt zur Suche dort (/stroemipedia?suche=…). #}
+    {% if rechte.wiki or wiki_lesemodus %}<form class="start-suche" action="{{ modul.pfad.wiki }}" method="get" role="search">
+      <input type="search" name="suche" placeholder="Strömipedia durchsuchen …" aria-label="Strömipedia durchsuchen"
+             autocomplete="off" enterkeyhint="search">
+      <button class="btn secondary" type="submit">Suchen</button>
+    </form>{% endif %}
+  </div>
+  <div id="start-inhalt"><p class="help">Wird geladen …</p></div>
+</main>
+{% endblock %}
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/start.js') }}"></script>
+{% endblock %}

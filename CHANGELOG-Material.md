@@ -68,6 +68,7 @@ Geschichte stehen. Schemaversion nach der Nachbesserung vor dem Merge: 30; mit d
 | Hinweiskästen über die ganze Breite | Hinweiskästen (`.notice`, Zeile zur Prüfanleitung) laufen in allen Modulen über die volle Breite ihrer Spalte, ihr Inhalt – Text und Knöpfe – bleibt höchstens 100ch (rund 120 Zeichen) breit, der Knopf neben seinem Text; ersetzt V10 „der Kasten darf schmaler sein“ | gebaut 01.11.2026 (kein Schemaschritt), Zweig kaesten, zur Freigabe |
 | Verlust melden statt Sperren | Artikelseite: „Verlust melden“ (Menü „Mehr“ des Prüfers, Dialog ohne Grundauswahl) statt „Sperren“; ohne Prüfung sperrt der Server nur noch mit „verlust“ und „rueckruf“, „sturz“/„beschaedigung“ 400 mit Hinweis auf „Mangel melden“; ältere Sperren bleiben lesbar; Banner und Marke „verloren“ am Artikel | gebaut 01.11.2026 (kein Schemaschritt), Zweig verlust |
 | Nachbesserung aus der zweiten Durchsicht vor dem Merge | Strömipedia: Verschieben nur, wer die Seite in den Papierkorb legen darf (Entscheidung des Nutzers), kein „+“/„Unterseite anlegen“/„Duplizieren“ im freigegebenen Abschnitt, Editor hält bei 403 an; Riegenkarten: Kontosuche nur mit ganzer E-Mail-Adresse, Kopie nur mit passenden Ausbildern, keine zweite Leitungszeile; Anmeldung springt zum Ziel, alte Bildlinks der Subdomain; „Zurück“ nach dem Abmelden; Leitstelle: Inhalte mit Lehrgängen/Katalogen, Freigabe-Toast; Schritt 34 protokolliert jede Verknüpfung; README „Inbetriebnahme“ (Merge-Befehl, Kontrollen) und Werkzeug `scripts/vor_merge_riegenkarten.py` | gebaut 02.11.2026 (kein Schemaschritt, Schema bleibt 34), zur Freigabe |
+| Startseite über alle Module | „/“ für jedes Konto mit Modul: Kacheln je Modul mit Zahlen, die zum Handeln führen (Materialablage wie ihre Übersicht), „Zuletzt besucht“ und „Neu und geändert“ über die Module, Abschnitte der Strömipedia als Karten (auch auf ihrer Übersicht und im Lesemodus), Suchfeld der Strömipedia; Logo und Anmeldung führen dorthin | gebaut 02.11.2026 (kein Schemaschritt, Merker in `mat_meta`), Fotos vor dem Push |
 
 ## Abgleich mit dem Bestand (vor Lieferung 1)
 
@@ -9937,6 +9938,12 @@ oder Plattform-Verwaltung).
 | `GET /api/material/artikel/<id>` | wie bisher | seit Runde 3 (27.10.2026): `journal[].nachher.mangelbeschreibung` bei „Mangel gemeldet“, wenn das Konto den Inhalt der Meldung sehen darf (sonst fehlt das Feld) |
 | `HEAD …/lebenslauf.pdf`; `GET …/lebenslauf.pdf` | wie bisher | seit Schritt 32: HEAD nur Kopfzeilen (keine Kennung, kein Eintrag); über 60 Lebensläufe je Konto und Viertelstunde 429; Kennung nach dem Zurückspielen nie doppelt (Zählerdatei `pdf/lebenslauf/`) |
 | `produkt.rueckrufe[].still`, Antwort auf `POST …/produkte/<id>/rueckrufe`; `antraege[].rueckruf` | wie bisher | seit Schritt 32: `still` = Stand beim Anlegen (`mat_recall.mail_still`; vorher angelegte `null`); `rueckruf.wieder_offen` |
+| `GET /` | angemeldet (sonst Anmeldung mit `next=/`) | seit dem 02.11.2026 die Startseite über alle Module (`start.html`) für jedes Konto mit Modul, „Meine PSA“ oder Lesemodus; sonst 403 „Für dein Konto ist noch kein Bereich freigeschaltet.“ (vorher Strömipedia bzw. 302 ins erste Modul) |
+| `GET /api/start` | angemeldet (401), Startseite (sonst 403) | {`kacheln` [{`modul`, `name`, `pfad`, `zeilen` [{`art`, `zahl` > 0, `href`, bei `bald_faellig` `tage`}], `ruhig`}] in der Reihenfolge der Navigation, nur Module des Kontos (`meine_psa` statt `material` ohne Modulzugang mit PSA); `zuletzt`, `neu` (je höchstens 8: `modul`, `modulname`, `titel`, `zusatz`, `href`, `zeit`, bei `neu` auch `neu`); `abschnitte` (höchstens 6 wie `/api/public/index`, mit 3 `unterseiten`) oder `null` ohne Strömipedia; `abschnitte_gesamt`; `lesemodus`; `seit` (Vergleichspunkt, `null` beim ersten Besuch)} |
+| `POST /api/start/besuch` | angemeldet, JSON bzw. `X-Requested-With` (CSRF-Schutz der Schnittstelle) | merkt den Besuch der Startseite → `{ok}`; innerhalb von 30 Minuten bleibt der Vergleichspunkt |
+| `GET /api/public/index` | wie bisher | je Einstiegsseite zusätzlich `seiten` (sie und alles darunter, soweit freigegeben), `kinder` (Zahl der direkten Unterseiten), `unterseiten` (die ersten sechs: `title`, `slug`, `icon`), `icon` |
+| `GET /api/public/pages/<slug>` | wie bisher | vermerkt im Lesemodus den Besuch in `wiki_views` (für „Zuletzt besucht“), außer mit `?leise=1` (Quellseiten eingebauter Abschnitte) |
+| `GET /api/albums/<id>`, `GET /riegenkarten/<id>`, `GET /materialablage/artikel/<id>` | wie bisher | merken das Ziel für „Zuletzt besucht“ der Startseite (`mat_meta` `start:ziele:<Konto>`), nur wenn das Konto es sehen darf |
 
 ## Nachbesserung vor dem Merge – übrige Module (26.10.2026)
 
@@ -10839,3 +10846,46 @@ zum parallelen Bau „module-nachtraege“ und sind hier nicht angefasst.
   samt Freigabe mit/ohne Mailserver, Oberfläche statisch, Schritt 34 gegen das Werkzeug an einer Vorversion);
   angepasst `tests/test_rechte_ausbilder.py` (Suche mit ganzer Adresse, Protokoll von Schritt 34) und
   `tests/test_pruefungen.py` (Suche, Vorschau ohne Kennung).
+
+## Startseite über alle Module (02.11.2026)
+
+Wunsch des Nutzers (zum Bild der damaligen Startseite = Übersicht der Strömipedia): „Gibts aus Design Sicht eine
+ansprechendere Landingpage? Ggf. eine Übersicht der Statistiken der verschiedenen Module mit dem Block unten der letzten
+xy oder so“. Entscheidung: „Start über alle Module“, gebaut mit Fotos vor dem Push. Auftrag
+planung/startseite/auftrag_startseite.md, Bericht planung/startseite/bericht_startseite.md. Kein Schemaschritt (Schema
+bleibt 34). Zweig `startseite` auf `sammel`.
+
+**Route und Navigation**
+- `/` zeigt jedem angemeldeten Konto mit mindestens einem Modul, „Meine PSA“ oder dem Lesemodus der Strömipedia die
+  Startseite (`start.zugang`); vorher die Strömipedia bzw. eine Weiterleitung ins erste Modul. Die Strömipedia liegt
+  unverändert unter `/stroemipedia`, der Reiter „Strömipedia“ führt immer dorthin (auch mit Stufe – vorher `/`). Das
+  Logo führt nach `/`; einen Reiter „Start“ gibt es nicht, auf der Startseite ist keiner aktiv. Nach der Anmeldung und
+  als `start_url` der App `/` (ein `next` geht vor, wie bisher); der Kurzbefehl „Strömipedia“ der App führt nach
+  `/stroemipedia`. Konten ganz ohne Bereich behalten die Hinweisseite (jetzt mit „Zum Profil“).
+- Fehlerseiten führen „Zur Startseite“ (unter `/materialablage` mit Modulzugang weiter „Zur Übersicht der
+  Materialablage“); vorher je nach Konto „Zur Strömipedia“, „Zur Materialablage“ usw. Mails, Willkommen der
+  Materialablage und Anleitungen verweisen nirgends mit `/` auf die Strömipedia (geprüft).
+
+**Inhalt** (`start.html`, `start.js`, `app/start.py`, Muster der Kacheln der Übersicht der Materialablage)
+- Kopf „Hallo, <Name>“ (ohne Namen „Willkommen“) und das Suchfeld der Strömipedia (GET-Formular nach
+  `/stroemipedia?suche=…`; wiki.js und public.js setzen den Begriff ins Suchfeld über dem Baum, suchen und öffnen
+  unter 1024 px die Schublade; der Parameter verschwindet aus der Adresse).
+- Kacheln je Modul (Reihenfolge der Navigation, nur Module des Kontos): Kopf als Link ins Modul, Zeilen mit einer Zahl
+  über 0 als Link auf die passende Ansicht, sonst ein ruhiger Satz. Herkunft jeder Zahl im Bericht; die der
+  Materialablage über dieselben Dienste wie `GET /api/material/start` (`bestand.zaehlung`, neu `mangel.anzahl_offen` –
+  daraus auch `maengel_gesamt` –, `antrag.zu_entscheiden`, `psa.kurz`).
+- „Zuletzt besucht“ (Seiten aus `wiki_views`, Alben, Lehrgänge, Artikel aus `mat_meta`) und „Neu und geändert“
+  (Seiten, Alben, Lehrgänge), je 8 mit Modul und Zeit, beim Zeigen nach den Rechten von jetzt gefiltert.
+- Abschnitte der Strömipedia als Karten mit „alle →“.
+- „Letzter Besuch“: `POST /api/start/besuch` nach dem Zeichnen; verglichen wird mit dem vorigen Besuch, ein Besuch endet
+  nach 30 Minuten ohne Aufruf der Startseite.
+
+**Strömipedia**
+- Übersicht `/stroemipedia`: die obersten Abschnitte als Karten im Raster (Zahl der Seiten, sechs Unterseiten, „… n
+  weitere“) statt der Liste bis in die dritte Ebene; die Übersicht nutzt die Breite (`.wiki-shell.uebersicht`, bis
+  1180 px plus Rand, über die leere rechte Spur). Im Lesemodus dieselben Karten aus `/api/public/index`.
+- Besuche im Lesemodus zählen in `wiki_views` (außer `?leise=1`, den public.js jetzt für eingebaute Abschnitte setzt).
+
+**Tests**: neu `tests/test_module_startseite.py`; angepasst `test_smoke.py`, `test_wiki_lesemodus.py`,
+`test_umbenennung.py`, `test_material_stufen.py`, `test_module_uiux_u3.py`, `test_module_uiux_u1b.py`,
+`test_module_pwa_kontakt.py` (die frühere Startweiche und „Zur Strömipedia“).
