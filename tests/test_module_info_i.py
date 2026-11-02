@@ -76,7 +76,7 @@ STELLEN = [
     ("R7", RK, '${info("Kriterienliste", `${KRITERIEN_INFO} Im Bewertungsdialog', "!Zusätzlich zur Beschreibung: einzeln abhakbare Punkte. Im"),
     ("R8", RK, 'Datei (.xlsx)${info("Datei", `Kopfzeilen über der Tabelle', "Kopfzeilen über der Tabelle"),
     ("W1", WIKI, '<h2>Papierkorb${rows.length ? info("Papierkorb", `Wiederhergestellte Seiten', "Wiederhergestellte Seiten kommen"),
-    ("W2", WIKI, '<h3>Bearbeiten erlauben${info("Bearbeiten erlauben", `Freigegebene Redakteure', "Freigegebene Redakteure bearbeiten"),
+    ("W2", WIKI, '<h3>Bearbeiten erlauben${info("Bearbeiten erlauben", `Freigegebene Redakteure', "Freigegebene Redakteure und Mitglieder bearbeiten"),
     ("W4", WIKI, '<h2>Textfarbe${info("Textfarbe", `Nach dem Handbuch CD', "Nach dem Handbuch CD"),
     ("W5", WIKI, '<h2>Abschnitt einbinden${info("Abschnitt einbinden", `Zeigt einen synchronisierten', "Zeigt einen synchronisierten Abschnitt"),
     ("W6", WIKI, '<h2>Spalten einfügen${info("Spalten einfügen", `Die Spalten stehen im Editor', "Die Spalten stehen im Editor"),
