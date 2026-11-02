@@ -374,7 +374,7 @@ def test_rueckruf_still_beim_versand():
 
 
 def test_oberflaeche_statisch():
-    """7 Journal am Telefon als Karten, 8 Mangeltext im Banner höchstens 100ch, 11 Reiter bei 344 px, 14 Verbesserungen
+    """7 Journal am Telefon als Karten, 8 Mangeltext im Banner (seit 02.11.2026 über die ganze Breite), 11 Reiter bei 344 px, 14 Verbesserungen
     der Browserberichte (Artikelseite „Mehr“, „Löschen“ der Produktseite im Menü, abgeschlossene Durchgänge zugeklappt,
     Grund am ausgegrauten „Durchgang abschließen“, Inventarnummer ohne Umbruch, Katalogimport lesbar, Meine PSA am
     Finger, Kontrast auf Rot-hell, Tokens, Begriffe)."""
@@ -388,8 +388,10 @@ def test_oberflaeche_statisch():
                   ".mat-diff td.mat-j-vorher.leer { display: none; }", "overflow-wrap: break-word;"):
         assert regel in karte, regel
     # 8 und 11
-    assert ".mat-mangel-banner p { margin: 0 0 6px; overflow-wrap: anywhere; max-width: 100ch; }" in css
-    assert ".mat-mangel-liste p { margin: 2px 0; overflow-wrap: anywhere; max-width: 100ch; }" in css
+    # Banner und Liste „Gemeldete Mängel“ seit dem 02.11.2026 über die ganze Breite (Nutzer), umbrechen aber weiter.
+    assert ".mat-mangel-banner p { margin: 0 0 6px; overflow-wrap: anywhere; }" in css
+    assert ".mat-mangel-liste p { margin: 2px 0; overflow-wrap: anywhere; }" in css
+    assert "div.mat-banner.s-gesperrt > p { margin: 0 0 6px; overflow-wrap: break-word; }" in css
     assert "@media (max-width: 350px) { .mat-nav.enger .mat-reiter > a { padding-left: 4px; padding-right: 4px; } }" in css
     # 14: Artikelseite – Verschieben, Lebenslauf, Löschen im Menü „Mehr“, kein Erklärabsatz zwischen den Knopfreihen
     assert "function artikelMehr(a, eintraege) {" in js and '<p class="help mat-nur-touch">Lebenslauf (PDF)' not in js

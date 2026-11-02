@@ -51,7 +51,7 @@
 .mat-banner.s-lebensdauer { background: var(--mat-lebensdauer); }
 .mat-banner.s-neu { background: var(--wasser); }
 /* Banner mit zweiter Zeile („Empfohlen von … am …“, UI/UX vor dem Merge B7): die Zeile leiser, Links weiß. */
-div.mat-banner.s-gesperrt > p { margin: 0 0 6px; max-width: 100ch; overflow-wrap: break-word; }
+div.mat-banner.s-gesperrt > p { margin: 0 0 6px; overflow-wrap: break-word; }
 div.mat-banner.s-gesperrt > p:last-child { margin-bottom: 0; }
 .mat-banner .mat-banner-zeile { font-weight: 400; font-size: var(--fs-klein); }
 .mat-banner .mat-banner-zeile a { color: var(--weiss); text-decoration: underline; }
@@ -1571,7 +1571,8 @@ table.list.mat-na-zeilen tr:has(.mat-na-wahl:checked) { background: var(--co-inf
   letter-spacing: .03em; vertical-align: middle; white-space: nowrap; }
 /* Banner je offener Meldung (Artikel, Prüfung, Karte in Meine PSA): rot wie ein laufender Rückruf. */
 .mat-banner.mat-mangel-banner { background: var(--rot); }
-.mat-mangel-banner p { margin: 0 0 6px; overflow-wrap: anywhere; max-width: 100ch; }   /* rund 120 Zeichen je Zeile wie V10 */
+/* Text über die ganze Breite wie in den Hinweiskästen (Nutzer 02.11.2026; vorher 100ch). */
+.mat-mangel-banner p { margin: 0 0 6px; overflow-wrap: anywhere; }
 .mat-mangel-banner p:last-child { margin-bottom: 0; }
 .mat-mangel-banner .mat-mangel-titel { font-size: 1.05rem; letter-spacing: .02em; }
 .mat-mangel-banner .mat-mangel-text, .mat-mangel-banner .mat-mangel-zeile { font-weight: 400; }
@@ -1612,7 +1613,7 @@ table.list.mat-na-zeilen tr:has(.mat-na-wahl:checked) { background: var(--co-inf
 .mat-mangel-liste { list-style: none; margin: 0; padding: 0; }
 .mat-mangel-liste > li { padding: 8px 0; border-bottom: 1px solid var(--linie); }
 .mat-mangel-liste > li:last-child { border-bottom: 0; }
-.mat-mangel-liste p { margin: 2px 0; overflow-wrap: anywhere; max-width: 100ch; }
+.mat-mangel-liste p { margin: 2px 0; overflow-wrap: anywhere; }
 
 /* Dialog „Mangel melden“: der Hinweis auf die Sperre rot hinterlegt, die gesammelten Fotos als Liste. */
 .mat-mangel-warnung { border-left: 4px solid var(--rot); background: var(--rot-hell); padding: 8px 12px; margin: 6px 0 10px; }
