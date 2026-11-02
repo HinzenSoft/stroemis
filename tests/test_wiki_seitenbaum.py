@@ -113,12 +113,13 @@ def test_css_regeln():
     finger = [
         ".tree { --baum-spalte: 24px; --baum-einzug: 18px; }",
         ".tree .row { align-items: flex-start; }",
-        ".tree .tg { width: 44px; height: 44px; margin: 0 -10px; position: relative; z-index: 1; }",
+        # Seit dem 02.11.2026 (Seitenbaum am Finger kompakter) 36 statt 44 px hoch – test_wiki_baum_kompakt.py.
+        ".tree .tg { width: 44px; height: 36px; margin: 0 -10px; position: relative; z-index: 1; }",
         ".tree { margin-right: -12px; }",
-        ".tree a { padding-top: 12px; padding-bottom: 12px; padding-left: 8px; }",
-        ".tree .baum-titel { white-space: normal; text-overflow: clip; overflow-wrap: break-word; hyphens: auto; }",
-        ".tree .row-add, .tree .row-menu { width: 44px; height: 44px; margin-left: 0; }",
-        ".tree .row { min-height: 44px; }",
+        ".tree a { padding-top: 6px; padding-bottom: 6px; padding-left: 8px; }",
+        ".tree .baum-titel { white-space: normal; text-overflow: clip; overflow-wrap: break-word; hyphens: auto; flex-basis: 0; }",
+        ".tree .row-add, .tree .row-menu { width: 44px; height: 36px; margin-left: 0; }",
+        ".tree .row { min-height: 36px; }",
     ]
     for r in finger:
         assert r in css, r
