@@ -10888,4 +10888,6 @@ bleibt 34). Zweig `startseite` auf `sammel`.
 
 **Tests**: neu `tests/test_module_startseite.py`; angepasst `test_smoke.py`, `test_wiki_lesemodus.py`,
 `test_umbenennung.py`, `test_material_stufen.py`, `test_module_uiux_u3.py`, `test_module_uiux_u1b.py`,
-`test_module_pwa_kontakt.py` (die frühere Startweiche und „Zur Strömipedia“).
+`test_module_pwa_kontakt.py` (die frühere Startweiche und „Zur Strömipedia“), `test_material_ueberblick.py` (die
+Führungskraft „nur lesend“: die Merker „start:…“ in `mat_meta` zählen wie der Lebenslauf-Zähler nicht als Änderung –
+das Öffnen einer Artikelseite merkt sie für „Zuletzt besucht“).
