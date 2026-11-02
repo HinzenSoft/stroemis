@@ -67,6 +67,7 @@ Geschichte stehen. Schemaversion nach der Nachbesserung vor dem Merge: 30; mit d
 | Gerätetest 01.11.2026 – Teil 4 (Materialablage) | Prüfdurchgang: Suche nach Nummer/Name und „QR-Code scannen“ über der Liste, Vorgabe „offen“, eine Zählweise in Kopf, Filtern und Grund, Meldung nach Ausnehmen/Einbeziehen; Abschlussleiste der Prüfung beim Scrollen eingeklappt; ausgegrautes „Festschreiben“ führt zum fehlenden Schritt; Filter der Prüfungen mit aria-pressed, Links der Übersicht springen zur Liste; Bestandsbaum am Telefon nur „überfällig“; ein Platzhalter der Nummernsuche | gebaut 01.11.2026 (kein Schemaschritt), zur Freigabe |
 | Hinweiskästen über die ganze Breite | Hinweiskästen (`.notice`, Zeile zur Prüfanleitung) laufen in allen Modulen über die volle Breite ihrer Spalte, ihr Inhalt – Text und Knöpfe – bleibt höchstens 100ch (rund 120 Zeichen) breit, der Knopf neben seinem Text; ersetzt V10 „der Kasten darf schmaler sein“ | gebaut 01.11.2026 (kein Schemaschritt), Zweig kaesten, zur Freigabe |
 | Verlust melden statt Sperren | Artikelseite: „Verlust melden“ (Menü „Mehr“ des Prüfers, Dialog ohne Grundauswahl) statt „Sperren“; ohne Prüfung sperrt der Server nur noch mit „verlust“ und „rueckruf“, „sturz“/„beschaedigung“ 400 mit Hinweis auf „Mangel melden“; ältere Sperren bleiben lesbar; Banner und Marke „verloren“ am Artikel | gebaut 01.11.2026 (kein Schemaschritt), Zweig verlust |
+| Nachbesserung aus der zweiten Durchsicht vor dem Merge | Strömipedia: Verschieben nur, wer die Seite in den Papierkorb legen darf (Entscheidung des Nutzers), kein „+“/„Unterseite anlegen“/„Duplizieren“ im freigegebenen Abschnitt, Editor hält bei 403 an; Riegenkarten: Kontosuche nur mit ganzer E-Mail-Adresse, Kopie nur mit passenden Ausbildern, keine zweite Leitungszeile; Anmeldung springt zum Ziel, alte Bildlinks der Subdomain; „Zurück“ nach dem Abmelden; Leitstelle: Inhalte mit Lehrgängen/Katalogen, Freigabe-Toast; Schritt 34 protokolliert jede Verknüpfung; README „Inbetriebnahme“ (Merge-Befehl, Kontrollen) und Werkzeug `scripts/vor_merge_riegenkarten.py` | gebaut 02.11.2026 (kein Schemaschritt, Schema bleibt 34), zur Freigabe |
 
 ## Abgleich mit dem Bestand (vor Lieferung 1)
 
@@ -10736,3 +10737,105 @@ sehen; Vorlagen; Ankerplätze; Verweise auf die Anleitung), `docs/Editor - Bedie
 
 - Tests: `tests/test_module_anleitung.py` (neu); angepasst `tests/test_material_anleitung.py` (nur freigegebene Seiten), `tests/test_pruefungen.py` (neue Kriterien an eingefrorenen
   Leistungen jetzt 409) und `tests/test_module_info_i.py` (Infos mit „Mehr dazu“, Dialogtext der Ankerplätze).
+
+## Nachbesserung aus der zweiten Durchsicht vor dem Merge (02.11.2026)
+
+Grundlage: die drei Berichte der zweiten Durchsicht (planung/pruefung-merge2/bericht_sicherheit.md, bericht_migration.md,
+bericht_rechte.md) und die Entscheidung des Nutzers vom 01.11.2026 „Alles vor dem Merge“, dazu „Verschieben: nur wer
+löschen darf“. Auftrag planung/pruefung-merge2/auftrag_nachbesserung.md. Kein Schemaschritt (Schema bleibt 34); Schritt
+34 schreibt nur mehr ins Startprotokoll. Anleitungsverweise (anleitung.py, wikiverweis.py, Sicherheitsbefund 2) gehören
+zum parallelen Bau „module-nachtraege“ und sind hier nicht angefasst.
+
+**Strömipedia**
+- **Verschieben nur, wer löschen darf** (Sicherheitsbefund 1, Entscheidung des Nutzers): Elternseite oder Stelle einer
+  Seite ändert nur, wer sie auch in den Papierkorb legen darf (`can_delete`: Ersteller ab Redakteur, Wiki-Verwaltung).
+  Vorher reichte eine Bearbeitungsfreigabe, um eine fremde Seite samt Unterseiten unter eine eigene lesebeschränkte zu
+  hängen – danach lasen sie die übrigen Konten nicht mehr, und die Erstellerin holte sie nicht zurück (Probe p22).
+  `PUT /api/wiki/pages/<id>` mit geändertem `parent_id` oder `position` und `PUT /api/wiki/reorder` antworten 403
+  „Verschieben darf nur, wer die Seite auch in den Papierkorb legen darf – ihr Ersteller oder die Wiki-Verwaltung.“
+  Bearbeiten mit Freigabe bleibt; mitgeschickte gleiche Werte sind kein Verschieben, und `/reorder` lässt Einträge,
+  die Elternseite und Stelle behalten, unberührt (keine Prüfung, kein Schreiben). Rechte-Befund B4 gleich mit: ein
+  Mitglied mit Freigabe ändert die Stelle auch per `PUT … {"position"}` nicht mehr („Seiten verschieben dürfen Redakteure
+  und die Wiki-Verwaltung.“).
+- **Ziehen im Seitenbaum** nur an Seiten mit `can_delete`; abgelegt wird nur, wo der Server annimmt: nicht unter sich
+  selbst, nicht in einen für alle Angemeldeten freigegebenen Abschnitt (außer Wiki-Verwaltung), „daneben“ nur, wenn sich
+  dabei keine fremde Nachbarseite verschiebt (sonst kein Ablegezeichen). „Darunter“ hängt die Seite ans Ende, ohne die
+  übrigen Unterseiten umzunummerieren.
+- **Anlegen im freigegebenen Abschnitt** (B1): `can_create` je Baumzeile (`_baum_rechte`, eine Rechnung für den ganzen
+  Baum) und an der Seite (`page_json`, nach `inherits_public`), dazu `can_duplicate` (die Kopie liegt neben der Seite,
+  zählt also der Abschnitt der Elternseite). Der Baum zeigt „+“ und „Unterseite anlegen“ danach, „Duplizieren“ nach
+  `can_create` der Elternzeile, das „⋯“ der Seite nach `can_duplicate` – ein Redakteur sieht im freigegebenen
+  Abschnitt keinen dieser Knöpfe mehr (vorher 403 nach dem Anlegen).
+- **Autospeichern bei 403** (B2): Wird beim Schreiben die Stufe oder die Freigabe entzogen, kommt EINMAL die Meldung des
+  Servers als Toast (`role="alert"`) mit „Dein Text steht noch im Editor – kopiere ihn, bevor du die Seite verlässt.“;
+  die Statuszeile sagt „Nicht gespeichert – keine Berechtigung mehr“, das Autospeichern hört auf (vorher bei jedem
+  Tastendruck ein neuer 403). Wer den Editor danach verlässt, wird gefragt. Kein lokaler Entwurf eigens dafür.
+- **Teilen-Dialog** (B5): „Normalerweise liest jeder mit Stufe in der Strömipedia jede Seite.“ statt „… darf jeder
+  Angemeldete …“. **„Bearbeiten erlauben“** (H1) bietet nur Konten mit Strömipedia-Stufe an (`GET /api/wiki/users`);
+  wer schon freigegeben ist und die Stufe verloren hat, bleibt mit „– ohne Stufe in der Strömipedia, die Freigabe wirkt
+  nicht“ abwählbar.
+- Offen (gehört zum Zusammenführen mit „module-nachtraege“, das die Zeile umbaut): „Neue Seite“ legt weiter unter der
+  offenen Seite an – in einem freigegebenen Abschnitt antwortet das für Redakteure 403.
+
+**Anmeldung und Browser**
+- **Anmeldeseite mit Sitzung** (Sicherheitsbefund 4): `/login?next=…` springt bei bestehender Sitzung gleich zum Ziel
+  (`_safe_next`, nur seiteneigene Ziele; ohne `next` zur Startseite). Alte Links der Subdomain und Lesezeichen landen
+  so auf der Seite statt auf der Startseite. `/register` mit Sitzung weiter zur Startseite.
+- **Bild- und Dateilinks der Subdomain** (Migrationsbefund 2): `wiki.strömis.de/media/…` ohne Sitzung leitet zur
+  Anmeldung unter `BASE_URL` mit Rücksprung auf die Datei (vorher relativ auf die Subdomain, dort zu
+  `/oeffentlich/login` und nach der Anmeldung „Seite nicht gefunden“).
+- **„Zurück“ nach dem Abmelden** (Hinweis bfcache): Kommt eine angemeldete Seite aus dem Seitenspeicher des Browsers
+  zurück (`pageshow` mit `persisted`), verdeckt common.js den Inhalt, fragt `/api/me` und lädt neu, wenn die Sitzung
+  nicht mehr diesem Konto gehört oder niemand antwortet (dann Anmeldung bzw. Hinweisseite ohne Netz). Bewusst nicht
+  `Cache-Control: no-store`: Ob ein Browser solche Seiten aus dem bfcache hält, regelt jeder anders, und der schnelle
+  Rückweg angemeldeter Seiten bleibt so.
+- **Speicherstand der Prüfung** (Materialablage): Der Schlüssel in `sessionStorage` trägt die Kontokennung
+  (`stroemis-mat-pruefung-<Konto>-<Prüfung>`); ein Stand unter dem alten Schlüssel wird nicht mehr gelesen (das Abmelden
+  räumt ihn weg).
+- **Kontaktadressen**: Steuerzeichen (NUL bis U+001F, DEL, C1) zählen wie Leerraum – `a@b.de\x00` → 400.
+
+**Riegenkarten** (siehe CHANGELOG-Pruefungen.md, Nachtrag vom 02.11.2026)
+- **Kontosuche** (Sicherheitsbefund 3): Der Name zählt als Teil, die E-Mail-Adresse nur ganz (NFKC, Groß/klein egal).
+  Als Teil ließ sie sich über die Ja/Nein-Treffer Zeichen für Zeichen zurückgewinnen (406 Anfragen in der Probe). Die
+  Suche sagt bei einem „@“ ohne Treffer, dass die Adresse nur vollständig zählt.
+- **Import-Vorschau:** je Ausbilder nur `konto: {name, eingetragen}` – ohne Kennung. Begründung: Zum Zuordnen braucht
+  die Vorschau, wer es wird (der Name des Kontos, damit ein Namensvetter auffällt) und ob er schon im Lehrgang steht;
+  die Kennung braucht die Oberfläche nicht, die Adresse geht nie zurück. Wer eine Adresse schon kennt, erfährt nur den
+  Namen eines Kontos mit Riegenkarten-Stufe – den liefert die Kontosuche ohnehin.
+- **Kopieren** (B3) übernimmt nur Ausbilder mit passendem Konto (aktiv, Stufe ≥ Mitglied bzw. Plattform-Verwaltung),
+  Name aus dem Konto; die übrigen stehen in `ausbilder_nicht_uebernommen` und in der Meldung nach dem Kopieren.
+- **Leitung** (H2): Nimmt sich eine Leitung im Dialog das Kennzeichen „Leitung“, bleibt sie Leitung in ihrer eigenen
+  Zeile mit ihrer Funktion (vorher eine zweite Zeile derselben Person davor).
+
+**Leitstelle**
+- **Inhalte** (H5): Die Spalte nennt auch angelegte Lehrgänge und eigene Kataloge der Riegenkarten (nur, wenn es welche
+  gibt) – für Schritt 7 der Inbetriebnahme.
+- **Löschen** (H3, H4): Der Dialog nennt auch die Kataloge der Riegenkarten („gehen auf dich über“) und sagt, dass einen
+  allein geleiteten Lehrgang danach nur die Verwaltung der Riegenkarten pflegt (H4 nur als dieser Satz).
+- **Freigabe einer Kontoanfrage** (H6): Die Antwort trägt `mailserver`; der Toast unterscheidet „keine E-Mail: kein
+  Mailserver eingerichtet“ von „die E-Mail ließ sich nicht verschicken („Testmail senden“ zeigt, woran es liegt)“
+  (als Fehler).
+
+**Migration und Betrieb**
+- **Schritt 34 – Startprotokoll:** je Verknüpfung eine Zeile („Schritt 34 (Riegenkarten): Lehrgang 3 „…“ – Freitext
+  „Max Muster“ (Wasser) mit Konto 12 verknüpft“ bzw. „… mit der vorhandenen Zeile von Konto 12 zusammengelegt“) – eine
+  Verknüpfung über den Namen gibt dem Konto Einsicht in Teilnehmende und Bewertungen (Datenschutz-Hinweis); die
+  Summenzeile nennt verknüpft, zusammengelegt und entfernt getrennt, damit sich die neue Zahl der Ausbilder-Zeilen
+  nachrechnen lässt. Die Daten ändert der Schritt wie bisher.
+- **`scripts/vor_merge_riegenkarten.py`** (V1/V2, aus den Proben der Migrationsprüfung): nur lesend, nur Python, für die
+  Datenbank der Produktion vor dem Merge (Skala 0/1/2; auf einer migrierten Datenbank mit Hinweis). Teil 1 Vorschau
+  auf Schritt 34 (verknüpfen/zusammenlegen mit Konto, Name und Gliederung, ENTFERNEN mit Grund, Summe und Zeilenzahl
+  danach – dieselbe Regel wie `_schritt_34`), Teil 2 wer bewertet hat, ohne als Ausbilder eingetragen zu sein (mit
+  „wird über Schritt 34 verknüpft“). Aufruf im laufenden Container ohne Kopie und ohne `sqlite3` auf dem Rechner:
+  `git show origin/dev:scripts/vor_merge_riegenkarten.py | docker exec -i stroemis python - /data/stroemis.db` (H1).
+- **README „Inbetriebnahme“:** Schritt 2 zählt erst und prüft dann mit `?mode=ro&immutable=1` (legt an der ruhenden
+  Kopie keine `-shm`/`-wal` an, Befund 3); Schritt 3 bringt den geprüften Commit bzw. `origin/dev` nach main, nicht den
+  lokalen Zweig `dev`, mit `git log -1 --oneline` und `SCHEMA_VERSION` vor dem Push (Befund 1); Schritt 4 sichert das
+  Startprotokoll (`docker compose logs > ~/start-nach-merge-<Datum>.log`, V3) und zählt alle Tabellen der Kopie,
+  `pruef_ausbilder` getrennt mit der erwarteten Änderung (Befund 4). „Ausbilder nur mit Konto – Vor dem Merge“ mit dem
+  Werkzeug statt der `sqlite3`-Zeile. `.env.example`: Kommentar zu `PUBLIC_HOST`/`PUBLIC_URL` berichtigt (V4).
+- Tests: `tests/test_rechte_vor_merge2.py` (neu: Verschieben je Rolle samt p22, Anlegen im freigegebenen Abschnitt, Teilen,
+  Kontosuche und Vorschau, Anmeldung mit Ziel und Subdomain-Medien, Kontaktadresse, Kopieren und Leitung, Leitstelle
+  samt Freigabe mit/ohne Mailserver, Oberfläche statisch, Schritt 34 gegen das Werkzeug an einer Vorversion);
+  angepasst `tests/test_rechte_ausbilder.py` (Suche mit ganzer Adresse, Protokoll von Schritt 34) und
+  `tests/test_pruefungen.py` (Suche, Vorschau ohne Kennung).

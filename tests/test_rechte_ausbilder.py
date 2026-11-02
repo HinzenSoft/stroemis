@@ -36,10 +36,11 @@ def test_anlegen_und_bearbeiten():
         _, aus_id = konto(app, adm, "doris@example.org", "Doris Deaktiviert", {"pruefungen": MITGLIED})
         assert adm.put(f"/api/admin/users/{aus_id}", json={"active": False}).status_code == 200
 
-        # Kontosuche: Name oder E-Mail, nur passende Konten, keine E-Mail in der Antwort; ein Mitglied ohne Leitung
-        # sucht nicht (es trägt nirgends Ausbilder ein).
-        r = red.get(f"{API}/nutzer?q=MATS@")
+        # Kontosuche: Name (Teil) oder E-Mail (nur ganz – zweite Durchsicht vor dem Merge), nur passende Konten, keine
+        # E-Mail in der Antwort; ein Mitglied ohne Leitung sucht nicht (es trägt nirgends Ausbilder ein).
+        r = red.get(f"{API}/nutzer?q=MATS@example.org")
         assert r.status_code == 200 and [n["name"] for n in r.json["nutzer"]] == ["Mats Mitglied"], r.get_json()
+        assert red.get(f"{API}/nutzer?q=MATS@").json["nutzer"] == []
         assert all(set(n) == {"id", "name", "gliederung"} for n in r.json["nutzer"])
         assert red.get(f"{API}/nutzer?q=olaf").json["nutzer"] == []           # ohne Stufe
         assert red.get(f"{API}/nutzer?q=doris").json["nutzer"] == []          # deaktiviert
@@ -286,11 +287,19 @@ def test_migration_34():
         assert k.execute("SELECT wert FROM mat_meta WHERE schluessel = 'schema_version'").fetchone()[0] == "34"
         k.close()
         assert protokoll.zeilen == [
+            # Je Verknüpfung eine Zeile (Lehrgang, Freitext → Konto; Datenschutz-Hinweis der zweiten Durchsicht).
+            f"Schritt 34 (Riegenkarten): Lehrgang {a} „SR1 Alt“ – Freitext „eva  EINDEUTIG“ (Wasser) mit Konto "
+            f"{konten['Eva Eindeutig']} verknüpft",
+            f"Schritt 34 (Riegenkarten): Lehrgang {a} „SR1 Alt“ – Freitext „Leitung, Leo“ (Lehrgangsleitung) mit Konto "
+            f"{konten['Leo Leitung']} verknüpft",
+            f"Schritt 34 (Riegenkarten): Lehrgang {b} „SR2 Alt“ – Freitext „Eva Eindeutig“ (Leitung Wasser) mit der "
+            f"vorhandenen Zeile von Konto {konten['Eva Eindeutig']} zusammengelegt",
             f"Schritt 34 (Riegenkarten): Lehrgang {a} „SR1 Alt“ – Ausbilder ohne passendes Konto entfernt: "
             "Dana Doppelt (Seil), Ulf Unbekannt",
             f"Schritt 34 (Riegenkarten): Lehrgang {b} „SR2 Alt“ – Ausbilder ohne passendes Konto entfernt: "
             "Otto Ohnestufe (Referent), Xenia Deaktiviert",
-            "Schritt 34 (Riegenkarten): 3 Freitext-Ausbilder mit Konten verknüpft, 4 entfernt."], protokoll.zeilen
+            "Schritt 34 (Riegenkarten): 2 Freitext-Ausbilder mit Konten verknüpft, 1 mit einer vorhandenen Zeile "
+            "zusammengelegt, 4 entfernt."], protokoll.zeilen
 
         # Die Oberfläche zeigt die Namen der Konten und markiert Karl (ohne Stufe).
         app = make_app(tmp)

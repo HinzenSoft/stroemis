@@ -34,7 +34,8 @@ def test_speicherstand():
     assert 'const uhrzeit = () => new Date().toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });' in js
     # Sofort nach der Eingabe – nicht während einer laufenden Anfrage, nicht bei Konflikt oder fremdem Schreiber.
     aenderung = abschnitt(js, 'meinEditor.on("change", () => {\n      // Während einer Anfrage', "editorCleanup.push")
-    assert 'if (!isNew && !konflikt && !state.editorGesperrt && !sichertGerade) stand("Ungespeichert");' in aenderung
+    # verweigert: nach einem 403 (Nachbesserung vom 02.11.2026) kein „Ungespeichert“ mehr – es wird nicht mehr gespeichert.
+    assert 'if (!isNew && !konflikt && !verweigert && !state.editorGesperrt && !sichertGerade) stand("Ungespeichert");' in aenderung
     assert "spaeterSichern();" in aenderung
     sichern = abschnitt(js, "const jetztSichern = async () => {", "const spaeterSichern")
     assert 'stand("Speichert …");' in sichern

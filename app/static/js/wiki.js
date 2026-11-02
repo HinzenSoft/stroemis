@@ -75,7 +75,7 @@
   const state = { pages: [], byId: new Map(), current: null, comments: [], editor: null, dirty: false,
                   collapsed: new Set(), users: null, commentFilter: "open", spy: null, autosave: null,
                   praesenz: null, pulsLauf: 0, pulsToken: 0, ladeLauf: 0, schreibrecht: false,
-                  editorSeite: null, editorNeu: false, editorKonflikt: false };
+                  editorSeite: null, editorNeu: false, editorKonflikt: false, editorVerweigert: false };
 
   /* --- Wer ist gerade an der Seite? --------------------------------------------------------
      Der Editor speichert selbstständig; zwei Leute gleichzeitig an einer Seite hieße deshalb,
@@ -242,10 +242,10 @@
       const tg = sub ? `aria-label="${esc(p.title)} ${collapsed ? "aufklappen" : "zuklappen"}" aria-expanded="${!collapsed}"`
         : 'aria-hidden="true" tabindex="-1"';
       return `<li class="${sub ? "" : "leaf"}${collapsed ? " collapsed" : ""}" data-id="${p.id}" data-slug="${esc(p.slug)}">
-        <div class="row"${darfAnlegen() && p.can_edit ? ' draggable="true"' : ""}>
+        <div class="row"${p.can_delete ? ' draggable="true"' : ""}>
           <button class="tg" type="button" ${tg}>${sub ? KLAPPZEICHEN : ""}</button>
           <a href="/stroemipedia/${esc(p.slug)}" title="${esc(p.title)}" class="${state.current && state.current.id === p.id ? "active" : ""}">${p.icon ? `<span class="tree-icon" aria-hidden="true">${esc(p.icon)}</span>` : ""}<span class="baum-titel">${esc(p.title)}${p.is_public ? ' <span class="pub" title="für alle Angemeldeten freigegeben">🌐</span>' : ""}${p.favorite ? ' <span class="fav" title="auf der Merkliste">★</span>' : ""}</span></a>
-          ${darfAnlegen() ? `<button class="row-add" type="button" title="Unterseite anlegen" aria-label="Unterseite zu ${esc(p.title)} anlegen">+</button>` : ""}
+          ${p.can_create ? `<button class="row-add" type="button" title="Unterseite anlegen" aria-label="Unterseite zu ${esc(p.title)} anlegen">+</button>` : ""}
           <button class="row-menu" type="button" title="Mehr" aria-haspopup="menu" aria-label="Weitere Aktionen zu ${esc(p.title)}">⋯</button>
         </div>${sub}</li>`;
     }).join("")}</ul>`;
@@ -309,17 +309,19 @@
   /* Kontextmenü an der Baumzeile – dieselben Aktionen wie im Seitenkopf. „Seiten aus ZIP importieren“ steht seit dem
      28.10.2026 nicht mehr hier, sondern nur im Menü „⋯“ neben „Neue Seite“ über dem Baum (baumMenu; Wunsch des Nutzers:
      „reicht am oberen zentralen ⋯ aus“) – die Zielseite wählt der Dialog unter „Einsortieren unter“. Was nicht geht, steht
-     nicht da (Stufe Redakteur, 01.11.2026): Anlegen und Duplizieren ab Redakteur, Symbol nach can_edit, Papierkorb nach
-     can_delete der Baumzeile (api_wiki._baum_rechte). */
+     nicht da (Stufe Redakteur, 01.11.2026): Anlegen nach can_create der Baumzeile, Duplizieren nach can_create der
+     Elternzeile (in einem für alle Angemeldeten freigegebenen Abschnitt nur die Wiki-Verwaltung – Rechte-Befund B1 der
+     zweiten Durchsicht vor dem Merge), Symbol nach can_edit, Papierkorb nach can_delete (api_wiki._baum_rechte). */
+  const darfDuplizieren = (page) => (page.parent_id ? !!(state.byId.get(page.parent_id) || {}).can_create : darfAnlegen());
   function treeRowMenu(anchor, page) {
     if (!page) return;
     const box = document.createElement("div");
     box.className = "tree-menu";
     box.innerHTML = `
-      ${darfAnlegen() ? '<button type="button" data-a="child">Unterseite anlegen</button>' : ""}
+      ${page.can_create ? '<button type="button" data-a="child">Unterseite anlegen</button>' : ""}
       <button type="button" data-a="fav">${page.favorite ? "Von der Merkliste nehmen" : "Zur Merkliste"}</button>
       ${page.can_edit ? '<button type="button" data-a="icon">Symbol ändern</button>' : ""}
-      ${darfAnlegen() ? '<button type="button" data-a="dup">Duplizieren</button>' : ""}
+      ${darfDuplizieren(page) ? '<button type="button" data-a="dup">Duplizieren</button>' : ""}
       <button type="button" data-a="export">Als Markdown herunterladen</button>
       ${page.can_delete ? '<button type="button" data-a="del" class="danger">In den Papierkorb</button>' : ""}`;
     // Verhalten wie jedes Menü (common.js: Esc, Pfeiltasten, daneben tippen, Fokus zurück auf „⋯“).
@@ -348,8 +350,29 @@
     });
   }
 
-  /* Seiten im Baum per Ziehen umsortieren: auf eine Zeile = darunter einsortieren,
-     auf die Lücke zwischen zwei Zeilen = daneben. */
+  /* Seiten im Baum per Ziehen umsortieren: auf eine Zeile = darunter einsortieren (ans Ende),
+     auf die Lücke zwischen zwei Zeilen = daneben. Ziehen lässt sich nur, wer die Seite auch in den Papierkorb legen darf
+     (can_delete – Entscheidung des Nutzers vom 01.11.2026, Sicherheitsbefund 1 der zweiten Durchsicht vor dem Merge).
+     Abgelegt wird nur, wo der Server es annimmt: nicht in einen für alle Angemeldeten freigegebenen Abschnitt
+     (can_create der Elternzeile), und „daneben“ nur, wenn sich dabei keine fremde Nachbarseite verschiebt – „darunter“
+     hängt die Seite ans Ende, ohne die übrigen umzunummerieren. */
+  function ablagePlan(moved, target, mode) {
+    if (target.id === moved.id || ancestors(target).some((a) => a.id === moved.id)) return null;   // nicht unter sich selbst
+    const parentId = mode === "into" ? target.id : (target.parent_id || null);
+    const eltern = parentId ? state.byId.get(parentId) : null;
+    const neuerOrt = parentId !== (moved.parent_id || null);
+    if (neuerOrt && (parentId ? !(eltern && eltern.can_create) : !darfAnlegen())) return null;
+    const siblings = children(parentId).filter((x) => x.id !== moved.id);
+    if (mode === "into") {
+      const ende = siblings.reduce((m, x) => Math.max(m, x.position || 0), -1) + 1;
+      return [{ id: moved.id, parent_id: parentId, position: ende }];
+    }
+    const at = siblings.findIndex((x) => x.id === target.id);
+    siblings.splice(at < 0 ? siblings.length : (mode === "before" ? at : at + 1), 0, moved);
+    const items = siblings.map((x, i) => ({ id: x.id, parent_id: parentId, position: i }))
+      .filter((it) => { const x = state.byId.get(it.id); return (x.parent_id || null) !== it.parent_id || (x.position || 0) !== it.position; });
+    return items.every((it) => state.byId.get(it.id).can_delete) ? items : null;
+  }
   function wireTreeDrag() {
     let dragId = null;
     treeEl.querySelectorAll(".row").forEach((row) => {
@@ -363,11 +386,14 @@
       row.addEventListener("dragend", () => { dragId = null; clearDropMarks(); row.classList.remove("dragging"); });
       row.addEventListener("dragover", (e) => {
         if (!dragId || dragId === +li.dataset.id) return;
-        e.preventDefault();
         const r = row.getBoundingClientRect();
         const zone = (e.clientY - r.top) / r.height;
+        const mode = zone < 0.25 ? "before" : zone > 0.75 ? "after" : "into";
         clearDropMarks();
-        row.classList.add(zone < 0.25 ? "drop-before" : zone > 0.75 ? "drop-after" : "drop-into");
+        const moved = state.byId.get(dragId), target = state.byId.get(+li.dataset.id);
+        if (!moved || !target || !ablagePlan(moved, target, mode)) { e.dataTransfer.dropEffect = "none"; return; }
+        e.preventDefault();
+        row.classList.add(`drop-${mode}`);
       });
       row.addEventListener("drop", async (e) => {
         e.preventDefault();
@@ -377,15 +403,9 @@
           : row.classList.contains("drop-after") ? "after" : "into";
         clearDropMarks();
         if (!moved || !target || moved.id === target.id) return;
-        const parentId = mode === "into" ? target.id : (target.parent_id || null);
-        const siblings = children(parentId).filter((x) => x.id !== moved.id);
-        let index = siblings.length;
-        if (mode !== "into") {
-          const at = siblings.findIndex((x) => x.id === target.id);
-          index = at < 0 ? siblings.length : (mode === "before" ? at : at + 1);
-        }
-        siblings.splice(index, 0, moved);
-        const items = siblings.map((x, i) => ({ id: x.id, parent_id: parentId, position: i }));
+        const items = ablagePlan(moved, target, mode);
+        if (!items) return;
+        if (!items.length) return;                       // liegt schon so
         try {
           await api("/api/wiki/reorder", { method: "PUT", body: { items } });
           await loadTree();
@@ -1162,7 +1182,7 @@
       <button type="button" data-a="print">Drucken / als PDF sichern</button>
       ${anleitungUrl("seite") ? '<button type="button" data-a="anleitung">Anleitung zur Strömipedia</button>' : ""}
       ${p.can_edit ? `<button type="button" data-a="template">${p.is_template ? "Nicht mehr als Vorlage" : "Als Vorlage anbieten"}</button>` : ""}
-      ${p.can_create ? '<button type="button" data-a="dup">Duplizieren</button>' : ""}
+      ${p.can_duplicate ? '<button type="button" data-a="dup">Duplizieren</button>' : ""}
       ${p.can_delete ? '<button type="button" data-a="del" class="danger">In den Papierkorb</button>' : ""}`;
     // Verhalten wie jedes Menü (common.js: Esc, Pfeiltasten, daneben tippen, Fokus zurück auf „⋯“).
     const close = S.menueSchwebend(anchor, box);
@@ -1694,14 +1714,18 @@
   async function shareDialog(p) {
     if (!state.users) { try { state.users = (await api("/api/wiki/users")).users; } catch (e) { state.users = []; } }
     const editorIds = new Set((p.editors || []).map((u) => u.id));
+    /* Zur Auswahl stehen nur Konten mit Strömipedia-Stufe (api_wiki.users_for_sharing, Rechte-Hinweis H1). Wer schon
+       freigegeben ist und die Stufe verloren hat, bleibt abwählbar – mit Vermerk, sonst fiele er beim Speichern still weg. */
+    const mitStufe = new Set(state.users.map((u) => u.id));
+    const kandidaten = state.users.concat((p.editors || []).filter((u) => !mitStufe.has(u.id)));
     const publicLink = `${location.origin}/stroemipedia/${encodeURIComponent(p.slug)}`;
     dialog(`<h2>Teilen: ${esc(p.title)}</h2>
       ${p.can_share ? `<h3>Bearbeiten erlauben${info("Bearbeiten erlauben", `Freigegebene Redakteure bearbeiten diese Seite und ihre Unterseiten, freigegebene Mitglieder nur diese Seite. Löschen darf keiner von beiden.${mehrDazu("bearbeiten_erlauben")}`)}</h3>
       <input type="search" id="sh-filter" placeholder="Nutzer suchen …" aria-label="Nutzer suchen">
-      <div class="user-pick" id="sh-users">${state.users.filter((u) => u.id !== p.created_by).map((u) => `
-        <label class="inline"><input type="checkbox" value="${u.id}" ${editorIds.has(u.id) ? "checked" : ""}> ${esc(u.name || "Unbenannt")} <span class="muted small">${esc(u.gliederung || "")}</span></label>`).join("") || '<div class="muted small">Keine weiteren Nutzer.</div>'}</div>` : ""}
+      <div class="user-pick" id="sh-users">${kandidaten.filter((u) => u.id !== p.created_by).map((u) => `
+        <label class="inline"><input type="checkbox" value="${u.id}" ${editorIds.has(u.id) ? "checked" : ""}> ${esc(u.name || "Unbenannt")} <span class="muted small">${esc(u.gliederung || "")}${mitStufe.has(u.id) ? "" : " – ohne Stufe in der Strömipedia, die Freigabe wirkt nicht"}</span></label>`).join("") || '<div class="muted small">Keine weiteren Nutzer.</div>'}</div>` : ""}
       ${p.can_share ? `<h3 class="abgesetzt">Lesen einschränken</h3>
-      <p class="help">Normalerweise darf jeder Angemeldete jede Seite lesen. Eingeschränkt sehen die Seite und ihre Unterseiten
+      <p class="help">Normalerweise liest jeder mit Stufe in der Strömipedia jede Seite. Eingeschränkt sehen die Seite und ihre Unterseiten
         nur noch du, die Wiki-Verwaltung und die oben freigegebenen Nutzer.</p>
       <label class="inline"><input type="checkbox" id="sh-restrict" ${p.read_restricted ? "checked" : ""}
         ${p.effective_public ? "disabled" : ""}> Nur für freigegebene Nutzer lesbar</label>
@@ -4611,11 +4635,14 @@
     // Zwei Fälle, in denen der Abschluss NICHT speichern kann, und die deshalb fragen müssen:
     // die neue Seite, die noch nirgends steht, und der Konflikt, nach dem nichts mehr
     // angenommen wird. Früher lief beides stumm in den Abschluss – und der Text war weg.
-    if (state.editor && state.dirty && (state.editorNeu || state.editorKonflikt) && !state.speichert) {
+    if (state.editor && state.dirty && (state.editorNeu || state.editorKonflikt || state.editorVerweigert) && !state.speichert) {
       const frage = state.editorNeu
         ? "Die neue Seite ist noch nicht angelegt. Eingaben verwerfen?"
-        : "Die letzten Änderungen wurden nicht gespeichert (die Seite wurde inzwischen von jemand "
-          + "anderem geändert). Trotzdem verlassen? Ein Entwurf bleibt in diesem Browser.";
+        : state.editorVerweigert
+          ? "Die letzten Änderungen wurden nicht gespeichert – du darfst diese Seite nicht mehr bearbeiten. "
+            + "Trotzdem verlassen? Kopiere den Text vorher, wenn du ihn noch brauchst."
+          : "Die letzten Änderungen wurden nicht gespeichert (die Seite wurde inzwischen von jemand "
+            + "anderem geändert). Trotzdem verlassen? Ein Entwurf bleibt in diesem Browser.";
       if (!window.confirm(frage)) return false;
     } else if (state.editor && state.editorAbschluss && state.dirty) { try { state.editorAbschluss(); } catch (e) { /* egal */ } }
     else if (state.editor && state.dirty && !state.speichert
@@ -4633,6 +4660,7 @@
     state.editorSeite = null;
     state.editorNeu = false;
     state.editorKonflikt = false;
+    state.editorVerweigert = false;
     // Zeiger auf den zerstörten Editor löschen: ein Upload, der jetzt noch fertig wird,
     // würde sonst in einen abgeräumten Editor schreiben wollen und stumm verlorengehen.
     state.insertBlock = null;
@@ -4759,6 +4787,7 @@
     state.editorSeite = isNew ? null : p.id;
     state.editorNeu = !!isNew;
     state.editorKonflikt = false;
+    state.editorVerweigert = false;
     renderRail([]);
     // Kommentare bleiben beim Bearbeiten sichtbar – Anmerkungen liest man am besten,
     // während man den Text überarbeitet. Antworten geht weiterhin.
@@ -5171,6 +5200,10 @@
     let sitzung = bearbeitungsKennzeichen();
     let letzterSchreib = 0;
     let sicherLauf = 0, sichertGerade = false, wiederholen = false, konflikt = false;
+    /* 403 beim Speichern (Stufe oder Freigabe inzwischen entzogen – Rechte-Befund B2 der zweiten Durchsicht vor dem
+       Merge): EINMAL die Meldung des Servers als Toast (role="alert"), danach versucht der Editor nicht bei jedem
+       Tastendruck neu. Der Text bleibt im Editor stehen, damit man ihn kopieren kann. */
+    let verweigert = false;
     let leerGemeldet = false;          // der Hinweis kommt einmal je Bearbeitung, nicht je Lauf
     // Der Stand, wie er in der Datenbank steht – nicht die Editorfassung mit den $$-Marken.
     const urText = String(p.content || "");
@@ -5215,7 +5248,7 @@
       if (!lebt || state.editor !== meinEditor) return false;
       // Hat jemand anders die Bearbeitung übernommen, schreibt dieser Reiter nicht mehr –
       // sonst überschriebe er die Arbeit des neuen Schreibers.
-      if (isNew || konflikt || state.editorGesperrt) return false;
+      if (isNew || konflikt || verweigert || state.editorGesperrt) return false;
       if (sichertGerade) { wiederholen = true; return false; }
       const md = fromEditorMd(meinEditor.getMarkdown());
       // Zurückgetippt auf den gespeicherten Stand: dann gilt wieder die letzte Meldung.
@@ -5275,8 +5308,15 @@
         // Hat jemand anders gespeichert, hilft nur neu laden – sonst liefe das automatische
         // Speichern in eine Schleife aus Fehlermeldungen.
         konflikt = /inzwischen/i.test(e.message || "");
+        if (e.status === 403) verweigert = true;
         if (!lebt || state.editor !== meinEditor) return false;
         state.editorKonflikt = konflikt;
+        if (verweigert) {
+          state.editorVerweigert = true;
+          stand("Nicht gespeichert – keine Berechtigung mehr", true);
+          toast(`${e.message} Dein Text steht noch im Editor – kopiere ihn, bevor du die Seite verlässt.`, true);
+          return false;
+        }
         stand(konflikt ? "Nicht gespeichert – die Seite wurde zwischenzeitlich geändert" : "Nicht gespeichert", true);
         if (konflikt) toast(e.message, true);
         return false;
@@ -5297,13 +5337,13 @@
       }
     };
     const spaeterSichern = (verzoegerung = 1200) => {
-      if (!lebt || isNew || konflikt) return;
+      if (!lebt || isNew || konflikt || verweigert) return;
       clearTimeout(sicherLauf);
       sicherLauf = setTimeout(() => { sicherLauf = 0; if (lebt) jetztSichern(); }, verzoegerung);
     };
     meinEditor.on("change", () => {
       // Während einer Anfrage bleibt „Speichert …“ stehen; danach sagt der Abschluss, ob noch etwas offen ist.
-      if (!isNew && !konflikt && !state.editorGesperrt && !sichertGerade) stand("Ungespeichert");
+      if (!isNew && !konflikt && !verweigert && !state.editorGesperrt && !sichertGerade) stand("Ungespeichert");
       spaeterSichern();
     });
     editorCleanup.push(() => clearTimeout(sicherLauf));
@@ -5314,7 +5354,7 @@
        Abräumen aus dem Editor gelesen wurde. Scheitert es (Konflikt, Netz), bleibt der
        Entwurf im Browser stehen und wird beim nächsten Öffnen angeboten. */
     const nachsenden = async (md) => {
-      if (konflikt || state.editorGesperrt || md === gesichert) return md === gesichert;
+      if (konflikt || verweigert || state.editorGesperrt || md === gesichert) return md === gesichert;
       const titel = titelZeile(md) || (p.title || "").trim();
       if (!titel || (!md.trim() && gesichert.trim())) return false;
       try {

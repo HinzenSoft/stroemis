@@ -2900,7 +2900,11 @@ def _schritt_34(conn):
                                   "AND (recht_pruefungen >= 1 OR recht_verwaltung >= 3) AND trim(name) <> ''"):
         je_name.setdefault(_namensschluessel_34(name), []).append(uid)
     entfernt = {}
-    verknuepft = 0
+    # Je Verknüpfung eine Zeile (Lehrgang, Freitext → Konto): Eine Verknüpfung allein über den Namen gibt dem Konto
+    # Einsicht in Teilnehmende und Bewertungen – das Protokoll muss sagen, wen mit wem (Datenschutz-Hinweis der zweiten
+    # Durchsicht vor dem Merge). Zusammengelegt (Konto stand schon im Lehrgang) zählt getrennt: So lässt sich die neue
+    # Zahl der Ausbilder-Zeilen nachrechnen (vorher − zusammengelegt − entfernt).
+    verknuepft, zusammengelegt, zeilen = 0, 0, []
     for aid, lid, name, funktion, leit in conn.execute(
             "SELECT id, lehrgang_id, name, funktion, ist_leitung FROM pruef_ausbilder WHERE user_id IS NULL "
             "ORDER BY lehrgang_id, sortierung, id").fetchall():
@@ -2912,21 +2916,29 @@ def _schritt_34(conn):
         uid = treffer[0]
         vorhanden = conn.execute("SELECT id, funktion FROM pruef_ausbilder WHERE lehrgang_id = ? AND user_id = ? "
                                  "ORDER BY sortierung, id LIMIT 1", (lid, uid)).fetchone()
+        wer = f"„{name}“ ({funktion})" if funktion else f"„{name}“"
         if vorhanden:
             conn.execute("UPDATE pruef_ausbilder SET ist_leitung = max(ist_leitung, ?), "
                          "funktion = CASE WHEN trim(funktion) = '' THEN ? ELSE funktion END WHERE id = ?",
                          (leit, funktion, vorhanden[0]))
             conn.execute("DELETE FROM pruef_ausbilder WHERE id = ?", (aid,))
+            zusammengelegt += 1
+            zeilen.append((lid, f"{wer} mit der vorhandenen Zeile von Konto {uid} zusammengelegt"))
         else:
             conn.execute("UPDATE pruef_ausbilder SET user_id = ? WHERE id = ?", (uid, aid))
-        verknuepft += 1
-    titel = dict(conn.execute("SELECT id, titel FROM pruef_lehrgaenge")) if entfernt else {}
+            verknuepft += 1
+            zeilen.append((lid, f"{wer} mit Konto {uid} verknüpft"))
+    titel = dict(conn.execute("SELECT id, titel FROM pruef_lehrgaenge")) if entfernt or zeilen else {}
+    for lid, text in zeilen:
+        _NACH_DEM_FESTSCHREIBEN.append(f"Schritt 34 (Riegenkarten): Lehrgang {lid} „{titel.get(lid, '')}“ – Freitext "
+                                       f"{text}")
     for lid, namen in entfernt.items():
         _NACH_DEM_FESTSCHREIBEN.append(f"Schritt 34 (Riegenkarten): Lehrgang {lid} „{titel.get(lid, '')}“ – Ausbilder "
                                        f"ohne passendes Konto entfernt: {', '.join(namen)}")
-    if verknuepft or entfernt:
+    if zeilen or entfernt:
         _NACH_DEM_FESTSCHREIBEN.append(f"Schritt 34 (Riegenkarten): {verknuepft} Freitext-Ausbilder mit Konten "
-                                       f"verknüpft, {sum(len(n) for n in entfernt.values())} entfernt.")
+                                       f"verknüpft, {zusammengelegt} mit einer vorhandenen Zeile zusammengelegt, "
+                                       f"{sum(len(n) for n in entfernt.values())} entfernt.")
 
 
 # Meldungen für das Startprotokoll, die ein Schritt sammelt – migrieren() schreibt sie erst nach dem Festschreiben.

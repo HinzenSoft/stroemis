@@ -463,6 +463,29 @@ window.S = (function () {
     location.href = "/login";
   });
 
+  /* Abmelden und „Zurück“ (Sicherheitshinweis der zweiten Durchsicht vor dem Merge, 02.11.2026): Der Browser hält zuletzt
+     besuchte Seiten samt Inhalt im Speicher (bfcache) und zeigt sie bei „Zurück“ ohne Anfrage an den Server – nach dem
+     Abmelden also die angemeldete Seite. Kommt eine angemeldete Seite so zurück, fragt sie /api/me; gehört die Sitzung
+     nicht mehr diesem Konto (abgemeldet, abgelaufen, anderes Konto) oder antwortet niemand (kein Netz), lädt sie neu – dann
+     entscheidet der Server (Anmeldung) bzw. der Service Worker (Hinweisseite ohne Netz). Bis die Antwort da ist, bleibt der
+     Inhalt verdeckt. Bewusst nicht „Cache-Control: no-store“ für angemeldete Seiten: Ob ein Browser solche Seiten aus dem
+     bfcache hält, regelt jeder anders (Chromium seit 2024 zum Teil doch), und der schnelle Rückweg bleibt so erhalten. */
+  window.addEventListener("pageshow", async (e) => {
+    const ich = window.STROEMIS && window.STROEMIS.user;
+    if (!e.persisted || !ich) return;
+    const wurzel = document.documentElement;
+    wurzel.style.visibility = "hidden";
+    let gleich;
+    try {
+      const r = await fetch("/api/me", { credentials: "same-origin", cache: "no-store",
+                                         headers: { "X-Requested-With": "XMLHttpRequest" } });
+      const d = r.ok ? await r.json() : null;
+      gleich = !!(d && d.user && d.user.id === ich.id);
+    } catch (err) { gleich = false; }
+    if (gleich) wurzel.style.visibility = "";
+    else location.reload();
+  });
+
   /* Hauptnavigation, die nicht in die Bauchbinde passt (Telefon, Tablet hochkant, Konten mit allen Modulen): Vorher
      rollte die Leiste unsichtbar seitlich, und „Profil“ und „Abmelden“ lagen ohne jeden Hinweis hinter dem Rand.
      Jetzt weicht Schritt für Schritt, was entbehrlich ist – erst der eigene Name, dann der Schriftzug neben dem
