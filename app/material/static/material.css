@@ -482,8 +482,6 @@ tr.mat-entwurf a:not(.btn) { color: var(--rot-auf-flaeche); }
 .mat-punkt.laedt { opacity: .6; }
 .mat-punkt-kopf { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; margin-bottom: 8px; }
 .mat-punkt-text { font-weight: 700; flex: 1 1 260px; }
-.mat-kritisch { display: inline-block; font-size: var(--fs-marke); font-weight: 700; color: var(--rot); border: 1px solid var(--rot);
-  border-radius: var(--radius-pille); padding: 0 6px; }
 .mat-wahl3 { display: flex; gap: 0; margin: 6px 0; }
 .mat-wahl3 button { flex: 1 1 0; min-height: 46px; font: inherit; font-weight: 400; background: var(--weiss); color: var(--anthrazit);
   border: 1px solid var(--linie); cursor: pointer; padding: 6px 8px; }
@@ -678,18 +676,12 @@ html:has(.mat-mit-leiste) { scroll-padding-bottom: 210px; }
 .mat-befehl { background: var(--grau-hell); padding: 8px 10px; border-radius: var(--radius); overflow-x: auto;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: var(--fs-mittel); }
 
-/* Nur für Vorlesehilfen: unsichtbar, aber vorgelesen (etwa der Kopf der Spalte „kritisch“). */
+/* Nur für Vorlesehilfen: unsichtbar, aber vorgelesen (etwa „Gliederung“ vor der Marke in der globalen Suche). */
 .mat-vorlesen { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 
-/* Befunde einer abgeschlossenen Prüfung: „kritisch“ steht in einer eigenen schmalen Spalte neben dem Prüfpunkt,
-   damit der Text der Punkte untereinander ruhig bleibt. Als Karte (bis 600 px Inhaltsbreite) entfällt die leere
-   Zelle. */
-.mat-befunde .mat-krit-spalte { width: 1%; white-space: nowrap; padding-left: 4px; padding-right: 4px; }
+/* Befunde einer abgeschlossenen Prüfung: der Sollwert hinter dem Wert bricht nicht um. (Die schmale Spalte „kritisch“
+   ist am 03.11.2026 mit der Funktion entfallen.) */
 .mat-befunde .mat-soll { white-space: nowrap; }
-@container mat-seite (max-width: 600px) {
-  table.list.mat-befunde td.mat-krit-spalte:empty { display: none; }
-  table.list.mat-befunde td.mat-krit-spalte { width: auto; padding: 2px 0; }
-}
 
 /* Fotos groß zeigen: Ein Klick auf ein Foto öffnet es über der Seite statt in einem neuen Tab (Rahmen und
    Schließen-Knopf wie die Bilder im Wiki, .md-lightbox in app.css). Mehrere Fotos derselben Gruppe – etwa
