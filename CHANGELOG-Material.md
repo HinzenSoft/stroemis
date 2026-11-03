@@ -11685,3 +11685,8 @@ test_material_aussondern (`test_kritisch_lebensende_berichtigung` → `test_mang
 test_material_bericht (Zahl und CSV-Spalte), test_material_bestandteile, test_material_laenge (`kritisch` am Längenpunkt
 übergangen statt 400), test_material_pdf_umbruch (Tabellenkopf), test_material_beispielbestand (Formulare,
 Mangelpunkte), test_module_info_i (kein „i“ „kritisch“).
+
+**Bestätigt am 03.11.2026** (Nutzer: „passt“): Der Katalogimport übergeht `kritisch` ganz – er speichert den Wert nicht
+und prüft ihn nicht (auch ein ungültiger Wert oder `kritisch` an einem Text-Punkt führt zu keinem Fehler); der
+Formularvergleich beim Import lässt `is_critical` aus, ein erneuter Import einer alten Katalogdatei legt dafür keine neue
+Formularversion an; `scripts/beispielbestand_petzl_punkte.json` behält sein ungenutztes Feld `kritisch`.
