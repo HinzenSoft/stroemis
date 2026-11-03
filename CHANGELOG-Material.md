@@ -11610,3 +11610,8 @@ Liste, PUT je Person, Entziehen an der Zeile 403; dauerhafter Verwalter und Verw
 `tests/test_material_freigaben.py::test_dauerhaft_pruefen` an die neue Regel angepasst (befristeter Verwalter vergibt
 dauerhaftes Prüfen mit Grundrecht von oben, danach ist es für ihn nicht änderbar – das Grundrecht läuft länger als er –,
 ohne Grundrecht 400).
+
+**Nachtrag 03.11.2026 (beim Artikel-Nachzug gefunden):** Unter „Einzeln“ im Formular „Freigabe anlegen“ standen „Du
+verwaltest hier bis …“ bzw. „Spätestens …“ auch ohne gewähltes Grundrecht bzw. ohne Häkchen „Prüffreigabe“, weil
+`hilfe()` den Satz nach `zeigen(false)` wieder einblendete. Die Hilfe einer Gültigkeitszeile steht jetzt nur unter einer
+sichtbaren Zeile (freigaben.js `gueltig.hilfe`); statische Prüfung in `test_oberflaeche_statisch`.

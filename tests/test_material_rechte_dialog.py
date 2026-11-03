@@ -195,6 +195,8 @@ def test_oberflaeche_statisch():
     # Dieselben Rollenkarten an beiden Stellen (eine Komponente), Legende „Rolle“ mit „i“ samt Strömipedia-Link.
     assert '${rollenHtml("mf-rollen", "mf-vorlage")}' in form and '${rollenHtml("mfp-rollen", "mfp-rolle")}' in dlg
     assert fjs.count("${rollenHtml(") == 2 and "VORLAGEN" not in fjs
+    # Hilfe der Gültigkeitszeile nur unter einer sichtbaren Zeile (Einzeln ohne Grundrecht/Prüffreigabe: keine Hilfe).
+    assert 'hilfe(text) { hilfeEl.textContent = text || ""; hilfeEl.hidden = !text || gruppe.hidden; }' in fjs
     karten = abschnitt(fjs, "  const rollenHtml = (id, name) =>", "  // gruende:")
     assert '<legend>Rolle${info("Rolle", rollenInfo())}</legend>' in karten and 'class="mf-vorlage"' in karten
     assert '<p class="help mf-gruende" id="${id}-gruende" hidden></p>' in karten

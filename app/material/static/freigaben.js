@@ -397,7 +397,9 @@
         else if (geht && erzwungen) { dauer.checked = true; feld.value = ""; feld.classList.remove("ungueltig"); erzwungen = false; }
       },
       vomNutzer: () => angefasst,
-      hilfe(text) { hilfeEl.textContent = text || ""; hilfeEl.hidden = !text; },
+      // Die Hilfe steht nur unter einer sichtbaren Zeile: Unter „Einzeln“ ohne gewähltes Grundrecht bzw. ohne Häkchen
+      // „Prüffreigabe“ ist die Zeile verborgen (zeigen(false)) – dann bleibt auch „Du verwaltest hier bis …“ weg.
+      hilfe(text) { hilfeEl.textContent = text || ""; hilfeEl.hidden = !text || gruppe.hidden; },
       zeigen(an) { gruppe.hidden = !an; if (!an) hilfeEl.hidden = true; },
       dauerhaft: () => dauer.checked && !nurBis(),
       // null (dauerhaft) oder das Datum – ohne gültiges Datum ein Fehler am Feld.
