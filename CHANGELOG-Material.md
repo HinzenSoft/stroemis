@@ -77,6 +77,7 @@ Geschichte stehen. Schemaversion nach der Nachbesserung vor dem Merge: 30; mit d
 | Freigaben je Person, Ordnerbild neben dem Namen | Reiter „Freigaben“: eine Zeile je Person in allen drei Listen, EIN „Ändern“ → Dialog „Rechte ändern“ (neuer Endpunkt je Person und Ordner, eine Transaktion), „Entziehen“ nimmt alle Rechte der Person dort, „… hat hier schon: …“ beim Anlegen; Ordnerfoto links neben Name und Knopfzeile (96 px, Telefon 64 px) | gebaut 02.11.2026 (kein Schemaschritt), freigegeben 02.11.2026 |
 | Suchzeile in der Strömipedia | Unter 1024 px (außer im Editor) klebt oben im Inhalt eine Zeile „☰“ + „Artikel suchen“ wie in der Materialablage; Treffer als Liste darunter über dem Text (Tippen/Enter öffnet, Esc/daneben/Zurück schließt); ersetzt „☰ Seiten“, das „☰“ der Kopfzeile einer Seite und das Suchfeld in der Schublade; die Kopfzeile klebt direkt darunter; dieselbe Zeile im Lesemodus (Konten ohne Stufe) und in public.html, gesucht über `/api/public/search` (eine Suchlogik in markdown.js) | gebaut 02.11.2026 (kein Schemaschritt); Lesemodus bestätigt am 02.11.2026: ja, gebaut 02.11.2026 |
 | Rechte ändern mit Rollen | Dialog „Rechte ändern“ mit denselben Rollenkarten wie „Freigabe anlegen“ (vorgewählt die Rolle zu den heutigen Rechten, seltene Fälle unter „Einzeln“), Gültigkeit als Radiogruppe „dauerhaft / bis [Datum]“ in Dialog und Anlegen-Formular, nicht wählbare Rollen ausgegraut mit Grund als Satz, Erklärungen im „i“, Notiz zugeklappt; ohne Änderung schließt „Speichern“ ohne Anfrage; Server und Schnittstelle unverändert | gebaut 02.11.2026 (kein Schemaschritt) |
+| Prüfen folgt dem Grundrecht | Bei internen Rollen („Prüfer“, „Materialwart und Prüfer“) ist Prüfen immer dauerhaft und gilt, solange das Grundrecht gilt – auch vom befristeten Verwalter (Server: dauerhafte Prüffreigabe mit Grundrecht dort oder darüber auch von ihm); kein vorbelegtes Datum außer beim externen Prüfer, „bis“ mit leerem Feld, wo „dauerhaft“ nicht geht; Rollenwechsel lässt die eigene Wahl; behebt den ungekappten Datumsvorschlag (eigenes Ende > 24 Monate → Ablehnung) | gebaut 03.11.2026 (kein Schemaschritt) |
 
 ## Abgleich mit dem Bestand (vor Lieferung 1)
 
@@ -11532,3 +11533,63 @@ und kürzen der eigenen Zeile gehen. Bestehende Freigabe-Tests liefen unverände
 unter den Karten (mit den betroffenen Rollen davor), nicht in jeder Karte; „Vorlage“ heißt auch im Formular „Freigabe
 anlegen“, im Hinweis der Leitstelle und im README „Rolle“; die Material-Verwaltung darf im Dialog ihre eigene Zeile auch
 erweitern (z. B. eine eigene Prüffreigabe), wie es der Server für sie schon erlaubte.
+
+## Prüfen folgt dem Grundrecht (Entscheidung des Nutzers, 03.11.2026)
+
+Anlass: Fehler im Bau „Rechte ändern mit Rollen“ (beim Artikel-Nachzug gefunden). Wer selbst befristet über heute +
+24 Monate hinaus verwaltet, bekam bei „Prüfer“ und „Materialwart und Prüfer“ sein eigenes Ende ungekappt als Datum
+vorgeschlagen – das Prüfen bekam dasselbe Datum, und der Server lehnte mit „höchstens 24 Monate“ ab.
+
+Nutzer: „Ja, es sollen nur explizite befristete Rechte befristet sein.“ Auf Nachfrage gewählt **„Prüfen folgt dem
+Grundrecht“**:
+
+> Bei internen Rollen ist Prüfen immer dauerhaft und gilt, solange das Grundrecht gilt – keine eigene 24-Monats-Grenze
+> mehr. Ein Datum steht nur, wo jemand „bis“ wählt; nie vorbelegt (außer beim Externen Prüfer, der per Rolle befristet
+> ist). Die Regel aus Phase 2 bleibt: Wer selbst befristet verwaltet, kann kein „dauerhaft“ wählen und muss ein Datum bis
+> zu seinem eigenen Ende eintragen. Server wird angepasst (dauerhaftes Prüfen auch von befristeten Verwaltern, wenn ein
+> Grundrecht dabei ist).
+
+Verworfen: „Alles dauerhaft außer bis“ und „Nur den Fehler beheben“. Kein Schemaschritt, keine Migration.
+
+**Server** (services/freigaben.py, 1.6 Nr. 3, 4 und 8)
+- Vorher: Eine Prüffreigabe ohne Ende vergab nur, wer selbst dauerhaft verwaltet (Nr. 3, sonst 403 „Dauerhaft vergibt
+  nur …“); eine fremde dauerhafte war für einen befristeten Verwalter nicht änderbar (Nr. 4).
+- Nachher: Eine dauerhafte Prüffreigabe darf auch ein befristeter Verwalter vergeben oder aus einer befristeten machen,
+  wenn die Person dort in derselben Anfrage ein Grundrecht bekommt oder dort bzw. darüber schon ein gültiges hat
+  (`_folgt_grundrecht`, rechte.grundrecht_an); ohne Grundrecht wie für alle 400 („Dauerhaft gibt es eine Prüffreigabe
+  nur zusammen mit lesen oder verwalten …“). Nach derselben Regel ist eine solche Zeile für ihn auch änderbar (Nr. 4,
+  „änderbar“ in den Listen) – gefragt nach dem Stand vor der Anfrage, damit etwa „Prüfer“ → „Externer Prüfer“ geht,
+  obwohl das Grundrecht dabei zuerst wegfällt. Unverändert: das Grundrecht höchstens bis zum eigenen Ende und nicht
+  dauerhaft, befristetes Prüfen höchstens 24 Monate und nicht länger als das eigene Verwalten, die eigene Zeile nur
+  verkürzen/herabsetzen/entziehen (außer Material-Verwaltung), Qualifikation, Gliederungstrennung, Nr. 7. Zur Laufzeit
+  wie bisher: Eine dauerhafte Prüffreigabe wirkt nur mit gültigem Grundrecht am Anker oder darüber und ruht ohne es.
+
+**Oberfläche** (freigaben.js)
+- „Prüfer“ und „Materialwart und Prüfer“ schicken das Prüfen immer ohne Ende (`rolleAnlegen`, `rolleAendern` ohne den
+  Schalter `pruefDauer`); die Zeile „Gültig“ der Rolle betrifft nur das Grundrecht. Hat sie ein Ende, steht darunter
+  „Prüfen gilt, solange das Grundrecht gilt.“ (statt „Das Prüfen endet am selben Tag – höchstens 24 Monate.“).
+- Kein vorbelegtes Datum: „dauerhaft“ ist vorgewählt, wo es geht; wo nicht (befristeter Verwalter beim Grundrecht) ist
+  „bis“ gewählt, das Feld leer, darunter „Du verwaltest hier bis TT.MM.JJJJ – länger geht nicht.“ (vorher „– länger
+  vergibst du nichts.“); Speichern ohne Datum → „Bitte ein Datum angeben.“ am Feld. Auch „bis“ anklicken füllt nichts
+  mehr ein. Ausnahme Externer Prüfer: wie bisher der 31.12. des Folgejahres, gekappt auf 24 Monate und das eigene
+  Verwalten. Unter „Einzeln“ ebenso: Prüffreigabe vorgewählt dauerhaft – ohne Grundrecht „bis“ mit leerem Feld und dem
+  Satz „Spätestens … – höchstens 24 Monate …“; bekommt die Person ein Grundrecht, kehrt „dauerhaft“ zurück, solange man
+  die Zeile nicht selbst angefasst hat. Prüfen dauerhaft unter „Einzeln“ jetzt auch für befristete Verwalter.
+- Im Dialog „Rechte ändern“ zeigen vorhandene Rechte ihre gespeicherten Daten (kein Vorschlag).
+- Rollenwechsel: Was man an der Gültigkeit selbst gesetzt hat (angeklickt oder getippt), bleibt; sonst gilt die Vorgabe
+  der neuen Rolle. So setzt der Wechsel nie ein Datum über die Grenze – der Fall aus dem Anlass ist weg.
+
+**Bestand**: keine Migration – befristete Prüffreigaben interner Personen bleiben, wie sie sind; der Dialog öffnet sie
+unter „Einzeln“ mit ihrem Datum. Auf dauerhaft bringt sie ein Verwalter mit „Rechte ändern“ → Rolle „Prüfer“ bzw.
+„Materialwart und Prüfer“ (oder unter „Einzeln“ die Prüffreigabe „dauerhaft“) → „Speichern“ – auch ein befristeter.
+
+**Tests**: `tests/test_material_rechte_dialog.py` – statisch (kein vorbelegtes Datum außer extern, Hilfetext,
+Rollenwechsel nach `vomNutzer`), neu `test_gueltigkeit_ohne_vorbelegung` (Gültigkeitszeile mit Node.js und
+nachgebautem DOM: „bis“ bleibt leer, Fehler am Feld, erzwungenes „bis“ kehrt zurück, Vorschlag nur beim externen
+Prüfer) und `test_pruefen_folgt_dem_grundrecht` (befristeter Verwalter über und unter 24 Monaten: „Prüfer“ und
+„Materialwart und Prüfer“ beim Anlegen und Ändern → Prüfen dauerhaft, Grundrecht bis eigenes Ende, die Zeile bleibt
+für ihn in derselben Rolle änderbar; Grundrecht über das eigene Ende oder dauerhaft 403; der Fall aus dem Anlass;
+befristet mit Grundrecht → „Prüfer“; „Prüfer“ → „Externer Prüfer“; ohne Grundrecht dauerhaft 400 bei POST und PUT;
+extern über 24 Monate 400; eigene Zeile unverändert); `test_rolle_als_anfrage` an die neuen Signaturen angepasst.
+`tests/test_material_freigaben.py::test_dauerhaft_pruefen` an die neue Regel angepasst (befristeter Verwalter vergibt
+dauerhaftes Prüfen mit Grundrecht von oben, ändert es, ohne Grundrecht 400).
