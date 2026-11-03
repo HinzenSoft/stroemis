@@ -11576,6 +11576,9 @@ Verworfen: „Alles dauerhaft außer bis“ und „Nur den Fehler beheben“. Ke
   Satz „Spätestens … – höchstens 24 Monate …“; bekommt die Person ein Grundrecht, kehrt „dauerhaft“ zurück, solange man
   die Zeile nicht selbst angefasst hat. Prüfen dauerhaft unter „Einzeln“ jetzt auch für befristete Verwalter.
 - Im Dialog „Rechte ändern“ zeigen vorhandene Rechte ihre gespeicherten Daten (kein Vorschlag).
+- „Daran hängt eine dauerhafte Prüffreigabe …“ zählt die Prüffreigabe am selben Ordner nur noch mit, wenn sie unter
+  „Einzeln“ dauerhaft bleibt – bei einer Rolle regelt die Rolle sie selbst (sonst stünde neben „Prüfen gilt, solange das
+  Grundrecht gilt.“ derselbe Inhalt noch einmal; mit dem befristeten Verwalter wäre das jetzt der Normalfall).
 - Rollenwechsel: Was man an der Gültigkeit selbst gesetzt hat (angeklickt oder getippt), bleibt; sonst gilt die Vorgabe
   der neuen Rolle. So setzt der Wechsel nie ein Datum über die Grenze – der Fall aus dem Anlass ist weg.
 

@@ -255,6 +255,9 @@ def test_oberflaeche_statisch():
     # Prüfen dauerhaft unter „Einzeln“: mit Grundrecht auch für befristete Verwalter.
     assert "gPruef.erlauben(!!grund || grundrechtDort(a));" in steuerung
     assert "const pruefDauerGeht = eigen ? !!(pf && pf.bis === null) : true;" in dlg
+    # „Daran hängt …“ ohne die Prüffreigabe hier, wo die Rolle sie selbst regelt (sonst stünde es doppelt da).
+    assert "const bleibt = ez && (pruefWahl ? pruefWahl.checked && gPruef.dauerhaft() : pfDauer);" in dlg
+    assert '<p class="help" id="mfp-traegt" hidden></p>' in dlg
     # Notiz zugeklappt wie beim Anlegen, offen, wenn es eine gibt; der Datenschutzsatz bleibt sichtbar darin.
     assert '<details class="mf-notiz"${notiz || abweichend ? " open" : ""}><summary>Notiz</summary>' in dlg
     assert "Sehen nur Verwalter dieses Ordners und die Material-Verwaltung" in dlg
@@ -519,7 +522,7 @@ def test_pruefen_folgt_dem_grundrecht():
         return
     with tempfile.TemporaryDirectory() as tmp:
         app, k = umgebung(tmp)
-        adm, w = k["adm"], k["wart"]
+        adm = k["adm"]
         gid, _ = gliederung(adm)
         with app.app_context():
             from app.material.services import freigaben
@@ -607,8 +610,7 @@ def test_pruefen_folgt_dem_grundrecht():
         assert _kurz(*_rechte(lang, gid, uid)) == (None, grenze)
 
         # Die eigene Zeile bleibt, wie sie war: befristetes eigenes Prüfen nicht dauerhaft, kein neues eigenes Prüfen.
-        sql_frei = freigeben(adm, gid, kurz_id, "pruefen", bis=tag(30))
-        assert sql_frei
+        freigeben(adm, gid, kurz_id, "pruefen", bis=tag(30))
         g, p = _rechte(kurz, gid, kurz_id)
         assert g["eigen"] and p["bis"] == tag(30)
         r = kurz.put(PERSON.format(gid, kurz_id), json={"pruefen": {"bis": None}})

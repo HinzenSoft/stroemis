@@ -736,7 +736,7 @@
       ${rollenHtml("mfp-rollen", "mfp-rolle")}
       ${gueltigHtml("mfp-gueltig", "Gültig", true)}
       ${einzelnHtml("mfp", grundHtml, pruefHtml)}
-      <p class="help" id="mfp-traegt" hidden>${esc(g ? traegtText(g) : "")}</p>
+      <p class="help" id="mfp-traegt" hidden></p>
       <p class="help" id="mfp-ohne-grund" hidden>${esc(OHNE_GRUNDRECHT)}</p>
       ${mitNotiz.length ? `<details class="mf-notiz"${notiz || abweichend ? " open" : ""}><summary>Notiz</summary>
         <input type="text" id="mfp-notiz" maxlength="200" aria-label="Notiz" aria-describedby="mfp-notiz-hilfe" value="${esc(notiz)}">
@@ -781,7 +781,14 @@
         }
         // Was an diesem Grundrecht hängt, sagt der Dialog, sobald es wegfällt oder ein Ende bekommt.
         const dauerDanach = !ez ? gRolle.dauerhaft() : gGrund ? gGrund.dauerhaft() : !!(g && g.bis === null);
-        feld("mfp-traegt").hidden = !(g && g.traegt_pruefen && grundFrei && (!grundDanach() || !dauerDanach));
+        // Die Prüffreigabe hier zählt nur mit, wenn sie unter „Einzeln“ dauerhaft bleibt – bei einer Rolle fällt sie weg,
+        // bekommt ein Datum oder es steht „Prüfen gilt, solange das Grundrecht gilt.“ darunter (wie personEntziehen).
+        const pfDauer = !!(pf && pf.bis === null);
+        const bleibt = ez && (pruefWahl ? pruefWahl.checked && gPruef.dauerhaft() : pfDauer);
+        const andere = g ? Math.max(0, (g.traegt_pruefen || 0) - (pfDauer && !bleibt ? 1 : 0)) : 0;
+        const traegt = feld("mfp-traegt");
+        traegt.hidden = !(andere && grundFrei && (!grundDanach() || !dauerDanach));
+        if (!traegt.hidden) traegt.textContent = traegtText(Object.assign({}, g, { traegt_pruefen: andere }));
         feld("mfp-ohne-grund").hidden = !(ez && pruefWahl && pruefWahl.checked && gPruef.dauerhaft() && !grundDanach() && !grundrechtOben(p, d));
       }
 
