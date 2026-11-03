@@ -439,7 +439,7 @@ def _befunde(pid):
         if r["finding"] == "mangel":
             maengel += 1
         punkt = {"nr": nr, "text": r["checklist_text"], "art": r["editor"], "soll": _soll_text(r),
-                 "kritisch": bool(r["is_critical"]), "pflicht": bool(r["mandatory"]), "befund": r["finding"] or "ok",
+                 "pflicht": bool(r["mandatory"]), "befund": r["finding"] or "ok",
                  "befund_text": ("nicht unterschrieben" if r["editor"] == "signature" and r["finding"] == "ok"
                                  and not r["signature_png"] else BEFUND_TEXT.get(r["finding"], "")),
                  "wert": _wert_text(r), "notiz": r["note"] or "",

@@ -23,8 +23,9 @@ Sonst legt das Skript nichts an.
 Der Katalog: Kategorien, Produkte, Dokumente, Bilder, Rückrufe und Meldungen werden nur gelesen. Einzige Ausnahme sind
 DEMO-Formulare für echte Kategorien ohne wirksames aktives Prüfformular (formulare) – mit DEMO-Kennzeichen, aktiv; der
 Katalog-Export lässt sie aus: nach den Petzl-Prüfberichten, wo scripts/beispielbestand_petzl_punkte.json die Kategorie
-nach ihrem Namen kennt (Punkte wörtlich, mit Gruppe, Soll und kritisch; Fundstellen je Punkt in der Datei, die Quellen im
-Bericht – das Formular hat kein Feld dafür), sonst Platzhalter (je ein Punkt Ja/Nein, Text, Zahl, bei Artikellänge
+nach ihrem Namen kennt (Punkte wörtlich, mit Gruppe und Soll; Fundstellen je Punkt in der Datei, die Quellen im
+Bericht – das Formular hat kein Feld dafür; das Feld „kritisch“ der Datei bleibt seit dem 03.11.2026 ungenutzt),
+sonst Platzhalter (je ein Punkt Ja/Nein, Text, Zahl, bei Artikellänge
 „Länge (m)“) an der obersten Kategorie ohne Formular. Grundlage sind die Produkte ohne DEMO-Kennzeichen außerhalb von DEMO-Kategorien und ohne Bestandteil-Liste
 (Sets nur als Ordnerart). Alles Fachliche (Prüfpunkte, Intervalle, Lebensdauern, Hersteller, Produkte) kommt aus dem
 Katalog; erfunden sind nur Bestandsangaben, und die tragen „DEMO“: Ordner „DEMO-…“, Seriennummern „DEMO-…“, DEMO-Konten mit
@@ -38,9 +39,8 @@ dass Journal, Prüftage, Protokolle und Durchgänge ihr damaliges Datum tragen. 
 selbst setzt (applied_at bestätigter Anträge, Trigger mit 'now'), tragen den Lauftag – sie werden nicht umgangen. Ab
 gut zwei Jahren vor heute: Ersterfassung je Bereich kurz vor seiner ersten Jahresprüfung (die Eingangsprüfung geschieht
 im Durchgang), jährliche Prüfdurchgänge je Bereich (abgeschlossen, mit Sammelprotokoll), dazwischen Prüfungen bei
-kürzerem Intervall und außerplanmäßige, Mängel mit Sperre und späterer Prüfung nach Reparatur (nur an nicht kritischen
-Punkten; ein kritischer führt zur Aussonderung), Aussonderungen (Mangel, Lebensdauer, Verlust; seit Schritt 28 empfiehlt
-der Prüfer sie mit „aussondern empfohlen“, der Materialwart sondert aus, nach Verlust direkt) mit Nachkauf, Nachkäufe
+kürzerem Intervall und außerplanmäßige, Mängel mit Sperre und späterer Prüfung nach Reparatur,
+Aussonderungen (Mangel, Lebensdauer, Verlust; seit Schritt 28 empfiehlt der Prüfer sie mit „aussondern empfohlen“, der Materialwart sondert aus, nach Verlust direkt) mit Nachkauf, Nachkäufe
 über die Jahre, verloren gemeldete Artikel, Verschiebungen, Zuordnungen zu Personen (auch beendete: Einsatzkräfte
 scheiden aus, ihre Ausrüstung geht über die Reserve an neue, sie selbst bekommen danach nichts mehr), Änderungsanträge
 (bestätigt, abgelehnt, zurückgezogen, offen – jeder Zustand kommt vor). Heute:
@@ -390,7 +390,7 @@ class still:
 
 def _platzhalter_punkte(mit_laenge):
     """Die Prüfpunkte eines Platzhalter-Formulars: je ein Punkt der Arten Ja/Nein, Text und Zahl, bei Artikellänge dazu
-    „Länge (m)“ – ohne Inhalt, nur zum Durchklicken. Pflicht ist nur der Ja/Nein-Punkt (Soll „ja“, nicht kritisch)."""
+    „Länge (m)“ – ohne Inhalt, nur zum Durchklicken. Pflicht ist nur der Ja/Nein-Punkt (Soll „ja“)."""
     punkte = [{"gruppe": "DEMO-Gruppe", "text": "DEMO Ja/Nein-Punkt (Platzhalter)", "art": "yesno", "soll": "ja"},
               {"gruppe": "DEMO-Gruppe", "text": "DEMO Text-Punkt (Platzhalter)", "art": "text", "pflicht": False},
               {"gruppe": "DEMO-Gruppe", "text": "DEMO Zahl-Punkt (Platzhalter)", "art": "number", "pflicht": False}]
@@ -440,10 +440,10 @@ def petzl_gruppe(gruppe):
 
 
 def petzl_punkte(v):
-    """Die Punkte wörtlich (berichtigte Fassung „text“) mit Gruppe, Art, Pflicht, Soll und kritisch – so, wie die App sie
-    als Prüfpunkt kennt."""
+    """Die Punkte wörtlich (berichtigte Fassung „text“) mit Gruppe, Art, Pflicht und Soll – so, wie die App sie als
+    Prüfpunkt kennt. Das Feld „kritisch“ der Datei bleibt liegen: Die App kennt die Marke seit dem 03.11.2026 nicht mehr."""
     return [{"gruppe": petzl_gruppe(p.get("gruppe")), "text": p["text"], "art": p["art_app"],
-             "pflicht": bool(p.get("pflicht")), "soll": p.get("soll") or "", "kritisch": bool(p.get("kritisch"))}
+             "pflicht": bool(p.get("pflicht")), "soll": p.get("soll") or ""}
             for p in v["punkte"]]
 
 
@@ -1178,21 +1178,21 @@ class Beispielbestand:
         mangel = "zufall"
         if art == "ausserplanmaessig":
             x = self.rnd.random()
-            mangel = "kritisch" if x < 0.08 else ("mangel" if x < 0.45 else None)
+            mangel = "schwer" if x < 0.08 else ("mangel" if x < 0.45 else None)
         self.pruefen(a, art, *self._ergebnis(i, mangel))
 
     def _ergebnis(self, i, mangel="zufall"):
         """(Ergebnis, Mangel) einer Prüfung am Tag der Uhr: Lebensdauer erreicht → aussondern („lebensdauer“); sonst nach
-        mangel („mangel“, „kritisch“, None) bzw. dem Zufall einer gewöhnlichen Prüfung. „aussondern“ heißt hier: Der
+        mangel („mangel“, „schwer“, None) bzw. dem Zufall einer gewöhnlichen Prüfung. „aussondern“ heißt hier: Der
         Prüfer empfiehlt es („aussondern empfohlen“, sperrt), der Materialwart sondert danach aus (pruefen, Schritt 28)."""
         tag = self.uhr.tag().isoformat()
         if i["retire_by"] and i["retire_by"] <= tag:
             return "aussondern", "lebensdauer"
         if mangel == "zufall":
             x = self.rnd.random()
-            mangel = "kritisch" if x < AUSSONDERN else ("mangel" if x < AUSSONDERN + MANGEL else None)
-        if mangel == "kritisch":
-            return "aussondern", "kritisch"
+            mangel = "schwer" if x < AUSSONDERN else ("mangel" if x < AUSSONDERN + MANGEL else None)
+        if mangel == "schwer":
+            return "aussondern", "schwer"
         if mangel == "mangel":
             return "instandsetzen", "mangel"
         return "einsatzbereit", None
@@ -1242,7 +1242,7 @@ class Beispielbestand:
         """Die Prüfpunkte aus dem Katalog: Ja/Nein und Zahlen mit Sollwert stehen schon auf ihrem Soll. Ein Pflichtpunkt,
         dessen Wert nur eine echte Prüfung liefert (Messwert, Datum, Foto), steht auf „nicht zutreffend“ mit der
         DEMO-Bemerkung; ein Pflicht-Textfeld bekommt die DEMO-Bemerkung als Wert, ein Pflicht-Unterschriftsfeld die
-        DEMO-Unterschrift. mangel („mangel“, „kritisch“ oder „lebensdauer“): ein Punkt weicht vom Soll ab (_mangelpunkt) –
+        DEMO-Unterschrift. mangel („mangel“, „schwer“ oder „lebensdauer“): ein Punkt weicht vom Soll ab (_mangelpunkt) –
         mit DEMO-Bemerkung und DEMO-Platzhalterfoto, wie es jeder Mangel braucht."""
         from werkzeug.datastructures import FileStorage
 
@@ -1279,21 +1279,19 @@ class Beispielbestand:
     def _mangelpunkt(self, punkte, mangel):
         """Der Punkt, an dem ein Befund vom Soll abweicht (Ablaufprüfung vom 25.10.2026, Befunde 3 und 4):
           - „lebensdauer“: der Ja/Nein-Punkt zur Lebensdauer (Text mit „Lebensdauer“), ohne einen solchen keiner;
-          - „kritisch“ (aussondern): ein kritischer Ja/Nein-Punkt, ohne einen solchen ein gewöhnlicher;
-          - „mangel“ (instandsetzen): nur ein nicht kritischer Punkt – ein kritischer führte zur Aussonderung.
+          - „schwer“ (aussondern empfohlen) und „mangel“ (instandsetzen): ein Ja/Nein-Punkt – wie schwer ein Mangel ist,
+            entscheidet der Prüfer mit dem Ergebnis (die Marke „kritisch“ ist am 03.11.2026 entfallen).
         Der Punkt zur Lebensdauer steht nur für das Lebensende. Gestreut über die Punkte, die „vorangehenden Kontrollen“
-        (Seriennummer lesbar …) nur, wenn sonst keiner bleibt; ohne Ja/Nein-Punkt der erste nicht kritische Punkt, der
-        einen Befund kennt (kein Unterschriftsfeld)."""
+        (Seriennummer lesbar …) nur, wenn sonst keiner bleibt; ohne Ja/Nein-Punkt der erste Punkt, der einen Befund
+        kennt (kein Unterschriftsfeld)."""
         janein = [r for r in punkte if r["editor"] == "yesno"]
         if mangel == "lebensdauer":
             return next((r for r in janein if "lebensdauer" in r["checklist_text"].lower()), None)
         janein = [r for r in janein if "lebensdauer" not in r["checklist_text"].lower()]
-        gewoehnlich = [r for r in janein if not r["is_critical"]]
-        liste = ([r for r in janein if r["is_critical"]] or gewoehnlich) if mangel == "kritisch" else gewoehnlich
-        if liste:
-            weiter = [r for r in liste if not r["group_name"].startswith("Vorangehende")]
-            return self.rnd.choice(weiter or liste)
-        return next((r for r in punkte if r["editor"] not in ("signature", "yesno") and not r["is_critical"]), None)
+        if janein:
+            weiter = [r for r in janein if not r["group_name"].startswith("Vorangehende")]
+            return self.rnd.choice(weiter or janein)
+        return next((r for r in punkte if r["editor"] not in ("signature", "yesno")), None)
 
     def _e_nachkauf(self, alt):
         """Ersatz für einen ausgesonderten Artikel: dasselbe Produkt in denselben Ordner, derselben Person zugeordnet –
@@ -1547,7 +1545,7 @@ class Beispielbestand:
 
     def sicherstellen(self):
         """Was in der Geschichte zufällig nicht vorkam, geschieht heute an Artikeln außerhalb der persönlichen Ordner:
-        eine Aussonderung aus einer Prüfung (kritischer Mangel), eine durch den Materialwart (nach Verlust), ein Mangel
+        eine Aussonderung aus einer Prüfung (schwerer Mangel), eine durch den Materialwart (nach Verlust), ein Mangel
         (gesperrt), ein Verlust (verloren gemeldet), ein Nachkauf ohne Eingangsprüfung (neu) und je fehlendem
         Antragszustand (bestätigt, abgelehnt, zurückgezogen, offen) ein Änderungsantrag."""
         from app import db
@@ -1570,7 +1568,7 @@ class Beispielbestand:
         # Aussonderung nach einer Prüfung („aussondern empfohlen“, Schritt 28) und nach Verlust – je durch den Materialwart.
         if not gibt("x.kind = 'aussonderung' AND i.lock_state = 'ausgesondert' AND EXISTS (SELECT 1 FROM mat_inspection e "
                     "WHERE e.item_id = x.item_id AND e.result = 'aussondern_empfohlen')") and frei:
-            self.pruefen(frei.pop(), "ausserplanmaessig", "aussondern", "kritisch")
+            self.pruefen(frei.pop(), "ausserplanmaessig", "aussondern", "schwer")
         if not gibt("x.kind = 'aussonderung' AND x.reason = 'Verlust'") and frei:
             a = frei.pop()
             pruefer, wart = self._pruefer_fuer(a), self._wart(a)

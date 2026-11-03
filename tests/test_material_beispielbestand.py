@@ -474,8 +474,8 @@ def test_beispielbestand():
             befunde = db.query("SELECT r.*, x.result FROM mat_inspection_result r JOIN mat_inspection x ON x.id = "
                                f"r.inspection_id WHERE x.item_id IN ({','.join(str(i) for i in iids)})")
             maengel = [b for b in befunde if b["finding"] == "mangel"]
-            # Ein kritischer Mangel führt zur Aussonderung, nie zu „instandsetzen“.
-            assert not [b for b in maengel if b["is_critical"] and b["result"] == "instandsetzen"]
+            # Die Marke „kritisch“ gibt es seit dem 03.11.2026 nicht mehr: Kein Befund trägt sie.
+            assert not [b for b in befunde if b["is_critical"]]
             assert maengel and all(b["photo"] and b["note"] == HINWEIS for b in maengel)
             assert all(b["note"] == HINWEIS for b in befunde if b["finding"] == "nicht_zutreffend")
             # Soll beachtet: Ja/Nein ohne Mangel steht auf dem Soll; Textpunkte tragen den DEMO-Platzhalter.
@@ -608,7 +608,8 @@ def test_beispielbestand():
 
 def test_formulare():
     """Formulare für echte Kategorien ohne wirksames Formular: nach dem Petzl-Prüfbericht, wo die Datei die Kategorie
-    nach ihrem Namen kennt – genau ihre Punkte (Text wörtlich, Gruppe, Art, Pflicht, Soll, kritisch), DEMO-Kennzeichen,
+    nach ihrem Namen kennt – genau ihre Punkte (Text wörtlich, Gruppe, Art, Pflicht, Soll; „kritisch“ der Datei nicht
+    mehr, seit 03.11.2026), DEMO-Kennzeichen,
     aktiv –, sonst ein Platzhalter an der obersten Kategorie ohne Formular. Echte Formulare (aktiv und inaktiv) bleiben,
     der Export enthält keins der DEMO-Formulare, ein zweiter Lauf legt nichts an; fehlt die Datei, gibt es nur
     Platzhalter. Kategorien und Produkte sind Platzhalter."""
@@ -660,8 +661,8 @@ def test_formulare():
                     assert f["title"] == f"DEMO – Prüfformular nach Petzl-Prüfbericht ({v['bezugsprodukt']}) – Seilrollen"
                     punkte = katalog.punkte(f["id"])
                     assert [(p["label"], p["group_name"], p["editor"], bool(p["mandatory"]), p["expected_value"],
-                             bool(p["is_critical"])) for p in punkte] == [
-                        (p["text"], p["gruppe"], p["art_app"], p["pflicht"], p["soll"], p["kritisch"])
+                             p["is_critical"]) for p in punkte] == [
+                        (p["text"], p["gruppe"], p["art_app"], p["pflicht"], p["soll"], 0)
                         for p in v["punkte"]], punkte
                     assert katalog.formular_fuer_produkt(
                         db.query("SELECT id FROM mat_product WHERE model = 'Rolle Delta'", one=True)["id"])["id"] == f["id"]
@@ -812,9 +813,10 @@ def test_typen():
 
 
 def test_mangelpunkt():
-    """Wo ein Befund abweicht: Ein gewöhnlicher Mangel (instandsetzen) nur an einem nicht kritischen Punkt, gestreut und
-    nicht an den vorangehenden Kontrollen (Seriennummer lesbar …); ein kritischer an einem kritischen Punkt; das
-    Lebensende am Punkt zur Lebensdauer – nie umgekehrt. Mit den Punkten der Petzl-Vorlagen."""
+    """Wo ein Befund abweicht: Ein Mangel (instandsetzen) wie ein schwerer (aussondern empfohlen) an einem Ja/Nein-Punkt,
+    gestreut und nicht an den vorangehenden Kontrollen (Seriennummer lesbar …) – die Marke „kritisch“ der Petzl-Datei
+    spielt seit dem 03.11.2026 keine Rolle mehr; das Lebensende am Punkt zur Lebensdauer – nie umgekehrt. Mit den
+    Punkten der Petzl-Vorlagen."""
     modul = skript()
     vorlagen, _ = modul.petzl_vorlagen()
 
@@ -824,26 +826,22 @@ def test_mangelpunkt():
 
     lauf = Lauf()
     for name in ("Abseilachten", "Gurte", "Abseilgeräte", "Seile"):
-        punkte = [{"id": k, "editor": p["art_app"], "checklist_text": p["text"], "group_name": p["gruppe"] or "",
-                   "is_critical": int(bool(p.get("kritisch")))} for k, p in enumerate(vorlagen[name]["punkte"])]
+        punkte = [{"id": k, "editor": p["art_app"], "checklist_text": p["text"], "group_name": p["gruppe"] or ""}
+                  for k, p in enumerate(vorlagen[name]["punkte"])]
         lebensdauer = lauf._mangelpunkt(punkte, "lebensdauer")
         assert lebensdauer and "Lebensdauer" in lebensdauer["checklist_text"], name
-        gewaehlt = Counter()
+        gewaehlt, schwer = Counter(), Counter()
         for _ in range(200):
-            m = lauf._mangelpunkt(punkte, "mangel")
-            assert m["editor"] == "yesno" and not m["is_critical"], (name, m)
-            assert "Lebensdauer" not in m["checklist_text"] and m["group_name"] != "Vorangehende Kontrollen", (name, m)
-            gewaehlt[m["id"]] += 1
-            k = lauf._mangelpunkt(punkte, "kritisch")
-            assert "Lebensdauer" not in k["checklist_text"], (name, k)
-            if any(p["is_critical"] and "Lebensdauer" not in p["checklist_text"] for p in punkte):
-                assert k["is_critical"], (name, k)
-        assert len(gewaehlt) > 2, (name, gewaehlt)                                  # gestreut
-    # Platzhalter: der eine Ja/Nein-Punkt für Mangel und Kritisch, für das Lebensende keiner.
-    platz = [{"id": 1, "editor": "yesno", "checklist_text": "DEMO Ja/Nein-Punkt (Platzhalter)", "group_name": "DEMO-Gruppe",
-              "is_critical": 0}, {"id": 2, "editor": "text", "checklist_text": "DEMO Text-Punkt (Platzhalter)",
-                                  "group_name": "DEMO-Gruppe", "is_critical": 0}]
-    assert lauf._mangelpunkt(platz, "mangel")["id"] == 1 and lauf._mangelpunkt(platz, "kritisch")["id"] == 1
+            for art, zaehler in (("mangel", gewaehlt), ("schwer", schwer)):
+                m = lauf._mangelpunkt(punkte, art)
+                assert m["editor"] == "yesno", (name, art, m)
+                assert "Lebensdauer" not in m["checklist_text"] and m["group_name"] != "Vorangehende Kontrollen", (name, m)
+                zaehler[m["id"]] += 1
+        assert len(gewaehlt) > 2 and len(schwer) > 2, (name, gewaehlt, schwer)                       # gestreut
+    # Platzhalter: der eine Ja/Nein-Punkt für Mangel und schweren Mangel, für das Lebensende keiner.
+    platz = [{"id": 1, "editor": "yesno", "checklist_text": "DEMO Ja/Nein-Punkt (Platzhalter)", "group_name": "DEMO-Gruppe"},
+             {"id": 2, "editor": "text", "checklist_text": "DEMO Text-Punkt (Platzhalter)", "group_name": "DEMO-Gruppe"}]
+    assert lauf._mangelpunkt(platz, "mangel")["id"] == 1 and lauf._mangelpunkt(platz, "schwer")["id"] == 1
     assert lauf._mangelpunkt(platz, "lebensdauer") is None
     print("Mangelpunkte bestanden.")
 

@@ -15,8 +15,9 @@ derselben Transaktion das Prüfprotokoll als PDF mit Unterschrift, Anmeldung, Ze
 (Trigger, models.py). Eine Korrektur ist eine Berichtigung: ein neuer Entwurf mit allen Befunden, Fotos und
 Anhängen, demselben Prüftag und Verweis auf das Original, das unverändert bleibt. Regeln beim Abschluss:
   - Jeder Pflichtpunkt hat einen Wert oder ist „nicht zutreffend“; jeder Mangel hat ein Foto und eine Bemerkung.
-  - Ein kritischer Punkt mit Mangel schließt „einsatzbereit“ aus, ebenso ein erreichtes Lebensende
-    (nur textil – bei Metall entscheidet allein der Befund).
+  - Ein erreichtes Lebensende schließt „einsatzbereit“ aus (nur textil – bei Metall entscheidet allein der Befund).
+    Bei einem Mangel wählt der Prüfer das Ergebnis selbst – die Marke „kritisch“ an Prüfpunkten mit ihrer Sperre ist
+    am 03.11.2026 entfallen (Entscheidung des Nutzers); die Spalte is_critical bleibt, gelesen wird sie nicht mehr.
   - „instandsetzen“ und „aussondern empfohlen“ ohne Mangel brauchen einen Grund.
   - Die nächste Fälligkeit (nur bei „einsatzbereit“) ist Prüftag + wirksames Intervall und lässt sich
     nur vorziehen.
@@ -170,7 +171,7 @@ def befund_json(r):
                 "original": katalog.bild_url(r["photo"], "orig")}
     return {"id": r["id"], "position": r["position"], "gruppe": r["group_name"], "text": r["checklist_text"],
             "art": r["editor"], "pflicht": bool(r["mandatory"]), "soll": r["expected_value"],
-            "kritisch": bool(r["is_critical"]), "befund": r["finding"], "wert": r["value"], "notiz": r["note"],
+            "befund": r["finding"], "wert": r["value"], "notiz": r["note"],
             "foto": foto, "unterschrift": us.daten_uri(r.get("signature_png")),
             # Zeile „… vorhanden“ eines Bestandteils (Bestandteil-Liste; SET_GRUPPE: Set-Prüfung vor Schritt 26) – die
             # Oberfläche zeigt „vorhanden/fehlt“; ein Formular darf selbst eine Gruppe „Bestandteile“ haben, deshalb ohne
@@ -274,10 +275,7 @@ def pruefung_json(p, pruefer_id=None):
         iv = wirksam(produkt, bestand.heimat(item), item["interval_months"])
         out["intervall"] = iv
         out["vorschlag_naechste"] = plus_monate(date.fromisoformat(tag), iv["monate"]).isoformat() if iv["monate"] else None
-        kritisch = [r["checklist_text"] for r in punkte if r["finding"] == "mangel" and r["is_critical"]]
         gruende = []
-        if kritisch:
-            gruende.append("kritischer Mangel: " + "; ".join(kritisch))
         if out["lebensdauer"] and out["lebensdauer"]["erreicht"]:
             gruende.append(f"Lebensende erreicht am {_fmt(out['lebensdauer']['ende'])}")
         out["einsatzbereit_gesperrt"] = gruende
@@ -395,10 +393,10 @@ def starten(iid, pruefer, art=None, durchgang_id=None):
         for p in punkte:
             befund, wert, soll = _vorbelegung(p, item, laenge_moeglich)
             db.execute("INSERT INTO mat_inspection_result (inspection_id, checklist_item_id, position, group_name, "
-                       "checklist_text, editor, mandatory, expected_value, is_critical, finding, value) "
-                       "VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+                       "checklist_text, editor, mandatory, expected_value, finding, value) "
+                       "VALUES (?,?,?,?,?,?,?,?,?,?)",
                        (pid, p["id"], p["position"], p["group_name"], p["label"], p["editor"], p["mandatory"],
-                        soll, p["is_critical"], befund, wert))
+                        soll, befund, wert))
         # Bestandteil-Liste des Produkts (Schritt 25): je Position „… vorhanden“ – auch im Durchgang.
         from . import stueckliste
         stueckliste.pruefzeilen(pid, item)
@@ -963,16 +961,12 @@ def abschliessen(pid, d, pruefer, pruefdatum=None):
         if ohne_notiz:
             raise Abgelehnt("Jeder Mangel braucht eine Bemerkung – sie fehlt bei: " + "; ".join(ohne_notiz[:5]))
         maengel = [r for r in punkte if r["finding"] == "mangel"]
-        kritisch = [r["checklist_text"] for r in maengel if r["is_critical"]]
         lebensdauer = _lebensdauer(item, produkt, tag)
         grund = text(d, "grund", "Grund", 300) if "grund" in d else p["reason"]
         bemerkung = text(d, "bemerkung", "Bemerkung", 4000, einzeilig=False) if "bemerkung" in d else p["remarks"]
         naechste = None
         if ergebnis == "einsatzbereit":
             grund = ""                          # ein Grund gehört zu Sperre und Aussonderung, nicht zur Freigabe
-            if kritisch:
-                raise Abgelehnt("Kritischer Mangel (" + "; ".join(kritisch[:3]) + ") – „einsatzbereit“ ist ausgeschlossen. "
-                                "Bitte „instandsetzen“ oder „aussondern empfohlen“ wählen.")
             if lebensdauer and lebensdauer["erreicht"]:
                 raise Abgelehnt(f"Das Lebensende ist erreicht ({_fmt(lebensdauer['ende'])}) – „einsatzbereit“ ist "
                                 "nicht mehr wählbar.")
@@ -1367,10 +1361,10 @@ def berichtigen(pid, d, pruefer):
                 if foto:
                     fotos.append(foto)
                 db.execute("INSERT INTO mat_inspection_result (inspection_id, checklist_item_id, position, group_name, "
-                           "checklist_text, editor, mandatory, expected_value, is_critical, finding, value, note, photo, "
-                           "signature_png, component_id, component_serials) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                           "checklist_text, editor, mandatory, expected_value, finding, value, note, photo, "
+                           "signature_png, component_id, component_serials) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                            (neu, r["checklist_item_id"], r["position"], r["group_name"], r["checklist_text"], r["editor"],
-                            r["mandatory"], r["expected_value"], r["is_critical"], r["finding"], r["value"], r["note"],
+                            r["mandatory"], r["expected_value"], r["finding"], r["value"], r["note"],
                             foto, r["signature_png"], r.get("component_id"), r.get("component_serials")))
             for a in anhaenge(pid):
                 try:

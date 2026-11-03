@@ -78,6 +78,7 @@ Geschichte stehen. Schemaversion nach der Nachbesserung vor dem Merge: 30; mit d
 | Suchzeile in der Strömipedia | Unter 1024 px (außer im Editor) klebt oben im Inhalt eine Zeile „☰“ + „Artikel suchen“ wie in der Materialablage; Treffer als Liste darunter über dem Text (Tippen/Enter öffnet, Esc/daneben/Zurück schließt); ersetzt „☰ Seiten“, das „☰“ der Kopfzeile einer Seite und das Suchfeld in der Schublade; die Kopfzeile klebt direkt darunter; dieselbe Zeile im Lesemodus (Konten ohne Stufe) und in public.html, gesucht über `/api/public/search` (eine Suchlogik in markdown.js) | gebaut 02.11.2026 (kein Schemaschritt); Lesemodus bestätigt am 02.11.2026: ja, gebaut 02.11.2026 |
 | Rechte ändern mit Rollen | Dialog „Rechte ändern“ mit denselben Rollenkarten wie „Freigabe anlegen“ (vorgewählt die Rolle zu den heutigen Rechten, seltene Fälle unter „Einzeln“), Gültigkeit als Radiogruppe „dauerhaft / bis [Datum]“ in Dialog und Anlegen-Formular, nicht wählbare Rollen ausgegraut mit Grund als Satz, Erklärungen im „i“, Notiz zugeklappt; ohne Änderung schließt „Speichern“ ohne Anfrage; Server und Schnittstelle unverändert | gebaut 02.11.2026 (kein Schemaschritt) |
 | Prüfen folgt dem Grundrecht | Bei internen Rollen („Prüfer“, „Materialwart und Prüfer“) ist Prüfen immer dauerhaft und gilt, solange das Grundrecht gilt – auch vom befristeten Verwalter (Server: dauerhafte Prüffreigabe mit Grundrecht dort oder darüber auch von ihm; ändern nur, solange das tragende Grundrecht nicht länger läuft als sein Verwalten); kein vorbelegtes Datum außer beim externen Prüfer, „bis“ mit leerem Feld, wo „dauerhaft“ nicht geht; Rollenwechsel lässt die eigene Wahl; behebt den ungekappten Datumsvorschlag (eigenes Ende > 24 Monate → Ablehnung) | gebaut 03.11.2026 (kein Schemaschritt) |
+| „kritisch“ entfernt | Die Markierung „kritisch“ an Prüfpunkten ist ganz entfernt: kein Häkchen im Formular-Editor, keine Marke, Spalte und kein „i“ in Prüfung, Befunden und neuem Prüfprotokoll, keine Sperre von „einsatzbereit“ wegen eines kritischen Mangels (Oberfläche und Server) – bei einem Mangel wählt der Prüfer das Ergebnis selbst; Jahresbericht ohne „mit kritischem Mangel“, CSV ohne „kritischer Mangel“; Katalogexport ohne `kritisch`, der Import übergeht es; `is_critical` bleibt, wird nicht mehr gelesen | gebaut 03.11.2026 (kein Schemaschritt), Zweig kritisch-weg |
 
 ## Abgleich mit dem Bestand (vor Lieferung 1)
 
@@ -11610,3 +11611,73 @@ Liste, PUT je Person, Entziehen an der Zeile 403; dauerhafter Verwalter und Verw
 `tests/test_material_freigaben.py::test_dauerhaft_pruefen` an die neue Regel angepasst (befristeter Verwalter vergibt
 dauerhaftes Prüfen mit Grundrecht von oben, danach ist es für ihn nicht änderbar – das Grundrecht läuft länger als er –,
 ohne Grundrecht 400).
+
+
+## „kritisch“ entfernt (Entscheidung des Nutzers, 03.11.2026)
+
+Nutzer: „Entferne „kritisch“ bei den Prüfungen.“ Auf Nachfrage (Marke nur beim Prüfen / Marke überall, Regel bleibt /
+Funktion ganz entfernen) gewählt **„Funktion ganz entfernen“**:
+
+> Kein Häkchen „kritisch“ mehr im Formular-Editor, keine Sperre: Bei jedem Mangel entscheidet der Prüfer das Ergebnis
+> selbst. Vorhandene Markierungen werden ignoriert (Datenbank bleibt), Katalogdateien mit „kritisch“ lassen sich weiter
+> importieren. Ändert, was Prüfer festschreiben dürfen.
+
+Gebaut 03.11.2026 (kein Schemaschritt, keine Migration).
+
+**Formular-Editor und Formularansicht** (material.js): kein Häkchen „kritisch“ neben „Pflicht“, keine Marke
+„· kritisch“ in der Ansicht ohne Bearbeiten; neue Punkte ohne `kritisch`; das „i“ an „Prüfpunkte“ ohne den Satz „Ein
+kritischer Punkt mit Mangel schließt „einsatzbereit“ aus.“ Die Schnittstelle der Formulare (`punkt_json`) liefert kein
+`kritisch` mehr; `punkte_pruefen` übergeht das Feld ohne Prüfung (auch an Nicht-Ja/Nein-Punkten und mit einem Wert, der
+kein Ja/Nein ist – beides war vorher ein Fehler), geschrieben wird `is_critical` nicht mehr (Vorgabe 0). Das Journal der
+Formulare nennt „kritisch“ nicht mehr. Eine neue Version übernimmt die Punkte ihrer Vorlage ohne die Markierung.
+
+**Prüfung** (pruefung.py, material.js): keine Marke am Prüfpunkt, keine Spalte „kritisch“ und kein „i“ in den Befunden
+einer abgeschlossenen Prüfung (die Tabelle hat wieder Prüfpunkt, Befund, Wert, Bemerkung, Foto); `befund_json` ohne
+`kritisch`. Die Sperre von „einsatzbereit“ wegen eines kritischen Mangels entfällt in der Oberfläche (Knopf, title,
+Hinweis „kritischer Mangel – nicht einsatzbereit“) und auf dem Server (`festschreiben`, `einsatzbereit_gesperrt`). Die
+übrigen Regeln bleiben: erreichtes Lebensende schließt „einsatzbereit“ aus, Pflichtpunkte brauchen einen Befund, jeder
+Mangel ein Foto und eine Bemerkung, offene Mangelmeldungen müssen abgehakt sein, „instandsetzen“/„aussondern empfohlen“
+ohne Mangel brauchen einen Grund. Hilfetext der Prüfung: „Ein Mangel braucht ein Foto und eine Bemerkung.“ Neue
+Ergebniszeilen (Start, Berichtigung, Bestandteil-Zeilen) schreiben `is_critical` nicht mehr (Vorgabe 0); eine
+Berichtigung kopiert die Markierung des Originals nicht.
+
+**Prüfprotokoll** (nur neu erzeugte; pdf/pruefprotokoll.html): keine Spalte „kritisch“ und keine Legende dazu – die
+Legende nennt nur noch „Nr. Mangel“, wenn es Mängel gibt. Die 13 mm der Spalte gehen an Befund (27 → 29 mm), Wert /
+Bemerkung (46 → 50 mm) und den Prüfpunkt (70 → 77 mm); Gruppenzeilen über fünf Spalten. Die Schätzung der Tabellenhöhe
+für „kurz“ bleibt bei 44 bzw. 28 Zeichen je Zeile – bei den breiteren Spalten schätzt sie eher zu hoch, die sichere
+Richtung. Festgeschriebene Protokolle bleiben, wie sie sind: Nur das Festschreiben erzeugt ein Prüfprotokoll; Lesen der
+Prüfung, Ausliefern des PDF, Lebenslauf und Jahresbericht rendern es nicht neu (Test unten). Der Lebenslauf (auf Abruf)
+nannte „kritisch“ nie.
+
+**Jahresbericht und CSV** (bericht.py, pdf/bericht.html, material.js): keine Zahl „mit kritischem Mangel“ (Seite und
+PDF), keine CSV-Spalte „kritischer Mangel“ (die Spalte „Mängel“ bleibt).
+
+**Katalog** (katalog_export.py, importer.py): Der Export schreibt `kritisch` nicht mehr (Punkte: `gruppe`, `text`,
+`art`, `pflicht`, `soll`). Der Import nimmt Dateien mit `kritisch` ohne Fehler und **speichert den Wert nicht**
+(is_critical = 0). Der Vergleich „Formular unverändert“ lässt `is_critical` aus – ein erneuter Import derselben Datei
+legt keine neue Version an, nur weil ein vorhandenes Formular die alte Markierung trägt. `docs/material-katalog-vorlage.json`
+enthält keine Formulare und blieb unverändert; das Katalogformat in den älteren Abschnitten oben bleibt als Geschichte.
+
+**Datenbank**: kein Schemaschritt. `is_critical` bleibt in `mat_checklist_item` und `mat_inspection_result` (Vorgabe 0)
+und wird nirgends mehr gelesen. Bestehende Prüfungen mit kritischem Mangel zeigen keine Marke mehr.
+
+**DEMO/Skripte** (scripts/material_beispielbestand.py): Petzl- und Platzhalter-Formulare ohne `kritisch` (das Feld der
+Datei `scripts/beispielbestand_petzl_punkte.json` bleibt als Teil der Recherche-Kopie liegen und ungenutzt). Der
+Beispielbestand unterscheidet nur noch „mangel“ (instandsetzen) und „schwer“ (aussondern empfohlen), beide an einem
+Ja/Nein-Punkt – vorher wählte er für den schweren einen kritischen Punkt.
+
+**Anleitung**: Thema `kritisch` aus `app/material/services/anleitung.py` entfernt (sein einziges „Mehr dazu“ war das „i“
+an den Befunden); `pruefpunkte` bleibt.
+
+**Tests**: neu `tests/test_material_ohne_kritisch.py` (Formular-Editor statisch und Schnittstelle mit `kritisch` an
+Ja/Nein-, Text- und Zahlpunkt, Journal; Mangel an einem Punkt mit is_critical = 1 in Formular und Ergebniszeile →
+„einsatzbereit“ festgeschrieben, Befunde, Protokoll-HTML und -PDF, Lebenslauf ohne „kritisch“, gespeichertes Protokoll
+byteweise unverändert; Jahresbericht (Schnittstelle, PDF) und CSV ohne; Import mit `kritisch` → is_critical = 0, zweiter
+Lauf bei alter Markierung ohne neue Version, Export ohne, Export → Import; Oberfläche statisch). Angepasst: test_material
+(`test_formulare_und_dokumente`: kein 400 mehr für `kritisch` an Text-Punkten; `test_pruefung`: Mangel am ersten Punkt
+sperrt „einsatzbereit“ nicht; `test_festschreiben`: Kopf ohne „kritisch“; `test_kritisch_eigene_spalte` →
+`test_befundtabelle_ohne_kritisch`; Prüfpunkt „Testpunkt kritisch“ → „Testpunkt Schnitt“, auch in test_material_l5),
+test_material_aussondern (`test_kritisch_lebensende_berichtigung` → `test_mangel_lebensende_berichtigung`),
+test_material_bericht (Zahl und CSV-Spalte), test_material_bestandteile, test_material_laenge (`kritisch` am Längenpunkt
+übergangen statt 400), test_material_pdf_umbruch (Tabellenkopf), test_material_beispielbestand (Formulare,
+Mangelpunkte), test_module_info_i (kein „i“ „kritisch“).

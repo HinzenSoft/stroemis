@@ -26,18 +26,18 @@ def test_mangel_braucht_bemerkung():
         pk = punkte_von(pr)
         url = f"/api/material/pruefungen/{pr['id']}/punkte"
         assert p1.put(f"{url}/{pk['Testpunkt Messwert']}", json={"wert": "1"}).status_code == 200
-        # Der kritische Punkt weicht ab → Mangel, mit Foto, aber ohne Bemerkung.
-        r = p1.put(f"{url}/{pk['Testpunkt kritisch']}", json={"wert": "ja"})
+        # Der erste Punkt weicht ab → Mangel, mit Foto, aber ohne Bemerkung.
+        r = p1.put(f"{url}/{pk['Testpunkt Schnitt']}", json={"wert": "ja"})
         assert r.status_code == 200 and r.json["punkt"]["befund"] == "mangel", r.get_json()
-        r = p1.post(f"{url}/{pk['Testpunkt kritisch']}/foto", data={"file": (jpeg(), "m.jpg")}, headers=H,
+        r = p1.post(f"{url}/{pk['Testpunkt Schnitt']}/foto", data={"file": (jpeg(), "m.jpg")}, headers=H,
                     content_type="multipart/form-data")
         assert r.status_code == 200, r.get_json()
         r = abschluss(p1, pr["id"], ergebnis="instandsetzen")
-        assert r.status_code == 400 and "Bemerkung" in r.json["error"] and "Testpunkt kritisch" in r.json["error"], r.get_json()
+        assert r.status_code == 400 and "Bemerkung" in r.json["error"] and "Testpunkt Schnitt" in r.json["error"], r.get_json()
         # Nur Leerraum zählt nicht als Bemerkung.
-        assert p1.put(f"{url}/{pk['Testpunkt kritisch']}", json={"notiz": "   "}).status_code == 200
+        assert p1.put(f"{url}/{pk['Testpunkt Schnitt']}", json={"notiz": "   "}).status_code == 200
         assert abschluss(p1, pr["id"], ergebnis="instandsetzen").status_code == 400
-        assert p1.put(f"{url}/{pk['Testpunkt kritisch']}", json={"notiz": "Schnitt im Band, 2 cm"}).status_code == 200
+        assert p1.put(f"{url}/{pk['Testpunkt Schnitt']}", json={"notiz": "Schnitt im Band, 2 cm"}).status_code == 200
         r = abschluss(p1, pr["id"], ergebnis="instandsetzen")
         assert r.status_code == 200, r.get_json()
     print("Mangel braucht Bemerkung bestanden.")
@@ -201,12 +201,12 @@ def test_pruefform_tippen_speichern():
                 return db.query("SELECT COUNT(*) AS n FROM mat_audit", one=True)["n"]
 
         vorher = journal_anzahl()
-        krit = pk["Testpunkt kritisch"]
-        r = p1.put(f"{url}/{krit}", json={"wert": "ja"})                 # Mangel
+        schnitt = pk["Testpunkt Schnitt"]
+        r = p1.put(f"{url}/{schnitt}", json={"wert": "ja"})                 # Mangel
         assert r.status_code == 200 and r.json["punkt"]["befund"] == "mangel", r.get_json()
         # Zwischenstände der Bemerkung, wie sie beim Tippen hinausgehen – der Befund bleibt Mangel, der Wert „ja“.
         for stand in ("Schnitt", "Schnitt im Band", "Schnitt im Band, 2 cm", "Schnitt im Band, 2 cm"):
-            r = p1.put(f"{url}/{krit}", json={"notiz": stand})
+            r = p1.put(f"{url}/{schnitt}", json={"notiz": stand})
             assert r.status_code == 200, r.get_json()
             assert r.json["punkt"]["notiz"] == stand and r.json["punkt"]["befund"] == "mangel" and r.json["punkt"]["wert"] == "ja"
         # Messwert getippt: „1“, „1,“ (Komma gerade getippt), „-“ (halb) wird abgelehnt, „1,5“ steht.
@@ -226,11 +226,11 @@ def test_pruefform_tippen_speichern():
         # Der Entwurf (so lädt ihn die Seite neu) trägt den letzten Stand.
         d = p1.get(f"/api/material/pruefungen/{pr['id']}").json["pruefung"]
         pkt = {x["id"]: x for x in d["punkte"]}
-        assert pkt[krit]["notiz"] == "Schnitt im Band, 2 cm" and pkt[mw]["wert"] == "1,5" and d["bemerkung"] == "Schnapper gereinigt"
+        assert pkt[schnitt]["notiz"] == "Schnitt im Band, 2 cm" and pkt[mw]["wert"] == "1,5" and d["bemerkung"] == "Schnapper gereinigt"
         # Zwischenstände hinterlassen keine Spur im Journal.
         assert journal_anzahl() == vorher, (journal_anzahl(), vorher)
         # Ohne X-Requested-With (etwa ein fremdes Formular) wird nichts gespeichert – keepalive ändert daran nichts.
-        r = p1.put(f"{url}/{krit}", data='{"notiz": "fremd"}', headers={"Content-Type": "text/plain"})
+        r = p1.put(f"{url}/{schnitt}", data='{"notiz": "fremd"}', headers={"Content-Type": "text/plain"})
         assert r.status_code in (400, 403), r.status_code
     print("Prüfformular: Speichern beim Tippen bestanden.")
 

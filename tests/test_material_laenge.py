@@ -466,7 +466,7 @@ def test_csv_und_import():
 # --- 6. Prüfung mit Längenpunkt ----------------------------------------------------------------------------------------
 
 def test_pruefung_laenge():
-    """Formular-Editor: Art „laenge“ ohne Sollwert, nie kritisch. Prüfung: vorbelegt mit der Artikellänge; „55“ wird
+    """Formular-Editor: Art „laenge“ ohne Sollwert (ein Feld „kritisch“ wird seit 03.11.2026 übergangen). Prüfung: vorbelegt mit der Artikellänge; „55“ wird
     „55,0“; Festschreiben übernimmt den abweichenden Wert (Journal „laenge_geaendert“ mit Verweis, Protokoll
     „57,5 m → 55,0 m“); unverändert → kein Journal, Protokoll „(unverändert)“; ohne Länge am Artikel: leer und Pflicht;
     Berichtigung übernimmt ebenso; ohne vorgesehene Länge (Karabiner): „nicht zutreffend“, Wert 409; Ergebniszeilen
@@ -477,10 +477,11 @@ def test_pruefung_laenge():
         f = kp.get(f"/api/material/formulare/{t.form}").json
         assert f["editoren"]["laenge"] == "Länge (m)"
         pl = next(x for x in f["formular"]["punkte"] if x["art"] == "laenge")
-        assert pl["soll"] == "" and pl["pflicht"] is True and pl["kritisch"] is False
+        assert pl["soll"] == "" and pl["pflicht"] is True and "kritisch" not in pl
         r = kp.post("/api/material/formulare", json={"kategorie_id": t.statik, "titel": "x", "punkte": [
             {"text": "Testpunkt Länge", "art": "laenge", "soll": "50", "kritisch": True}]})
-        assert r.status_code == 400 and "Kritisch" in r.json["error"], r.get_json()
+        assert r.status_code == 201 and r.json["formular"]["punkte"][0]["soll"] == "", r.get_json()
+        assert "kritisch" not in r.json["formular"]["punkte"][0]
         fid = formular_neu(kp, {"kategorie_id": t.statik}, "Statik Platzhalter",
                            [{"text": "Testpunkt Länge", "art": "laenge", "soll": "50"}], aktivieren=False)
         assert kp.get(f"/api/material/formulare/{fid}").json["formular"]["punkte"][0]["soll"] == ""

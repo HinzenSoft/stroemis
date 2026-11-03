@@ -296,7 +296,7 @@ def test_katalog_liste():
 
 def test_pruefung_zeilen():
     """Je Position eine Ja/Nein-Zeile „… vorhanden“ hinter den Formularpunkten, „(2×)“ bei mehr als einem Stück;
-    „nein“ ist ein Mangel mit Foto und Bemerkung (F1 a, nicht kritisch – „einsatzbereit“ bleibt wählbar); eine Liste,
+    „nein“ ist ein Mangel mit Foto und Bemerkung (F1 a – „einsatzbereit“ bleibt wählbar); eine Liste,
     die sich während des Entwurfs ändert, ändert ihn nicht; Durchgang ebenso; Berichtigung kopiert; Protokoll-PDF."""
     with tempfile.TemporaryDirectory() as tmp:
         t = aufbau(tmp)
@@ -307,7 +307,7 @@ def test_pruefung_zeilen():
                               ("Bestandteile", "Platzhalter Tasche vorhanden", True)], texte
         assert not any(b for _, _, b in texte[:-2])
         a = zeile(pr, "Platzhalter Bestandteil A (2×) vorhanden")
-        assert (a["art"], a["soll"], a["wert"], a["befund"], a["pflicht"], a["kritisch"]) == \
+        assert (a["art"], a["soll"], a["wert"], a["befund"], a["pflicht"], "kritisch" in a) == \
             ("yesno", "ja", "ja", "ok", True, False)
         assert [n["stueck"] for n in a["nummern"]] == [1, 2]
         # Liste ändern: der offene Entwurf behält seine Zeilen.
