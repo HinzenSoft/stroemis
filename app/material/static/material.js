@@ -5141,6 +5141,9 @@
     leisteMarkieren(f.ziel.art === "kategorie" ? f.ziel.id : f.ziel.kategorie_id);
     const bearbeitbar = DARF.katalog && f.aenderbar;
     let punkte = f.punkte.map((p) => Object.assign({}, p));
+    // Der getippte, noch nicht gespeicherte Titel: zeichnen() baut das Feld neu (Prüfpunkt anlegen, verschieben,
+    // entfernen, Art ändern) – vorher stand dort wieder der gespeicherte Titel und das Getippte war weg.
+    let titelEingabe = f.titel || "";
     const zielText = f.ziel.art === "kategorie" ? `Kategorie ${f.ziel.pfad.map((x) => x.name).join(" / ")} (generisch)` : `Produkt ${f.ziel.name} (spezifisch)`;
     const zielLink = f.ziel.art === "kategorie" ? `/materialablage/katalog?kategorie=${f.ziel.id}` : `/materialablage/katalog/produkt/${f.ziel.id}`;
     function punktZeile(p, i) {
@@ -5159,6 +5162,8 @@
     }
     function einsammeln() {
       if (!bearbeitbar) return;
+      const titelFeld = $("#fp-titel", inhalt);
+      if (titelFeld) titelEingabe = titelFeld.value;
       $$("#fp-tabelle tbody tr", inhalt).forEach((tr) => {
         const p = punkte[+tr.dataset.i];
         p.gruppe = $(".fp-gruppe", tr).value; p.text = $(".fp-text", tr).value; p.art = $(".fp-art", tr).value;
@@ -5210,7 +5215,7 @@
         ${wikiZeile()}
         <p class="help">${esc(zielText)}. ${f.gueltig_ab ? `Gültig ab ${esc(fmtTag(f.gueltig_ab))}.` : "Noch nie aktiviert."}
           ${f.benutzt ? " Diese Version wurde schon für Prüfungen benutzt und bleibt unverändert – Änderungen gehen über eine neue Version." : ""}</p>
-        ${bearbeitbar ? `<label for="fp-titel">Titel</label><input type="text" id="fp-titel" value="${esc(f.titel || "")}" maxlength="160">` : ""}
+        ${bearbeitbar ? `<label for="fp-titel">Titel</label><input type="text" id="fp-titel" value="${esc(titelEingabe)}" maxlength="160">` : ""}
         <h2 class="mat-fp-punkte">Prüfpunkte${infoKnopf("Prüfpunkte", PRUEFPUNKTE_INFO + mehrDazu("pruefpunkte"))}</h2>
         <table class="list mat-tabelle mat-formtabelle" id="fp-tabelle">
           <colgroup><col style="width:13%"><col style="width:48%"><col style="width:12%"><col style="width:11%"><col style="width:16%"></colgroup><thead><tr><th>Gruppe</th><th>Prüfpunkt</th><th>Art</th><th>Soll</th><th></th></tr></thead>

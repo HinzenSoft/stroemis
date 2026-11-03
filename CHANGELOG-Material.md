@@ -11690,3 +11690,12 @@ Mangelpunkte), test_module_info_i (kein „i“ „kritisch“).
 und prüft ihn nicht (auch ein ungültiger Wert oder `kritisch` an einem Text-Punkt führt zu keinem Fehler); der
 Formularvergleich beim Import lässt `is_critical` aus, ein erneuter Import einer alten Katalogdatei legt dafür keine neue
 Formularversion an; `scripts/beispielbestand_petzl_punkte.json` behält sein ungenutztes Feld `kritisch`.
+
+## Titel im Prüfformular-Editor bleibt beim Bearbeiten (Meldung des Nutzers, 03.11.2026)
+
+Nutzer: „Der Titel von Prüfformularen verschwindet beim Bearbeiten andauernd, prüfe das und pushe direkt den Fix auf
+beide Server.“ Ursache: Der Editor wird bei „+ Prüfpunkt anlegen“, ↑/↓, ✕ und beim Wechsel der Art neu gezeichnet;
+`einsammeln()` übernahm vorher nur die Prüfpunkte, das Titelfeld kam mit dem zuletzt gespeicherten Titel zurück – das
+Getippte war weg. Jetzt merkt sich `einsammeln()` auch den Titel (`titelEingabe`, material.js `formular()`), das Feld
+wird damit gezeichnet; die Überschrift zeigt weiter den gespeicherten Titel, Speichern und Aktivieren nehmen den Titel
+aus dem Feld. Kein Schemaschritt. Test: `tests/test_material_formular_titel.py` (statisch; ohne die Korrektur rot).
