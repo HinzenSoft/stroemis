@@ -4,7 +4,7 @@ tests/test_material_aussondern.py  oder pytest
 Prüfer sondern nicht mehr aus – das Ergebnis „aussondern empfohlen“ sperrt nur (wie „instandsetzen“), die Empfehlung
 steht im Prüfprotokoll und am Artikel. Der Materialwart sondert aus, wenn die letzte Prüfung „instandsetzen“ oder
 „aussondern empfohlen“ ergab (E2); ohne Prüfung nur einen verloren gemeldeten Artikel; nach einer Mangelmeldung erst
-nach einer Prüfung. Dazu kritischer Mangel und Lebensende, Durchgang mit Sammelprotokoll, Berichtigung, Altbestand
+nach einer Prüfung. Dazu Mangel (seit 03.11.2026 ohne Sperre durch „kritisch“) und Lebensende, Durchgang mit Sammelprotokoll, Berichtigung, Altbestand
 („aussondern“ vor Schritt 28), Schritt 28 (frisch = migriert, zweiter Lauf, Trigger unverändert) und die Oberfläche
 statisch.
 
@@ -139,9 +139,10 @@ def test_bedingungen_materialwart():
     print("Bedingungen des Materialwarts bestanden.")
 
 
-def test_kritisch_lebensende_berichtigung():
-    """Kritischer Mangel: „einsatzbereit“ aus, „aussondern empfohlen“ geht. Lebensende erreicht: ebenso. Berichtigung
-    einer Empfehlung zu „einsatzbereit“ gibt frei (Freiprüfung); die Empfehlung ist danach weg."""
+def test_mangel_lebensende_berichtigung():
+    """Mangel an einem Punkt, den das Formular als „kritisch“ übergab: „einsatzbereit“ bleibt wählbar (die Sperre ist am
+    03.11.2026 entfallen), „aussondern empfohlen“ geht. Lebensende erreicht: „einsatzbereit“ aus. Berichtigung einer
+    Empfehlung zu „einsatzbereit“ gibt frei (Freiprüfung); die Empfehlung ist danach weg."""
     with post_mangel(), tempfile.TemporaryDirectory() as tmp:
         t = aufbau(tmp)
         w, p = t.w, t.k["pruefer"]
@@ -153,8 +154,7 @@ def test_kritisch_lebensende_berichtigung():
         assert p.put(f"{url}/{pk['Testpunkt Verschluss']}", json={"wert": "nein", "notiz": "Platzhalter klemmt"}).status_code == 200
         assert p.post(f"{url}/{pk['Testpunkt Verschluss']}/foto", data={"file": (jpeg(), "m.jpg")}, headers=H,
                       content_type="multipart/form-data").status_code == 200
-        r = festschreiben(p, pr["id"], ergebnis="einsatzbereit")
-        assert r.status_code == 400 and "„aussondern empfohlen“" in r.json["error"], r.get_json()
+        assert p.get(f"{API}/pruefungen/{pr['id']}").json["pruefung"]["einsatzbereit_gesperrt"] == []
         assert festschreiben(p, pr["id"], ergebnis="aussondern_empfohlen").status_code == 200   # Mangel: ohne Grund
         # Lebensende erreicht (textil).
         h = _heute()
@@ -165,7 +165,7 @@ def test_kritisch_lebensende_berichtigung():
         assert festschreiben(p, pr["id"], ergebnis="einsatzbereit").status_code == 400
         r = festschreiben(p, pr["id"], ergebnis="aussondern_empfohlen", grund="Lebensdauer überschritten")
         assert r.status_code == 200 and artikel(w, alt)["lock_state"] == "gesperrt", r.get_json()
-        # Berichtigung einer Empfehlung (der erste Artikel, kritischer Mangel bleibt im Original).
+        # Berichtigung einer Empfehlung.
         b = neuer_artikel(w, t.ids["hms"], t.lager, serial_no="BER-1")["id"]
         geprueft(t.app, b)
         pr = pruefung(p, b)
@@ -176,7 +176,7 @@ def test_kritisch_lebensende_berichtigung():
         assert festschreiben(p, neu["id"], ergebnis="einsatzbereit").status_code == 200
         a = artikel(w, b)
         assert a["lock_state"] == "frei" and a["aussonderung_empfohlen"] is None and a["folder_id"] == t.lager
-    print("Kritisch, Lebensende und Berichtigung bestanden.")
+    print("Mangel, Lebensende und Berichtigung bestanden.")
 
 
 def test_durchgang_und_altbestand():
@@ -325,7 +325,7 @@ def test_oberflaeche_statisch():
 if __name__ == "__main__":
     test_ergebnis_sperrt_nur()
     test_bedingungen_materialwart()
-    test_kritisch_lebensende_berichtigung()
+    test_mangel_lebensende_berichtigung()
     test_durchgang_und_altbestand()
     test_schritt_28()
     test_oberflaeche_statisch()

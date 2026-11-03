@@ -2286,7 +2286,7 @@
   const TASTATUR_ADRESSE = 'inputmode="url" autocapitalize="off" autocorrect="off" spellcheck="false" autocomplete="off"';
 
   /* Hinweise, die nur im title stehen, sieht ohne Maus niemand. Dort zeigt ein Tipp auf ein nicht bedienbares Element
-     mit title – farbige Zahlen in Baum und Schublade, Marken wie „kritisch“ oder „DEMO“, gekürzte Prüfsummen – den
+     mit title – farbige Zahlen in Baum und Schublade, Marken wie „DEMO“, gekürzte Prüfsummen – den
      Text als Meldung. Ein gesperrtes Auswahlkästchen nimmt keinen Tipp an (material.css lässt ihn zur Zelle durch);
      die Zelle sagt, warum es gesperrt ist. */
   const OHNE_HOVER = window.matchMedia("(hover: none)");
@@ -2928,7 +2928,7 @@
         ${zahlen([[b.bewegungen.zugaenge, "Zugänge (angelegt oder importiert)"], [b.bewegungen.aussonderungen, "Aussonderungen"], [b.bewegungen.geloescht, "gelöscht (falsch angelegt, ohne Prüfung)"]])}</section>`;
       const pruefungen = `<section class="section" id="be-pruefungen"><h2>Prüfungen im Jahr ${esc(String(k.jahr))}</h2>
         ${paar(zahlen([[pr.gesamt, "<strong>Prüfungen gesamt</strong> (ohne Aussonderungen)"], ...pr.arten.map((a) => [a.n, esc(a.text)]), [pr.entwuerfe, "offene Entwürfe (nicht abgeschlossen)"]]),
-          zahlen([...pr.ergebnisse.map((e) => [e.n, `Ergebnis „${esc(e.text)}“`]), [pr.mit_mangel, "mit Mangel"], [pr.kritisch, "mit kritischem Mangel"]]))}
+          zahlen([...pr.ergebnisse.map((e) => [e.n, `Ergebnis „${esc(e.text)}“`]), [pr.mit_mangel, "mit Mangel"]]))}
         <h3>Prüfabdeckung</h3>
         ${zahlen([[pr.abdeckung.bestand, "Artikel im Bestand (ohne ausgesonderte)"], [pr.abdeckung.geprueft, "davon im Jahr mit abgeschlossener Prüfung"], [pr.abdeckung.nicht_geprueft, "im Jahr nicht geprüft"]])}
         ${pr.nicht_geprueft.length ? `<details class="mat-auf"${pr.nicht_geprueft.length <= NICHT_GEPRUEFT_OFFEN ? " open" : ""}><summary>Im Jahr nicht geprüft (${pr.nicht_geprueft.length})</summary>${liste([["Inventarnummer"], ["Produkt"], ["letzte Prüfung"]],
@@ -5146,7 +5146,7 @@
     function punktZeile(p, i) {
       if (!bearbeitbar) {
         return `<tr><td data-l="Gruppe">${esc(p.gruppe || "")}</td><td data-l="Prüfpunkt">${esc(p.text)}</td><td data-l="Art">${esc(EDITOR[p.art])}</td>
-          <td data-l="Soll">${esc(p.soll || "–")}</td><td>${p.pflicht ? "Pflicht" : "optional"}${p.kritisch ? ' · <strong class="mat-warn">kritisch</strong>' : ""}</td></tr>`;
+          <td data-l="Soll">${esc(p.soll || "–")}</td><td>${p.pflicht ? "Pflicht" : "optional"}</td></tr>`;
       }
       return `<tr data-i="${i}"><td data-l="Gruppe"><input type="text" class="fp-gruppe" value="${esc(p.gruppe || "")}" maxlength="80"></td>
         <td data-l="Prüfpunkt"><textarea class="fp-text" rows="1" maxlength="1000" aria-label="Prüfpunkt">${esc(p.text || "")}</textarea></td>
@@ -5155,7 +5155,6 @@
           : p.art === "text" || p.art === "number" ? `<input type="text" class="fp-soll" value="${esc(p.soll || "")}" maxlength="60" placeholder="optional">`
             : p.art === "laenge" ? '<span class="muted" title="Das Soll ist die am Artikel hinterlegte Länge">Artikellänge</span>' : '<span class="muted">–</span>'}</td>
         <td><label class="inline"><input type="checkbox" class="fp-pflicht" ${p.pflicht ? "checked" : ""}> Pflicht</label>
-          <label class="inline"><input type="checkbox" class="fp-kritisch" ${p.kritisch ? "checked" : ""} ${p.art === "yesno" ? "" : "disabled"}> kritisch</label>
           <div class="btn-row">${S.reihenfolgeKnoepfe(i, punkte.length, `data-act="hoch" data-i="${i}"`, `data-act="runter" data-i="${i}"`, `Prüfpunkt ${i + 1}`)}${S.entfernenKnopf(`data-act="weg" data-i="${i}"`, `Prüfpunkt ${i + 1} entfernen`)}</div></td></tr>`;
     }
     function einsammeln() {
@@ -5164,7 +5163,7 @@
         const p = punkte[+tr.dataset.i];
         p.gruppe = $(".fp-gruppe", tr).value; p.text = $(".fp-text", tr).value; p.art = $(".fp-art", tr).value;
         const soll = $(".fp-soll", tr); p.soll = soll ? soll.value : "";
-        p.pflicht = $(".fp-pflicht", tr).checked; p.kritisch = $(".fp-kritisch", tr).checked && p.art === "yesno";
+        p.pflicht = $(".fp-pflicht", tr).checked;
       });
     }
     /* Prüfanleitung aus dem Wiki (Phase 2 · L3): nur die Material-Verwaltung sieht die Zeile (formular.wiki kommt sonst
@@ -5237,7 +5236,7 @@
       } catch (e) { toast(e.message, true); }
     }
     aktionen = {
-      "punkt-neu": () => { einsammeln(); punkte.push({ gruppe: punkte.length ? punkte[punkte.length - 1].gruppe : "", text: "", art: "yesno", soll: "nein", pflicht: true, kritisch: false }); zeichnen(); fokus($$(".fp-text", inhalt).pop()); },
+      "punkt-neu": () => { einsammeln(); punkte.push({ gruppe: punkte.length ? punkte[punkte.length - 1].gruppe : "", text: "", art: "yesno", soll: "nein", pflicht: true }); zeichnen(); fokus($$(".fp-text", inhalt).pop()); },
       hoch: (b) => { einsammeln(); const i = +b.dataset.i; if (i > 0) { [punkte[i - 1], punkte[i]] = [punkte[i], punkte[i - 1]]; zeichnen(); } },
       runter: (b) => { einsammeln(); const i = +b.dataset.i; if (i < punkte.length - 1) { [punkte[i + 1], punkte[i]] = [punkte[i], punkte[i + 1]]; zeichnen(); } },
       weg: (b) => { einsammeln(); punkte.splice(+b.dataset.i, 1); zeichnen(); },
@@ -5270,7 +5269,7 @@
      Gespeichert wird sofort (PUT …/formulare/<id>/wiki), danach zeichnet die Formularansicht ihre Zeile neu. */
   const REICHWEITE = { oeffentlich: "öffentlich", intern: "intern", beschraenkt: "beschränkt" };
   const PRUEFPUNKTE_INFO = "Bei der Prüfung ist jeder Befund mit „in Ordnung“ vorbelegt, Ja/Nein-Punkte mit ihrem Sollwert; bei Text und Zahl ist das Soll ein Hinweis für den Prüfer. "
-    + "Ein kritischer Punkt mit Mangel schließt „einsatzbereit“ aus. Ein Punkt der Art „Länge (m)“ ist mit der Länge des Artikels vorbelegt; trägt der Prüfer eine andere ein, "
+    + "Ein Punkt der Art „Länge (m)“ ist mit der Länge des Artikels vorbelegt; trägt der Prüfer eine andere ein, "
     + "übernimmt das Festschreiben sie in den Artikel (nur bei Kategorien mit „Artikel haben eine Länge“).";
   const WIKI_PRUEFUNG_INFO = "Hat die Seite eine Überschrift „Prüfung“, wird dieser Abschnitt in offenen Prüfungen eingeblendet, sonst nur verlinkt.";
   // Wer die Anleitung sieht, steht sichtbar und in einer Zeile; dass neue Konten keinen Zugang haben, sagt das „i“ (NEUE_KONTEN).
@@ -5431,7 +5430,7 @@
      Fürs Telefon am Material gebaut: je Prüfpunkt große Umschalter, ein Kamera-Knopf, die Bemerkung nur
      bei Bedarf; unten eine feste Leiste mit Ergebnis und Abschluss. Jede Eingabe geht sofort an den
      Server – der Entwurf ist immer gespeichert. Prüfen und Anzeigen übernimmt der Server; hier wird nur
-     vorab gezeigt, was er sagen würde (kritischer Mangel, fehlendes Foto). */
+     vorab gezeigt, was er sagen würde (fehlendes Foto, erreichtes Lebensende). */
   const befundMarke = (b) => (b ? `<span class="mat-befund b-${esc(b)}">${esc(BEFUND[b] || b)}</span>` : '<span class="muted">–</span>');
   const isoHeute = (plusTage) => {
     const d = new Date(); d.setDate(d.getDate() + (plusTage || 0));
@@ -5824,7 +5823,7 @@
           && alt.faellig >= isoHeute(1) && (!pr.vorschlag_naechste || alt.faellig <= pr.vorschlag_naechste)) abschlussEntwurf.faellig = alt.faellig;
         abschlussAktualisieren();
       }
-      abschlussMerken();             // was nicht mehr gilt (etwa „einsatzbereit“ nach einem kritischen Mangel), fällt weg
+      abschlussMerken();             // was nicht mehr gilt (etwa „einsatzbereit“ nach erreichtem Lebensende), fällt weg
     }
 
     // „Alles ist gespeichert“ nur, wenn es stimmt.
@@ -6042,7 +6041,6 @@
           ${n.neu !== null && n.neu !== undefined && n.neu !== n.alt ? `<div class="help">bisher ${esc(n.alt || "keine")}</div>` : ""}${n.artikel !== undefined && n.artikel !== n.wert ? `<div class="help">am Artikel heute ${esc(n.artikel || "keine")}</div>` : ""}</div>`).join("")}</fieldset>` : "";
       return `<div class="mat-punkt${mangel ? " mangel" : ""}${nz ? " nz" : ""}" id="pp-${x.id}">
         <div class="mat-punkt-kopf"><span class="mat-punkt-text">${esc(x.text)}</span>
-          ${x.kritisch ? '<span class="mat-kritisch" title="Ein Mangel hier schließt „einsatzbereit“ aus">kritisch</span>' : ""}
           ${x.art === "yesno" && x.soll && !istBestandteil(x) ? `<span class="muted small">Soll ${esc(x.soll)}</span>` : ""}${x.art === "laenge" && laengeMoeglich ? `<span class="muted small">${x.soll ? `am Artikel ${esc(x.soll)} m` : "am Artikel keine Länge"}</span>` : ""}${x.pflicht ? "" : '<span class="muted small">optional</span>'}</div>
         <div class="mat-punkt-zeile">${steuer}${foto}
           ${notiz ? "" : `<button type="button" class="lnk small" data-act="pnotiz-auf" data-rid="${x.id}"><span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Bemerkung<span class="k-anlegen"> anlegen</span></span></button>`}</div>
@@ -6061,7 +6059,7 @@
         html += punktHtml(x);
       });
       return `<section class="section mat-punkte"><h2>Prüfpunkte</h2>
-        <p class="help">Vorbelegt mit dem Sollwert – ändere nur, was abweicht. Ein Mangel braucht ein Foto, ein kritischer schließt „einsatzbereit“ aus.</p>${html}</section>`;
+        <p class="help">Vorbelegt mit dem Sollwert – ändere nur, was abweicht. Ein Mangel braucht ein Foto und eine Bemerkung.</p>${html}</section>`;
     }
 
     function anhaengeListe() {
@@ -6098,9 +6096,10 @@
         && (x.art === "photo" ? !x.foto : x.art === "signature" ? !x.unterschrift : x.art === "yesno" ? !x.wert : !(x.wert || "").trim()));
       const ohneFoto = pr.punkte.filter((x) => x.befund === "mangel" && !x.foto);
       const ohneNotiz = pr.punkte.filter((x) => x.befund === "mangel" && !(x.notiz || "").trim());
-      const kritisch = pr.punkte.filter((x) => x.befund === "mangel" && x.kritisch);
+      // Bei einem Mangel wählt der Prüfer das Ergebnis selbst – die Sperre durch „kritische“ Punkte ist am 03.11.2026
+      // entfallen; „einsatzbereit“ schließt hier nur noch ein erreichtes Lebensende aus (wie auf dem Server).
       const ldErreicht = pr.lebensdauer && pr.lebensdauer.erreicht;
-      return { offen, ohneFoto, ohneNotiz, kritisch, einsatzSperre: kritisch.length || ldErreicht, maengel: pr.punkte.filter((x) => x.befund === "mangel") };
+      return { offen, ohneFoto, ohneNotiz, einsatzSperre: !!ldErreicht, maengel: pr.punkte.filter((x) => x.befund === "mangel") };
     }
 
     // Mit weichem Trennstrich: Am schmalen Telefon (bis 360 px) brechen „einsatzbereit“ und „instandsetzen“ in zwei
@@ -6129,7 +6128,7 @@
         b.setAttribute("aria-checked", String(b.dataset.e === ergebnis));
         if (b.dataset.e === "einsatzbereit") {
           b.disabled = !!h.einsatzSperre;
-          b.title = h.einsatzSperre ? (pr.einsatzbereit_gesperrt.concat(h.kritisch.length ? ["kritischer Mangel"] : [])).join("; ") : "";
+          b.title = h.einsatzSperre ? pr.einsatzbereit_gesperrt.join("; ") : "";
         }
       });
       radioStopp($(".mat-ergebnis", box));
@@ -6142,10 +6141,9 @@
       if (h.offen.length) teile.push(`${plural(h.offen.length, "Pflichtpunkt", "Pflichtpunkte")} ohne Befund`);
       if (h.ohneFoto.length) teile.push(`${plural(h.ohneFoto.length, "Mangel", "Mängel")} ohne Foto`);
       if (h.ohneNotiz.length) teile.push(`${plural(h.ohneNotiz.length, "Mangel", "Mängel")} ohne Bemerkung`);
-      if (h.kritisch.length) teile.push("kritischer Mangel – nicht einsatzbereit");
-      else if (pr.lebensdauer && pr.lebensdauer.erreicht) teile.push("Lebensende erreicht – nicht einsatzbereit");
+      if (pr.lebensdauer && pr.lebensdauer.erreicht) teile.push("Lebensende erreicht – nicht einsatzbereit");
       $("#pr-hinweis", box).textContent = teile.join(" · ");
-      $("#pr-hinweis", box).classList.toggle("warn", !!(h.offen.length || h.ohneFoto.length || h.ohneNotiz.length || h.kritisch.length));
+      $("#pr-hinweis", box).classList.toggle("warn", !!(h.offen.length || h.ohneFoto.length || h.ohneNotiz.length));
       // Fehlt nichts mehr, nennt die eingeklappte Leiste das gewählte Ergebnis (sonst stünde dort nur „Zum Abschluss“).
       $("#pr-stand-kurz", box).textContent = ergebnis ? `Ergebnis: ${ERGEBNIS[ergebnis]}` : "";
       leisteMessen();
@@ -6154,7 +6152,6 @@
     function leseHtml() {
       const zeilen = pr.punkte.map((x) => `<tr class="${x.befund === "mangel" ? "mat-mangelzeile" : ""}">
           <td data-l="Prüfpunkt" class="mat-k-ohne">${x.gruppe ? `<span class="muted small">${esc(x.gruppe)}</span><br>` : ""}${esc(x.text)}</td>
-          <td class="mat-krit-spalte mat-k-kurz">${x.kritisch ? '<span class="mat-kritisch">kritisch</span>' : ""}</td>
           <td data-l="Befund" class="mat-k-kurz mat-k-ohne">${x.art === "signature" && !x.unterschrift && x.befund !== "nicht_zutreffend" ? '<span class="muted">nicht unterschrieben</span>' : befundMarke(x.befund)}</td><td data-l="Wert" class="mat-k-kurz">${x.art === "signature" && x.unterschrift ? `<img class="mat-us-mini" src="${esc(x.unterschrift)}" alt="Unterschrift">`
             : x.art === "laenge" && x.wert ? `${esc(x.wert)} m${x.soll && x.soll !== x.wert ? ` <span class="muted small mat-soll">(vorher ${esc(x.soll)} m)</span>` : x.soll ? ' <span class="muted small mat-soll">(unverändert)</span>' : ""}`
             : istBestandteil(x) && x.art === "yesno" && x.wert ? esc(x.wert === "ja" ? "vorhanden" : "fehlt")
@@ -6172,7 +6169,7 @@
           ${pr.basis_id ? `<dt>Grundlage</dt><dd><a href="/materialablage/pruefung/${pr.basis_id}">Prüfung vom Tag der Aussonderung</a></dd>` : ""}
           <dt>Abgeschlossen</dt><dd>${esc(fmtZeit(pr.abgeschlossen_am))}</dd></dl></section>${protokollHtml()}</div>`;
       return `${ergebnisBox}
-        ${pr.punkte.length ? `<section class="section"><h2>Befunde${pr.punkte.some((x) => x.kritisch) ? infoKnopf("kritisch", "„kritisch“: Ein Mangel an diesem Prüfpunkt schließt „einsatzbereit“ aus." + mehrDazu("kritisch")) : ""}</h2><table class="list mat-tabelle mat-karten mat-befunde"><thead><tr><th>Prüfpunkt</th><th class="mat-krit-spalte"><span class="mat-vorlesen">kritisch</span></th><th>Befund</th><th>Wert</th><th>Bemerkung</th><th>Foto</th></tr></thead><tbody>${zeilen}</tbody></table></section>` : ""}
+        ${pr.punkte.length ? `<section class="section"><h2>Befunde</h2><table class="list mat-tabelle mat-karten mat-befunde"><thead><tr><th>Prüfpunkt</th><th>Befund</th><th>Wert</th><th>Bemerkung</th><th>Foto</th></tr></thead><tbody>${zeilen}</tbody></table></section>` : ""}
         ${pr.art !== "aussonderung" ? anhaengeHtml() : ""}
         ${pr.dokumente.length ? `<section class="section"><h2>Herstellerdokumente am Prüftag</h2>${dokListe(pr.dokumente, false)}</section>` : ""}`;
     }

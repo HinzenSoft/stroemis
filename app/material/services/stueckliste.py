@@ -190,7 +190,7 @@ def zeile_text(bezeichnung, anzahl):
 
 def pruefzeilen(pruefung_id, item):
     """Beim Start einer Prüfung (jede Prüfart, einzeln oder im Durchgang): je Position der Bestandteil-Liste des Produkts
-    eine Ja/Nein-Zeile „… vorhanden“ – Pflicht, Soll „ja“, nicht kritisch, vorbelegt „ja“, ohne Formularpunkt, Gruppe
+    eine Ja/Nein-Zeile „… vorhanden“ – Pflicht, Soll „ja“, vorbelegt „ja“, ohne Formularpunkt, Gruppe
     BESTANDTEIL_GRUPPE hinter den Formularpunkten; einmal je Prüfung. Was fehlt, ist ein Mangel wie jeder andere (F1 a).
     Dazu je Zeile die Position und die Seriennummern ihrer Stück am Artikel (teilnummern) – „alt“ wie heute, „neu“
     trägt der Prüfer ein."""
@@ -202,7 +202,7 @@ def pruefzeilen(pruefung_id, item):
     for n, z in enumerate(kurzliste(item["product_id"])):
         serien = [{"alt": nummern.get((z["id"], st), ""), "neu": None} for st in range(1, z["anzahl"] + 1)]
         db.execute("INSERT INTO mat_inspection_result (inspection_id, checklist_item_id, position, group_name, "
-                   "checklist_text, editor, mandatory, expected_value, is_critical, finding, value, component_id, "
-                   "component_serials) VALUES (?, NULL, ?, ?, ?, 'yesno', 1, 'ja', 0, 'ok', 'ja', ?, ?)",
+                   "checklist_text, editor, mandatory, expected_value, finding, value, component_id, "
+                   "component_serials) VALUES (?, NULL, ?, ?, ?, 'yesno', 1, 'ja', 'ok', 'ja', ?, ?)",
                    (pruefung_id, BESTANDTEIL_POS + n, BESTANDTEIL_GRUPPE, zeile_text(z["bezeichnung"], z["anzahl"]),
                     z["id"], json.dumps(serien, ensure_ascii=False)))

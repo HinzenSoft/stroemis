@@ -184,10 +184,9 @@ def test_marken_je_liste():
     assert 'const eingefrorenInfo = (tns) => (tns.some((t) => t.eingefroren) ? info("eingefroren", `Eingefroren (Schloss am Namen): ${esc(EINGEFROREN)}${mehrDazu("eingefroren")}`) : "");' in rk   # ohne Emoji (UI/UX D14)
     assert '<h2>Teilnehmende${eingefrorenInfo(tns)}</h2>' in rk and '<h2>Bewertung${eingefrorenInfo(tns)}</h2>' in rk
     assert 'title="Lehrgangsleitung: darf' not in rk                                           # R1: das title je Zeile entfällt
-    # Prüfung: „kritisch“ in den Befunden.
-    assert ('<h2>Befunde${pr.punkte.some((x) => x.kritisch) ? infoKnopf("kritisch", "„kritisch“: Ein Mangel an diesem Prüfpunkt '
-            'schließt „einsatzbereit“ aus." + mehrDazu("kritisch")) : ""}</h2>') in mat
-    assert 'title="Ein Mangel hier schließt „einsatzbereit“ aus">kritisch</span>' in mat
+    # Prüfung: Das „i“ „kritisch“ an den Befunden ist mit der Funktion am 03.11.2026 entfallen (keine Marke, kein title).
+    assert '<h2>Befunde</h2>' in mat and 'infoKnopf("kritisch"' not in mat and 'mehrDazu("kritisch")' not in mat
+    assert ">kritisch</span>" not in mat
     # Leitstelle: Marken der Nutzerliste seit dem Auftrag „letzte offene Punkte“ (Nutzer: „i“ und Box redundant) in der
     # Box „Hilfe: Rechte je Modul“ statt im „i“ am Seitentitel; das title je Marke bleibt.
     assert 'data-titel-info="nutzer"' not in html and 'info("nutzerliste"' not in html

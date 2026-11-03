@@ -3,7 +3,7 @@ python tests/test_material_bericht.py  oder  pytest tests/test_material_bericht.
 
 Fester Aufbau über zwei Jahre (die Uhr des Moduls wird für das Vorjahr verstellt, wie in test_material_erinnerung):
 Statuszeilen genau nach status.STATUS; Berichtigung nach Durchgangsende zählt einmal; Aussonderung aus Prüfung zählt
-nicht als Prüfung; kritischer Mangel; Sperren aus dem Journal (Meldung am gesperrten Artikel zählt nicht, Verlust eigene
+nicht als Prüfung; keine Zahl und Spalte „kritischer Mangel“ mehr (03.11.2026); Sperren aus dem Journal (Meldung am gesperrten Artikel zählt nicht, Verlust eigene
 Art, kein Pfadtext); Journaleintrag am 31.12. um 23:30 UTC im Folgejahr; Unterordner mit gesperrtem Artikel nach
 Heimat; Untergliederung als Zeile; DEMO-Kennzeichnung; Haken „Prüfer nennen“; Rechte; Eingaben; PDF-Seiten und PDF/A;
 CSV mit Formelschutz; Kappung im PDF; eine Sichtberechnung je Anfrage. Alle Namen, Hersteller, Prüfpunkte und Gründe
@@ -112,7 +112,8 @@ def aufbau(tmp):
       grenze    Lager, angelegt 1.1. J-1 (Zeitstempel direkt gesetzt); zwei Journal-Sperren von Hand: 31.12. J-1
                 22:30 UTC (zählt J-1) und 23:30 UTC (zählt J, Ortszeit 1.1.), mit fremdem Pfadtext im Journal
       fach_a    Fach 1; im Durchgang ausgenommen („nicht auffindbar“), nie geprüft
-      krit      Fahrzeug; Eingangsprüfung mit kritischem Mangel → instandsetzen → gesperrt (aus Prüfung)
+      krit      Fahrzeug; Eingangsprüfung mit Mangel (am Punkt, der bis 03.11.2026 „kritisch“ hieß) → instandsetzen →
+                gesperrt (aus Prüfung)
       aus       Fahrzeug; Eingangsprüfung mit „aussondern empfohlen“ → gesperrt (aus Prüfung), nach dem Durchgang vom
                 Materialwart ausgesondert („irreparabel“; seit Schritt 28 – vorher sonderte die Prüfung selbst aus)
       unter     Fach 1; vom Prüfer gesperrt (Rückruf), im Durchgang ausgenommen – Heimat bleibt das Fach
@@ -261,7 +262,7 @@ def test_zahlen():
         assert b["bewegungen"] == {"zugaenge": 11, "geloescht": 1, "aussonderungen": 2}, b["bewegungen"]
         # Prüfungen: Berichtigung nach Durchgangsende zählt einmal; die Aussonderung aus der Prüfung nicht als Prüfung.
         p = b["pruefungen"]
-        assert p["gesamt"] == 5 and p["entwuerfe"] == 1 and p["mit_mangel"] == 1 and p["kritisch"] == 1, p
+        assert p["gesamt"] == 5 and p["entwuerfe"] == 1 and p["mit_mangel"] == 1 and "kritisch" not in p, p
         assert {x["art"]: x["n"] for x in p["arten"]} == {"eingang": 3, "periodisch": 1, "ausserplanmaessig": 1, "reparatur": 0}
         assert {x["ergebnis"]: x["n"] for x in p["ergebnisse"]} == {"einsatzbereit": 3, "instandsetzen": 1, "aussondern_empfohlen": 1}
         assert p["abdeckung"] == {"bestand": 11, "geprueft": 3, "nicht_geprueft": 8}, p["abdeckung"]
@@ -481,14 +482,14 @@ def test_pdf_und_csv():
         r, seiten = pdf_text(f, f"/materialablage/ordner/{gid}/bericht-{J - 1}.pdf", pfad)
         assert f"OG Berichtstadt {J - 1}" in _flach(seiten[0])
         # CSV: Spalten laut bericht.CSV_SPALTEN, eine Zeile je Prüfung und Aussonderung des Jahres (berichtigte Originale
-        # nicht), Formelschutz, kritischer Mangel, Berichtigung von, Prüfer nur mit Haken.
+        # nicht), Formelschutz, Mängel (ohne Spalte „kritischer Mangel“), Berichtigung von, Prüfer nur mit Haken.
         from app.material.services import bericht as dienst
         r = f.get(f"/materialablage/export/{gid}-pruefungen-{J}.csv")
         assert r.status_code == 200 and r.mimetype == "text/csv", r.status_code
         cd = r.headers["Content-Disposition"]
         assert cd.startswith("attachment") and re.search(rf"Pruefungen_OG Berichtstadt_{J}_\d{{4}}-\d{{2}}-\d{{2}}_\d{{4}}\.csv", cd), cd
         kopf, zeilen = csv_lesen(r.data)
-        assert kopf == list(dienst.CSV_SPALTEN), kopf
+        assert kopf == list(dienst.CSV_SPALTEN) and "kritischer Mangel" not in kopf, kopf
         assert len(zeilen) == 7 and sum(1 for z in zeilen if z["Art"] == "Aussonderungsprotokoll") == 2, [z["Art"] for z in zeilen]
         assert all(z["Prüfer"] == "" and z["Urkundennummer"] == "" for z in zeilen)
         ber = protokoll_zeile(app, o["ber"])
@@ -498,13 +499,13 @@ def test_pdf_und_csv():
         assert z_ber[0]["Bemerkung"] == "Platzhalter nachgetragen" and z_ber[0]["Prüfdurchgang"] == ""
         assert not any(z["Protokoll-ID"] == orig["protocol_id"] for z in zeilen)
         z_krit = [z for z in zeilen if z["Inventarnummer"] == a["krit"]["inventory_no"]][0]
-        assert (z_krit["Ergebnis"], z_krit["Mängel"], z_krit["kritischer Mangel"], z_krit["Prüfdurchgang"]) == \
-            ("instandsetzen", "1", "ja", "Jahresprüfung Fahrzeug"), z_krit
+        assert (z_krit["Ergebnis"], z_krit["Mängel"], z_krit["Prüfdurchgang"]) == \
+            ("instandsetzen", "1", "Jahresprüfung Fahrzeug"), z_krit
         assert z_krit["Ordner"] == "OG Berichtstadt / Fahrzeug GW" and z_krit["Gliederung"] == "OG Berichtstadt"
         assert z_krit["Kategorie"] == "PSA gegen Absturz / Karabiner" and z_krit["DEMO"] == "nein"
         z_aus = [z for z in zeilen if z["Art"] == "Aussonderungsprotokoll" and z["Inventarnummer"] == a["verlust"]["inventory_no"]][0]
         assert z_aus["Ergebnis"] == "ausgesondert", z_aus
-        assert z_aus["Grund"] == "Verlust" and z_aus["Mängel"] == "" and z_aus["kritischer Mangel"] == "" and z_aus["Bemerkung"] == "Platzhalter weg"
+        assert z_aus["Grund"] == "Verlust" and z_aus["Mängel"] == "" and z_aus["Bemerkung"] == "Platzhalter weg"
         roh = r.data.decode("utf-8-sig")
         assert "1012-4711" not in roh and "pruefer" not in roh and ";wart;" not in roh
         # Mit Haken: beide Spalten gefüllt.

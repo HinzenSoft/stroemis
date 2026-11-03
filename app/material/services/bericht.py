@@ -50,10 +50,11 @@ SPERRARTEN = (("pruefung", "aus Prüfung (instandsetzen, aussondern empfohlen)")
 # Die Grundarten einer Aussonderung aus dem Präfix des Grundtexts (pruefung._wirkung bzw. AUSSONDERUNGSGRUENDE).
 GRUNDARTEN = (("pruefung", "aus Prüfung (Ergebnis „aussondern“)"),) + tuple(AUSSONDERUNGSGRUENDE.items()) + (
     ("sonstiges", "sonstiger Grund"),)
-# Spalten der CSV-Prüfungsliste – benannt wie export.VERZEICHNIS_SPALTEN, dazu Mängel und kritischer Mangel.
+# Spalten der CSV-Prüfungsliste – benannt wie export.VERZEICHNIS_SPALTEN, dazu die Zahl der Mängel (die Spalte „kritischer
+# Mangel“ ist mit „kritisch“ am 03.11.2026 entfallen).
 CSV_SPALTEN = ("Datum", "Art", "Prüfart", "Ergebnis", "Grund", "Inventarnummer", "Seriennummer", "Hersteller", "Modell",
                "Artikelnummer", "Kategorie", "Ordner", "Gliederung", "Prüfdurchgang", "Protokoll-ID", "Berichtigung von",
-               "Mängel", "kritischer Mangel", "Prüfer", "Urkundennummer", "Bemerkung", "DEMO")
+               "Mängel", "Prüfer", "Urkundennummer", "Bemerkung", "DEMO")
 FUSS = ("Zahlen zum Stichtag; der Bericht ist kein Prüfnachweis – Nachweise sind die Protokolle.",
         "Bestandszahlen gelten zum Stichtag (heute), Ereigniszahlen für das Kalenderjahr; ein Status zum 31.12. lässt "
         "sich nicht rekonstruieren.",
@@ -227,23 +228,20 @@ def _bewegungen(ordner_ids, params):
 
 
 def _pruefungen(params):
-    """Prüfungen im Jahr (PRUEFUNG_IM_JAHR): gesamt, je Prüfart, je Ergebnis, mit Mangel, mit kritischem Mangel, offene
-    Entwürfe – und die Prüfabdeckung über den Bestand (ohne Ausgesonderte) mit der Liste der nicht geprüften."""
+    """Prüfungen im Jahr (PRUEFUNG_IM_JAHR): gesamt, je Prüfart, je Ergebnis, mit Mangel, offene Entwürfe – und die
+    Prüfabdeckung über den Bestand (ohne Ausgesonderte) mit der Liste der nicht geprüften."""
     rows = db.query(
         "SELECT x.kind, x.result, x.item_id, i.lock_state, "
-        "EXISTS (SELECT 1 FROM mat_inspection_result r WHERE r.inspection_id = x.id AND r.finding = 'mangel') AS mangel, "
-        "EXISTS (SELECT 1 FROM mat_inspection_result r WHERE r.inspection_id = x.id AND r.finding = 'mangel' "
-        "AND r.is_critical = 1) AS kritisch "
+        "EXISTS (SELECT 1 FROM mat_inspection_result r WHERE r.inspection_id = x.id AND r.finding = 'mangel') AS mangel "
         f"FROM mat_inspection x JOIN mat_item i ON i.id = x.item_id WHERE {MENGE} AND {PRUEFUNG_IM_JAHR}", params)
     arten = {k: 0 for k in PRUEFARTEN if k != "aussonderung"}
     ergebnisse = {e: 0 for e in ERGEBNISSE}
-    mit_mangel = kritisch = 0
+    mit_mangel = 0
     geprueft = set()
     for r in rows:
         arten[r["kind"]] = arten.get(r["kind"], 0) + 1
         ergebnisse[r["result"]] = ergebnisse.get(r["result"], 0) + 1
         mit_mangel += 1 if r["mangel"] else 0
-        kritisch += 1 if r["kritisch"] else 0
         if r["lock_state"] != "ausgesondert":
             geprueft.add(r["item_id"])
     entwuerfe = db.query(f"SELECT COUNT(*) AS n FROM mat_inspection x JOIN mat_item i ON i.id = x.item_id WHERE {MENGE} "
@@ -260,7 +258,7 @@ def _pruefungen(params):
             # „aussondern (ausgesondert)“ gibt es nur an Prüfungen vor Schritt 28 – die Zeile nur, wenn welche da sind.
             "ergebnisse": [{"ergebnis": e, "text": ERGEBNISSE.get(e, e), "n": n} for e, n in ergebnisse.items()
                            if n or e != "aussondern"],
-            "mit_mangel": mit_mangel, "kritisch": kritisch, "entwuerfe": entwuerfe,
+            "mit_mangel": mit_mangel, "entwuerfe": entwuerfe,
             "abdeckung": {"bestand": bestand_n, "geprueft": len(geprueft), "nicht_geprueft": len(nicht)},
             "nicht_geprueft": [{"inventarnummer": r["inventory_no"], "produkt": _produkt(r),
                                 "letzte": datum_text(r["last_inspected_on"]) or "noch nie", "demo": bool(r["demo"])}
@@ -562,8 +560,7 @@ def csv(fid, jahr, sicht=None, pruefer_nennen=False):
         "x.inspector_certificate, x.corrects_inspection_id, "
         "(SELECT o.protocol_id FROM mat_inspection o WHERE o.id = x.corrects_inspection_id) AS original_protokoll, "
         "(SELECT COUNT(*) FROM mat_inspection_result r WHERE r.inspection_id = x.id AND r.finding = 'mangel') AS maengel, "
-        "EXISTS (SELECT 1 FROM mat_inspection_result r WHERE r.inspection_id = x.id AND r.finding = 'mangel' "
-        "AND r.is_critical = 1) AS kritisch, r.title AS durchgang, i.inventory_no, i.serial_no, i.folder_id, "
+        "r.title AS durchgang, i.inventory_no, i.serial_no, i.folder_id, "
         f"i.origin_folder_id, i.lock_state, {bestand.heimat_sql('i')} AS heimat, p.manufacturer, p.model, p.article_no, "
         f"p.category_id, {bestand.demo_sql('i', 'p')} AS demo FROM mat_inspection x JOIN mat_item i ON i.id = x.item_id "
         "JOIN mat_product p ON p.id = i.product_id LEFT JOIN mat_round r ON r.id = x.round_id "
@@ -583,7 +580,7 @@ def csv(fid, jahr, sicht=None, pruefer_nennen=False):
             x["inventory_no"], x["serial_no"], x["manufacturer"], x["model"], x["article_no"] or "",
             kategorien.get(x["category_id"], ""), ordner["pfad"], ordner["gliederung"], x["durchgang"] or "",
             x["protocol_id"] or "", (x["original_protokoll"] or "(ohne Protokoll)") if x["corrects_inspection_id"] else "",
-            "" if aus else x["maengel"], "" if aus else ("ja" if x["kritisch"] else "nein"),
+            "" if aus else x["maengel"],
             x["inspector_name"] if pruefer_nennen else "", (x["inspector_certificate"] or "") if pruefer_nennen else "",
             x["remarks"] or "", "ja" if x["demo"] else "nein"])
     return export.csv_bytes(CSV_SPALTEN, zeilen), _name(o, jahr, demo, pruefer_nennen, "Pruefungen", ".csv")

@@ -68,7 +68,7 @@ def _summe(pfad):
 
 def _punkt(p):
     return {"gruppe": p["group_name"], "text": p["label"], "art": p["editor"], "pflicht": bool(p["mandatory"]),
-            "soll": p["expected_value"], "kritisch": bool(p["is_critical"])}
+            "soll": p["expected_value"]}
 
 
 def sammeln(mit_dateien=True):

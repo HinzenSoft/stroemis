@@ -82,7 +82,6 @@ THEMEN = {
     "pruefanleitung": ("Prüfformulare", "pruefanleitung-aus-der-stroemipedia"),
     "pruefpunkte": ("Prüfformulare", "pruefpunkte"),
     "eingangspruefung": ("Prüfung", "pruefarten"),
-    "kritisch": ("Prüfformulare", "pruefpunkte"),
     "pruefsumme": ("Nachweise und Protokolle", "pruefsumme-und-stempel"),
     "rueckruf": ("Rückrufe", "anlegen"),
     "import_spalten": ("Bestandsimport", "wie-werte-gelesen-werden"),

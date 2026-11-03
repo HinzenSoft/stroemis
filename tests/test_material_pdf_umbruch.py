@@ -47,7 +47,7 @@ def _sammel(n):
 
 
 def _punkt(nr, notiz=""):
-    return {"nr": nr, "text": f"Platzhalter-Prüfpunkt {nr}", "kritisch": False, "soll": "Ja", "befund": "ok",
+    return {"nr": nr, "text": f"Platzhalter-Prüfpunkt {nr}", "soll": "Ja", "befund": "ok",
             "befund_text": "in Ordnung", "wert": "Ja", "nummern": [], "foto_nr": None, "notiz": notiz, "unterschrift": None}
 
 
@@ -143,7 +143,7 @@ def test_pruefprotokoll_lange_bemerkungen_mit_kopf():
         mit_punkt = [i for i, s in enumerate(seiten) if "Platzhalter-Prüfpunkt" in s]
         assert len(mit_punkt) >= 2, mit_punkt
         for i in mit_punkt:
-            assert re.search(r"Prüfpunkt\s+kritisch\s+Soll\s+Befund", seiten[i]), ("Tabellenkopf fehlt", i)
+            assert re.search(r"Prüfpunkt\s+Soll\s+Befund", seiten[i]), ("Tabellenkopf fehlt", i)
         kopf = [i for i, s in enumerate(seiten) if re.search(r"^\s*Befunde\s*$", s, re.M)]
         assert len(kopf) == 1 and kopf[0] in mit_punkt, (kopf, mit_punkt)
     print("Prüfprotokoll: lange Bemerkungen mit Tabellenkopf bestanden.")

@@ -1010,14 +1010,13 @@ def punkte(fid):
 
 def punkt_json(p):
     return {"id": p["id"], "gruppe": p["group_name"], "position": p["position"], "text": p["label"],
-            "art": p["editor"], "pflicht": bool(p["mandatory"]), "soll": p["expected_value"],
-            "kritisch": bool(p["is_critical"])}
+            "art": p["editor"], "pflicht": bool(p["mandatory"]), "soll": p["expected_value"]}
 
 
 def punkte_pruefen(roh):
     """Prüfpunkte eines Formulars aus der Anfrage. Ja/Nein-Punkte brauchen einen Sollwert („ja“ oder
-    „nein“ – bei Schadensfragen „nein“); kritisch kann nur ein solcher Punkt sein: Weicht er ab, ist
-    „einsatzbereit“ ausgeschlossen."""
+    „nein“ – bei Schadensfragen „nein“). Ein Feld „kritisch“ (Formular-Editor und Katalogdateien bis 03.11.2026) wird
+    ohne Prüfung übergangen: Die Funktion ist entfallen, neue Punkte tragen is_critical = 0."""
     if not isinstance(roh, list):
         raise Abgelehnt("„punkte“ muss eine Liste sein.")
     if len(roh) > 200:
@@ -1037,14 +1036,10 @@ def punkte_pruefen(roh):
                 raise Abgelehnt(f"Prüfpunkt {n} (Ja/Nein) braucht den Sollwert „ja“ oder „nein“.")
         elif art in ("photo", "signature", "date", "laenge"):
             soll = ""                   # bei „Länge“ ist das Soll die Artikellänge zum Prüfzeitpunkt (pruefung.starten)
-        kritisch = wahr(p, "kritisch", f"kritisch (Prüfpunkt {n})")
-        if kritisch and art != "yesno":
-            raise Abgelehnt(f"Prüfpunkt {n}: Kritisch kann nur ein Ja/Nein-Punkt sein – er hat einen Sollwert, "
-                            "an dem sich ein Mangel festmachen lässt.")
         out.append({"group_name": text(p, "gruppe", f"Gruppe von Prüfpunkt {n}", 80),
                     "label": text(p, "text", f"Text von Prüfpunkt {n}", PUNKT_TEXT_MAX, pflicht=True),
                     "editor": art, "mandatory": int(wahr(p, "pflicht", f"Pflicht (Prüfpunkt {n})") if "pflicht" in p else 1),
-                    "expected_value": soll, "is_critical": int(kritisch), "position": n})
+                    "expected_value": soll, "position": n})
     return out
 
 
@@ -1052,16 +1047,16 @@ def _punkte_schreiben(fid, liste):
     db.execute("DELETE FROM mat_checklist_item WHERE form_id = ?", (fid,))
     for p in liste:
         db.execute("INSERT INTO mat_checklist_item (form_id, group_name, position, label, editor, mandatory, "
-                   "expected_value, is_critical) VALUES (?,?,?,?,?,?,?,?)",
+                   "expected_value) VALUES (?,?,?,?,?,?,?)",
                    (fid, p["group_name"], p["position"], p["label"], p["editor"], p["mandatory"],
-                    p["expected_value"], p["is_critical"]))
+                    p["expected_value"]))
 
 
 def _punkte_kurz(liste):
     """Für das Journal: die Prüfpunkte als lesbare Zeilen."""
     return [f"{p['group_name'] + ': ' if p['group_name'] else ''}{p['label']} [{p['editor']}"
             f"{', Soll ' + p['expected_value'] if p['expected_value'] else ''}"
-            f"{', kritisch' if p['is_critical'] else ''}{'' if p['mandatory'] else ', optional'}]" for p in liste]
+            f"{'' if p['mandatory'] else ', optional'}]" for p in liste]
 
 
 def formular_anlegen(d, demo=False):
