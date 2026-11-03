@@ -634,17 +634,28 @@ def test_dauerhaft_pruefen():
         assert r.status_code == 400 and "24 Monate" in r.json["error"], r.get_json()
         assert grant(app, gid, eins_id, "pruefen")["valid_until"] is None
 
-        # Ein befristeter Verwalter vergibt nichts Dauerhaftes (Nr. 3) – auch keine Prüffreigabe mit Grundrecht.
+        # Ein befristeter Verwalter vergibt kein dauerhaftes Grundrecht (Nr. 3) – eine dauerhafte Prüffreigabe aber
+        # schon, wo die Person dort oder darüber ein Grundrecht hat („Prüfen folgt dem Grundrecht“, Nutzer 03.11.2026);
+        # sie wirkt, solange das Grundrecht gilt – hier das von oben bis Tag 200, länger als er selbst verwaltet.
         gast, gast_id = neues_konto(app, "gast@example.org", name="Gast Test")
         freigeben(adm, gid, gast_id, "verwalten", bis=tag(80))
         vier, vier_id = konto("vier", "1012-5004")
         freigeben(adm, gid, vier_id, "lesen", bis=tag(200))
-        r = erteilen(gast, lager, user_id=vier_id, pruefen=True)
-        assert r.status_code == 403 and "Dauerhaft vergibt nur" in r.json["error"], r.get_json()
         assert erteilen(gast, lager, user_id=vier_id, pruefen=True, pruefen_bis=tag(60)).status_code == 201
         # Ändern: befristet → dauerhaft mit Grundrecht (Dauer dann so lang wie das Grundrecht), zurück auf ein Datum.
         pv = grant(app, lager, vier_id, "pruefen")["id"]
-        assert gast.put(f"/api/material/freigaben/{pv}", json={"bis": None}).status_code == 403
+        r = gast.put(f"/api/material/freigaben/{pv}", json={"bis": None})
+        assert r.status_code == 200 and r.json["freigabe"]["bis"] is None and r.json["freigabe"]["aenderbar"], r.get_json()
+        assert sicht(vier_id).ende("pruefen", fach) == tag(200)              # endet mit dem Grundrecht
+        assert gast.put(f"/api/material/freigaben/{pv}", json={"bis": tag(81)}).status_code == 403   # Datum: Nr. 3
+        assert gast.put(f"/api/material/freigaben/{pv}", json={"bis": tag(60)}).status_code == 200
+        r = erteilen(gast, lager, user_id=vier_id, pruefen=True)
+        assert r.status_code == 201 and grant(app, lager, vier_id, "pruefen")["valid_until"] is None, r.get_json()
+        # Ohne Grundrecht dort oder darüber (der externe Prüfer) auch vom befristeten Verwalter nicht – 400 wie für alle.
+        ext2, ext2_id = konto("extern2", "1012-8002")
+        r = erteilen(gast, lager, user_id=ext2_id, pruefen=True)
+        assert r.status_code == 400 and "nur zusammen mit lesen oder verwalten" in r.json["error"], r.get_json()
+        assert grant(app, lager, ext2_id, "pruefen") is None
         r = w.put(f"/api/material/freigaben/{pv}", json={"bis": None})
         assert r.status_code == 200 and r.json["freigabe"]["bis"] is None and r.json["freigabe"]["wirkt"], r.get_json()
         assert sicht(vier_id).ende("pruefen", fach) == tag(200)              # endet mit dem Grundrecht

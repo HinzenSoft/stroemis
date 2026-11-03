@@ -10,9 +10,12 @@ Was eine Freigabe ist und wie sie wirkt, steht in rechte.py. Hier stehen die Reg
      (Stufe Mitglied oder Verwaltung, die gibt die Plattform-Verwaltung in der Leitstelle), auch aus anderen
      Gliederungen (rechte.waehlbares_konto mit modulzugang).
   3  Was er vergibt oder nach einer Änderung hinterlässt, endet nicht später als sein eigenes Verwalten am Anker
-     (Sicht.ende). Unbefristet vergibt nur, wer selbst unbefristet verwaltet.
+     (Sicht.ende). Unbefristet vergibt nur, wer selbst unbefristet verwaltet – ausgenommen die dauerhafte
+     Prüffreigabe an ein Konto mit Grundrecht am Anker oder darüber („Prüfen folgt dem Grundrecht“, Nutzer
+     03.11.2026): Sie wirkt nur, solange dieses Grundrecht gilt, und zählt als in den Grenzen (_folgt_grundrecht).
   4  Eine fremde Zeile ändert oder entzieht er nur, wenn sie schon vorher in diesen Grenzen liegt – ein befristeter
-     Verwalter kann einen dauerhaften weder entziehen noch kürzen noch herabsetzen.
+     Verwalter kann einen dauerhaften weder entziehen noch kürzen noch herabsetzen. Eine dauerhafte Prüffreigabe, die
+     vor der Anfrage ein Grundrecht trug, liegt darin (wie bei Nr. 3).
   5  Die eigene Zeile nur verkürzen, herabsetzen (verwalten → lesen) oder entziehen – das immer, auch wenn sie länger
      läuft als das eigene Verwalten (Nr. 4 gilt nur für fremde).
   6  Zeilen oberhalb des eigenen Bereichs sieht er als „geerbt“, ohne Notiz, und ändert sie nicht.
@@ -21,8 +24,9 @@ Was eine Freigabe ist und wie sie wirkt, steht in rechte.py. Hier stehen die Reg
   8  Prüffreigaben nur an qualifizierte Konten (Häkchen, Urkundennummer und Zugang zum Modul). Befristet nur für
      externe Prüfer: Dauerhaft (ohne Ende) darf eine Prüffreigabe sein, wenn das Konto am Anker oder darüber heute ein
      Grundrecht hat – auch eines aus derselben Anfrage (Vorlagen „Prüfer“, „Materialwart und Prüfer“) – oder
-     Material-Verwaltung ist (rechte.grundrecht_an, nach dem Schreiben gefragt; sonst 400). Wirken tut sie nur, solange das Grundrecht gilt (rechte.Sicht). Mit Ende
-     höchstens 24 Monate – für alle. Nr. 3 gilt auch hier: dauerhaft nur, wer selbst dauerhaft verwaltet.
+     Material-Verwaltung ist (rechte.grundrecht_an, nach dem Schreiben gefragt; sonst 400). Wirken tut sie nur,
+     solange das Grundrecht gilt (rechte.Sicht). Mit Ende höchstens 24 Monate – für alle. Seit dem 03.11.2026 vergibt
+     sie so auch, wer selbst nur befristet verwaltet (Nr. 3); das Grundrecht dazu bleibt in seinen Grenzen.
   9  lesen und verwalten: Enddatum frei, wenn gesetzt nicht in der Vergangenheit.
  10  Die Notiz (200 Zeichen, eine Zeile) sehen nur Verwalter des Ankers und die Material-Verwaltung – ins Journal
      kommt nur „notiz_geaendert“.
@@ -208,17 +212,36 @@ def _reicht_weiter(alt, neu):
         neu["permission"] != alt["permission"] and (alt["permission"], neu["permission"]) != ("verwalten", "lesen"))
 
 
-def _regeln(s, ich, anker, alt, neu, konto):
+def _dauerhaft_geprueft(z):
+    return z is not None and z["permission"] == "pruefen" and z["valid_until"] is None
+
+
+def _folgt_grundrecht(z, getragen):
+    """„Prüfen folgt dem Grundrecht“ (Nutzer 03.11.2026): Eine dauerhafte Prüffreigabe wirkt nur, solange das Konto am
+    Anker oder darüber ein Grundrecht hat (rechte.Sicht) – trägt eines sie (getragen), liegt sie für Nr. 3 und 4 in den
+    Grenzen eines befristeten Verwalters. Das Grundrecht selbst bleibt in seinen: Vergibt er es, endet es spätestens
+    mit seinem eigenen Verwalten. Trägt eines von oben, das länger gilt, prüft die Person so lange (so entschieden)."""
+    return _dauerhaft_geprueft(z) and getragen
+
+
+def _regeln(s, ich, anker, alt, neu, konto, getragen=None):
     """Prüft eine Änderung an einer Zeile – vorher alt (None beim Anlegen), nachher neu (None beim Entziehen) – gegen
     1.6 Nr. 3, 4, 5, 8 und 12. Der Anker ist sichtbar und wird vom Handelnden verwaltet (Route); Nr. 7 prüft der Aufrufer
-    nach dem Schreiben."""
+    nach dem Schreiben. getragen: ob das Konto VOR der Anfrage am Anker oder darüber ein Grundrecht hatte (Nr. 4 an
+    einer dauerhaften Prüffreigabe; None – jetzt gefragt). Für Nr. 3 zählt der Stand jetzt, mit dem Grundrecht aus
+    derselben Anfrage (es wird zuerst geschrieben); ob es nach dem Schreiben noch trägt, fragt _dauerhaft_pruefen."""
     if not s.alles:
         ende = _ende(s, anker)
         # Nr. 4 nur für fremde Zeilen – die eigene darf man immer verkürzen und entziehen (Nr. 5), auch wenn sie
         # länger läuft als das eigene Verwalten; was danach bleibt, prüft Nr. 3.
-        if alt is not None and alt["user_id"] != ich["id"] and _spaeter(alt["valid_until"], ende):
+        if alt is not None and alt["user_id"] != ich["id"] and _spaeter(alt["valid_until"], ende) and not (
+                _folgt_grundrecht(alt, rechte.grundrecht_an(konto, anker) if getragen is None else getragen)):
             raise Abgelehnt(NICHT_AENDERBAR, 403)
-        if neu is not None and _spaeter(neu["valid_until"], ende):
+        if _dauerhaft_geprueft(neu) and ende is not None:
+            # Prüfen folgt dem Grundrecht – ohne eines dort oder darüber (der externe Prüfer) wie für alle 400.
+            if not rechte.grundrecht_an(konto, anker):
+                raise Abgelehnt(PRUEFEN_DAUERHAFT)
+        elif neu is not None and _spaeter(neu["valid_until"], ende):
             if neu["valid_until"] is None:
                 raise Abgelehnt("Dauerhaft vergibt nur, wer selbst dauerhaft verwaltet – setze ein Enddatum (spätestens "
                                 f"{_tag(ende)}).", 403)
@@ -263,10 +286,10 @@ def _dauerhaft_pruefen(alt, neu, anker, konto):
         raise Abgelehnt(PRUEFEN_DAUERHAFT)
 
 
-def _schreiben(s, ich, anker, alt, neu, konto, grund=None):
+def _schreiben(s, ich, anker, alt, neu, konto, grund=None, getragen=None):
     """Eine Zeile anlegen (alt None), ändern oder entziehen (neu None) – nach den Regeln, mit Journal. Liefert die
-    Kennung. Läuft in der Transaktion des Aufrufers."""
-    _regeln(s, ich, anker, alt, neu, konto)
+    Kennung. Läuft in der Transaktion des Aufrufers; getragen wie bei _regeln."""
+    _regeln(s, ich, anker, alt, neu, konto, getragen)
     jetzt = db.now()
     if alt is None:
         gid = db.execute("INSERT INTO mat_folder_grant (folder_id, user_id, permission, valid_until, granted_by, "
@@ -360,12 +383,13 @@ def erteilen(fid, d):
     with db.transaction(sofort=True):
         # Ein Grundrecht kann ein vorhandenes verwalten herabsetzen – dann gilt Nr. 7.
         vorher = _verwaltung_vorher(s, fid, ordner, noetig=bool(grund))
+        getragen = None if s.alles else rechte.grundrecht_an(konto, fid)      # Nr. 4: Stand vor der Anfrage
         for arten, recht, bis in wunsch:
             alt = db.query(f"SELECT * FROM mat_folder_grant WHERE folder_id = ? AND user_id = ? AND permission IN "
                            f"({','.join('?' * len(arten))})", (fid, konto["id"], *arten), one=True)
             neu = {"user_id": konto["id"], "permission": recht, "valid_until": bis,
                    "note": notiz if notiz is not None else (alt["note"] if alt else "")}
-            ids.append(_schreiben(s, ich, fid, alt, neu, konto))
+            ids.append(_schreiben(s, ich, fid, alt, neu, konto, getragen=getragen))
         _verwaltung_danach(vorher)
     rechte.sicht_verwerfen()
     return ids
@@ -503,20 +527,23 @@ def person_setzen(fid, uid, d):
         verwalten = (vorhanden.get("grundrecht") or {}).get("permission") == "verwalten" or (
             isinstance(wunsch["grundrecht"], dict) and wunsch["grundrecht"]["permission"] == "verwalten")
         vorher = _verwaltung_vorher(s, fid, ordner, noetig=verwalten)
+        # Nr. 4 an einer dauerhaften Prüffreigabe nach dem Stand VOR der Anfrage – das Grundrecht wird zuerst
+        # geschrieben und kann schon weg sein (etwa „Prüfer“ → „Externer Prüfer“).
+        getragen = None if s.alles else rechte.grundrecht_an(konto, fid)
         for teil in PERSON_TEILE:                       # zuerst das Grundrecht – es trägt eine dauerhafte Prüffreigabe
             alt, w = vorhanden.get(teil), wunsch[teil]
             if w is None and not (nur_notiz and alt is not None and notiz is not None):
                 continue
             if w == "weg":
                 if alt is not None:
-                    ids.append(_mit_vorsatz(teil, _schreiben, s, ich, fid, alt, None, konto))
+                    ids.append(_mit_vorsatz(teil, _schreiben, s, ich, fid, alt, None, konto, None, getragen))
                     weniger = True
                 continue
             neu = dict(w or {"permission": alt["permission"], "valid_until": alt["valid_until"]}, user_id=uid,
                        note=notiz if notiz is not None else (alt["note"] if alt else ""))
             if alt is not None and all(neu[k] == alt[k] for k in ("permission", "valid_until", "note")):
                 continue
-            ids.append(_mit_vorsatz(teil, _schreiben, s, ich, fid, alt, neu, konto))
+            ids.append(_mit_vorsatz(teil, _schreiben, s, ich, fid, alt, neu, konto, None, getragen))
             weniger = weniger or (alt is not None and _spaeter(alt["valid_until"], neu["valid_until"]))
         _mit_vorsatz("grundrecht", _verwaltung_danach, vorher)
     rechte.sicht_verwerfen()
@@ -681,7 +708,8 @@ def _eintrag(r, ordner, s, system, notiz, grundlage):
            else system.get(r["id"], "(gelöschtes Konto)"),
            "seit": r["created_at"], "eigen": r["user_id"] == s.uid,
            "aenderbar": bool(s.alles or (darf_anker and (r["user_id"] == s.uid
-                                                         or not _spaeter(r["valid_until"], _ende(s, anker)))))}
+                                                         or not _spaeter(r["valid_until"], _ende(s, anker))
+                                                         or _folgt_grundrecht(r, dort))))}
     out["entziehbar"] = _entziehbar(s, r, ordner, out["aenderbar"])
     if notiz and darf_anker:
         out["notiz"] = r["note"] or ""
