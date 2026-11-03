@@ -25,7 +25,8 @@ from datetime import timedelta
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from test_material import _heute, freigeben, gliederung, neues_konto, umgebung  # noqa: E402
+from test_material import H, _heute, freigeben, gliederung, neues_konto, umgebung  # noqa: E402
+from test_material_ueberblick import ordner_neu  # noqa: E402
 
 WURZEL = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 FRG = os.path.join(WURZEL, "app/material/static/freigaben.js")
@@ -258,6 +259,10 @@ def test_oberflaeche_statisch():
     # „Daran hängt …“ ohne die Prüffreigabe hier, wo die Rolle sie selbst regelt (sonst stünde es doppelt da).
     assert "const bleibt = ez && (pruefWahl ? pruefWahl.checked && gPruef.dauerhaft() : pfDauer);" in dlg
     assert '<p class="help" id="mfp-traegt" hidden></p>' in dlg
+    # Nicht änderbar (Nr. 4, auch eine dauerhafte Prüffreigabe mit längerem Grundrecht): Dialog in „Einzeln“, das Recht
+    # als Text; „Entziehen“ an der Zeile nur, wenn jedes Recht änderbar ist.
+    assert "const pruefFrei = !pf || pf.aenderbar;" in dlg and "pruefHtml = `<p class=\"mfp-titel\">Prüffreigabe</p>${fest(pf)}`;" in dlg
+    assert "const ganzEntziehbar = (p) => p.rechte.every((f) => f.aenderbar && f.entziehbar !== false);" in fjs
     # Notiz zugeklappt wie beim Anlegen, offen, wenn es eine gibt; der Datenschutzsatz bleibt sichtbar darin.
     assert '<details class="mf-notiz"${notiz || abweichend ? " open" : ""}><summary>Notiz</summary>' in dlg
     assert "Sehen nur Verwalter dieses Ordners und die Material-Verwaltung" in dlg
@@ -522,7 +527,7 @@ def test_pruefen_folgt_dem_grundrecht():
         return
     with tempfile.TemporaryDirectory() as tmp:
         app, k = umgebung(tmp)
-        adm = k["adm"]
+        adm, w = k["adm"], k["wart"]
         gid, _ = gliederung(adm)
         with app.app_context():
             from app.material.services import freigaben
@@ -608,6 +613,61 @@ def test_pruefen_folgt_dem_grundrecht():
         assert r.status_code == 403 and "eigene Verwalterfreigabe" in r.json["error"], r.get_json()
         assert lang.put(PERSON.format(gid, uid), json={"pruefen": {"bis": grenze}}).status_code == 200
         assert _kurz(*_rechte(lang, gid, uid)) == (None, grenze)
+
+        # „Nur innerhalb seiner Zeit“ (Nutzer 03.11.2026): Eine dauerhafte Prüffreigabe ändert ein befristeter Verwalter
+        # nur, wenn das Grundrecht, das sie vor der Anfrage trug, nicht länger läuft als sein Verwalten.
+        lager = ordner_neu(w, gid, "Lager")
+        # (a) eigene Vergabe mit Grundrecht bis vor seinem Ende: kürzen und entziehen gehen, auch einzeln an der Zeile.
+        for i, weg in ((34, "put"), (35, "delete")):
+            uid = person_neu(i)
+            daten, = js(["rolleAnlegen", "pruefer", tag(40)])
+            assert kurz.post(FR.format(gid), json=dict(daten, user_id=uid)).status_code == 201
+            g, p = _rechte(kurz, gid, uid)
+            assert p["aenderbar"] and p["entziehbar"], p
+            if weg == "put":
+                assert kurz.put(PERSON.format(gid, uid), json={"pruefen": {"bis": tag(30)}}).status_code == 200
+                assert kurz.put(PERSON.format(gid, uid), json={"pruefen": None}).status_code == 200
+            else:
+                assert kurz.delete(f"/api/material/freigaben/{p['id']}", headers=H).status_code == 200
+            assert _kurz(*_rechte(kurz, gid, uid)) == (("lesen", tag(40)), "keine")
+        # (b) dauerhaftes bzw. längeres Grundrecht hier (von der Verwaltung): nicht änderbar – Liste, PUT, Entziehen.
+        # (c) geerbt: lesen dauerhaft an der Gliederung, dauerhaftes Prüfen am Lager – vergeben darf er es, danach
+        # ändern nicht mehr.
+        faelle = []
+        for i, bis in ((36, None), (37, tag(200))):
+            uid = person_neu(i)
+            freigeben(adm, gid, uid, "lesen", bis=bis)
+            r = adm.put(PERSON.format(gid, uid), json={"pruefen": {"bis": None}})
+            assert r.status_code == 200, r.get_json()
+            faelle.append((gid, uid))
+        uid = person_neu(38)
+        freigeben(adm, gid, uid, "lesen")
+        r = kurz.post(FR.format(lager), json={"user_id": uid, "pruefen": True, "pruefen_bis": None})
+        assert r.status_code == 201 and r.json["freigaben"][0]["bis"] is None, r.get_json()
+        assert not r.json["freigaben"][0]["aenderbar"], r.get_json()
+        faelle.append((lager, uid))
+        for fid, uid in faelle:
+            p = next(f for f in kurz.get(FR.format(fid)).json["direkt"] if f["konto"]["id"] == uid and f["recht"] == "pruefen")
+            assert (p["bis"], p["aenderbar"], p["entziehbar"]) == (None, False, False), p
+            gruende, = js(["rollenGruende", None, p, {"fest": True, "eigen": False, "qualifiziert": True, "ohneZugang": False}])
+            assert set(gruende) == {"fuehrungskraft", "materialwart", "materialwart_pruefer", "pruefer", "extern"}, gruende
+            for daten in ({"pruefen": {"bis": tag(30)}}, {"pruefen": None}, {"pruefen": {"bis": None}, "notiz": "x"}):
+                r = kurz.put(PERSON.format(fid, uid), json=daten)
+                assert r.status_code == 403 and r.json["error"].startswith("„Prüffreigabe“: Diese Freigabe reicht weiter"), (daten, r.get_json())
+            r = kurz.delete(f"/api/material/freigaben/{p['id']}", headers=H)
+            assert r.status_code == 403 and "reicht weiter als deine eigene" in r.json["error"], r.get_json()
+            assert _rechte(adm, fid, uid)[1]["bis"] is None
+        # Der dauerhafte Verwalter und die Material-Verwaltung ändern sie weiter.
+        fid, uid = faelle[0]
+        assert w.put(PERSON.format(fid, uid), json={"pruefen": {"bis": tag(30)}}).status_code == 200
+        fid, uid = faelle[2]
+        assert adm.put(PERSON.format(fid, uid), json={"pruefen": None}).status_code == 200
+        # Grundrecht genau bis zu seinem Ende: änderbar.
+        uid = person_neu(39)
+        freigeben(adm, gid, uid, "lesen", bis=ende_kurz)
+        assert kurz.put(PERSON.format(gid, uid), json={"pruefen": {"bis": None}}).status_code == 200
+        assert _rechte(kurz, gid, uid)[1]["aenderbar"]
+        assert kurz.put(PERSON.format(gid, uid), json={"pruefen": None}).status_code == 200
 
         # Die eigene Zeile bleibt, wie sie war: befristetes eigenes Prüfen nicht dauerhaft, kein neues eigenes Prüfen.
         freigeben(adm, gid, kurz_id, "pruefen", bis=tag(30))

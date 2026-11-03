@@ -645,10 +645,15 @@ def test_dauerhaft_pruefen():
         # Ändern: befristet → dauerhaft mit Grundrecht (Dauer dann so lang wie das Grundrecht), zurück auf ein Datum.
         pv = grant(app, lager, vier_id, "pruefen")["id"]
         r = gast.put(f"/api/material/freigaben/{pv}", json={"bis": None})
-        assert r.status_code == 200 and r.json["freigabe"]["bis"] is None and r.json["freigabe"]["aenderbar"], r.get_json()
+        assert r.status_code == 200 and r.json["freigabe"]["bis"] is None, r.get_json()
         assert sicht(vier_id).ende("pruefen", fach) == tag(200)              # endet mit dem Grundrecht
-        assert gast.put(f"/api/material/freigaben/{pv}", json={"bis": tag(81)}).status_code == 403   # Datum: Nr. 3
-        assert gast.put(f"/api/material/freigaben/{pv}", json={"bis": tag(60)}).status_code == 200
+        # Danach trägt sie ein Grundrecht bis Tag 200 – länger als er verwaltet: für ihn nicht mehr änderbar (Nr. 4,
+        # „Nur innerhalb seiner Zeit“, Nutzer 03.11.2026); der dauerhafte Verwalter ändert sie weiter.
+        assert not r.json["freigabe"]["aenderbar"]
+        for m, d in (("put", {"bis": tag(60)}), ("put", {"bis": tag(81)}), ("delete", None)):
+            r = getattr(gast, m)(f"/api/material/freigaben/{pv}", json=d, headers=H)
+            assert r.status_code == 403 and "reicht weiter als deine eigene" in r.json["error"], (m, d, r.get_json())
+        assert w.put(f"/api/material/freigaben/{pv}", json={"bis": tag(60)}).status_code == 200
         r = erteilen(gast, lager, user_id=vier_id, pruefen=True)
         assert r.status_code == 201 and grant(app, lager, vier_id, "pruefen")["valid_until"] is None, r.get_json()
         # Ohne Grundrecht dort oder darüber (der externe Prüfer) auch vom befristeten Verwalter nicht – 400 wie für alle.
