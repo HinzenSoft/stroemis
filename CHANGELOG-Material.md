@@ -4558,6 +4558,10 @@ Abstände.“ Entscheidungen des Nutzers (beide die Empfehlung):
   aktiv und nicht `display: none`, Maus unverändert, Ordnerbaum bleibt, Doku); angepasst `test_wiki_seitenbaum.py`
   (Finger-Regeln 36 statt 44 px) und `test_material_nachtrag_sammel.py` (Klappknopf der Strömipedia 44 × 36).
 
+**Bestätigt am 03.11.2026** (Nutzer: „Bestätigt“): Bei umbrochenen Titeln sitzen Klappzeichen und „⋯“ 3 px unter der
+Mitte der ersten Titelzeile (6 px Polster bleiben, keine 9 px); die kräftigere Linie vor einem Abschnitt bleibt 2 px in
+`--linie` wie der Trenner in Menüs.
+
 ## Verweise auf die Anleitung in der Strömipedia (Wunsch des Nutzers, 28.10.2026; gebaut 01.11.2026)
 
 Wunsch des Nutzers, wörtlich: „Verweise im Modul, z. B. an relevanten Stellen mit neuen oder bestehenden Info-i's auf
@@ -11455,6 +11459,11 @@ bestätigt am 02.11.2026: ja.
   angepasst: `test_geraetetest_teil1.py` (`test_b14_schubladen`: „☰“ mit „Seiten“ zum Vorlesen auch im Lesemodus) und
   `test_material_vor_merge_3.py` (statische Prüfung der übrigen Module: dasselbe für wiki_lesemodus.html und public.html).
 
+**Bestätigt am 03.11.2026** (Nutzer: „Bestätigt“): Die gemeinsame Suchlogik liegt in markdown.js (public.html lädt
+common.js nicht); nach dem Öffnen eines Treffers bleibt der Suchbegriff auch im Lesemodus im Feld stehen (vorher
+geleert), Fehler der Suche zeigt dort ein Toast; public.html ist mit angepasst, obwohl sie seit dem 01.11.2026 keine
+Route mehr zeichnet.
+
 ## Rechte ändern mit Rollen (Wunsch des Nutzers, 02.11.2026)
 
 Nutzer zum Dialog „Rechte ändern“ (Reiter „Freigaben“): „Das Menü ist meiner Meinung nach sehr unübersichtlich und
@@ -11518,3 +11527,8 @@ Fälle, die Gründe und die Abbildung Rolle → Anfrage; gegen die Schnittstelle
 Ändern mit den erwarteten Rechten (und wieder dieselbe Rolle beim Öffnen), externer Prüfer höchstens 24 Monate (alles
 oder nichts), ohne Qualifikation und eigene Rechte – was der Dialog ausgraut, lehnt auch der Server ab; herabsetzen
 und kürzen der eigenen Zeile gehen. Bestehende Freigabe-Tests liefen unverändert grün.
+
+**Bestätigt am 03.11.2026** (Nutzer: „Bestätigt“): Warum eine Rolle nicht wählbar ist, steht als ein Satz je Grund
+unter den Karten (mit den betroffenen Rollen davor), nicht in jeder Karte; „Vorlage“ heißt auch im Formular „Freigabe
+anlegen“, im Hinweis der Leitstelle und im README „Rolle“; die Material-Verwaltung darf im Dialog ihre eigene Zeile auch
+erweitern (z. B. eine eigene Prüffreigabe), wie es der Server für sie schon erlaubte.
