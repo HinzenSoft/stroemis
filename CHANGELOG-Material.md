@@ -12682,6 +12682,16 @@ _formular_editor (Prüfung braucht die Zuweisung als Standard), _formular_titel 
 (Suchzeile auch auf „Prüfformulare“), _uiux_u2 und _vor_merge_3 (Seitentitel), test_module_info_i (M17, M29),
 test_module_kleinigkeiten (17 Anleitungs-„i“), test_module_letzte_offene (Abschnittsaktion „Zuweisen“).
 
+**Zusatz – Formular-Editor** (Wunsch des Nutzers, 04.11.2026, Bildschirmfoto Menü „⋯“ der Gruppenzeile: „Gruppe nach
+oben/unten kann weg.“): Die Gruppenzeile hat kein Menü „⋯“ mehr; „Gruppe nach oben“ und „Gruppe nach unten“ samt
+Aktionen sind entfernt, eine Gruppe verschiebt nur noch der Griff ⠿; „Gruppe entfernen“ ist ein grau umrandeter
+kleiner Knopf (ein Eintrag wird ein Knopf – wie bisher schon bei nur einer Gruppe), am Rechner so hoch wie „⋯“ der
+Punkte; ist neben ihm kein Platz für 14em Namen (Telefon), steht er in einer eigenen Zeile darunter, rechtsbündig – der
+Name behält die Breite. Test `test_material_formular_editor` (statisch; im Browser Knopf statt Menü, Reihenfolge per
+Ziehen, Lage des Knopfs, 44 px am Finger; das Band, in dem `ziehen()` das Ziel nach dem Bildlauf am Rand erwartet, ist
+20–75 % statt 30–60 % der Höhe – am Telefon springt das Ziel um eine Kartenhöhe, sobald die gezogene Zeile davor
+rückt) und `test_material_formular_titel` (8 statt 10 Stellen, die neu zeichnen); die Übung nutzte die Einträge nicht.
+
 **Bitte bestätigen**:
 1. E2 „Datei maßgeblich“ so gelesen: Gelöst wird eine Zuweisung, an der ein Formular **oder** ein Ziel der Datei
    beteiligt ist und die die Datei nicht nennt; eine Zuweisung zwischen einem Formular und einem Ziel, die es nur auf
@@ -12692,3 +12702,5 @@ test_module_kleinigkeiten (17 Anleitungs-„i“), test_module_letzte_offene (Ab
 4. Übung: Der Ablauf „Prüfformulare zuweisen“ setzt den Haken am Gurt, dessen Formular schon gilt (Z3: ausdrücklich
    zugewiesen bleibt es bei einem Wechsel des Standards) – zeigt das Prinzip ohne Wirkung auf die Prüfung.
 5. Startprotokoll und Journal nennen bei der Migration Produkte mit Kennung und Namen.
+6. Editor: Gruppen lassen sich per Tastatur nicht mehr verschieben (der Griff ⠿ ist kein Tastaturziel) – siehe
+   „Zusatz“ unten.

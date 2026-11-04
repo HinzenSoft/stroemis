@@ -445,10 +445,14 @@ table.list.mat-artikel th.mat-wahlspalte, table.list.mat-artikel td.mat-wahlspal
 @media (hover: hover) and (pointer: fine) { table.list.mat-formtabelle tr:hover td { background: none; } }
 table.list.mat-formtabelle tr.fp-gruppenzeile > :is(td, th) { background: var(--grau-hell); border-top: 2px solid var(--linie);
   color: var(--anthrazit); font-size: var(--fs-mittel); overflow-wrap: anywhere; }
-.mat-formtabelle .fp-gruppenkopf { display: flex; align-items: flex-start; gap: 8px; }
-.mat-formtabelle textarea.fp-gruppenname { flex: 1 1 auto; min-width: 0; font-weight: 700; }
+/* Rechts der Knopf „Gruppe entfernen“ (seit 04.11.2026 statt „⋯“); ist neben ihm kein Platz für 14em Namen (Telefon),
+   rückt er in eine eigene Zeile darunter, rechtsbündig – der Name behält die Breite. */
+.mat-formtabelle .fp-gruppenkopf { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 8px; }
+.mat-formtabelle textarea.fp-gruppenname { flex: 1 1 14em; min-width: 0; font-weight: 700; }
 .mat-formtabelle .fp-menue { text-align: right; }
-.mat-formtabelle .fp-gruppenkopf .fp-menue { flex: 0 0 auto; }
+.mat-formtabelle .fp-gruppenkopf .fp-menue { flex: 0 0 auto; margin-left: auto; }
+/* so hoch wie „⋯“ der Punkte; am Finger gilt die Tippfläche von 44 px (app.css) */
+@media not (pointer: coarse) { .mat-formtabelle .fp-gruppenkopf .fp-menue > .btn { min-height: 36px; } }
 .mat-formtabelle .fp-menue summary.btn { justify-content: center; min-width: 38px; min-height: 36px; font-size: var(--fs-mittel); }
 .mat-formtabelle .fp-menue summary::after { content: none; }
 .mat-formtabelle tr.fp-leer > td { border-bottom: 0; padding-bottom: 0; }

@@ -58,9 +58,12 @@ def test_statisch():
     assert "S.reihenfolgeKnoepfe(i, n, hoch, runter)" in lies("app/static/js/pruefungen.js")
     # Menü „⋯“ über S.menue, Einträge ohne Auslassungspunkte; die Gruppe als Zwischenzeile mit Feld (80 Zeichen).
     assert 'S.menue({ text: "⋯", art: "mat-menue", eintraege })' in editor
-    for text in ("Nach oben", "Nach unten", "In Gruppe verschieben", "Entfernen", "Gruppe nach oben", "Gruppe nach unten",
-                 "Gruppe entfernen"):
+    for text in ("Nach oben", "Nach unten", "In Gruppe verschieben", "Entfernen", "Gruppe entfernen"):
         assert f'text: "{text}"' in editor, text
+    # „Gruppe nach oben/unten kann weg.“ (Nutzer, 04.11.2026) – Gruppen nur noch am Griff; „Gruppe entfernen“ als Knopf.
+    for weg in ("Gruppe nach oben", "Gruppe nach unten", "gruppe-hoch", "gruppe-runter"):
+        assert weg not in js, weg
+    assert 'const menue = zeilenMenue([{ text: "Gruppe entfernen", attrs: `data-act="gruppe-weg" data-g="${gi}"` }], gruppeText(g));' in editor
     assert not re.search(r'text: "[^"]*…"', editor)
     assert '<textarea class="fp-gruppenname" rows="1" maxlength="80" aria-label="Gruppe" placeholder="ohne Gruppe – Name eintragen">' in editor
     assert "fp-gruppe\"" not in editor and 'data-l="Gruppe"' not in editor
@@ -186,7 +189,10 @@ def ziehen(s, von, nach, anteil=0.75, halten=0.0, esc=False, waehrend=None):
             runter = y1 > s.hoehe - 80
             hin(x0, s.hoehe - 8 if runter else kopf + 8)
             ende = time.time() + 10
-            im_bild = lambda y: s.hoehe * 0.3 <= y <= s.hoehe * 0.6   # noqa: E731
+            # Band im Bild: 20–75 % der Höhe. Am Telefon springt das Ziel um die Höhe einer Karte (≈ 290 px), sobald die
+            # gezogene Zeile davor rückt – seit dem höheren Gruppenkopf (Knopf „Gruppe entfernen“ in eigener Zeile) sprang
+            # es über das alte Band 30–60 % hinweg.
+            im_bild = lambda y: s.hoehe * 0.2 <= y <= s.hoehe * 0.75   # noqa: E731
             while time.time() < ende and not im_bild(lage(s, nach, anteil)[1]):
                 s.b.warten(0.03)
             assert im_bild(lage(s, nach, anteil)[1]), ("Bildlauf am Rand holt das Ziel nicht ins Bild", nach)
@@ -236,12 +242,17 @@ def gruppe_ziehen(s, touch):
     assert [g[0] for g in vorher] == ["Gruppe C", "Gruppe A neu", "Gruppe B gezogen"], vorher
     assert s.js("[...document.querySelectorAll('#fp-tabelle tr.fp-gruppenzeile')].map((tr) => tr.querySelectorAll('.fp-griff').length)") == [1, 1, 1]
     assert s.js("[...document.querySelectorAll('#fp-tabelle tr.fp-gruppenzeile .fp-griff')].every((g) => g.getAttribute('aria-hidden') === 'true')")
-    # Der Griff steht vorn in der Flucht der Griffe darunter, das Namensfeld behält den Rest der Zeile.
+    # Der Griff steht vorn in der Flucht der Griffe darunter, das Namensfeld behält den Rest der Zeile. Der Knopf „Gruppe
+    # entfernen“ steht rechts daneben – ist dafür kein Platz (Telefon), in einer eigenen Zeile darunter, rechtsbündig.
     lage_kopf = s.js("""(() => { const tr = document.querySelector('#fp-tabelle tr.fp-gruppenzeile'); const g = tr.querySelector('.fp-griff').getBoundingClientRect();
       const n = tr.querySelector('.fp-gruppenname').getBoundingClientRect(), m = tr.querySelector('.fp-menue').getBoundingClientRect();
       const p = document.querySelector('#fp-tabelle tr.fp-punkt .fp-griff').getBoundingClientRect();
-      return [g.left - p.left, n.left - g.right, m.left - n.right, n.width / tr.getBoundingClientRect().width]; })()""")
-    assert abs(lage_kopf[0]) <= 10 and 0 <= lage_kopf[1] <= 12 and 0 <= lage_kopf[2] <= 12 and lage_kopf[3] > 0.6, lage_kopf
+      return [g.left - p.left, n.left - g.right, m.left - n.right, n.width / tr.getBoundingClientRect().width, m.top - n.bottom,
+              Math.abs(m.right - n.right)]; })()""")
+    daneben = 0 <= lage_kopf[2] <= 12
+    darunter = touch and lage_kopf[4] >= -1 and lage_kopf[5] <= 2
+    assert abs(lage_kopf[0]) <= 10 and 0 <= lage_kopf[1] <= 12 and (daneben or darunter) and lage_kopf[3] > 0.6, lage_kopf
+    assert daneben is not touch, lage_kopf          # 1280: daneben; 360: darunter
 
     def mitten(s):
         assert struktur(s) == vorher, struktur(s)
@@ -266,12 +277,11 @@ def gruppe_ziehen(s, touch):
     # … und wieder ans Ende (unter „+ Prüfpunkt“ der letzten Gruppe).
     ziehen(s, kopf(0), "#fp-tabelle tbody:last-of-type tr.fp-fuss", anteil=0.9)
     assert struktur(s) == vorher, struktur(s)
-    # Das Menü „⋯“ der Gruppe bleibt (Tastatur).
-    klick(s, f"{kopf(1)} .fp-menue summary")
-    assert s.js("[...document.querySelectorAll('#fp-tabelle details.menue[open] .menue-liste button')].map((b) => b.textContent.trim())") == [
-        "Gruppe nach oben", "Gruppe nach unten", "Gruppe entfernen"]
-    s.taste()
-    s.b.warten(0.2)
+    # An der Gruppe kein Menü „⋯“ mehr, nur der Knopf „Gruppe entfernen“ (Wunsch vom 04.11.2026).
+    assert s.js(f"[...document.querySelectorAll({json.dumps(kopf(1) + ' .fp-menue > *')})].map((b) => [b.tagName, b.className, b.textContent.trim()])") == [
+        ["BUTTON", "btn secondary small", "Gruppe entfernen"]]
+    if touch:
+        tippflaechen(s, "#fp-tabelle tr.fp-gruppenzeile .fp-menue .btn")
 
 
 def eine_gruppe(u, kategorie, breite, hoehe, touch):
@@ -398,15 +408,15 @@ def ablauf(u, kategorie, breite, hoehe, touch):
         assert st[3] == ["Gruppe C", ["Platzhalter 4"], False] and st[2] == ["", [], True], st
         assert s.js("document.querySelector('#fp-tabelle tr.fp-leer').textContent").strip().startswith("Die Gruppe ist leer")
 
-        # Gruppe: leer ohne Rückfrage entfernen; nach oben/unten; mit Punkten nur nach Rückfrage mit Anzahl.
-        menue(s, kopf(2), "gruppe-weg")
+        # Gruppe: leer ohne Rückfrage entfernen (Knopf statt „⋯“); verschieben nur am Griff; mit Punkten nur nach Rückfrage
+        # mit Anzahl.
+        assert not s.js(f"document.querySelector({json.dumps(kopf(2) + ' .fp-menue summary')})")
+        klick(s, f'{kopf(2)} .fp-menue [data-act="gruppe-weg"]')
         assert not s.js("document.querySelector('dialog[open]')")
         assert [g[0] for g in struktur(s)] == ["Gruppe A neu", "Gruppe B", "Gruppe C"]
-        menue(s, kopf(2), "gruppe-hoch")
-        assert [g[0] for g in struktur(s)] == ["Gruppe A neu", "Gruppe C", "Gruppe B"]
-        menue(s, kopf(0), "gruppe-runter")
-        assert [g[0] for g in struktur(s)] == ["Gruppe C", "Gruppe A neu", "Gruppe B"]
-        menue(s, kopf(1), "gruppe-weg")
+        ziehen(s, kopf(2), kopf(0), anteil=0.1)
+        assert [g[0] for g in struktur(s)] == ["Gruppe C", "Gruppe A neu", "Gruppe B"], struktur(s)
+        klick(s, f'{kopf(1)} .fp-menue [data-act="gruppe-weg"]')
         assert s.warte("!!document.querySelector('dialog[open] #c-titel')")
         assert s.js("document.querySelector('dialog[open] #c-titel').textContent") == "Gruppe „Gruppe A neu“ mit 2 Prüfpunkten entfernen?"
         klick(s, "dialog[open] #c-no")
@@ -459,10 +469,10 @@ def ablauf(u, kategorie, breite, hoehe, touch):
         assert lang[0] == LANG and len(LANG) == 80 and lang[1] <= 1 and lang[2] <= 1, lang
         assert s.js("document.querySelector('#fp-titel').value") == "Platzhalter Editor getippt"
 
-        # Tippflächen am Finger (Griff, „⋯“ an Punkt und Gruppe) – gemessen; kein waagerechter Bildlauf.
+        # Tippflächen am Finger (Griff, „⋯“ am Punkt, Knopf „Gruppe entfernen“) – gemessen; kein waagerechter Bildlauf.
         if touch:
             for sel in ("#fp-tabelle .fp-griff", "#fp-tabelle tr.fp-gruppenzeile .fp-griff", "#fp-tabelle tr.fp-punkt .fp-menue summary",
-                        "#fp-tabelle tr.fp-gruppenzeile .fp-menue summary",
+                        '#fp-tabelle tr.fp-gruppenzeile .fp-menue [data-act="gruppe-weg"]',
                         "#fp-tabelle .fp-z-pflicht label"):
                 tippflaechen(s, sel)
             assert s.js("getComputedStyle(document.querySelector('#fp-tabelle .fp-griff')).touchAction") == "none"

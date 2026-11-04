@@ -5233,13 +5233,11 @@
         <td class="fp-menue">${menue}</td></tr>`;
     }
     // Die Zwischenzeile einer Gruppe: vorn der Griff ⠿ (Wunsch vom 04.11.2026: „Die einzelnen Gruppen müssen sich auch in
-    // der Reihenfolge verschieben lassen“ – nur, wenn es mehr als eine Gruppe gibt), Name in voller Breite und „⋯“ (nach
-    // oben, nach unten, entfernen) – bei einer einzigen Gruppe bleibt nur „Gruppe entfernen“, das S.menue als Knopf zeichnet.
+    // der Reihenfolge verschieben lassen“ – nur, wenn es mehr als eine Gruppe gibt), Name in voller Breite und der Knopf
+    // „Gruppe entfernen“ (S.menue mit einem Eintrag). Die Einträge zum Verschieben der Gruppe im Menü „⋯“ entfielen auf
+    // Wunsch des Nutzers (04.11.2026) – verschoben wird eine Gruppe nur noch am Griff, per Tastatur nicht.
     function gruppenKopf(g, gi) {
-      const menue = zeilenMenue([
-        gi > 0 && { text: "Gruppe nach oben", attrs: `data-act="gruppe-hoch" data-g="${gi}"` },
-        gi < gruppen.length - 1 && { text: "Gruppe nach unten", attrs: `data-act="gruppe-runter" data-g="${gi}"` },
-        { text: "Gruppe entfernen", attrs: `data-act="gruppe-weg" data-g="${gi}"` }], gruppeText(g));
+      const menue = zeilenMenue([{ text: "Gruppe entfernen", attrs: `data-act="gruppe-weg" data-g="${gi}"` }], gruppeText(g));
       return `<tr class="fp-gruppenzeile" data-g="${gi}"><td colspan="6"><div class="fp-gruppenkopf">
         ${gruppen.length > 1 ? '<span class="fp-griff" aria-hidden="true" title="Gruppe zum Verschieben ziehen">⠿</span>' : ""}
         <textarea class="fp-gruppenname" rows="1" maxlength="80" aria-label="Gruppe" placeholder="ohne Gruppe – Name eintragen">${esc(g.name)}</textarea>
@@ -5549,22 +5547,6 @@
         const g = { name: "", punkte: [neuerPunkt()] };
         gruppen.push(g);
         zeichnen({ g, teil: "name" });
-      },
-      "gruppe-hoch": (b) => {
-        einsammeln();
-        const gi = +b.dataset.g;
-        if (gi < 1) return;
-        const [g] = gruppen.splice(gi, 1);
-        gruppen.splice(gi - 1, 0, g);
-        zeichnen({ g, teil: "menue" });
-      },
-      "gruppe-runter": (b) => {
-        einsammeln();
-        const gi = +b.dataset.g;
-        if (gi >= gruppen.length - 1) return;
-        const [g] = gruppen.splice(gi, 1);
-        gruppen.splice(gi + 1, 0, g);
-        zeichnen({ g, teil: "menue" });
       },
       // Mit Punkten fragt es nach (mit Anzahl), eine leere Gruppe geht ohne Rückfrage.
       "gruppe-weg": async (b) => {
