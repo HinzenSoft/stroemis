@@ -561,6 +561,7 @@
   let bereitSeit = 0;                   // seit wann der gezeigte Schritt bereit ist
   let nachgeholt = 0;                   // wie oft lage() das Ziel dieses Schritts wieder ins Bild geholt hat
   let selbstGerollt = false;            // in diesem Schritt hast du selbst gerollt – dann holt lage() nichts zurück
+  let eingabeSeit = 0;                  // letzte Eingabe (Tippen, Klicken, Taste) außerhalb der Blase
 
   // Ein Bild weiter (requestAnimationFrame; im verdeckten Reiter nach spätestens 80 ms).
   const bild = () => new Promise((r) => { requestAnimationFrame(() => r()); setTimeout(r, 80); });
@@ -912,6 +913,8 @@
       selbstGerollt = true;
     };
     for (const art of ["wheel", "touchmove", "keydown"]) window.addEventListener(art, selbst, { capture: true, passive: true });
+    const eingabe = (e) => { if (!(e.target instanceof Element && e.target.closest(".fuehrung-blase"))) eingabeSeit = Date.now(); };
+    for (const art of ["pointerdown", "keydown"]) window.addEventListener(art, eingabe, { capture: true, passive: true });
     window.addEventListener("resize", lagePlanen);
     if (window.visualViewport) window.visualViewport.addEventListener("resize", lagePlanen);
     new MutationObserver(lagePlanen).observe(document.documentElement,
@@ -946,6 +949,7 @@
   async function schrittZeigen() {
     schrittVerlassen();
     const lauf = laufNr;
+    const beginn = Date.now();
     const a = ablaufDef();
     if (!a) { sackgasse("Diese Übung gibt es hier noch nicht."); return; }
     // Läuft ein Seitenwechsel (die Aktion des Schritts führt auf eine andere Seite), wertet die Führung hier nichts mehr aus
@@ -985,9 +989,13 @@
       zielBeschreiben(el, s);
     }
     lage();
-    // Fokus: ohne Aktion auf „Weiter“, mit Aktion auf das Ziel (wenn fokussierbar), sonst auf den Text.
+    // Fokus: ohne Aktion auf „Weiter“, mit Aktion auf das Ziel (wenn fokussierbar), sonst auf den Text – nicht, wenn du
+    // inzwischen selbst etwas tust (ein Menü geöffnet hast: der Fokus woanders schlösse es).
+    const ae = document.activeElement;
+    const selbstAmWerk = eingabeSeit > beginn || Boolean(ae && ae.closest && ae.closest("details.menue[open], .menue-schwebend"));
     const weiterKnopf = blase.querySelector(".fuehrung-weiter");
-    if (weiterKnopf) weiterKnopf.focus({ preventScroll: true });
+    if (selbstAmWerk) { /* Fokus bleibt */ }
+    else if (weiterKnopf) weiterKnopf.focus({ preventScroll: true });
     else if (el && el.matches("a[href], button, input, select, textarea, summary, [tabindex], [contenteditable]") && !el.disabled) el.focus({ preventScroll: true });
     else blase.querySelector(".fuehrung-text").focus({ preventScroll: true });
     fuehrung.bereit = true;

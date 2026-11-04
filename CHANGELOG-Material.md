@@ -11823,7 +11823,8 @@ Bericht `planung/tutorial/bericht_robust.md`; nur `einfuehrung.js`, `app.css`/`m
 - Seitenwechsel auf Dateien (`/api/`, `/media/`, Endung) hält die Schicht über die Navigation API an: Übungsdatei oder
   „In der Übung gibt es diese Datei nicht.“ (ersetzt den Klick-Wächter für den Export der Strömipedia).
 - Ein geöffnetes Menü bleibt frei: Die Blase weicht aus (unter, über, neben das Menü) oder liegt unter einem schwebenden
-  Menü; der Rahmen dunkelt es nicht ab.
+  Menü; der Rahmen dunkelt es nicht ab. Handelst du, während ein Schritt noch vorbereitet wird (Menü geöffnet), nimmt die
+  Führung dir den Fokus nicht weg (er schlösse das Menü). Über dem Ziel steht die Blase nur unterhalb der Leisten oben.
 - Klebende Leisten unten: allgemeine Regel in `app.css` (Abschnitt „Einführung“): unter `html.fuehrung-leiste`
   `bottom: var(--fuehrung-hoehe, 0px)` bzw. abgezogene Höhe; Materialablage (Abschlussleiste, jetzt auch die
   Mehrfachauswahl, `scroll-padding` mit beiden Leisten) und Ankerplätze (Karte, Großansicht) folgen ihr.
