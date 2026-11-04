@@ -335,7 +335,7 @@
       if (a === "child") return neueSeite(page.id);
       if (a === "fav") return toggleFavorite(page.id, !page.favorite);
       if (a === "icon") return iconDialog(page.id, page.icon || "");
-      if (a === "export") { window.location.href = `/api/wiki/pages/${page.id}/export?stand=${Date.now()}`; return; }
+      if (a === "export") { window.location.href = S.ziel(`/api/wiki/pages/${page.id}/export?stand=${Date.now()}`); return; }
       if (a === "dup") {
         try { const r2 = await api(`/api/wiki/pages/${page.id}/duplicate`, { method: "POST", body: {} });
           toast("Seite dupliziert"); await loadTree(); navigate(r2.page.slug); }
@@ -1232,8 +1232,8 @@
         } catch (err) { toast(err.message, true); }
         return;
       }
-      if (a === "export") { window.location.href = `/api/wiki/pages/${p.id}/export?stand=${Date.now()}`; return; }
-      if (a === "exportzip") { window.location.href = `/api/wiki/pages/${p.id}/export?children=1&stand=${Date.now()}`; return; }
+      if (a === "export") { window.location.href = S.ziel(`/api/wiki/pages/${p.id}/export?stand=${Date.now()}`); return; }
+      if (a === "exportzip") { window.location.href = S.ziel(`/api/wiki/pages/${p.id}/export?children=1&stand=${Date.now()}`); return; }
       if (a === "print") { window.print(); return; }
       if (a === "del") return trashPage(p);
       try {
@@ -3835,7 +3835,7 @@
           const slug = (b.lines[1] || "").trim().split("#")[0];
           hideCtx();
           // Neuer Tab: Im Editor stehen ungespeicherte Änderungen, ein Seitenwechsel verlöre sie.
-          if (slug) window.open(`/stroemipedia/${encodeURIComponent(slug)}`, "_blank", "noopener");
+          if (slug) window.open(S.ziel(`/stroemipedia/${encodeURIComponent(slug)}`), "_blank", "noopener");
         };
         const dup = box.querySelector("[data-act=dup]");
         if (dup) dup.onclick = () => rewriteBlock(index, b.lines.join("\n") + "\n\n" + b.lines.join("\n"));
@@ -3998,7 +3998,7 @@
           hideCtx();
           linkDialog(cur, ({ url, text }) => rewrite(() => `[${text}](${url})`));
         };
-        box.querySelector("[data-act=open]").onclick = () => { window.open(href, "_blank", "noopener"); hideCtx(); };
+        box.querySelector("[data-act=open]").onclick = () => { window.open(S.ziel(href), "_blank", "noopener"); hideCtx(); };
         box.querySelector("[data-act=copy]").onclick = async () => {
           try { await navigator.clipboard.writeText(new URL(href, location.origin).href); toast("Adresse kopiert"); }
           catch (e) { toast("Kopieren war nicht möglich.", true); }
@@ -4276,7 +4276,7 @@
         box.querySelector("[data-act=crop]").onclick = () => cropStart(img);
         box.querySelector("[data-act=dup]").onclick = () => rewriteImage(img, (o) => imgMd(o.alt, o.url, o.width) + "\n\n" + imgMd(o.alt, o.url, o.width));
         box.querySelector("[data-act=replace]").onclick = () => pickImage((url) => rewriteImage(img, (o) => imgMd(o.alt, url, o.width)));
-        box.querySelector("[data-act=download]").onclick = () => window.open(img.getAttribute("src").replace(/#w=.*$/, ""), "_blank", "noopener");
+        box.querySelector("[data-act=download]").onclick = () => window.open(S.ziel(img.getAttribute("src").replace(/#w=.*$/, "")), "_blank", "noopener");
         box.querySelector("[data-act=del]").onclick = () => rewriteImage(img, () => null);
       }, "Bild");
       // Griff zum Skalieren am rechten Rand
@@ -4379,7 +4379,7 @@
           if (kind !== "embed") return toast("Das ist keine HTML-Datei.", true);
           rewriteImage(fr, (o) => bau(Object.assign({}, o, { url })));
         });
-        box.querySelector("[data-act=open]").onclick = () => { window.open(src.replace(/#.*$/, ""), "_blank", "noopener"); hideCtx(); };
+        box.querySelector("[data-act=open]").onclick = () => { window.open(S.ziel(src.replace(/#.*$/, "")), "_blank", "noopener"); hideCtx(); };
         box.querySelector("[data-act=dup]").onclick = () => rewriteImage(fr, (o) => bau(o) + "\n\n" + bau(o));
         box.querySelector("[data-act=del]").onclick = () => rewriteImage(fr, () => null);
       }, "HTML-Baustein");

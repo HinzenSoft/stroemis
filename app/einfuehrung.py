@@ -65,12 +65,12 @@ TEILE = {
          "start": "/materialablage", "ablaeufe": ("Katalog und Prüfformular",)},
     ),
     "wiki": (
-        {"teil": "grund", "titel": "Grundteil", "minuten": 5, "stufe": auth.MITGLIED, "start": "/stroemipedia",
-         "ablaeufe": ("Lesen",)},
-        {"teil": "redakteur", "titel": "Redakteur", "minuten": 3, "stufe": auth.REDAKTEUR, "start": "/stroemipedia",
-         "ablaeufe": ("Seite anlegen",)},
-        {"teil": "verwaltung", "titel": "Verwaltung", "minuten": 2, "stufe": auth.VERWALTUNG, "start": "/stroemipedia",
-         "ablaeufe": ("Für alle Angemeldeten freigeben",)},
+        {"teil": "grund", "titel": "Grundteil", "minuten": 5, "stufe": auth.MITGLIED, "start": "/stroemipedia/uebung-start",
+         "ablaeufe": ("Lesen", "Suchen", "Kommentieren", "Bearbeiten")},
+        {"teil": "redakteur", "titel": "Redakteur", "minuten": 3, "stufe": auth.REDAKTEUR,
+         "start": "/stroemipedia/uebung-start", "ablaeufe": ("Seite anlegen", "Bearbeiten erlauben", "Verlauf")},
+        {"teil": "verwaltung", "titel": "Verwaltung", "minuten": 2, "stufe": auth.VERWALTUNG,
+         "start": "/stroemipedia/uebung-seite-lesen", "ablaeufe": ("Für alle Angemeldeten freigeben", "Papierkorb")},
     ),
     "karte": (
         {"teil": "grund", "titel": "Grundteil", "minuten": 3, "stufe": auth.MITGLIED, "start": "/ankerplaetze",
