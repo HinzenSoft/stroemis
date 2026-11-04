@@ -805,9 +805,11 @@
       if (top + h > vh - 8) top = anker.top - 12 - h;
       if (top < 8) top = Math.max(8, vh - h - 8);
     } else if (r) {
+      // Darüber nur unterhalb der Leisten oben (Kopfleiste, Seitenkopf) – die Blase verdeckt sie nicht.
+      const obenFrei = freieFlaeche(zielEl).oben;
       top = r.bottom + 12;                                   // unter dem Ziel …
       if (top + h > vh - 8) top = r.top - 12 - h;            // … sonst darüber …
-      if (top < 8) top = Math.max(8, vh - h - 8);            // … sonst unten im Fenster
+      if (top < obenFrei + 8) top = Math.max(8, vh - h - 8); // … sonst unten im Fenster
       left = Math.min(Math.max(8, r.left), vw - w - 8);
     }
     left = Math.max(8, left);
