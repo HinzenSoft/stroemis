@@ -17,6 +17,7 @@
    Schnittstelle für die Übungsdateien:
      S.einfuehrung.modul("material", {
        bestand: () => ({ … }),          Übungsbestand (frisch je Ablauf), nur Platzhalter „Übung“, Kennungen ab 900000001
+                                         (die Materialablage füllt ihre Produkte aus STROEMIS.einfuehrung.katalog)
        antworten: [[methode, muster, (treffer, body, z, url) => antwort], …]
                                          methode "GET" … oder "*"; muster RegExp (auf den Pfad) oder genauer Pfad;
                                          antwort: Objekt (JSON 200), {status, error} (Fehler), {datei: "/static/…"}
