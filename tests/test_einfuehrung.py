@@ -551,29 +551,36 @@ def test_profil():
         t = aufbau(tmp)
         k = konten(t.app)
         html = t.k["pruefer"].get("/profil").get_data(as_text=True)
-        teil = html[html.index('id="einfuehrungen"'):html.index("Passwort ändern")]
+        anfang = html.index('id="einfuehrungen"')
+        teil = html[anfang:html.index("</section>", anfang)]
         assert "<h2 id=\"einf-titel\">Einführungen</h2>" in teil
-        assert "Kurze Übungen an Übungsdaten – dein echter Bestand bleibt unverändert." in teil
-        assert teil.count('class="einf-zeile"') == 2 and '<h3 class="einf-modul">Materialablage</h3>' in teil
-        assert "Grundteil · etwa 5 Min." in teil and "Prüfer · etwa 4 Min." in teil
-        assert teil.count("noch nicht begonnen") == 2 and teil.count(">Starten</a>") == 2
-        assert 'href="/materialablage/artikel/900000012?uebung=pruefer"' in teil and 'class="btn secondary small"' in teil
+        assert "Kurze Übungen an Übungsdaten (je 4–5 Min.) – dein echter Bestand bleibt unverändert." in teil
+        # Kompakt (Wunsch vom 04.11.2026): je Modul eine Zeile, die Teile als kleine Knöpfe; Dauer, Stand und Aktion im
+        # title und aria-label, kein Stand-Text, solange nichts unterbrochen ist.
+        assert teil.count('class="einf-modulzeile"') == 1 and '<h3 class="einf-modul">Materialablage</h3>' in teil
+        knoepfe = re.findall(r'<a class="btn secondary small einf-teil" [^>]*>([^<]+)</a>', teil)
+        assert knoepfe == ["Grundteil", "Prüfer"], knoepfe
+        assert 'aria-label="Materialablage, Grundteil, etwa 5 Min., noch nicht begonnen: Starten"' in teil
+        assert 'title="Starten · etwa 4 Min. · noch nicht begonnen"' in teil and 'class="einf-stand"' not in teil
+        assert 'href="/materialablage/artikel/900000012?uebung=pruefer"' in teil and 'data-zustand="offen"' in teil
         assert put(t.k["pruefer"], "material", "grund", zustand="erledigt").status_code == 200
         assert put(t.k["pruefer"], "material", "pruefer", zustand="unterbrochen", ablauf=0).status_code == 200
         html = t.k["pruefer"].get("/profil").get_data(as_text=True)
-        assert re.search(r"erledigt am \d\d\.\d\d\.\d{4}", html) and ">Erneut ansehen</a>" in html
-        assert "unterbrochen bei „Prüfung durchführen“" in html and ">Fortsetzen</a>" in html
-        assert 'aria-label="Materialablage, Prüfer: Fortsetzen"' in html
+        assert re.search(r'aria-label="Materialablage, Grundteil, etwa 5 Min\., erledigt am \d\d\.\d\d\.\d{4}: Erneut ansehen"', html)
+        assert 'Grundteil<span class="einf-mark" aria-hidden="true">✓</span></a>' in html
+        assert 'Prüfer<span class="einf-mark" aria-hidden="true">· fortsetzen</span></a>' in html
+        assert '<p class="einf-stand">Prüfer: unterbrochen bei „Prüfung durchführen“</p>' in html
+        assert 'aria-label="Materialablage, Prüfer, etwa 4 Min., unterbrochen bei „Prüfung durchführen“: Fortsetzen"' in html
         # „Nicht jetzt“ (abgelehnt) heißt im Profil „noch nicht begonnen“ mit „Starten“.
         assert put(t.mitglied, "material", "grund", zustand="abgelehnt").status_code == 200
         html = t.mitglied.get("/profil").get_data(as_text=True)
-        assert "noch nicht begonnen" in html and ">Starten</a>" in html
-        # Mehrere Module, je mit Zwischenzeile; Reihenfolge Materialablage, Strömipedia, Ankerplätze, Riegenkarten.
+        assert "noch nicht begonnen: Starten" in html and 'data-zustand="abgelehnt"' in html
+        # Mehrere Module, je eine Zeile; Reihenfolge Materialablage, Strömipedia, Ankerplätze, Riegenkarten.
         sql(t.app, "UPDATE users SET recht_wiki = 3, recht_karte = 1, recht_pruefungen = 2 WHERE id = ?", (t.mitglied_id,))
         html = t.mitglied.get("/profil").get_data(as_text=True)
         module = re.findall(r'<h3 class="einf-modul">([^<]+)</h3>', html)
         assert module == ["Materialablage", "Strömipedia", "Ankerplätze", "Riegenkarten"], module
-        assert html.index('id="einfuehrungen"') < html.index("<h2>Passwort ändern</h2>")
+        assert html.index("<h2>Passwort ändern</h2>") < html.index('id="einfuehrungen"') < html.index('id="app-installieren"')
         # Ohne Modul mit Übung: kein Abschnitt (Lesemodus, Leitstelle allein, kein Zugang zur Materialablage).
         for c in (k["lesemodus"][0], t.person):
             assert 'id="einfuehrungen"' not in c.get("/profil").get_data(as_text=True)
@@ -660,12 +667,12 @@ def test_statisch():
     for token in ("var(--wasser)", "var(--radius-gross)", "var(--schatten-dialog)", "var(--schatten-leiste)",
                   "var(--sicher-unten)", "var(--abdunkeln-leicht)", "var(--fuehrung-hoehe, 0px)"):
         assert token in teil, token
-    # Vorlagen: Skripte nach common.js und vor den Skripten der Seite, Titelvorsatz, Profilabschnitt vor „Passwort“.
+    # Vorlagen: Skripte nach common.js und vor den Skripten der Seite, Titelvorsatz, Profilabschnitt nach „Passwort“.
     base = lies("app/templates/base.html")
     assert base.index("js/common.js") < base.index("js/einfuehrung.js") < base.index("{% block scripts %}")
     assert "{% if uebung_teil %}Übung · {% endif %}" in base and "einfuehrung: {{ einfuehrung | tojson }}" in base
     profil = lies("app/templates/profil.html")
-    assert profil.index('id="einfuehrungen"') < profil.index("<h2>Passwort ändern</h2>")
+    assert profil.index("<h2>Passwort ändern</h2>") < profil.index('id="einfuehrungen"')
     # Jede Übungsdatei registriert genau die Teile aus TEILE, mit denselben Abläufen und derselben Startadresse.
     for modul, teile in einfuehrung.TEILE.items():
         gefunden = _uebungsdatei_teile(modul)
