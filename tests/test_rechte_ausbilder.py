@@ -284,7 +284,7 @@ def test_migration_34():
         assert zeilen(c) == [(konten["Leo Leitung"], "Leo Leitung", "", 1)]
         k = sqlite3.connect(pfad)
         assert {r[0] for r in k.execute("SELECT beschreibung FROM pruef_lehrgaenge")} == {"Treffpunkt am Wehr"}
-        assert k.execute("SELECT wert FROM mat_meta WHERE schluessel = 'schema_version'").fetchone()[0] == "34"
+        assert k.execute("SELECT wert FROM mat_meta WHERE schluessel = 'schema_version'").fetchone()[0] == str(models.SCHEMA_VERSION)
         k.close()
         assert protokoll.zeilen == [
             # Je Verknüpfung eine Zeile (Lehrgang, Freitext → Konto; Datenschutz-Hinweis der zweiten Durchsicht).

@@ -276,6 +276,14 @@ Feldnamen folgen dem Konzept vom 16.10.2026 (englisch, wie dort festgelegt). Abw
     Kein Journal (die Riegenkarten führen keines). Einmal je Stand über den Versionsvermerk; ein zweiter Lauf fände
     ohnehin keinen Freitext mehr. Rückweg: Ein älterer Stand liest die verknüpften Zeilen wie immer; entfernte
     Freitext-Ausbilder gibt es nur in der Sicherung vor dem Deploy.
+  - Schritt 35 (Prüfformular eines anderen Produkts übernehmen, Wunsch vom 04.11.2026): mat_product.formular_von – das
+    Produkt, dessen aktives spezifisches Formular für dieses gilt (katalog.formular_fuer_produkt), mit jeder neuen Version
+    dort. ON DELETE SET NULL nur als Netz: produkt_loeschen löst die Verweise vorher selbst (mit Journal). Trigger
+    (TRIGGER_35) gegen Ketten (die Quelle verweist selbst, oder auf das Produkt verweisen schon andere), Verweis auf sich
+    selbst und DEMO-Mischung (Quelle und Ziel mit verschiedenem demo) – beim Einfügen und beim Ändern von formular_von
+    oder demo. Rein additiv: Die Spalte kommt leer dazu, keine Zeile ändert sich. Wiederholbar (Spalte nur, wenn sie
+    fehlt; Trigger entfernt und neu; IF NOT EXISTS). Rückweg: Ein älterer Stand übergeht Spalte und Trigger – seine
+    Produkte mit Verweis werden dort wieder nach dem eigenen oder generischen Formular geprüft.
 """
 import json
 import logging
@@ -284,7 +292,7 @@ import sqlite3
 import unicodedata
 from datetime import datetime, timezone
 
-SCHEMA_VERSION = 34
+SCHEMA_VERSION = 35
 
 # --- Wertelisten -------------------------------------------------------------------------------
 # Was die Datenbank per CHECK erzwingt, steht hier ein zweites Mal – mit den Wörtern, die die
@@ -2945,6 +2953,41 @@ def _schritt_34(conn):
 _NACH_DEM_FESTSCHREIBEN = []
 
 
+# --- Schritt 35: Prüfformular eines anderen Produkts übernehmen (Wunsch vom 04.11.2026) ---------------------------------
+FORMULAR_VON_35 = "formular_von INTEGER REFERENCES mat_product(id) ON DELETE SET NULL"
+FORMULAR_KETTE = ("'Ein Produkt übernimmt das Prüfformular nur von einem Produkt mit eigenem Formular – keine Ketten, "
+                  "nicht von sich selbst, DEMO nur von DEMO.'")
+# Verweist NEW auf eine Quelle, die selbst verweist, auf sich selbst, auf ein Produkt anderer DEMO-Art – oder verweisen
+# schon andere auf NEW (dann wäre NEW eine Quelle mit Verweis)? Beim Einfügen ist NEW.id noch leer: Dann trifft nur der
+# erste Teil.
+_VERWEIS_UNZULAESSIG = ("NEW.formular_von IS NOT NULL AND (NEW.formular_von = NEW.id "
+                        "OR NOT EXISTS (SELECT 1 FROM mat_product q WHERE q.id = NEW.formular_von "
+                        "AND q.formular_von IS NULL AND q.demo = NEW.demo) "
+                        "OR EXISTS (SELECT 1 FROM mat_product b WHERE b.formular_von = NEW.id))")
+TRIGGER_35 = [
+    _trigger("mat_product_formular_von_neu", "BEFORE INSERT ON mat_product", _VERWEIS_UNZULAESSIG, FORMULAR_KETTE),
+    _trigger("mat_product_formular_von", "BEFORE UPDATE OF formular_von, demo ON mat_product", _VERWEIS_UNZULAESSIG,
+             FORMULAR_KETTE),
+    # Die Quelle: Ihre DEMO-Art bleibt, solange andere auf sie verweisen.
+    _trigger("mat_product_formular_quelle", "BEFORE UPDATE OF demo ON mat_product",
+             "EXISTS (SELECT 1 FROM mat_product b WHERE b.formular_von = NEW.id AND b.id <> NEW.id AND b.demo <> NEW.demo)",
+             FORMULAR_KETTE),
+]
+SCHRITT_35_INDEX = ("CREATE INDEX IF NOT EXISTS idx_mat_product_formular_von ON mat_product(formular_von) "
+                    "WHERE formular_von IS NOT NULL")
+
+
+def _schritt_35(conn):
+    """Spalte mat_product.formular_von (nur, wenn sie fehlt), ihr Index und TRIGGER_35 (entfernt und neu). Rein additiv,
+    wiederholbar; siehe Kopf."""
+    if "formular_von" not in _spalten(conn, "mat_product"):
+        conn.execute(f"ALTER TABLE mat_product ADD COLUMN {FORMULAR_VON_35}")
+    conn.execute(SCHRITT_35_INDEX)
+    for sql in TRIGGER_35:
+        conn.execute("DROP TRIGGER IF EXISTS " + sql.split("CREATE TRIGGER IF NOT EXISTS ", 1)[1].split()[0])
+        conn.execute(sql)
+
+
 # Je Version die Schritte, die von der Vorversion dorthin führen: eine Liste von SQL-Befehlen (für sich
 # wiederholbar, IF NOT EXISTS) oder eine Funktion. Alle Schritte eines Starts laufen in EINER
 # Transaktion – bricht einer ab, bleibt die Datenbank, wie sie war, und der nächste Start versucht es neu.
@@ -2953,7 +2996,7 @@ SCHRITTE = {1: SCHRITT_1, 2: _schritt_2, 3: _schritt_3, 4: SCHRITT_4, 5: _schrit
             14: _schritt_14, 15: _schritt_15, 16: _schritt_16, 17: _schritt_17, 18: SCHRITT_18, 19: SCHRITT_19,
             20: _schritt_20, 21: _schritt_21, 22: _schritt_22, 23: _schritt_23, 24: _schritt_24,
             25: _schritt_25, 26: _schritt_26, 27: _schritt_27, 28: _schritt_28, 29: SCHRITT_29, 30: SCHRITT_30,
-            31: SCHRITT_31, 32: _schritt_32, 33: _schritt_33, 34: _schritt_34}
+            31: SCHRITT_31, 32: _schritt_32, 33: _schritt_33, 34: _schritt_34, 35: _schritt_35}
 
 
 def _meta(conn, schluessel, vorgabe=None):

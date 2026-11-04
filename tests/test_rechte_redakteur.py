@@ -545,7 +545,7 @@ def test_migration():
         from app import db
         from app.material import models
         with app.app_context():
-            assert db.query("SELECT wert FROM mat_meta WHERE schluessel = 'schema_version'", one=True)["wert"] == "34"
+            assert db.query("SELECT wert FROM mat_meta WHERE schluessel = 'schema_version'", one=True)["wert"] == str(models.SCHEMA_VERSION)
             assert db.query("SELECT recht_wiki, recht_verwaltung FROM users", one=True) == {"recht_wiki": 3,
                                                                                              "recht_verwaltung": 3}
         pfad = os.path.join(tmp, "stroemis.db")
@@ -589,7 +589,7 @@ def test_migration():
         assert stand() == vorher and vorher[1] == "32", stand()
         make_app(tmp)                                       # Neustart: Schritt 33 läuft
         nachher, version = stand()
-        assert version == "34"
+        assert version == str(models.SCHEMA_VERSION)
         assert nachher["admin@example.org"] == (3, 3, 3, 3, 3), nachher
         assert nachher["m@example.org"] == (1, 1, 1, 1, 0) and nachher["n@example.org"] == (0, 0, 0, 0, 0)
         assert nachher["v@example.org"] == (3, 3, 3, 3, 0) and nachher["g@example.org"] == (3, 1, 0, 3, 0), nachher

@@ -402,6 +402,8 @@
     bestandteil_nummern: "Seriennummern der Bestandteile",
     // Set-Protokolle im Prüfdurchgang (Schritt 27)
     set_protokolle: "Set-Protokolle",
+    // Prüfformular eines anderen Produkts übernehmen (Schritt 35)
+    formular_von: "Prüfformular von Produkt Nr.",
   };
   // Die Beschriftung eines Feldes in einem Journaleintrag – wie beschriftung.feld_name: „description“ ist am Produkt der
   // kurze Zusatz hinter dem Namen und heißt dort seit dem Wunsch vom 18.10.2026 „Bemerkung“; an Ordnern und in den
@@ -442,7 +444,9 @@
                    anzahl_verringert: "Anzahl in der Stückliste des Sets verringert – ein Stück zu entnehmen",
                    set_rueckbau: "Set aufgelöst – die Teile sind eigene Artikel (Schritt 26)",
                    // Schritt 25: Bestandteil-Liste eines Produkts und Seriennummern der Bestandteile am Artikel
-                   bestandteile: "Bestandteile geändert", bestandteil_nummern: "Seriennummern der Bestandteile geändert" };
+                   bestandteile: "Bestandteile geändert", bestandteil_nummern: "Seriennummern der Bestandteile geändert",
+                   // Schritt 35: Prüfformular eines anderen Produkts übernehmen – am übernehmenden Produkt
+                   formular_uebernommen: "Prüfformular übernommen", formular_geloest: "Übernahme des Prüfformulars gelöst" };
   const RECHT = { lesen: "lesen", pruefen: "prüfen", verwalten: "verwalten" };
   const ENTITAET = { item: "Artikel", product: "Produkt", document: "Dokument", form: "Formular", folder: "Ordner",
                      category: "Kategorie", user: "Konto", inspection: "Prüfung", round: "Durchgang", request: "Produktmeldung" };

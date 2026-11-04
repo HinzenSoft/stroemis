@@ -31,6 +31,16 @@ Format 2 (ZIP mit katalog.json und den Dateien; als reine JSON-Datei nur ohne Da
   Manifeste) ist ein Hinweis und wird übergangen. Auch in Format 1 gelesen.
   Seit dem Rückbau der Set-Funktion (Schritt 26, Wunsch vom 25.10.2026) ist „set“: true ein Fehler dieses Produkts
   (SET_ENTFALLEN – wie jeder Fehler wird dann nichts gespeichert); „set“: false wird übergangen.
+  Seit Schritt 35: „formular_von“ an einem Produkt – das Produkt, dessen aktives spezifisches Prüfformular es übernimmt,
+  angegeben wie das Ziel eines Formulars ({uid, hersteller, modell, artikelnummer}; _produkt_ziel). Aufgelöst nach den
+  Formularen der Datei (die Quelle bekommt dort vielleicht erst ihr Formular, _formularverweise); fehlt die Quelle oder
+  passt sie nicht (katalog.formular_uebernehmen), ist das ein Hinweis, kein Fehler – der Verweis bleibt dann, wie er
+  hier war. null löst einen Verweis (vor den Formularen, damit ein Formular der Datei für das Produkt aktiv werden kann),
+  ohne den Schlüssel bleibt er, wie er ist. Einzige Ausnahme von „deaktiviert wird nie etwas“: Hat das Produkt hier ein
+  eigenes aktives Formular, deaktiviert der Verweis es wie beim Übernehmen in der Oberfläche (eigenes_deaktivieren; so
+  steht es auch in der Quelle des Exports – dort war es beim Verknüpfen deaktiviert worden), die Änderungsliste sagt es.
+  Verweist das Produkt hier, wird ein Formular der Datei für das Produkt zwar angelegt, aber nicht aktiviert (Hinweis).
+  Auch in Format 1 gelesen.
 
 Dateien sind nicht Teil der Datenbanktransaktion. Ein Probelauf schreibt deshalb keine einzige. Der echte Lauf
 ermittelt erst in einem Probedurchgang, welche Dateien er braucht, legt nur diese ab – außerhalb der Schreibsperre,
@@ -219,6 +229,7 @@ class _Lauf:
         self.intervall_offen = {}             # geänderte Kategorie → (Fundstelle, Name), siehe _intervalle_pruefen
         self.listen = []                      # (Fundstelle, Name, Eintrag, Produkt) mit „bestandteile“, _bestandteillisten
         self.unveraendert = set()             # Produkte, die als „unveraendert“ zählen – bis _bestandteillisten etwas ändert
+        self.formularverweise = []            # (Fundstelle, Name, Angabe, Produkt) mit „formular_von“, _formularverweise
         self.bericht = _bericht()
 
     def notiz(self, zeile):
@@ -623,6 +634,8 @@ def _produkt(n, e, lauf):
             bericht["fehler"].append(f"{ort} ({name}): {exc}")
     if "bestandteile" in e:
         lauf.listen.append((ort, name, e, pid))
+    if "formular_von" in e:
+        lauf.formularverweise.append((ort, name, e["formular_von"], pid))
     return True
 
 
@@ -904,6 +917,12 @@ def _formulare(liste, lauf):
                 raise Abgelehnt("Ein Formular braucht mindestens einen Prüfpunkt.")
             titel = _name(e.get("titel"), "Titel", 160) if isinstance(e.get("titel"), str) else ""
             aktivieren = e.get("aktivieren", True) is not False
+            # Übernimmt das Produkt hier das Formular eines anderen (Schritt 35), gälte ein eigenes aktives nicht – der
+            # Import legt es an, aktiviert es aber nicht (katalog.formular_aktivieren wiese es ab).
+            if aktivieren and spalte == "product_id" and p["formular_von"]:
+                aktivieren = False
+                bericht["hinweise"].append(f"{ort}: {zielname} übernimmt hier das Prüfformular eines anderen Produkts – "
+                                           "das Formular aus der Datei wird nicht aktiviert.")
             neu = [{k: p[k] for k in _PUNKTFELDER} for p in punkte]
 
             # Ein leerer Titel in der Datei gibt keinen vor (das erste Formular legt die Oberfläche ohne Titel an):
@@ -939,6 +958,32 @@ def _formulare(liste, lauf):
         except Abgelehnt as exc:
             titel_roh = e.get("titel") if isinstance(e, dict) and isinstance(e.get("titel"), str) else ""
             bericht["fehler"].append(f"{ort}{f' ({titel_roh})' if titel_roh else ''}: {exc}")
+
+
+def _formularverweise(lauf, loesen):
+    """„formular_von“ der Produkte (Schritt 35, siehe Kopf): loesen=True – vor den Formularen – löst die Verweise mit
+    null, loesen=False – danach – setzt die übrigen. Was nicht geht, ist ein Hinweis."""
+    bericht = lauf.bericht
+    for ort, name, angabe, pid in lauf.formularverweise:
+        if (angabe is None) != loesen:
+            continue
+        if angabe is None:
+            if katalog.formular_uebernahme_loesen(pid):
+                lauf.notiz(f"Produkt „{name}“: Übernahme des Prüfformulars gelöst")
+            continue
+        try:
+            q = _produkt_ziel(angabe, lauf)
+        except Abgelehnt as exc:
+            bericht["hinweise"].append(f"{ort} ({name}): Prüfformular nicht übernommen – {exc}")
+            continue
+        try:
+            eigenes = db.query("SELECT version FROM mat_form WHERE product_id = ? AND active = 1", (pid,), one=True)
+            if katalog.formular_uebernehmen(pid, {"quelle": q["id"], "eigenes_deaktivieren": True}):
+                lauf.notiz(f"Produkt „{name}“: übernimmt das Prüfformular von „{katalog.produktname(q)}“"
+                           + (f" (eigenes Formular Version {eigenes['version']} deaktiviert)" if eigenes else ""))
+        except Abgelehnt as exc:
+            bericht["hinweise"].append(f"{ort} ({name}): Prüfformular von „{katalog.produktname(q)}“ nicht übernommen – "
+                                       f"{exc}")
 
 
 def _gekuerzt(t, n):
@@ -1233,7 +1278,9 @@ def _durchgang(daten, lauf, speichern):
                 _nachholen(lauf)
                 _bestandteillisten(lauf)
                 _intervalle_pruefen(lauf)
+                _formularverweise(lauf, loesen=True)
                 _formulare(daten.get("formulare") or [], lauf)
+                _formularverweise(lauf, loesen=False)
             except Abgelehnt as exc:
                 lauf.bericht["fehler"].append(str(exc))
             if not speichern(lauf):

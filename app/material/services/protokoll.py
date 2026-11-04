@@ -450,13 +450,19 @@ def _befunde(pid):
     return gruppen, fotos, maengel
 
 
-def _formular_text(p):
+def _formular_text(p, item):
+    """Das Formular der Prüfung. Gehört es zu einem anderen Produkt als dem des Artikels – übernommen (Schritt 35) –,
+    nennt das Protokoll dieses Produkt."""
     if not p["form_id"]:
         return ""
     f = db.query("SELECT title, category_id, product_id FROM mat_form WHERE id = ?", (p["form_id"],), one=True)
     if not f:
         return ""
     art = "spezifisch für das Produkt" if f["product_id"] else "generisch für die Kategorie"
+    if f["product_id"] and f["product_id"] != item["product_id"]:
+        q = db.query("SELECT manufacturer, model, description FROM mat_product WHERE id = ?", (f["product_id"],), one=True)
+        if q:
+            art = f"spezifisch für das Produkt „{katalog.produktname(q)}“"
     return f"„{f['title']}“, Version {p['form_version']} ({art})"
 
 
@@ -529,7 +535,7 @@ def _pruefprotokoll(p, pid, ts, png, login, ordner_id):
         "artikel": _artikel(item, produkt, ordner_id),
         "pruefung": {"art": PRUEFART_TEXT.get(p["kind"], p["kind"]), "datum": datum_text(p["inspected_on"]),
                      "pruefer": p["inspector_name"], "urkunde": p["inspector_certificate"], "login": login,
-                     "formular": _formular_text(p), "durchgang": durchgang["title"] if durchgang else "",
+                     "formular": _formular_text(p, item), "durchgang": durchgang["title"] if durchgang else "",
                      "grund": p["reason"] or "", "ergebnis": p["result"], "ergebnis_text": ERGEBNISSE.get(p["result"], ""),
                      # Die EN-365-Karte nennt immer die nächste Prüfung – ohne Fälligkeit steht da, warum.
                      "naechste": datum_text(p["next_due_on"]) or {

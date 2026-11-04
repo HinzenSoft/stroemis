@@ -613,6 +613,10 @@ def produkt_loeschen(pid):
             alt = dict(alt, bestandteile=bestandteile)
         dateien = [r["file_path"] for r in db.query(
             "SELECT file_path FROM mat_product_document WHERE product_id = ? AND file_path IS NOT NULL", (pid,))]
+        # Wer das Formular dieses Produkts übernimmt (Schritt 35), verliert den Verweis mit Journal – dort gilt danach
+        # das eigene oder generische Formular (der Löschdialog nennt die Produkte vorher).
+        for n in formular_nutzer(pid):
+            formular_uebernahme_loesen(n["id"], grund=f"„{produktname(alt)}“ gelöscht")
         for f in db.query("SELECT id FROM mat_form WHERE product_id = ?", (pid,)):
             journal.eintragen("form", f["id"], "geloescht", {"produkt": pid}, None)
         # Die Dokumente gehen mit dem Produkt (ON DELETE CASCADE) – ihr Journal bekommt das Ende vermerkt,
@@ -717,7 +721,10 @@ def produkt_json(p, voll=False):
         out["kategorie_dokumente"] = geerbte_dokumente(p["id"])
         f = formular_fuer_produkt(p["id"])
         out["formular"] = ({"id": f["id"], "version": f["version"], "title": f["title"], "quelle": f["quelle"],
-                            "punkte": f["punkte_anzahl"]} if f else None)
+                            "art": f["art"], "von": f.get("uebernommen_von"), "punkte": f["punkte_anzahl"]}
+                           if f else None)
+        # Übernommenes Formular (Schritt 35): woher und wer von hier übernimmt.
+        out.update(formular_uebernahme_json(p))
     return out
 
 
@@ -1129,6 +1136,13 @@ def formular_aktivieren(fid):
     f = formular(fid)
     if not punkte(fid):
         raise Abgelehnt("Ein Formular ohne Prüfpunkte lässt sich nicht aktivieren.")
+    # Entweder Verweis oder eigenes Formular (Schritt 35): Mit Verweis gälte ein eigenes aktives ohnehin nicht.
+    b = produkt(f["product_id"]) if f["product_id"] else None
+    if b and b["formular_von"]:
+        q = db.query("SELECT manufacturer, model, description FROM mat_product WHERE id = ?", (b["formular_von"],),
+                     one=True)
+        raise Abgelehnt(f"„{produktname(b)}“ übernimmt das Prüfformular von „{produktname(q) if q else '?'}“ – erst die "
+                        "Verknüpfung auf der Produktseite lösen.", 409)
     spalte, ziel = ("category_id", f["category_id"]) if f["category_id"] else ("product_id", f["product_id"])
     with db.transaction(sofort=True):
         for anderes in db.query(f"SELECT id FROM mat_form WHERE {spalte} = ? AND active = 1 AND id <> ?", (ziel, fid)):
@@ -1160,23 +1174,176 @@ def formular_loeschen(fid):
         journal.eintragen("form", fid, "geloescht", {"title": f["title"], "version": f["version"]}, None)
 
 
+def _aktives_spezifisches(pid):
+    return db.query("SELECT * FROM mat_form WHERE product_id = ? AND active = 1", (pid,), one=True)
+
+
 def formular_fuer_produkt(pid):
-    """Das Formular, nach dem ein Artikel dieses Produkts geprüft wird: das aktive spezifische des
-    Produkts, sonst das aktive generische der Kategorie – oder der nächsten Oberkategorie mit einem."""
+    """Das Formular, nach dem ein Artikel dieses Produkts geprüft wird – die eine Stelle für Prüfung, Produkt- und
+    Artikelseite, Übersichten und Export. Der Reihe nach: das aktive spezifische Formular des Produkts, dessen Formular
+    dieses übernimmt (formular_von, Schritt 35 – jede neue Version dort gilt sofort auch hier); sonst das eigene aktive
+    spezifische; sonst das aktive generische der Kategorie – oder der nächsten Oberkategorie mit einem. „art“ sagt, woher
+    es kommt (uebernommen, produkt, kategorie), „quelle“ dasselbe in Worten. Ist die Quelle weggefallen (Formular
+    deaktiviert), gilt still das Nächste – die Produktseite warnt (produkt_json, formular_von.aktiv)."""
     p = produkt(pid)
-    f = db.query("SELECT * FROM mat_form WHERE product_id = ? AND active = 1", (pid,), one=True)
-    if f:
-        f["quelle"] = "Produkt"
-    else:
+    f = None
+    if p.get("formular_von"):
+        q = db.query("SELECT id, manufacturer, model, description FROM mat_product WHERE id = ?", (p["formular_von"],),
+                     one=True)
+        f = _aktives_spezifisches(q["id"]) if q else None
+        if f:
+            f["art"], f["quelle"] = "uebernommen", f"übernommen von „{produktname(q)}“"
+            f["uebernommen_von"] = {"id": q["id"], "name": produktname(q)}
+    if not f:
+        f = _aktives_spezifisches(pid)
+        if f:
+            f["art"], f["quelle"] = "produkt", "Produkt"
+    if not f:
         for k in reversed(kategorie_pfad(p["category_id"])):
             f = db.query("SELECT * FROM mat_form WHERE category_id = ? AND active = 1", (k["id"],), one=True)
             if f:
-                f["quelle"] = f"Kategorie „{k['name']}“"
+                f["art"], f["quelle"] = "kategorie", f"Kategorie „{k['name']}“"
                 break
     if f:
         f["punkte_anzahl"] = db.query("SELECT COUNT(*) AS n FROM mat_checklist_item WHERE form_id = ?",
                                       (f["id"],), one=True)["n"]
     return f
+
+
+# --- Prüfformular eines anderen Produkts übernehmen (Schritt 35, Wunsch vom 04.11.2026) ---------------------------------
+# Produkt B verweist auf Produkt A (mat_product.formular_von): Für B gilt immer das aktive spezifische Formular von A, ohne
+# Kopie. Keine Ketten – die Quelle hat ein eigenes Formular und verweist selbst nicht, auf ein Produkt mit Verweis verweist
+# niemand –, nicht auf sich selbst, DEMO nur mit DEMO (die Trigger aus Schritt 35 halten das auch gegen SQL von Hand).
+# Entweder Verweis oder eigenes Formular: Mit Verweis lässt sich kein eigenes aktivieren (formular_aktivieren), beim
+# Übernehmen wird ein eigenes aktives deaktiviert, wenn man es so will (eigenes_deaktivieren). Laufende und
+# festgeschriebene Prüfungen behalten ihr Formular (form_id der Prüfung). Rechte wie beim spezifischen Formular (Route:
+# katalog_required); Journal am Produkt B.
+
+def _kurz(p):
+    """Ein Produkt für Listen und Links der Oberfläche (nameHtml/zusatzHtml in material.js)."""
+    return {"id": p["id"], "name": produktname(p), "manufacturer": p["manufacturer"], "model": p["model"],
+            "description": p["description"], "article_no": p.get("article_no", ""), "demo": bool(p.get("demo"))}
+
+
+def formular_nutzer(pid):
+    """Die Produkte, die das Formular dieses Produkts übernehmen – nach Namen."""
+    return db.query("SELECT id, manufacturer, model, description, article_no, demo FROM mat_product "
+                    "WHERE formular_von = ? ORDER BY manufacturer COLLATE NOCASE, model COLLATE NOCASE, id", (pid,))
+
+
+def formular_nutzer_json(pid):
+    return [_kurz(n) for n in formular_nutzer(pid)]
+
+
+def _hat_laengenpunkt(fid):
+    return bool(db.query("SELECT 1 FROM mat_checklist_item WHERE form_id = ? AND editor = 'laenge' LIMIT 1", (fid,),
+                         one=True))
+
+
+def _quelle_grund(b, q):
+    """Warum q nicht Quelle für b sein kann – oder "" (b und q: Zeilen aus mat_product)."""
+    if q["id"] == b["id"]:
+        return "Ein Produkt kann sein Formular nicht von sich selbst übernehmen."
+    if bool(q["demo"]) != bool(b["demo"]):
+        return "DEMO-Produkte übernehmen nur von DEMO-Produkten, echte nur von echten."
+    if q.get("formular_von"):
+        return f"„{produktname(q)}“ übernimmt selbst ein Formular – übernehmen lässt sich nur ein eigenes."
+    f = _aktives_spezifisches(q["id"])
+    if not f:
+        return f"„{produktname(q)}“ hat kein eigenes aktives Prüfformular."
+    if _hat_laengenpunkt(f["id"]) and not laenge_wirksam(b["category_id"]):
+        return ("Das Formular hat einen Prüfpunkt „Länge (m)“, die Artikel dieses Produkts haben aber keine Länge "
+                "(Kategorie).")
+    return ""
+
+
+def formular_quellen(pid, q="", seite=1, pro_seite=50):
+    """Die Produkte, deren Formular B (pid) übernehmen kann, für die Suche im Dialog – wie die Produktsuche
+    (search.produkte, nach Kategorie): nur Produkte mit eigenem aktivem spezifischem Formular, ohne eigenen Verweis,
+    gleicher DEMO-Art, nicht B selbst. Wer trotzdem nicht passt (Länge), kommt mit „waehlbar“: false und dem Grund; eine
+    andere Kategorie als die von B ist erlaubt („andere_kategorie“, der Dialog weist darauf hin). Liefert (Liste, gesamt,
+    seite, pro_seite)."""
+    from . import search
+    b = produkt(pid)
+    zusatz = ("p.id <> ? AND p.formular_von IS NULL AND p.demo = ? "
+              "AND EXISTS (SELECT 1 FROM mat_form f WHERE f.product_id = p.id AND f.active = 1)", (pid, b["demo"]))
+    rows, gesamt = search.produkte(q, None, seite, pro_seite, "kategorie", zusatz=zusatz)
+    seite, pro_seite = search.seiten(seite, pro_seite)
+    out = []
+    for r in rows:
+        j = produkt_json(r)
+        j["grund"] = _quelle_grund(b, r)
+        j["waehlbar"] = not j["grund"]
+        j["andere_kategorie"] = r["category_id"] != b["category_id"]
+        out.append(j)
+    return out, gesamt, seite, pro_seite
+
+
+def formular_uebernehmen(pid, d):
+    """B (pid) übernimmt das Formular von d["quelle"]. Hat B ein eigenes aktives Formular, nur mit
+    d["eigenes_deaktivieren"] – es wird dann in derselben Transaktion deaktiviert (Journal am Formular). Ist die Quelle
+    schon gesetzt, ändert sich nichts. Liefert, ob sich etwas geändert hat."""
+    qid = kennung(d.get("quelle"), "Quelle")
+    deaktivieren = wahr(d, "eigenes_deaktivieren", "Eigenes Formular deaktivieren")
+    with db.transaction(sofort=True):
+        b = produkt(pid)
+        q = db.query("SELECT * FROM mat_product WHERE id = ?", (qid,), one=True)
+        if not q:
+            raise Abgelehnt("Das Produkt, dessen Formular übernommen werden soll, gibt es nicht.", 404)
+        if b["formular_von"] == q["id"]:
+            return False
+        grund = _quelle_grund(b, q)
+        if grund:
+            raise Abgelehnt(grund, 409)
+        nutzer = formular_nutzer(pid)
+        if nutzer:
+            raise Abgelehnt(f"Das Formular von „{produktname(b)}“ übernehmen schon "
+                            f"{', '.join('„' + produktname(n) + '“' for n in nutzer)} – ein Produkt, von dem andere "
+                            "übernehmen, übernimmt selbst keins.", 409)
+        eigenes = _aktives_spezifisches(pid)
+        if eigenes and not deaktivieren:
+            raise Abgelehnt(f"„{produktname(b)}“ hat ein eigenes aktives Prüfformular (Version {eigenes['version']}) – "
+                            "es muss beim Übernehmen deaktiviert werden.", 409)
+        if eigenes:
+            db.execute("UPDATE mat_form SET active = 0, updated_at = ? WHERE id = ?", (db.now(), eigenes["id"]))
+            journal.eintragen("form", eigenes["id"], "deaktiviert", {"active": 1},
+                              {"active": 0, "grund": f"Formular von „{produktname(q)}“ übernommen"})
+        alt = (db.query("SELECT id, manufacturer, model, description FROM mat_product WHERE id = ?",
+                        (b["formular_von"],), one=True) if b["formular_von"] else None)
+        db.execute("UPDATE mat_product SET formular_von = ?, updated_at = ? WHERE id = ?", (q["id"], db.now(), pid))
+        journal.eintragen("product", pid, "formular_uebernommen",
+                          {"formular_von": alt["id"], "produkt": produktname(alt)} if alt else None,
+                          {"formular_von": q["id"], "produkt": produktname(q)})
+    return True
+
+
+def formular_uebernahme_loesen(pid, grund=None):
+    """Den Verweis von B (pid) lösen – danach gilt wieder das eigene aktive oder das generische Formular. grund steht im
+    Journal (etwa „Produkt gelöscht“). Liefert, ob es einen Verweis gab."""
+    with db.transaction(sofort=True):
+        b = produkt(pid)
+        if not b["formular_von"]:
+            return False
+        q = db.query("SELECT id, manufacturer, model, description FROM mat_product WHERE id = ?", (b["formular_von"],),
+                     one=True)
+        db.execute("UPDATE mat_product SET formular_von = NULL, updated_at = ? WHERE id = ?", (db.now(), pid))
+        journal.eintragen("product", pid, "formular_geloest",
+                          {"formular_von": b["formular_von"], "produkt": produktname(q) if q else "?"},
+                          {"grund": grund} if grund else None)
+    return True
+
+
+def formular_uebernahme_json(p):
+    """Für die Produktseite: woher B sein Formular übernimmt (formular_von, mit „aktiv“: hat die Quelle gerade ein
+    aktives spezifisches Formular) und wer das Formular dieses Produkts übernimmt (formular_genutzt_von)."""
+    von = None
+    if p.get("formular_von"):
+        q = db.query("SELECT * FROM mat_product WHERE id = ?", (p["formular_von"],), one=True)
+        if q:
+            f = _aktives_spezifisches(q["id"])
+            von = dict(_kurz(q), aktiv=bool(f),
+                       formular={"id": f["id"], "version": f["version"], "title": f["title"]} if f else None)
+    return {"formular_von": von, "formular_genutzt_von": formular_nutzer_json(p["id"])}
 
 
 def formular_json(f, mit_punkten=True):

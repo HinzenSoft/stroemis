@@ -88,6 +88,8 @@ FELD = {
     "bestandteil_nummern": "Seriennummern der Bestandteile",
     # Set-Protokolle im Prüfdurchgang (Schritt 27): am Durchgang beim Festschreiben
     "set_protokolle": "Set-Protokolle",
+    # Prüfformular eines anderen Produkts übernehmen (Schritt 35)
+    "formular_von": "Prüfformular von Produkt Nr.",
 }
 AKTION = {
     "angelegt": "angelegt", "geaendert": "geändert", "geloescht": "gelöscht", "verschoben": "verschoben",
@@ -131,6 +133,8 @@ AKTION = {
     "bestandteile": "Bestandteile geändert", "bestandteil_nummern": "Seriennummern der Bestandteile geändert",
     # Schritt 26: Rückbau der Set-Funktion (Migration) – am früheren Set-Artikel
     "set_rueckbau": "Set aufgelöst – die Teile sind eigene Artikel (Schritt 26)",
+    # Schritt 35: Prüfformular eines anderen Produkts übernehmen – am übernehmenden Produkt
+    "formular_uebernommen": "Prüfformular übernommen", "formular_geloest": "Übernahme des Prüfformulars gelöst",
 }
 ENTITAET = {"item": "Artikel", "product": "Produkt", "document": "Dokument", "form": "Formular", "folder": "Ordner",
             "category": "Kategorie", "user": "Konto", "inspection": "Prüfung", "round": "Durchgang",
