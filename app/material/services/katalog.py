@@ -1069,8 +1069,8 @@ def punkte(fid):
 
 
 def punkt_json(p):
-    return {"id": p["id"], "gruppe": p["group_name"], "position": p["position"], "text": p["label"],
-            "art": p["editor"], "pflicht": bool(p["mandatory"]), "soll": p["expected_value"]}
+    return {"id": p["id"], "gruppe": p["group_name"], "untergruppe": p["untergruppe"], "position": p["position"],
+            "text": p["label"], "art": p["editor"], "pflicht": bool(p["mandatory"]), "soll": p["expected_value"]}
 
 
 def punkt_text(roh, n):
@@ -1086,10 +1086,36 @@ def punkt_text(roh, n):
     return text({"text": roh}, "text", f"Text von Prüfpunkt {n}", PUNKT_TEXT_MAX, pflicht=True, einzeilig=False)
 
 
+def punkte_ordnen(liste):
+    """Die Reihenfolge-Regel der Untergruppen (Schritt 39, Entscheidung 2 vom 04.11.2026): In jeder Gruppe – einem Block
+    aufeinanderfolgender Punkte mit gleicher Gruppe; zwei getrennte Blöcke mit gleichem Namen bleiben zwei, wie im
+    Editor – stehen erst die Punkte ohne Untergruppe, danach die Untergruppen, jede als zusammenhängender Block in der
+    Reihenfolge ihres ersten Punkts. Innerhalb davon bleibt die Reihenfolge der Anfrage (stabil); ein Formular ohne
+    Untergruppen kommt unverändert heraus. Die Positionen werden danach neu gezählt."""
+    bloecke = []
+    for p in liste:
+        if bloecke and bloecke[-1][0] == p["group_name"]:
+            bloecke[-1][1].append(p)
+        else:
+            bloecke.append((p["group_name"], [p]))
+    out = []
+    for _gruppe, punkte_ in bloecke:
+        teile = {"": []}
+        for p in punkte_:
+            teile.setdefault(p["untergruppe"], []).append(p)
+        for teil in teile.values():
+            out.extend(teil)
+    for n, p in enumerate(out, 1):
+        p["position"] = n
+    return out
+
+
 def punkte_pruefen(roh):
     """Prüfpunkte eines Formulars aus der Anfrage. Ja/Nein-Punkte brauchen einen Sollwert („ja“ oder
     „nein“ – bei Schadensfragen „nein“). Ein Feld „kritisch“ (Formular-Editor und Katalogdateien bis 03.11.2026) wird
-    ohne Prüfung übergangen: Die Funktion ist entfallen, die Spalte is_critical seit Schritt 37 auch."""
+    ohne Prüfung übergangen: Die Funktion ist entfallen, die Spalte is_critical seit Schritt 37 auch. „untergruppe“
+    (Schritt 39) wie „gruppe“ (eine Zeile, höchstens 80 Zeichen; fehlt sie – ältere Dateien –, ist sie leer); die
+    Reihenfolge ordnet punkte_ordnen."""
     if not isinstance(roh, list):
         raise Abgelehnt("„punkte“ muss eine Liste sein.")
     if len(roh) > 200:
@@ -1110,24 +1136,28 @@ def punkte_pruefen(roh):
         elif art in ("photo", "signature", "date", "laenge"):
             soll = ""                   # bei „Länge“ ist das Soll die Artikellänge zum Prüfzeitpunkt (pruefung.starten)
         out.append({"group_name": text(p, "gruppe", f"Gruppe von Prüfpunkt {n}", 80),
+                    "untergruppe": text(p, "untergruppe", f"Untergruppe von Prüfpunkt {n}", 80),
                     "label": punkt_text(p.get("text"), n),
                     "editor": art, "mandatory": int(wahr(p, "pflicht", f"Pflicht (Prüfpunkt {n})") if "pflicht" in p else 1),
                     "expected_value": soll, "position": n})
-    return out
+    return punkte_ordnen(out)
 
 
 def _punkte_schreiben(fid, liste):
     db.execute("DELETE FROM mat_checklist_item WHERE form_id = ?", (fid,))
     for p in liste:
-        db.execute("INSERT INTO mat_checklist_item (form_id, group_name, position, label, editor, mandatory, "
-                   "expected_value) VALUES (?,?,?,?,?,?,?)",
-                   (fid, p["group_name"], p["position"], p["label"], p["editor"], p["mandatory"],
+        db.execute("INSERT INTO mat_checklist_item (form_id, group_name, untergruppe, position, label, editor, "
+                   "mandatory, expected_value) VALUES (?,?,?,?,?,?,?,?)",
+                   (fid, p["group_name"], p["untergruppe"], p["position"], p["label"], p["editor"], p["mandatory"],
                     p["expected_value"]))
 
 
 def _punkte_kurz(liste):
-    """Für das Journal: die Prüfpunkte als lesbare Zeilen."""
-    return [f"{p['group_name'] + ': ' if p['group_name'] else ''}{p['label']} [{p['editor']}"
+    """Für das Journal: die Prüfpunkte als lesbare Zeilen („Gruppe › Untergruppe: Text [Art …]“)."""
+    def ort(p):
+        teile = [x for x in (p["group_name"], p["untergruppe"]) if x]
+        return " › ".join(teile) + ": " if teile else ""
+    return [f"{ort(p)}{p['label']} [{p['editor']}"
             f"{', Soll ' + p['expected_value'] if p['expected_value'] else ''}"
             f"{'' if p['mandatory'] else ', optional'}]" for p in liste]
 

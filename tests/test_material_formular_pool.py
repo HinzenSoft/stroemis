@@ -493,13 +493,16 @@ def test_migration_37_38():
         assert vorher[ids["p7"]] is None and vorher[ids["p8"]] == ids["g3"]
         formen_vorher = _formulare(conn)
         punkte_vorher = conn.execute("SELECT * FROM mat_checklist_item ORDER BY id").fetchall()
+        # Die Spalten von Stand 37 – Schritt 39 (Untergruppe) kommt beim Start gleich mit dazu.
+        punkt_spalten = ", ".join(r[1] for r in conn.execute("PRAGMA table_info(mat_checklist_item)"))
         pruefung_vorher = conn.execute("SELECT * FROM mat_inspection ORDER BY id").fetchall()
         conn.close()
         with startprotokoll() as log:
             app = make_app(tmp)                                            # Start: Schritt 38
         conn = sqlite3.connect(pfad)
         conn.row_factory = sqlite3.Row
-        assert conn.execute("SELECT wert FROM mat_meta WHERE schluessel = 'schema_version'").fetchone()[0] == "38"
+        assert (conn.execute("SELECT wert FROM mat_meta WHERE schluessel = 'schema_version'").fetchone()[0]
+                == str(models.SCHEMA_VERSION))                              # seit Schritt 39 nicht mehr das Ende
         spalten = [r[1] for r in conn.execute("PRAGMA table_info(mat_form)")]
         assert "category_id" not in spalten and "product_id" not in spalten and "formular_id" in spalten
         assert "formular_von" not in [r[1] for r in conn.execute("PRAGMA table_info(mat_product)")]
@@ -517,8 +520,9 @@ def test_migration_37_38():
         assert nachher[ids["g3"]]["title"] == "Prüfformular Platzhalter K3"            # M3: unbenutzt
         assert nachher[ids["s6"]]["title"] == "Prüfformular Testwerk Platzhalter P6"
         assert nachher[ids["g1v1"]]["title"] == ""                                       # M3: benutzt bleibt
-        assert [tuple(r) for r in conn.execute("SELECT * FROM mat_checklist_item WHERE form_id IN (SELECT value FROM "
-                                               "json_each(?)) ORDER BY id", (json.dumps([r[0] for r in formen_vorher]),))
+        assert [tuple(r) for r in conn.execute(f"SELECT {punkt_spalten} FROM mat_checklist_item WHERE form_id IN "
+                                               "(SELECT value FROM json_each(?)) ORDER BY id",
+                                               (json.dumps([r[0] for r in formen_vorher]),))
                 ] == [tuple(r) for r in punkte_vorher]
         assert [tuple(r) for r in conn.execute("SELECT * FROM mat_inspection ORDER BY id")] == [tuple(r) for r in
                                                                                                  pruefung_vorher]

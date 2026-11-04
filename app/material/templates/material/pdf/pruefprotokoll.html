@@ -19,6 +19,13 @@ table.befunde tr.gruppe td { padding: 3mm 1.5mm 1mm; border-bottom: .8pt solid v
 table.befunde tr.gruppe { break-after: avoid; }
 /* Eine Gruppenzeile bleibt mit den ersten zwei Prüfpunkten ihrer Gruppe zusammen (der erste über break-after oben). */
 table.befunde tr.gruppe + tr + tr:not(.gruppe) { break-before: avoid; }
+/* Untergruppe (Schritt 39): kleinere Zwischenüberschrift unter der Gruppe – in der Spalte „Prüfpunkt“, ihre Punkte
+   darunter noch einmal eingezogen; Einzug statt neuer Farbe. Bleibt wie die Gruppenzeile mit ihren ersten Punkten
+   zusammen. */
+table.befunde tr.untergruppe td { padding: 2mm 1.5mm .6mm; font-size: 8pt; font-weight: 700; color: var(--anthrazit); }
+table.befunde tr.untergruppe { break-after: avoid; }
+table.befunde tr.untergruppe + tr + tr:not(.gruppe, .untergruppe) { break-before: avoid; }
+table.befunde td.in-ug { padding-left: 4mm; }
 table.befunde td.nr { text-align: right; }
 table.befunde tr.lang { break-inside: auto; }
 /* Mangel: Nummer als rote Marke, Befund fett – auch schwarz-weiß gedruckt erkennbar */
@@ -104,13 +111,15 @@ table.liste td.artversion { hyphens: manual; overflow-wrap: break-word; }
   <h2>Befunde</h2>
   {%- if gruppen %}
   {#- Höhe der Tabelle grob geschätzt (für „kurz“): je Zeile die längere der beiden Textspalten – Prüfpunkt rund 44
-      Zeichen je Zeile, Wert / Bemerkung rund 28 – zu 4,3 mm, dazu 2,6 mm Rand; eine Gruppenzeile 9 mm. Die Zeichenzahlen
+      Zeichen je Zeile, Wert / Bemerkung rund 28 – zu 4,3 mm, dazu 2,6 mm Rand; eine Gruppenzeile 9 mm, eine Zeile einer
+      Untergruppe 7 mm. Die Zeichenzahlen
       stammen aus der Zeit mit der Spalte „kritisch“; bei den breiteren Spalten heute schätzen sie eher zu hoch – das
       ist die sichere Richtung (eine Liste gilt seltener als kurz und darf dann umbrechen). #}
   {%- set mass = namespace(mm=0) %}
   {%- for g in gruppen %}
     {%- if g.name and g.punkte %}{% set mass.mm = mass.mm + 9 %}{% endif %}
     {%- for p in g.punkte %}
+      {%- if p.untergruppe_neu %}{% set mass.mm = mass.mm + 7 %}{% endif %}
       {%- set rechts = ([p.wert, p.notiz] + (p.nummern or [])) | select | join("\n") %}
       {%- set zeilen = [(p.text or "") | length // 44 + 1 + (p.text or "").count("\n"),
                         rechts | length // 28 + 1 + rechts.count("\n") + (1 if p.foto_nr else 0) + (3 if p.unterschrift else 0)] | max %}
@@ -126,6 +135,9 @@ table.liste td.artversion { hyphens: manual; overflow-wrap: break-word; }
       <tr class="gruppe"><td colspan="5">{{ g.name }}</td></tr>
       {%- endif %}
       {%- for p in g.punkte %}
+      {%- if p.untergruppe_neu %}
+      <tr class="untergruppe"><td></td><td colspan="4">{{ p.untergruppe }}</td></tr>
+      {%- endif %}
       {#- Ein Prüfpunkt mit mehr als 200 Zeichen Text (rund fünf Zeilen) ist schon für sich kein Rest am Seitenende: Er
           bleibt aus den Ketten heraus (hoch), sonst rückte die Tabelle wegen vier hoher Zeilen ganz auf die nächste Seite. #}
       {#- Eine Zeile, die höher als eine Seite werden kann (Wert und Bemerkung zusammen sehr lang oder sehr viele
@@ -134,7 +146,7 @@ table.liste td.artversion { hyphens: manual; overflow-wrap: break-word; }
                      or ((p.wert or "") ~ (p.notiz or "")).count("\n") > 20 %}
       <tr class="befund{{ ' mangel' if p.befund == 'mangel' }}{{ ' lang' if lang }}{{ hoch([p.text, p.wert, p.notiz] + (p.nummern or []), 200) }}">
         <td class="nr"><span class="nr-marke">{{ p.nr }}</span></td>
-        <td><span class="text">{{ p.text }}</span></td>
+        <td{{ ' class="in-ug"' | safe if p.untergruppe }}><span class="text">{{ p.text }}</span></td>
         <td>{{ p.soll }}</td>
         <td class="befund-{{ p.befund }}">{{ p.befund_text }}</td>
         <td>

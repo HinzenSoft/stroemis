@@ -176,7 +176,8 @@ def befund_json(r):
     if r["photo"]:
         foto = {"web": katalog.bild_url(r["photo"]), "vorschau": katalog.bild_url(r["photo"], "thumb"),
                 "original": katalog.bild_url(r["photo"], "orig")}
-    return {"id": r["id"], "position": r["position"], "gruppe": r["group_name"], "text": r["checklist_text"],
+    return {"id": r["id"], "position": r["position"], "gruppe": r["group_name"], "untergruppe": r["untergruppe"],
+            "text": r["checklist_text"],
             "art": r["editor"], "pflicht": bool(r["mandatory"]), "soll": r["expected_value"],
             "befund": r["finding"], "wert": r["value"], "notiz": r["note"],
             "foto": foto, "unterschrift": us.daten_uri(r.get("signature_png")),
@@ -396,10 +397,10 @@ def starten(iid, pruefer, art=None, durchgang_id=None):
         for p in punkte:
             befund, wert, soll = _vorbelegung(p, item, laenge_moeglich)
             db.execute("INSERT INTO mat_inspection_result (inspection_id, checklist_item_id, position, group_name, "
-                       "checklist_text, editor, mandatory, expected_value, finding, value) "
-                       "VALUES (?,?,?,?,?,?,?,?,?,?)",
-                       (pid, p["id"], p["position"], p["group_name"], p["label"], p["editor"], p["mandatory"],
-                        soll, befund, wert))
+                       "untergruppe, checklist_text, editor, mandatory, expected_value, finding, value) "
+                       "VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+                       (pid, p["id"], p["position"], p["group_name"], p["untergruppe"], p["label"], p["editor"],
+                        p["mandatory"], soll, befund, wert))
         # Bestandteil-Liste des Produkts (Schritt 25): je Position „… vorhanden“ – auch im Durchgang.
         from . import stueckliste
         stueckliste.pruefzeilen(pid, item)
@@ -1364,11 +1365,12 @@ def berichtigen(pid, d, pruefer):
                 if foto:
                     fotos.append(foto)
                 db.execute("INSERT INTO mat_inspection_result (inspection_id, checklist_item_id, position, group_name, "
-                           "checklist_text, editor, mandatory, expected_value, finding, value, note, photo, "
-                           "signature_png, component_id, component_serials) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-                           (neu, r["checklist_item_id"], r["position"], r["group_name"], r["checklist_text"], r["editor"],
-                            r["mandatory"], r["expected_value"], r["finding"], r["value"], r["note"],
-                            foto, r["signature_png"], r.get("component_id"), r.get("component_serials")))
+                           "untergruppe, checklist_text, editor, mandatory, expected_value, finding, value, note, photo, "
+                           "signature_png, component_id, component_serials) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                           (neu, r["checklist_item_id"], r["position"], r["group_name"], r["untergruppe"],
+                            r["checklist_text"], r["editor"], r["mandatory"], r["expected_value"], r["finding"],
+                            r["value"], r["note"], foto, r["signature_png"], r.get("component_id"),
+                            r.get("component_serials")))
             for a in anhaenge(pid):
                 try:
                     with open(f"{anh.anhang_dir(katalog.medien_dir())}/{a['file_path']}", "rb") as fh:

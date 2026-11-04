@@ -39,6 +39,8 @@ sonst bleibt alles (zweiter Import ändert nichts). Abgeglichen über die uid, s
 ein Verschieben in eine andere Heimat gibt es nicht (Fehler). Die Datei ist für Zuweisungen maßgeblich (E2): Für jedes
 Formular und jedes Ziel der Datei gilt danach genau, was sie sagt – eine Zuweisung hier, die sie nicht nennt, wird
 gelöst (_zuweisungen). Einzige Ausnahme von „gelöscht wird nie etwas“ außer der Bestandteil-Liste.
+Seit Schritt 39 trägt ein Prüfpunkt „untergruppe“ (in jedem Format gelesen; fehlt das Feld, ist sie leer) – sie zählt
+beim Vergleich mit der aktiven Version mit (_PUNKTFELDER).
 Ältere Dateien (Format 1/2) kommen weiter herein: Ein Formular mit „kategorie“ kommt in deren Pool und wird ihr Standard,
 eins mit „produkt“ in den Pool der Kategorie des Produkts und ihm zugewiesen (mit „aktivieren“: false nur als Version,
 ohne Zuweisung); „formular_von“ an einem Produkt (Schritt 35) wird die Zuweisung an das Formular, das der Quelle hier
@@ -898,7 +900,8 @@ def _produkt_text(p):
 
 # Verglichen wird ohne „kritisch“: Die Marke ist am 03.11.2026 entfallen (die Spalte is_critical mit Schritt 37) – eine
 # Katalogdatei, die sie noch trägt, gilt beim erneuten Import als unverändert (keine neue Version nur wegen der Marke).
-_PUNKTFELDER = ("group_name", "label", "editor", "mandatory", "expected_value")
+# Seit Schritt 39 zählt auch die Untergruppe (fehlt sie in einer älteren Datei, ist sie leer – katalog.punkte_pruefen).
+_PUNKTFELDER = ("group_name", "untergruppe", "label", "editor", "mandatory", "expected_value")
 # Ein führendes „DEMO“ im Formulartitel („DEMO – “, „DEMO-“, „DEMO “) nimmt der Import heraus – auf dev heißen die
 # Platzhalter so, in der Produktion gibt es kein DEMO (Entscheidung vom 04.11.2026, katalog-transfer).
 _DEMO_VORN = re.compile(r"^DEMO(?:\s*[–—-]\s*|\s+)")

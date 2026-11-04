@@ -332,6 +332,13 @@ Feldnamen folgen dem Konzept vom 16.10.2026 (englisch, wie dort festgelegt). Abw
     STAND_TRIGGER_38: mat_meta.katalog_stand zählt jede Änderung am Katalog (Zwischenspeicher der Übung). Wiederholbar:
     der Datenteil nur, solange mat_form category_id hat, Tabellen und Trigger IF NOT EXISTS bzw. entfernt und neu. Rückweg
     nur über die Sicherung vor dem Deploy.
+  - Schritt 39 (Untergruppen in Prüfformularen, Wunsch vom 04.11.2026; Bauauftrag planung/untergruppen): Spalte
+    untergruppe an mat_checklist_item (leer = keine; eine Ebene unter der Gruppe) und als Kopie an mat_inspection_result
+    – wie group_name, damit festgeschriebene Protokolle bleiben, wie sie waren. Die Kopie schützt mat_result_untergruppe
+    wie mat_result_aendern die übrigen Spalten (deren Spaltenliste bleibt, wie sie ausgeliefert wurde – wie
+    mat_result_bestandteil aus Schritt 25). Rein additiv (ADD COLUMN mit Vorgabe '', Trigger entfernt und neu), kein
+    Journal, nichts Sichtbares ändert sich am Altbestand; wiederholbar. Die Reihenfolge-Regel (in einer Gruppe erst die
+    Punkte ohne Untergruppe, dann die Untergruppen als zusammenhängende Blöcke) hält der Dienst (katalog.punkte_pruefen).
 """
 import json
 import logging
@@ -340,7 +347,7 @@ import sqlite3
 import unicodedata
 from datetime import datetime, timezone
 
-SCHEMA_VERSION = 38
+SCHEMA_VERSION = 39
 
 # --- Wertelisten -------------------------------------------------------------------------------
 # Was die Datenbank per CHECK erzwingt, steht hier ein zweites Mal – mit den Wörtern, die die
@@ -3560,6 +3567,29 @@ def _schritt_38(conn):
         conn.execute(sql)
 
 
+# --- Schritt 39: Untergruppen in Prüfformularen (Wunsch vom 04.11.2026) -----------------------------------------------
+# Eine Ebene unter der Gruppe (Gruppe › Untergruppe › Prüfpunkte); leer = keine. Die Befundzeile einer Prüfung trägt eine
+# Kopie wie group_name – ein späteres Umbenennen im Formular ändert kein Protokoll.
+SPALTEN_39 = (
+    ("mat_checklist_item", "untergruppe", "TEXT NOT NULL DEFAULT ''"),
+    ("mat_inspection_result", "untergruppe", "TEXT NOT NULL DEFAULT ''"),
+)
+TRIGGER_39 = [
+    # Eine abgeschlossene Prüfung behält auch ihre Untergruppen (wie mat_result_aendern und mat_result_bestandteil).
+    _trigger("mat_result_untergruppe", "BEFORE UPDATE OF untergruppe ON mat_inspection_result",
+             _ELTERN_ZU.format("OLD") + " OR " + _ELTERN_ZU.format("NEW"), _ABGESCHLOSSEN),
+]
+
+
+def _schritt_39(conn):
+    """Die Spalten aus SPALTEN_39 (nur, wenn sie fehlen) und TRIGGER_39 (entfernt und neu). Rein additiv, wiederholbar;
+    siehe Kopf."""
+    spalten_nachruesten(conn, SPALTEN_39)
+    for sql in TRIGGER_39:
+        conn.execute(f"DROP TRIGGER IF EXISTS {_trigger_name(sql)}")
+        conn.execute(sql)
+
+
 # Je Version die Schritte, die von der Vorversion dorthin führen: eine Liste von SQL-Befehlen (für sich
 # wiederholbar, IF NOT EXISTS) oder eine Funktion. Alle Schritte eines Starts laufen in EINER
 # Transaktion – bricht einer ab, bleibt die Datenbank, wie sie war, und der nächste Start versucht es neu.
@@ -3569,7 +3599,7 @@ SCHRITTE = {1: SCHRITT_1, 2: _schritt_2, 3: _schritt_3, 4: SCHRITT_4, 5: _schrit
             20: _schritt_20, 21: _schritt_21, 22: _schritt_22, 23: _schritt_23, 24: _schritt_24,
             25: _schritt_25, 26: _schritt_26, 27: _schritt_27, 28: _schritt_28, 29: SCHRITT_29, 30: SCHRITT_30,
             31: SCHRITT_31, 32: _schritt_32, 33: _schritt_33, 34: _schritt_34, 35: _schritt_35,
-            36: _schritt_36, 37: _schritt_37, 38: _schritt_38}
+            36: _schritt_36, 37: _schritt_37, 38: _schritt_38, 39: _schritt_39}
 
 
 def _meta(conn, schluessel, vorgabe=None):
