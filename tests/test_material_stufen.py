@@ -43,9 +43,9 @@ def test_migration_9_10():
     """Eine Datenbank im Stand von Schritt 9 (Stufen aus Phase 1 in recht_material, Katalog-Häkchen, Freigaben aus
     Schritt 8): Schritt 10 setzt die Stufe – 2 für bisherige Katalogpfleger und die Plattform-Verwaltung, 1 für eine
     Stufe aus Phase 1 (auch den Materialwart mit 2), eine Freigabe (auch abgelaufen) oder das Häkchen Prüfer, sonst 0.
-    Name, Aktivität und Status zählen nicht. mat_katalog und mat_pruefer bleiben. Je geänderter Stufe und je
-    aufgelöstem Katalog-Häkchen ein Journaleintrag „rollen“ am Konto, das Konto nur als Verweis. Ein zweiter Start und
-    ein direkter zweiter Aufruf ändern nichts."""
+    Name, Aktivität und Status zählen nicht. mat_pruefer bleibt, mat_katalog fällt danach mit Schritt 37. Je geänderter
+    Stufe und je aufgelöstem Katalog-Häkchen ein Journaleintrag „rollen“ am Konto, das Konto nur als Verweis. Ein
+    zweiter Start und ein direkter zweiter Aufruf ändern nichts."""
     from app.material import models
     with tempfile.TemporaryDirectory() as tmp:
         app = make_app(tmp)
@@ -54,6 +54,9 @@ def test_migration_9_10():
         assert r.status_code == 201, r.get_json()
         gid = r.json["ordner"]["id"]
         gestern = (_heute() - timedelta(days=1)).isoformat()
+        # Die Spalte des Katalog-Häkchens bringt eine Sicherung aus Phase 1 mit – angelegt wird sie seit Schritt 37 nicht
+        # mehr (db.MIGRATIONS).
+        sql(app, "ALTER TABLE users ADD COLUMN mat_katalog INTEGER NOT NULL DEFAULT 0")
         faelle = {  # Name: (Spalten, Freigabe (Recht, bis) oder None, Stufe nach Schritt 10, Journal?)
             "phase1_mitglied": ({"recht_material": 1}, ("lesen", None), 1, False),
             "phase1_wart": ({"recht_material": 2}, ("verwalten", None), 1, True),
@@ -83,6 +86,7 @@ def test_migration_9_10():
                  "recht_verwaltung = 2 WHERE email = 'admin@example.org'")
         sql(app, "UPDATE users SET mat_ref = NULL WHERE email LIKE 'katalog%' OR email LIKE 'phase1%'")
         vorher = {u["id"]: u for u in zeilen(app, "SELECT * FROM users")}
+        katalog_alt = [(u["mat_katalog"], uid) for uid, u in vorher.items()]
         journal_vorher = zeilen(app, "SELECT MAX(id) AS m FROM mat_audit")[0]["m"] or 0
 
         app = make_app(tmp)                                    # Neustart: Schritt 10 läuft
@@ -92,12 +96,13 @@ def test_migration_9_10():
         # von Schritt 10 behält die 2.
         assert {n: nachher[ids[n]]["recht_material"] for n in faelle} == {n: 3 if f[2] == 2 else f[2] for n, f in faelle.items()}
         assert nachher[admin_id]["recht_material"] == 3
-        # Nur die Stufe ändert sich: Häkchen, mat_katalog, Urkundennummer, Name, Aktivität bleiben.
-        # Die übrigen Stufen hebt nur Schritt 33 (Verwaltung 2 → 3).
+        # Nur die Stufe ändert sich: Häkchen, Urkundennummer, Name, Aktivität bleiben; mat_katalog entfernt Schritt 37
+        # im selben Start. Die übrigen Stufen hebt nur Schritt 33 (Verwaltung 2 → 3).
         for uid, u in nachher.items():
+            assert "mat_katalog" not in u
             assert {k_: v for k_, v in u.items() if k_ not in ("recht_material", "mat_ref")} == \
                 {k_: (3 if k_.startswith("recht_") and v == 2 else v) for k_, v in vorher[uid].items()
-                 if k_ not in ("recht_material", "mat_ref")}, u
+                 if k_ not in ("recht_material", "mat_ref", "mat_katalog")}, u
         # Journal: je Konto mit geänderter Stufe oder aufgelöstem Katalog-Häkchen genau ein Eintrag – ohne E-Mail und
         # ohne Namen, das Konto als Verweis; keiner für 2 → 2, 1 → 1 und 0 → 0.
         e = zeilen(app, "SELECT * FROM mat_audit WHERE id > ? ORDER BY id", (journal_vorher,))
@@ -142,12 +147,16 @@ def test_migration_9_10():
         app = make_app(tmp)
         assert stand() == vorher
         # Seit Schritt 33 (Verwaltung = 3) ist Schritt 10 allein kein Leerlauf mehr – er schriebe die Verwaltung als 2;
-        # in der Reihe mit Schritt 33, wie die Migration ihn immer laufen lässt, bleibt jede Stufe, wie sie war.
+        # in der Reihe mit Schritt 33, wie die Migration ihn immer laufen lässt, bleibt jede Stufe, wie sie war. Seit
+        # Schritt 37 gehört die Spalte mat_katalog dazu, die Schritt 10 noch liest (hier mit den alten Werten zurück).
         conn = sqlite3.connect(os.path.join(tmp, "stroemis.db"))
         conn.execute("BEGIN")
         stufen = conn.execute("SELECT id, recht_material, recht_verwaltung FROM users ORDER BY id").fetchall()
+        conn.execute("ALTER TABLE users ADD COLUMN mat_katalog INTEGER NOT NULL DEFAULT 0")
+        conn.executemany("UPDATE users SET mat_katalog = ? WHERE id = ?", katalog_alt)
         models._schritt_10(conn)
         models._schritt_33(conn)
+        models._schritt_37(conn)
         assert conn.execute("SELECT id, recht_material, recht_verwaltung FROM users ORDER BY id").fetchall() == stufen
         conn.rollback()
         conn.close()

@@ -4,10 +4,10 @@ Bis zum 04.11.2026 (Phase 2 · Lieferung 3) konnte die Material-Verwaltung eine 
 an eine Formularversion knüpfen; offene Prüfungen blendeten deren Abschnitt „Prüfung“ ein. Wunsch des Nutzers
 (04.11.2026): „Entferne die Prüfanleitung im Wiki Funktion.“ Festlegungen (planung/ohne-pruefanleitung/auftrag.md):
 Oberfläche, beide Routen, Dienst wikiverweis, formular.wiki/wiki_aendern, pruefung.anleitung und die Kopie in neue
-Versionen sind weg; die Spalte mat_form.wiki_page_id samt Index bleibt (Schema 35, kein Schemaschritt), vorhandene
-Werte bleiben stehen und werden nirgends mehr gelesen; Journal-Einträge „wiki“ bleiben lesbar. Diese Tests prüfen das
-Gegenteil der früheren: Route 404, kein Feld im JSON, keine Zeile, keine Einblendung. Seiten, Titel und Konten sind
-Platzhalter."""
+Versionen sind weg; Journal-Einträge „wiki“ bleiben lesbar. Die Spalte mat_form.wiki_page_id samt Index blieb dabei
+zunächst stehen – Schritt 37 (Aufräumen, 04.11.2026) entfernt sie (Migration: test_material_aufraeumen.py). Diese Tests
+prüfen das Gegenteil der früheren: Route 404, kein Feld im JSON, keine Zeile, keine Einblendung. Seiten, Titel und
+Konten sind Platzhalter."""
 import io
 import json
 import os
@@ -40,8 +40,8 @@ def ok(r, code=200):
 def aufbau(tmp):
     """Material-Verwaltung mit Wiki-Stufe (mvw, hätte früher verknüpfen dürfen), Material-Verwaltung ohne (mv),
     Materialwart, Prüfer mit Wiki-Stufe (pw); eine öffentliche Wiki-Seite mit Abschnitt „Prüfung“; ein Lager mit zwei
-    Karabinern. Das generische Karabiner-Formular trägt eine Verknüpfung aus der Zeit vor dem 04.11.2026 (direkt in der
-    Datenbank – eine Route dafür gibt es nicht mehr)."""
+    Karabinern. Eine Verknüpfung aus der Zeit vor dem 04.11.2026 lässt sich nicht mehr anlegen – die Spalte gibt es seit
+    Schritt 37 nicht mehr."""
     app, k = umgebung(tmp)
     adm = k["adm"]
     mvw, _ = neues_konto(app, "mvwiki@example.org", name="MV Wiki", rechte={"material": 3, "wiki": 1})
@@ -56,15 +56,8 @@ def aufbau(tmp):
     seite = ok(adm.post("/api/wiki/pages", json={"title": TITEL, "content": "## Prüfung\n\nSchritt eins\n"}), 201)["page"]
     ok(adm.put(f"/api/wiki/pages/{seite['id']}/share", json={"is_public": True, "public_children": False}))
     fid = formulare["karabiner"]
-    with app.app_context():
-        from app import db
-        db.execute("UPDATE mat_form SET wiki_page_id = ? WHERE id = ?", (seite["id"], fid))
     return SimpleNamespace(app=app, k=k, adm=adm, mv=k["katalog"], mvw=mvw, pw=pw, ids=ids, fid=fid, art=art,
                            seite=seite)
-
-
-def wiki_wert(t, fid):
-    return zeilen(t.app, "SELECT wiki_page_id FROM mat_form WHERE id = ?", (fid,))[0]["wiki_page_id"]
 
 
 # --- 1. Schnittstelle -----------------------------------------------------------------------------------------------
@@ -81,18 +74,16 @@ def test_routen_und_formular():
         regeln = {r.rule for r in t.app.url_map.iter_rules()}
         assert not any(r.startswith("/api/material/wiki") or (r.endswith("/wiki") and "/formulare/" in r)
                        for r in regeln)
-        # formular_json ohne wiki und wiki_aendern – auch mit Altwert in der Spalte, der stehen bleibt.
+        # formular_json ohne wiki und wiki_aendern.
         for c in (t.adm, t.mvw, t.mv, t.k["wart"]):
             text = c.get(f"/api/material/formulare/{t.fid}").get_data(as_text=True)
             f = json.loads(text)["formular"]
             assert "wiki" not in f and "wiki_aendern" not in f and TITEL not in text, sorted(f)
-        assert wiki_wert(t, t.fid) == t.seite["id"]
-        # Neue Version (mit und ohne Vorlage): keine Kopie der Verknüpfung, die alte Version behält ihren Wert.
+        # Neue Version (mit und ohne Vorlage): nichts von einer Verknüpfung.
         f2 = ok(t.mvw.post("/api/material/formulare", json={"kategorie_id": t.ids["karabiner"]}), 201)["formular"]
         f3 = ok(t.mvw.post("/api/material/formulare", json={"kategorie_id": t.ids["karabiner"], "vorlage_id": t.fid}),
                 201)["formular"]
         assert "wiki" not in f2 and "wiki" not in f3
-        assert wiki_wert(t, f2["id"]) is None and wiki_wert(t, f3["id"]) is None and wiki_wert(t, t.fid) == t.seite["id"]
         # Alte Journal-Einträge „wiki“ bleiben lesbar (beschriftung.py und material.js).
         from app.material.services import beschriftung
         assert beschriftung.AKTION["wiki"] == "Prüfanleitung (Strömipedia) geändert"
@@ -147,22 +138,21 @@ def test_katalog_ignoriert_altes_feld():
         neue = zeilen(t.app, "SELECT * FROM mat_form WHERE id NOT IN (SELECT value FROM json_each(?)) ORDER BY id",
                       (json.dumps(sorted(vorher)),))
         assert any(f["category_id"] == t.ids["karabiner"] for f in neue), neue
-        assert all(f["wiki_page_id"] is None for f in neue), neue
+        assert all("wiki_page_id" not in f for f in neue), neue
     print("Katalog ignoriert das alte Feld bestanden.")
 
 
 # --- 2. Schema und Quelltext ----------------------------------------------------------------------------------------
 
-def test_spalte_bleibt():
-    """Kein Schemaschritt: Spalte und Index bleiben, Schema 35."""
+def test_spalte_entfernt():
+    """Seit Schritt 37 (Aufräumen): Spalte und Index sind weg."""
     with tempfile.TemporaryDirectory() as tmp:
         t = aufbau(tmp)
-        assert "wiki_page_id" in [s["name"] for s in zeilen(t.app, "PRAGMA table_info(mat_form)")]
-        assert zeilen(t.app, "SELECT 1 FROM sqlite_master WHERE type = 'index' AND name = 'idx_mat_form_wiki'")
+        assert "wiki_page_id" not in [s["name"] for s in zeilen(t.app, "PRAGMA table_info(mat_form)")]
+        assert not zeilen(t.app, "SELECT 1 FROM sqlite_master WHERE type = 'index' AND name = 'idx_mat_form_wiki'")
         from app.material import models
-        assert models.SCHEMA_VERSION == 35
-        assert "nicht mehr genutzt seit 04.11.2026" in lesen("app/material/models.py")
-    print("Spalte bleibt bestanden.")
+        assert models.SCHEMA_VERSION >= 37 and ("mat_form", "wiki_page_id") in models.SPALTEN_WEG_37
+    print("Spalte entfernt bestanden.")
 
 
 def test_quelltext_ohne_funktion():
@@ -195,6 +185,6 @@ if __name__ == "__main__":
     test_routen_und_formular()
     test_pruefung_ohne_anleitung()
     test_katalog_ignoriert_altes_feld()
-    test_spalte_bleibt()
+    test_spalte_entfernt()
     test_quelltext_ohne_funktion()
     print("Alle Tests zur entfernten Prüfanleitung bestanden.")

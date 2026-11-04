@@ -755,7 +755,7 @@ def produkt_bild_entfernen(pid):
 def produkt_json(p, voll=False):
     out = {f: p.get(f) for f in ("id", "category_id", "manufacturer", "model", "article_no", "norm", "material_kind",
                                  "interval_months", "lifetime_years", "lifetime_source", "description",
-                                 "wiki_page_id", "created_at", "updated_at")}
+                                 "created_at", "updated_at")}
     out["demo"] = bool(p.get("demo"))
     out["bild"] = bild_url(p.get("image"))
     out["vorschau"] = bild_url(p.get("image"), "thumb")
@@ -1101,7 +1101,7 @@ def punkt_text(roh, n):
 def punkte_pruefen(roh):
     """Prüfpunkte eines Formulars aus der Anfrage. Ja/Nein-Punkte brauchen einen Sollwert („ja“ oder
     „nein“ – bei Schadensfragen „nein“). Ein Feld „kritisch“ (Formular-Editor und Katalogdateien bis 03.11.2026) wird
-    ohne Prüfung übergangen: Die Funktion ist entfallen, neue Punkte tragen is_critical = 0."""
+    ohne Prüfung übergangen: Die Funktion ist entfallen, die Spalte is_critical seit Schritt 37 auch."""
     if not isinstance(roh, list):
         raise Abgelehnt("„punkte“ muss eine Liste sein.")
     if len(roh) > 200:
@@ -1170,7 +1170,6 @@ def formular_anlegen(d, demo=False):
         # „Neue Version“ in den Katalog-Export (Sicherheitsprüfung vom 25.10.2026, Befund 5). Mit eigenen Punkten
         # (Katalogimport) zählt nur der Parameter.
         demo = demo or bool("punkte" not in d and vorlage and vorlage["demo"])
-        # mat_form.wiki_page_id (Prüfanleitung aus dem Wiki) bleibt seit dem 04.11.2026 leer – keine Kopie mehr.
         fid = db.execute(f"INSERT INTO mat_form ({spalte}, version, title, active, demo, created_by, created_at, "
                          "updated_at) VALUES (?,?,?,0,?,?,?,?)", (ziel, version, titel, int(bool(demo)), uid, ts, ts))
         if "punkte" in d:

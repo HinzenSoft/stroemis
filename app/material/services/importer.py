@@ -886,8 +886,8 @@ def _produkt_text(p):
     return katalog.produktname(p) + (f" ({p['article_no']})" if p.get("article_no") else "")
 
 
-# Verglichen wird ohne is_critical: Die Marke „kritisch“ ist am 03.11.2026 entfallen – ein Formular, das sie noch trägt,
-# gilt beim erneuten Import derselben Datei als unverändert (keine neue Version nur wegen der alten Spalte).
+# Verglichen wird ohne „kritisch“: Die Marke ist am 03.11.2026 entfallen (die Spalte is_critical mit Schritt 37) – eine
+# Katalogdatei, die sie noch trägt, gilt beim erneuten Import als unverändert (keine neue Version nur wegen der Marke).
 _PUNKTFELDER = ("group_name", "label", "editor", "mandatory", "expected_value")
 
 

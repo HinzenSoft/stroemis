@@ -20,8 +20,8 @@ Woher die Rechte kommen (Bauentwurf Phase 2 · Lieferung 1, Abschnitt 1, mit der
                           (qualifiziert); allein gibt sie keinen Zugang mehr.
   Name                    Ohne Namen gibt es keinen Modulzugang: Wer handelt, steht namentlich im Journal.
 
-Das Häkchen „Produktkatalogpfleger“ (users.mat_katalog) liest der Code seit Schritt 10 nicht mehr – es bleibt als
-Rückweg stehen; Schritt 10 hat aus ihm die Stufe Verwaltung gemacht. Die Stufen aus Phase 1 (1 Führungskraft,
+Das Häkchen „Produktkatalogpfleger“ (users.mat_katalog) las der Code seit Schritt 10 nicht mehr – Schritt 10 hat aus
+ihm die Stufe Verwaltung gemacht, Schritt 37 die Spalte entfernt. Die Stufen aus Phase 1 (1 Führungskraft,
 2 Materialwart) hat Schritt 8 in Freigaben umgesetzt und Schritt 10 zu Mitglied gemacht.
 
 Rechte in einem Ordner F (RECHTE): grund – Grundrecht, Verwaltung oder gültiges lesen/verwalten an F oder darüber;
@@ -136,12 +136,6 @@ def ist_pruefer(user=None):
     damit noch nirgends – dafür braucht es zusätzlich eine Prüffreigabe am Ordner."""
     user = user or current_user()
     return bool(user and user["mat_pruefer"] and urkunde_gueltig(urkunde_saeubern(user["urkundennummer"])))
-
-
-def urkunde_fehlt(user=None):
-    """Häkchen „Prüfer“ gesetzt, aber (noch) keine gültige Urkundennummer – die Oberfläche zeigt dann den Weg ins Profil."""
-    user = user or current_user()
-    return bool(user and user["mat_pruefer"] and not ist_pruefer(user))
 
 
 def zugang(user=None):
