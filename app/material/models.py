@@ -315,6 +315,23 @@ Feldnamen folgen dem Konzept vom 16.10.2026 (englisch, wie dort festgelegt). Abw
     gelesen werden sie nirgends mehr. Kein Journal (nichts Sichtbares ändert sich, wie Schritt 33). Rückweg nur über die
     Sicherung vor dem Deploy: Ein älterer Stand schriebe in die fehlenden Spalten (das Skript des Beispielbestands etwa
     mat_katalog).
+  - Schritt 38 (Formular-Pool je Kategorie, Wunsch vom 04.11.2026; Entscheidungen im Entwurf planung/formular-pool):
+    Statt generischer Formulare je Kategorie, spezifischer je Produkt und „Prüfformular übernehmen“ (Schritt 35/36) steht
+    jedes Formular im Pool genau einer Kategorie (mat_formular: Heimat, uid für den Katalogaustausch, demo = jede Version
+    DEMO). mat_form ist eine Version davon (formular_id; category_id und product_id fallen), neu aufgebaut mit denselben
+    Kennungen – Prüfungen und Prüfpunkte zeigen weiter auf ihre Version. mat_formular_zuweisung: der Standard einer
+    Kategorie (gilt auch in Unterkategorien ohne eigenen) oder die Zuweisung an ein Produkt (geht dem Standard vor), je
+    Kategorie bzw. Produkt höchstens eine, nur im Teilbaum der Heimat (TRIGGER_38 als Netz). Die Migration legt je
+    bisherigem Ziel ein Formular an (Heimat: die Kategorie bzw. die heutige Kategorie des Produkts), eine aktive Version
+    wird Standard bzw. Zuweisung; ein übernommenes Formular wird Zuweisung an das Formular der Quelle – liegt das Produkt
+    nicht im Teilbaum, wandert das Formular in die nächste gemeinsame Oberkategorie, ohne eine bekommt das Produkt eine
+    Kopie der aktiven Version (M1). Unbenutzte Versionen ohne Titel heißen „Prüfformular <früheres Ziel>“ (M3), benutzte
+    bleiben. Danach muss je Produkt dieselbe Version gelten wie vorher (bei den Kopien: dieselben Prüfpunkte) – sonst
+    Abbruch, die Datenbank bleibt, wie sie war. Journal „Migration Schritt 38“, Sonderfälle im Startprotokoll. Trigger,
+    Index und Spalte formular_von aus Schritt 35/36 fallen (mit SQLite < 3.35 bleibt die Spalte ungelesen stehen). Dazu
+    STAND_TRIGGER_38: mat_meta.katalog_stand zählt jede Änderung am Katalog (Zwischenspeicher der Übung). Wiederholbar:
+    der Datenteil nur, solange mat_form category_id hat, Tabellen und Trigger IF NOT EXISTS bzw. entfernt und neu. Rückweg
+    nur über die Sicherung vor dem Deploy.
 """
 import json
 import logging
@@ -323,7 +340,7 @@ import sqlite3
 import unicodedata
 from datetime import datetime, timezone
 
-SCHEMA_VERSION = 37
+SCHEMA_VERSION = 38
 
 # --- Wertelisten -------------------------------------------------------------------------------
 # Was die Datenbank per CHECK erzwingt, steht hier ein zweites Mal – mit den Wörtern, die die
@@ -3073,7 +3090,11 @@ TRIGGER_36 = [
 
 
 def _schritt_36(conn):
-    """Bestand richten, den TRIGGER_36 künftig ausschließt (siehe Kopf), dann die Trigger (entfernt und neu)."""
+    """Bestand richten, den TRIGGER_36 künftig ausschließt (siehe Kopf), dann die Trigger (entfernt und neu). Hat ein
+    späterer Stand mat_form schon zum Formular-Pool umgebaut (Schritt 38 – etwa ein Test, der den Versionsvermerk
+    zurücksetzt), gibt es hier nichts mehr zu tun: Schritt 38 entfernt diese Trigger ohnehin."""
+    if "product_id" not in _spalten(conn, "mat_form"):
+        return
     namen = dict(conn.execute("SELECT id, trim(manufacturer || ' ' || model) FROM mat_product "
                               "WHERE formular_von IS NOT NULL OR id IN (SELECT formular_von FROM mat_product)"))
     for bid, qid in conn.execute(
@@ -3136,6 +3157,409 @@ def _schritt_37(conn):
         raise sqlite3.IntegrityError("Schritt 37: Bestand nach dem Entfernen der Spalten verändert.")
 
 
+# --- Schritt 38: Formular-Pool je Kategorie (Wunsch vom 04.11.2026) -----------------------------------------------------
+# Ein Formular (mat_formular) steht im Pool genau einer Kategorie (Heimat) und hat Versionen (mat_form, wie bisher: höchstens
+# eine aktiv, benutzte unveränderlich). Welches Formular für ein Produkt gilt, sagen die Zuweisungen
+# (mat_formular_zuweisung): eine an das Produkt selbst, sonst der Standard seiner Kategorie oder der nächsten Oberkategorie
+# mit einem (katalog.formular_fuer_produkt). Zuweisen lässt sich ein Formular nur im Teilbaum seiner Heimat (Entscheidung
+# Z1) – die Trigger unten sind das Netz hinter den Diensten.
+MIGRATION_38 = "Migration Schritt 38"
+FORMULAR_38 = [
+    """CREATE TABLE IF NOT EXISTS mat_formular (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      uid         TEXT,                                          -- Katalogkennung für Export und Import (32 hex)
+      category_id INTEGER NOT NULL REFERENCES mat_category(id),  -- Heimat: der Pool, in dem es steht
+      herkunft    TEXT NOT NULL DEFAULT '',                      -- nur aus der Migration: das frühere Ziel
+      demo        INTEGER NOT NULL DEFAULT 0,                    -- 1 = jede Version trägt das DEMO-Kennzeichen
+      created_by  INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      created_at  TEXT NOT NULL,
+      updated_at  TEXT NOT NULL
+    )""",
+    "CREATE UNIQUE INDEX IF NOT EXISTS ux_mat_formular_uid ON mat_formular(uid)",
+    "CREATE INDEX IF NOT EXISTS idx_mat_formular_kategorie ON mat_formular(category_id)",
+    _uid_trigger("mat_formular"),
+    """CREATE TABLE IF NOT EXISTS mat_formular_zuweisung (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      formular_id INTEGER NOT NULL REFERENCES mat_formular(id) ON DELETE CASCADE,
+      category_id INTEGER REFERENCES mat_category(id) ON DELETE CASCADE,   -- Standard der Kategorie …
+      product_id  INTEGER REFERENCES mat_product(id) ON DELETE CASCADE,    -- … oder dem Produkt zugewiesen
+      created_by  INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      created_at  TEXT NOT NULL,
+      CHECK ((category_id IS NULL) <> (product_id IS NULL))
+    )""",
+    # Je Kategorie höchstens ein Standard, je Produkt höchstens eine Zuweisung.
+    "CREATE UNIQUE INDEX IF NOT EXISTS ux_mat_zuweisung_kategorie ON mat_formular_zuweisung(category_id) "
+    "WHERE category_id IS NOT NULL",
+    "CREATE UNIQUE INDEX IF NOT EXISTS ux_mat_zuweisung_produkt ON mat_formular_zuweisung(product_id) "
+    "WHERE product_id IS NOT NULL",
+    "CREATE INDEX IF NOT EXISTS idx_mat_zuweisung_formular ON mat_formular_zuweisung(formular_id)",
+]
+# mat_form als Version eines Formulars – dieselben Kennungen wie vorher (Prüfungen und Prüfpunkte zeigen weiter hin), ohne
+# category_id/product_id. AUTOINCREMENT wie bei den Umbauten aus Schritt 2: Eine gelöschte Version gibt ihre Kennung nicht
+# an die nächste weiter (das Journal kennt sie unter „form“).
+FORM_38 = """CREATE TABLE {name} (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      formular_id INTEGER NOT NULL REFERENCES mat_formular(id) ON DELETE CASCADE,
+      version     INTEGER NOT NULL,
+      title       TEXT NOT NULL DEFAULT '',
+      valid_from  TEXT,                                    -- gesetzt beim ersten Aktivieren
+      active      INTEGER NOT NULL DEFAULT 0,
+      demo        INTEGER NOT NULL DEFAULT 0,
+      created_by  INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      created_at  TEXT NOT NULL,
+      updated_at  TEXT NOT NULL,
+      UNIQUE (formular_id, version)
+    )"""
+# Höchstens eine aktive Version je Formular – die Datenbank sorgt dafür.
+FORM_INDIZES_38 = ["CREATE UNIQUE INDEX IF NOT EXISTS ux_mat_form_aktiv ON mat_form(formular_id) WHERE active = 1"]
+# Was aus Schritt 35/36 fällt: die Trigger des Übernehmens (die an mat_form gehen mit der alten Tabelle), Index und Spalte.
+TRIGGER_WEG_38 = ("mat_product_formular_von_neu", "mat_product_formular_von", "mat_product_formular_quelle",
+                  "mat_category_formular_demo", "mat_form_aktiv_verweis_neu", "mat_form_aktiv_verweis",
+                  "mat_product_verweis_eigenes")
+ZUWEISUNG_TEILBAUM = ("'Ein Prüfformular lässt sich nur in seiner Kategorie und ihren Unterkategorien zuweisen (Produkte "
+                      "und Kategorien dort).'")
+
+
+def _teilbaum_38(start):
+    """SQL: die Kennungen des Teilbaums ab der Kategorie start (ein Ausdruck) samt start."""
+    return (f"(WITH RECURSIVE teil(id) AS (SELECT {start} UNION SELECT c.id FROM mat_category c JOIN teil t "
+            "ON c.parent_id = t.id) SELECT id FROM teil)")
+
+
+# Die Kategorie, um die es bei einer Zuweisung geht: die Kategorie selbst oder die des Produkts.
+_ZIEL_38 = "COALESCE({z}.category_id, (SELECT category_id FROM mat_product WHERE id = {z}.product_id))"
+# Liegt die Kategorie ziel im Teilbaum von heimat? Über alle Paare (Kategorie, Vorfahr) – ohne Bezug auf eine äußere
+# Zeile im WITH, nur in der Abfrage danach; UNION hält auch einen (verbotenen) Kreis endlich.
+_IM_TEILBAUM_38 = ("EXISTS (WITH RECURSIVE vorfahr(kat, vor) AS (SELECT id, id FROM mat_category UNION "
+                   "SELECT v.kat, c.parent_id FROM vorfahr v JOIN mat_category c ON c.id = v.vor "
+                   "WHERE c.parent_id IS NOT NULL) SELECT 1 FROM vorfahr WHERE kat = {ziel} AND vor = {heimat})")
+TRIGGER_38 = [
+    _trigger("mat_zuweisung_teilbaum_neu", "BEFORE INSERT ON mat_formular_zuweisung",
+             f"{_ZIEL_38.format(z='NEW')} NOT IN {_teilbaum_38('(SELECT category_id FROM mat_formular WHERE id = NEW.formular_id)')}",
+             ZUWEISUNG_TEILBAUM),
+    _trigger("mat_zuweisung_teilbaum", "BEFORE UPDATE OF formular_id, category_id, product_id ON mat_formular_zuweisung",
+             f"{_ZIEL_38.format(z='NEW')} NOT IN {_teilbaum_38('(SELECT category_id FROM mat_formular WHERE id = NEW.formular_id)')}",
+             ZUWEISUNG_TEILBAUM),
+    # Ein Produkt wechselt die Kategorie: Seine Zuweisung muss im Teilbaum bleiben (der Dienst löst sie vorher, Z6).
+    _trigger("mat_product_zuweisung_teilbaum", "BEFORE UPDATE OF category_id ON mat_product",
+             "EXISTS (SELECT 1 FROM mat_formular_zuweisung z WHERE z.product_id = NEW.id) AND NEW.category_id NOT IN "
+             "(WITH RECURSIVE teil(id) AS (SELECT f.category_id FROM mat_formular f JOIN mat_formular_zuweisung z "
+             "ON z.formular_id = f.id WHERE z.product_id = NEW.id UNION SELECT c.id FROM mat_category c JOIN teil t "
+             "ON c.parent_id = t.id) SELECT id FROM teil)", ZUWEISUNG_TEILBAUM),
+    # Eine Kategorie wird umgehängt – danach gelesen, darum AFTER (RAISE nimmt die Änderung zurück): Jede Zuweisung im
+    # verschobenen Teilbaum muss weiter unter der Heimat ihres Formulars liegen.
+    _trigger("mat_category_zuweisung_teilbaum", "AFTER UPDATE OF parent_id ON mat_category",
+             "EXISTS (SELECT 1 FROM mat_formular_zuweisung z JOIN mat_formular f ON f.id = z.formular_id "
+             f"WHERE {_ZIEL_38.format(z='z')} IN {_teilbaum_38('NEW.id')} "
+             f"AND NOT {_IM_TEILBAUM_38.format(ziel=_ZIEL_38.format(z='z'), heimat='f.category_id')})",
+             ZUWEISUNG_TEILBAUM),
+    # Ein Formular bekommt eine andere Heimat (die Oberfläche bietet das nicht an, Entscheidung O7).
+    _trigger("mat_formular_heimat", "AFTER UPDATE OF category_id ON mat_formular",
+             "EXISTS (SELECT 1 FROM mat_formular_zuweisung z WHERE z.formular_id = NEW.id "
+             f"AND {_ZIEL_38.format(z='z')} NOT IN {_teilbaum_38('NEW.category_id')})", ZUWEISUNG_TEILBAUM),
+]
+# Stand des Katalogs für den Zwischenspeicher der Übung (einfuehrung.katalog_material, Nachtrag vom 04.11.2026): Jede
+# Änderung an diesen Tabellen zählt mat_meta.katalog_stand hoch – auch zwei in derselben Sekunde. Geschrieben wird nur
+# beim Ändern, nie beim Lesen. Wer eine dieser Tabellen neu aufbaut, legt die Trigger danach neu an.
+KATALOG_STAND_TABELLEN = ("mat_category", "mat_product", "mat_product_document", "mat_recall", "mat_form",
+                          "mat_checklist_item", "mat_formular", "mat_formular_zuweisung")
+
+
+def _stand_trigger(tabelle, art):
+    return (f"CREATE TRIGGER IF NOT EXISTS trg_{tabelle}_stand_{art.lower()} AFTER {art} ON {tabelle} "
+            "BEGIN UPDATE mat_meta SET wert = CAST(wert AS INTEGER) + 1 WHERE schluessel = 'katalog_stand'; END")
+
+
+STAND_TRIGGER_38 = [_stand_trigger(t, a) for t in KATALOG_STAND_TABELLEN for a in ("INSERT", "UPDATE", "DELETE")]
+
+
+def _trigger_name(sql):
+    return sql.split("CREATE TRIGGER IF NOT EXISTS ", 1)[1].split()[0]
+
+
+def _produktname_38(hersteller, modell):
+    """Der Name eines Produkts wie katalog.produkt_teile (ohne Zusatz) – für Titel und Startprotokoll."""
+    return f"{hersteller or ''} {' '.join((modell or '').split('|')[0].split())}".strip()
+
+
+def _geltend_vorher_38(conn):
+    """Je Produkt die Kennung der Version, nach der es bis Schritt 37 geprüft wurde (katalog.formular_fuer_produkt in
+    der alten Form): Verweis formular_von → eigenes aktives spezifisches → aktives generisches der Kategorie oder der
+    nächsten Oberkategorie mit einem. None ohne Formular."""
+    eltern = dict(conn.execute("SELECT id, parent_id FROM mat_category"))
+    kat = dict(conn.execute("SELECT category_id, id FROM mat_form WHERE category_id IS NOT NULL AND active = 1"))
+    prod = dict(conn.execute("SELECT product_id, id FROM mat_form WHERE product_id IS NOT NULL AND active = 1"))
+    von = "formular_von" if "formular_von" in _spalten(conn, "mat_product") else "NULL"
+    out = {}
+    for pid, kid, quelle in conn.execute(f"SELECT id, category_id, {von} FROM mat_product").fetchall():
+        f = (prod.get(quelle) if quelle else None) or prod.get(pid)
+        gesehen = set()
+        while not f and kid in eltern and kid not in gesehen:
+            gesehen.add(kid)
+            f = kat.get(kid)
+            kid = eltern[kid]
+        out[pid] = f
+    return out
+
+
+def geltend_je_produkt(conn):
+    """Je Produkt die Kennung der Version, die nach dem Formular-Pool gilt – dieselbe Regel wie
+    katalog.formular_fuer_produkt, für alle Produkte auf einmal (Migration, Pool-Seite): die aktive Version des dem
+    Produkt zugewiesenen Formulars, sonst die des Standards seiner Kategorie oder der nächsten Oberkategorie mit einem.
+    {Produkt: (Version, Formular, Kategorie des Standards oder None)}; ohne Formular fehlt das Produkt."""
+    eltern = dict(conn.execute("SELECT id, parent_id FROM mat_category"))
+    aktiv = dict(conn.execute("SELECT formular_id, id FROM mat_form WHERE active = 1"))
+    prod = dict(conn.execute("SELECT product_id, formular_id FROM mat_formular_zuweisung WHERE product_id IS NOT NULL"))
+    kat = dict(conn.execute("SELECT category_id, formular_id FROM mat_formular_zuweisung WHERE category_id IS NOT NULL"))
+    out = {}
+    for pid, kid in conn.execute("SELECT id, category_id FROM mat_product").fetchall():
+        fid = prod.get(pid)
+        if fid in aktiv:
+            out[pid] = (aktiv[fid], fid, None)
+            continue
+        gesehen = set()
+        while kid in eltern and kid not in gesehen:
+            gesehen.add(kid)
+            fid = kat.get(kid)
+            if fid in aktiv:
+                out[pid] = (aktiv[fid], fid, kid)
+                break
+            kid = eltern[kid]
+    return out
+
+
+def _formularpool_38(conn):
+    """Der Datenteil von Schritt 38 (siehe Kopf): Formulare in den Pool, Zuweisungen, Titel, Vorher/Nachher-Vergleich.
+    Läuft nur, solange mat_form noch category_id hat; danach gibt es nichts mehr zu tun."""
+    ts = _jetzt()
+    vorher = _geltend_vorher_38(conn)
+    eltern = dict(conn.execute("SELECT id, parent_id FROM mat_category"))
+    kat_namen = dict(conn.execute("SELECT id, name FROM mat_category"))
+    produkte = {r[0]: {"kategorie": r[1], "name": _produktname_38(r[2], r[3]), "von": r[4]} for r in conn.execute(
+        "SELECT id, category_id, manufacturer, model, "
+        f"{'formular_von' if 'formular_von' in _spalten(conn, 'mat_product') else 'NULL'} FROM mat_product")}
+    benutzt = {r[0] for r in conn.execute("SELECT DISTINCT form_id FROM mat_inspection WHERE form_id IS NOT NULL")}
+    versionen = conn.execute("SELECT id, category_id, product_id, version, title, active, demo, created_by, created_at "
+                             "FROM mat_form ORDER BY id").fetchall()
+    meldungen = []
+
+    def pfad(kid):
+        teile, gesehen = [], set()
+        while kid in eltern and kid not in gesehen:
+            gesehen.add(kid)
+            teile.insert(0, kat_namen[kid])
+            kid = eltern[kid]
+        return teile
+
+    def vorfahren(kid):
+        """kid und alle Oberkategorien, von unten nach oben."""
+        out, gesehen = [], set()
+        while kid in eltern and kid not in gesehen:
+            gesehen.add(kid)
+            out.append(kid)
+            kid = eltern[kid]
+        return out
+
+    # 1. Je Ziel ein Formular – Heimat ist die Kategorie bzw. die heutige Kategorie des Produkts.
+    ziele = {}                                     # ("k"|"p", Kennung) → [Versionen]
+    for v in versionen:
+        ziele.setdefault(("k", v[1]) if v[1] is not None else ("p", v[2]), []).append(v)
+    formular_von_ziel, form_zu_formular, aktiv_von = {}, {}, {}
+    for (art, ziel), liste in sorted(ziele.items(), key=lambda x: min(v[0] for v in x[1])):
+        if art == "k":
+            heimat, herkunft = ziel, f"Kategorie „{kat_namen.get(ziel, '?')}“"
+        else:
+            heimat, herkunft = produkte[ziel]["kategorie"], f"Produkt „{produkte[ziel]['name']}“"
+        erste = min(liste, key=lambda v: v[0])
+        fid = conn.execute("INSERT INTO mat_formular (category_id, herkunft, demo, created_by, created_at, updated_at) "
+                           "VALUES (?,?,?,?,?,?)", (heimat, herkunft, int(all(v[6] for v in liste)), erste[7], erste[8],
+                                                    ts)).lastrowid
+        formular_von_ziel[(art, ziel)] = fid
+        for v in liste:
+            form_zu_formular[v[0]] = fid
+            if v[5]:
+                aktiv_von[fid] = v[0]
+        _journal_8(conn, "formular", fid, "angelegt", None,
+                   {"heimat": " / ".join(pfad(heimat)), "entstanden": ("generisches Formular der " if art == "k" else
+                                                                     "spezifisches Formular von ") + herkunft,
+                    "versionen": len(liste)}, MIGRATION_38)
+        # Unbenutzte Versionen ohne Titel heißen nach ihrem früheren Ziel (Entscheidung M3); benutzte bleiben, wie sie
+        # sind – der Pool zeigt dann die Herkunft.
+        name = kat_namen.get(ziel, "?") if art == "k" else produkte[ziel]["name"]
+        for v in liste:
+            if (v[4] or "").strip():
+                continue
+            if v[0] in benutzt:
+                meldungen.append(f"Version {v[3]} (Kennung {v[0]}) ohne Titel ist schon benutzt und bleibt ohne Titel – "
+                                 f"im Pool „(ohne Titel – bisher {herkunft})“.")
+                continue
+            titel = f"Prüfformular {name}"[:160]
+            conn.execute("UPDATE mat_form SET title = ? WHERE id = ?", (titel, v[0]))
+            _journal_8(conn, "form", v[0], "geaendert", {"title": ""}, {"title": titel}, MIGRATION_38)
+
+    def zuweisen(fid, spalte, ziel, grund, titel=None):
+        conn.execute(f"INSERT INTO mat_formular_zuweisung (formular_id, {spalte}, created_at) VALUES (?,?,?)",
+                     (fid, ziel, ts))
+        name = " / ".join(pfad(ziel)) if spalte == "category_id" else produkte[ziel]["name"]
+        if titel is None:
+            titel = conn.execute("SELECT title FROM mat_form WHERE id = ?", (aktiv_von[fid],)).fetchone()[0]
+        _journal_8(conn, "formular", fid, "zugewiesen", None,
+                   {"kategorie" if spalte == "category_id" else "produkt": name, "grund": grund}, MIGRATION_38)
+        _journal_8(conn, "category" if spalte == "category_id" else "product", ziel,
+                   "standard_gesetzt" if spalte == "category_id" else "formular_zugewiesen", None,
+                   {"formular": titel, "formular_id": fid, "grund": grund}, MIGRATION_38)
+
+    # 2. Standards und Zuweisungen: wo heute eine Version aktiv ist (ein Produkt mit Verweis hatte nie ein eigenes aktives).
+    standards = zuweisungen = 0
+    for (art, ziel), fid in formular_von_ziel.items():
+        if fid not in aktiv_von:
+            if art == "p":
+                meldungen.append(f"Spezifisches Formular von Produkt {ziel} „{produkte[ziel]['name']}“ ohne aktive Version "
+                                 "– im Pool der Kategorie, nicht zugewiesen (es galt schon vorher nicht).")
+            continue
+        if art == "k":
+            zuweisen(fid, "category_id", ziel, "bisher generisches Formular")
+            standards += 1
+        elif not produkte[ziel]["von"]:
+            zuweisen(fid, "product_id", ziel, "bisher spezifisches Formular")
+            zuweisungen += 1
+    # 3. Übernommene Formulare (formular_von): B bekommt das Formular von A, wenn es gilt (Entscheidung M1 über Grenzen).
+    kopien = {}                                    # Produkt B → Version, deren Prüfpunkte B vorher galten (Kopie)
+    nutzer = {}
+    for b, p in sorted(produkte.items()):
+        if p["von"]:
+            nutzer.setdefault(p["von"], []).append(b)
+    for a, liste in sorted(nutzer.items()):
+        fid = formular_von_ziel.get(("p", a))
+        if fid not in aktiv_von:
+            for b in liste:
+                meldungen.append(f"Produkt {b} „{produkte[b]['name']}“ übernahm das Formular von „"
+                                 f"{produkte.get(a, {}).get('name', '?')}“, das keine aktive Version hat – es bleibt beim "
+                                 "Standard der Kategorie (wie bisher).")
+            continue
+        heimat = produkte[a]["kategorie"]
+        mit, ohne = [], []
+        for b in liste:
+            gemeinsam = [k for k in vorfahren(produkte[b]["kategorie"]) if k in vorfahren(heimat)]
+            (mit if gemeinsam else ohne).append(b)
+        # Die nächste gemeinsame Oberkategorie von A und allen B, die mit A einen Baum teilen.
+        ziel_heimat = heimat
+        for b in mit:
+            if ziel_heimat not in vorfahren(produkte[b]["kategorie"]):
+                ziel_heimat = next(k for k in vorfahren(ziel_heimat) if k in vorfahren(produkte[b]["kategorie"]))
+        if ziel_heimat != heimat:
+            conn.execute("UPDATE mat_formular SET category_id = ? WHERE id = ?", (ziel_heimat, fid))
+            _journal_8(conn, "formular", fid, "verschoben", {"heimat": " / ".join(pfad(heimat))},
+                       {"heimat": " / ".join(pfad(ziel_heimat)), "grund": "gemeinsame Oberkategorie der Produkte, die "
+                                                                          "es übernommen hatten"}, MIGRATION_38)
+            meldungen.append(f"Formular von Produkt {a} „{produkte[a]['name']}“ steht im Pool von „"
+                             f"{' / '.join(pfad(ziel_heimat))}“ – der nächsten gemeinsamen Oberkategorie der Produkte, die es "
+                             "übernommen hatten.")
+        for b in mit:
+            zuweisen(fid, "product_id", b, f"bisher übernommen von „{produkte[a]['name']}“")
+            zuweisungen += 1
+        for b in ohne:
+            # Ohne gemeinsame Oberkategorie: eine Kopie der aktiven Version als eigenes Formular in der Kategorie von B.
+            quelle = aktiv_von[fid]
+            q = conn.execute("SELECT title, valid_from, demo FROM mat_form WHERE id = ?", (quelle,)).fetchone()
+            kopie_fid = conn.execute(
+                "INSERT INTO mat_formular (category_id, herkunft, demo, created_at, updated_at) VALUES (?,?,?,?,?)",
+                (produkte[b]["kategorie"], f"Kopie des Formulars von „{produkte[a]['name']}“", q[2], ts, ts)).lastrowid
+            kopien[b] = (quelle, kopie_fid, q)
+            _journal_8(conn, "formular", kopie_fid, "angelegt", None,
+                       {"heimat": " / ".join(pfad(produkte[b]["kategorie"])),
+                        "entstanden": f"Kopie der aktiven Version des Formulars von „{produkte[a]['name']}“ "
+                                      f"(Kennung {quelle})"}, MIGRATION_38)
+            meldungen.append(f"Produkt {b} „{produkte[b]['name']}“ übernahm das Formular von Produkt {a} „"
+                             f"{produkte[a]['name']}“ aus einem anderen Kategorienbaum – es hat jetzt eine Kopie davon in seiner "
+                             "Kategorie (spätere Änderungen am Original gelten dort nicht mehr).")
+    return {"vorher": vorher, "form_zu_formular": form_zu_formular, "kopien": kopien, "meldungen": meldungen,
+            "standards": standards, "zuweisungen": zuweisungen, "zuweisen": zuweisen, "pfad": pfad,
+            "formulare": len(formular_von_ziel)}
+
+
+def _schritt_38(conn):
+    """Formular-Pool (siehe Kopf): Tabellen, Datenteil (nur solange mat_form noch category_id hat), mat_form als Version
+    eines Formulars neu aufgebaut, Trigger, Index und Spalte aus Schritt 35/36 weg, Trigger von Schritt 38. Danach gilt
+    für jedes Produkt dieselbe Version wie vorher (bis auf die Kopien aus Entscheidung M1 – deren Prüfpunkte gleichen der
+    alten Version) – sonst Abbruch, die Transaktion von migrieren() nimmt alles zurück. Wiederholbar."""
+    for sql in FORMULAR_38:
+        conn.execute(sql)
+    conn.execute("INSERT OR IGNORE INTO mat_meta (schluessel, wert) VALUES ('katalog_stand', '0')")
+    if "category_id" in _spalten(conn, "mat_form"):
+        anzahl = conn.execute("SELECT COUNT(*) FROM mat_form").fetchone()[0]
+        punkte = conn.execute("SELECT COUNT(*) FROM mat_checklist_item").fetchone()[0]
+        vorher_fk = _fk_verletzungen(conn, ("mat_checklist_item", "mat_inspection"))
+        d = _formularpool_38(conn)
+        # Erst die Trigger aus Schritt 35/36 (einer nennt mat_form – das Umbenennen prüft jeden Trigger), dann der Umbau.
+        for name in TRIGGER_WEG_38:
+            conn.execute(f"DROP TRIGGER IF EXISTS {name}")
+        conn.execute("DROP TABLE IF EXISTS mat_form_neu")
+        conn.execute(FORM_38.format(name="mat_form_neu"))
+        conn.execute("CREATE TEMP TABLE _formular_38 (form_id INTEGER PRIMARY KEY, formular_id INTEGER NOT NULL)")
+        conn.executemany("INSERT INTO _formular_38 (form_id, formular_id) VALUES (?, ?)", d["form_zu_formular"].items())
+        conn.execute("INSERT INTO mat_form_neu (id, formular_id, version, title, valid_from, active, demo, created_by, "
+                     "created_at, updated_at) SELECT f.id, m.formular_id, f.version, f.title, f.valid_from, f.active, "
+                     "f.demo, f.created_by, f.created_at, f.updated_at FROM mat_form f JOIN _formular_38 m "
+                     "ON m.form_id = f.id")
+        conn.execute("DROP TABLE _formular_38")
+        conn.execute("DROP TABLE mat_form")
+        conn.execute("ALTER TABLE mat_form_neu RENAME TO mat_form")
+        for sql in FORM_INDIZES_38:
+            conn.execute(sql)
+        hoechste = max(conn.execute("SELECT COALESCE(MAX(id), 0) FROM mat_form").fetchone()[0],
+                       conn.execute("SELECT COALESCE(MAX(entity_id), 0) FROM mat_audit WHERE entity = 'form'").fetchone()[0])
+        conn.execute("DELETE FROM sqlite_sequence WHERE name IN ('mat_form', 'mat_form_neu')")
+        conn.execute("INSERT INTO sqlite_sequence (name, seq) VALUES ('mat_form', ?)", (hoechste,))
+        # Die Kopien aus Entscheidung M1: Version 1 mit den Prüfpunkten der Quelle, aktiv, dem Produkt zugewiesen.
+        for b, (quelle, kopie_fid, q) in sorted(d["kopien"].items()):
+            vid = conn.execute("INSERT INTO mat_form (formular_id, version, title, valid_from, active, demo, created_at, "
+                               "updated_at) VALUES (?,1,?,?,1,?,?,?)",
+                               (kopie_fid, q[0], q[1], q[2], _jetzt(), _jetzt())).lastrowid
+            conn.execute("INSERT INTO mat_checklist_item (form_id, group_name, position, label, editor, mandatory, "
+                         "expected_value) SELECT ?, group_name, position, label, editor, mandatory, expected_value "
+                         "FROM mat_checklist_item WHERE form_id = ? ORDER BY position, id", (vid, quelle))
+            _journal_8(conn, "form", vid, "angelegt", None, {"version": 1, "title": q[0], "vorlage": quelle},
+                       MIGRATION_38)
+            d["zuweisen"](kopie_fid, "product_id", b, "Kopie des übernommenen Formulars", q[0])
+            d["zuweisungen"] += 1
+        # Nachher: je Produkt dieselbe Version wie vorher (die Kopien: dieselben Prüfpunkte), nichts verloren.
+        nachher = geltend_je_produkt(conn)
+
+        def inhalt(vid):
+            return conn.execute("SELECT group_name, position, label, editor, mandatory, expected_value FROM "
+                                "mat_checklist_item WHERE form_id = ? ORDER BY position, id", (vid,)).fetchall()
+        abweichend = []
+        for pid, alt in d["vorher"].items():
+            neu = nachher.get(pid, (None,))[0]
+            if pid in d["kopien"]:
+                if neu is None or inhalt(neu) != inhalt(alt) or alt != d["kopien"][pid][0]:
+                    abweichend.append(pid)
+            elif neu != alt:
+                abweichend.append(pid)
+        if (abweichend or conn.execute("SELECT COUNT(*) FROM mat_form").fetchone()[0] != anzahl + len(d["kopien"])
+                or conn.execute("SELECT COUNT(*) FROM mat_checklist_item").fetchone()[0] < punkte
+                or _fk_verletzungen(conn, ("mat_checklist_item", "mat_inspection", "mat_form", "mat_formular",
+                                           "mat_formular_zuweisung")) - vorher_fk):
+            raise sqlite3.IntegrityError(f"Schritt 38: Nach dem Umbau gälte für Produkte ein anderes Prüfformular als "
+                                         f"vorher: {abweichend[:10]}" if abweichend else
+                                         "Schritt 38: Bestand der Prüfformulare nach dem Umbau verändert.")
+        if anzahl:
+            _NACH_DEM_FESTSCHREIBEN.append(
+                f"Schritt 38 (Materialablage): {d['formulare'] + len(d['kopien'])} Prüfformulare im Pool, {d['standards']} "
+                f"Standards von Kategorien, {d['zuweisungen']} Zuweisungen an Produkte; für jedes Produkt gilt dasselbe "
+                "Formular wie vorher" + (" (bei den Kopien: dieselben Prüfpunkte)." if d["kopien"] else "."))
+        _NACH_DEM_FESTSCHREIBEN.extend(f"Schritt 38 (Materialablage): {m}" for m in d["meldungen"])
+    for name in TRIGGER_WEG_38:
+        conn.execute(f"DROP TRIGGER IF EXISTS {name}")
+    conn.execute("DROP INDEX IF EXISTS idx_mat_product_formular_von")
+    if "formular_von" in _spalten(conn, "mat_product") and sqlite3.sqlite_version_info >= (3, 35):
+        conn.execute("ALTER TABLE mat_product DROP COLUMN formular_von")
+    for sql in TRIGGER_38 + STAND_TRIGGER_38:
+        conn.execute(f"DROP TRIGGER IF EXISTS {_trigger_name(sql)}")
+        conn.execute(sql)
+
+
 # Je Version die Schritte, die von der Vorversion dorthin führen: eine Liste von SQL-Befehlen (für sich
 # wiederholbar, IF NOT EXISTS) oder eine Funktion. Alle Schritte eines Starts laufen in EINER
 # Transaktion – bricht einer ab, bleibt die Datenbank, wie sie war, und der nächste Start versucht es neu.
@@ -3145,7 +3569,7 @@ SCHRITTE = {1: SCHRITT_1, 2: _schritt_2, 3: _schritt_3, 4: SCHRITT_4, 5: _schrit
             20: _schritt_20, 21: _schritt_21, 22: _schritt_22, 23: _schritt_23, 24: _schritt_24,
             25: _schritt_25, 26: _schritt_26, 27: _schritt_27, 28: _schritt_28, 29: SCHRITT_29, 30: SCHRITT_30,
             31: SCHRITT_31, 32: _schritt_32, 33: _schritt_33, 34: _schritt_34, 35: _schritt_35,
-            36: _schritt_36, 37: _schritt_37}
+            36: _schritt_36, 37: _schritt_37, 38: _schritt_38}
 
 
 def _meta(conn, schluessel, vorgabe=None):

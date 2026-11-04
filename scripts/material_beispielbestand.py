@@ -21,12 +21,13 @@ dazu die dev-Kennung (STROEMIS_NAME endet auf „-dev“) – nur lokal (beide A
 Sonst legt das Skript nichts an.
 
 Der Katalog: Kategorien, Produkte, Dokumente, Bilder, Rückrufe und Meldungen werden nur gelesen. Einzige Ausnahme sind
-DEMO-Formulare für echte Kategorien ohne wirksames aktives Prüfformular (formulare) – mit DEMO-Kennzeichen, aktiv; der
-Katalog-Export lässt sie aus: nach den Petzl-Prüfberichten, wo scripts/beispielbestand_petzl_punkte.json die Kategorie
+DEMO-Formulare für echte Kategorien ohne wirksamen Standard (formulare) – im Pool der Kategorie, mit DEMO-Kennzeichen,
+aktiv und als ihr Standard (der Katalog-Export nimmt aktive Formulare seit dem 04.11.2026 mit, der Import ohne „DEMO“
+im Titel): nach den Petzl-Prüfberichten, wo scripts/beispielbestand_petzl_punkte.json die Kategorie
 nach ihrem Namen kennt (Punkte wörtlich, mit Gruppe und Soll; Fundstellen je Punkt in der Datei, die Quellen im
 Bericht – das Formular hat kein Feld dafür; das Feld „kritisch“ der Datei bleibt seit dem 03.11.2026 ungenutzt),
 sonst Platzhalter (je ein Punkt Ja/Nein, Text, Zahl, bei Artikellänge
-„Länge (m)“) an der obersten Kategorie ohne Formular. Grundlage sind die Produkte ohne DEMO-Kennzeichen außerhalb von DEMO-Kategorien und ohne Bestandteil-Liste
+„Länge (m)“) an der obersten Kategorie ohne Standard. Grundlage sind die Produkte ohne DEMO-Kennzeichen außerhalb von DEMO-Kategorien und ohne Bestandteil-Liste
 (Sets nur als Ordnerart). Alles Fachliche (Prüfpunkte, Intervalle, Lebensdauern, Hersteller, Produkte) kommt aus dem
 Katalog; erfunden sind nur Bestandsangaben, und die tragen „DEMO“: Ordner „DEMO-…“, Seriennummern „DEMO-…“, DEMO-Konten mit
 @example.invalid, Bemerkungen, Gründe und Befunde „DEMO – nicht für echte Prüfungen“, Seillängen als Bestandswert. Ein
@@ -448,25 +449,28 @@ def petzl_punkte(v):
 
 
 def formulare(vorlagen):
-    """Prüfformulare für echte Kategorien ohne wirksames aktives Formular – DEMO-gekennzeichnet und aktiv, der
-    Katalog-Export lässt sie aus. Echte Formulare (aktiv wie inaktiv) und DEMO-Kategorien samt Teilbaum bleiben unberührt.
-      1. Petzl: Eine echte Kategorie, deren Name (oder früherer Name, PETZL_ALIAS) in vorlagen steht, die selbst kein Formular hat und über keine
-         Oberkategorie ein aktives echtes, bekommt das Formular nach dem Petzl-Prüfbericht.
-      2. Platzhalter: von oben nach unten – eine echte Kategorie, die weder
-         selbst noch über eine Oberkategorie ein aktives Formular hat, bekommt eins, so hoch wie möglich (die
-         Unterkategorien erben es; ein Formular an einer Unterkategorie geht ihm vor). „Länge (m)“ kommt dazu, wenn eine
-         Kategorie des Teilbaums eine Artikellänge vorsieht. Eine Kategorie mit nur einem inaktiven echten Formular
-         bekommt keins (aktiv verdrängte das DEMO-Formular es im Export); ihre Unterkategorien bekommen eigene.
-    Ein zweiter Lauf legt nichts doppelt an. Liefert (petzl, platzhalter, ohne) – je Kategorienamen."""
+    """Prüfformulare für echte Kategorien ohne wirksamen Standard (eigener oder geerbt, Formular-Pool seit Schritt 38) –
+    je ein Formular im Pool der Kategorie mit DEMO-Kennzeichen, aktiv und Standard der Kategorie. Der Katalog-Export
+    nimmt sie seit dem 04.11.2026 mit (aktive Formulare, auch Platzhalter); der Import nimmt „DEMO“ aus dem Titel. Echte
+    Formulare, ihre Zuweisungen und DEMO-Kategorien samt Teilbaum bleiben unberührt.
+      1. Petzl: Eine echte Kategorie, deren Name (oder früherer Name, PETZL_ALIAS) in vorlagen steht, die selbst weder
+         einen Standard noch Formulare in ihrem Pool hat und über keine Oberkategorie einen echten Standard, bekommt das
+         Formular nach dem Petzl-Prüfbericht.
+      2. Platzhalter: von oben nach unten – eine echte Kategorie ohne Standard, auch über keine Oberkategorie, bekommt
+         einen, so hoch wie möglich (die Unterkategorien erben ihn; ein Standard an einer Unterkategorie geht ihm vor).
+         „Länge (m)“ kommt dazu, wenn eine Kategorie des Teilbaums eine Artikellänge vorsieht.
+    Ein zweiter Lauf legt nichts doppelt an. Liefert (petzl, platzhalter) – je Kategorienamen."""
     from app import db
     from app.material.services import katalog
     kats = {k["id"]: k for k in db.query("SELECT id, parent_id, name, demo FROM mat_category ORDER BY position, name, id")}
     kinder = {}
     for k in kats.values():
         kinder.setdefault(k["parent_id"], []).append(k)
-    formulare_an = {}
-    for f in db.query("SELECT category_id, active, demo FROM mat_form WHERE category_id IS NOT NULL"):
-        formulare_an.setdefault(f["category_id"], []).append(f)
+    # Standard je Kategorie (nur mit aktiver Version – sonst gilt er nicht) mit dem DEMO-Kennzeichen seines Formulars.
+    standard = {r["category_id"]: r["demo"] for r in db.query(
+        "SELECT z.category_id, f.demo FROM mat_formular_zuweisung z JOIN mat_formular f ON f.id = z.formular_id "
+        "WHERE z.category_id IS NOT NULL AND EXISTS (SELECT 1 FROM mat_form v WHERE v.formular_id = f.id AND v.active = 1)")}
+    im_pool = {r["category_id"] for r in db.query("SELECT DISTINCT category_id FROM mat_formular")}
     raus, stapel = set(), [k["id"] for k in kats.values() if k["demo"]]
     while stapel:
         x = stapel.pop()
@@ -475,40 +479,38 @@ def formulare(vorlagen):
             stapel += [c["id"] for c in kinder.get(x, [])]
 
     def anlegen(kid, titel, punkte):
-        fid = katalog.formular_anlegen({"kategorie_id": kid, "titel": titel, "punkte": punkte}, demo=True)
+        pf, fid = katalog.pool_anlegen({"kategorie_id": kid, "titel": titel, "punkte": punkte}, demo=True)
         katalog.formular_aktivieren(fid)
-        formulare_an[kid] = [{"active": 1, "demo": 1}]
+        katalog.zuweisung_setzen(pf, {"kategorien": [kid]})
+        standard[kid] = 1
+        im_pool.add(kid)
 
     petzl = []
     for k in kats.values():
         v = petzl_vorlage(vorlagen, k["name"])
-        if k["id"] in raus or not v or formulare_an.get(k["id"]):
+        if k["id"] in raus or not v or k["id"] in standard or k["id"] in im_pool:
             continue
         oben = [x["id"] for x in katalog.kategorie_pfad(k["id"])][:-1]
-        if any(f["active"] and not f["demo"] for o in oben for f in formulare_an.get(o, [])):
+        if any(o in standard and not standard[o] for o in oben):
             continue
         anlegen(k["id"], petzl_titel(k["name"], v), petzl_punkte(v))
         petzl.append(k["name"])
     laenge = katalog.laenge_kategorien()
-    platzhalter, ohne = [], []
+    platzhalter = []
 
     def abdecken(k, geerbt):
         if k["id"] in raus:
             return
-        eigene = formulare_an.get(k["id"], [])
-        if not geerbt and not eigene:
+        if not geerbt and k["id"] not in standard:
             anlegen(k["id"], FORMULAR_TITEL + k["name"],
                     _platzhalter_punkte(bool(katalog._unterkategorien(k["id"]) & laenge)))
             platzhalter.append(k["name"])
-        abgedeckt = geerbt or not eigene or any(f["active"] or f["demo"] for f in eigene)
-        if not abgedeckt:
-            ohne.append(k["name"])
         for kind in kinder.get(k["id"], []):
-            abdecken(kind, abgedeckt)
+            abdecken(kind, True)
 
     for k in kinder.get(None, []):
         abdecken(k, False)
-    return petzl, platzhalter, ohne
+    return petzl, platzhalter
 
 
 # --- Bilder: DEMO-Unterschrift und DEMO-Mangelfoto -----------------------------------------------------------------------
@@ -575,7 +577,7 @@ class Beispielbestand:
         self._ereignisse, self._nr = [], 0
         self._foto = self._signatur = None
         self._start = time.monotonic()
-        self._formulare = ([], [], [])
+        self._formulare = ([], [])
         self._vorlagen = {}
 
     # --- Vorprüfungen ---
@@ -680,7 +682,7 @@ class Beispielbestand:
         if fehlt:
             self.hinweise.append(fehlt)
         self._formulare = formulare(self._vorlagen)
-        petzl, platzhalter, _ = self._formulare
+        petzl, platzhalter = self._formulare
         if petzl or platzhalter:
             print(f"Formulare (DEMO, aktiv): {len(petzl)} nach Petzl-Prüfbericht ({', '.join(petzl)}), "
                   f"{len(platzhalter)} Platzhalter ({', '.join(platzhalter[:8])}{' …' if len(platzhalter) > 8 else ''}).")
@@ -1657,18 +1659,16 @@ class Beispielbestand:
         if fehlen:
             grund = "" if any(p["lebensdauer"] for p in produkte) else " (der Katalog hat kein textiles Produkt mit Lebensdauer)"
             print(f"  Kommt nicht vor: {', '.join(fehlen)}{grund}.")
-        petzl, platzhalter, ohne_form = self._formulare
+        petzl, platzhalter = self._formulare
         if petzl:
-            print("Formulare nach Petzl-Prüfbericht (DEMO, nicht im Katalog-Export; Fundstelle je Punkt in "
+            print("Formulare nach Petzl-Prüfbericht (DEMO, Standard der Kategorie; Fundstelle je Punkt in "
                   "scripts/beispielbestand_petzl_punkte.json):")
             for name in petzl:
                 for q in petzl_vorlage(self._vorlagen, name)["quelle"].values():
                     print(f"  {name}: {q['hersteller']} „{q['titel']}“ ({q.get('version_gedruckt') or 'ohne Versionsangabe'}"
                           f"), {q['dateiname']}")
         if platzhalter:
-            print(f"Platzhalter-Formulare (DEMO, nicht im Katalog-Export): {', '.join(platzhalter)}.")
-        if ohne_form:
-            print(f"Ohne wirksames Formular (nur ein inaktives echtes – bitte im Katalog aktivieren): {', '.join(ohne_form)}.")
+            print(f"Platzhalter-Formulare (DEMO, Standard der Kategorie): {', '.join(platzhalter)}.")
         ohne = sorted({p["name"] for p in produkte if not p["formular"]})
         if ohne:
             print(f"Ohne aktives Prüfformular (keine Prüfung möglich, Artikel „neu“): {', '.join(ohne)}.")

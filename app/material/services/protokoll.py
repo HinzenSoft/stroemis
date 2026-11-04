@@ -451,19 +451,16 @@ def _befunde(pid):
 
 
 def _formular_text(p, item):
-    """Das Formular der Prüfung. Gehört es zu einem anderen Produkt als dem des Artikels – übernommen (Schritt 35) –,
-    nennt das Protokoll dieses Produkt."""
+    """Das Formular der Prüfung: „„Titel“, Version n (Prüfformular der Kategorie „Heimat“)“ – seit dem Formular-Pool
+    (Schritt 38) nach der Kategorie, in deren Pool es steht. Festgeschriebene Protokolle sind Dateien und bleiben, wie sie
+    sind."""
     if not p["form_id"]:
         return ""
-    f = db.query("SELECT title, category_id, product_id FROM mat_form WHERE id = ?", (p["form_id"],), one=True)
+    f = db.query("SELECT f.title, c.name AS heimat FROM mat_form f JOIN mat_formular p ON p.id = f.formular_id "
+                 "JOIN mat_category c ON c.id = p.category_id WHERE f.id = ?", (p["form_id"],), one=True)
     if not f:
         return ""
-    art = "spezifisch für das Produkt" if f["product_id"] else "generisch für die Kategorie"
-    if f["product_id"] and f["product_id"] != item["product_id"]:
-        q = db.query("SELECT manufacturer, model, description FROM mat_product WHERE id = ?", (f["product_id"],), one=True)
-        if q:
-            art = f"spezifisch für das Produkt „{katalog.produktname(q)}“"
-    return f"„{f['title']}“, Version {p['form_version']} ({art})"
+    return f"„{f['title']}“, Version {p['form_version']} (Prüfformular der Kategorie „{f['heimat']}“)"
 
 
 def _lebensdauer_text(item, produkt, tag):

@@ -80,9 +80,9 @@ def test_routen_und_formular():
             f = json.loads(text)["formular"]
             assert "wiki" not in f and "wiki_aendern" not in f and TITEL not in text, sorted(f)
         # Neue Version (mit und ohne Vorlage): nichts von einer Verknüpfung.
-        f2 = ok(t.mvw.post("/api/material/formulare", json={"kategorie_id": t.ids["karabiner"]}), 201)["formular"]
-        f3 = ok(t.mvw.post("/api/material/formulare", json={"kategorie_id": t.ids["karabiner"], "vorlage_id": t.fid}),
-                201)["formular"]
+        pf = ok(t.mvw.get(f"/api/material/formulare/{t.fid}"))["formular"]["formular_id"]
+        f2 = ok(t.mvw.post("/api/material/formulare", json={"formular_id": pf}), 201)["formular"]
+        f3 = ok(t.mvw.post("/api/material/formulare", json={"formular_id": pf, "vorlage_id": t.fid}), 201)["formular"]
         assert "wiki" not in f2 and "wiki" not in f3
         # Alte Journal-Einträge „wiki“ bleiben lesbar (beschriftung.py und material.js).
         from app.material.services import beschriftung
@@ -135,8 +135,8 @@ def test_katalog_ignoriert_altes_feld():
         r = t.mv.post("/api/material/katalog/import", headers=H, content_type="multipart/form-data",
                       data={"file": (io.BytesIO(aus.getvalue()), "katalog.zip"), "trocken": "0"})
         assert import_abwarten(t.mv, r)["bericht"]["gespeichert"]
-        neue = zeilen(t.app, "SELECT * FROM mat_form WHERE id NOT IN (SELECT value FROM json_each(?)) ORDER BY id",
-                      (json.dumps(sorted(vorher)),))
+        neue = zeilen(t.app, "SELECT f.*, p.category_id FROM mat_form f JOIN mat_formular p ON p.id = f.formular_id "
+                             "WHERE f.id NOT IN (SELECT value FROM json_each(?)) ORDER BY f.id", (json.dumps(sorted(vorher)),))
         assert any(f["category_id"] == t.ids["karabiner"] for f in neue), neue
         assert all("wiki_page_id" not in f for f in neue), neue
     print("Katalog ignoriert das alte Feld bestanden.")

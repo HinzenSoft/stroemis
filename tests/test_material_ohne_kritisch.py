@@ -54,7 +54,7 @@ def test_formular_editor():
         app, k = umgebung(tmp)
         ids = katalog_grund(k["adm"])
         kp = k["katalog"]
-        r = kp.post(f"{API}/formulare", json={"kategorie_id": ids["gurte"], "titel": "Platzhalter-Formular", "punkte": [
+        r = kp.post(f"{API}/formular-pool", json={"kategorie_id": ids["gurte"], "titel": "Platzhalter-Formular", "punkte": [
             {"text": "Platzhalter Ja/Nein", "art": "yesno", "soll": "nein", "kritisch": True},
             {"text": "Platzhalter Text", "art": "text", "kritisch": True},
             {"text": "Platzhalter Zahl", "art": "number", "kritisch": "vielleicht"}]})

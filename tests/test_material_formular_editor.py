@@ -276,7 +276,7 @@ def gruppe_ziehen(s, touch):
 
 def eine_gruppe(u, kategorie, breite, hoehe, touch):
     """Bei nur einer Gruppe kein Griff am Kopf (die Punkte behalten ihren); mit „+ Gruppe“ haben beide Köpfe einen."""
-    r = u.adm.post("/api/material/formulare", json={"kategorie_id": kategorie, "titel": "Platzhalter eine Gruppe", "punkte": [
+    r = u.adm.post("/api/material/formular-pool", json={"kategorie_id": kategorie, "titel": "Platzhalter eine Gruppe", "punkte": [
         {"gruppe": "Gruppe A", "text": "Platzhalter 1", "art": "yesno", "soll": "nein"},
         {"gruppe": "Gruppe A", "text": "Platzhalter 2", "art": "yesno", "soll": "ja"}]})
     assert r.status_code == 201, r.get_json()
@@ -297,7 +297,7 @@ def eine_gruppe(u, kategorie, breite, hoehe, touch):
 
 
 def formular_anlegen(u, kategorie):
-    r = u.adm.post("/api/material/formulare", json={"kategorie_id": kategorie, "titel": "Platzhalter Editor", "punkte": [
+    r = u.adm.post("/api/material/formular-pool", json={"kategorie_id": kategorie, "titel": "Platzhalter Editor", "punkte": [
         {"gruppe": "Gruppe A", "text": "Platzhalter 1", "art": "yesno", "soll": "nein"},
         {"gruppe": "Gruppe A", "text": "Platzhalter 2", "art": "yesno", "soll": "ja"},
         {"gruppe": "Gruppe B", "text": "Platzhalter 3", "art": "text"},

@@ -147,13 +147,12 @@ def konto_namen(refs):
 
 
 def fuer_produkt(pid, user=None, meldungen=True):
-    """Journal eines Produkts: seine Stammdaten, seine Dokumente, seine spezifischen Formulare und die
-    Meldungen, über die es in den Katalog kam – diese nur, soweit das Konto die Meldung sehen darf
+    """Journal eines Produkts: seine Stammdaten (seit Schritt 38 auch, welches Prüfformular ihm zugewiesen wurde), seine
+    Dokumente und die Meldungen, über die es in den Katalog kam – diese nur, soweit das Konto die Meldung sehen darf
     (rechte.darf_meldung: Melder, Material-Verwaltung, wer den Ordner der Meldung sieht). meldungen=False lässt
-    sie ganz weg."""
+    sie ganz weg. Die Versionen früherer spezifischer Formulare stehen seit dem Formular-Pool auf der Formularseite."""
     paare = [("product", pid)]
     paare += [("document", r["id"]) for r in db.query("SELECT id FROM mat_product_document WHERE product_id = ?", (pid,))]
-    paare += [("form", r["id"]) for r in db.query("SELECT id FROM mat_form WHERE product_id = ?", (pid,))]
     if meldungen:
         from .rechte import darf_meldung
         paare += [("request", r["id"]) for r in db.query(

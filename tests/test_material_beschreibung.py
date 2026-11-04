@@ -140,14 +140,14 @@ def test_import_lange_beschreibung():
         assert ber["produkte"] == {"neu": 0, "geaendert": 0, "unveraendert": 2}, ber
         assert not [h for h in ber["hinweise"] if "Bemerkung" in h], ber["hinweise"]
 
-        # Austausch in eine zweite Instanz (Format 2): erst der Probelauf, dann der echte Lauf.
+        # Austausch in eine zweite Instanz (Format 3 seit Schritt 38): erst der Probelauf, dann der echte Lauf.
         roh = exportieren(c)
         app_b = make_app(tmp_b)
         c_b = anmelden(app_b, "admin@example.org", "geheim123")
         ber = importieren(c_b, roh, True)
         assert not ber["fehler"] and not ber["gespeichert"] and ber["produkte"]["neu"] == 2, ber
         ber = importieren(c_b, roh, False)
-        assert ber["gespeichert"] and not ber["fehler"] and ber["version"] == 2, ber
+        assert ber["gespeichert"] and not ber["fehler"] and ber["version"] == 3, ber
         assert any("Karabiner Lang" in h for h in ber["hinweise"]), ber["hinweise"]
         zeilen = {r["model"]: r["description"] for r in _db(app_b, "SELECT model, description FROM mat_product",
                                                             one=False)}

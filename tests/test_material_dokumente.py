@@ -153,8 +153,8 @@ def test_version_und_protokoll():
         assert kp.delete(f"/api/material/produkte/{ids['hms']}", headers=H).status_code == 200
         assert dateien(tmp) == {name_a, name_b}
 
-        # Protokollregel: Pflegehinweis (Datei C) an einer eigenen Kategorie ohne Formular; ihr Produkt hat ein
-        # spezifisches Formular und wird geprüft – das Protokoll nennt das geerbte Dokument. Ein zweites Produkt (Gurt)
+        # Protokollregel: Pflegehinweis (Datei C) an einer eigenen Kategorie ohne Formular; ihrem Produkt ist ein
+        # Formular zugewiesen und es wird geprüft – das Protokoll nennt das geerbte Dokument. Ein zweites Produkt (Gurt)
         # hat dieselbe Datei als Datenblatt.
         r = kp.post("/api/material/kategorien", json={"name": "Pflegekategorie", "parent_id": ids["psa"],
                                                      "default_material_kind": "metall_hardware"})
@@ -167,10 +167,13 @@ def test_version_und_protokoll():
         dokument_anlegen(kp, ids["gurt"], PDF_C, name="blatt.pdf", kind="datenblatt")
         assert dateien(tmp) == {name_a, name_b, name_c}
         hms2 = _neues_produkt(kp, dict(ids, karabiner=pflege), "HB-8")
-        r = kp.post("/api/material/formulare", json={"produkt_id": hms2, "titel": "Spezifisch", "punkte": [
+        # Das Formular steht im Pool der Oberkategorie (seit Schritt 38) – sonst hielte es die Pflegekategorie selbst.
+        r = kp.post("/api/material/formular-pool", json={"kategorie_id": ids["psa"], "titel": "Spezifisch", "punkte": [
             {"text": "Testpunkt Verschluss", "art": "yesno", "soll": "ja"}]})
         assert r.status_code == 201, r.get_json()
         assert kp.post(f"/api/material/formulare/{r.json['formular']['id']}/aktivieren", json={}).status_code == 200
+        assert kp.put(f"/api/material/formular-pool/{r.json['formular']['formular_id']}/zuweisung",
+                      json={"produkte": [hms2]}).status_code == 200
         gid, _ = gliederung(w)
         a = neuer_artikel(w, hms2, gid, serial_no="K-1")
         r = starten(p1, a["id"])

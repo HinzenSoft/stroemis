@@ -285,8 +285,8 @@ def bis_schritt(version, nachruesten=True):
     seit Schritt 23 mat_item_change.group_id (SPALTEN_23 – Schritt 23 baut die Tabelle danach trotzdem um, der CHECK
     kennt die neuen Felder erst dann); seit Schritt 25 die Tabelle der Seriennummern der Bestandteile (models.TABELLEN_25,
     ohne Trigger) und die beiden Spalten an mat_inspection_result (models.SPALTEN_25) – Artikelansicht und Prüfung lesen
-    sie; seit Schritt 35 die Spalte mat_product.formular_von (models.SPALTEN_35) – jede Produktansicht fragt, wer das
-    Prüfformular übernimmt. nachruesten=False lässt den Stand ganz, wie er war (für Tests, die genau das prüfen); nachruesten="schritt_25" rüstet
+    sie; seit Schritt 35 die Spalte mat_product.formular_von (models.SPALTEN_35); seit Schritt 38 die (leeren) Tabellen
+    des Formular-Pools (models.FORMULAR_38) – jede Produkt- und Artikelansicht fragt nach Zuweisungen. nachruesten=False lässt den Stand ganz, wie er war (für Tests, die genau das prüfen); nachruesten="schritt_25" rüstet
     nur Tabelle und Spalten aus Schritt 25 nach (für Tests, die einen älteren Stand ohne die übrigen Nachrüstungen prüfen,
     aber Artikel anlegen)."""
     def lauf(f, *a):
@@ -296,7 +296,7 @@ def bis_schritt(version, nachruesten=True):
         models.SCHEMA_VERSION = version
         # Die Startschritte der Module stehen in db.SCHEMA_MODULE (init_db ruft sie der Reihe nach mit der Verbindung):
         # hinten angehängt, läuft das Nachrüsten nach der Modulmigration jedes Starts in f.
-        mit = nachruesten and version < 35
+        mit = nachruesten and version < 38
         schritt = schritt_25_nachruesten if nachruesten == "schritt_25" else spalten_20_nachruesten
         if mit:
             from app.material import schema_anmelden
@@ -318,6 +318,15 @@ def objekte_weg_37():
     return {befehl.split()[-1] for befehl in models.OBJEKTE_WEG_37}
 
 
+def trigger_38():
+    """(neu, weg): die Trigger, die Schritt 38 anlegt (Teilbaum der Zuweisungen, Zähler katalog_stand, uid des
+    Formulars), und die aus Schritt 35/36, die er entfernt – für Tests, die Trigger eines älteren Stands mit dem Endstand
+    vergleichen."""
+    from app.material import models
+    neu = {models._trigger_name(x) for x in models.TRIGGER_38 + models.STAND_TRIGGER_38} | {"trg_mat_formular_uid"}
+    return neu, set(models.TRIGGER_WEG_38)
+
+
 def spalten_vor_37(conn):
     """Die Set-Spalten, die Schritt 37 entfernt, leer wieder anlegen (ohne Commit) – für Tests, die Schritt 26 auf dem
     Endstand noch einmal laufen lassen (er liest sie); models._schritt_37 räumt sie danach wieder ab, wie in der Kette."""
@@ -337,11 +346,12 @@ def schritt_25_nachruesten(conn):
         conn.execute(befehl)
     models.spalten_nachruesten(conn, models.SPALTEN_25)
     models.spalten_nachruesten(conn, models.SPALTEN_35)
+    formular_pool_nachruesten(conn)
     conn.commit()
 
 
 def spalten_20_nachruesten(conn):
-    """Nur die Spalten aus Schritt 20 bis 25 und 35 und die Tabellen aus Schritt 21 und 25 (ohne Trigger) an eine Datenbank
+    """Nur die Spalten aus Schritt 20 bis 25 und 35 und die Tabellen aus Schritt 21, 25 und 38 (ohne Trigger) an eine Datenbank
     älteren Stands (siehe bis_schritt) – mit Commit. Schritt 22: is_set und set_teile an mat_product_request (die Meldung
     schreibt sie); Schritt 23: group_id an mat_item_change; Schritt 25: mat_item_component_serial und component_id,
     component_serials an mat_inspection_result."""
@@ -363,7 +373,42 @@ def spalten_20_nachruesten(conn):
         models.spalten_nachruesten(conn, models.SPALTEN_25)
     if version < 35:
         models.spalten_nachruesten(conn, models.SPALTEN_35)
+    if version < 38:
+        formular_pool_nachruesten(conn)
     conn.commit()
+
+
+_FORM_38_SPALTEN = ("id", "formular_id", "version", "title", "valid_from", "active", "demo", "created_by", "created_at",
+                    "updated_at")
+
+
+def formular_pool_nachruesten(conn):
+    """Die Tabellen des Formular-Pools (Schritt 38, models.FORMULAR_38) und – solange sie leer ist – mat_form in seiner
+    Form (Version eines Formulars, ohne Ziel): Die Dienste schreiben seit Schritt 38 nur noch so, und ein Test auf einem
+    älteren Stand legt seine Formulare über sie an. Der spätere Schritt 38 findet dann nichts zu übertragen (mat_form hat
+    kein category_id mehr) und legt nur Trigger und Indizes an. Die Trigger aus Schritt 35/36 (TRIGGER_WEG_38) gehen
+    dabei weg – sie nennen das Ziel an mat_form, und Schritt 38 entfernt sie ohnehin. Ohne Commit."""
+    from app.material import models
+    for befehl in models.FORMULAR_38:
+        conn.execute(befehl)
+    # Immer (auch wenn ein späterer Lauf von Schritt 35/36 sie wieder angelegt hat): Ihre Fassung nennt das Ziel an mat_form.
+    for name in models.TRIGGER_WEG_38:
+        conn.execute(f"DROP TRIGGER IF EXISTS {name}")
+    if "category_id" in models._spalten(conn, "mat_form") and not conn.execute("SELECT 1 FROM mat_form").fetchone():
+        # Spalten und Indizes späterer Schritte bleiben (mat_form.wiki_page_id aus Schritt 12 bis Schritt 37).
+        weitere = [(r[1], r[2]) for r in conn.execute("PRAGMA table_info(mat_form)")
+                   if r[1] not in _FORM_38_SPALTEN and r[1] not in ("category_id", "product_id")]
+        indizes = [r[0] for r in conn.execute("SELECT sql FROM sqlite_master WHERE type = 'index' AND tbl_name = "
+                                              "'mat_form' AND sql IS NOT NULL")
+                   if "category_id" not in r[0] and "product_id" not in r[0]]
+        # Wie in Schritt 38 über mat_form_neu und Umbenennen – so steht dieselbe Fassung im Schema wie nach dem Schritt.
+        conn.execute(models.FORM_38.format(name="mat_form_neu"))
+        conn.execute("DROP TABLE mat_form")
+        conn.execute("ALTER TABLE mat_form_neu RENAME TO mat_form")
+        for spalte, art in weitere:
+            conn.execute(f"ALTER TABLE mat_form ADD COLUMN {spalte} {art}")
+        for befehl in models.FORM_INDIZES_38 + indizes:
+            conn.execute(befehl)
 
 
 def grant_tabelle_wie_schritt_8(pfad):
@@ -1204,6 +1249,7 @@ def test_nichts_aus_b():
         t, b = trennung_aufbau(tmp)
         app, w, ids = t.app, t.wart_a, t.ids
         form = zeilen(app, "SELECT id FROM mat_form ORDER BY id LIMIT 1")[0]["id"]
+        pool = zeilen(app, "SELECT formular_id FROM mat_form WHERE id = ?", (form,))[0]["formular_id"]
         kennungen = {"iid": t.art_b["id"], "mid": b.meldung, "aid": b.anhang_id, "token": b.token, "gid": b.freigabe,
                      "kid": ids["karabiner"], "did": 999999, "ruid": 999999, "anid": 999999, "filename": "material.js", "sid": 999999,
                      "uid": t.wart_b_id,                    # „Rechte ändern“ je Person (02.11.2026)
@@ -1213,7 +1259,8 @@ def test_nichts_aus_b():
                      ("pruefungen", "pid"): t.entwurf_b, ("pruefung", "pid"): t.entwurf_b, ("punkte", "rid"): b.punkt,
                      ("ordner", "fid"): t.lager_b, ("export", "fid"): t.lager_b, ("formulare", "fid"): form,
                      ("formular", "fid"): form, ("durchgaenge", "rid"): t.durchgang_b, ("durchgang", "rid"): t.durchgang_b,
-                     ("import", "kennung"): "0" * 32}       # Katalogimport im Hintergrund (24.10.2026)
+                     ("import", "kennung"): "0" * 32,       # Katalogimport im Hintergrund (24.10.2026)
+                     "pf": pool}                            # Formular im Pool (Schritt 38)
         regeln = [r for r in app.url_map.iter_rules() if r.endpoint.split(".")[0] in ("material", "material_api")
                   and r.endpoint != "material.medien"]
         vorher = _stand(app)

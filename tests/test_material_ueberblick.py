@@ -238,7 +238,12 @@ AUSNAHMEN_LESEN = {
     "material.nacharbeit_csv": 403,                # ebenso die Nacharbeit als CSV
     "material.meine_psa_artikel": 404,             # „Meine PSA“: der Führungskraft ist nichts zugeordnet (Phase 3 · L1)
     "material.setprotokoll": 404,                  # Set-Protokoll (Schritt 27): die Kennung 999999 gibt es nicht
-    "material_api.produkt_formularquellen": 403,   # Kandidaten für „Prüfformular übernehmen“ (Schritt 35): Katalogpflege
+    # Formular-Pool (Schritt 38): Die Seite „Prüfformulare“, ihr Baum, der Dialog „Zuweisen“ und die Folgen eines
+    # Verschiebens sind nur für die Material-Verwaltung (Entscheidung O6); Formularseiten liest jeder.
+    "material.formulare_seite": 403,
+    "material_api.formular_pool": 403,
+    "material_api.formular_pool_kandidaten": 403,
+    "material_api.formular_pool_folgen": 403,
 }
 # Werkzeuge der Katalogpflege (Katalogaustausch, Lieferung 4) sind nur für die Material-Verwaltung; den Katalog selbst
 # liest die Führungskraft über /kategorien und /produkte. Ebenso der Probelauf der Erinnerungsmails (Phase 2 · L2); die
@@ -252,7 +257,7 @@ NUR_VERWALTER_LESEN = re.compile(r"^/api/material/(ordner/<int:fid>/freigaben|or
                                  r"|artikel/<int:iid>/kandidaten|ordner/<int:fid>/kandidaten)$")  # Auswahl (P4-L2b)
 # Abfrageparameter, ohne die eine Route nichts zu lesen hätte (400).
 ABFRAGE = {
-    "material_api.formulare": lambda e: {"produkt": e[("produkte", "pid")]},
+    "material_api.formulare": lambda e: {"formular": e["pf"]},
     "material_api.artikel_vorschlag": lambda e: {"product_id": e[("produkte", "pid")], "folder_id": e[("ordner", "fid")]},
     "material_api.artikelnummer_pruefen": lambda e: {"nr": "GA-100"},
 }
@@ -304,6 +309,7 @@ def test_fuehrungskraft_nur_lesen():
         app, k = umgebung(tmp)
         ids = katalog_grund(k["adm"])
         formulare = pruef_formulare(k["katalog"], ids)
+        pool = k["katalog"].get(f"/api/material/formulare/{formulare['spezifisch']}").json["formular"]["formular_id"]
         kp, w, p1, f = k["katalog"], k["wart"], k["pruefer"], k["fuehrung"]
         h = _heute()
         # Katalog: Produkt mit Bild und Herstellerdokument.
@@ -357,6 +363,7 @@ def test_fuehrungskraft_nur_lesen():
             ("produkte", "pid"): ids["gurt"], ("produkt", "pid"): ids["gurt"],
             ("pruefungen", "pid"): entwurf, ("pruefung", "pid"): fest, ("punkte", "rid"): punkt,
             ("ordner", "fid"): gid, ("formulare", "fid"): formulare["spezifisch"], ("formular", "fid"): formulare["spezifisch"],
+            "pf": pool,                                     # Formular im Pool (Schritt 38)
             ("durchgaenge", "rid"): rid, ("durchgang", "rid"): rid,
             ("export", "fid"): gid,                         # CSV und Protokoll-ZIP je Ordner
             ("import", "kennung"): "0" * 32,                # Katalogimport im Hintergrund (24.10.2026)

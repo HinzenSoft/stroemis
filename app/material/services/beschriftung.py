@@ -88,8 +88,11 @@ FELD = {
     "bestandteil_nummern": "Seriennummern der Bestandteile",
     # Set-Protokolle im Prüfdurchgang (Schritt 27): am Durchgang beim Festschreiben
     "set_protokolle": "Set-Protokolle",
-    # Prüfformular eines anderen Produkts übernehmen (Schritt 35)
+    # Prüfformular eines anderen Produkts übernehmen (Schritt 35) – nur noch zum Lesen alter Einträge
     "formular_von": "Prüfformular von Produkt Nr.",
+    # Formular-Pool (Schritt 38): Formular, Heimat, Zuweisungen
+    "formular": "Prüfformular", "formular_id": "Prüfformular Nr.", "heimat": "im Pool von", "entstanden": "entstanden aus",
+    "versionen": "Versionen", "titel": "Titel", "kategorie": "Kategorie", "bisher": "bisher", "vorlage": "Vorlage Nr.",
 }
 AKTION = {
     "angelegt": "angelegt", "geaendert": "geändert", "geloescht": "gelöscht", "verschoben": "verschoben",
@@ -134,12 +137,16 @@ AKTION = {
     "bestandteile": "Bestandteile geändert", "bestandteil_nummern": "Seriennummern der Bestandteile geändert",
     # Schritt 26: Rückbau der Set-Funktion (Migration) – am früheren Set-Artikel
     "set_rueckbau": "Set aufgelöst – die Teile sind eigene Artikel (Schritt 26)",
-    # Schritt 35: Prüfformular eines anderen Produkts übernehmen – am übernehmenden Produkt
+    # Schritt 35: Prüfformular eines anderen Produkts übernehmen – am übernehmenden Produkt (nur noch alte Einträge)
     "formular_uebernommen": "Prüfformular übernommen", "formular_geloest": "Übernahme des Prüfformulars gelöst",
+    # Schritt 38: Formular-Pool – am Formular, am Produkt und an der Kategorie
+    "zugewiesen": "zugewiesen", "zuweisung_geloest": "Zuweisung gelöst",
+    "formular_zugewiesen": "Prüfformular zugewiesen", "formular_zuweisung_geloest": "Zuweisung des Prüfformulars gelöst",
+    "standard_gesetzt": "Standard-Prüfformular gesetzt", "standard_geloest": "Standard-Prüfformular gelöst",
 }
 ENTITAET = {"item": "Artikel", "product": "Produkt", "document": "Dokument", "form": "Formular", "folder": "Ordner",
             "category": "Kategorie", "user": "Konto", "inspection": "Prüfung", "round": "Durchgang",
-            "request": "Produktmeldung"}
+            "request": "Produktmeldung", "formular": "Prüfformular"}
 # Wie PRUEFART_KURZ in material.js: im Journal kurz („periodisch“ statt „periodische Prüfung“).
 PRUEFART_KURZ = PRUEFARTEN
 SPERRZUSTAND = {"frei": "frei", "gesperrt": "gesperrt", "verloren": "verloren (gesperrt)", "ausgesondert": "ausgesondert"}

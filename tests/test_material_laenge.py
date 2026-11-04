@@ -35,12 +35,9 @@ def kategorie_neu(c, **d):
 
 
 def formular_neu(c, ziel, titel, punkte, aktivieren=True):
-    r = c.post("/api/material/formulare", json=dict(ziel, titel=titel, punkte=punkte))
-    assert r.status_code == 201, r.get_json()
-    fid = r.json["formular"]["id"]
-    if aktivieren:
-        assert c.post(f"/api/material/formulare/{fid}/aktivieren", json={}).status_code == 200
-    return fid
+    """Wie test_material.formular_neu (seit dem Formular-Pool: Formular im Pool, aktiviert und zugewiesen)."""
+    from test_material import formular_neu as neu
+    return neu(c, ziel, titel, punkte, aktivieren)
 
 
 def aufbau(tmp):
@@ -305,7 +302,7 @@ def test_katalogformat():
     with tempfile.TemporaryDirectory() as tmp_a, tempfile.TemporaryDirectory() as tmp_b:
         t = aufbau(tmp_a)
         daten = _katalog_json(exportieren(t.kp))
-        assert daten["version"] == 2
+        assert daten["version"] == 3                    # Format 3 seit dem Formular-Pool (Schritt 38)
         assert _kat(daten, "PSA gegen Absturz", "Seile")["artikel_laenge"] is True
         assert _kat(daten, "PSA gegen Absturz", "Seile", "Statikseile")["artikel_laenge"] is False
         assert _kat(daten, "PSA gegen Absturz", "Gurte")["artikel_laenge"] is False
@@ -480,7 +477,7 @@ def test_pruefung_laenge():
         assert f["editoren"]["laenge"] == "Länge (m)"
         pl = next(x for x in f["formular"]["punkte"] if x["art"] == "laenge")
         assert pl["soll"] == "" and pl["pflicht"] is True and "kritisch" not in pl
-        r = kp.post("/api/material/formulare", json={"kategorie_id": t.statik, "titel": "x", "punkte": [
+        r = kp.post("/api/material/formular-pool", json={"kategorie_id": t.statik, "titel": "x", "punkte": [
             {"text": "Testpunkt Länge", "art": "laenge", "soll": "50", "kritisch": True}]})
         assert r.status_code == 201 and r.json["formular"]["punkte"][0]["soll"] == "", r.get_json()
         assert "kritisch" not in r.json["formular"]["punkte"][0]
@@ -713,7 +710,7 @@ def test_nachbesserung_pruefung():
         assert kp.put(f"/api/material/kategorien/{t.seile}", json={"items_have_length": True}).status_code == 200
 
         # V3: zwei Längenpunkte in einem Formular → 400.
-        r = kp.post("/api/material/formulare", json={"kategorie_id": t.statik, "titel": "Zwei Längen", "punkte": [
+        r = kp.post("/api/material/formular-pool", json={"kategorie_id": t.statik, "titel": "Zwei Längen", "punkte": [
             {"text": "Testpunkt Länge A", "art": "laenge"}, {"text": "Testpunkt Länge B", "art": "laenge"}]})
         assert r.status_code == 400 and "höchstens einen" in r.json["error"], r.get_json()
         # V4: Produktwechsel eines ungeprüften Artikels auf ein Produkt ohne Länge leert sie.

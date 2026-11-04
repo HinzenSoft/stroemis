@@ -42,10 +42,12 @@ def import_catalog(datei, trocken):
     except Abgelehnt as exc:
         click.echo(str(exc), err=True)
         sys.exit(2)
-    # Bestandteil-Listen (Schritt 25): neu, geändert, unverändert – wie der Bericht in der App.
+    # Bestandteil-Listen (Schritt 25): neu, geändert, unverändert – wie der Bericht in der App; Zuweisungen der
+    # Prüfformulare (Format 3, Schritt 38): neu, gelöst, unverändert.
     namen = {"bestandteillisten": "Bestandteil-Listen"}
-    teile = ("kategorien", "produkte", "formulare") + (("bilder", "dokumente") if bericht.get("version") == 2 else ()) + tuple(
-        t for t in ("bestandteillisten",) if any(bericht.get(t, {}).values()))
+    teile = ("kategorien", "produkte", "formulare") + (("bilder", "dokumente") if (bericht.get("version") or 0) >= 2
+                                                       else ()) + tuple(
+        t for t in ("bestandteillisten", "zuweisungen") if any(bericht.get(t, {}).values()))
     for teil in teile:
         zahlen = ", ".join(f"{k} {v}" for k, v in bericht[teil].items())
         click.echo(f"{namen.get(teil, teil.capitalize()):<11} {zahlen}")
@@ -65,7 +67,7 @@ def import_catalog(datei, trocken):
 @click.argument("ziel", type=click.Path(dir_okay=False))
 @with_appcontext
 def export_catalog(ziel):
-    """Den Katalog dieser Instanz ohne DEMO als ZIP (Format 2) schreiben – für import-catalog in einer anderen.
+    """Den Katalog dieser Instanz ohne DEMO als ZIP (Format 3) schreiben – für import-catalog in einer anderen.
     Bestand und Prüfungen kommen nie mit."""
     teil = ziel + ".teil"
     try:

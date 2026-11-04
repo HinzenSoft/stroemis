@@ -18,8 +18,8 @@ import zipfile
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from test_material import (H, KATALOG, PDF, anmelden, gliederung, import_abwarten, jpeg, katalog_grund,  # noqa: E402
-                           make_app, umgebung)
+from test_material import (H, KATALOG, PDF, anmelden, formular_neu, gliederung, import_abwarten, jpeg,  # noqa: E402
+                           katalog_grund, make_app, umgebung)
 
 
 def png(farbe=(20, 120, 200)):
@@ -83,12 +83,13 @@ def zahlen(app, *tabellen):
         return {t: db.query(f"SELECT COUNT(*) AS n FROM {t}", one=True)["n"] for t in tabellen}
 
 
-TABELLEN = ("mat_category", "mat_product", "mat_form", "mat_checklist_item", "mat_product_document", "mat_audit")
+TABELLEN = ("mat_category", "mat_product", "mat_form", "mat_formular", "mat_formular_zuweisung", "mat_checklist_item",
+            "mat_product_document", "mat_audit")
 
 
 def quellkatalog(k):
     """Instanz A: Kategorien, zwei Produkte (eins mit Bild), Dokumente als Datei und als Link an Produkt und Kategorie,
-    ein generisches (aktiv) und ein spezifisches Formular (nur Entwurf), dazu ein DEMO-Teil."""
+    ein Prüfformular als Standard von Gurte (aktiv) und eins im Pool von Karabiner (nur Entwurf), dazu ein DEMO-Teil."""
     kp = k["katalog"]
     ids = katalog_grund(k["adm"])
     assert hoch(kp, f"/api/material/produkte/{ids['gurt']}/bild", jpeg().getvalue(), "gurt.jpg").status_code == 200
@@ -113,29 +114,35 @@ def quellkatalog(k):
     r = hoch(kp, f"/api/material/kategorien/{ids['gurte']}/dokumente", PDF + b"%pflege", "pflege.pdf",
              kind="pflegehinweis", title="Pflegehinweis Gurte", valid_from="2024-01-01")
     assert r.status_code == 201, r.get_json()
-    # Generisch für Gurte, aktiv; spezifisch für HMS Beta nur als Entwurf (nicht aktiv).
-    r = kp.post("/api/material/formulare", json={"kategorie_id": ids["gurte"], "titel": "Gurtprüfung (Test)", "punkte": [
+    # Standard für Gurte, aktiv; im Pool von Karabiner einer für HMS Beta nur als Entwurf (nicht aktiv, nicht im Export).
+    formular_neu(kp, {"kategorie_id": ids["gurte"]}, "Gurtprüfung (Test)", [
         {"gruppe": "Testgruppe", "text": "Testpunkt Gurt", "art": "yesno", "soll": "nein", "kritisch": True},
-        {"text": "Testbemerkung", "art": "text", "pflicht": False}]})
-    assert r.status_code == 201, r.get_json()
-    assert kp.post(f"/api/material/formulare/{r.json['formular']['id']}/aktivieren", json={}).status_code == 200
-    r = kp.post("/api/material/formulare", json={"produkt_id": ids["hms"], "titel": "HMS Beta (Entwurf)", "punkte": [
-        {"text": "Testpunkt Verschluss", "art": "yesno", "soll": "ja"}]})
+        {"text": "Testbemerkung", "art": "text", "pflicht": False}])
+    r = kp.post("/api/material/formular-pool", json={"kategorie_id": ids["karabiner"], "titel": "HMS Beta (Entwurf)",
+                                                      "punkte": [{"text": "Testpunkt Verschluss", "art": "yesno",
+                                                                  "soll": "ja"}]})
     assert r.status_code == 201, r.get_json()
     ids["hms_formular"] = r.json["formular"]["id"]
 
-    # DEMO: über den Import mit Kennzeichen …
-    demo = {"format": "stroemis-material-katalog", "version": 1, "demo": True,
-            "kategorien": [{"name": "DEMO Testbaum", "unterkategorien": [
-                {"name": "DEMO Unterbaum", "materialart": "metall_hardware", "intervall_monate": 12}]}],
-            "produkte": [{"kategorie": ["DEMO Testbaum", "DEMO Unterbaum"], "hersteller": "DEMO-Testwerk",
-                          "modell": "DEMO Teil", "artikelnummer": "DEMO-T-1", "materialart": "metall_hardware"},
-                         {"kategorie": ["PSA gegen Absturz", "Karabiner"], "hersteller": "DEMO-Testwerk",
-                          "modell": "DEMO Karabiner", "artikelnummer": "DEMO-K-9", "materialart": "metall_hardware",
-                          "intervall_monate": 12}],
-            "formulare": [{"kategorie": ["DEMO Testbaum", "DEMO Unterbaum"], "titel": "DEMO-Formular",
-                           "punkte": [{"text": "DEMO-Prüfpunkt", "art": "yesno", "soll": "ja"}]}]}
-    assert importieren(kp, json.dumps(demo).encode(), False, "demo.json")["gespeichert"]
+    # DEMO: über die Dienste mit Kennzeichen (der Import übernimmt seit dem 04.11.2026 keins mehr) …
+    with kp.application.test_request_context():
+        from flask import g
+
+        from app.material.services import katalog
+        g.mat_akteur = "Test"
+        baum = katalog.kategorie_anlegen({"name": "DEMO Testbaum"}, demo=True)
+        unter = katalog.kategorie_anlegen({"name": "DEMO Unterbaum", "parent_id": baum,
+                                           "default_material_kind": "metall_hardware", "default_interval_months": 12},
+                                          demo=True)
+        katalog.produkt_anlegen({"category_id": unter, "manufacturer": "DEMO-Testwerk", "model": "DEMO Teil",
+                                 "article_no": "DEMO-T-1", "material_kind": "metall_hardware"}, demo=True)
+        katalog.produkt_anlegen({"category_id": ids["karabiner"], "manufacturer": "DEMO-Testwerk", "model": "DEMO Karabiner",
+                                 "article_no": "DEMO-K-9", "material_kind": "metall_hardware", "interval_months": 12},
+                                demo=True)
+        pf, vid = katalog.pool_anlegen({"kategorie_id": unter, "titel": "DEMO-Formular", "punkte": [
+            {"text": "DEMO-Prüfpunkt", "art": "yesno", "soll": "ja"}]}, demo=True)
+        katalog.formular_aktivieren(vid)
+        katalog.zuweisung_setzen(pf, {"kategorien": [unter]})
     # … und ohne: über die Oberfläche in einer DEMO-Kategorie angelegt (trägt selbst kein Kennzeichen).
     kats = {x["name"]: x for x in kp.get("/api/material/kategorien").json["kategorien"]}
     r = kp.post("/api/material/produkte", json={"category_id": kats["DEMO Unterbaum"]["id"], "manufacturer": "Testwerk",
@@ -157,7 +164,7 @@ def test_rundlauf():
 
         # Vorschau: was mitkommt und was nicht.
         v = kp.get("/api/material/katalog/export/vorschau").json["export"]
-        assert v["enthalten"] == {"kategorien": 3, "produkte": 2, "bilder": 1, "formulare": 2, "dokumente": 4}, v
+        assert v["enthalten"] == {"kategorien": 3, "produkte": 2, "bilder": 1, "formulare": 1, "dokumente": 4}, v
         assert v["ausgelassen"]["kategorien"] == 2 and v["ausgelassen"]["produkte"] == 3, v
         assert v["ausgelassen"]["formulare"] == 1 and v["ausgelassen"]["dokumente"] == 1, v
         assert v["ausgelassen"]["ohne_kennzeichen"] == 1 and "DEMO Testbaum" in v["ausgelassen"]["namen"], v
@@ -174,7 +181,7 @@ def test_rundlauf():
             for n in namen:                                   # jede Datei heißt nach ihrer Prüfsumme
                 if n.startswith("dateien/"):
                     assert os.path.splitext(n.rsplit("/", 1)[1])[0] == sha(z.read(n)), n
-        assert daten["format"] == "stroemis-material-katalog" and daten["version"] == 2
+        assert daten["format"] == "stroemis-material-katalog" and daten["version"] == 3
         text = json.dumps(daten, ensure_ascii=False)
         assert "DEMO" not in text and "Im DEMO-Baum" not in text and "Rückzug" not in text, text
         gurt = next(p for p in daten["produkte"] if p["modell"] == "Gurt Alpha")
@@ -185,9 +192,14 @@ def test_rundlauf():
         psa = daten["kategorien"][0]
         assert psa["name"] == "PSA gegen Absturz" and [u["name"] for u in psa["unterkategorien"]] == ["Gurte", "Karabiner"]
         assert psa["unterkategorien"][0]["dokumente"][0]["datei"].startswith("dateien/dokumente/")
-        formulare = {(f.get("kategorie_uid") or f["produkt"]["uid"]): f for f in daten["formulare"]}
-        assert formulare[psa["unterkategorien"][0]["uid"]]["aktivieren"] is True
-        assert formulare[hms["uid"]]["aktivieren"] is False and formulare[hms["uid"]]["titel"] == "HMS Beta (Entwurf)"
+        # Format 3: je Formular des Pools mit aktiver Version eins, samt Zuweisungen; der Entwurf bleibt draußen (E1).
+        gurte = psa["unterkategorien"][0]
+        assert [(f["titel"], f["kategorie"], f["kategorie_uid"], f["standard_fuer"], f["zugewiesen"])
+                for f in daten["formulare"]] == [("Gurtprüfung (Test)", ["PSA gegen Absturz", "Gurte"], gurte["uid"],
+                                                  [{"kategorie": ["PSA gegen Absturz", "Gurte"],
+                                                    "kategorie_uid": gurte["uid"]}], [])], daten["formulare"]
+        assert len(daten["formulare"][0]["uid"]) == 32 and "aktivieren" not in daten["formulare"][0]
+        assert daten["version"] == 3
 
         # Instanz B, leer: Probelauf schreibt nichts – weder Datenbank noch Dateien.
         app_b = make_app(tmp_b)
@@ -195,8 +207,8 @@ def test_rundlauf():
         vorher, dateien_vorher = zahlen(app_b, *TABELLEN), dateien_zaehlen(tmp_b)
         ber = importieren(b, roh, True)
         assert not ber["gespeichert"] and not ber["fehler"] and ber["trocken"], ber
-        assert ber["kategorien"]["neu"] == 3 and ber["produkte"]["neu"] == 2 and ber["formulare"]["neu"] == 2, ber
-        assert ber["bilder"]["neu"] == 1 and ber["dokumente"]["neu"] == 4, ber
+        assert ber["kategorien"]["neu"] == 3 and ber["produkte"]["neu"] == 2 and ber["formulare"]["neu"] == 1, ber
+        assert ber["bilder"]["neu"] == 1 and ber["dokumente"]["neu"] == 4 and ber["zuweisungen"]["neu"] == 1, ber
         assert zahlen(app_b, *TABELLEN) == vorher and dateien_zaehlen(tmp_b) == dateien_vorher
         assert ber["herkunft"]["quelle"] == "https://strömis.de"
 
@@ -221,8 +233,9 @@ def test_rundlauf():
                         assert sha(fh.read()) == d["sha256"]
             assert {r["uid"] for r in db.query("SELECT uid FROM mat_category")} == \
                 {psa["uid"]} | {u["uid"] for u in psa["unterkategorien"]}
-            aktiv = {(f["category_id"] or 0, f["product_id"] or 0): f["active"] for f in db.query("SELECT * FROM mat_form")}
-            assert sorted(aktiv.values()) == [0, 1], aktiv
+            assert [(f["title"], f["active"], f["demo"]) for f in db.query("SELECT * FROM mat_form")] == [
+                ("Gurtprüfung (Test)", 1, 0)]
+            assert katalog.formular_fuer_produkt(p["id"])["quelle"] == "Standard der Kategorie „Gurte“"
             assert db.query("SELECT COUNT(*) AS n FROM mat_audit WHERE user_name = 'Katalogimport (katalog.zip)'",
                             one=True)["n"] == 0                       # in der Anfrage: der angemeldete Nutzer
         dateien_nach = dateien_zaehlen(tmp_b)
@@ -232,7 +245,8 @@ def test_rundlauf():
         assert ber["gespeichert"], ber
         for teil in ("kategorien", "produkte", "bilder"):
             assert ber[teil]["neu"] == 0 and ber[teil]["geaendert"] == 0, (teil, ber)
-        assert ber["formulare"] == {"neu": 0, "unveraendert": 2} and ber["dokumente"]["unveraendert"] == 4, ber
+        assert ber["formulare"] == {"neu": 0, "unveraendert": 1} and ber["dokumente"]["unveraendert"] == 4, ber
+        assert ber["zuweisungen"] == {"neu": 0, "geloest": 0, "unveraendert": 1}, ber
         assert not ber["aenderungen"] and dateien_zaehlen(tmp_b) == dateien_nach
 
         # In A: Produkt umbenennen, Kategorie umbenennen und verschieben, neues Bild, neue Dokumentversion.
@@ -492,8 +506,11 @@ def test_format1_und_json():
         k2["produkte"].append(dict(k2["produkte"][0], modell="Zwilling", artikelnummer="ZW-2"))
         ber = importieren(c, json.dumps(k2).encode(), False, "katalog.json")
         assert "mehrfach" in ber["fehler"][0] and "produkte[0], produkte[1]" in ber["fehler"][0], ber
-        assert importieren(c, json.dumps({"format": "stroemis-material-katalog", "version": 3}).encode(), True,
+        # Unbekannt ist erst Version 4 (Format 3 seit dem Formular-Pool, Schritt 38).
+        assert importieren(c, json.dumps({"format": "stroemis-material-katalog", "version": 4}).encode(), True,
                            "x.json")["fehler"]
+        assert not importieren(c, json.dumps({"format": "stroemis-material-katalog", "version": 3}).encode(), True,
+                               "x.json")["fehler"]
 
         # Über die Kennung: Ober- und Unterkategorie tauschen die Plätze – ohne Zyklus, ohne neue Kategorie.
         def baum(aussen, innen):
@@ -669,43 +686,46 @@ def test_dokumentketten_mit_gleichem_titel():
     print("Dokumentkettentest bestanden.")
 
 
-def test_formular_ohne_titel_bleibt_unveraendert():
-    """Ein Formular ohne Titel in der Datei gibt keinen Titel vor: Ein zweiter Import derselben Datei legt keine neue
-    Version an, auch wenn das Formular hier einen Titel trägt."""
+def test_formular_titel_und_kennung():
+    """Seit dem Formular-Pool (Format 3): Ein Formular findet sich in der Zielinstanz über seine uid wieder – auch nach
+    einem neuen Titel (dann eine neue Version, kein zweites Formular); ein zweiter Import derselben Datei ändert nichts.
+    Titel sind Pflicht – eine Datei ohne Titel (ältere Stände) bekommt „Prüfformular <Kategorie>“."""
     from app import db
     punkte1 = [{"text": "Testpunkt eins", "art": "yesno", "soll": "ja"}]
-    punkte2 = punkte1 + [{"text": "Testpunkt zwei", "art": "yesno", "soll": "ja"}]
 
     def formulare(app):
         with app.app_context():
-            return [(f["version"], f["title"], f["active"]) for f in db.query("SELECT * FROM mat_form ORDER BY id")]
+            return [(f["formular_id"], f["version"], f["title"], f["active"])
+                    for f in db.query("SELECT * FROM mat_form ORDER BY id")]
 
     with tempfile.TemporaryDirectory() as tmp_a, tempfile.TemporaryDirectory() as tmp_b:
         app_a, a = _admin(tmp_a)
         app_b, b = _admin(tmp_b)
         ids = katalog_grund(a)
-        # Wie in der Oberfläche: erst ohne Titel angelegt, im Editor betitelt und mit Punkten gefüllt, aktiviert.
-        r = a.post("/api/material/formulare", json={"kategorie_id": ids["gurte"]})
-        assert r.status_code == 201, r.get_json()
-        f1 = r.json["formular"]["id"]
-        assert a.put(f"/api/material/formulare/{f1}", json={"titel": "Gurtprüfung", "punkte": punkte1}).status_code == 200
-        assert a.post(f"/api/material/formulare/{f1}/aktivieren", json={}).status_code == 200
+        f1 = formular_neu(a, {"kategorie_id": ids["gurte"]}, "Gurtprüfung", punkte1)
         assert importieren(b, exportieren(a), False)["gespeichert"]
-        # Neue Version in A, Titel geleert (kein Pflichtfeld), ein Punkt dazu, aktiviert.
-        r = a.post("/api/material/formulare", json={"kategorie_id": ids["gurte"], "vorlage_id": f1})
-        f2 = r.json["formular"]["id"]
-        assert a.put(f"/api/material/formulare/{f2}", json={"titel": "", "punkte": punkte2}).status_code == 200
-        assert a.post(f"/api/material/formulare/{f2}/aktivieren", json={}).status_code == 200
+        # Neue Version in A mit neuem Titel, aktiviert: in B eine neue Version desselben Formulars.
+        r = a.post("/api/material/formulare", json={"formular_id": a.get(f"/api/material/formulare/{f1}").json[
+            "formular"]["formular_id"], "vorlage_id": f1, "titel": "Gurtprüfung (neu)"})
+        assert r.status_code == 201, r.get_json()
+        assert a.post(f"/api/material/formulare/{r.json['formular']['id']}/aktivieren", json={}).status_code == 200
         roh = exportieren(a)
-        assert [f["titel"] for f in katalogjson(roh)["formulare"]] == [""]
+        assert [f["titel"] for f in katalogjson(roh)["formulare"]] == ["Gurtprüfung (neu)"]
         ber = importieren(b, roh, False)
         assert ber["gespeichert"] and ber["formulare"] == {"neu": 1, "unveraendert": 0}, ber
         for _ in range(2):
             ber = importieren(b, roh, False)
             assert ber["gespeichert"] and ber["formulare"] == {"neu": 0, "unveraendert": 1}, ber
             assert not ber["aenderungen"], ber["aenderungen"]
-        assert formulare(app_b) == [(1, "Gurtprüfung", 0), (2, "Gurtprüfung", 1)], formulare(app_b)
-    print("Formulartiteltest bestanden.")
+        assert [x[1:] for x in formulare(app_b)] == [(1, "Gurtprüfung", 0), (2, "Gurtprüfung (neu)", 1)], formulare(app_b)
+        assert len({x[0] for x in formulare(app_b)}) == 1
+        # Ohne Titel (eine ältere Datei, Format 1): „Prüfformular <Kategorie>“.
+        alt = {"format": "stroemis-material-katalog", "version": 1, "formulare": [
+            {"kategorie": ["PSA gegen Absturz", "Karabiner"], "titel": "", "punkte": punkte1}]}
+        ber = importieren(b, json.dumps(alt).encode(), False, "katalog.json")
+        assert ber["gespeichert"] and not ber["fehler"], ber
+        assert any(f[2] == "Prüfformular Karabiner" and f[3] == 1 for f in formulare(app_b)), formulare(app_b)
+    print("Formulartitel und Kennung bestanden.")
 
 
 def test_namenskette():
@@ -920,7 +940,7 @@ if __name__ == "__main__":
     test_rechte()
     test_intervall_wandert_von_kategorie_ans_produkt()
     test_dokumentketten_mit_gleichem_titel()
-    test_formular_ohne_titel_bleibt_unveraendert()
+    test_formular_titel_und_kennung()
     test_namenskette()
     test_namenskette_grenze()
     test_bild_an_der_uploadgrenze()

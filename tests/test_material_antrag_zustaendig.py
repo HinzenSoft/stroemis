@@ -30,7 +30,7 @@ from test_material_antrag import (_ohne_trigger, _pdf_text, _schema, _schema_in,
                                   ablehnen, antraege, aufbau, beantragen, bestaetigen, item, journal, lesen, post,
                                   pruefen, sql, trigger_25, trigger_27, trigger_30, trigger_31, trigger_32, trigger_35,
                                   trigger_36, zeilen, zurueckziehen)
-from test_material_trennung import bis_schritt, endversion, objekte_weg_37, spalten_vor_37  # noqa: E402
+from test_material_trennung import bis_schritt, endversion, objekte_weg_37, spalten_vor_37, trigger_38  # noqa: E402
 
 FEST = ("Seit der ersten Prüfung stehen die Stammdaten fest – sie sind Teil des Prüfnachweises. Eine Änderung beantragst "
         "du mit Begründung; entscheiden die Materialwarte des Ordners.")
@@ -524,11 +524,11 @@ def test_migration_23():
         # der Set-Funktion statt der entfallenen Set-Trigger, seit Schritt 30 dessen Trigger (Kennungen, Kontoverweise),
         # seit Schritt 31 die des Lebenslauf-Verzeichnisses, seit Schritt 32 die gegen REPLACE ohne recursive_triggers,
         # seit Schritt 35 die der Prüfformular-Übernahme, seit Schritt 36 die ihrer Nachbesserung; Schritt 37 nimmt die
-        # beiden Wächter mat_item_kein_teil* wieder weg.
+        # beiden Wächter mat_item_kein_teil* wieder weg; Schritt 38 bringt die des Formular-Pools und nimmt die aus 35/36.
         neu_26 = {x.split("CREATE TRIGGER IF NOT EXISTS ", 1)[1].split()[0] for x in models.TRIGGER_26}
         erwartet = ((set(t22) | {"mat_item_change_gruppe"} | trigger_25() | neu_26 | trigger_27() | trigger_30()
-                     | trigger_31() | trigger_32() | trigger_35() | trigger_36())
-                    - set(models.TRIGGER_WEG_26) - objekte_weg_37())
+                     | trigger_31() | trigger_32() | trigger_35() | trigger_36() | trigger_38()[0])
+                    - set(models.TRIGGER_WEG_26) - objekte_weg_37() - trigger_38()[1])
         assert v23 == endversion() and set(t23) == erwartet, set(t23) ^ erwartet
         for n in ("mat_item_stammdaten_fest", "mat_item_produkt_fest", "mat_item_antrag_angewendet",
                   "mat_item_change_inhalt"):
@@ -538,7 +538,7 @@ def test_migration_23():
             and len(alt) == 3
         assert all(x["group_id"] is None for x in alt)
         assert zeilen(t.app, "SELECT seq FROM sqlite_sequence WHERE name = 'mat_item_change'")[0]["seq"] == 40
-        assert _zahlen(pfad) == vorher
+        assert _zahlen(pfad) == dict(vorher, mat_meta=vorher["mat_meta"] + 1)      # Schritt 38: katalog_stand
         indizes = {r["name"] for r in zeilen(t.app, "SELECT name FROM sqlite_master WHERE type = 'index' "
                                                     "AND tbl_name = 'mat_item_change' AND sql IS NOT NULL")}
         assert "idx_mat_item_change_gruppe" in indizes and "ux_mat_item_change_offen" in indizes, indizes

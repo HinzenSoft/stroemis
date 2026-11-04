@@ -21,7 +21,7 @@ from .services.rechte import katalog_required
 @api.get("/katalog/export")
 @katalog_required
 def katalog_exportieren():
-    """Der Katalog ohne DEMO als ZIP (Format 2) – gebaut in einer Zwischendatei unter TMP_DIR, nicht im Speicher;
+    """Der Katalog ohne DEMO als ZIP (Format 3) – gebaut in einer Zwischendatei unter TMP_DIR, nicht im Speicher;
     sie verschwindet, sobald die Antwort geschrieben ist."""
     zwischen = tempfile.TemporaryFile(dir=current_app.config["TMP_DIR"])
     try:

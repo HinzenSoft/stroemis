@@ -29,7 +29,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from test_material import (H, abschluss, gliederung, katalog_grund, make_app, neuer_artikel,  # noqa: E402
                            pruef_formulare, punkte_von, starten, umgebung, mails_abfangen, mails_zurueck)
 from test_material_erinnerung import umwelt  # noqa: E402
-from test_material_trennung import bis_schritt, endversion, objekte_weg_37, spalten_vor_37  # noqa: E402
+from test_material_trennung import bis_schritt, endversion, objekte_weg_37, spalten_vor_37, trigger_38  # noqa: E402
 
 # Eine KOPIE einer Datenbank auf Stand 7 für den Pfad 7 → 15 – nur, wenn angegeben; die Quelle bleibt unberührt.
 KOPIE_STAND_7 = os.environ.get("MATERIAL_KOPIE_STAND_7") or ""
@@ -1496,10 +1496,12 @@ def test_migration_17():
         # Seriennummern der Bestandteile.
         # 26: die Wächter des Rückbaus statt der entfallenen Set-Trigger; 30: Kennungen und Kontoverweise; 31: Lebensläufe;
         # 35: Prüfformular übernehmen; 36: dessen Nachbesserung (DEMO über die Kategorie, Verweis oder eigenes Formular);
-        # 37: ohne die Wächter mat_item_kein_teil* (mit der Spalte parent_item_id entfernt).
+        # 37: ohne die Wächter mat_item_kein_teil* (mit der Spalte parent_item_id entfernt); 38: Formular-Pool (Teilbaum,
+        # Zähler), ohne die aus 35/36.
         neu_26, weg_26 = trigger_26()
-        erwartet = (set(t16) | TRIGGER_17 | TRIGGER_19 | trigger_21() | TRIGGER_23 | trigger_25() | neu_26 | trigger_27()
-                    | trigger_30() | trigger_31() | trigger_32() | trigger_35() | trigger_36()) - weg_26 - objekte_weg_37()
+        erwartet = ((set(t16) | TRIGGER_17 | TRIGGER_19 | trigger_21() | TRIGGER_23 | trigger_25() | neu_26 | trigger_27()
+                     | trigger_30() | trigger_31() | trigger_32() | trigger_35() | trigger_36() | trigger_38()[0]) - weg_26
+                    - objekte_weg_37() - trigger_38()[1])
         assert v17 == endversion() and set(t17) == erwartet, set(t17) ^ erwartet
         assert t17["mat_item_stammdaten_fest"] != t16["mat_item_stammdaten_fest"]
         assert t17["mat_item_antrag_angewendet"] != t16["mat_item_antrag_angewendet"]          # seit Schritt 23 alle Felder
@@ -1508,8 +1510,11 @@ def test_migration_17():
         assert [{k: r[k] for k in alt[0]} for r in zeilen(t.app, "SELECT * FROM mat_item_change ORDER BY id")] == alt \
             and len(alt) == 3
         assert zeilen(t.app, "SELECT seq FROM sqlite_sequence WHERE name = 'mat_item_change'") == seq
-        # Schritt 19 legt mat_mail_fehler (leer) an – sonst keine Zeile anders.
-        assert _zahlen(pfad) == dict(vorher, mat_mail_fehler=0)
+        # Schritt 19 legt mat_mail_fehler (leer) an, Schritt 38 den Zähler katalog_stand in mat_meta – sonst keine Zeile
+        # anders.
+        n = _zahlen(pfad)
+        assert n == dict(vorher, mat_mail_fehler=0, mat_meta=vorher["mat_meta"] + 1), {x: (vorher.get(x), n.get(x)) for x in set(n) | set(vorher)
+                                                      if vorher.get(x) != n.get(x)}
         indizes = {r["name"] for r in zeilen(t.app, "SELECT name FROM sqlite_master WHERE type = 'index' "
                                                     "AND tbl_name = 'mat_item_change' AND sql IS NOT NULL")}
         assert indizes == {"ux_mat_item_change_offen", "idx_mat_item_change_item", "idx_mat_item_change_status",

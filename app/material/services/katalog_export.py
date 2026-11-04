@@ -1,24 +1,29 @@
 """Katalog-Export (Lieferung 4): Kategorien, Produkte mit Bild und Dokumenten und die Prüfformulare dieser Instanz
-als ZIP im Format 2 des Katalogimports (importer.py) – so kommt der in dev gepflegte Katalog in die Produktion.
+als ZIP im Format 3 des Katalogimports (importer.py; bis Schritt 37 Format 2) – so kommt der in dev gepflegte Katalog in
+die Produktion.
 
     flask --app "app:create_app()" material export-catalog katalog.zip
     GET /api/material/katalog/export
 
 Bestand, Artikel, Prüfungen, Meldungen und Rückrufe bleiben draußen – sie gehören zur Instanz, nicht zum Katalog.
 Ebenso alles, was DEMO ist: Kategorien mit DEMO-Kennzeichen samt ihrem ganzen Teilbaum, Produkte mit Kennzeichen
-oder in einer DEMO-Kategorie, Formulare mit Kennzeichen oder an einem DEMO-Ziel, Dokumente an DEMO-Zielen. Über die
-Oberfläche in einer DEMO-Kategorie Angelegtes trägt selbst kein Kennzeichen – es fällt mit dem Teilbaum heraus,
-und der Bericht zählt es eigens.
+oder in einer DEMO-Kategorie, Formulare im Pool einer DEMO-Kategorie, Dokumente an DEMO-Zielen. Über die Oberfläche in
+einer DEMO-Kategorie Angelegtes trägt selbst kein Kennzeichen – es fällt mit dem Teilbaum heraus, und der Bericht zählt
+es eigens. Ein Prüfformular mit DEMO-Kennzeichen in einer echten Kategorie (die Platzhalter der Skripte) kommt mit, wenn
+es aktiv ist (Entscheidung vom 04.11.2026, katalog-transfer) – der Import nimmt „DEMO“ vorn aus dem Titel und übernimmt
+nie ein Kennzeichen; der Bericht nennt es.
 
 Aufbau des Archivs:
-  katalog.json                          Format 2 (CHANGELOG-Material.md, „Katalogdatei (Format 2)“)
+  katalog.json                          Format 3 (CHANGELOG-Material.md, „Katalogdatei (Format 3)“)
   dateien/bilder/<sha256>.<endung>      Originale der Produktbilder, unverändert (mit ihren Metadaten)
   dateien/dokumente/<sha256>.<endung>   aktuelle Herstellerdokumente (nicht zurückgezogen, nicht abgelöst); ihre
                                         früheren Versionen nur als Kennung („vorgaenger“ in katalog.json)
   bericht.txt                           was drin ist und was nicht – zum Lesen, der Import übergeht ihn
 
-Je Ziel kommt ein Formular mit: das aktive („aktivieren“: true), ohne aktives die neueste Version mit Prüfpunkten
-(„aktivieren“: false). Ältere Versionen nicht – ihre Nummern sind ohnehin je Instanz eigene.
+Prüfformulare (Format 3, Formular-Pool): je Formular des Pools mit aktiver Version genau diese – mit uid, Heimat
+(„kategorie“, „kategorie_uid“), Titel, Prüfpunkten und den Zuweisungen („standard_fuer“: Kategorien, „zugewiesen“:
+Produkte, beide nur, soweit sie mitkommen). Ohne aktive Version kommt ein Formular nicht mit (E1), ältere Versionen nie –
+ihre Nummern sind je Instanz eigene. Kein Journal und nichts Journalähnliches: keine Konten, Namen, Bearbeitungszeiten.
 
 Eine Datei, die der Import nicht annähme (größer als seine Grenze, importer.BILD_MAX_IMPORT bzw. DOK_MAX_BYTES), bleibt
 draußen und steht im Bericht unter „zu_gross“ – sonst stünde der ganze Import.
@@ -26,9 +31,7 @@ draußen und steht im Bericht unter „zu_gross“ – sonst stünde der ganze I
 Bestandteil-Liste (Schritt 25): als „bestandteile“: [{bezeichnung, anzahl}]; ohne Liste fehlt der Schlüssel. „set“
 schreibt der Export nie (die Set-Funktion ist seit Schritt 26 zurückgebaut).
 
-Übernommenes Prüfformular (Schritt 35): als „formular_von“: {uid, hersteller, modell, artikelnummer} – wie das Produkt
-eines Formulars; ohne Verweis fehlt der Schlüssel. Kommt die Quelle nicht mit (sie liegt in einer DEMO-Kategorie), fehlt
-er auch – der Bericht nennt das Produkt („verweis_ohne_quelle“).
+„formular_von“ (Schritt 35/36) schreibt der Export seit dem Formular-Pool nicht mehr – das ist jetzt eine Zuweisung.
 """
 import hashlib
 import json
@@ -78,7 +81,7 @@ def sammeln(mit_dateien=True):
                "enthalten": {"kategorien": 0, "produkte": 0, "bilder": 0, "formulare": 0, "dokumente": 0},
                "ausgelassen": {"kategorien": 0, "produkte": 0, "formulare": 0, "dokumente": 0, "ohne_kennzeichen": 0,
                                "namen": []},
-               "ohne_punkte": 0, "fehlende_dateien": [], "zu_gross": [], "verweis_ohne_quelle": [], "groesse": 0,
+               "ohne_aktive": 0, "fehlende_dateien": [], "zu_gross": [], "formular_liste": [], "groesse": 0,
                "grenze": EXPORT_MAX_BYTES}
     raus_n = bericht["ausgelassen"]
     dateien = {}
@@ -231,54 +234,41 @@ def sammeln(mit_dateien=True):
             e["bestandteile"] = [{"bezeichnung": z["bezeichnung"], "anzahl": z["anzahl"]} for z in flach]
         produkte.append(e)
     bericht["enthalten"]["produkte"] = len(produkte)
-    # Übernommenes Prüfformular: erst jetzt, wo feststeht, welche Produkte mitkommen.
-    nach_pid = {p["id"]: p for p in exportiert}
-    for p, e in zip(exportiert, produkte):
-        if not p["formular_von"]:
-            continue
-        q = nach_pid.get(p["formular_von"])
-        if q:
-            e["formular_von"] = {"uid": q["uid"], "hersteller": q["manufacturer"], "modell": q["model"],
-                                 "artikelnummer": q["article_no"]}
-        else:
-            bericht["verweis_ohne_quelle"].append(katalog.produktname(p))
 
-    # Je Ziel ein Formular: das aktive, sonst die neueste Version mit Prüfpunkten.
-    formulare = {}
-    for f in db.query("SELECT f.*, (SELECT COUNT(*) FROM mat_checklist_item c WHERE c.form_id = f.id) AS punkte_n "
-                      "FROM mat_form f ORDER BY f.version DESC"):
-        formulare.setdefault(("k", f["category_id"]) if f["category_id"] else ("p", f["product_id"]), []).append(f)
-
-    def wahl(ziel):
-        liste = formulare.get(ziel) or []
-        aktiv = next((f for f in liste if f["active"]), None)
-        if aktiv:
-            return aktiv, True
-        return next((f for f in liste if f["punkte_n"]), None), False
-
+    # Prüfformulare: je Formular des Pools mit aktiver Version (E1) und Heimat im Export.
+    kat_angabe = {k["id"]: {"kategorie": pfad(k["id"]), "kategorie_uid": k["uid"]} for k in reihe}
+    prod_angabe = {p["id"]: {"uid": p["uid"], "hersteller": p["manufacturer"], "modell": p["model"],
+                             "artikelnummer": p["article_no"]} for p in exportiert}
+    zuweisungen = {}
+    for z in db.query("SELECT * FROM mat_formular_zuweisung ORDER BY id"):
+        zuweisungen.setdefault(z["formular_id"], []).append(z)
     formular_liste = []
-    ziele = [(("k", k["id"]), {"kategorie": pfad(k["id"]), "kategorie_uid": k["uid"]}) for k in reihe]
-    ziele += [(("p", p["id"]), {"produkt": {"uid": p["uid"], "hersteller": p["manufacturer"], "modell": p["model"],
-                                            "artikelnummer": p["article_no"]}}) for p in exportiert]
-    for ziel, angabe in ziele:
-        f, aktivieren = wahl(ziel)
-        if not f:
-            bericht["ohne_punkte"] += 1 if formulare.get(ziel) else 0
-            continue
-        if f["demo"]:
+    for r in db.query("SELECT f.*, v.id AS version_id, v.title, v.demo AS version_demo FROM mat_formular f "
+                      "LEFT JOIN mat_form v ON v.formular_id = f.id AND v.active = 1 ORDER BY f.id"):
+        if r["category_id"] in raus:
             raus_n["formulare"] += 1
+            raus_n["ohne_kennzeichen"] += 0 if r["demo"] else 1
             continue
-        formular_liste.append(dict(angabe, titel=f["title"], aktivieren=aktivieren,
-                                   punkte=[_punkt(x) for x in katalog.punkte(f["id"])]))
-    exportierte_ziele = {z for z, _ in ziele}
-    for ziel in formulare:
-        if ziel not in exportierte_ziele:          # Formulare an DEMO-Kategorien und -Produkten
-            raus_n["formulare"] += 1
-            raus_n["ohne_kennzeichen"] += 0 if all(f["demo"] for f in formulare[ziel]) else 1
+        if not r["version_id"]:
+            bericht["ohne_aktive"] += 1
+            continue
+        if r["category_id"] not in kat_angabe:
+            continue                                # Heimat ohne Pfad (sollte es nicht geben)
+        liste = zuweisungen.get(r["id"], [])
+        punkte = [_punkt(x) for x in katalog.punkte(r["version_id"])]
+        formular_liste.append(dict(kat_angabe[r["category_id"]], uid=r["uid"], titel=r["title"], punkte=punkte,
+                                   standard_fuer=[kat_angabe[z["category_id"]] for z in liste
+                                                  if z["category_id"] in kat_angabe],
+                                   zugewiesen=[prod_angabe[z["product_id"]] for z in liste
+                                               if z["product_id"] in prod_angabe]))
+        bericht["formular_liste"].append({
+            "titel": r["title"], "heimat": " / ".join(pfad(r["category_id"])), "demo": bool(r["version_demo"]),
+            "platzhalter": any("platzhalter" in (p["text"] or "").casefold() for p in punkte),
+            "standard_fuer": len(formular_liste[-1]["standard_fuer"]), "zugewiesen": len(formular_liste[-1]["zugewiesen"])})
     bericht["enthalten"]["formulare"] = len(formular_liste)
     raus_n["namen"] = raus_n["namen"][:50]
 
-    daten = {"format": importer.FORMAT, "version": 2, "quelle": bericht["quelle"], "erstellt": bericht["erstellt"],
+    daten = {"format": importer.FORMAT, "version": 3, "quelle": bericht["quelle"], "erstellt": bericht["erstellt"],
              "kategorien": kategorien, "produkte": produkte, "formulare": formular_liste}
     return daten, dateien, bericht
 
@@ -287,7 +277,7 @@ def bericht_text(b):
     """bericht.txt im Archiv: für Menschen, nicht für den Import."""
     e, a = b["enthalten"], b["ausgelassen"]
     zeilen = ["Katalog-Export – Materialablage", f"Quelle:   {b['quelle']}", f"Erstellt: {b['erstellt']}",
-              f"Format:   {importer.FORMAT}, Version 2", "",
+              f"Format:   {importer.FORMAT}, Version 3", "",
               "Im Export:",
               f"  Kategorien  {e['kategorien']}", f"  Produkte    {e['produkte']} (davon {e['bilder']} mit Bild)",
               f"  Formulare   {e['formulare']}", f"  Dokumente   {e['dokumente']}", "",
@@ -299,15 +289,22 @@ def bericht_text(b):
                       "bzw. gehören zu einem DEMO-Ziel.")
     if a["namen"]:
         zeilen += ["", "DEMO-Kategorien und -Produkte (oberste Ebene):"] + [f"  {n}" for n in a["namen"]]
-    if b["ohne_punkte"]:
-        zeilen += ["", f"Nicht im Export: {b['ohne_punkte']} Formularentwürfe ohne Prüfpunkte (ohne aktives Formular)."]
+    if b["formular_liste"]:
+        zeilen += ["", "Prüfformulare im Export (je die aktive Version – der Import macht sie aktiv, ohne DEMO):"]
+        for f in b["formular_liste"]:
+            marken = [m for m, ja in (("auf dieser Instanz DEMO", f["demo"]), ("Platzhalter", f["platzhalter"])) if ja]
+            wo = [w for w in (f"Standard für {f['standard_fuer']} Kategorie{'n' if f['standard_fuer'] != 1 else ''}"
+                              if f["standard_fuer"] else "",
+                              f"{f['zugewiesen']} Produkt{'en' if f['zugewiesen'] != 1 else ''} zugewiesen"
+                              if f["zugewiesen"] else "") if w]
+            zeilen.append(f"  „{f['titel']}“ – {f['heimat']}{' – ' + ', '.join(wo) if wo else ''}"
+                          f"{' [' + ', '.join(marken) + ']' if marken else ''}")
+    if b["ohne_aktive"]:
+        zeilen += ["", f"Nicht im Export: {b['ohne_aktive']} Prüfformulare ohne aktive Version."]
     if b["fehlende_dateien"]:
         zeilen += ["", "Nicht im Export, weil die Datei hier fehlt:"] + [f"  {x}" for x in b["fehlende_dateien"]]
     if b["zu_gross"]:
         zeilen += ["", "Nicht im Export, weil der Import die Datei nicht annähme:"] + [f"  {x}" for x in b["zu_gross"]]
-    if b.get("verweis_ohne_quelle"):
-        zeilen += ["", "Ohne „Prüfformular übernommen von“, weil das Quellprodukt nicht im Export ist (DEMO):"] \
-            + [f"  {x}" for x in b["verweis_ohne_quelle"]]
     zeilen += ["", "Bestand, Artikel, Prüfungen, Meldungen und Rückrufe sind nie Teil des Katalog-Exports.",
                "Importieren: Katalog → „Katalog importieren“ oder flask material import-catalog <datei.zip>.", ""]
     return "\n".join(zeilen)

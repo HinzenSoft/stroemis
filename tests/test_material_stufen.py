@@ -224,6 +224,7 @@ def test_ohne_stufe_rundum():
         freigeben(t.adm, t.b, uid, "verwalten")
         freigeben(t.adm, t.b, uid, "pruefen")
         form = zeilen(app, "SELECT id FROM mat_form ORDER BY id LIMIT 1")[0]["id"]
+        pool = zeilen(app, "SELECT formular_id FROM mat_form WHERE id = ?", (form,))[0]["formular_id"]
         kennungen = {"iid": t.art_b["id"], "mid": b.meldung, "aid": b.anhang_id, "token": b.token, "gid": b.freigabe,
                      "kid": ids["karabiner"], "did": 999999, "ruid": 999999, "anid": 999999, "mfid": 999999, "sid": 999999,
                      "uid": uid,                            # „Rechte ändern“ je Person (02.11.2026)
@@ -234,7 +235,8 @@ def test_ohne_stufe_rundum():
                      ("pruefungen", "pid"): t.entwurf_b, ("pruefung", "pid"): t.entwurf_b, ("punkte", "rid"): b.punkt,
                      ("ordner", "fid"): t.lager_b, ("export", "fid"): t.lager_b, ("formulare", "fid"): form,
                      ("formular", "fid"): form, ("durchgaenge", "rid"): t.durchgang_b, ("durchgang", "rid"): t.durchgang_b,
-                     ("import", "kennung"): "0" * 32}       # Katalogimport im Hintergrund (24.10.2026)
+                     ("import", "kennung"): "0" * 32,       # Katalogimport im Hintergrund (24.10.2026)
+                     "pf": pool}                            # Formular im Pool (Schritt 38)
         regeln = [r for r in app.url_map.iter_rules() if r.endpoint.split(".")[0] in ("material", "material_api")]
         vorher = _stand(app)
         gezaehlt = 0

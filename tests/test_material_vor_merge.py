@@ -300,14 +300,14 @@ def test_schritt_30_trigger():
 def _zeilen_je_tabelle(pfad, ohne_leere=()):
     """Zeilen je mat_-Tabelle; Tabellen aus ohne_leere fehlen, wenn sie leer sind (seit Schritt 31: mat_lebenslauf, die
     ein Stand 29 noch nicht hat). Ohne die Spalten, die Schritt 37 entfernt (models.SPALTEN_WEG_37) – so gleicht ein
-    älterer Stand dem Endstand."""
+    älterer Stand dem Endstand. Ebenso ohne mat_product.formular_von (Schritt 35 bis 38)."""
     from app.material import models
     c = sqlite3.connect(pfad)
     out = {}
     for (t,) in c.execute("SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE 'mat_%' AND name NOT LIKE "
                           "'%fts%' AND name <> 'mat_meta' ORDER BY name").fetchall():
         spalten = ", ".join(f'"{r[1]}"' for r in c.execute(f"PRAGMA table_info({t})")
-                            if (t, r[1]) not in models.SPALTEN_WEG_37)
+                            if (t, r[1]) not in models.SPALTEN_WEG_37 + (("mat_product", "formular_von"),))
         out[t] = c.execute(f"SELECT {spalten} FROM {t} ORDER BY rowid").fetchall()
         if t in ohne_leere and not out[t]:
             del out[t]

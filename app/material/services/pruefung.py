@@ -379,8 +379,8 @@ def starten(iid, pruefer, art=None, durchgang_id=None):
             raise Abgelehnt(f"Prüfart „{art}“ ist hier nicht wählbar ({', '.join(PRUEFARTEN[a] for a in arten)}).")
         formular = katalog.formular_fuer_produkt(item["product_id"])
         if not formular:
-            raise Abgelehnt("Für dieses Produkt gibt es kein aktives Prüfformular – weder am Produkt noch in "
-                            "seiner Kategorie. Die Material-Verwaltung legt es im Katalog an.", 409)
+            raise Abgelehnt("Für dieses Produkt gilt kein Prüfformular – weder ihm zugewiesen noch als Standard seiner "
+                            "Kategorie. Die Material-Verwaltung legt es unter „Prüfformulare“ fest.", 409)
         punkte = katalog.punkte(formular["id"])
         if durchgang_id:
             runde = durchgang.runde_fuer_start(durchgang_id, iid)

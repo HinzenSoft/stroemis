@@ -31,16 +31,21 @@ Format 2 (ZIP mit katalog.json und den Dateien; als reine JSON-Datei nur ohne Da
   Manifeste) ist ein Hinweis und wird übergangen. Auch in Format 1 gelesen.
   Seit dem Rückbau der Set-Funktion (Schritt 26, Wunsch vom 25.10.2026) ist „set“: true ein Fehler dieses Produkts
   (SET_ENTFALLEN – wie jeder Fehler wird dann nichts gespeichert); „set“: false wird übergangen.
-  Seit Schritt 35: „formular_von“ an einem Produkt – das Produkt, dessen aktives spezifisches Prüfformular es übernimmt,
-  angegeben wie das Ziel eines Formulars ({uid, hersteller, modell, artikelnummer}; _produkt_ziel). Aufgelöst nach den
-  Formularen der Datei (die Quelle bekommt dort vielleicht erst ihr Formular, _formularverweise); fehlt die Quelle oder
-  passt sie nicht (katalog.formular_uebernehmen), ist das ein Hinweis, kein Fehler – der Verweis bleibt dann, wie er
-  hier war. null löst einen Verweis (vor den Formularen, damit ein Formular der Datei für das Produkt aktiv werden kann),
-  ohne den Schlüssel bleibt er, wie er ist. Einzige Ausnahme von „deaktiviert wird nie etwas“: Hat das Produkt hier ein
-  eigenes aktives Formular, deaktiviert der Verweis es wie beim Übernehmen in der Oberfläche (eigenes_deaktivieren; so
-  steht es auch in der Quelle des Exports – dort war es beim Verknüpfen deaktiviert worden), die Änderungsliste sagt es.
-  Verweist das Produkt hier, wird ein Formular der Datei für das Produkt zwar angelegt, aber nicht aktiviert (Hinweis).
-  Auch in Format 1 gelesen.
+Format 3 (seit Schritt 38, Formular-Pool; Entscheidungen vom 04.11.2026) – Kategorien und Produkte wie Format 2, die
+Formulare als Einträge des Pools: {uid, kategorie/kategorie_uid (Heimat), titel, punkte, standard_fuer: [{kategorie,
+kategorie_uid}], zugewiesen: [{uid, hersteller, modell, artikelnummer}]}. Der Export schreibt nur Formulare mit aktiver
+Version (E1); hier wird das Formular aktiv – eine neue Version, wenn Titel oder Prüfpunkte von der aktiven abweichen,
+sonst bleibt alles (zweiter Import ändert nichts). Abgeglichen über die uid, sonst über den Titel in derselben Heimat (E3);
+ein Verschieben in eine andere Heimat gibt es nicht (Fehler). Die Datei ist für Zuweisungen maßgeblich (E2): Für jedes
+Formular und jedes Ziel der Datei gilt danach genau, was sie sagt – eine Zuweisung hier, die sie nicht nennt, wird
+gelöst (_zuweisungen). Einzige Ausnahme von „gelöscht wird nie etwas“ außer der Bestandteil-Liste.
+Ältere Dateien (Format 1/2) kommen weiter herein: Ein Formular mit „kategorie“ kommt in deren Pool und wird ihr Standard,
+eins mit „produkt“ in den Pool der Kategorie des Produkts und ihm zugewiesen (mit „aktivieren“: false nur als Version,
+ohne Zuweisung); „formular_von“ an einem Produkt (Schritt 35) wird die Zuweisung an das Formular, das der Quelle hier
+zugewiesen ist (sonst ein Hinweis), null ändert nichts mehr. Nichts davon löst eine Zuweisung.
+In jedem Format: Der Import übernimmt nie ein DEMO-Kennzeichen (ein Feld „demo“ der Datei zählt nicht) und nimmt ein
+führendes „DEMO“ aus Formulartiteln („DEMO – “, „DEMO-“, „DEMO “); ein leerer Titel (ältere Dateien) wird „Prüfformular
+<Kategorie bzw. Produkt>“ – Titel sind Pflicht.
 
 Dateien sind nicht Teil der Datenbanktransaktion. Ein Probelauf schreibt deshalb keine einzige. Der echte Lauf
 ermittelt erst in einem Probedurchgang, welche Dateien er braucht, legt nur diese ab – außerhalb der Schreibsperre,
@@ -79,7 +84,7 @@ from .interval import herstellerseite
 log = logging.getLogger(__name__)
 
 FORMAT = "stroemis-material-katalog"
-VERSIONEN = (1, 2)
+VERSIONEN = (1, 2, 3)
 
 # Grenzen für Katalogdateien: Upload der Route (routes.py), Export (katalog_export.py) und das Archiv, bevor
 # irgendetwas daraus gelesen wird. Ein Katalog mit Bildern und Herstellerdokumenten hat schnell einige hundert
@@ -189,6 +194,7 @@ def _bericht():
     return {"kategorien": {"neu": 0, "geaendert": 0, "unveraendert": 0},
             "produkte": {"neu": 0, "geaendert": 0, "unveraendert": 0},
             "formulare": {"neu": 0, "unveraendert": 0},
+            "zuweisungen": {"neu": 0, "geloest": 0, "unveraendert": 0},
             "bilder": {"neu": 0, "geaendert": 0, "unveraendert": 0},
             "dokumente": {"neu": 0, "neue_version": 0, "unveraendert": 0},
             "bestandteillisten": {"neu": 0, "geaendert": 0, "unveraendert": 0},
@@ -212,8 +218,8 @@ class _Lauf:
     verschwindet. Mit ablage nimmt er die vorher abgelegten Dateien – und legt nur selbst ab, wenn sich die
     Datenbank seit dem Probedurchgang geändert hat und er eine Datei mehr braucht."""
 
-    def __init__(self, version, demo, dateien, archiv, uids=({}, {}), ablage=None, fortschritt=None):
-        self.version, self.demo, self.dateien, self.archiv = version, demo, dateien, archiv
+    def __init__(self, version, dateien, archiv, uids=({}, {}), ablage=None, fortschritt=None):
+        self.version, self.dateien, self.archiv = version, dateien, archiv
         self.fortschritt = fortschritt        # Rückruf des Hintergrundauftrags, siehe oben
         self.kategorie_uids, self.produkt_uids = set(uids[0]), set(uids[1])
         self.planen = ablage is None
@@ -224,12 +230,14 @@ class _Lauf:
         self.alte_bilder = []                 # ersetzte Produktbilder – gelöscht erst nach dem Commit
         self.belegt = set()                   # Dokumente hier, die schon einem Eintrag der Datei entsprechen
         self.summen = {}                      # Produktbild hier → SHA-256 des Originals
-        self.zugeordnet = {"category": 0, "product": 0}
+        self.zugeordnet = {"category": 0, "product": 0, "formular": 0}
         self.zurueckgestellt = []             # (nochmal, Fehlermeldung) – Einträge mit _Konflikt, siehe _nachholen
         self.intervall_offen = {}             # geänderte Kategorie → (Fundstelle, Name), siehe _intervalle_pruefen
         self.listen = []                      # (Fundstelle, Name, Eintrag, Produkt) mit „bestandteile“, _bestandteillisten
         self.unveraendert = set()             # Produkte, die als „unveraendert“ zählen – bis _bestandteillisten etwas ändert
-        self.formularverweise = []            # (Fundstelle, Name, Angabe, Produkt) mit „formular_von“, _formularverweise
+        self.formularverweise = []            # (Fundstelle, Name, Angabe, Produkt) mit „formular_von“ (Format 1/2)
+        self.formulare = []                   # (Fundstelle, Titel, Formular, standard_fuer, zugewiesen), _zuweisungen
+        self.kategorien, self.produkte = set(), set()     # Kennungen hier, die die Datei nennt (E2, _zuweisungen)
         self.bericht = _bericht()
 
     def notiz(self, zeile):
@@ -240,8 +248,8 @@ class _Lauf:
             liste.append("… und weitere Änderungen")
 
     def uid(self, e, feld="uid"):
-        """Die Katalogkennung eines Eintrags (nur Format 2) – oder None."""
-        wert = e.get(feld) if self.version == 2 else None
+        """Die Katalogkennung eines Eintrags (ab Format 2) – oder None."""
+        wert = e.get(feld) if self.version >= 2 else None
         if wert in (None, ""):
             return None
         if not isinstance(wert, str) or not _UID.fullmatch(wert):
@@ -321,7 +329,7 @@ def _reihenfolge(liste, tabelle, lauf):
     """(Index, Eintrag) in der Reihenfolge der Bearbeitung: Im Format 2 zuerst, was es hier unter seiner uid schon
     gibt. So wird eine umbenannte Kategorie umbenannt, bevor eine neue mit ihrem alten Namen kommt."""
     paare = list(enumerate(liste))
-    if lauf.version != 2:
+    if lauf.version < 2:
         return paare
     vorhanden = {r["uid"] for r in db.query(f"SELECT uid FROM {tabelle} WHERE uid IS NOT NULL")}
     return sorted(paare, key=lambda p: not (isinstance(p[1], dict) and p[1].get("uid") in vorhanden))
@@ -465,11 +473,12 @@ def _kategorie(e, parent, ort, lauf, tiefe):
                 bericht["kategorien"]["unveraendert"] += 1
             lauf.uid_uebernehmen("mat_category", "category", vorhanden, uid)
         else:
-            kid = _ohne_konflikt(katalog.kategorie_anlegen, d, demo=lauf.demo)
+            kid = _ohne_konflikt(katalog.kategorie_anlegen, d)
             lauf.uid_setzen("mat_category", kid, uid)
             bericht["kategorien"]["neu"] += 1
             lauf.notiz(f"Kategorie „{_kategorie_pfadname(kid)}“: neu")
-        if lauf.version == 2:
+        lauf.kategorien.add(kid)
+        if lauf.version >= 2:
             _dokumente(e.get("dokumente"), "category_id", kid, ort, name, lauf)
     except _Konflikt as exc:
         lauf.zurueckgestellt.append((lambda: _kategorie(e, parent, ort, lauf, tiefe), f"{ort} ({e.get('name')}): {exc}"))
@@ -614,7 +623,7 @@ def _produkt(n, e, lauf):
             lauf.uid_uebernehmen("mat_product", "product", vorhanden, uid)
             bild = vorhanden["image"]
         else:
-            pid = _ohne_konflikt(katalog.produkt_anlegen, d, demo=lauf.demo, importiert=True)
+            pid = _ohne_konflikt(katalog.produkt_anlegen, d, importiert=True)
             lauf.uid_setzen("mat_product", pid, uid)
             bericht["produkte"]["neu"] += 1
             lauf.notiz(f"Produkt „{name}“: neu")
@@ -626,7 +635,8 @@ def _produkt(n, e, lauf):
     except Abgelehnt as exc:
         bericht["fehler"].append(f"{ort} ({name}): {exc}")
         return True
-    if lauf.version == 2:
+    lauf.produkte.add(pid)
+    if lauf.version >= 2:
         _bild(e, pid, bild, ort, name, lauf)
         try:
             _dokumente(e.get("dokumente"), "product_id", pid, ort, name, lauf)
@@ -865,7 +875,7 @@ def _dokument_einfuegen(spalte, ziel, w, abgelegt, ersetzt):
     return did
 
 
-# --- Formulare -------------------------------------------------------------------------------------
+# --- Formulare (seit Schritt 38 ein Pool je Kategorie, siehe Kopf) -------------------------------------------------
 
 def _produkt_ziel(angabe, lauf):
     if not isinstance(angabe, dict):
@@ -889,101 +899,243 @@ def _produkt_text(p):
 # Verglichen wird ohne „kritisch“: Die Marke ist am 03.11.2026 entfallen (die Spalte is_critical mit Schritt 37) – eine
 # Katalogdatei, die sie noch trägt, gilt beim erneuten Import als unverändert (keine neue Version nur wegen der Marke).
 _PUNKTFELDER = ("group_name", "label", "editor", "mandatory", "expected_value")
+# Ein führendes „DEMO“ im Formulartitel („DEMO – “, „DEMO-“, „DEMO “) nimmt der Import heraus – auf dev heißen die
+# Platzhalter so, in der Produktion gibt es kein DEMO (Entscheidung vom 04.11.2026, katalog-transfer).
+_DEMO_VORN = re.compile(r"^DEMO(?:\s*[–—-]\s*|\s+)")
+
+
+def ohne_demo(titel):
+    return _DEMO_VORN.sub("", titel, count=1).strip()
+
+
+def _formular_titel(e, ersatz):
+    """Der Titel eines Formulareintrags ohne führendes „DEMO“; leer (ältere Dateien) heißt er „Prüfformular <ersatz>“
+    wie nach der Migration (Titel sind seit dem Formular-Pool Pflicht)."""
+    titel = _name(e.get("titel"), "Titel", 160) if isinstance(e.get("titel"), str) else ""
+    return ohne_demo(titel) or f"Prüfformular {ersatz}"[:160]
+
+
+def _formular_mit_titel(heimat, titel):
+    """Ein Formular im Pool von heimat, dessen aktive (sonst neueste) Version so heißt – oder None."""
+    for r in db.query("SELECT id FROM mat_formular WHERE category_id = ? ORDER BY id", (heimat,)):
+        if katalog._anzeige_titel(r["id"]) == titel:
+            return katalog.pool_formular(r["id"])
+    return None
+
+
+def _versionen(pf, titel, punkte_roh, aktivieren, zielname, lauf, frisch=False):
+    """Die Versionen eines Formulars an die Datei angleichen: Gleicht die aktive Version Titel und Prüfpunkten, bleibt
+    alles; sonst wird die neueste aktiviert, wenn sie gleicht, oder eine neue Version angelegt (und aktiviert). Ohne
+    aktivieren (Format 1/2 mit „aktivieren“: false) nur angelegt. frisch: eben angelegtes Formular (Version 1 aus der
+    Datei), zählt als neu. Liefert die Version, die der Datei entspricht."""
+    bericht = lauf.bericht
+    neu = [{k: p[k] for k in _PUNKTFELDER} for p in katalog.punkte_pruefen(punkte_roh)]
+
+    def gleich(f):
+        return f["title"] == titel and [{k: p[k] for k in _PUNKTFELDER} for p in katalog.punkte(f["id"])] == neu
+
+    aktive = katalog._aktive_version(pf)
+    letzte = db.query("SELECT * FROM mat_form WHERE formular_id = ? ORDER BY version DESC LIMIT 1", (pf,), one=True)
+    if frisch:
+        fid = letzte["id"]
+    elif aktivieren and aktive and gleich(aktive):
+        fid = aktive["id"]
+    elif letzte and gleich(letzte):
+        fid = letzte["id"]
+    else:
+        fid = None
+    angelegt = frisch or not fid
+    if not fid:
+        fid = katalog.formular_anlegen({"formular_id": pf, "titel": titel, "punkte": punkte_roh})
+    if angelegt:
+        bericht["formulare"]["neu"] += 1
+    else:
+        bericht["formulare"]["unveraendert"] += 1
+    aktiviert = aktivieren and not katalog.formular(fid)["active"]
+    if aktiviert:
+        katalog.formular_aktivieren(fid)
+    if angelegt or aktiviert:
+        version = katalog.formular(fid)["version"]
+        lauf.notiz(f"Formular „{titel}“ ({zielname}): " + (f"neue Version {version}{', aktiv' if aktiviert else ''}"
+                                                          if angelegt else f"Version {version} aktiviert"))
+    return fid
+
+
+def _neues_formular(heimat, titel, punkte_roh, lauf, uid=None):
+    pf, _vid = katalog.pool_anlegen({"kategorie_id": heimat, "titel": titel, "punkte": punkte_roh})
+    lauf.uid_setzen("mat_formular", pf, uid)
+    return pf
 
 
 def _formulare(liste, lauf):
     if not isinstance(liste, list):
         raise Abgelehnt("„formulare“ muss eine Liste sein.")
     bericht = lauf.bericht
+    gesehen = {}
     for n, e in enumerate(liste):
         ort = f"formulare[{n}]"
         try:
             if not isinstance(e, dict):
                 raise Abgelehnt("Eintrag ist kein Objekt.")
-            if ("kategorie" in e) == ("produkt" in e):
-                raise Abgelehnt("Ein Formular gehört entweder zu einer „kategorie“ oder zu einem „produkt“.")
-            if "kategorie" in e:
-                kid = _kategorie_ziel(e, lauf)
-                ziel = {"kategorie_id": kid}
-                spalte, wert = "category_id", kid
-                zielname = f"Kategorie „{_kategorie_pfadname(kid)}“"
+            if lauf.version >= 3:
+                _formular_3(e, ort, lauf, gesehen)
             else:
-                p = _produkt_ziel(e["produkt"], lauf)
-                ziel = {"produkt_id": p["id"]}
-                spalte, wert = "product_id", p["id"]
-                zielname = f"Produkt „{katalog.produktname(p)}“"
-            punkte = katalog.punkte_pruefen(e.get("punkte"))
-            if not punkte:
-                raise Abgelehnt("Ein Formular braucht mindestens einen Prüfpunkt.")
-            titel = _name(e.get("titel"), "Titel", 160) if isinstance(e.get("titel"), str) else ""
-            aktivieren = e.get("aktivieren", True) is not False
-            # Übernimmt das Produkt hier das Formular eines anderen (Schritt 35), gälte ein eigenes aktives nicht – der
-            # Import legt es an, aktiviert es aber nicht (katalog.formular_aktivieren wiese es ab).
-            if aktivieren and spalte == "product_id" and p["formular_von"]:
-                aktivieren = False
-                bericht["hinweise"].append(f"{ort}: {zielname} übernimmt hier das Prüfformular eines anderen Produkts – "
-                                           "das Formular aus der Datei wird nicht aktiviert.")
-            neu = [{k: p[k] for k in _PUNKTFELDER} for p in punkte]
-
-            # Ein leerer Titel in der Datei gibt keinen vor (das erste Formular legt die Oberfläche ohne Titel an):
-            # Verglichen werden dann nur die Prüfpunkte. Eine neue Version erbt ohnehin den Titel der letzten hier.
-            def gleich(f):
-                return ((not titel or f["title"] == titel)
-                        and [{k: p[k] for k in _PUNKTFELDER} for p in katalog.punkte(f["id"])] == neu)
-
-            # Verglichen wird mit dem aktiven Formular des Ziels (soll es aktiv werden), dann mit der neuesten
-            # Version – ein Entwurf hier führt so nicht zu einer neuen Version mit dem Inhalt der aktiven.
-            aktive = db.query(f"SELECT * FROM mat_form WHERE {spalte} = ? AND active = 1", (wert,), one=True)
-            letzte = db.query(f"SELECT * FROM mat_form WHERE {spalte} = ? ORDER BY version DESC LIMIT 1", (wert,), one=True)
-            if aktivieren and aktive and gleich(aktive):
-                fid = aktive["id"]
-            elif letzte and gleich(letzte):
-                fid = letzte["id"]
-            else:
-                fid = None
-            angelegt = not fid
-            if angelegt:
-                fid = katalog.formular_anlegen(dict(ziel, titel=titel, punkte=e.get("punkte")), demo=lauf.demo)
-                bericht["formulare"]["neu"] += 1
-            else:
-                bericht["formulare"]["unveraendert"] += 1
-            aktiviert = aktivieren and not katalog.formular(fid)["active"]
-            if aktiviert:
-                katalog.formular_aktivieren(fid)
-            if angelegt or aktiviert:
-                version = katalog.formular(fid)["version"]
-                lauf.notiz(f"Formular „{titel or katalog.formular(fid)['title']}“ ({zielname}): "
-                           + (f"neue Version {version}{', aktiv' if aktiviert else ''}" if angelegt
-                              else f"Version {version} aktiviert"))
+                _formular_alt(e, ort, lauf)
         except Abgelehnt as exc:
             titel_roh = e.get("titel") if isinstance(e, dict) and isinstance(e.get("titel"), str) else ""
             bericht["fehler"].append(f"{ort}{f' ({titel_roh})' if titel_roh else ''}: {exc}")
 
 
-def _formularverweise(lauf, loesen):
-    """„formular_von“ der Produkte (Schritt 35, siehe Kopf): loesen=True – vor den Formularen – löst die Verweise mit
-    null, loesen=False – danach – setzt die übrigen. Was nicht geht, ist ein Hinweis."""
+def _formular_3(e, ort, lauf, gesehen):
+    """Format 3: ein Formular des Pools mit Heimat, Titel, Prüfpunkten und seinen Zuweisungen (gesetzt erst nach allen
+    Formularen, _zuweisungen). Abgeglichen über die uid, sonst über den Titel in derselben Heimat (Entscheidung E3); die
+    Datei kommt nur mit aktiven Formularen (E1) – es wird hier aktiv."""
+    uid = lauf.uid(e)
+    if uid and uid in gesehen:
+        raise Abgelehnt(f"Die Katalogkennung {uid} steht schon bei {gesehen[uid]}.")
+    if uid:
+        gesehen[uid] = ort
+    heimat = _kategorie_ziel(e, lauf)
+    titel = _formular_titel(e, katalog.kategorie(heimat)["name"])
+    if not katalog.punkte_pruefen(e.get("punkte")):
+        raise Abgelehnt("Ein Formular braucht mindestens einen Prüfpunkt.")
+    zielname = f"Kategorie „{_kategorie_pfadname(heimat)}“"
+    pf_row = db.query("SELECT * FROM mat_formular WHERE uid = ?", (uid,), one=True) if uid else None
+    if pf_row and pf_row["category_id"] != heimat:
+        raise Abgelehnt(f"Das Prüfformular steht hier im Pool von „{_kategorie_pfadname(pf_row['category_id'])}“, in der "
+                        f"Datei in „{_kategorie_pfadname(heimat)}“ – Formulare lassen sich nicht verschieben.")
+    if not pf_row:
+        pf_row = _formular_mit_titel(heimat, titel)
+        if pf_row and uid and pf_row["uid"] != uid:
+            lauf.uid_uebernehmen("mat_formular", "formular", pf_row, uid)
+    pf = pf_row["id"] if pf_row else _neues_formular(heimat, titel, e.get("punkte"), lauf, uid)
+    _versionen(pf, titel, e.get("punkte"), True, zielname, lauf, frisch=not pf_row)
+    lauf.formulare.append((ort, titel, pf, e.get("standard_fuer"), e.get("zugewiesen")))
+
+
+def _formular_alt(e, ort, lauf):
+    """Format 1 und 2: ein Formular gehört zu einer „kategorie“ (generisch) oder einem „produkt“ (spezifisch). Es kommt in
+    den Pool der Kategorie bzw. der Kategorie des Produkts (wie in der Migration, Schritt 38) und wird – mit „aktivieren“
+    (Vorgabe) – Standard der Kategorie bzw. dem Produkt zugewiesen. Abgeglichen über den Titel in der Heimat, sonst das
+    Formular, das dort schon Standard bzw. dem Produkt zugewiesen ist."""
+    if ("kategorie" in e) == ("produkt" in e):
+        raise Abgelehnt("Ein Formular gehört entweder zu einer „kategorie“ oder zu einem „produkt“.")
+    if "kategorie" in e:
+        heimat = _kategorie_ziel(e, lauf)
+        spalte, ziel = "category_id", heimat
+        name = katalog.kategorie(heimat)["name"]
+        zielname = f"Kategorie „{_kategorie_pfadname(heimat)}“"
+    else:
+        p = _produkt_ziel(e["produkt"], lauf)
+        heimat, spalte, ziel = p["category_id"], "product_id", p["id"]
+        name = katalog.produktname(p)
+        zielname = f"Produkt „{name}“"
+    titel = _formular_titel(e, name)
+    if not katalog.punkte_pruefen(e.get("punkte")):
+        raise Abgelehnt("Ein Formular braucht mindestens einen Prüfpunkt.")
+    aktivieren = e.get("aktivieren", True) is not False
+    pf_row = _formular_mit_titel(heimat, titel)
+    if not pf_row:
+        z = db.query(f"SELECT f.* FROM mat_formular_zuweisung z JOIN mat_formular f ON f.id = z.formular_id "
+                     f"WHERE z.{spalte} = ? AND f.category_id = ?", (ziel, heimat), one=True)
+        pf_row = z
+    pf = pf_row["id"] if pf_row else _neues_formular(heimat, titel, e.get("punkte"), lauf)
+    _versionen(pf, titel, e.get("punkte"), aktivieren, zielname, lauf, frisch=not pf_row)
+    if aktivieren:
+        lauf.formulare.append((ort, titel, pf, *(([{"_id": ziel}], None) if spalte == "category_id"
+                                                 else (None, [{"_id": ziel}]))))
+
+
+def _zuweisungen(lauf):
+    """Die Zuweisungen aus der Datei setzen – nach allen Formularen. Format 3: Die Datei ist maßgeblich (Entscheidung E2):
+    Für jedes Formular und jedes Ziel (Kategorie, Produkt) der Datei gilt danach genau, was sie sagt; eine Zuweisung hier,
+    an der ein Formular oder ein Ziel der Datei beteiligt ist und die sie nicht nennt, wird gelöst. Zuweisungen zwischen
+    Formularen und Zielen, die nur es hier gibt, bleiben. Format 1/2 setzt nur (Standard bzw. Produkt des Formulars und
+    „formular_von“) und löst nichts. Was hier nicht geht (Ziel fehlt, liegt nicht unter der Heimat, Länge), ist ein
+    Hinweis."""
     bericht = lauf.bericht
+    zahl = bericht["zuweisungen"]
+    wunsch = {}                                    # ("category_id"|"product_id", Kennung) → (Formular, Titel, Fundstelle)
+    for ort, titel, pf, kats, prods in lauf.formulare:
+        for spalte, liste, wo in (("category_id", kats, "standard_fuer"), ("product_id", prods, "zugewiesen")):
+            if liste is None:
+                continue
+            if not isinstance(liste, list):
+                bericht["fehler"].append(f"{ort} ({titel}): „{wo}“ muss eine Liste sein.")
+                continue
+            for x in liste:
+                try:
+                    if isinstance(x, dict) and "_id" in x:
+                        ziel = x["_id"]
+                    elif spalte == "category_id":
+                        if not isinstance(x, dict):
+                            raise Abgelehnt("Kategorieangabe ist kein Objekt.")
+                        ziel = _kategorie_ziel(x, lauf)
+                    else:
+                        ziel = _produkt_ziel(x, lauf)["id"]
+                except Abgelehnt as exc:
+                    bericht["hinweise"].append(f"{ort} ({titel}): nicht zugewiesen – {exc}")
+                    continue
+                if (spalte, ziel) in wunsch and wunsch[(spalte, ziel)][0] != pf:
+                    bericht["hinweise"].append(f"{ort} ({titel}): {_ziel_text(spalte, ziel)} steht in der Datei schon bei "
+                                               f"„{wunsch[(spalte, ziel)][1]}“ – bleibt dort.")
+                    continue
+                wunsch[(spalte, ziel)] = (pf, titel, ort)
     for ort, name, angabe, pid in lauf.formularverweise:
-        if (angabe is None) != loesen:
-            continue
         if angabe is None:
-            if katalog.formular_uebernahme_loesen(pid):
-                lauf.notiz(f"Produkt „{name}“: Übernahme des Prüfformulars gelöst")
             continue
         try:
             q = _produkt_ziel(angabe, lauf)
+            # Das Formular der Quelle: aus derselben Datei (gleich gesetzt) oder hier schon zugewiesen.
+            pf = (wunsch.get(("product_id", q["id"])) or (None,))[0]
+            z = db.query("SELECT formular_id FROM mat_formular_zuweisung WHERE product_id = ?", (q["id"],), one=True)
+            pf = pf or (z["formular_id"] if z else None)
+            if not pf:
+                raise Abgelehnt(f"„{katalog.produktname(q)}“ hat hier kein zugewiesenes Prüfformular")
         except Abgelehnt as exc:
-            bericht["hinweise"].append(f"{ort} ({name}): Prüfformular nicht übernommen – {exc}")
+            bericht["hinweise"].append(f"{ort} ({name}): Prüfformular nicht übernommen – {exc}.")
             continue
-        try:
-            eigenes = db.query("SELECT version FROM mat_form WHERE product_id = ? AND active = 1", (pid,), one=True)
-            if katalog.formular_uebernehmen(pid, {"quelle": q["id"], "eigenes_deaktivieren": True}):
-                lauf.notiz(f"Produkt „{name}“: übernimmt das Prüfformular von „{katalog.produktname(q)}“"
-                           + (f" (eigenes Formular Version {eigenes['version']} deaktiviert)" if eigenes else ""))
-        except Abgelehnt as exc:
-            bericht["hinweise"].append(f"{ort} ({name}): Prüfformular von „{katalog.produktname(q)}“ nicht übernommen – "
-                                       f"{exc}")
+        wunsch.setdefault(("product_id", pid), (pf, katalog._anzeige_titel(pf), ort))
+    if lauf.version >= 3:
+        formulare = {pf for _o, _t, pf, _k, _p in lauf.formulare}
+        for z in db.query("SELECT * FROM mat_formular_zuweisung ORDER BY id"):
+            spalte, ziel = ("category_id", z["category_id"]) if z["category_id"] else ("product_id", z["product_id"])
+            beteiligt = (z["formular_id"] in formulare or ziel in (lauf.kategorien if spalte == "category_id"
+                                                                    else lauf.produkte))
+            if beteiligt and wunsch.get((spalte, ziel), (None,))[0] != z["formular_id"]:
+                if (spalte, ziel) in wunsch:
+                    continue                       # wechselt gleich zum Formular der Datei (Journal dort)
+                katalog._zuweisung_loesen(z, "steht nicht in der Katalogdatei")
+                zahl["geloest"] += 1
+                lauf.notiz(f"Prüfformular „{katalog._anzeige_titel(z['formular_id'])}“: {_ziel_text(spalte, ziel)} "
+                           "nicht mehr zugewiesen")
+    for (spalte, ziel), (pf, titel, ort) in wunsch.items():
+        da = db.query(f"SELECT formular_id FROM mat_formular_zuweisung WHERE {spalte} = ?", (ziel,), one=True)
+        if da and da["formular_id"] == pf:
+            zahl["unveraendert"] += 1
+            continue
+        heimat = katalog.pool_formular(pf)["category_id"]
+        kategorie = ziel if spalte == "category_id" else katalog.produkt(ziel)["category_id"]
+        if kategorie not in katalog._unterkategorien(heimat):
+            bericht["hinweise"].append(f"{ort} ({titel}): {_ziel_text(spalte, ziel)} liegt hier nicht unter "
+                                       f"„{_kategorie_pfadname(heimat)}“ – nicht zugewiesen.")
+            continue
+        aktiv = katalog._aktive_version(pf)
+        grund = (katalog.laenge_grund(katalog.produkt(ziel), katalog._hat_laengenpunkt(aktiv["id"]))
+                 if spalte == "product_id" and aktiv else "" if aktiv else katalog.NUR_AKTIV_ZUWEISEN)
+        if grund:
+            bericht["hinweise"].append(f"{ort} ({titel}): {_ziel_text(spalte, ziel)} nicht zugewiesen – {grund}")
+            continue
+        katalog._zuweisen(pf, spalte, ziel, aktiv["title"], None)
+        zahl["neu"] += 1
+        lauf.notiz(f"Prüfformular „{titel}“: " + ("Standard für " if spalte == "category_id" else "zugewiesen an ")
+                   + _ziel_text(spalte, ziel))
+
+
+def _ziel_text(spalte, ziel):
+    if spalte == "category_id":
+        return f"Kategorie „{_kategorie_pfadname(ziel)}“"
+    return f"„{katalog.produktname(katalog.produkt(ziel))}“"
 
 
 def _gekuerzt(t, n):
@@ -1278,9 +1430,8 @@ def _durchgang(daten, lauf, speichern):
                 _nachholen(lauf)
                 _bestandteillisten(lauf)
                 _intervalle_pruefen(lauf)
-                _formularverweise(lauf, loesen=True)
                 _formulare(daten.get("formulare") or [], lauf)
-                _formularverweise(lauf, loesen=False)
+                _zuweisungen(lauf)
             except Abgelehnt as exc:
                 lauf.bericht["fehler"].append(str(exc))
             if not speichern(lauf):
@@ -1313,18 +1464,19 @@ def importieren(daten, trocken=False, quelle="Datei", archiv=None, fortschritt=N
         return bericht
     version = daten.get("version")
     if type(version) is not int or version not in VERSIONEN:
-        bericht["fehler"].append("Unbekannte Formatversion – erwartet wird \"version\": 1 oder 2.")
+        bericht["fehler"].append("Unbekannte Formatversion – erwartet wird \"version\": 1, 2 oder 3.")
         return bericht
     basis = {"version": version, "trocken": bool(trocken)}
-    if version == 2:
+    if version >= 2:
         # Höchstens 200 Zeichen – gekürzt am Wortende mit „…“, nicht mitten im Wort (Browserprüfung vor dem Merge, V7).
         herkunft = {k: _gekuerzt(daten[k], 200) for k in ("quelle", "erstellt") if isinstance(daten.get(k), str)}
         if herkunft:
             basis["herkunft"] = herkunft
     bericht.update(basis)
-    demo = daten.get("demo") is True
+    # Ein Feld „demo“ der Datei zählt nicht: Der Import übernimmt nie ein DEMO-Kennzeichen (Entscheidung vom 04.11.2026,
+    # katalog-transfer) – nicht an Kategorien, Produkten, Formularen.
     uids, dateien = ({}, {}), {}
-    if version == 2:
+    if version >= 2:
         uids = _uids(daten)
         for gruppe in uids:
             for uid, orte in gruppe.items():
@@ -1338,7 +1490,7 @@ def importieren(daten, trocken=False, quelle="Datei", archiv=None, fortschritt=N
     try:
         if fortschritt:
             fortschritt("probe")
-        erster = _Lauf(version, demo, dateien, archiv, uids)
+        erster = _Lauf(version, dateien, archiv, uids)
         # Braucht der Lauf keine neue Datei (Format 1, nur Links, nichts geändert), speichert gleich der erste
         # Durchgang. Sonst plant er nur.
         gespeichert = _durchgang(daten, erster, lambda lauf: not (lauf.bericht["fehler"] or trocken or lauf.bedarf))
@@ -1366,7 +1518,7 @@ def importieren(daten, trocken=False, quelle="Datei", archiv=None, fortschritt=N
             raise
         if fortschritt:
             fortschritt("schreiben")
-        zweiter = _Lauf(version, demo, dateien, archiv, uids, ablage, fortschritt)
+        zweiter = _Lauf(version, dateien, archiv, uids, ablage, fortschritt)
         try:
             gespeichert = _durchgang(daten, zweiter, lambda lauf: not lauf.bericht["fehler"])
         except BaseException:

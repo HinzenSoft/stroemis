@@ -62,13 +62,13 @@ def test_ablauf():
         app, k = umgebung(tmp_a)
         ids = katalog_grund(k["adm"])
         kp, w, p1 = k["katalog"], k["wart"], k["pruefer"]
-        r = kp.post("/api/material/formulare", json={"produkt_id": ids["gurt"], "titel": "Platzhalter Absatz", "punkte": [
+        r = kp.post("/api/material/formular-pool", json={"kategorie_id": ids["gurte"], "titel": "Platzhalter Absatz", "punkte": [
             {"gruppe": "Platzhalter Gruppe", "text": ABSATZ, "art": "yesno", "soll": "nein"},
             {"gruppe": "Platzhalter Gruppe", "text": HTML, "art": "yesno", "soll": "ja"},
             {"text": "Platzhalter  einzeilig", "art": "text", "pflicht": False},
             {"text": MESSUNG, "art": "text"}]})
         assert r.status_code == 201, r.get_json()
-        fid = r.json["formular"]["id"]
+        fid, pf = r.json["formular"]["id"], r.json["formular"]["formular_id"]
         erwartet = [ABSATZ_NORM, HTML, "Platzhalter einzeilig", MESSUNG]
         assert [p["text"] for p in r.json["formular"]["punkte"]] == erwartet
         # Speichern (PUT) wie der Editor: Absätze bleiben, Windows-Umbrüche werden „\n“.
@@ -78,11 +78,12 @@ def test_ablauf():
         assert r.status_code == 200, r.get_json()
         assert [p["text"] for p in kp.get(f"/api/material/formulare/{fid}").json["formular"]["punkte"]] == erwartet
         # Neue Version übernimmt die Punkte unverändert.
-        r = kp.post("/api/material/formulare", json={"produkt_id": ids["gurt"], "vorlage_id": fid})
+        r = kp.post("/api/material/formulare", json={"formular_id": pf, "vorlage_id": fid})
         assert r.status_code == 201 and [p["text"] for p in r.json["formular"]["punkte"]] == erwartet
         assert kp.post(f"/api/material/formulare/{fid}/aktivieren", json={}).status_code == 200
+        assert kp.put(f"/api/material/formular-pool/{pf}/zuweisung", json={"produkte": [ids["gurt"]]}).status_code == 200
 
-        # Katalog-Export (Format 2) und Import in eine zweite Anlage: rund.
+        # Katalog-Export (Format 3) und Import in eine zweite Anlage: rund.
         roh = exportieren(kp)
         formulare = katalogjson(roh)["formulare"]
         texte = [p["text"] for f in formulare for p in f["punkte"]]

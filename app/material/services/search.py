@@ -97,7 +97,7 @@ def produkte(q="", kategorie_id=None, seite=1, pro_seite=25, sort=None, richtung
     Jedes Wort muss irgendwo vorkommen. Die Beschreibung (der Zusatz hinter dem Modell, etwa „Screwlock“) steht nicht
     im Volltextindex und wird mit LIKE durchsucht – sie ist kurz, und der Katalog hat Hunderte, nicht Millionen
     Produkte; den Index umzubauen hieße einen Schemaschritt. zusatz: (SQL-Bedingung über p, Argumente) – eine feste
-    Einschränkung aus dem Dienst (katalog.formular_quellen), nie aus der Anfrage."""
+    Einschränkung aus einem Dienst, nie aus der Anfrage."""
     seite, pro_seite = seiten(seite, pro_seite)
     if sort == "intervall":
         if richtung not in RICHTUNGEN:

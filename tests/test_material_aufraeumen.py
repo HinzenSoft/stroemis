@@ -167,7 +167,7 @@ def test_frisch():
     assert models.SCHEMA_VERSION >= 37 and models.SPALTEN_WEG_37 == ENTFERNT
     with tempfile.TemporaryDirectory() as t36, tempfile.TemporaryDirectory() as t37:
         bis_schritt(36)(make_app, t36)
-        make_app(t37)
+        bis_schritt(37)(make_app, t37)                     # seit Schritt 38 ist 37 nicht mehr das Ende
         s36, s37 = _schema(os.path.join(t36, "stroemis.db")), _schema(os.path.join(t37, "stroemis.db"))
         conn36, conn37 = sqlite3.connect(os.path.join(t36, "stroemis.db")), sqlite3.connect(os.path.join(t37, "stroemis.db"))
         try:
@@ -224,7 +224,7 @@ def test_altbestand_36_37():
             original = fh.read()
 
         with startprotokoll() as protokoll:
-            app = make_app(tmp)
+            app = bis_schritt(37)(make_app, tmp)               # seit Schritt 38 ist 37 nicht mehr das Ende
         assert zeilen(app, "SELECT wert FROM mat_meta WHERE schluessel = 'schema_version'")[0]["wert"] == "37"
         for (tb, s), n in werte.items():
             assert f"Schritt 37 (Materialablage): Spalte {tb}.{s} entfernt – {n} Zeile(n) trugen einen Wert." in protokoll, \
@@ -246,7 +246,7 @@ def test_altbestand_36_37():
             assert set(schema36) - set(schema37) == OBJEKTE_WEG - {("trigger", "mat_item_kein_teil_aendern")}
             assert not set(schema37) - set(schema36)
             # Zweiter Lauf: nichts ändert sich (auch Schritt 37 für sich nicht).
-            assert models.migrieren(conn) == models.SCHEMA_VERSION
+            assert bis_schritt(37)(models.migrieren, conn) == 37
             conn.execute("BEGIN")
             n = conn.total_changes
             models._schritt_37(conn)
@@ -257,7 +257,7 @@ def test_altbestand_36_37():
             conn.close()
         # Zweiter Start: legt mat_katalog nicht neu an, ändert nichts.
         with startprotokoll() as protokoll:
-            app = make_app(tmp)
+            app = bis_schritt(37)(make_app, tmp)
         assert not [z for z in protokoll if "Schritt 37" in z], protokoll
         conn = sqlite3.connect(pfad)
         try:
@@ -316,7 +316,7 @@ def test_sqlite_alt():
         sqlite3.sqlite_version_info = (3, 34, 1)
         try:
             with startprotokoll() as protokoll:
-                assert models.migrieren(conn) == 37
+                assert models.migrieren(conn) == models.SCHEMA_VERSION
         finally:
             sqlite3.sqlite_version_info = alt
         try:

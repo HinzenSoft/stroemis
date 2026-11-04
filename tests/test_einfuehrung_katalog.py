@@ -3,8 +3,9 @@
 python tests/test_einfuehrung_katalog.py  oder  pytest tests/test_einfuehrung_katalog.py
 
 1. Auswahl: je Rolle (Gurt, Seil, Helm – ohne Helm ein Karabiner) das passende Produkt – nicht DEMO, ohne laufenden
-   Rückruf, mit geltendem, echtem Formular (katalog.formular_fuer_produkt), Bild zuerst, sonst kleinste Kennung; dieselbe
-   Auswahl bei jedem Aufruf; ohne Katalog bzw. ohne passendes Produkt der Platzhalter (null).
+   Rückruf, mit geltendem Formular (katalog.formular_fuer_produkt; seit dem Formular-Pool, Schritt 38, gleich ob es das
+   DEMO-Kennzeichen trägt – wie der Export), Bild zuerst, sonst kleinste Kennung; dieselbe Auswahl bei jedem Aufruf; ohne
+   Katalog bzw. ohne passendes Produkt der Platzhalter (null).
 2. Übungsseite: STROEMIS.einfuehrung.katalog trägt nur Katalogfelder – keine Kennung, kein Artikel, keine Bestandszahl,
    keine Person, kein Journal; Prüfpunkte mit Absätzen und „optional“ wie im Formular; ohne Übung kein Katalog.
 3. Sperre und CSP: Aus der Übung laden genau die Bilder der Auswahl (Web- und Vorschaufassung, nur GET); ein fremdes
@@ -14,6 +15,8 @@ python tests/test_einfuehrung_katalog.py  oder  pytest tests/test_einfuehrung_ka
    Anmeldung mit Modulzugang – ohne das rechnet keine Anfrage die Auswahl (Befund 1); die Auswahl liegt prozessweit im
    Zwischenspeicher und wird erst nach einer Änderung am Katalog oder nach Ablauf der Frist neu gerechnet. DEMO nach der
    Regel des Katalog-Exports: ein Produkt in einer DEMO-Kategorie zählt als DEMO, auch ohne eigenes Kennzeichen (Befund 4).
+5. Nachtrag zum Formular-Pool: Der Schlüssel des Zwischenspeichers folgt dem Zähler mat_meta.katalog_stand – zwei
+   Änderungen in derselben Sekunde (auch per SQL von Hand) rechnen jede neu, ohne dass der Test den Speicher leert.
 Alle Inhalte sind Platzhalter (Hersteller „Platzhalter“, Kategorien nach den Rollen benannt)."""
 import hashlib
 import json
@@ -36,8 +39,9 @@ SATZ = "In der Übung gesperrt – es wird nichts gespeichert."
 def katalog_platzhalter(app):
     """Ein kleiner Katalog mit Platzhaltern für die Auswahl: Kategorien „Platzhalter-Ausrüstung“ mit „Gurte“, „Seile“,
     „Karabiner“ (kein „Helme“; Prüfintervall 6 Monate als Vorgabe); je Rolle Produkte, die gewählt werden sollen bzw. nicht (DEMO, Rückruf, ohne Formular,
-    nur DEMO-Formular, ohne Bild). Formulare: generisch für Gurte (mit Absatz, optionalem Punkt, Zahl- und Fotopunkt),
-    spezifisch für ein Seil, DEMO-spezifisch für ein anderes, generisch für Karabiner. Liefert die Kennungen."""
+    mit DEMO-Formular, ohne Bild). Formulare (Pool, Schritt 38): Standard für Gurte (mit Absatz, optionalem Punkt, Zahl-
+    und Fotopunkt), einem Seil zugewiesen, einem anderen ein DEMO-Formular, Standard für Karabiner. Liefert die
+    Kennungen."""
     from werkzeug.datastructures import FileStorage
     with app.test_request_context():
         from app import db
@@ -58,8 +62,13 @@ def katalog_platzhalter(app):
             return pid
 
         def formular(ziel, titel, punkte, demo=False):
-            fid = katalog.formular_anlegen(dict(ziel, titel=titel, punkte=punkte), demo=demo)
+            if "kategorie_id" in ziel:
+                kid, wem = ziel["kategorie_id"], {"kategorien": [ziel["kategorie_id"]]}
+            else:
+                kid, wem = katalog.produkt(ziel["produkt_id"])["category_id"], {"produkte": [ziel["produkt_id"]]}
+            pf, fid = katalog.pool_anlegen({"kategorie_id": kid, "titel": titel, "punkte": punkte}, demo=demo)
             katalog.formular_aktivieren(fid)
+            katalog.zuweisung_setzen(pf, wem)
             return fid
 
         ids = {
@@ -70,8 +79,10 @@ def katalog_platzhalter(app):
                             interval_months=12),
             "gurt_metall": produkt("Gurt Metall", "Gurte", "metall_hardware", bild=True),
             "seil_ohne_formular": produkt("Seil ohne Formular", "Seile", "textil", bild=True),
-            "seil_demo_formular": produkt("Seil DEMO-Formular", "Seile", "textil", bild=True),
             "seil": produkt("Seil mit Formular", "Seile", "textil"),
+            # Ohne Bild und nach „Seil mit Formular“ angelegt: gewählt nur, wenn jenes kein Formular mehr hat – sein
+            # DEMO-Formular zählt seit dem Formular-Pool wie ein echtes (test_auswahl).
+            "seil_demo_formular": produkt("Seil DEMO-Formular", "Seile", "textil"),
             "karabiner": produkt("Karabiner", "Karabiner", "metall_hardware", bild=True),
         }
         db.execute("INSERT INTO mat_recall (product_id, title, created_at) VALUES (?, 'Platzhalter-Rückruf', ?)",
@@ -136,8 +147,8 @@ def test_auswahl():
         assert auswahl(app) == {"produkte": {"gurt": None, "seil": None, "helm": None}, "formulare": []}
         ids = katalog_platzhalter(app)
         a = auswahl(app)
-        # Gurt: mit Bild vor ohne, DEMO und Rückruf nicht, Materialart passend; Seil: das mit (echtem) Formular; Helm: der
-        # Katalog hat keine Helme – ein Karabiner.
+        # Gurt: mit Bild vor ohne, DEMO und Rückruf nicht, Materialart passend; Seil: das mit Formular; Helm: der Katalog
+        # hat keine Helme – ein Karabiner.
         assert modelle(a) == {"gurt": "Gurt mit Bild", "seil": "Seil mit Formular", "helm": "Karabiner"}, a
         assert a == auswahl(app), "dieselbe Auswahl bei jedem Aufruf"
         for p in a["produkte"].values():
@@ -149,11 +160,13 @@ def test_auswahl():
         assert s["bild"] is None and s["intervall"] == {"monate": 6, "quelle": "Kategorie „Seile“"}
         assert g["dokumente"] == [{"titel": "Platzhalter-Anleitung", "art": "gebrauchsanleitung", "version": "",
                                    "gueltig_ab": "2026-01-01", "datei": False, "groesse": 0}]
-        # Formulare je Produkt einmal, mit Stelle der Kategorie im Pfad (None: spezifisch); Absatz und „optional“ bleiben.
+        # Formulare je Produkt einmal, mit Stelle der Kategorie des Standards im Pfad (None: dem Produkt zugewiesen) und
+        # der Heimat; Absatz und „optional“ bleiben.
         f = a["formulare"]
         assert [x["titel"] for x in f] == ["Platzhalter Gurte", "Platzhalter Seil", "Platzhalter Karabiner"]
         assert [g["formular"], s["formular"], h["formular"]] == [0, 1, 2]
-        assert f[0]["kategorie"] == 1 and f[1]["kategorie"] is None and f[0]["quelle"] == "Kategorie „Gurte“"
+        assert f[0]["kategorie"] == 1 and f[1]["kategorie"] is None and f[0]["quelle"] == "Standard der Kategorie „Gurte“"
+        assert f[0]["heimat"] == 1 and f[1]["heimat"] == 1 and f[1]["quelle"] == "dem Produkt zugewiesen"
         assert f[0]["punkte"][0] == {"gruppe": "Platzhalter A", "text": "Platzhalter Ja/Nein\nmit Absatz", "art": "yesno",
                                      "pflicht": True, "soll": "nein"}
         assert f[0]["punkte"][1]["pflicht"] is False
@@ -176,7 +189,16 @@ def test_auswahl():
         finally:
             katalog.formular_fuer_produkt = echt
             vergessen(app)
-        # Ohne echtes aktives Formular: nur Platzhalter.
+        # Das DEMO-Kennzeichen eines Formulars zählt nicht (Entscheidung vom 04.11.2026, wie der Export): Gilt für das
+        # Seil keins mehr, nimmt die Auswahl das Seil mit dem DEMO-Formular.
+        try:
+            katalog.formular_fuer_produkt = lambda pid: None if pid == ids["seil"] else echt(pid)
+            vergessen(app)
+            assert modelle(auswahl(app))["seil"] == "Seil DEMO-Formular"
+        finally:
+            katalog.formular_fuer_produkt = echt
+            vergessen(app)
+        # Ohne aktives Formular: nur Platzhalter.
         with app.test_request_context():
             from app import db
             db.execute("UPDATE mat_form SET active = 0")
@@ -313,8 +335,9 @@ def test_zwischenspeicher_und_bildausnahme():
                 for url in bilder:
                     assert mitglied.get(url, headers={"X-Uebung": "1"}).status_code == 200, url
             assert len(aufrufe) == 1, aufrufe
-            # Eine Änderung über die Dienste (Gurt-Formular deaktiviert) rechnet sofort neu.
-            assert k["katalog"].post(f"/api/material/formulare/{ids['form_gurte']}/deaktivieren", json={}).status_code == 200
+            # Eine Änderung über die Dienste (Standard der Gurte gelöst) rechnet sofort neu.
+            pf = k["katalog"].get(f"/api/material/formulare/{ids['form_gurte']}").json["formular"]["formular_id"]
+            assert k["katalog"].put(f"/api/material/formular-pool/{pf}/zuweisung", json={}).status_code == 200
             e, r, _html = einf(mitglied, "/materialablage?uebung=grund")
             assert len(aufrufe) == 2 and modelle(e["katalog"])["gurt"] is None, (aufrufe, modelle(e["katalog"]))
             assert mitglied.get(bilder[0], headers={"X-Uebung": "1"}).status_code in (200, 403)
@@ -334,7 +357,7 @@ def test_zwischenspeicher_und_bildausnahme():
 
 def test_demo_kategorie():
     """Befund 4: Ein Produkt ohne eigenes Kennzeichen in einer Kategorie unter einer DEMO-Kategorie (so legt es die
-    Oberfläche an) mit einem generischen Formular ohne Kennzeichen – die Übung nimmt es nicht, wie der Export."""
+    Oberfläche an) mit einem Standardformular ohne Kennzeichen – die Übung nimmt es nicht, wie der Export."""
     from werkzeug.datastructures import FileStorage
     with tempfile.TemporaryDirectory() as tmp:
         app, k = umgebung(tmp)
@@ -346,9 +369,10 @@ def test_demo_kategorie():
             pid = katalog.produkt_anlegen({"category_id": gurte, "manufacturer": "Platzhalter", "model": "Gurt in DEMO",
                                            "material_kind": "textil", "lifetime_years": 10})
             katalog.produkt_bild_setzen(pid, FileStorage(stream=jpeg(), filename=f"{pid}.jpg", content_type="image/jpeg"))
-            fid = katalog.formular_anlegen({"kategorie_id": gurte, "titel": "Platzhalter DEMO-Kategorie",
+            pf, fid = katalog.pool_anlegen({"kategorie_id": gurte, "titel": "Platzhalter DEMO-Kategorie",
                                             "punkte": [{"text": "Platzhalter", "art": "yesno", "soll": "ja"}]})
             katalog.formular_aktivieren(fid)
+            katalog.zuweisung_setzen(pf, {"kategorien": [gurte]})
             assert katalog.produkt_ist_demo(katalog.produkt(pid)) and katalog.formular_ist_demo(katalog.formular(fid))
         assert modelle(auswahl(app))["gurt"] is None
         katalog_platzhalter(app)
@@ -358,9 +382,43 @@ def test_demo_kategorie():
     print("DEMO-Kategorie bestanden.")
 
 
+def test_zwei_aenderungen_in_einer_sekunde():
+    """Nachtrag: Zwei Änderungen in derselben Sekunde – per SQL von Hand, ohne updated_at und ohne den Speicher zu leeren
+    – sieht die Auswahl beide (Zähler mat_meta.katalog_stand); Lesen allein zählt nicht hoch."""
+    with tempfile.TemporaryDirectory() as tmp:
+        app, k = umgebung(tmp)
+        ids = katalog_platzhalter(app)
+        assert modelle(auswahl(app))["gurt"] == "Gurt mit Bild"
+        with app.test_request_context():
+            from app import db
+            stand = db.query("SELECT wert FROM mat_meta WHERE schluessel = 'katalog_stand'", one=True)["wert"]
+            auswahl(app)
+            assert db.query("SELECT wert FROM mat_meta WHERE schluessel = 'katalog_stand'", one=True)["wert"] == stand
+            pf = db.query("SELECT formular_id FROM mat_form WHERE id = ?", (ids["form_gurte"],), one=True)["formular_id"]
+            zeile = db.query("SELECT * FROM mat_formular_zuweisung WHERE formular_id = ?", (pf,), one=True)
+            # Erste Änderung: der Standard der Gurte fällt – gleich danach (dieselbe Sekunde) die zweite.
+            with db.transaction():
+                db.execute("DELETE FROM mat_formular_zuweisung WHERE id = ?", (zeile["id"],))
+        assert modelle(auswahl(app))["gurt"] is None
+        with app.test_request_context():
+            from app import db
+            with db.transaction():
+                db.execute("INSERT INTO mat_formular_zuweisung (formular_id, category_id, created_at) VALUES (?, ?, ?)",
+                           (pf, zeile["category_id"], zeile["created_at"]))
+        assert modelle(auswahl(app))["gurt"] == "Gurt mit Bild"
+        with app.test_request_context():
+            from app import db
+            with db.transaction():
+                db.execute("UPDATE mat_checklist_item SET label = 'Platzhalter geändert' WHERE form_id = ? AND position = 1",
+                           (ids["form_gurte"],))
+        assert auswahl(app)["formulare"][0]["punkte"][0]["text"] == "Platzhalter geändert"
+    print("Zwei Änderungen in einer Sekunde bestanden.")
+
+
 if __name__ == "__main__":
     test_auswahl()
     test_uebungsseite()
     test_sperre_und_csp()
     test_zwischenspeicher_und_bildausnahme()
     test_demo_kategorie()
+    test_zwei_aenderungen_in_einer_sekunde()

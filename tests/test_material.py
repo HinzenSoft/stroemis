@@ -402,7 +402,7 @@ def test_katalog():
             assert c.post("/api/material/kategorien", json={"name": "X"}).status_code == 403, wer
             assert c.put(f"/api/material/kategorien/{ids['gurte']}", json={"norm": "x"}).status_code == 403, wer
             assert c.delete(f"/api/material/kategorien/{ids['karabiner']}", headers=H).status_code == 403, wer
-            assert c.post("/api/material/formulare", json={"kategorie_id": ids["gurte"]}).status_code == 403, wer
+            assert c.post("/api/material/formular-pool", json={"kategorie_id": ids["gurte"], "titel": "x"}).status_code == 403, wer
             assert c.post(f"/api/material/produkte/{ids['gurt']}/dokumente", data={"kind": "datenblatt", "file": (io.BytesIO(PDF), "d.pdf")},
                           headers=H, content_type="multipart/form-data").status_code == 403, wer
             assert c.post(f"/api/material/produkte/{ids['gurt']}/bild", data={"file": (jpeg(), "b.jpg")}, headers=H,
@@ -713,30 +713,32 @@ def test_formulare_und_dokumente():
                   {"gruppe": "Zustand", "text": "Testpunkt B", "art": "yesno", "soll": "nein"},
                   {"text": "Bemerkung zum Test", "art": "text", "pflicht": False}]
         # Ja/Nein braucht einen Sollwert. („kritisch“ – bis 03.11.2026 nur an Ja/Nein-Punkten – wird übergangen.)
-        r = kp.post("/api/material/formulare", json={"kategorie_id": ids["gurte"], "punkte": [{"text": "x", "art": "yesno"}]})
+        r = kp.post("/api/material/formular-pool", json={"kategorie_id": ids["gurte"], "titel": "x",
+                                                          "punkte": [{"text": "x", "art": "yesno"}]})
         assert r.status_code == 400 and "Sollwert" in r.json["error"]
-        r = kp.post("/api/material/formulare", json={"kategorie_id": ids["gurte"], "titel": "Gurt generisch", "punkte": punkte})
+        # Seit dem Formular-Pool (Schritt 38): ein Formular im Pool der Kategorie, Standard der Kategorie per Zuweisung.
+        r = kp.post("/api/material/formular-pool", json={"kategorie_id": ids["gurte"], "titel": "Gurt generisch",
+                                                          "punkte": punkte})
         assert r.status_code == 201, r.get_json()
         generisch = r.json["formular"]
+        pool = generisch["formular_id"]
         assert generisch["version"] == 1 and not generisch["aktiv"] and len(generisch["punkte"]) == 3
         assert kp.post(f"/api/material/formulare/{generisch['id']}/aktivieren", json={}).status_code == 200
-        # Gilt für jedes Produkt der Kategorie – bis ein spezifisches das generische ersetzt.
+        assert kp.put(f"/api/material/formular-pool/{pool}/zuweisung", json={"kategorien": [ids["gurte"]]}).status_code == 200
+        # Gilt für jedes Produkt der Kategorie – bis dem Produkt ein anderes zugewiesen ist.
         p = kp.get(f"/api/material/produkte/{ids['gurt']}").json["produkt"]
         assert p["formular"]["id"] == generisch["id"] and "Gurte" in p["formular"]["quelle"], p["formular"]
-        r = kp.post("/api/material/formulare", json={"produkt_id": ids["gurt"], "titel": "Gurt Alpha spezifisch",
-                                                     "punkte": punkte[:1]})
-        spezifisch = r.json["formular"]
-        assert kp.post(f"/api/material/formulare/{spezifisch['id']}/aktivieren", json={}).status_code == 200
+        spezifisch = kp.get(f"/api/material/formulare/{formular_neu(kp, {'produkt_id': ids['gurt']}, 'Gurt Alpha spezifisch', punkte[:1])}").json["formular"]
         p = kp.get(f"/api/material/produkte/{ids['gurt']}").json["produkt"]
-        assert p["formular"]["id"] == spezifisch["id"] and p["formular"]["quelle"] == "Produkt"
-        assert kp.post(f"/api/material/formulare/{spezifisch['id']}/deaktivieren", json={}).status_code == 200
+        assert p["formular"]["id"] == spezifisch["id"] and p["formular"]["quelle"] == "dem Produkt zugewiesen"
+        assert kp.put(f"/api/material/formular-pool/{spezifisch['formular_id']}/zuweisung", json={}).status_code == 200
         assert kp.get(f"/api/material/produkte/{ids['gurt']}").json["produkt"]["formular"]["id"] == generisch["id"]
         # Neue Version übernimmt die Punkte; Aktivieren löst die alte ab – höchstens eine aktiv.
-        r = kp.post("/api/material/formulare", json={"kategorie_id": ids["gurte"]})
+        r = kp.post("/api/material/formulare", json={"formular_id": pool})
         v2 = r.json["formular"]
         assert v2["version"] == 2 and [x["text"] for x in v2["punkte"]] == ["Testpunkt A", "Testpunkt B", "Bemerkung zum Test"]
         assert kp.post(f"/api/material/formulare/{v2['id']}/aktivieren", json={}).status_code == 200
-        versionen = kp.get(f"/api/material/formulare?kategorie={ids['gurte']}").json["formulare"]
+        versionen = kp.get(f"/api/material/formulare?formular={pool}").json["formulare"]
         assert [(f["version"], f["aktiv"]) for f in versionen] == [(2, True), (1, False)]
         # Eine benutzte Version bleibt unverändert; geändert wird über eine neue.
         with app.app_context():
@@ -750,11 +752,12 @@ def test_formulare_und_dokumente():
         assert r.status_code == 409 and "neue Version" in r.json["error"]
         assert kp.delete(f"/api/material/formulare/{v2['id']}", headers=H).status_code == 409
         assert kp.get(f"/api/material/formulare/{v2['id']}").json["formular"]["benutzt"] is True
-        assert kp.post("/api/material/formulare", json={"kategorie_id": ids["gurte"]}).json["formular"]["version"] == 3
+        assert kp.post("/api/material/formulare", json={"formular_id": pool}).json["formular"]["version"] == 3
         # Unbenutzt und inaktiv: löschbar; die Formularpflege steht im Journal.
         assert kp.delete(f"/api/material/formulare/{generisch['id']}", headers=H).status_code == 200
         journal = kp.get(f"/api/material/formulare/{v2['id']}").json["formular"]["journal"]
-        assert [j["action"] for j in journal][-2:] == ["aktiviert", "angelegt"], journal
+        assert [j["action"] for j in journal if j["entity"] == "form" and j["entity_id"] == v2["id"]][-2:] == [
+            "aktiviert", "angelegt"], journal
 
         # Herstellerdokumente: PDF hochladen, neue Version, zurückziehen – am Produkt, für alle Artikel.
         def hoch(url, inhalt, name, **felder):
@@ -1070,15 +1073,32 @@ def test_review_befunde():
 
 # --- Lieferung 2: Prüfung ---------------------------------------------------------------------------------
 
+def formular_neu(c, ziel, titel, punkte, aktivieren=True):
+    """Ein Prüfformular wie bis Schema 37 „generisch“ ({"kategorie_id"}) bzw. „spezifisch“ ({"produkt_id"}): seit dem
+    Formular-Pool (Schritt 38) ein neues Formular im Pool der Kategorie (bzw. der Kategorie des Produkts), aktiviert und
+    als Standard der Kategorie bzw. dem Produkt zugewiesen; aktivieren=False lässt es als Entwurf ohne Zuweisung.
+    Liefert die Kennung der Version."""
+    if "kategorie_id" in ziel:
+        kid, wem = ziel["kategorie_id"], {"kategorien": [ziel["kategorie_id"]]}
+    else:
+        r = c.get(f"/api/material/produkte/{ziel['produkt_id']}")
+        assert r.status_code == 200, r.get_json()
+        kid, wem = r.json["produkt"]["category_id"], {"produkte": [ziel["produkt_id"]]}
+    r = c.post("/api/material/formular-pool", json={"kategorie_id": kid, "titel": titel, "punkte": punkte})
+    assert r.status_code == 201, r.get_json()
+    fid = r.json["formular"]["id"]
+    if aktivieren:
+        assert c.post(f"/api/material/formulare/{fid}/aktivieren", json={}).status_code == 200
+        r = c.put(f"/api/material/formular-pool/{r.json['formular']['formular_id']}/zuweisung", json=wem)
+        assert r.status_code == 200, r.get_json()
+    return fid
+
+
 def pruef_formulare(kp, ids):
-    """Aktive Formulare: generisch für Gurte, spezifisch für den Gurt Alpha (ersetzt das generische),
-    generisch für Karabiner. Inhalte erfunden, nur für den Test."""
+    """Aktive Formulare: Standard für Gurte, dem Gurt Alpha zugewiesen (geht dem Standard vor), Standard für
+    Karabiner. Inhalte erfunden, nur für den Test."""
     def form(ziel, titel, punkte):
-        r = kp.post("/api/material/formulare", json=dict(ziel, titel=titel, punkte=punkte))
-        assert r.status_code == 201, r.get_json()
-        fid = r.json["formular"]["id"]
-        assert kp.post(f"/api/material/formulare/{fid}/aktivieren", json={}).status_code == 200
-        return fid
+        return formular_neu(kp, ziel, titel, punkte)
     # „kritisch“ an einigen Punkten: so sendeten Formular-Editor und Katalogdateien bis zum 03.11.2026 – seitdem übergangen.
     return {
         "generisch": form({"kategorie_id": ids["gurte"]}, "Gurt generisch", [
@@ -1500,10 +1520,9 @@ def test_review_lieferung2():
         gid, system = gliederung(w)
         fahrzeug = w.post("/api/material/ordner", json={"name": "Fahrzeug", "kind": "fahrzeug", "parent_id": gid}).json["ordner"]["id"]
         lager = w.post("/api/material/ordner", json={"name": "Lager", "kind": "standort", "parent_id": gid}).json["ordner"]["id"]
-        r = kp.post("/api/material/formulare", json={"kategorie_id": ids["karabiner"], "titel": "Zahlen", "punkte": [
+        formular_neu(kp, {"kategorie_id": ids["karabiner"]}, "Zahlen", [
             {"text": "Öffnungsweite", "art": "number", "soll": "max. 22 mm"}, {"text": "Bandbreite", "art": "number", "soll": "45"},
-            {"text": "Zustand", "art": "text", "soll": "Hinweis für den Prüfer", "pflicht": False}]})
-        assert kp.post(f"/api/material/formulare/{r.json['formular']['id']}/aktivieren", json={}).status_code == 200
+            {"text": "Zustand", "art": "text", "soll": "Hinweis für den Prüfer", "pflicht": False}])
 
         # 1. Bei Zahl und Text ist das Soll ein Hinweis, kein Messwert – nur eine reine Zahl wird vorbelegt.
         a = neuer_artikel(w, ids["hms"], fahrzeug, serial_no="A")
@@ -1655,15 +1674,15 @@ def test_listen_und_formular():
         # Ein Prüfpunkt darf eine ganze Prüfanweisung sein (bis 1000 Zeichen) – im Editor wie im Import.
         anweisung = "Kontrolle des Zustands der Verriegelungshülse (z. B. Deformierungen, Risse, Korrosion). " * 10
         assert 800 < len(anweisung.strip()) <= 1000
-        r = kp.post("/api/material/formulare", json={"kategorie_id": ids["gurte"], "punkte": [
+        r = kp.post("/api/material/formular-pool", json={"kategorie_id": ids["gurte"], "titel": "Lang", "punkte": [
             {"text": anweisung, "art": "yesno", "soll": "nein"}]})
         assert r.status_code == 201 and r.json["formular"]["punkte"][0]["text"] == anweisung.strip(), r.get_json()
-        r = kp.post("/api/material/formulare", json={"kategorie_id": ids["gurte"], "punkte": [
+        r = kp.post("/api/material/formular-pool", json={"kategorie_id": ids["gurte"], "titel": "Zu lang", "punkte": [
             {"text": "x" * 1001, "art": "yesno", "soll": "nein"}]})
         assert r.status_code == 400 and "1000" in r.json["error"], r.get_json()
-        # Das Formular eines Produkts nennt dessen Kategorie (die Leiste links markiert sie).
-        spez = kp.get(f"/api/material/formulare?produkt={ids['gurt']}").json["formulare"][0]["id"]
-        assert kp.get(f"/api/material/formulare/{spez}").json["formular"]["ziel"]["kategorie_id"] == ids["gurte"]
+        # Das Formular, das einem Produkt zugewiesen ist, nennt seine Heimat (die Leiste links markiert sie).
+        spez = kp.get(f"/api/material/produkte/{ids['gurt']}").json["produkt"]["formular"]["id"]
+        assert kp.get(f"/api/material/formulare/{spez}").json["formular"]["formular"]["heimat"]["id"] == ids["gurte"]
 
         # Katalog: sortierbar nach Hersteller, Intervall (auch geerbt), Bestand – auf dem Server, über alle Seiten.
         r = adm.post("/api/material/produkte", json={"category_id": ids["karabiner"], "manufacturer": "Alpenwerk",
@@ -2266,7 +2285,9 @@ def test_produkt_variante():
         assert docs["Anleitung"]["sha256"] == alt_v2["sha256"] and docs["Anleitung"]["datei"] == alt_v2["datei"]
         assert docs["Datenblatt"]["url"] == "https://example.org/gurt" and not docs["Datenblatt"]["datei"]
         assert set(os.listdir(orig)) == vorher                                 # keine Kopie, der Link ohnehin nicht
-        assert kp.get(f"/api/material/formulare?produkt={neu['id']}").json["formulare"] == []
+        # Eine Zuweisung kommt nicht mit (Formular-Pool): Für die Variante gilt der Standard der Kategorie.
+        f = kp.get(f"/api/material/produkte/{neu['id']}").json["produkt"]["formular"]
+        assert f is None or f["art"] == "standard", f
         journal = kp.get(f"/api/material/produkte/{neu['id']}").json["produkt"]["journal"]
         assert any(e["action"] == "variante" and e["nachher"]["von"] == gurt for e in journal), journal
         # Ohne Dokumente geht es auch; und das Löschen der Variante lässt die gemeinsame Datei beim Original.
@@ -2814,11 +2835,9 @@ def test_unterschriftsfeld():
         app, k = umgebung(tmp)
         ids = katalog_grund(k["adm"])
         kp, w, p1 = k["katalog"], k["wart"], k["pruefer"]
-        r = kp.post("/api/material/formulare", json={"produkt_id": ids["hms"], "titel": "HMS mit Unterschrift", "punkte": [
+        formular_neu(kp, {"produkt_id": ids["hms"]}, "HMS mit Unterschrift", [
             {"text": "Testpunkt Sicht", "art": "yesno", "soll": "ja"},
-            {"text": "Unterschrift Gerätewart", "art": "signature"}]})
-        assert r.status_code == 201, r.get_json()
-        assert kp.post(f"/api/material/formulare/{r.json['formular']['id']}/aktivieren", json={}).status_code == 200
+            {"text": "Unterschrift Gerätewart", "art": "signature"}])
         gid, _ = gliederung(w)
         a = neuer_artikel(w, ids["hms"], gid)
         pr = starten(p1, a["id"]).json["pruefung"]
@@ -3242,10 +3261,9 @@ def test_befundtabelle_ohne_kritisch():
         punkte = [{"gruppe": "Testgruppe A" if i <= 20 else "Testgruppe B",
                    "text": lang.strip() if i == 7 else f"Testpunkt {i}", "art": "yesno", "soll": "nein",
                    "kritisch": i % 3 == 1} for i in range(1, 46)]
-        r = k["katalog"].post("/api/material/formulare", json={"produkt_id": ids["hms"], "titel": "HMS lang", "punkte": punkte})
-        assert r.status_code == 201, r.get_json()
+        fid = formular_neu(k["katalog"], {"produkt_id": ids["hms"]}, "HMS lang", punkte)
+        r = k["katalog"].get(f"/api/material/formulare/{fid}")
         assert all("kritisch" not in x for x in r.json["formular"]["punkte"]), r.json["formular"]["punkte"][:2]
-        assert k["katalog"].post(f"/api/material/formulare/{r.json['formular']['id']}/aktivieren", json={}).status_code == 200
         b = neuer_artikel(w, ids["hms"], gid)
         pid = starten(p1, b["id"]).json["pruefung"]["id"]
         html, pfad = protokoll(pid, ergebnis="einsatzbereit")

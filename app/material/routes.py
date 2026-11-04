@@ -136,7 +136,8 @@ def _bezug_seite(art, kennung_wert):
     return None if sichtbar else b.meldung
 
 
-def _seite(ansicht, katalog_seite=False, warnung=None, bezug=None, willkommen=False, besuch=None, **daten):
+def _seite(ansicht, katalog_seite=False, warnung=None, bezug=None, willkommen=False, besuch=None, nur_verwaltung=False,
+           **daten):
     """Eine Seite des Moduls. Ohne Anmeldung zur Anmeldung, ohne Modulzugang die Fehlerseite 403 mit dem Grund
     (zugang_meldung). bezug: („artikel“ | „ordner“ | „pruefung“ | „durchgang“, Kennung) – was das Konto nicht sehen
     darf, antwortet vor dem Zeichnen wie Unbekanntes mit der Fehlerseite 404, ohne Banner, ohne Daten. warnung: eine
@@ -144,7 +145,8 @@ def _seite(ansicht, katalog_seite=False, warnung=None, bezug=None, willkommen=Fa
     Modulzugang (katalog_seite). Jede Seite bekommt die Verweise auf die Anleitung in der Strömipedia mit, die das
     Konto lesen darf (anleitung.verweise); willkommen (nur die Übersicht): beim allerersten Besuch der Dialog
     „Willkommen in der Materialablage“. besuch (nur die Artikelseite): erst wenn das Konto den Gegenstand sehen darf, für
-    „Zuletzt besucht“ der Startseite gemerkt (app/start.py)."""
+    „Zuletzt besucht“ der Startseite gemerkt (app/start.py). nur_verwaltung: eine Seite allein für die Material-Verwaltung
+    (sonst die Fehlerseite 403; in der Übung entscheiden die Rechte des Teils)."""
     u = current_user()
     if not u:
         return redirect(url_for("pages.login", next=request.full_path.rstrip("?")))
@@ -152,6 +154,8 @@ def _seite(ansicht, katalog_seite=False, warnung=None, bezug=None, willkommen=Fa
         return _fehlerseite(403, zugang_meldung(u))
     if einfuehrung.uebung("material"):
         return _uebung_seite(ansicht, **daten)
+    if nur_verwaltung and not ist_material_verwaltung(u):
+        return _fehlerseite(403, nur_verwaltung if isinstance(nur_verwaltung, str) else "Nur für die Material-Verwaltung.")
     if bezug:
         fehlt = _bezug_seite(*bezug)
         if fehlt:
@@ -340,6 +344,15 @@ def produkt_seite(pid):
 @seiten.get("/materialablage/katalog/formular/<int:fid>")
 def formular_seite(fid):
     return _seite("formular", katalog_seite=True, id=fid)
+
+
+@seiten.get("/materialablage/katalog/formulare")
+def formulare_seite():
+    """Die Seite „Prüfformulare“ (Formular-Pool, Schritt 38): nur für die Material-Verwaltung (Entscheidung O6) – wer
+    sonst Zugang hat, bekommt die Fehlerseite 403; welches Formular gilt, sieht jeder an Produkt, Kategorie und Artikel."""
+    return _seite("formulare", katalog_seite=True, kategorie=request.args.get("kategorie", type=int),
+                  nur_verwaltung="Die Seite „Prüfformulare“ sieht nur die Material-Verwaltung. Welches Prüfformular gilt, "
+                                 "steht an Produkt, Kategorie und Artikel.")
 
 
 @seiten.get("/materialablage/katalog/meldungen")
@@ -600,7 +613,6 @@ def produkt_lesen(pid):
     p = katalog.produkt_json(katalog.produkt(pid), voll=True)
     # Meldungen, über die das Produkt kam, nur soweit das Konto sie sehen darf (Melder, Ordner der Meldung …).
     p["journal"] = journal.fuer_produkt(pid, current_user())
-    p["formulare"] = katalog.formulare_fuer(produkt_id=pid)
     p["rueckrufe"] = rueckruf.fuer_produkt(pid)
     return jsonify(produkt=p)
 
@@ -629,33 +641,6 @@ def produkt_aendern(pid):
 def produkt_loeschen(pid):
     katalog.produkt_loeschen(pid)
     return jsonify(ok=True)
-
-
-# Prüfformular eines anderen Produkts übernehmen (Schritt 35): Kandidaten für den Dialog, verknüpfen, lösen – Rechte wie
-# beim spezifischen Formular (Material-Verwaltung).
-@api.get("/produkte/<int:pid>/formularquellen")
-@katalog_required
-def produkt_formularquellen(pid):
-    """Wie GET /produkte (q, seite, pro_seite; nach Kategorie), nur Produkte mit eigenem aktivem spezifischem Formular;
-    je Treffer „waehlbar“, „grund“ und „andere_kategorie“."""
-    seite, pro_seite = _seite_args()
-    liste, gesamt, seite, pro_seite = katalog.formular_quellen(pid, request.args.get("q", ""), seite, pro_seite)
-    return jsonify(produkte=liste, gesamt=gesamt, seite=seite, pro_seite=pro_seite)
-
-
-@api.put("/produkte/<int:pid>/formular-von")
-@katalog_required
-def produkt_formular_von(pid):
-    """{"quelle": Produkt, "eigenes_deaktivieren": ja/nein} – liefert das Produkt (voll) und „geaendert“."""
-    geaendert = katalog.formular_uebernehmen(pid, json_body())
-    return jsonify(produkt=katalog.produkt_json(katalog.produkt(pid), voll=True), geaendert=geaendert)
-
-
-@api.delete("/produkte/<int:pid>/formular-von")
-@katalog_required
-def produkt_formular_von_loesen(pid):
-    geaendert = katalog.formular_uebernahme_loesen(pid)
-    return jsonify(produkt=katalog.produkt_json(katalog.produkt(pid), voll=True), geaendert=geaendert)
 
 
 @api.post("/produkte/<int:pid>/bild")
@@ -792,25 +777,75 @@ def meldung_ablehnen(mid):
     return jsonify(meldung=meldung.meldung_json(meldung.meldung(mid)))
 
 
+# --- Prüfformulare: Formular-Pool (Schritt 38) -------------------------------------------------------------------------
+# Die Seite „Prüfformulare“ und alles, was sie schreibt, nur für die Material-Verwaltung (Entscheidung O6); Formularseiten
+# (Versionen, „Gilt für“) liest jeder mit Modulzugang. Die Übernehmen-Routen aus Schritt 35
+# (…/produkte/<id>/formularquellen, …/produkte/<id>/formular-von) gibt es nicht mehr – 404 wie jeder unbekannte Weg.
+
+@api.get("/formular-pool")
+@katalog_required
+def formular_pool():
+    """Kategorienbaum mit Standard und den Formularen je Pool (katalog.pool); ?kategorie=<id> nur deren Teilbaum."""
+    return jsonify(katalog.pool(request.args.get("kategorie", type=int)))
+
+
+@api.post("/formular-pool")
+@katalog_required
+def formular_pool_anlegen():
+    """{kategorie_id, titel, vorlage_id?, punkte?} – ein neues Formular mit Version 1 (Entwurf). Liefert die Version."""
+    _pf, vid = katalog.pool_anlegen(json_body())
+    return jsonify(formular=katalog.formular_json(katalog.formular(vid))), 201
+
+
+@api.get("/formular-pool/<int:pf>/kandidaten")
+@katalog_required
+def formular_pool_kandidaten(pf):
+    """Für den Dialog „Zuweisen“: Kategorien und Produkte im Teilbaum der Heimat (katalog.kandidaten)."""
+    return jsonify(katalog.kandidaten(pf))
+
+
+@api.put("/formular-pool/<int:pf>/zuweisung")
+@katalog_required
+def formular_pool_zuweisung(pf):
+    """{kategorien: [...], produkte: [...]} – die vollständige Menge (katalog.zuweisung_setzen). Liefert das Formular
+    („Gilt für“) und „geaendert“ (Zahl der Änderungen)."""
+    geaendert = katalog.zuweisung_setzen(pf, json_body())
+    return jsonify(formular=katalog.formular_info(pf), geaendert=geaendert)
+
+
+@api.get("/formular-pool/folgen")
+@katalog_required
+def formular_pool_folgen():
+    """Was ein Verschieben an Zuweisungen lösen würde (Entscheidung Z6) – für die Dialoge „Kategorie bearbeiten“
+    (?kategorie=<id>&parent=<id oder leer>) und „Produkt bearbeiten“ (?produkt=<id>&kategorie=<id>)."""
+    pid = request.args.get("produkt", type=int)
+    if pid:
+        katalog.produkt(pid)
+        liste = katalog.verschieben_folgen(produkt_id=pid, category_id=request.args.get("kategorie", type=int))
+    else:
+        kid = request.args.get("kategorie", type=int)
+        katalog.kategorie(kid or 0)
+        liste = katalog.verschieben_folgen(kategorie_id=kid, parent_id=request.args.get("parent", type=int))
+    return jsonify(folgen=liste)
+
+
 @api.get("/formulare")
 def formulare():
+    """Die Versionen eines Formulars (?formular=<id>)."""
     if not current_user():
         return jsonify(error="Nicht angemeldet"), 401
     _katalog_lesen()
-    kid = request.args.get("kategorie", type=int)
-    pid = request.args.get("produkt", type=int)
-    if bool(kid) == bool(pid):
-        raise Abgelehnt("Bitte genau eine Kategorie oder ein Produkt angeben.")
-    if kid:
-        katalog.kategorie(kid)
-    else:
-        katalog.produkt(pid)
-    return jsonify(formulare=katalog.formulare_fuer(kid, pid), editoren=models.EDITOREN)
+    pf = request.args.get("formular", type=int)
+    if not pf:
+        raise Abgelehnt("Bitte ein Formular angeben (?formular=<Kennung>).")
+    katalog.pool_formular(pf)
+    return jsonify(formulare=katalog.formulare_fuer(pf), editoren=models.EDITOREN)
 
 
 @api.post("/formulare")
 @katalog_required
 def formular_anlegen():
+    """{formular_id, vorlage_id?, titel?, punkte?} – eine neue Version (katalog.formular_anlegen)."""
     fid = katalog.formular_anlegen(json_body())
     return jsonify(formular=katalog.formular_json(katalog.formular(fid))), 201
 
@@ -821,11 +856,21 @@ def formular_lesen(fid):
         return jsonify(error="Nicht angemeldet"), 401
     _katalog_lesen()
     f = katalog.formular_json(katalog.formular(fid))
-    f["journal"] = journal.lesen([("form", fid)], grenze=100)
-    f["versionen"] = katalog.formulare_fuer(f["kategorie_id"], f["produkt_id"])
-    # Wer das Formular dieses Produkts übernimmt (Schritt 35) – Änderungen wirken auch dort.
-    f["genutzt_von"] = katalog.formular_nutzer_json(f["produkt_id"]) if f["produkt_id"] else []
+    versionen = katalog.formulare_fuer(f["formular_id"])
+    f["journal"] = journal.lesen([("formular", f["formular_id"])] + [("form", v["id"]) for v in versionen], grenze=100)
+    f["versionen"] = versionen
+    # Wofür das Formular gilt (Abschnitt „Gilt für“): Standard, Zuweisungen, Zahl der Produkte.
+    f["formular"] = katalog.formular_info(f["formular_id"])
     return jsonify(formular=f, editoren=models.EDITOREN)
+
+
+@api.get("/formulare/<int:fid>/wirksam")
+def formular_wirksam(fid):
+    """Die Produkte, für die das Formular dieser Version gerade gilt (zugewiesen oder über einen Standard)."""
+    if not current_user():
+        return jsonify(error="Nicht angemeldet"), 401
+    _katalog_lesen()
+    return jsonify(produkte=katalog.wirksam_fuer(katalog.formular(fid)["formular_id"]))
 
 
 @api.put("/formulare/<int:fid>")
@@ -852,8 +897,8 @@ def formular_deaktivieren(fid):
 @api.delete("/formulare/<int:fid>")
 @katalog_required
 def formular_loeschen(fid):
-    katalog.formular_loeschen(fid)
-    return jsonify(ok=True)
+    """Eine Version löschen – war es die letzte, ist das Formular aus dem Pool („formular_geloescht“)."""
+    return jsonify(ok=True, formular_geloescht=katalog.formular_loeschen(fid))
 
 
 # --- Schnittstelle: Ordner -------------------------------------------------------------------------------

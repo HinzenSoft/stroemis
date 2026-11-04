@@ -157,7 +157,7 @@ def test_migration_12():
     with tempfile.TemporaryDirectory() as tmp:
         t = aufbau(tmp)
         neuer_artikel(t.w, t.ids["hms"], t.lager, serial_no="MIG-0001")
-        ok(t.mv.post("/api/material/formulare", json={"kategorie_id": t.ids["gurte"], "titel": "Platzhalterformular",
+        ok(t.mv.post("/api/material/formular-pool", json={"kategorie_id": t.ids["gurte"], "titel": "Platzhalterformular",
                                                        "punkte": [{"text": "Testpunkt", "art": "yesno", "soll": "ja"}]}),
            201)
         pfad = os.path.join(tmp, "stroemis.db")
@@ -206,7 +206,7 @@ def test_migration_12():
         # 11 → 12: die Tabellen (Spalte und Index am Formular fehlen seit Schritt 37 ohnehin).
         def stand():
             c = sqlite3.connect(pfad)
-            out = {"form": c.execute("SELECT id, category_id, product_id, version, title, valid_from, active, created_at, "
+            out = {"form": c.execute("SELECT id, formular_id, version, title, valid_from, active, created_at, "
                                      "updated_at FROM mat_form ORDER BY id").fetchall(),
                    "item": c.execute("SELECT * FROM mat_item ORDER BY id").fetchall(),
                    "product": c.execute("SELECT * FROM mat_product ORDER BY id").fetchall()}

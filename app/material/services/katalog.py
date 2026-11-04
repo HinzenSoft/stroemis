@@ -12,13 +12,15 @@ Fachliche Grenzen aus dem Konzept:
     (Petzl MICRO TRAXION = P53, Rock Exotica Omni-Block 2.0 Single = P53).
   - Lebensdauer: Pflicht bei textilem Material, verboten bei Metall, bei „sonstiges“ nur mit
     Herstellerangabe (Fundstelle).
-  - Formulare: je Kategorie ein generisches, je Produkt optional ein spezifisches, das das generische
-    ersetzt. Versioniert; eine benutzte Version wird nie mehr geändert, sondern durch eine neue ersetzt.
+  - Prüfformulare (seit Schritt 38 ein Pool je Kategorie): Ein Formular steht im Pool seiner Kategorie und gilt als
+    Standard einer Kategorie (auch in Unterkategorien ohne eigenen) oder einem Produkt zugewiesen. Versioniert; eine
+    benutzte Version wird nie mehr geändert, sondern durch eine neue ersetzt.
   - Fotos und Herstellerdokumente hängen am Produkt, nie am einzelnen Artikel. Allgemeine Dokumente
     (Pflegehinweise, Anleitungen) können an einer Kategorie hängen und gelten dann für alle Produkte
     darin und in ihren Unterkategorien.
 """
 import hashlib
+import json
 import os
 import re
 import secrets
@@ -28,13 +30,15 @@ from flask import current_app, g, has_request_context
 
 from ... import db
 from ...images import ALLOWED_EXT, delete_photo_files, store_upload
-from ..models import DEMO_KATEGORIEN, DOKUMENTARTEN, EDITOREN, MATERIALARTEN, produkt_demo_sql
+from ..models import DEMO_KATEGORIEN, DOKUMENTARTEN, EDITOREN, MATERIALARTEN, geltend_je_produkt
 from . import Abgelehnt, akteur, auswahl, datum, ganzzahl, heute, kennung, text, wahr
 from . import faelligkeit, journal
 from .interval import herstellerseite, lebensende
 
 FORMULAR_BENUTZT = ("Diese Formularversion wurde schon für Prüfungen benutzt und bleibt deshalb unverändert. "
                     "Lege eine neue Version an.")
+TITEL_PFLICHT = "Ein Prüfformular braucht einen Titel."
+NUR_AKTIV_ZUWEISEN = "Zuweisen lässt sich nur ein Formular mit aktiver Version – erst eine Version aktivieren."
 LEBENSDAUER_TEXTIL = "Bei textilem Material ist die Lebensdauer Pflicht (Herstellerangabe in Jahren)."
 LEBENSDAUER_METALL = "Metall hat keine festgeschriebene Lebensdauer – das Feld bleibt leer."
 LEBENSDAUER_SONSTIGES = "Bei „sonstiges“ gibt es eine Lebensdauer nur mit Herstellerangabe (Fundstelle angeben)."
@@ -230,20 +234,15 @@ def kategorie_aendern(kid, d, intervall_pruefen=True):
             ohne = _ohne_intervall(kid, w)
             if ohne:
                 raise ohne_intervall_meldung(ohne)
-        try:
-            db.execute("UPDATE mat_category SET parent_id = ?, name = ?, norm = ?, default_material_kind = ?, "
-                       "default_interval_months = ?, default_lifetime_years = ?, position = ?, items_have_length = ?, "
-                       "updated_at = ? WHERE id = ?",
-                       (w["parent_id"], w["name"], w["norm"], w["default_material_kind"], w["default_interval_months"],
-                        w["default_lifetime_years"], w["position"], w["items_have_length"], db.now(), kid))
-        except sqlite3.IntegrityError as exc:
-            # Der Trigger aus Schritt 36 (mat_category_formular_demo) hat die Änderung zurückgenommen: Danach teilten ein
-            # DEMO- und ein echtes Produkt ein Prüfformular. Klartext statt „anderswo geändert“.
-            if "DEMO nur von DEMO" not in str(exc):
-                raise
-            raise Abgelehnt("Nach dem Verschieben wäre ein Produkt in dieser Kategorie DEMO und das, dessen Prüfformular "
-                            "es teilt, nicht (oder umgekehrt) – DEMO nur mit DEMO. Erst die Verknüpfung lösen.",
-                            409) from None
+        # Zuweisungen, die danach nicht mehr unter der Heimat ihres Prüfformulars lägen, werden gelöst (Entscheidung
+        # Z6; der Dialog nennt sie vorher, verschieben_folgen) – sonst nähme der Trigger aus Schritt 38 die Änderung zurück.
+        if w["parent_id"] != alt["parent_id"]:
+            _verschieben_loesen(_eltern(kid, w["parent_id"]), {}, f"Kategorie „{w['name']}“ verschoben")
+        db.execute("UPDATE mat_category SET parent_id = ?, name = ?, norm = ?, default_material_kind = ?, "
+                   "default_interval_months = ?, default_lifetime_years = ?, position = ?, items_have_length = ?, "
+                   "updated_at = ? WHERE id = ?",
+                   (w["parent_id"], w["name"], w["norm"], w["default_material_kind"], w["default_interval_months"],
+                    w["default_lifetime_years"], w["position"], w["items_have_length"], db.now(), kid))
         journal.aenderung("category", kid, alt, w)
         if (w["default_interval_months"], w["parent_id"]) != (alt["default_interval_months"], alt["parent_id"]):
             faelligkeit.kappen(*faelligkeit.in_kategorie(kid))
@@ -262,9 +261,9 @@ def kategorie_loeschen(kid):
             raise Abgelehnt("Die Kategorie hat Unterkategorien – erst diese verschieben oder löschen.", 409)
         if db.query("SELECT 1 FROM mat_product WHERE category_id = ? LIMIT 1", (kid,), one=True):
             raise Abgelehnt("In der Kategorie stehen noch Produkte.", 409)
-        if db.query("SELECT 1 FROM mat_inspection i JOIN mat_form f ON f.id = i.form_id WHERE f.category_id = ? LIMIT 1",
-                    (kid,), one=True):
-            raise Abgelehnt("Ein Formular dieser Kategorie wurde schon für Prüfungen benutzt.", 409)
+        if db.query("SELECT 1 FROM mat_inspection i JOIN mat_form f ON f.id = i.form_id JOIN mat_formular p "
+                    "ON p.id = f.formular_id WHERE p.category_id = ? LIMIT 1", (kid,), one=True):
+            raise Abgelehnt("Ein Prüfformular dieser Kategorie wurde schon für Prüfungen benutzt.", 409)
         # Eine Prüfung nennt die damals gültigen Dokumente mit Version und Prüfsumme (documents_json) – auch die einer
         # Kategorie, aus der das Produkt inzwischen fortgezogen ist. Prüfnachweise werden unbefristet aufbewahrt
         # (Entscheidung des Betreibers vom 18.10.2026), also bleibt ein solches Dokument samt Datei – und mit ihm die
@@ -274,9 +273,16 @@ def kategorie_loeschen(kid):
                     "WHERE x.completed_at IS NOT NULL AND json_extract(j.value, '$.id') = d.id) LIMIT 1",
                     (kid,), one=True):
             raise Abgelehnt(DOKUMENT_IM_PROTOKOLL, 409)
-        for f in db.query("SELECT id FROM mat_form WHERE category_id = ?", (kid,)):
-            db.execute("DELETE FROM mat_form WHERE id = ?", (f["id"],))
-            journal.eintragen("form", f["id"], "geloescht", {"kategorie": alt["name"]}, None)
+        # Ein Standard hier aus dem Pool einer Oberkategorie geht mit der Kategorie (ON DELETE CASCADE), die Formulare
+        # ihres Pools samt Versionen ebenso – je mit Journal (eine leere Kategorie hat keine Produkte, die sie bräuchten).
+        for z in db.query("SELECT * FROM mat_formular_zuweisung WHERE category_id = ?", (kid,)):
+            _zuweisung_loesen(z, f"Kategorie „{alt['name']}“ gelöscht")
+        for pf in db.query("SELECT id FROM mat_formular WHERE category_id = ?", (kid,)):
+            for f in db.query("SELECT id FROM mat_form WHERE formular_id = ?", (pf["id"],)):
+                journal.eintragen("form", f["id"], "geloescht", {"kategorie": alt["name"]}, None)
+            journal.eintragen("formular", pf["id"], "geloescht", {"titel": _anzeige_titel(pf["id"]),
+                                                                  "heimat": alt["name"]}, None)
+            db.execute("DELETE FROM mat_formular WHERE id = ?", (pf["id"],))
         # Dokumente der Kategorie gehen mit (eine leere Kategorie hat keine Produkte, die sie bräuchten);
         # ihr Journal bekommt das Ende vermerkt.
         for dok in db.query("SELECT id, title, file_path FROM mat_product_document WHERE category_id = ?", (kid,)):
@@ -291,13 +297,18 @@ def kategorie_loeschen(kid):
 
 
 def kategorien():
-    """Alle Kategorien flach, mit Produktzahl und Formularstand – den Baum baut die Oberfläche."""
+    """Alle Kategorien flach, mit Produktzahl, eigenem Standard-Prüfformular (Formular und aktive Version – geerbt wird
+    in der Oberfläche über den Pfad, Entscheidung S1) und Zahl der Formulare im eigenen Pool – den Baum baut die
+    Oberfläche."""
+    standard = {r["category_id"]: {"formular_id": r["formular_id"], "version_id": r["id"], "version": r["version"],
+                                   "titel": r["title"]} for r in db.query(
+        "SELECT z.category_id, z.formular_id, f.id, f.version, f.title FROM mat_formular_zuweisung z "
+        "JOIN mat_form f ON f.formular_id = z.formular_id AND f.active = 1 WHERE z.category_id IS NOT NULL")}
     rows = db.query(
         "SELECT c.*, (SELECT COUNT(*) FROM mat_product p WHERE p.category_id = c.id) AS produkte, "
-        "(SELECT f.id FROM mat_form f WHERE f.category_id = c.id AND f.active = 1) AS aktives_formular, "
-        "(SELECT COUNT(*) FROM mat_form f WHERE f.category_id = c.id) AS formulare "
+        "(SELECT COUNT(*) FROM mat_formular f WHERE f.category_id = c.id) AS formulare "
         "FROM mat_category c ORDER BY c.position, c.name COLLATE NOCASE")
-    return [kategorie_json(r) for r in rows]
+    return [kategorie_json(dict(r, standard_formular=standard.get(r["id"]))) for r in rows]
 
 
 def kategorie_json(k):
@@ -307,7 +318,7 @@ def kategorie_json(k):
     # Das Häkchen selbst und ob es hier wirkt (auch von einer Oberkategorie geerbt).
     out["items_have_length"] = bool(k.get("items_have_length"))
     out["laenge_wirksam"] = laenge_wirksam(k["id"])
-    for f in ("produkte", "aktives_formular", "formulare"):
+    for f in ("produkte", "standard_formular", "formulare"):
         if f in k:
             out[f] = k[f]
     return out
@@ -327,9 +338,9 @@ def kategorie_pfad(kid):
 
 # --- DEMO-Regel des Katalogs (Sicherheitsprüfung vom 04.11.2026, Befund 4) ---------------------------------------------
 # Wie im Katalog-Export: DEMO ist eine Kategorie mit Kennzeichen samt Teilbaum, ein Produkt mit Kennzeichen oder in einer
-# solchen Kategorie, ein Formular mit Kennzeichen oder an einem solchen Ziel (SQL: models.DEMO_KATEGORIEN). Genutzt von
-# Export, Übung der Einführung (einfuehrung._katalog_auswahl) und „Prüfformular übernehmen“ (Dienst, Kandidaten, Trigger
-# aus Schritt 36). kategorien: das Ergebnis von demo_kategorien(), wenn es schon da ist (mehrere Fragen nacheinander).
+# solchen Kategorie, ein Formular mit Kennzeichen oder im Pool einer solchen Kategorie (SQL: models.DEMO_KATEGORIEN).
+# Genutzt von Export und Übung der Einführung (einfuehrung._katalog_auswahl). kategorien: das Ergebnis von
+# demo_kategorien(), wenn es schon da ist (mehrere Fragen nacheinander).
 
 def demo_kategorien():
     """Die Kennungen aller Kategorien, die als DEMO zählen."""
@@ -342,13 +353,12 @@ def produkt_ist_demo(p, kategorien=None):
 
 
 def formular_ist_demo(f, kategorien=None):
+    """f: eine Version (mat_form) – DEMO mit eigenem Kennzeichen oder im Pool einer DEMO-Kategorie."""
     if f["demo"]:
         return True
     kategorien = demo_kategorien() if kategorien is None else kategorien
-    if f["category_id"]:
-        return f["category_id"] in kategorien
-    p = db.query("SELECT demo, category_id FROM mat_product WHERE id = ?", (f["product_id"],), one=True)
-    return not p or produkt_ist_demo(p, kategorien)
+    heimat = db.query("SELECT category_id FROM mat_formular WHERE id = ?", (f["formular_id"],), one=True)
+    return not heimat or heimat["category_id"] in kategorien
 
 
 # --- Produkte ------------------------------------------------------------------------------------
@@ -546,7 +556,7 @@ def produkt_variante(pid, d):
     eine eigene Artikelnummer ist Pflicht. Auf Wunsch die aktuellen Dokumente des Produkts dazu – je Dokument die
     neueste, nicht zurückgezogene Version; die neue Zeile nennt dieselbe Datei (seit Schritt 18 heißt sie nach ihrem
     Inhalt und bleibt, bis keine Zeile sie mehr nennt – bis dahin wurde sie kopiert, damit das Löschen des einen
-    Produkts die Dokumente des anderen nicht mitnimmt). Das Produktbild nie, spezifische Formulare auch nicht. Die
+    Produkts die Dokumente des anderen nicht mitnimmt). Das Produktbild nie, eine Formularzuweisung auch nicht. Die
     Bestandteil-Liste: „bestandteile“ (die im Dialog bearbeitete Liste, nur Text; [] ohne Liste) oder ohne sie die Liste
     des Vorbilds (Schritt 25)."""
     from . import stueckliste
@@ -607,8 +617,10 @@ def produkt_aendern(pid, d, importiert=False):
         if (_einheitlich(w["article_no"]), _einheitlich(w["manufacturer"])) != \
                 (_einheitlich(artikelnummer(alt["article_no"])), _einheitlich(alt["manufacturer"])):
             _artikelnummer_pruefen(w["article_no"], w["manufacturer"], ausser=pid)
+        # Eine Zuweisung, die in der neuen Kategorie nicht mehr unter der Heimat ihres Prüfformulars läge, wird gelöst
+        # (Entscheidung Z6; der Dialog nennt sie vorher, verschieben_folgen).
         if w["category_id"] != alt["category_id"]:
-            _demo_wechsel_pruefen(dict(alt, category_id=w["category_id"]))
+            _verschieben_loesen(_eltern(), {pid: w["category_id"]}, "Produkt in eine andere Kategorie verschoben")
         db.execute("UPDATE mat_product SET category_id = ?, manufacturer = ?, model = ?, article_no = ?, dedupe_key = ?, "
                    "norm = ?, material_kind = ?, interval_months = ?, lifetime_years = ?, lifetime_source = ?, "
                    "description = ?, updated_at = ? WHERE id = ?",
@@ -637,57 +649,26 @@ def lebensende_nachziehen(pid, alt_jahre, neu_jahre):
             journal.eintragen("item", i["id"], "lebensende", {"retire_by": i["retire_by"]}, {"retire_by": neu})
 
 
-PRODUKTFORMULAR_BENUTZT = "Das Prüfformular dieses Produkts wurde schon für Prüfungen benutzt – es bleibt im Katalog."
-
-
-def _formular_benutzt(pid):
-    return bool(db.query("SELECT 1 FROM mat_inspection WHERE form_id IN (SELECT id FROM mat_form WHERE product_id = ?) "
-                         "LIMIT 1", (pid,), one=True))
-
-
-def _demo_wechsel_pruefen(b):
-    """Vor dem Wechsel der Kategorie von Produkt b (mit der neuen category_id): Wird es dadurch DEMO oder echt, während
-    es ein Prüfformular übernimmt oder andere seins übernehmen, lehnt das mit Namen ab (DEMO nur mit DEMO)."""
-    partner = db.query("SELECT * FROM mat_product WHERE id = ? OR formular_von = ?", (b["formular_von"] or 0, b["id"]))
-    if not partner:
-        return
-    kategorien = demo_kategorien()
-    demo = produkt_ist_demo(b, kategorien)
-    anders = [produktname(x) for x in partner if produkt_ist_demo(x, kategorien) != demo]
-    if anders:
-        raise Abgelehnt(f"In dieser Kategorie wäre „{produktname(b)}“ {'DEMO' if demo else 'kein DEMO mehr'} – das "
-                        f"Prüfformular teilt es aber mit {', '.join('„' + n + '“' for n in anders)} (DEMO nur mit DEMO). "
-                        "Erst die Verknüpfung lösen.", 409)
-
-
 def produkt_loeschen(pid):
     """Nur ein Produkt ohne Artikel; seine Bestandteil-Liste geht mit (ON DELETE CASCADE, im Journal „geloescht“ als Zahl
-    der Bestandteile)."""
+    der Bestandteile), eine Formularzuweisung ebenso (Journal am Formular). Prüfformulare hängen seit Schritt 38 nicht
+    mehr am Produkt – sie bleiben im Pool."""
     with db.transaction(sofort=True):
         alt = produkt(pid)
         if db.query("SELECT 1 FROM mat_item WHERE product_id = ? LIMIT 1", (pid,), one=True):
             raise Abgelehnt("Von diesem Produkt gibt es Artikel – es bleibt im Katalog.", 409)
-        # Eine Prüfung nach einem Formular dieses Produkts – seit Schritt 35 auch an Artikeln eines anderen, das es
-        # übernimmt – hält das Formular und damit das Produkt (Sicherheitsprüfung vom 04.11.2026, Befund 2).
-        if _formular_benutzt(pid):
-            raise Abgelehnt(PRODUKTFORMULAR_BENUTZT, 409)
         bestandteile = db.query("SELECT COUNT(*) AS n FROM mat_product_component WHERE set_product_id = ?", (pid,),
                                 one=True)["n"]
         if bestandteile:
             alt = dict(alt, bestandteile=bestandteile)
         dateien = [r["file_path"] for r in db.query(
             "SELECT file_path FROM mat_product_document WHERE product_id = ? AND file_path IS NOT NULL", (pid,))]
-        # Wer das Formular dieses Produkts übernimmt (Schritt 35), verliert den Verweis mit Journal – dort gilt danach
-        # das eigene oder generische Formular (der Löschdialog nennt die Produkte vorher).
-        for n in formular_nutzer(pid):
-            formular_uebernahme_loesen(n["id"], grund=f"„{produktname(alt)}“ gelöscht")
-        for f in db.query("SELECT id FROM mat_form WHERE product_id = ?", (pid,)):
-            journal.eintragen("form", f["id"], "geloescht", {"produkt": pid}, None)
+        for z in db.query("SELECT * FROM mat_formular_zuweisung WHERE product_id = ?", (pid,)):
+            _zuweisung_loesen(z, "Produkt gelöscht")
         # Die Dokumente gehen mit dem Produkt (ON DELETE CASCADE) – ihr Journal bekommt das Ende vermerkt,
         # damit eine später wieder vergebene Kennung nicht ihre Geschichte erbt (journal.LOESCHUNG).
         for dok in db.query("SELECT id, title FROM mat_product_document WHERE product_id = ?", (pid,)):
             journal.eintragen("document", dok["id"], "geloescht", {"produkt": pid, "title": dok["title"]}, None)
-        db.execute("DELETE FROM mat_form WHERE product_id = ?", (pid,))
         db.execute("DELETE FROM mat_product WHERE id = ?", (pid,))
         journal.eintragen("product", pid, "geloescht", alt, None)
     for name in dateien:
@@ -780,16 +761,15 @@ def produkt_json(p, voll=False):
                                   f"'ausgesondert' AND {artikel_filter('i')}", (p["id"],), one=True)["n"]
         out["artikel_gesamt"] = db.query(f"SELECT COUNT(*) AS n FROM mat_item i WHERE i.product_id = ? "
                                          f"AND {artikel_filter('i')}", (p["id"],), one=True)["n"]
-        out["loeschbar"] = not (db.query("SELECT 1 FROM mat_item WHERE product_id = ? LIMIT 1", (p["id"],), one=True)
-                                or _formular_benutzt(p["id"]))
+        out["loeschbar"] = not db.query("SELECT 1 FROM mat_item WHERE product_id = ? LIMIT 1", (p["id"],), one=True)
         out["dokumente"] = dokumente(p["id"])
         out["kategorie_dokumente"] = geerbte_dokumente(p["id"])
+        # Das geltende Prüfformular – nur zur Anzeige; welches gilt, legt die Material-Verwaltung unter „Prüfformulare“
+        # fest (Schritt 38).
         f = formular_fuer_produkt(p["id"])
         out["formular"] = ({"id": f["id"], "version": f["version"], "title": f["title"], "quelle": f["quelle"],
-                            "art": f["art"], "von": f.get("uebernommen_von"), "punkte": f["punkte_anzahl"]}
-                           if f else None)
-        # Übernommenes Formular (Schritt 35): woher und wer von hier übernimmt.
-        out.update(formular_uebernahme_json(p))
+                            "art": f["art"], "punkte": f["punkte_anzahl"], "formular": f["formular"],
+                            "standard_von": f["standard_von"]} if f else None)
     return out
 
 
@@ -1063,7 +1043,15 @@ def gueltige_dokumente(pid, stichtag):
     return [d for d in dokumente(pid, stichtag) if d["gilt"]] + geerbte_dokumente(pid, stichtag)
 
 
-# --- Prüfformulare ------------------------------------------------------------------------------------
+# --- Prüfformulare: Formular-Pool je Kategorie (Schritt 38, Wunsch vom 04.11.2026) --------------------------------------
+# Ein Formular (mat_formular) steht im Pool seiner Heimatkategorie und hat Versionen (mat_form): höchstens eine aktiv, eine
+# benutzte bleibt unverändert, geändert wird über „Neue Version“. Es gilt für ein Produkt, wenn es ihm zugewiesen ist oder
+# Standard seiner Kategorie bzw. der nächsten Oberkategorie mit einem ist (formular_fuer_produkt). Zuweisen lässt es sich
+# nur im Teilbaum der Heimat (Entscheidung Z1), nur mit aktiver Version (Z4); ein Haken holt eine Zuweisung von einem
+# anderen Formular her (Z5); Deaktivieren und Löschen sind gesperrt, solange es zugewiesen ist (Z4); fällt eine Zuweisung
+# durch Verschieben aus dem Teilbaum, wird sie gelöst (Z6). Kein Verschieben eines Formulars (O7) – „Kopie anlegen“.
+# Rechte (routes.py): Formularseiten liest jeder mit Modulzugang, die Seite „Prüfformulare“ und alles Schreiben nur die
+# Material-Verwaltung (O6). „formular“ heißt hier wie bisher eine Version (mat_form), „pool_formular“ der Eintrag im Pool.
 
 def formular(fid):
     f = db.query("SELECT * FROM mat_form WHERE id = ?", (fid,), one=True)
@@ -1144,50 +1132,89 @@ def _punkte_kurz(liste):
             f"{'' if p['mandatory'] else ', optional'}]" for p in liste]
 
 
-def formular_anlegen(d, demo=False):
-    """Neue Version für eine Kategorie (generisch) oder ein Produkt (spezifisch). Ohne Vorlage
-    übernimmt sie die Prüfpunkte der letzten Version desselben Ziels – der Normalfall ist „ändern“."""
-    kid = kennung(d.get("kategorie_id"), "Kategorie", leer_erlaubt=True)
-    pid = kennung(d.get("produkt_id"), "Produkt", leer_erlaubt=True)
-    if bool(kid) == bool(pid):
-        raise Abgelehnt("Ein Formular gehört entweder zu einer Kategorie oder zu einem Produkt.")
-    if kid:
-        kategorie(kid)
-    else:
-        produkt(pid)
-    spalte, ziel = ("category_id", kid) if kid else ("product_id", pid)
-    vorlage_id = kennung(d.get("vorlage_id"), "Vorlage", leer_erlaubt=True)
+def _titel(d, pflicht=True):
+    """Der Titel aus d – seit dem Formular-Pool Pflicht für neue Formulare und Versionen (Entscheidung O5): Im Pool
+    stehen mehrere Formulare nebeneinander."""
     titel = text(d, "titel", "Titel", 160)
+    if pflicht and not titel:
+        raise Abgelehnt(TITEL_PFLICHT)
+    return titel
+
+
+def _demo_nachziehen(pf):
+    """mat_formular.demo: 1, wenn jede Version das DEMO-Kennzeichen trägt."""
+    db.execute("UPDATE mat_formular SET demo = NOT EXISTS (SELECT 1 FROM mat_form WHERE formular_id = ? AND demo = 0), "
+               "updated_at = ? WHERE id = ?", (pf, db.now(), pf))
+
+
+def pool_anlegen(d, demo=False):
+    """Ein neues Formular im Pool der Kategorie d["kategorie_id"] mit Version 1 als Entwurf; Titel Pflicht (O5). Die
+    Prüfpunkte aus d["punkte"] (Katalogimport, Schnittstelle), sonst aus der Version d["vorlage_id"] („Prüfpunkte
+    übernehmen von …“ im Anlegedialog, „Kopie anlegen“ auf der Formularseite – Entscheidung O4), sonst keine. Übernimmt
+    es die Punkte einer DEMO-Vorlage, bleibt es DEMO (wie bei „Neue Version“). Liefert (Formular, Version)."""
+    kid = kennung(d.get("kategorie_id"), "Kategorie")
+    vorlage_id = kennung(d.get("vorlage_id"), "Vorlage", leer_erlaubt=True)
+    titel = _titel(d)
+    eigene = punkte_pruefen(d.get("punkte")) if "punkte" in d else None
     uid, _ = akteur()
     ts = db.now()
     with db.transaction(sofort=True):
-        letzte = db.query(f"SELECT * FROM mat_form WHERE {spalte} = ? ORDER BY version DESC LIMIT 1", (ziel,), one=True)
+        kategorie(kid)
+        vorlage = formular(vorlage_id) if vorlage_id else None
+        demo = demo or bool(eigene is None and vorlage and vorlage["demo"])
+        pf = db.execute("INSERT INTO mat_formular (category_id, demo, created_by, created_at, updated_at) "
+                        "VALUES (?,?,?,?,?)", (kid, int(bool(demo)), uid, ts, ts))
+        vid = db.execute("INSERT INTO mat_form (formular_id, version, title, active, demo, created_by, created_at, "
+                         "updated_at) VALUES (?,1,?,0,?,?,?,?)", (pf, titel, int(bool(demo)), uid, ts, ts))
+        liste = eigene if eigene is not None else [dict(p) for p in punkte(vorlage["id"])] if vorlage else []
+        _punkte_schreiben(vid, liste)
+        journal.eintragen("formular", pf, "angelegt", None,
+                          {"heimat": _pfad_text(kid), "titel": titel, "vorlage": vorlage_id})
+        journal.eintragen("form", vid, "angelegt", None,
+                          {"formular_id": pf, "version": 1, "title": titel, "vorlage": vorlage_id,
+                           "punkte": _punkte_kurz(liste)})
+    return pf, vid
+
+
+def formular_anlegen(d, demo=False):
+    """Eine neue Version des Formulars d["formular_id"]. Ohne Vorlage übernimmt sie die Prüfpunkte seiner letzten Version
+    – der Normalfall ist „ändern“; mit d["vorlage_id"] die dieser Version, mit d["punkte"] eigene. Titel aus d, sonst der
+    der Vorlage; leer geht nicht (O5). Bis Schema 37 nannte die Anfrage ein Ziel (kategorie_id bzw. produkt_id) – das
+    lehnt der Dienst mit dem neuen Weg ab. Liefert die Kennung der Version."""
+    if d.get("formular_id") in (None, "") and (d.get("kategorie_id") or d.get("produkt_id")):
+        raise Abgelehnt("Prüfformulare stehen seit dem Formular-Pool im Pool einer Kategorie: ein neues über "
+                        "„Prüfformular anlegen“ (POST /api/material/formular-pool), eine neue Version mit „formular_id“.")
+    pf = kennung(d.get("formular_id"), "Formular")
+    vorlage_id = kennung(d.get("vorlage_id"), "Vorlage", leer_erlaubt=True)
+    titel = _titel(d, pflicht=False)
+    eigene = punkte_pruefen(d.get("punkte")) if "punkte" in d else None
+    uid, _ = akteur()
+    ts = db.now()
+    with db.transaction(sofort=True):
+        pool_formular(pf)
+        letzte = db.query("SELECT * FROM mat_form WHERE formular_id = ? ORDER BY version DESC LIMIT 1", (pf,), one=True)
         vorlage = formular(vorlage_id) if vorlage_id else letzte
         version = (letzte["version"] + 1) if letzte else 1
+        titel = titel or (vorlage["title"] if vorlage else "")
         if not titel:
-            titel = vorlage["title"] if vorlage else ""
-        # Übernimmt die neue Version die Prüfpunkte einer DEMO-Vorlage, bleibt sie DEMO – sonst kämen deren Punkte über
-        # „Neue Version“ in den Katalog-Export (Sicherheitsprüfung vom 25.10.2026, Befund 5). Mit eigenen Punkten
-        # (Katalogimport) zählt nur der Parameter.
-        demo = demo or bool("punkte" not in d and vorlage and vorlage["demo"])
-        fid = db.execute(f"INSERT INTO mat_form ({spalte}, version, title, active, demo, created_by, created_at, "
-                         "updated_at) VALUES (?,?,?,0,?,?,?,?)", (ziel, version, titel, int(bool(demo)), uid, ts, ts))
-        if "punkte" in d:
-            liste = punkte_pruefen(d.get("punkte"))
-        elif vorlage:
-            liste = [dict(p) for p in punkte(vorlage["id"])]
-        else:
-            liste = []
-        _punkte_schreiben(fid, liste)
-        journal.eintragen("form", fid, "angelegt", None,
-                          {spalte: ziel, "version": version, "title": titel,
+            raise Abgelehnt(TITEL_PFLICHT)
+        # Übernimmt die neue Version die Prüfpunkte einer DEMO-Vorlage, bleibt sie DEMO (Sicherheitsprüfung vom
+        # 25.10.2026, Befund 5). Mit eigenen Punkten (Katalogimport) zählt nur der Parameter.
+        demo = demo or bool(eigene is None and vorlage and vorlage["demo"])
+        vid = db.execute("INSERT INTO mat_form (formular_id, version, title, active, demo, created_by, created_at, "
+                         "updated_at) VALUES (?,?,?,0,?,?,?,?)", (pf, version, titel, int(bool(demo)), uid, ts, ts))
+        liste = eigene if eigene is not None else [dict(p) for p in punkte(vorlage["id"])] if vorlage else []
+        _punkte_schreiben(vid, liste)
+        _demo_nachziehen(pf)
+        journal.eintragen("form", vid, "angelegt", None,
+                          {"formular_id": pf, "version": version, "title": titel,
                            "vorlage": vorlage["id"] if vorlage else None, "punkte": _punkte_kurz(liste)})
-    return fid
+    return vid
 
 
 def formular_speichern(fid, d):
     alt = formular(fid)
-    titel = text(d, "titel", "Titel", 160) if "titel" in d else alt["title"]
+    titel = _titel(d) if "titel" in d else alt["title"]
     liste_neu = punkte_pruefen(d.get("punkte")) if "punkte" in d else None
     # „Benutzt?“ und Schreiben unter einer Sperre: Eine Prüfung, die gleichzeitig beginnt, kopierte sonst
     # Punkte, die gleich darauf unter derselben Versionsnummer andere werden.
@@ -1206,21 +1233,13 @@ def formular_speichern(fid, d):
 
 
 def formular_aktivieren(fid):
-    # Alles unter der Schreibsperre – auch der Blick auf den Verweis: Läse ihn das Aktivieren vorher, könnte ein
-    # gleichzeitiges Übernehmen dazwischenkommen (Sicherheitsprüfung vom 04.11.2026, Befund 3; Trigger aus Schritt 36).
+    """Diese Version wird die aktive ihres Formulars – sie gilt sofort für alle Zuweisungen und Standards."""
     with db.transaction(sofort=True):
         f = formular(fid)
         if not punkte(fid):
             raise Abgelehnt("Ein Formular ohne Prüfpunkte lässt sich nicht aktivieren.")
-        # Entweder Verweis oder eigenes Formular (Schritt 35): Mit Verweis gälte ein eigenes aktives ohnehin nicht.
-        b = produkt(f["product_id"]) if f["product_id"] else None
-        if b and b["formular_von"]:
-            q = db.query("SELECT manufacturer, model, description FROM mat_product WHERE id = ?", (b["formular_von"],),
-                         one=True)
-            raise Abgelehnt(f"„{produktname(b)}“ übernimmt das Prüfformular von „{produktname(q) if q else '?'}“ – erst "
-                            "die Verknüpfung auf der Produktseite lösen.", 409)
-        spalte, ziel = ("category_id", f["category_id"]) if f["category_id"] else ("product_id", f["product_id"])
-        for anderes in db.query(f"SELECT id FROM mat_form WHERE {spalte} = ? AND active = 1 AND id <> ?", (ziel, fid)):
+        for anderes in db.query("SELECT id FROM mat_form WHERE formular_id = ? AND active = 1 AND id <> ?",
+                                (f["formular_id"], fid)):
             db.execute("UPDATE mat_form SET active = 0, updated_at = ? WHERE id = ?", (db.now(), anderes["id"]))
             journal.eintragen("form", anderes["id"], "deaktiviert", {"active": 1}, {"active": 0, "ersetzt_durch": fid})
         db.execute("UPDATE mat_form SET active = 1, valid_from = COALESCE(valid_from, ?), updated_at = ? WHERE id = ?",
@@ -1228,16 +1247,27 @@ def formular_aktivieren(fid):
         journal.eintragen("form", fid, "aktiviert", {"active": f["active"]}, {"active": 1})
 
 
+def _zugewiesen_sperre(pf, was):
+    """Abgelehnt (409), solange das Formular zugewiesen ist (Entscheidung Z4) – die Meldung nennt, wo."""
+    ziele = _ziele_text(pf)
+    if ziele:
+        raise Abgelehnt(f"{was} geht erst, wenn das Formular nirgends mehr gilt – es ist {ziele}. Die Zuweisungen löst "
+                        "„Zuweisen“ (Seite „Prüfformulare“).", 409)
+
+
 def formular_deaktivieren(fid):
-    f = formular(fid)
-    if not f["active"]:
-        return
-    with db.transaction():
+    with db.transaction(sofort=True):
+        f = formular(fid)
+        if not f["active"]:
+            return
+        _zugewiesen_sperre(f["formular_id"], "Deaktivieren")
         db.execute("UPDATE mat_form SET active = 0, updated_at = ? WHERE id = ?", (db.now(), fid))
         journal.eintragen("form", fid, "deaktiviert", {"active": 1}, {"active": 0})
 
 
 def formular_loeschen(fid):
+    """Eine nie benutzte, nicht aktive Version löschen. War es die letzte, geht das Formular mit aus dem Pool (gesperrt,
+    solange es zugewiesen ist – ohne aktive Version ist es das nie). Liefert, ob das Formular ganz weg ist."""
     with db.transaction(sofort=True):
         f = formular(fid)
         if ist_benutzt(fid):
@@ -1245,69 +1275,65 @@ def formular_loeschen(fid):
         if f["active"]:
             raise Abgelehnt("Das aktive Formular lässt sich nicht löschen – erst eine andere Version aktivieren "
                             "oder dieses deaktivieren.", 409)
+        pf = f["formular_id"]
+        letzte = not db.query("SELECT 1 FROM mat_form WHERE formular_id = ? AND id <> ? LIMIT 1", (pf, fid), one=True)
+        if letzte:
+            _zugewiesen_sperre(pf, "Löschen")
         db.execute("DELETE FROM mat_form WHERE id = ?", (fid,))
         journal.eintragen("form", fid, "geloescht", {"title": f["title"], "version": f["version"]}, None)
+        if letzte:
+            heimat = pool_formular(pf)["category_id"]
+            db.execute("DELETE FROM mat_formular WHERE id = ?", (pf,))
+            journal.eintragen("formular", pf, "geloescht", {"titel": f["title"], "heimat": _pfad_text(heimat)}, None)
+        else:
+            _demo_nachziehen(pf)
+    return letzte
 
 
-def _aktives_spezifisches(pid):
-    return db.query("SELECT * FROM mat_form WHERE product_id = ? AND active = 1", (pid,), one=True)
+def _aktive_version(pf):
+    return db.query("SELECT * FROM mat_form WHERE formular_id = ? AND active = 1", (pf,), one=True) if pf else None
 
 
 def formular_fuer_produkt(pid):
     """Das Formular, nach dem ein Artikel dieses Produkts geprüft wird – die eine Stelle für Prüfung, Produkt- und
-    Artikelseite, Übersichten und Export. Der Reihe nach: das aktive spezifische Formular des Produkts, dessen Formular
-    dieses übernimmt (formular_von, Schritt 35 – jede neue Version dort gilt sofort auch hier); sonst das eigene aktive
-    spezifische; sonst das aktive generische der Kategorie – oder der nächsten Oberkategorie mit einem. „art“ sagt, woher
-    es kommt (uebernommen, produkt, kategorie), „quelle“ dasselbe in Worten. Ist die Quelle weggefallen (Formular
-    deaktiviert), gilt still das Nächste – die Produktseite warnt (produkt_json, formular_von.aktiv)."""
+    Artikelseite, Übersichten, Übung und Beispielbestand (für alle Produkte auf einmal: models.geltend_je_produkt, gleiche
+    Regel). Der Reihe nach: die aktive Version des dem Produkt zugewiesenen Formulars, sonst die des Standards seiner
+    Kategorie oder der nächsten Oberkategorie mit einem (Entscheidung S1). Die Versionszeile mit „art“ (zugewiesen,
+    standard), „quelle“ (in Worten), „standard_von“ (die Kategorie des Standards), „formular“ (Kennung, Titel, Heimat) und
+    „punkte_anzahl“ – oder None (S2: dann ist das Produkt nicht prüfbar, Produkt- und Kategorieseite warnen)."""
     p = produkt(pid)
-    f = None
-    if p.get("formular_von"):
-        q = db.query("SELECT id, manufacturer, model, description FROM mat_product WHERE id = ?", (p["formular_von"],),
-                     one=True)
-        f = _aktives_spezifisches(q["id"]) if q else None
-        if f:
-            f["art"], f["quelle"] = "uebernommen", f"übernommen von „{produktname(q)}“"
-            f["uebernommen_von"] = {"id": q["id"], "name": produktname(q)}
-    if not f:
-        f = _aktives_spezifisches(pid)
-        if f:
-            f["art"], f["quelle"] = "produkt", "Produkt"
-    if not f:
+    z = db.query("SELECT formular_id FROM mat_formular_zuweisung WHERE product_id = ?", (pid,), one=True)
+    f = _aktive_version(z["formular_id"]) if z else None
+    if f:
+        f["art"], f["quelle"], f["standard_von"] = "zugewiesen", "dem Produkt zugewiesen", None
+    else:
         for k in reversed(kategorie_pfad(p["category_id"])):
-            f = db.query("SELECT * FROM mat_form WHERE category_id = ? AND active = 1", (k["id"],), one=True)
+            z = db.query("SELECT formular_id FROM mat_formular_zuweisung WHERE category_id = ?", (k["id"],), one=True)
+            f = _aktive_version(z["formular_id"]) if z else None
             if f:
-                f["art"], f["quelle"] = "kategorie", f"Kategorie „{k['name']}“"
+                f["art"], f["quelle"] = "standard", f"Standard der Kategorie „{k['name']}“"
+                f["standard_von"] = {"id": k["id"], "name": k["name"]}
                 break
     if f:
         f["punkte_anzahl"] = db.query("SELECT COUNT(*) AS n FROM mat_checklist_item WHERE form_id = ?",
                                       (f["id"],), one=True)["n"]
+        heimat = pool_formular(f["formular_id"])["category_id"]
+        f["formular"] = {"id": f["formular_id"], "titel": f["title"],
+                         "heimat": {"id": heimat, "name": _pfad_text(heimat)}}
     return f
 
 
-# --- Prüfformular eines anderen Produkts übernehmen (Schritt 35, Wunsch vom 04.11.2026) ---------------------------------
-# Produkt B verweist auf Produkt A (mat_product.formular_von): Für B gilt immer das aktive spezifische Formular von A, ohne
-# Kopie. Keine Ketten – die Quelle hat ein eigenes Formular und verweist selbst nicht, auf ein Produkt mit Verweis verweist
-# niemand –, nicht auf sich selbst, DEMO nur mit DEMO (die Trigger aus Schritt 35 halten das auch gegen SQL von Hand).
-# Entweder Verweis oder eigenes Formular: Mit Verweis lässt sich kein eigenes aktivieren (formular_aktivieren), beim
-# Übernehmen wird ein eigenes aktives deaktiviert, wenn man es so will (eigenes_deaktivieren). Laufende und
-# festgeschriebene Prüfungen behalten ihr Formular (form_id der Prüfung). Rechte wie beim spezifischen Formular (Route:
-# katalog_required); Journal am Produkt B.
+# --- Zuweisungen ---------------------------------------------------------------------------------------------------------
 
 def _kurz(p):
     """Ein Produkt für Listen und Links der Oberfläche (nameHtml/zusatzHtml in material.js)."""
     return {"id": p["id"], "name": produktname(p), "manufacturer": p["manufacturer"], "model": p["model"],
-            "description": p["description"], "article_no": p.get("article_no", ""), "demo": bool(p.get("demo"))}
+            "description": p["description"], "article_no": p.get("article_no", ""), "demo": bool(p.get("demo")),
+            "category_id": p.get("category_id")}
 
 
-def formular_nutzer(pid):
-    """Die Produkte, die das Formular dieses Produkts übernehmen – nach Namen."""
-    return db.query("SELECT id, manufacturer, model, description, article_no, demo FROM mat_product "
-                    "WHERE formular_von = ? ORDER BY manufacturer COLLATE NOCASE, model COLLATE NOCASE, id", (pid,))
-
-
-def formular_nutzer_json(pid):
-    return [_kurz(n) for n in formular_nutzer(pid)]
+def _pfad_text(kid):
+    return " / ".join(k["name"] for k in kategorie_pfad(kid))
 
 
 def _hat_laengenpunkt(fid):
@@ -1315,142 +1341,380 @@ def _hat_laengenpunkt(fid):
                          one=True))
 
 
-def _quelle_grund(b, q, kategorien=None):
-    """Warum q nicht Quelle für b sein kann – oder "" (b und q: Zeilen aus mat_product). DEMO nach der Regel des
-    Katalogs (produkt_ist_demo: auch über die Kategorie); kategorien wie dort."""
-    if q["id"] == b["id"]:
-        return "Ein Produkt kann sein Formular nicht von sich selbst übernehmen."
-    kategorien = demo_kategorien() if kategorien is None else kategorien
-    if produkt_ist_demo(q, kategorien) != produkt_ist_demo(b, kategorien):
-        return "DEMO-Produkte übernehmen nur von DEMO-Produkten, echte nur von echten."
-    if q.get("formular_von"):
-        return f"„{produktname(q)}“ übernimmt selbst ein Formular – übernehmen lässt sich nur ein eigenes."
-    f = _aktives_spezifisches(q["id"])
-    if not f:
-        return f"„{produktname(q)}“ hat kein eigenes aktives Prüfformular."
-    if _hat_laengenpunkt(f["id"]) and not laenge_wirksam(b["category_id"]):
-        return f"Das Formular hat einen Prüfpunkt „Länge (m)“, Artikel von „{produktname(b)}“ haben aber keine Länge."
+def _anzeige_titel(pf):
+    """Der Titel eines Formulars: der seiner aktiven Version, sonst der neuesten."""
+    v = db.query("SELECT title FROM mat_form WHERE formular_id = ? ORDER BY active DESC, version DESC LIMIT 1", (pf,),
+                 one=True)
+    return v["title"] if v else ""
+
+
+def _ziele_text(pf):
+    """Wo das Formular zugewiesen ist, in Worten („Standard für „Gurte“, zugewiesen an „Testwerk X““) – leer, wenn
+    nirgends."""
+    kats = [f"„{_pfad_text(r['category_id'])}“" for r in db.query(
+        "SELECT category_id FROM mat_formular_zuweisung WHERE formular_id = ? AND category_id IS NOT NULL ORDER BY id",
+        (pf,))]
+    prods = [f"„{produktname(r)}“" for r in db.query(
+        "SELECT p.manufacturer, p.model, p.description FROM mat_formular_zuweisung z JOIN mat_product p "
+        "ON p.id = z.product_id WHERE z.formular_id = ? ORDER BY p.manufacturer COLLATE NOCASE, p.model COLLATE NOCASE",
+        (pf,))]
+    teile = []
+    if kats:
+        teile.append("Standard für " + ", ".join(kats[:5]) + (" …" if len(kats) > 5 else ""))
+    if prods:
+        teile.append("zugewiesen an " + ", ".join(prods[:5]) + (f" und {len(prods) - 5} weitere" if len(prods) > 5
+                                                                 else ""))
+    return " und ".join(teile)
+
+
+def _ziel_name(spalte, ziel):
+    if spalte == "category_id":
+        return {"kategorie": _pfad_text(ziel)}
+    p = db.query("SELECT manufacturer, model, description FROM mat_product WHERE id = ?", (ziel,), one=True)
+    return {"produkt": produktname(p) if p else f"Nr. {ziel}"}
+
+
+def _zuweisung_loesen(z, grund):
+    """Eine Zuweisung (Zeile aus mat_formular_zuweisung) löschen – Journal am Formular und am Produkt bzw. an der
+    Kategorie. grund steht im Journal (etwa „Produkt in eine andere Kategorie verschoben“)."""
+    spalte, ziel = ("category_id", z["category_id"]) if z["category_id"] else ("product_id", z["product_id"])
+    titel = _anzeige_titel(z["formular_id"])
+    db.execute("DELETE FROM mat_formular_zuweisung WHERE id = ?", (z["id"],))
+    journal.eintragen("formular", z["formular_id"], "zuweisung_geloest", _ziel_name(spalte, ziel),
+                      {"grund": grund} if grund else None)
+    journal.eintragen("category" if spalte == "category_id" else "product", ziel,
+                      "standard_geloest" if spalte == "category_id" else "formular_zuweisung_geloest",
+                      {"formular": titel, "formular_id": z["formular_id"]}, {"grund": grund} if grund else None)
+
+
+def _zuweisen(pf, spalte, ziel, titel, uid):
+    """pf an ein Produkt bzw. als Standard an eine Kategorie – hängt dort ein anderes, wechselt es hierher (Z5)."""
+    alt = db.query(f"SELECT * FROM mat_formular_zuweisung WHERE {spalte} = ?", (ziel,), one=True)
+    vorher = None
+    if alt:
+        vorher = {"formular": _anzeige_titel(alt["formular_id"]), "formular_id": alt["formular_id"]}
+        db.execute("DELETE FROM mat_formular_zuweisung WHERE id = ?", (alt["id"],))
+        journal.eintragen("formular", alt["formular_id"], "zuweisung_geloest", _ziel_name(spalte, ziel),
+                          {"grund": f"jetzt „{titel}“"})
+    db.execute(f"INSERT INTO mat_formular_zuweisung (formular_id, {spalte}, created_by, created_at) VALUES (?,?,?,?)",
+               (pf, ziel, uid, db.now()))
+    journal.eintragen("formular", pf, "zugewiesen", {"bisher": vorher["formular"]} if vorher else None,
+                      _ziel_name(spalte, ziel))
+    journal.eintragen("category" if spalte == "category_id" else "product", ziel,
+                      "standard_gesetzt" if spalte == "category_id" else "formular_zugewiesen", vorher,
+                      {"formular": titel, "formular_id": pf})
+
+
+def _kennungen(d, feld, name):
+    wert = d.get(feld)
+    if wert is None:
+        return set()
+    if not isinstance(wert, list):
+        raise Abgelehnt(f"„{feld}“ muss eine Liste sein.")
+    return {kennung(x, name) for x in wert}
+
+
+def laenge_grund(p, mit_laenge):
+    """Warum ein Formular mit Prüfpunkt „Länge (m)“ (mit_laenge) Produkt p nicht zugewiesen werden kann – oder ""."""
+    if mit_laenge and not laenge_wirksam(p["category_id"]):
+        return f"Das Formular hat einen Prüfpunkt „Länge (m)“, Artikel von „{produktname(p)}“ haben aber keine Länge."
     return ""
 
 
-def formular_quellen(pid, q="", seite=1, pro_seite=50):
-    """Die Produkte, deren Formular B (pid) übernehmen kann, für die Suche im Dialog – wie die Produktsuche
-    (search.produkte, nach Kategorie): nur Produkte mit eigenem aktivem spezifischem Formular, ohne eigenen Verweis,
-    gleicher DEMO-Art (produkt_ist_demo), nicht B selbst. Wer trotzdem nicht passt (Länge), kommt mit „waehlbar“: false und dem Grund; eine
-    andere Kategorie als die von B ist erlaubt („andere_kategorie“, der Dialog weist darauf hin). Liefert (Liste, gesamt,
-    seite, pro_seite)."""
-    from . import search
-    b = produkt(pid)
-    kategorien = demo_kategorien()
-    zusatz = (f"p.id <> ? AND p.formular_von IS NULL AND {produkt_demo_sql('p')} = ? "
-              "AND EXISTS (SELECT 1 FROM mat_form f WHERE f.product_id = p.id AND f.active = 1)",
-              (pid, int(produkt_ist_demo(b, kategorien))))
-    rows, gesamt = search.produkte(q, None, seite, pro_seite, "kategorie", zusatz=zusatz)
-    seite, pro_seite = search.seiten(seite, pro_seite)
+def zuweisung_setzen(pf, d):
+    """Die Zuweisungen von Formular pf als vollständige Menge: d["kategorien"] (Standard dieser Kategorien) und
+    d["produkte"]. Was dazukommt, muss im Teilbaum der Heimat liegen (Z1) und braucht eine aktive Version (Z4); ein
+    Produkt dazu Artikel mit Länge, wenn das Formular den Prüfpunkt „Länge (m)“ hat. Hängt dort schon ein anderes
+    Formular, wechselt die Zuweisung hierher (Z5). Was wegfällt, wird gelöst – das Produkt bzw. die Kategorie fällt auf
+    den Standard darüber zurück. Unter einer Schreibsperre, Journal je Änderung. Liefert die Zahl der Änderungen."""
+    kats = _kennungen(d, "kategorien", "Kategorie")
+    prods = _kennungen(d, "produkte", "Produkt")
+    uid, _ = akteur()
+    n = 0
+    with db.transaction(sofort=True):
+        f = pool_formular(pf)
+        teil = _unterkategorien(f["category_id"])
+        heimat = _pfad_text(f["category_id"])
+        alt = db.query("SELECT * FROM mat_formular_zuweisung WHERE formular_id = ?", (pf,))
+        alt_k = {z["category_id"]: z for z in alt if z["category_id"]}
+        alt_p = {z["product_id"]: z for z in alt if z["product_id"]}
+        aktiv = _aktive_version(pf)
+        if (kats - set(alt_k) or prods - set(alt_p)) and not aktiv:
+            raise Abgelehnt(NUR_AKTIV_ZUWEISEN, 409)
+        for kid in sorted(kats - set(alt_k)):
+            k = kategorie(kid)
+            if kid not in teil:
+                raise Abgelehnt(f"„{k['name']}“ liegt nicht unter „{heimat}“ – das Formular lässt sich nur dort zuweisen, "
+                                "wo es im Pool steht (und darunter).", 409)
+        mit_laenge = _hat_laengenpunkt(aktiv["id"]) if aktiv else False
+        for pid in sorted(prods - set(alt_p)):
+            p = produkt(pid)
+            if p["category_id"] not in teil:
+                raise Abgelehnt(f"„{produktname(p)}“ liegt nicht unter „{heimat}“ – das Formular lässt sich nur dort "
+                                "zuweisen, wo es im Pool steht (und darunter).", 409)
+            grund = laenge_grund(p, mit_laenge)
+            if grund:
+                raise Abgelehnt(grund, 409)
+        for kid in sorted(set(alt_k) - kats):
+            _zuweisung_loesen(alt_k[kid], None)
+            n += 1
+        for pid in sorted(set(alt_p) - prods):
+            _zuweisung_loesen(alt_p[pid], None)
+            n += 1
+        titel = aktiv["title"] if aktiv else ""
+        for kid in sorted(kats - set(alt_k)):
+            _zuweisen(pf, "category_id", kid, titel, uid)
+            n += 1
+        for pid in sorted(prods - set(alt_p)):
+            _zuweisen(pf, "product_id", pid, titel, uid)
+            n += 1
+    return n
+
+
+def _ungueltige_zuweisungen(eltern, produkt_kategorie):
+    """Zuweisungen, deren Ziel mit dieser Ordnung (eltern: {Kategorie: Oberkategorie}, produkt_kategorie: {Produkt:
+    Kategorie} – nur Abweichungen von heute) nicht mehr unter der Heimat ihres Formulars läge."""
     out = []
-    for r in rows:
-        j = produkt_json(r)
-        j["grund"] = _quelle_grund(b, r, kategorien)
-        j["waehlbar"] = not j["grund"]
-        j["andere_kategorie"] = r["category_id"] != b["category_id"]
-        out.append(j)
-    return out, gesamt, seite, pro_seite
+    for z in db.query("SELECT z.*, f.category_id AS heimat, p.category_id AS produkt_kategorie "
+                      "FROM mat_formular_zuweisung z JOIN mat_formular f ON f.id = z.formular_id "
+                      "LEFT JOIN mat_product p ON p.id = z.product_id ORDER BY z.id"):
+        x = z["category_id"] or produkt_kategorie.get(z["product_id"], z["produkt_kategorie"])
+        gesehen = set()
+        while x is not None and x != z["heimat"] and x not in gesehen:
+            gesehen.add(x)
+            x = eltern.get(x)
+        if x != z["heimat"]:
+            out.append(z)
+    return out
 
 
-def formular_uebernehmen(pid, d):
-    """B (pid) übernimmt das Formular von d["quelle"]. Hat B ein eigenes aktives Formular, nur mit
-    d["eigenes_deaktivieren"] – es wird dann in derselben Transaktion deaktiviert (Journal am Formular). Ist die Quelle
-    schon gesetzt, ändert sich nichts. Liefert, ob sich etwas geändert hat."""
-    qid = kennung(d.get("quelle"), "Quelle")
-    deaktivieren = wahr(d, "eigenes_deaktivieren", "Eigenes Formular deaktivieren")
-    with db.transaction(sofort=True):
-        b = produkt(pid)
-        q = db.query("SELECT * FROM mat_product WHERE id = ?", (qid,), one=True)
-        if not q:
-            raise Abgelehnt("Das Produkt, dessen Formular übernommen werden soll, gibt es nicht.", 404)
-        if b["formular_von"] == q["id"]:
-            return False
-        grund = _quelle_grund(b, q)
-        if grund:
-            raise Abgelehnt(grund, 409)
-        nutzer = formular_nutzer(pid)
-        if nutzer:
-            raise Abgelehnt(f"Das Formular von „{produktname(b)}“ übernehmen schon "
-                            f"{', '.join('„' + produktname(n) + '“' for n in nutzer)} – ein Produkt, von dem andere "
-                            "übernehmen, übernimmt selbst keins.", 409)
-        eigenes = _aktives_spezifisches(pid)
-        if eigenes and not deaktivieren:
-            raise Abgelehnt(f"„{produktname(b)}“ hat ein eigenes aktives Prüfformular (Version {eigenes['version']}) – "
-                            "es muss beim Übernehmen deaktiviert werden.", 409)
-        if eigenes:
-            db.execute("UPDATE mat_form SET active = 0, updated_at = ? WHERE id = ?", (db.now(), eigenes["id"]))
-            journal.eintragen("form", eigenes["id"], "deaktiviert", {"active": 1},
-                              {"active": 0, "grund": f"Formular von „{produktname(q)}“ übernommen"})
-        alt = (db.query("SELECT id, manufacturer, model, description FROM mat_product WHERE id = ?",
-                        (b["formular_von"],), one=True) if b["formular_von"] else None)
-        db.execute("UPDATE mat_product SET formular_von = ?, updated_at = ? WHERE id = ?", (q["id"], db.now(), pid))
-        journal.eintragen("product", pid, "formular_uebernommen",
-                          {"formular_von": alt["id"], "produkt": produktname(alt)} if alt else None,
-                          {"formular_von": q["id"], "produkt": produktname(q)})
-    return True
+def _eltern(kid=None, parent_id=None):
+    eltern = {k["id"]: k["parent_id"] for k in db.query("SELECT id, parent_id FROM mat_category")}
+    if kid:
+        eltern[kid] = parent_id
+    return eltern
 
 
-def formular_uebernahme_loesen(pid, grund=None):
-    """Den Verweis von B (pid) lösen – danach gilt wieder das eigene aktive oder das generische Formular. grund steht im
-    Journal (etwa „Produkt gelöscht“). Liefert, ob es einen Verweis gab."""
-    with db.transaction(sofort=True):
-        b = produkt(pid)
-        if not b["formular_von"]:
-            return False
-        q = db.query("SELECT id, manufacturer, model, description FROM mat_product WHERE id = ?", (b["formular_von"],),
-                     one=True)
-        db.execute("UPDATE mat_product SET formular_von = NULL, updated_at = ? WHERE id = ?", (db.now(), pid))
-        journal.eintragen("product", pid, "formular_geloest",
-                          {"formular_von": b["formular_von"], "produkt": produktname(q) if q else "?"},
-                          {"grund": grund} if grund else None)
-    return True
+def verschieben_folgen(kategorie_id=None, parent_id=None, produkt_id=None, category_id=None):
+    """Was ein Verschieben lösen würde (Entscheidung Z6) – für den Satz im Dialog, bevor gespeichert wird: eine Kategorie
+    unter parent_id (None: oberste Ebene) oder ein Produkt in category_id. [{formular_id, formular, ziel}]."""
+    if produkt_id:
+        liste = _ungueltige_zuweisungen(_eltern(), {produkt_id: category_id})
+        liste = [z for z in liste if z["product_id"] == produkt_id]
+    else:
+        liste = _ungueltige_zuweisungen(_eltern(kategorie_id, parent_id), {})
+    out = []
+    for z in liste:
+        spalte, ziel = ("category_id", z["category_id"]) if z["category_id"] else ("product_id", z["product_id"])
+        name = _ziel_name(spalte, ziel)
+        out.append({"formular_id": z["formular_id"], "formular": _anzeige_titel(z["formular_id"]),
+                    "ziel": f"Kategorie „{name['kategorie']}“" if "kategorie" in name else f"„{name['produkt']}“"})
+    return out
 
 
-def formular_uebernahme_json(p):
-    """Für die Produktseite: woher B sein Formular übernimmt (formular_von, mit „aktiv“: hat die Quelle gerade ein
-    aktives spezifisches Formular) und wer das Formular dieses Produkts übernimmt (formular_genutzt_von)."""
-    von = None
-    if p.get("formular_von"):
-        q = db.query("SELECT * FROM mat_product WHERE id = ?", (p["formular_von"],), one=True)
-        if q:
-            f = _aktives_spezifisches(q["id"])
-            von = dict(_kurz(q), aktiv=bool(f),
-                       formular={"id": f["id"], "version": f["version"], "title": f["title"]} if f else None)
-    return {"formular_von": von, "formular_genutzt_von": formular_nutzer_json(p["id"])}
+def _verschieben_loesen(eltern, produkt_kategorie, grund):
+    """Vor dem Verschieben, in derselben Transaktion: Zuweisungen lösen, die danach außerhalb des Teilbaums lägen (Z6)."""
+    liste = _ungueltige_zuweisungen(eltern, produkt_kategorie)
+    for z in liste:
+        _zuweisung_loesen(z, grund)
+    return len(liste)
+
+
+# --- Lesen: Formularseite, Pool-Seite, Dialog „Zuweisen“ ----------------------------------------------------------------
+
+def pool_formular(pf):
+    row = db.query("SELECT * FROM mat_formular WHERE id = ?", (pf,), one=True)
+    if not row:
+        raise Abgelehnt("Prüfformular nicht gefunden.", 404)
+    return row
 
 
 def formular_json(f, mit_punkten=True):
-    out = {"id": f["id"], "kategorie_id": f["category_id"], "produkt_id": f["product_id"], "version": f["version"],
-           "titel": f["title"], "gueltig_ab": f["valid_from"], "aktiv": bool(f["active"]), "demo": bool(f["demo"]),
+    """Eine Version für die Schnittstelle (die Formularseite hängt formular_info und die Versionen an)."""
+    out = {"id": f["id"], "formular_id": f["formular_id"], "version": f["version"], "titel": f["title"],
+           "gueltig_ab": f["valid_from"], "aktiv": bool(f["active"]), "demo": bool(f["demo"]),
            "created_at": f["created_at"], "updated_at": f["updated_at"], "benutzt": ist_benutzt(f["id"])}
     out["aenderbar"] = not out["benutzt"]
-    if f["category_id"]:
-        out["ziel"] = {"art": "kategorie", "id": f["category_id"], "pfad": kategorie_pfad(f["category_id"])}
-    else:
-        p = db.query("SELECT id, manufacturer, model, description, article_no, category_id FROM mat_product WHERE id = ?",
-                     (f["product_id"],), one=True)
-        out["ziel"] = {"art": "produkt", "id": f["product_id"], "kategorie_id": p["category_id"] if p else None,
-                       "name": produktname(p) if p else "?"}
     if mit_punkten:
         out["punkte"] = [punkt_json(p) for p in punkte(f["id"])]
     return out
 
 
-def formulare_fuer(kategorie_id=None, produkt_id=None):
-    spalte, ziel = ("category_id", kategorie_id) if kategorie_id else ("product_id", produkt_id)
-    rows = db.query(f"SELECT * FROM mat_form WHERE {spalte} = ? ORDER BY version DESC", (ziel,))
+def formulare_fuer(pf):
+    """Die Versionen eines Formulars, neueste zuerst, mit Zahl der Prüfpunkte."""
     out = []
-    for f in rows:
+    for f in db.query("SELECT f.*, (SELECT COUNT(*) FROM mat_checklist_item c WHERE c.form_id = f.id) AS punkte_anzahl "
+                      "FROM mat_form f WHERE f.formular_id = ? ORDER BY f.version DESC", (pf,)):
         j = formular_json(f, mit_punkten=False)
-        j["punkte_anzahl"] = db.query("SELECT COUNT(*) AS n FROM mat_checklist_item WHERE form_id = ?",
-                                      (f["id"],), one=True)["n"]
+        j["punkte_anzahl"] = f["punkte_anzahl"]
         out.append(j)
     return out
+
+
+def _geltend():
+    """models.geltend_je_produkt über die Verbindung der Anfrage: {Produkt: (Version, Formular, Standard-Kategorie)}."""
+    return geltend_je_produkt(db.get_db())
+
+
+def wirksam_fuer(pf, geltend=None):
+    """Die Produkte, für die das Formular gerade gilt – zugewiesen oder über einen Standard –, nach Namen."""
+    geltend = _geltend() if geltend is None else geltend
+    ids = [pid for pid, (_v, f, _k) in geltend.items() if f == pf]
+    if not ids:
+        return []
+    rows = db.query("SELECT id, category_id, manufacturer, model, description, article_no, demo FROM mat_product "
+                    "WHERE id IN (SELECT value FROM json_each(?)) ORDER BY manufacturer COLLATE NOCASE, "
+                    "model COLLATE NOCASE, id", (json.dumps(ids),))
+    return [_kurz(r) for r in rows]
+
+
+def formular_info(pf, geltend=None):
+    """Das Formular zu einer Version für die Formularseite (Abschnitt „Gilt für“): Kennung, Titel (der aktiven, sonst der
+    neuesten Version), Heimat mit Pfad, Standard für welche Kategorien, welchen Produkten zugewiesen, für wie viele
+    Produkte es insgesamt gilt."""
+    f = pool_formular(pf)
+    geltend = _geltend() if geltend is None else geltend
+    kats = db.query("SELECT category_id FROM mat_formular_zuweisung WHERE formular_id = ? AND category_id IS NOT NULL",
+                    (pf,))
+    prods = db.query("SELECT p.id, p.category_id, p.manufacturer, p.model, p.description, p.article_no, p.demo "
+                     "FROM mat_formular_zuweisung z JOIN mat_product p ON p.id = z.product_id WHERE z.formular_id = ? "
+                     "ORDER BY p.manufacturer COLLATE NOCASE, p.model COLLATE NOCASE, p.id", (pf,))
+    aktiv = _aktive_version(pf)
+    return {"id": pf, "titel": _anzeige_titel(pf), "herkunft": f["herkunft"], "demo": bool(f["demo"]),
+            "heimat": {"id": f["category_id"], "name": kategorie(f["category_id"])["name"],
+                       "pfad": kategorie_pfad(f["category_id"])},
+            "aktive_version": {"id": aktiv["id"], "version": aktiv["version"]} if aktiv else None,
+            "standard_fuer": sorted(({"id": r["category_id"], "name": _pfad_text(r["category_id"])} for r in kats),
+                                    key=lambda x: x["name"].casefold()),
+            "zugewiesen": [_kurz(p) for p in prods],
+            "wirksam_n": sum(1 for _v, x, _k in geltend.values() if x == pf)}
+
+
+def pool(kategorie_id=None):
+    """Für die Seite „Prüfformulare“ (nur Material-Verwaltung, Entscheidung O6): alle Kategorien in Baumreihenfolge – mit
+    kategorie_id nur deren Teilbaum –, je Kategorie ihr Standard (eigener oder geerbt, S1) und die Formulare ihres Pools:
+    Titel, aktive und neueste Version, Versionen, Standard für, zugewiesen an, für wie viele Produkte es gilt."""
+    kats = db.query("SELECT id, parent_id, name, demo FROM mat_category ORDER BY position, name COLLATE NOCASE, id")
+    nach_id = {k["id"]: k for k in kats}
+    kinder = {}
+    for k in kats:
+        kinder.setdefault(k["parent_id"] if k["parent_id"] in nach_id else None, []).append(k)
+    versionen = {}
+    for v in db.query("SELECT f.id, f.formular_id, f.version, f.title, f.active, f.demo, "
+                      "EXISTS (SELECT 1 FROM mat_inspection x WHERE x.form_id = f.id) AS benutzt "
+                      "FROM mat_form f ORDER BY f.version DESC"):
+        versionen.setdefault(v["formular_id"], []).append(v)
+    standard = {}                                  # Kategorie → Formular
+    zugewiesen = {}                                # Formular → [Produkt]
+    standard_fuer = {}                             # Formular → [Kategorie]
+    for z in db.query("SELECT z.formular_id, z.category_id, p.id AS pid, p.category_id AS pkat, p.manufacturer, "
+                      "p.model, p.description, p.article_no, p.demo FROM mat_formular_zuweisung z "
+                      "LEFT JOIN mat_product p ON p.id = z.product_id ORDER BY p.manufacturer COLLATE NOCASE, "
+                      "p.model COLLATE NOCASE, z.id"):
+        if z["category_id"]:
+            standard[z["category_id"]] = z["formular_id"]
+            standard_fuer.setdefault(z["formular_id"], []).append(z["category_id"])
+        else:
+            zugewiesen.setdefault(z["formular_id"], []).append(_kurz(dict(z, id=z["pid"], category_id=z["pkat"])))
+    wirksam = {}
+    for _v, pf, _k in _geltend().values():
+        wirksam[pf] = wirksam.get(pf, 0) + 1
+    formulare = {}
+    for r in db.query("SELECT * FROM mat_formular ORDER BY id"):
+        formulare.setdefault(r["category_id"], []).append(r)
+
+    def pfad(kid):
+        teile, gesehen = [], set()
+        while kid in nach_id and kid not in gesehen:
+            gesehen.add(kid)
+            teile.insert(0, nach_id[kid]["name"])
+            kid = nach_id[kid]["parent_id"]
+        return teile
+
+    def kopf(pf):
+        """Titel und Versionen eines Formulars für Standardzeilen."""
+        liste = versionen.get(pf, [])
+        aktiv = next((v for v in liste if v["active"]), None)
+        return aktiv, (aktiv or (liste[0] if liste else None))
+
+    def eintrag(r):
+        liste = versionen.get(r["id"], [])
+        aktiv, zeige = kopf(r["id"])
+        neueste = liste[0] if liste else None
+        return {"id": r["id"], "titel": zeige["title"] if zeige else "", "herkunft": r["herkunft"], "demo": bool(r["demo"]),
+                "aktive_version": {"id": aktiv["id"], "version": aktiv["version"]} if aktiv else None,
+                "neueste_version": {"id": neueste["id"], "version": neueste["version"],
+                                    "entwurf": not neueste["active"] and not neueste["benutzt"]} if neueste else None,
+                "link": zeige["id"] if zeige else None, "versionen": len(liste),
+                "standard_fuer": [{"id": k, "name": " / ".join(pfad(k))} for k in standard_fuer.get(r["id"], [])],
+                "zugewiesen": zugewiesen.get(r["id"], []), "wirksam_n": wirksam.get(r["id"], 0)}
+
+    out = []
+
+    def baum(parent, tiefe, geerbt):
+        """geerbt: der Standard, der von oben kommt (mit „geerbt_von“) – oder None."""
+        for k in kinder.get(parent, []):
+            eigen = standard.get(k["id"])
+            aktiv = kopf(eigen)[0] if eigen else None
+            std = ({"formular_id": eigen, "titel": aktiv["title"], "version": aktiv["version"], "version_id": aktiv["id"],
+                    "geerbt_von": None} if aktiv else geerbt)
+            out.append({"id": k["id"], "parent_id": k["parent_id"], "name": k["name"], "pfad": pfad(k["id"]),
+                        "tiefe": tiefe, "demo": bool(k["demo"]), "standard": std,
+                        "formulare": [eintrag(r) for r in formulare.get(k["id"], [])]})
+            baum(k["id"], tiefe + 1, dict(std, geerbt_von={"id": k["id"], "name": k["name"]}) if aktiv else geerbt)
+
+    baum(None, 0, None)
+    if kategorie_id:
+        kategorie(kategorie_id)
+        teil = _unterkategorien(kategorie_id)
+        out = [k for k in out if k["id"] in teil]
+    return {"kategorien": out, "formulare": sum(len(k["formulare"]) for k in out)}
+
+
+def kandidaten(pf):
+    """Für den Dialog „Zuweisen“ (Entscheidungen Z1–Z5): die Kategorien und Produkte im Teilbaum der Heimat – je Zeile
+    „gewaehlt“ (gilt hier ausdrücklich), „bisher“ (ein anderes Formular hängt dort; ein Haken holt es her), bei Produkten
+    „standard“ (das Formular, das ohne Zuweisung über einen Standard gälte – „ueber_standard“, wenn es dieses ist) und
+    „grund“, wenn sich ein neuer Haken nicht setzen lässt (Länge). Ohne aktive Version „grund“ am Ganzen."""
+    f = pool_formular(pf)
+    heimat = f["category_id"]
+    teil = _unterkategorien(heimat)
+    aktiv = _aktive_version(pf)
+    mit_laenge = _hat_laengenpunkt(aktiv["id"]) if aktiv else False
+    zuw = db.query("SELECT * FROM mat_formular_zuweisung")
+    std = {z["category_id"]: z["formular_id"] for z in zuw if z["category_id"]}
+    prod = {z["product_id"]: z["formular_id"] for z in zuw if z["product_id"]}
+    titel = {}
+
+    def titel_von(x):
+        if x not in titel:
+            titel[x] = _anzeige_titel(x)
+        return titel[x]
+
+    def bisher(x):
+        return {"id": x, "titel": titel_von(x)} if x and x != pf else None
+
+    kats = [k for k in pool(heimat)["kategorien"]]
+    geltend = _geltend()
+    kategorien = [{"id": k["id"], "name": k["name"], "pfad": k["pfad"], "tiefe": k["tiefe"],
+                   "gewaehlt": std.get(k["id"]) == pf, "bisher": bisher(std.get(k["id"])),
+                   "standard": None if std.get(k["id"]) or not k["standard"] else
+                   {"id": k["standard"]["formular_id"], "titel": k["standard"]["titel"]}} for k in kats]
+    produkte = []
+    for p in db.query("SELECT p.*, c.name AS category_name FROM mat_product p JOIN mat_category c ON c.id = p.category_id "
+                      "WHERE p.category_id IN (SELECT value FROM json_each(?)) "
+                      "ORDER BY p.manufacturer COLLATE NOCASE, p.model COLLATE NOCASE, p.id", (json.dumps(sorted(teil)),)):
+        j = _kurz(p)
+        j["category_name"] = p["category_name"]
+        j["gewaehlt"] = prod.get(p["id"]) == pf
+        j["bisher"] = bisher(prod.get(p["id"]))
+        g = geltend.get(p["id"])
+        j["standard"] = ({"id": g[1], "titel": titel_von(g[1])} if g and g[2] is not None else None)
+        j["ueber_standard"] = bool(g and g[2] is not None and g[1] == pf)
+        j["grund"] = "" if j["gewaehlt"] else laenge_grund(p, mit_laenge)
+        produkte.append(j)
+    return {"formular": formular_info(pf, geltend), "kategorien": kategorien, "produkte": produkte,
+            "laenge": mit_laenge, "grund": "" if aktiv else NUR_AKTIV_ZUWEISEN}
 
 
 def durchsichtige_bilder_reparieren(conn):

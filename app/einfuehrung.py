@@ -70,8 +70,8 @@ TEILE = {
         {"teil": "materialwart", "titel": "Materialwart", "minuten": 4, "stufe": auth.MITGLIED,
          "start": "/materialablage/artikel/neu?ordner=900000002",
          "ablaeufe": ("Artikel anlegen", "Freigabe erteilen", "Prüfdurchgang")},
-        {"teil": "verwaltung", "titel": "Material-Verwaltung", "minuten": 3, "stufe": auth.VERWALTUNG,
-         "start": "/materialablage/katalog", "ablaeufe": ("Katalog und Prüfformular",)},
+        {"teil": "verwaltung", "titel": "Material-Verwaltung", "minuten": 5, "stufe": auth.VERWALTUNG,
+         "start": "/materialablage/katalog", "ablaeufe": ("Katalog und Prüfformular", "Prüfformulare zuweisen")},
     ),
     "wiki": (
         {"teil": "grund", "titel": "Grundteil", "minuten": 5, "stufe": auth.MITGLIED, "start": "/stroemipedia/uebung-start",
@@ -121,7 +121,8 @@ UEBUNGSSEITEN = frozenset({
     "material.dashboard", "material.pruefungen", "material.bestand_seite", "material.antraege_seite",
     "material.ordner_seite", "material.artikel_neu", "material.artikel_seite", "material.pruefung_neu",
     "material.pruefung_seite", "material.durchgang_seite", "material.durchgaenge_seite", "material.katalog_seite",
-    "material.produkt_seite", "material.formular_seite", "material.meldungen_seite", "material.suche_seite",
+    "material.produkt_seite", "material.formular_seite", "material.formulare_seite", "material.meldungen_seite",
+    "material.suche_seite",
     # Strömipedia (_wiki), Ankerplätze, Riegenkarten (_pruefungen_seite ohne Druck)
     "pages.wiki", "pages.wiki_page", "pages.karte", "pages.pruefungen", "pages.pruefungen_lehrgang",
     "pages.pruefungen_kataloge", "pages.pruefungen_katalog",
@@ -237,16 +238,17 @@ def _katalog_bild(p):
 def _katalog_auswahl():
     """Je Rolle (KATALOG_ROLLEN) ein Produkt mit seinem geltenden Formular: nicht DEMO, ohne laufenden Rückruf,
     Kategorie und Materialart passend, mit geltendem Formular (katalog.formular_fuer_produkt – die eine Stelle, die das
-    Formular eines Produkts bestimmt), das nicht DEMO ist und Prüfpunkte hat. DEMO nach der Regel des Katalogs wie im
-    Export (katalog.produkt_ist_demo, formular_ist_demo: auch über eine DEMO-Kategorie – Sicherheitsprüfung vom
-    04.11.2026, Befund 4). Produkte mit Bild zuerst, dann die kleinste Kennung – dieselbe Auswahl für alle.
-    {rolle: (Produktzeile, Formularzeile, Kategoriepfad, Bild)}; fehlt eine Rolle, bleibt in der Übung ihr Platzhalter."""
+    Formular eines Produkts bestimmt), das Prüfpunkte hat. DEMO nach der Regel des Katalogs wie im Export
+    (katalog.produkt_ist_demo: auch über eine DEMO-Kategorie – Sicherheitsprüfung vom 04.11.2026, Befund 4). Das Formular
+    zählt wie im Export unabhängig von seinem DEMO-Kennzeichen (Entscheidung vom 04.11.2026, Formular-Pool R1) – im Pool
+    einer DEMO-Kategorie steht es ohnehin nur für DEMO-Produkte (Zuweisung nur im Teilbaum). Produkte mit Bild zuerst,
+    dann die kleinste Kennung – dieselbe Auswahl für alle. {rolle: (Produktzeile, Formularzeile, Kategoriepfad, Bild)};
+    fehlt eine Rolle, bleibt in der Übung ihr Platzhalter."""
     from .material.models import produkt_demo_sql
     from .material.services import katalog
-    # Ohne ein aktives echtes Formular gilt für kein Produkt eins – dann muss niemand die Produkte durchgehen.
-    if not db.query("SELECT 1 FROM mat_form WHERE active = 1 AND demo = 0 LIMIT 1", one=True):
+    # Ohne ein aktives Formular gilt für kein Produkt eins – dann muss niemand die Produkte durchgehen.
+    if not db.query("SELECT 1 FROM mat_form WHERE active = 1 LIMIT 1", one=True):
         return {}
-    demo_kategorien = katalog.demo_kategorien()
     produkte = db.query(f"SELECT * FROM mat_product p WHERE NOT {produkt_demo_sql('p')} AND NOT EXISTS (SELECT 1 FROM "
                         "mat_recall r WHERE r.product_id = p.id AND r.closed_at IS NULL) ORDER BY p.id")
     pfade, bilder, out, vergeben = {}, {}, {}, set()
@@ -270,7 +272,7 @@ def _katalog_auswahl():
                                 key=lambda p: (bild(p) is None, p["id"]))
             for p in kandidaten:
                 f = katalog.formular_fuer_produkt(p["id"])
-                if f and f["punkte_anzahl"] and not katalog.formular_ist_demo(f, demo_kategorien):
+                if f and f["punkte_anzahl"]:
                     out[rolle] = (p, f, pfad(p["category_id"]), bild(p))
                     vergeben.add(p["id"])
                     break
@@ -281,15 +283,18 @@ def _katalog_auswahl():
 
 # Die Auswahl geht je Produkt Kategoriepfad, Bild und Formular durch – bei einem großen Katalog ein Vielfaches einer
 # normalen Seite, und das für jede Übungsseite und jedes ihrer Bilder. Darum prozessweit zwischengespeichert
-# (Sicherheitsprüfung vom 04.11.2026, Befund 1): je App, mit dem Katalog-Stand und dem Tag als Schlüssel (_KATALOG_STAND:
-# Zahl und letzte Änderung der Tabellen, aus denen die Auswahl stammt – eine Änderung über die Dienste rechnet sofort
-# neu) und höchstens KATALOG_FRIST Sekunden lang für das, was der Stand nicht sieht (SQL von Hand, zwei Änderungen in
-# derselben Sekunde, Bilddateien, ein umbenanntes Dokument). Gefahrlos: Die Auswahl trägt nur Katalogfelder, die jedes
-# Konto mit Modulzugang ohnehin liest, und die Medienroute prüft jedes Bild weiter selbst.
+# (Sicherheitsprüfung vom 04.11.2026, Befund 1): je App, mit dem Katalog-Stand und dem Tag als Schlüssel und höchstens
+# KATALOG_FRIST Sekunden lang für das, was der Stand nicht sieht (Bilddateien). Der Stand ist seit Schritt 38 vor allem
+# der Zähler mat_meta.katalog_stand: Trigger an jeder Tabelle, aus der die Auswahl stammt (models.KATALOG_STAND_TABELLEN),
+# zählen ihn bei jeder Änderung hoch – auch bei zweien in derselben Sekunde (daran scheiterte der Schlüssel aus Zahl und
+# letzter Änderung, der dahinter bleibt) und bei SQL von Hand; Lesen schreibt nichts. Gefahrlos: Die Auswahl trägt nur
+# Katalogfelder, die jedes Konto mit Modulzugang ohnehin liest, und die Medienroute prüft jedes Bild weiter selbst.
 KATALOG_FRIST = 60
-_KATALOG_STAND = ("SELECT (SELECT COUNT(*) || '|' || IFNULL(MAX(updated_at), '') FROM mat_product) || ';' || "
+_KATALOG_STAND = ("SELECT (SELECT IFNULL(MAX(wert), '') FROM mat_meta WHERE schluessel = 'katalog_stand') || ';' || "
+                  "(SELECT COUNT(*) || '|' || IFNULL(MAX(updated_at), '') FROM mat_product) || ';' || "
                   "(SELECT COUNT(*) || '|' || IFNULL(MAX(updated_at), '') FROM mat_form) || ';' || "
                   "(SELECT COUNT(*) || '|' || IFNULL(MAX(updated_at), '') FROM mat_category) || ';' || "
+                  "(SELECT COUNT(*) || '|' || IFNULL(MAX(id), 0) FROM mat_formular_zuweisung) || ';' || "
                   "(SELECT COUNT(*) || '|' || COUNT(closed_at) FROM mat_recall) || ';' || "
                   "(SELECT COUNT(*) || '|' || IFNULL(MAX(id), 0) FROM mat_product_document) || ';' || "
                   "(SELECT COUNT(*) || '|' || IFNULL(MAX(id), 0) FROM mat_checklist_item) AS stand")
@@ -303,9 +308,10 @@ def katalog_vergessen():
 def katalog_material():
     """Die Auswahl für die Übungsseite (STROEMIS.einfuehrung.katalog): {"produkte": {rolle: {…} | None},
     "formulare": [{…}]} – je Produkt nur Katalogfelder (siehe oben); „formular“ ist die Stelle in „formulare“ (ein
-    Formular, das für zwei Produkte gilt, steht dort einmal), „kategorie“ im Formular die Stelle seiner Kategorie im
-    Kategoriepfad des Produkts (None: ein spezifisches Formular). Je Anfrage einmal gelesen, gerechnet nur, wenn der
-    Zwischenspeicher (siehe oben) nichts Gültiges hat."""
+    Formular, das für zwei Produkte gilt, steht dort einmal), „kategorie“ im Formular die Stelle der Kategorie, deren
+    Standard es ist, im Kategoriepfad des Produkts (None: dem Produkt zugewiesen), „heimat“ die Stelle der Kategorie, in
+    deren Pool es steht. Je Anfrage einmal gelesen, gerechnet nur, wenn der Zwischenspeicher (siehe oben) nichts Gültiges
+    hat."""
     if has_request_context() and "einfuehrung_katalog" in g:
         return g.einfuehrung_katalog
     from .material.services import heute
@@ -335,8 +341,11 @@ def _katalog_rechnen():
         if f["id"] not in stelle:
             stelle[f["id"]] = len(formulare)
             ids = [k["id"] for k in kpfad]
+            von = (f["standard_von"] or {}).get("id")
+            heimat = f["formular"]["heimat"]["id"]
             formulare.append({"titel": f["title"], "version": f["version"], "quelle": f["quelle"],
-                              "kategorie": ids.index(f["category_id"]) if f["category_id"] in ids else None,
+                              "kategorie": ids.index(von) if von in ids else None,
+                              "heimat": ids.index(heimat) if heimat in ids else None,
                               "punkte": [{k: v for k, v in katalog.punkt_json(x).items() if k not in ("id", "position")}
                                          for x in katalog.punkte(f["id"])]})
         monate, quelle = herstellerseite(p)

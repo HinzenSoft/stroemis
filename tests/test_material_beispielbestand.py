@@ -34,7 +34,8 @@ from test_material import (H, PDF, _flach, anmelden, gliederung, jpeg, katalog_g
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 HINWEIS = "DEMO – nicht für echte Prüfungen"
 KATALOG_TABELLEN = ("mat_category", "mat_product", "mat_product_document", "mat_form", "mat_checklist_item",
-                    "mat_recall", "mat_product_request")
+                    "mat_recall", "mat_product_request", "mat_formular", "mat_formular_zuweisung")
+DEMO_TITEL = ("DEMO-Prüfformular (Platzhalter) – ", "DEMO – Prüfformular nach Petzl-Prüfbericht")
 BESTAND_TABELLEN = ("mat_folder", "mat_item", "mat_inspection", "mat_inspection_result", "mat_round", "mat_round_item",
                     "mat_folder_grant", "mat_audit", "users")
 GLIEDERUNGEN = ("DEMO-Kreisverband Flussland", "DEMO-OG Nachbarstadt")
@@ -104,20 +105,25 @@ def sha(pfad):
 
 
 def katalog_stand(app, ohne_demo_formulare=False):
-    """Alles, was zum Katalog gehört: jede Zeile jeder Katalogtabelle, der Export im Format 2 (katalog.json ohne
+    """Alles, was zum Katalog gehört: jede Zeile jeder Katalogtabelle, der Export im Format 3 (katalog.json ohne
     Zeitstempel, Prüfsummen der Dateien im Archiv) und die Dateien hinter Produktbildern und Dokumenten.
-    ohne_demo_formulare: die DEMO-Formulare des Beispielbestands samt Prüfpunkten nicht mitzählen."""
+    ohne_demo_formulare: die DEMO-Formulare des Beispielbestands samt Prüfpunkten, Formular im Pool und Zuweisung nicht
+    mitzählen – auch nicht im Export (er nimmt aktive Formulare seit dem 04.11.2026 mit, auch DEMO)."""
     with app.app_context():
         from app import db
         from app.material.services import katalog, katalog_export
         tabellen = {t: db.query(f"SELECT * FROM {t} ORDER BY id") for t in KATALOG_TABELLEN}
-        if ohne_demo_formulare:
-            demo = {f["id"] for f in tabellen["mat_form"] if f["demo"] and f["title"].startswith(
-                ("DEMO-Prüfformular (Platzhalter) – ", "DEMO – Prüfformular nach Petzl-Prüfbericht"))}
-            tabellen["mat_form"] = [f for f in tabellen["mat_form"] if f["id"] not in demo]
-            tabellen["mat_checklist_item"] = [c for c in tabellen["mat_checklist_item"] if c["form_id"] not in demo]
         daten, dateien, _ = katalog_export.sammeln()
         daten.pop("erstellt")
+        if ohne_demo_formulare:
+            demo = {f["id"] for f in tabellen["mat_form"] if f["demo"] and f["title"].startswith(DEMO_TITEL)}
+            pool = {f["formular_id"] for f in tabellen["mat_form"] if f["id"] in demo}
+            tabellen["mat_form"] = [f for f in tabellen["mat_form"] if f["id"] not in demo]
+            tabellen["mat_checklist_item"] = [c for c in tabellen["mat_checklist_item"] if c["form_id"] not in demo]
+            tabellen["mat_formular"] = [f for f in tabellen["mat_formular"] if f["id"] not in pool]
+            tabellen["mat_formular_zuweisung"] = [z for z in tabellen["mat_formular_zuweisung"]
+                                                  if z["formular_id"] not in pool]
+            daten["formulare"] = [f for f in daten["formulare"] if not f["titel"].startswith(DEMO_TITEL)]
         medien = katalog.medien_dir()
         files = {}
         for p in tabellen["mat_product"]:
@@ -139,8 +145,8 @@ def bestand_stand(app):
 
 
 def platzhalterkatalog(k):
-    """Echte Produkte (ohne DEMO-Kennzeichen, Platzhalter): Gurt Alpha (textil, 10 Jahre, spezifisches Formular mit
-    Ja/Nein, Zahl ohne Soll und freiem Text), HMS Beta (Metall, generisches Formular), Helm Gamma (ohne Formular). Dazu
+    """Echte Produkte (ohne DEMO-Kennzeichen, Platzhalter): Gurt Alpha (textil, 10 Jahre, zugewiesenes Formular mit
+    Ja/Nein, Zahl ohne Soll und freiem Text), HMS Beta (Metall, Standard der Kategorie), Helm Gamma (ohne Formular). Dazu
     ein Produktbild, ein Dokument als Datei und eins als Link, ein inaktiver Formularentwurf und ein DEMO-Teil."""
     kp = k["katalog"]
     ids = katalog_grund(k["adm"])
@@ -162,23 +168,23 @@ def platzhalterkatalog(k):
     r = kp.post(f"/api/material/kategorien/{ids['gurte']}/dokumente",
                 json={"kind": "pflegehinweis", "title": "Pflege (Test)", "url": "https://hersteller.example/pflege"})
     assert r.status_code == 201, r.get_json()
-    r = kp.post("/api/material/formulare", json={"produkt_id": ids["hms"], "titel": "HMS Beta (Entwurf)", "punkte": [
-        {"text": "Testpunkt Entwurf", "art": "yesno", "soll": "ja"}]})
+    r = kp.post("/api/material/formular-pool", json={"kategorie_id": ids["karabiner"], "titel": "HMS Beta (Entwurf)",
+                                                      "punkte": [{"text": "Testpunkt Entwurf", "art": "yesno", "soll": "ja"}]})
     assert r.status_code == 201, r.get_json()
-    demo = {"format": "stroemis-material-katalog", "version": 1, "demo": True,
-            "kategorien": [{"name": "DEMO Testbaum", "materialart": "metall_hardware", "intervall_monate": 12}],
-            "produkte": [{"kategorie": ["DEMO Testbaum"], "hersteller": "DEMO-Testwerk", "modell": "DEMO Teil",
-                          "artikelnummer": "DEMO-T-1", "materialart": "metall_hardware"}],
-            "formulare": [{"kategorie": ["DEMO Testbaum"], "titel": "DEMO-Formular",
-                           "punkte": [{"text": "DEMO-Prüfpunkt", "art": "yesno", "soll": "ja"}]}]}
-    with k["adm"].application.app_context():
+    # DEMO-Teil über die Dienste (der Katalogimport übernimmt seit dem 04.11.2026 kein DEMO-Kennzeichen mehr).
+    with k["adm"].application.test_request_context():
         from flask import g
 
-        from app.material.services import importer
+        from app.material.services import katalog
         g.mat_akteur = "Test"
-        assert not importer.importieren(demo, quelle="Test")["fehler"]
-        from app import db
-        ids["demo"] = db.query("SELECT id FROM mat_product WHERE demo = 1", one=True)["id"]
+        baum = katalog.kategorie_anlegen({"name": "DEMO Testbaum", "default_material_kind": "metall_hardware",
+                                          "default_interval_months": 12}, demo=True)
+        ids["demo"] = katalog.produkt_anlegen({"category_id": baum, "manufacturer": "DEMO-Testwerk", "model": "DEMO Teil",
+                                               "article_no": "DEMO-T-1", "material_kind": "metall_hardware"}, demo=True)
+        pf, vid = katalog.pool_anlegen({"kategorie_id": baum, "titel": "DEMO-Formular", "punkte": [
+            {"text": "DEMO-Prüfpunkt", "art": "yesno", "soll": "ja"}]}, demo=True)
+        katalog.formular_aktivieren(vid)
+        katalog.zuweisung_setzen(pf, {"kategorien": [baum]})
     return ids
 
 
@@ -235,13 +241,13 @@ def test_ohne_echte_produkte():
         with app.app_context():
             from flask import g
 
-            from app.material.services import importer
+            from app.material.services import katalog
             g.mat_akteur = "Test"
-            assert not importer.importieren({
-                "format": "stroemis-material-katalog", "version": 1, "demo": True,
-                "kategorien": [{"name": "DEMO Nur", "materialart": "metall_hardware", "intervall_monate": 12}],
-                "produkte": [{"kategorie": ["DEMO Nur"], "hersteller": "DEMO-Testwerk", "modell": "DEMO Einzel",
-                              "materialart": "metall_hardware"}]}, quelle="Test")["fehler"]
+            # Über die Dienste – der Katalogimport übernimmt seit dem 04.11.2026 kein DEMO-Kennzeichen mehr.
+            kid = katalog.kategorie_anlegen({"name": "DEMO Nur", "default_material_kind": "metall_hardware",
+                                             "default_interval_months": 12}, demo=True)
+            katalog.produkt_anlegen({"category_id": kid, "manufacturer": "DEMO-Testwerk", "model": "DEMO Einzel",
+                                     "material_kind": "metall_hardware"}, demo=True)
         vorher = bestand_stand(app)
         aus, code = laufen("--beispielbestand", "--artikel", "5")
         assert code == 1 and "keine echten Produkte" in aus, aus
@@ -339,8 +345,8 @@ def test_beispielbestand():
         r = k["katalog"].delete(f"/api/material/produkte/{ids['helm']}", headers=H)
         assert r.status_code == 409, r.get_json()
 
-        # 1. Der Katalog bleibt unverändert – Zeilen, Export und Dateien – bis auf das DEMO-Platzhalter-Formular an der
-        # Oberkategorie (sie hatte keins; der Helm erbt es), das der Export auslässt.
+        # 1. Der Katalog bleibt unverändert – Zeilen, Export und Dateien – bis auf das DEMO-Platzhalter-Formular als
+        # Standard der Oberkategorie (sie hatte keinen; der Helm erbt ihn), das seit dem 04.11.2026 im Export steht.
         nachher = katalog_stand(app, ohne_demo_formulare=True)
         for teil in ("export", "export_dateien", "dateien"):
             assert nachher[teil] == katalog_vorher[teil], teil
@@ -351,9 +357,12 @@ def test_beispielbestand():
             from app import db
             from app.material.services import bestand, export, globalsuche, katalog, lebenslauf
             from app.material.services import status as st
-            demo_formulare = db.query("SELECT * FROM mat_form WHERE demo = 1 AND title LIKE 'DEMO-Prüfformular%'")
+            demo_formulare = db.query("SELECT f.*, p.category_id FROM mat_form f JOIN mat_formular p ON p.id = f.formular_id "
+                                      "WHERE f.demo = 1 AND f.title LIKE 'DEMO-Prüfformular%'")
             assert [(f["title"], f["category_id"], f["active"]) for f in demo_formulare] == [
                 ("DEMO-Prüfformular (Platzhalter) – PSA gegen Absturz", ids["psa"], 1)], demo_formulare
+            assert db.query("SELECT category_id FROM mat_formular_zuweisung WHERE formular_id = ?",
+                            (demo_formulare[0]["formular_id"],)) == [{"category_id": ids["psa"]}]
             assert katalog.formular_fuer_produkt(ids["helm"])["id"] == demo_formulare[0]["id"]
             gls = db.query(f"SELECT * FROM mat_folder WHERE parent_id IS NULL AND name IN ({','.join('?' * 2)})",
                            GLIEDERUNGEN)
@@ -607,12 +616,12 @@ def test_beispielbestand():
 
 
 def test_formulare():
-    """Formulare für echte Kategorien ohne wirksames Formular: nach dem Petzl-Prüfbericht, wo die Datei die Kategorie
+    """Formulare für echte Kategorien ohne wirksamen Standard: nach dem Petzl-Prüfbericht, wo die Datei die Kategorie
     nach ihrem Namen kennt – genau ihre Punkte (Text wörtlich, Gruppe, Art, Pflicht, Soll; „kritisch“ der Datei nicht
-    mehr, seit 03.11.2026), DEMO-Kennzeichen,
-    aktiv –, sonst ein Platzhalter an der obersten Kategorie ohne Formular. Echte Formulare (aktiv und inaktiv) bleiben,
-    der Export enthält keins der DEMO-Formulare, ein zweiter Lauf legt nichts an; fehlt die Datei, gibt es nur
-    Platzhalter. Kategorien und Produkte sind Platzhalter."""
+    mehr, seit 03.11.2026), DEMO-Kennzeichen, aktiv, Standard der Kategorie –, sonst ein Platzhalter an der obersten
+    Kategorie ohne Standard. Echte Formulare (aktiv und inaktiv) bleiben, der Export enthält die aktiven – seit dem
+    04.11.2026 auch die DEMO-Formulare (der Import nimmt „DEMO“ aus dem Titel), nie die inaktiven –, ein zweiter Lauf
+    legt nichts an; fehlt die Datei, gibt es nur Platzhalter. Kategorien und Produkte sind Platzhalter."""
     spec = importlib.util.spec_from_file_location("material_beispielbestand_formulare",
                                                   os.path.join(REPO, "scripts", "material_beispielbestand.py"))
     modul = importlib.util.module_from_spec(spec)
@@ -648,11 +657,15 @@ def test_formulare():
                 assert not importer.importieren(katalogdatei, quelle="Test")["fehler"]
                 kid = {k["name"]: k["id"] for k in db.query("SELECT id, name FROM mat_category")}
                 echt_vorher = db.query("SELECT * FROM mat_form WHERE demo = 0 ORDER BY id")
-                petzl, platzhalter, ohne = modul.formulare(vorlagen if mit_datei else {})
+                petzl, platzhalter = modul.formulare(vorlagen if mit_datei else {})
                 assert petzl == (["Seilrollen"] if mit_datei else []), petzl
-                assert platzhalter == ["Testbaum"] and ohne == [], (platzhalter, ohne)
+                assert platzhalter == ["Testbaum"], platzhalter
                 assert db.query("SELECT * FROM mat_form WHERE demo = 0 ORDER BY id") == echt_vorher
-                neu = {f["category_id"]: f for f in db.query("SELECT * FROM mat_form WHERE demo = 1")}
+                neu = {f["category_id"]: f for f in db.query("SELECT f.*, p.category_id FROM mat_form f JOIN mat_formular "
+                                                             "p ON p.id = f.formular_id WHERE f.demo = 1")}
+                standard = {z["category_id"]: z["formular_id"] for z in db.query(
+                    "SELECT * FROM mat_formular_zuweisung WHERE category_id IS NOT NULL")}
+                assert all(standard[k_] == f["formular_id"] for k_, f in neu.items()), (standard, neu)
                 assert set(neu) == ({kid["Seilrollen"], kid["Testbaum"]} if mit_datei else {kid["Testbaum"]}), neu
                 assert all(f["active"] for f in neu.values())
                 if mit_datei:
@@ -669,12 +682,18 @@ def test_formulare():
                         db.query("SELECT id FROM mat_product WHERE model = 'Rolle Delta'", one=True)["id"])["id"] == f["id"]
                 platz = katalog.punkte(neu[kid["Testbaum"]]["id"])
                 assert [p["editor"] for p in platz] == ["yesno", "text", "number"], platz
-                # Der Export nimmt die echten Formulare mit (auch das inaktive), keines der DEMO-Formulare.
-                daten, _, _ = katalog_export.sammeln(mit_dateien=False)
-                assert sorted(x["titel"] for x in daten["formulare"]) == ["Gurte (Test, inaktiv)", "Karabiner (Test)"]
+                # Der Export nimmt die aktiven Formulare mit – auch die DEMO-Formulare (der Bericht sagt es), nicht das
+                # inaktive echte.
+                daten, _, bericht = katalog_export.sammeln(mit_dateien=False)
+                assert sorted(x["titel"] for x in daten["formulare"]) == sorted(
+                    ["Karabiner (Test)", "DEMO-Prüfformular (Platzhalter) – Testbaum"]
+                    + ([f"DEMO – Prüfformular nach Petzl-Prüfbericht ({roh['Seilrollen']['bezugsprodukt']}) – Seilrollen"]
+                       if mit_datei else [])), daten["formulare"]
+                assert bericht["ohne_aktive"] == 1
+                assert {x["titel"]: x["demo"] for x in bericht["formular_liste"]}["Karabiner (Test)"] is False
                 # Zweiter Lauf: nichts dazu.
                 anzahl = db.query("SELECT COUNT(*) AS n FROM mat_form", one=True)["n"]
-                assert modul.formulare(vorlagen if mit_datei else {}) == ([], [], [])
+                assert modul.formulare(vorlagen if mit_datei else {}) == ([], [])
                 assert db.query("SELECT COUNT(*) AS n FROM mat_form", one=True)["n"] == anzahl
     # Jede Petzl-Vorlage lässt sich so anlegen (Titel, Gruppen und Texte in den Grenzen der App).
     with tempfile.TemporaryDirectory() as tmp:
@@ -686,8 +705,8 @@ def test_formulare():
             g.mat_akteur = "Test"
             for name, v in vorlagen.items():
                 kid = katalog.kategorie_anlegen({"name": name})
-                fid = katalog.formular_anlegen({"kategorie_id": kid, "titel": modul.petzl_titel(name, v),
-                                                "punkte": modul.petzl_punkte(v)}, demo=True)
+                _pf, fid = katalog.pool_anlegen({"kategorie_id": kid, "titel": modul.petzl_titel(name, v),
+                                                 "punkte": modul.petzl_punkte(v)}, demo=True)
                 assert len(katalog.punkte(fid)) == len(v["punkte"]), name
                 assert len(modul.petzl_titel(name, v)) <= 160
     # Fehlt die Datei: nur Platzhalter, mit Grund.
@@ -804,10 +823,10 @@ def test_typen():
                 {"name": OBEN, "unterkategorien": [
                     {"name": "Bandmaterial", "materialart": "textil", "intervall_monate": 12}]}]},
                 quelle="Test")["fehler"]
-            petzl, platzhalter, _ = modul.formulare(vorlagen)
+            petzl, platzhalter = modul.formulare(vorlagen)
             assert petzl == ["Bandmaterial"] and platzhalter == [OBEN], (petzl, platzhalter)
-            f = db.query("SELECT f.* FROM mat_form f JOIN mat_category k ON k.id = f.category_id WHERE k.name = "
-                         "'Bandmaterial'", one=True)
+            f = db.query("SELECT f.* FROM mat_form f JOIN mat_formular p ON p.id = f.formular_id JOIN mat_category k "
+                         "ON k.id = p.category_id WHERE k.name = 'Bandmaterial'", one=True)
             assert f["demo"] and f["title"].endswith("– Bandmaterial"), f
             assert [p["label"] for p in katalog.punkte(f["id"])] == [p["text"] for p in vorlagen["Textilmaterial"]["punkte"]]
     print("Typen nach Kategorienamen bestanden.")
@@ -922,8 +941,9 @@ def test_konten():
 
 
 def test_neue_version_demo():
-    """„Neue Version“ eines DEMO-Formulars (ohne eigene Punkte, wie die Oberfläche) bleibt DEMO und damit aus dem
-    Katalog-Export – auch aus einer gewählten DEMO-Vorlage; mit eigenen Punkten (Katalogimport) zählt nur der Parameter."""
+    """„Neue Version“ eines DEMO-Formulars (ohne eigene Punkte, wie die Oberfläche) bleibt DEMO – auch aus einer gewählten
+    DEMO-Vorlage; mit eigenen Punkten (Katalogimport) zählt nur der Parameter. Der Export nimmt die aktive DEMO-Version
+    seit dem 04.11.2026 mit (der Bericht nennt sie), der Import macht daraus ein echtes Formular ohne „DEMO“ im Titel."""
     modul = skript()
     with tempfile.TemporaryDirectory() as tmp:
         app, k = umgebung(tmp)
@@ -936,29 +956,32 @@ def test_neue_version_demo():
         with app.app_context():
             from flask import g
 
+            from app import db
             from app.material.services import katalog, katalog_export
             g.mat_akteur = "Test"
             assert modul.formulare(vorlagen)[0] == ["Gurte"]
+            pf = db.query("SELECT id FROM mat_formular WHERE category_id = ?", (kid,), one=True)["id"]
         # „Neue Version“ ohne Vorlage nimmt die letzte (DEMO) – auch die Punkte; mit gewählter DEMO-Vorlage ebenso.
-        r = kp.post("/api/material/formulare", json={"kategorie_id": kid})
+        r = kp.post("/api/material/formulare", json={"formular_id": pf})
         assert r.status_code == 201 and r.json["formular"]["demo"] is True, r.get_json()
         assert r.json["formular"]["titel"].startswith("DEMO – Prüfformular nach Petzl-Prüfbericht"), r.get_json()
         with app.app_context():
-            from app import db
-            erste = db.query("SELECT id FROM mat_form WHERE category_id = ? ORDER BY version LIMIT 1", (kid,),
+            erste = db.query("SELECT id FROM mat_form WHERE formular_id = ? ORDER BY version LIMIT 1", (pf,),
                              one=True)["id"]
-        r = kp.post("/api/material/formulare", json={"kategorie_id": kid, "vorlage_id": erste})
+        r = kp.post("/api/material/formulare", json={"formular_id": pf, "vorlage_id": erste})
         assert r.status_code == 201 and r.json["formular"]["demo"] is True, r.get_json()
         neu = r.json["formular"]["id"]
         assert kp.post(f"/api/material/formulare/{neu}/aktivieren", headers=H).status_code == 200
         with app.app_context():
-            from app import db
-            daten, _, _ = katalog_export.sammeln(mit_dateien=False)
-            assert not daten["formulare"], daten["formulare"]
+            daten, _, bericht = katalog_export.sammeln(mit_dateien=False)
+            assert [f["titel"] for f in daten["formulare"]] == [r.json["formular"]["titel"]], daten["formulare"]
+            assert bericht["formular_liste"][0]["demo"] is True
+            assert "auf dieser Instanz DEMO" in katalog_export.bericht_text(bericht)
             # Mit eigenen Punkten (wie der Katalogimport) wird die neue Version echt – der Parameter entscheidet.
-            fid = katalog.formular_anlegen({"kategorie_id": kid, "titel": "Gurte (Test)", "punkte": [
+            fid = katalog.formular_anlegen({"formular_id": pf, "titel": "Gurte (Test)", "punkte": [
                 {"text": "Testpunkt", "art": "yesno", "soll": "ja"}]})
             assert not db.query("SELECT demo FROM mat_form WHERE id = ?", (fid,), one=True)["demo"]
+            assert not db.query("SELECT demo FROM mat_formular WHERE id = ?", (pf,), one=True)["demo"]
     print("Neue Version eines DEMO-Formulars bestanden.")
 
 
