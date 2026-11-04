@@ -279,7 +279,8 @@ def bis_schritt(version, nachruesten=True):
     seit Schritt 23 mat_item_change.group_id (SPALTEN_23 – Schritt 23 baut die Tabelle danach trotzdem um, der CHECK
     kennt die neuen Felder erst dann); seit Schritt 25 die Tabelle der Seriennummern der Bestandteile (models.TABELLEN_25,
     ohne Trigger) und die beiden Spalten an mat_inspection_result (models.SPALTEN_25) – Artikelansicht und Prüfung lesen
-    sie. nachruesten=False lässt den Stand ganz, wie er war (für Tests, die genau das prüfen); nachruesten="schritt_25" rüstet
+    sie; seit Schritt 35 die Spalte mat_product.formular_von (models.SPALTEN_35) – jede Produktansicht fragt, wer das
+    Prüfformular übernimmt. nachruesten=False lässt den Stand ganz, wie er war (für Tests, die genau das prüfen); nachruesten="schritt_25" rüstet
     nur Tabelle und Spalten aus Schritt 25 nach (für Tests, die einen älteren Stand ohne die übrigen Nachrüstungen prüfen,
     aber Artikel anlegen)."""
     def lauf(f, *a):
@@ -289,7 +290,7 @@ def bis_schritt(version, nachruesten=True):
         models.SCHEMA_VERSION = version
         # Die Startschritte der Module stehen in db.SCHEMA_MODULE (init_db ruft sie der Reihe nach mit der Verbindung):
         # hinten angehängt, läuft das Nachrüsten nach der Modulmigration jedes Starts in f.
-        mit = nachruesten and version < 25
+        mit = nachruesten and version < 35
         schritt = schritt_25_nachruesten if nachruesten == "schritt_25" else spalten_20_nachruesten
         if mit:
             from app.material import schema_anmelden
@@ -314,11 +315,12 @@ def schritt_25_nachruesten(conn):
     for befehl in models.TABELLEN_25:
         conn.execute(befehl)
     models.spalten_nachruesten(conn, models.SPALTEN_25)
+    models.spalten_nachruesten(conn, models.SPALTEN_35)
     conn.commit()
 
 
 def spalten_20_nachruesten(conn):
-    """Nur die Spalten aus Schritt 20 bis 25 und die Tabellen aus Schritt 21 und 25 (ohne Trigger) an eine Datenbank
+    """Nur die Spalten aus Schritt 20 bis 25 und 35 und die Tabellen aus Schritt 21 und 25 (ohne Trigger) an eine Datenbank
     älteren Stands (siehe bis_schritt) – mit Commit. Schritt 22: is_set und set_teile an mat_product_request (die Meldung
     schreibt sie); Schritt 23: group_id an mat_item_change; Schritt 25: mat_item_component_serial und component_id,
     component_serials an mat_inspection_result."""
@@ -338,6 +340,8 @@ def spalten_20_nachruesten(conn):
         for befehl in models.TABELLEN_25:
             conn.execute(befehl)
         models.spalten_nachruesten(conn, models.SPALTEN_25)
+    if version < 35:
+        models.spalten_nachruesten(conn, models.SPALTEN_35)
     conn.commit()
 
 

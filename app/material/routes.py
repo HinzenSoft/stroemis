@@ -631,6 +631,33 @@ def produkt_loeschen(pid):
     return jsonify(ok=True)
 
 
+# Prüfformular eines anderen Produkts übernehmen (Schritt 35): Kandidaten für den Dialog, verknüpfen, lösen – Rechte wie
+# beim spezifischen Formular (Material-Verwaltung).
+@api.get("/produkte/<int:pid>/formularquellen")
+@katalog_required
+def produkt_formularquellen(pid):
+    """Wie GET /produkte (q, seite, pro_seite; nach Kategorie), nur Produkte mit eigenem aktivem spezifischem Formular;
+    je Treffer „waehlbar“, „grund“ und „andere_kategorie“."""
+    seite, pro_seite = _seite_args()
+    liste, gesamt, seite, pro_seite = katalog.formular_quellen(pid, request.args.get("q", ""), seite, pro_seite)
+    return jsonify(produkte=liste, gesamt=gesamt, seite=seite, pro_seite=pro_seite)
+
+
+@api.put("/produkte/<int:pid>/formular-von")
+@katalog_required
+def produkt_formular_von(pid):
+    """{"quelle": Produkt, "eigenes_deaktivieren": ja/nein} – liefert das Produkt (voll) und „geaendert“."""
+    geaendert = katalog.formular_uebernehmen(pid, json_body())
+    return jsonify(produkt=katalog.produkt_json(katalog.produkt(pid), voll=True), geaendert=geaendert)
+
+
+@api.delete("/produkte/<int:pid>/formular-von")
+@katalog_required
+def produkt_formular_von_loesen(pid):
+    geaendert = katalog.formular_uebernahme_loesen(pid)
+    return jsonify(produkt=katalog.produkt_json(katalog.produkt(pid), voll=True), geaendert=geaendert)
+
+
 @api.post("/produkte/<int:pid>/bild")
 @katalog_required
 def produkt_bild(pid):
@@ -796,6 +823,8 @@ def formular_lesen(fid):
     f = katalog.formular_json(katalog.formular(fid))
     f["journal"] = journal.lesen([("form", fid)], grenze=100)
     f["versionen"] = katalog.formulare_fuer(f["kategorie_id"], f["produkt_id"])
+    # Wer das Formular dieses Produkts übernimmt (Schritt 35) – Änderungen wirken auch dort.
+    f["genutzt_von"] = katalog.formular_nutzer_json(f["produkt_id"]) if f["produkt_id"] else []
     return jsonify(formular=f, editoren=models.EDITOREN)
 
 

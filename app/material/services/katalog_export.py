@@ -25,6 +25,10 @@ draußen und steht im Bericht unter „zu_gross“ – sonst stünde der ganze I
 
 Bestandteil-Liste (Schritt 25): als „bestandteile“: [{bezeichnung, anzahl}]; ohne Liste fehlt der Schlüssel. „set“
 schreibt der Export nie (die Set-Funktion ist seit Schritt 26 zurückgebaut).
+
+Übernommenes Prüfformular (Schritt 35): als „formular_von“: {uid, hersteller, modell, artikelnummer} – wie das Produkt
+eines Formulars; ohne Verweis fehlt der Schlüssel. Kommt die Quelle nicht mit (sie liegt in einer DEMO-Kategorie), fehlt
+er auch – der Bericht nennt das Produkt („verweis_ohne_quelle“).
 """
 import hashlib
 import json
@@ -86,7 +90,8 @@ def sammeln(mit_dateien=True):
                "enthalten": {"kategorien": 0, "produkte": 0, "bilder": 0, "formulare": 0, "dokumente": 0},
                "ausgelassen": {"kategorien": 0, "produkte": 0, "formulare": 0, "dokumente": 0, "ohne_kennzeichen": 0,
                                "namen": []},
-               "ohne_punkte": 0, "fehlende_dateien": [], "zu_gross": [], "groesse": 0, "grenze": EXPORT_MAX_BYTES}
+               "ohne_punkte": 0, "fehlende_dateien": [], "zu_gross": [], "verweis_ohne_quelle": [], "groesse": 0,
+               "grenze": EXPORT_MAX_BYTES}
     raus_n = bericht["ausgelassen"]
     dateien = {}
     # Alle Dokumente für die Versionsketten („vorgaenger“): je Version, welche sie ersetzt, und woran sie zu erkennen ist.
@@ -238,6 +243,17 @@ def sammeln(mit_dateien=True):
             e["bestandteile"] = [{"bezeichnung": z["bezeichnung"], "anzahl": z["anzahl"]} for z in flach]
         produkte.append(e)
     bericht["enthalten"]["produkte"] = len(produkte)
+    # Übernommenes Prüfformular: erst jetzt, wo feststeht, welche Produkte mitkommen.
+    nach_pid = {p["id"]: p for p in exportiert}
+    for p, e in zip(exportiert, produkte):
+        if not p["formular_von"]:
+            continue
+        q = nach_pid.get(p["formular_von"])
+        if q:
+            e["formular_von"] = {"uid": q["uid"], "hersteller": q["manufacturer"], "modell": q["model"],
+                                 "artikelnummer": q["article_no"]}
+        else:
+            bericht["verweis_ohne_quelle"].append(katalog.produktname(p))
 
     # Je Ziel ein Formular: das aktive, sonst die neueste Version mit Prüfpunkten.
     formulare = {}
@@ -301,6 +317,9 @@ def bericht_text(b):
         zeilen += ["", "Nicht im Export, weil die Datei hier fehlt:"] + [f"  {x}" for x in b["fehlende_dateien"]]
     if b["zu_gross"]:
         zeilen += ["", "Nicht im Export, weil der Import die Datei nicht annähme:"] + [f"  {x}" for x in b["zu_gross"]]
+    if b.get("verweis_ohne_quelle"):
+        zeilen += ["", "Ohne „Prüfformular übernommen von“, weil das Quellprodukt nicht im Export ist (DEMO):"] \
+            + [f"  {x}" for x in b["verweis_ohne_quelle"]]
     zeilen += ["", "Bestand, Artikel, Prüfungen, Meldungen und Rückrufe sind nie Teil des Katalog-Exports.",
                "Importieren: Katalog → „Katalog importieren“ oder flask material import-catalog <datei.zip>.", ""]
     return "\n".join(zeilen)

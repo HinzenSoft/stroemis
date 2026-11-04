@@ -92,11 +92,12 @@ def kategorie_und_unterkategorien(kid):
         "SELECT id FROM baum", (kid,))]
 
 
-def produkte(q="", kategorie_id=None, seite=1, pro_seite=25, sort=None, richtung="auf"):
+def produkte(q="", kategorie_id=None, seite=1, pro_seite=25, sort=None, richtung="auf", zusatz=None):
     """Katalogsuche über Hersteller, Modell, Artikelnummer, Norm und Beschreibung. Liefert (Zeilen, Gesamtzahl).
     Jedes Wort muss irgendwo vorkommen. Die Beschreibung (der Zusatz hinter dem Modell, etwa „Screwlock“) steht nicht
     im Volltextindex und wird mit LIKE durchsucht – sie ist kurz, und der Katalog hat Hunderte, nicht Millionen
-    Produkte; den Index umzubauen hieße einen Schemaschritt."""
+    Produkte; den Index umzubauen hieße einen Schemaschritt. zusatz: (SQL-Bedingung über p, Argumente) – eine feste
+    Einschränkung aus dem Dienst (katalog.formular_quellen), nie aus der Anfrage."""
     seite, pro_seite = seiten(seite, pro_seite)
     if sort == "intervall":
         if richtung not in RICHTUNGEN:
@@ -121,6 +122,9 @@ def produkte(q="", kategorie_id=None, seite=1, pro_seite=25, sort=None, richtung
         ids = kategorie_und_unterkategorien(kategorie_id)
         bedingungen.append(f"p.category_id IN ({','.join('?' * len(ids))})")
         args += ids
+    if zusatz:
+        bedingungen.append(f"({zusatz[0]})")
+        args += list(zusatz[1])
     where = ("WHERE " + " AND ".join(bedingungen)) if bedingungen else ""
     gesamt = _abfragen(f"SELECT COUNT(*) AS n FROM mat_product p {where}", tuple(args), one=True)["n"]
     auswahl = (f"SELECT p.*, c.name AS category_name, "

@@ -308,6 +308,11 @@ table.list.mat-artikel th.mat-wahlspalte, table.list.mat-artikel td.mat-wahlspal
   gap: 2px 6px; text-align: left; background: none; border: 0; padding: 8px 10px; font: inherit; color: inherit; cursor: pointer; }
 .mat-treffer-wahl:focus { background: var(--grau-hell); }
 @media (hover: hover) and (pointer: fine) { .mat-treffer-produkt > .mat-bildlink:hover, .mat-treffer-wahl:hover { background: var(--grau-hell); } }
+/* Ein Treffer, der hier nicht wählbar ist (Prüfformular übernehmen, Schritt 35): wie der Knopf aufgebaut, aber ohne
+   Knopf, leise, mit dem Grund in einer eigenen Zeile darunter. */
+.mat-treffer-aus { flex: 1 1 auto; min-width: 0; display: flex; flex-wrap: wrap; align-items: center; align-content: center;
+  gap: 2px 6px; padding: 8px 10px; color: var(--grau); }
+.mat-treffer-grund { flex-basis: 100%; font-size: var(--fs-klein); }
 /* Der Fokusrahmen nach innen: Die Liste rollt (overflow) und schnitte ihn links und rechts ab. */
 .mat-treffer :is(.mat-treffer-wahl, .mat-bildlink):focus-visible { outline-offset: -3px; box-shadow: none; }
 .mat-treffer .help { padding: 6px 10px; margin: 0; }
