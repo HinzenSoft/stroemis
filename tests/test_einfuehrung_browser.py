@@ -106,10 +106,10 @@ def _angebot_und_profil(u, breite, hoehe, touch):
         assert not s.js("Boolean(document.querySelector('.einfuehrung-angebot'))"), wo
         # Profil: „Starten“ führt in die Übung (und setzt den Stand auf „unterbrochen“).
         s.oeffnen("/profil", warten=0.3)
-        assert s.js("document.querySelector('#einfuehrungen .einf-zeile[data-modul=material][data-teil=grund] a').textContent") == "Starten"
+        assert s.js("document.querySelector('#einfuehrungen .einf-teil[data-modul=material][data-teil=grund]').getAttribute('aria-label')").endswith(": Starten")
         s.sammeln()
         von = len(s.anfragen)
-        assert s.klick("#einfuehrungen .einf-zeile[data-modul=material][data-teil=grund] a") is None
+        assert s.klick("#einfuehrungen .einf-teil[data-modul=material][data-teil=grund]") is None
         z = s.warte("(() => { const z = window.S && S.einfuehrung && S.einfuehrung.zustand(); return z && z.bereit ? z : null; })()", 10)
         assert z and z["teil"] == "grund" and z["modul"] == "material", z
         assert "uebung=grund" in s.js("location.search") and s.js("document.title").startswith("Übung · ")

@@ -11948,6 +11948,12 @@ Schachtelung → 200; CSP, `no-store`, Weiterleitungen mit Kennung, Rückstrich 
   gespeicherten Schritt.
 - Strömipedia-Editor am Telefon: Der Speicherstand bleibt gekürzt („Ungespeic…“), nur der Schritttext ist angepasst.
 
+**Profil „Einführungen“ kompakt** (Wunsch vom 04.11.2026): Der Abschnitt steht unter „Passwort ändern“ (vor „App“);
+je Modul eine Zeile – Name links, die geltenden Teile als kleine, grau umrandete Knöpfe rechts (am Telefon darunter,
+44 px am Finger). Am Knopf ✓ für erledigt, „· fortsetzen“ für unterbrochen, die Stelle („unterbrochen bei „…““) in
+einer Zeile darunter; Dauer, Stand und Aktion in title und aria-label, die Dauer aller Teile im Hilfesatz („je 3–5
+Min.“). Etwa halb so hoch wie vorher. Tests: `test_einfuehrung.py` (Profil, Statisch), `test_einfuehrung_browser.py`.
+
 **Kleinigkeiten vom 04.11.2026** (Wünsche des Nutzers):
 - **Mangel-Banner**: Die Fotos der Meldung stehen links neben dem Text in einer Reihe (schmale Spalte, 64 px je Foto,
   untereinander), nicht mehr darunter – am Artikel, in der Prüfung und in Meine PSA (`mangelReihe` in material.js,

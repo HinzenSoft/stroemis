@@ -3155,17 +3155,22 @@ html.fuehrung-leiste dialog[open] .dlg-body { max-height: calc(80dvh - var(--fue
 @media (prefers-reduced-motion: no-preference) {
   .fuehrung-rahmen { transition: left .15s ease-out, top .15s ease-out, width .15s ease-out, height .15s ease-out; }
 }
-/* Profil „Einführungen“: je Teil eine Zeile mit Stand und Knopf; ist die Spalte schmal (Telefon), steht der Knopf unter
-   dem Text. */
+/* Profil „Einführungen“ (kompakt seit dem 04.11.2026): je Modul eine Zeile – Name links, die Teile als kleine Knöpfe
+   rechts (umbrechend), darunter nur bei unterbrochenen Teilen die Stelle. Ist die Spalte schmal (Telefon), stehen die
+   Knöpfe unter dem Namen. */
 .einf-liste { container: einf / inline-size; }
-.einf-modul { margin: 14px 0 2px; }
-.einf-zeilen { list-style: none; margin: 0; padding: 0; }
-.einf-zeile { display: flex; align-items: center; gap: 6px 12px; padding: 6px 0; border-bottom: 1px solid var(--linie); }
-.einf-zeile:last-child { border-bottom: 0; }
-.einf-text { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
-.einf-stand { color: var(--grau); font-size: var(--fs-klein); }
-.einf-zeile > .btn { flex: none; }
-@container einf (max-width: 420px) { .einf-zeile { flex-direction: column; align-items: flex-start; } }
+.einf-modulzeile { display: grid; grid-template-columns: 10rem 1fr; gap: 4px 12px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--linie); }
+.einf-modulzeile:last-child { border-bottom: 0; }
+.einf-modul { margin: 0; }
+.einf-teile { display: flex; flex-wrap: wrap; gap: 6px; }
+.einf-mark { margin-left: 5px; }
+.einf-teil[data-zustand="erledigt"] .einf-mark { color: var(--ok); }
+.einf-teil[data-zustand="unterbrochen"] .einf-mark { font-weight: 400; color: var(--grau); }
+.einf-stand { grid-column: 2; margin: 0; color: var(--grau); font-size: var(--fs-klein); }
+@container einf (max-width: 420px) {
+  .einf-modulzeile { grid-template-columns: 1fr; }
+  .einf-stand { grid-column: 1; }
+}
 @media (pointer: coarse) {
-  .einf-angebot-knoepfe .btn, .fuehrung-knoepfe .btn, .einf-zeile > .btn { min-height: 44px; }
+  .einf-angebot-knoepfe .btn, .fuehrung-knoepfe .btn, .einf-teil { min-height: 44px; }
 }
