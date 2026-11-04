@@ -81,7 +81,7 @@ def test_ablauf():
         r = kp.post("/api/material/formulare", json={"formular_id": pf, "vorlage_id": fid})
         assert r.status_code == 201 and [p["text"] for p in r.json["formular"]["punkte"]] == erwartet
         assert kp.post(f"/api/material/formulare/{fid}/aktivieren", json={}).status_code == 200
-        assert kp.put(f"/api/material/formular-pool/{pf}/zuweisung", json={"produkte": [ids["gurt"]]}).status_code == 200
+        assert kp.put(f"/api/material/formular-pool/{pf}/zuweisung", json={"kategorien": [], "produkte": [ids["gurt"]]}).status_code == 200
 
         # Katalog-Export (Format 3) und Import in eine zweite Anlage: rund.
         roh = exportieren(kp)

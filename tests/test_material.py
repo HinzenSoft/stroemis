@@ -724,14 +724,15 @@ def test_formulare_und_dokumente():
         pool = generisch["formular_id"]
         assert generisch["version"] == 1 and not generisch["aktiv"] and len(generisch["punkte"]) == 3
         assert kp.post(f"/api/material/formulare/{generisch['id']}/aktivieren", json={}).status_code == 200
-        assert kp.put(f"/api/material/formular-pool/{pool}/zuweisung", json={"kategorien": [ids["gurte"]]}).status_code == 200
+        assert kp.put(f"/api/material/formular-pool/{pool}/zuweisung", json={"kategorien": [ids["gurte"]], "produkte": []}).status_code == 200
         # Gilt für jedes Produkt der Kategorie – bis dem Produkt ein anderes zugewiesen ist.
         p = kp.get(f"/api/material/produkte/{ids['gurt']}").json["produkt"]
         assert p["formular"]["id"] == generisch["id"] and "Gurte" in p["formular"]["quelle"], p["formular"]
         spezifisch = kp.get(f"/api/material/formulare/{formular_neu(kp, {'produkt_id': ids['gurt']}, 'Gurt Alpha spezifisch', punkte[:1])}").json["formular"]
         p = kp.get(f"/api/material/produkte/{ids['gurt']}").json["produkt"]
         assert p["formular"]["id"] == spezifisch["id"] and p["formular"]["quelle"] == "dem Produkt zugewiesen"
-        assert kp.put(f"/api/material/formular-pool/{spezifisch['formular_id']}/zuweisung", json={}).status_code == 200
+        assert kp.put(f"/api/material/formular-pool/{spezifisch['formular_id']}/zuweisung",
+                      json={"kategorien": [], "produkte": []}).status_code == 200
         assert kp.get(f"/api/material/produkte/{ids['gurt']}").json["produkt"]["formular"]["id"] == generisch["id"]
         # Neue Version übernimmt die Punkte; Aktivieren löst die alte ab – höchstens eine aktiv.
         r = kp.post("/api/material/formulare", json={"formular_id": pool})
@@ -1079,11 +1080,11 @@ def formular_neu(c, ziel, titel, punkte, aktivieren=True):
     als Standard der Kategorie bzw. dem Produkt zugewiesen; aktivieren=False lässt es als Entwurf ohne Zuweisung.
     Liefert die Kennung der Version."""
     if "kategorie_id" in ziel:
-        kid, wem = ziel["kategorie_id"], {"kategorien": [ziel["kategorie_id"]]}
+        kid, wem = ziel["kategorie_id"], {"kategorien": [ziel["kategorie_id"]], "produkte": []}
     else:
         r = c.get(f"/api/material/produkte/{ziel['produkt_id']}")
         assert r.status_code == 200, r.get_json()
-        kid, wem = r.json["produkt"]["category_id"], {"produkte": [ziel["produkt_id"]]}
+        kid, wem = r.json["produkt"]["category_id"], {"kategorien": [], "produkte": [ziel["produkt_id"]]}
     r = c.post("/api/material/formular-pool", json={"kategorie_id": kid, "titel": titel, "punkte": punkte})
     assert r.status_code == 201, r.get_json()
     fid = r.json["formular"]["id"]

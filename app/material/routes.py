@@ -808,8 +808,8 @@ def formular_pool_kandidaten(pf):
 @katalog_required
 def formular_pool_zuweisung(pf):
     """{kategorien: [...], produkte: [...]} – die vollständige Menge (katalog.zuweisung_setzen). Liefert das Formular
-    („Gilt für“) und „geaendert“ (Zahl der Änderungen)."""
-    geaendert = katalog.zuweisung_setzen(pf, json_body())
+    („Gilt für“) und „geaendert“ (Zahl der Änderungen). Ohne beide Listen 400 (katalog.zuweisung_rumpf)."""
+    geaendert = katalog.zuweisung_setzen(pf, katalog.zuweisung_rumpf(request.get_json(silent=True)))
     return jsonify(formular=katalog.formular_info(pf), geaendert=geaendert)
 
 

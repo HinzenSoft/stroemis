@@ -1414,6 +1414,18 @@ def _kennungen(d, feld, name):
     return {kennung(x, name) for x in wert}
 
 
+ZUWEISUNG_RUMPF = "Bitte „kategorien“ und „produkte“ als Listen von Kennungen angeben – die vollständige Menge, auch leer."
+
+
+def zuweisung_rumpf(d):
+    """Der Rumpf von PUT …/formular-pool/<id>/zuweisung: beide Schlüssel als Liste, sonst 400. Die Menge ist vollständig –
+    ein kaputter Rumpf, ein Array oder ein fehlender Schlüssel lösten sonst still alle Zuweisungen des Formulars
+    (Sicherheitsprüfung Formular-Pool, Befund 2). Die Kennungen prüft zuweisung_setzen."""
+    if not isinstance(d, dict) or not all(isinstance(d.get(k), list) for k in ("kategorien", "produkte")):
+        raise Abgelehnt(ZUWEISUNG_RUMPF)
+    return d
+
+
 def laenge_grund(p, mit_laenge):
     """Warum ein Formular mit Prüfpunkt „Länge (m)“ (mit_laenge) Produkt p nicht zugewiesen werden kann – oder ""."""
     if mit_laenge and not laenge_wirksam(p["category_id"]):

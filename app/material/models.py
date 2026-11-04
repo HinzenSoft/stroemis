@@ -3216,6 +3216,7 @@ FORM_INDIZES_38 = ["CREATE UNIQUE INDEX IF NOT EXISTS ux_mat_form_aktiv ON mat_f
 TRIGGER_WEG_38 = ("mat_product_formular_von_neu", "mat_product_formular_von", "mat_product_formular_quelle",
                   "mat_category_formular_demo", "mat_form_aktiv_verweis_neu", "mat_form_aktiv_verweis",
                   "mat_product_verweis_eigenes")
+FORMULAR_ERSETZEN = "'Prüfformulare lassen sich nicht ersetzen und ihre Kennung nicht ändern.'"
 ZUWEISUNG_TEILBAUM = ("'Ein Prüfformular lässt sich nur in seiner Kategorie und ihren Unterkategorien zuweisen (Produkte "
                       "und Kategorien dort).'")
 
@@ -3257,6 +3258,12 @@ TRIGGER_38 = [
     _trigger("mat_formular_heimat", "AFTER UPDATE OF category_id ON mat_formular",
              "EXISTS (SELECT 1 FROM mat_formular_zuweisung z WHERE z.formular_id = NEW.id "
              f"AND {_ZIEL_38.format(z='z')} NOT IN {_teilbaum_38('NEW.category_id')})", ZUWEISUNG_TEILBAUM),
+    # INSERT OR REPLACE löscht ohne Lösch-Trigger (recursive_triggers aus) – mit anderer Heimat lägen die Zuweisungen
+    # danach außerhalb, mit Fremdschlüsseln nähme CASCADE Versionen und Zuweisungen mit (Sicherheitsprüfung Formular-Pool,
+    # Hinweis 3). Wie mat_product_ersetzen; die App legt Formulare nur neu an und ändert keine Kennung.
+    _trigger("mat_formular_ersetzen", "BEFORE INSERT ON mat_formular",
+             "EXISTS (SELECT 1 FROM mat_formular f WHERE f.id = NEW.id)", FORMULAR_ERSETZEN),
+    _trigger("mat_formular_kennung", "BEFORE UPDATE OF id ON mat_formular", "NEW.id IS NOT OLD.id", FORMULAR_ERSETZEN),
 ]
 # Stand des Katalogs für den Zwischenspeicher der Übung (einfuehrung.katalog_material, Nachtrag vom 04.11.2026): Jede
 # Änderung an diesen Tabellen zählt mat_meta.katalog_stand hoch – auch zwei in derselben Sekunde. Geschrieben wird nur

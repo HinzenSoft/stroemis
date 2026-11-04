@@ -173,7 +173,7 @@ def test_version_und_protokoll():
         assert r.status_code == 201, r.get_json()
         assert kp.post(f"/api/material/formulare/{r.json['formular']['id']}/aktivieren", json={}).status_code == 200
         assert kp.put(f"/api/material/formular-pool/{r.json['formular']['formular_id']}/zuweisung",
-                      json={"produkte": [hms2]}).status_code == 200
+                      json={"kategorien": [], "produkte": [hms2]}).status_code == 200
         gid, _ = gliederung(w)
         a = neuer_artikel(w, hms2, gid, serial_no="K-1")
         r = starten(p1, a["id"])
