@@ -82,6 +82,7 @@ Geschichte stehen. Schemaversion nach der Nachbesserung vor dem Merge: 30; mit d
 | Interaktive Einführung je Modul | Übungsmodus mit Übungsbestand, Sperre, Angebot, Führung, Profil „Einführungen“, Übungen für Materialablage, Strömipedia, Ankerplätze, Riegenkarten | Grundgerüst gebaut 03.11.2026 (kein Schemaschritt), Übungen je Modul und robuste Führung gebaut 04.11.2026, nach den Endprüfungen nachgebessert 04.11.2026, Zweig tutorial |
 | Prüfformular-Editor: Gruppen und Verschieben; Absätze im Prüfpunkt; „optional“ statt „Pflicht“ | Gruppe als Zwischenzeile (Name in voller Breite), Ziehgriff ⠿ und Menü „⋯“ statt ↑/↓/✕, „+ Prüfpunkt“ je Gruppe, „+ Gruppe“; Enter fügt im Prüfpunkt einen Absatz ein (Server, Prüfung, PDF, Katalog); Häkchen „optional“ statt „Pflicht“, Marke nur an optionalen Punkten | gebaut 04.11.2026 (kein Schemaschritt), Zweig formular-editor |
 | Prüfformular eines anderen Produkts übernehmen (Schritt 35) | Ein Produkt verweist auf ein anderes und wird nach dessen aktivem spezifischem Formular geprüft – mit jeder neuen Version dort; Anzeige an beiden Produkten und an der Formularseite, Lösen, Löschen der Quelle, Katalogdatei `formular_von` | gebaut 04.11.2026 (Schema 35), Zweig formular-uebernahme, wartet auf Freigabe |
+| Prüfformular-Editor: Gruppen ziehen | Griff ⠿ auch an jeder Gruppenzeile: der ganze Block zwischen andere Gruppen, Einfügemarke, Esc, Randbildlauf; Menü „⋯“ bleibt; kein Griff bei nur einer Gruppe | gebaut 04.11.2026 (kein Schemaschritt), Zweig gruppe-ziehen |
 
 ## Abgleich mit dem Bestand (vor Lieferung 1)
 
@@ -12172,3 +12173,34 @@ Führungskraft).
 4. Zum Abschnittskopf: ein Menü „Bearbeiten“ statt des Knopfs „Spezifisches Formular bearbeiten“ (bleibt als Knopf, wo
    nur er möglich ist); „Als Variante kopieren“ übernimmt einen Verweis nicht.
 5. DEMO-Art heißt DEMO-Kennzeichen des Produkts; „zurückgezogen“ gibt es bei Produkten nicht.
+
+## Prüfformular-Editor: Gruppen per Ziehgriff verschieben (Wunsch des Nutzers, 04.11.2026)
+
+Nutzer (Bildschirmfoto des neuen Editors, Gruppen „Visuell“, „Vorgeschichte“): „Die einzelnen Gruppen müssen sich auch in
+der Reihenfolge verschieben lassen.“ Bis dahin nur über „⋯“ → „Gruppe nach oben“/„nach unten“. Gebaut 04.11.2026 (kein
+Schemaschritt, Schnittstelle unverändert), Zweig `gruppe-ziehen` von 275bfd4 (Auftrag planung/gruppe-ziehen/auftrag.md).
+
+**Griff an der Gruppenzeile** (material.js `gruppenKopf`, material.css): vorn im Kopf ein Griff ⠿ wie an den Punkten
+(aria-hidden, Titel „Gruppe zum Verschieben ziehen“, in der Flucht der Punktgriffe, am Finger 44 × 44 px); das Namensfeld
+behält den Rest der Zeile bis „⋯“. Bei nur einer Gruppe kein Griff. Das Menü „⋯“ mit „Gruppe nach oben“/„nach unten“
+bleibt (Tastatur).
+
+**Ziehen** (`ziehen(e)` erweitert, dieselben Pointer Events, Randbildlauf, Esc/pointercancel, `overflow-anchor: none`):
+Am Griff eines Gruppenkopfs zieht der ganze Block (`tbody`: Kopf, Punkte, „+ Prüfpunkt“). Anders als eine Punktzeile
+wandert er nicht mit – ein langer Block schöbe die Seite unter dem Finger hin und her –, sondern bleibt blau hinterlegt
+stehen; eine blaue Einfügemarke (4 px, `--wasser`, fest über der Seite, folgt auch dem Bildlauf) steht an der Grenze
+zwischen zwei Gruppen (Mitte des Abstands, dazu Anfang und Ende), die dem Zeiger am nächsten liegt – nie zwischen Punkten.
+An seiner eigenen Stelle steht keine Marke (Loslassen ändert dann nichts). Beim Loslassen kommt der Block an diese
+Grenze, die Gruppenzeile wird ins Bild geholt; Esc lässt alles stehen. Getipptes sammelt `einsammeln()` vorher ein; zwei
+gleichnamige Blöcke, die so nebeneinander geraten, verhalten sich wie beim Menü (nach dem Speichern ein Block).
+
+**Unverändert**: Nur-Lese-Ansicht, Ziehen der Punkte, Einführung (Teil „Material-Verwaltung“), Schnittstelle.
+
+**Tests**: `tests/test_material_formular_editor.py` erweitert – statisch (Griff nur bei mehr als einer Gruppe, Block und
+Marke, CSS der Marke); Browser bei 1280 × 900 Maus und 360 × 740 Touch mit echten Ereignissen: Griff an jedem Kopf
+(aria-hidden, in der Flucht der Punktgriffe, Namensfeld > 60 % der Zeile), beim Ziehen rückt keine Zeile, der Block ist
+markiert, die Marke steht über einem Punkt einer anderen Gruppe an deren Anfang; Esc bricht ab (keine Marke, keine
+Zieh-Klassen mehr); Gruppe an den Anfang und ans Ende; die eben angelegte Gruppe mit getipptem Namen und Punkt mit
+Randbildlauf an den Anfang (Getipptes zieht mit), danach Reihenfolge in der Datenbank nach dem Speichern und in der
+Nur-Lese-Ansicht; Menü der Gruppe unverändert; Tippfläche des Gruppengriffs am Finger gemessen (≥ 44 px, Tipp auf die Mitte
+trifft); eigenes Formular mit nur einer Gruppe ohne Griff, nach „+ Gruppe“ mit Griff an beiden Köpfen.
