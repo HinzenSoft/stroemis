@@ -12577,7 +12577,7 @@ Prüfformular anlegen“ (Kategorie, Titel, „Prüfpunkte übernehmen von …�
 zuweisen“**: Häkchen je Kategorie (Standard) und je Produkt im Teilbaum (nach Kategorie gruppiert, Suche), je Zeile
 „bisher: …“ bzw. „gilt über Standard …“, Längen-Konflikte ausgegraut mit Grund; Folge („2 Änderungen – gilt ab sofort
 für neue Prüfungen“) bzw. Grund (ohne aktive Version, nichts geändert) steht in der Knopfzeile; am Telefon über die
-ganze Fläche, Zeilen 44 px am Finger. **Formularseite**: Pfad „Katalog / Prüfformulare / Heimat“, „Im Pool von …“,
+ganze Fläche (steht unten die Leiste der Übung, endet er über ihr), Zeilen 44 px am Finger. **Formularseite**: Pfad „Katalog / Prüfformulare / Heimat“, „Im Pool von …“,
 Abschnitt **„Gilt für“** (Standard für, zugewiesen, „Insgesamt für n Produkte“) mit der Abschnittsaktion „Zuweisen“,
 im Menü „Kopie anlegen“; „Neue Version“ fragt bei einer Version ohne Titel nach einem. **Produktseite**: Abschnitt
 „Prüfformular“ nur noch Anzeige („Geprüft wird nach „Titel“ · Version n (dem Produkt zugewiesen | Standard der

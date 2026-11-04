@@ -2219,6 +2219,12 @@ dialog:where(.mat-zuweisen) .dlg-actions > :is(.mat-zw-folge, .mat-knopfgrund) {
 @media (max-width: 640px) {
   dialog:where(.mat-zuweisen) { width: 100vw; max-width: 100vw; height: 100dvh; max-height: 100dvh; margin: 0; }
   dialog:where(.mat-zuweisen) .dlg-body { max-height: calc(100dvh - 6px); height: calc(100dvh - 6px); box-sizing: border-box; }
+  /* Mit der Leiste der Übung unten (allgemeine Regel in app.css) endet der Dialog über ihr – sonst kürzte die Regel nur
+     den Inhalt, und unter der Knopfzeile bliebe eine leere Fläche. */
+  html.fuehrung-leiste dialog.mat-zuweisen[open] { height: calc(100dvh - var(--fuehrung-hoehe, 0px));
+    max-height: calc(100dvh - var(--fuehrung-hoehe, 0px)); }
+  html.fuehrung-leiste dialog.mat-zuweisen[open] .dlg-body { height: calc(100dvh - 6px - var(--fuehrung-hoehe, 0px));
+    max-height: calc(100dvh - 6px - var(--fuehrung-hoehe, 0px)); }
 }
 @media (pointer: coarse) {
   .mat-zw-zeile { min-height: 44px; box-sizing: border-box; padding: 4px 0; }

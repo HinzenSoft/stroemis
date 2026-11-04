@@ -624,12 +624,26 @@ def test_migration_frisch():
 
 
 def test_oberflaeche_statisch():
-    """Teil 2 prüft die Oberfläche; hier nur, dass Übernehmen und „Generisches Formular“ aus material.js weg sind."""
+    """Übernehmen und „Generisches Formular“ sind aus material.js weg; Knopfsprache der neuen Stellen; der Dialog
+    „Zuweisen“ füllt am Telefon die Fläche und endet über der Leiste der Übung (Browser: probe in planung/formular-pool)."""
     with open(os.path.join(WURZEL, "app", "material", "static", "material.js"), encoding="utf-8") as fh:
         js = fh.read()
+    with open(os.path.join(WURZEL, "app", "material", "static", "material.css"), encoding="utf-8") as fh:
+        css = fh.read()
     for weg in ("formular-von", "formularquellen", "kat-formular", "formular-uebernehmen", "formularNutzerHinweis",
                 "formular_genutzt_von", "aktives_formular"):
         assert weg not in js, weg
+    # Anlegen-Knopf nach dem Muster, Zuweisen als Abschnittsaktion grau, die eine Hauptaktion im Dialog rot.
+    assert ('<button class="btn secondary" type="button" data-act="anlegen"><span class="k-text"><span class="k-plus" '
+            'aria-hidden="true">+ </span>Prüfformular<span class="k-anlegen"> anlegen</span></span></button>') in js
+    assert '<button class="btn secondary small" type="button" data-act="zuweisen">Zuweisen</button>' in js
+    assert '<button class="btn" id="zw-ok" type="button"${knopfAus("zw-grund", true)}>Zuweisung speichern</button>' in js
+    # 44 px nur am Finger.
+    finger = css[css.index("@media (pointer: coarse) {\n  .mat-zw-zeile"):]
+    assert ".mat-zw-zeile { min-height: 44px;" in finger[:finger.index("\n}")]
+    assert css.count(".mat-zw-zeile { min-height: 44px;") == 1
+    assert ("html.fuehrung-leiste dialog.mat-zuweisen[open] .dlg-body { height: calc(100dvh - 6px - var(--fuehrung-hoehe, 0px));"
+            in css)
     print("Oberfläche (statisch) bestanden.")
 
 
