@@ -402,8 +402,11 @@
     bestandteil_nummern: "Seriennummern der Bestandteile",
     // Set-Protokolle im Prüfdurchgang (Schritt 27)
     set_protokolle: "Set-Protokolle",
-    // Prüfformular eines anderen Produkts übernehmen (Schritt 35)
+    // Prüfformular eines anderen Produkts übernehmen (Schritt 35) – nur noch zum Lesen alter Einträge
     formular_von: "Prüfformular von Produkt Nr.",
+    // Formular-Pool (Schritt 38): Formular, Heimat, Zuweisungen
+    formular: "Prüfformular", formular_id: "Prüfformular Nr.", heimat: "im Pool von", entstanden: "entstanden aus",
+    versionen: "Versionen", titel: "Titel", kategorie: "Kategorie", bisher: "bisher", vorlage: "Vorlage Nr.",
   };
   // Die Beschriftung eines Feldes in einem Journaleintrag – wie beschriftung.feld_name: „description“ ist am Produkt der
   // kurze Zusatz hinter dem Namen und heißt dort seit dem Wunsch vom 18.10.2026 „Bemerkung“; an Ordnern und in den
@@ -446,11 +449,16 @@
                    set_rueckbau: "Set aufgelöst – die Teile sind eigene Artikel (Schritt 26)",
                    // Schritt 25: Bestandteil-Liste eines Produkts und Seriennummern der Bestandteile am Artikel
                    bestandteile: "Bestandteile geändert", bestandteil_nummern: "Seriennummern der Bestandteile geändert",
-                   // Schritt 35: Prüfformular eines anderen Produkts übernehmen – am übernehmenden Produkt
-                   formular_uebernommen: "Prüfformular übernommen", formular_geloest: "Übernahme des Prüfformulars gelöst" };
+                   // Schritt 35: Prüfformular eines anderen Produkts übernehmen – am übernehmenden Produkt (alte Einträge)
+                   formular_uebernommen: "Prüfformular übernommen", formular_geloest: "Übernahme des Prüfformulars gelöst",
+                   // Schritt 38: Formular-Pool – am Formular, am Produkt und an der Kategorie
+                   zugewiesen: "zugewiesen", zuweisung_geloest: "Zuweisung gelöst",
+                   formular_zugewiesen: "Prüfformular zugewiesen", formular_zuweisung_geloest: "Zuweisung des Prüfformulars gelöst",
+                   standard_gesetzt: "Standard-Prüfformular gesetzt", standard_geloest: "Standard-Prüfformular gelöst" };
   const RECHT = { lesen: "lesen", pruefen: "prüfen", verwalten: "verwalten" };
   const ENTITAET = { item: "Artikel", product: "Produkt", document: "Dokument", form: "Formular", folder: "Ordner",
-                     category: "Kategorie", user: "Konto", inspection: "Prüfung", round: "Durchgang", request: "Produktmeldung" };
+                     category: "Kategorie", user: "Konto", inspection: "Prüfung", round: "Durchgang", request: "Produktmeldung",
+                     formular: "Prüfformular" };
 
   /* Warum hier nicht geprüft werden kann – als HTML. obj: der Ordner, Artikel oder die Prüfung (mit „darf“); ohne obj
      gilt die Frage für das ganze Konto (Seite „Prüfungen“). Prüfen braucht seit Phase 2 dreierlei: das Häkchen
@@ -672,7 +680,7 @@
 
   /* --- Gerüst -------------------------------------------------------------------------------- */
   const NAV = { dashboard: "dashboard", pruefungen: "pruefungen", bestand: "bestand", ordner: "bestand", artikel: "bestand",
-                artikel_neu: "bestand", katalog: "katalog", produkt: "katalog", formular: "katalog", meldungen: "katalog", suche: "",
+                artikel_neu: "bestand", katalog: "katalog", produkt: "katalog", formular: "katalog", formulare: "katalog", meldungen: "katalog", suche: "",
                 pruefung: "pruefungen", pruefung_neu: "pruefungen", durchgang: "pruefungen", durchgaenge: "pruefungen",
                 bestandsimport: "bestand", bericht: "bestand", antraege: "bestand" };
   $$(".mat-nav a").forEach((a) => a.classList.toggle("aktiv", a.dataset.nav === NAV[ANSICHT]));
@@ -795,9 +803,9 @@
      aufgeklappt, alles einen Klick entfernt. Unter 1024 px ist die Leiste eine Schublade hinter
      „☰ Ordner“ bzw. „☰ Kategorien“ (wie im Wiki), auf einem Doppelbildschirm füllt sie die linke Hälfte. Nicht auf
      der Seite „Bestand“: dort ist der Ordnerbaum selbst der Inhalt. Auf- und Zuklappen merkt sich der Browser, je Baum getrennt. */
-  const KATALOG_ANSICHTEN = new Set(["katalog", "produkt", "formular", "meldungen"]);
+  const KATALOG_ANSICHTEN = new Set(["katalog", "produkt", "formular", "formulare", "meldungen"]);
   const MIT_LEISTE = new Set(["dashboard", "pruefungen", "ordner", "artikel", "artikel_neu", "suche", "pruefung",
-                              "pruefung_neu", "durchgang", "durchgaenge", "katalog", "produkt", "formular", "meldungen", "bestandsimport", "bericht",
+                              "pruefung_neu", "durchgang", "durchgaenge", "katalog", "produkt", "formular", "formulare", "meldungen", "bestandsimport", "bericht",
                               "antraege"]);
   const LEISTE_KATALOG = KATALOG_ANSICHTEN.has(ANSICHT);
   const leiste = document.getElementById("mat-side");
@@ -908,7 +916,7 @@
   function leisteKnopfSetzen() {
     if (!matNav) return;
     const schmal = alsSchublade();
-    const zeile = !schmal ? null : ANSICHT === "katalog" ? $(".mat-suchzeile", inhalt) : sucheZeileOben;
+    const zeile = !schmal ? null : ANSICHT === "katalog" || ANSICHT === "formulare" ? $(".mat-suchzeile", inhalt) : sucheZeileOben;
     if (leiste) umhaengen(leisteAuf, zeile || matNav, true);
     if (sucheZeileOben) {
       umhaengen(sucheForm, zeile || matNav, false);
@@ -3176,7 +3184,7 @@
           ${zeile("Nächste Prüfung", aus ? '<span class="muted">–</span>' : gesperrt ? '<span class="muted">setzt die Freiprüfung</span>' : a.status === "neu" ? '<strong>Eingangsprüfung ausstehend</strong>' : a.next_due_on ? `<strong>${esc(fmtTag(a.next_due_on))}</strong>` : '<span class="mat-warn">keine</span>')}
           ${zeile("Zuletzt geprüft", a.last_inspected_on ? esc(fmtTag(a.last_inspected_on)) : '<span class="muted">noch nie</span>')}
           ${zeile("Prüfintervall", ivText)}
-          ${zeile("Prüfformular", a.formular ? `${esc(a.formular.title || "ohne Titel")} · Version ${a.formular.version} <span class="muted">(${esc(a.formular.quelle)}, ${plural(a.formular.punkte, "Prüfpunkt", "Prüfpunkte")})</span>` : '<span class="mat-warn">kein aktives Prüfformular – im Katalog anlegen</span>')}
+          ${zeile("Prüfformular", a.formular ? `${esc(a.formular.title || "ohne Titel")} · Version ${a.formular.version} <span class="muted">(${esc(a.formular.quelle)}, ${plural(a.formular.punkte, "Prüfpunkt", "Prüfpunkte")})</span>` : '<span class="mat-warn">kein Prüfformular – die Material-Verwaltung weist es unter „Prüfformulare“ zu</span>')}
           ${a.notes ? zeile("Bemerkung", `<span class="mat-text">${esc(a.notes)}</span>`) : ""}
         </dl></section>
         <div class="mat-spalte">
@@ -4075,27 +4083,26 @@
       const angaben = k ? [k.norm ? esc(k.norm) : "", k.default_material_kind ? `Materialart ${esc(MATERIALART[k.default_material_kind])}` : "",
         k.default_interval_months ? `Prüfintervall ${k.default_interval_months} Monate` : "", k.laenge_wirksam ? "Artikel haben eine Länge" : "",
         plural(summe(k.id), "Produkt", "Produkte")].filter(Boolean).join(" · ") : "";
-      // Zum aktiven generischen Formular führt bei der Material-Verwaltung der Knopf „Generisches Formular“, sonst der Verweis in der Angabenzeile.
-      // Ohne eigenes gilt das der nächsten Oberkategorie mit einem (katalog.py prüft danach) – die Zeile nennt es mit Link: zur
-      // Kategorie, wo der Knopf steht (Material-Verwaltung), sonst zum Formular (Feinschliff aus den Wiki-Fragen, K9).
-      const geerbt = k && !k.aktives_formular ? pfad.slice(0, -1).reverse().find((x) => x.aktives_formular) : null;
-      const formularZeile = !k ? "" : k.aktives_formular
-        ? (DARF.katalog ? "" : ` · <a href="/materialablage/katalog/formular/${k.aktives_formular}">generisches Prüfformular</a>`)
-        : !geerbt ? ' · <span class="muted">kein aktives generisches Prüfformular</span>'
-          : ` · generisches Prüfformular von ${DARF.katalog
-            ? `<a href="/materialablage/katalog?kategorie=${geerbt.id}" data-act="kategorie" data-id="${geerbt.id}">„${esc(geerbt.name)}“</a>`
-            : `<a href="/materialablage/katalog/formular/${geerbt.aktives_formular}">„${esc(geerbt.name)}“</a>`}`;
+      /* Formular-Pool (Schritt 38): Die Angabenzeile nennt das Standard-Prüfformular der Kategorie mit Link zur Version –
+         ohne eigenen das der nächsten Oberkategorie mit einem („geerbt von“, Entscheidung S1). Welches Formular gilt, legt
+         die Material-Verwaltung auf der Seite „Prüfformulare“ fest; für sie steht dahinter der Link dorthin, an diese
+         Kategorie, mit der Zahl der Formulare in ihrem Pool. Knöpfe dafür gibt es an der Kategorie nicht mehr. */
+      const geerbt = k && !k.standard_formular ? pfad.slice(0, -1).reverse().find((x) => x.standard_formular) : null;
+      const std = k && (k.standard_formular || (geerbt && geerbt.standard_formular));
+      const formularZeile = !k ? "" : `${std ? ` · Standard-Prüfformular <a href="/materialablage/katalog/formular/${std.version_id}">„${esc(std.titel || "ohne Titel")}“</a>${geerbt
+        ? ` geerbt von <a href="/materialablage/katalog?kategorie=${geerbt.id}" data-act="kategorie" data-id="${geerbt.id}">„${esc(geerbt.name)}“</a>` : ""}`
+        : ' · <span class="muted">kein Standard-Prüfformular</span>'}${DARF.katalog
+        ? ` · <a href="/materialablage/katalog/formulare?kategorie=${k.id}">Prüfformulare (${k.formulare || 0})</a>` : ""}`;
       inhalt.innerHTML = `<div class="page-head"><h1>Katalog${anleitungKopf("katalog")}</h1>
           <div class="btn-row">${DARF.katalog ? '<button class="btn secondary" data-act="kat-neu"><span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Kategorie<span class="k-anlegen"> anlegen</span></span></button><button class="btn secondary" data-act="produkt-neu"><span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Produkt<span class="k-anlegen"> anlegen</span></span></button>' : ""}
             ${DARF.lesen || DARF.katalog ? `<a class="btn secondary mat-mit-zahl" href="/materialablage/katalog/meldungen">Produktmeldungen<span class="mat-meldezahl" id="kat-meldungen" hidden></span></a>` : ""}
-            ${DARF.katalog ? katalogMenue : ""}</div></div>
+            ${DARF.katalog ? `<a class="btn secondary" href="/materialablage/katalog/formulare${k ? `?kategorie=${k.id}` : ""}">Prüfformulare</a>${katalogMenue}` : ""}</div></div>
         ${k ? `<div class="mat-katkopf">
             <div class="mat-pfad">${pfadHtml(['<a href="/materialablage/katalog" data-act="kategorie" data-id="">alle Kategorien</a>',
               ...pfad.slice(0, -1).map((x) => `<a href="/materialablage/katalog?kategorie=${x.id}" data-act="kategorie" data-id="${x.id}">${esc(x.name)}</a>`)])}</div>
             <h2>${esc(k.name)} ${demoMarke(k.demo)}</h2>
             <p class="small">${angaben}${formularZeile}</p>
-            ${DARF.katalog ? `<div class="btn-row">${kategorieMenue}
-              <button class="btn secondary small" data-act="kat-formular">Generisches Formular</button></div>` : ""}
+            ${DARF.katalog ? `<div class="btn-row">${kategorieMenue}</div>` : ""}
             <details class="mat-katdoks mat-auf"${alsSchublade() ? "" : " open"}><summary>Dokumente für alle Produkte dieser Kategorie<span id="kat-doks-zahl"></span>${infoKnopf("Dokumente für alle Produkte dieser Kategorie", "Pflegehinweise, allgemeine Anleitungen … – sie gelten für jedes Produkt hier und in den Unterkategorien und stehen dort bei den Herstellerdokumenten." + mehrDazu("kategorie_dokumente"))}</summary>
               <div id="kat-doks"><p class="help">Wird geladen …</p></div>
               ${DARF.katalog ? '<button class="btn secondary small" data-act="dok-neu"><span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Dokument<span class="k-anlegen"> anlegen</span></span></button>' : ""}</details></div>`
@@ -4130,7 +4137,6 @@
         if (!(await confirm(`Kategorie „${k.name}“ löschen? Das geht nur ohne Unterkategorien und Produkte.`, "Löschen"))) return;
         try { await api(`${API}/kategorien/${k.id}`, { method: "DELETE" }); location.href = S.ziel("/materialablage/katalog"); } catch (e) { toast(e.message, true); }
       },
-      "kat-formular": () => formularFuer({ kategorie_id: kategorie }),
       "produkt-neu": () => produktDialog({ category_id: kategorie }),
       "kat-export": () => katalogExportDialog(),
       "kat-import": () => katalogImportDialog(),
@@ -4195,8 +4201,9 @@
     const e = v.enthalten, a = v.ausgelassen;
     const zeile = (t, n, raus) => `<tr><th scope="row">${t}</th><td>${n}</td><td>${raus === null ? "–" : raus}</td></tr>`;
     dialog(`<h2>Katalog exportieren</h2>
-      <p>Kategorien, Produkte mit Bild und Dokumenten und die Prüfformulare als ZIP – zum Sichern oder für eine
-        andere Installation. Bestand, Artikel und Prüfungen kommen nie mit, DEMO-Einträge auch nicht.</p>
+      <p>Kategorien, Produkte mit Bild und Dokumenten und die aktiven Prüfformulare samt Zuweisungen als ZIP – zum Sichern
+        oder für eine andere Installation. Bestand, Artikel, Prüfungen und das Journal kommen nie mit, DEMO-Kategorien und
+        -Produkte auch nicht.</p>
       <table class="mat-austausch"><thead><tr><th></th><th>im Export</th><th>ausgelassen (DEMO)</th></tr></thead><tbody>
         ${zeile("Kategorien", e.kategorien, a.kategorien)}${zeile("Produkte", e.produkte, a.produkte)}
         ${zeile("davon mit Bild", e.bilder, null)}${zeile("Formulare", e.formulare, a.formulare)}${zeile("Dokumente", e.dokumente, a.dokumente)}
@@ -4205,7 +4212,8 @@
       ${a.namen.length ? `<details class="mat-auf"><summary>DEMO-Einträge (oberste Ebene)</summary><ul class="mat-austausch-aenderungen">${a.namen.map((n) => `<li>${esc(n)}</li>`).join("")}</ul></details>` : ""}
       ${austauschListe("Nicht im Export, weil die Datei hier fehlt", v.fehlende_dateien, "warnung")}
       ${austauschListe("Nicht im Export, weil der Import die Datei nicht annähme (zu groß)", v.zu_gross, "warnung")}
-      ${v.ohne_punkte ? `<p class="help">${plural(v.ohne_punkte, "Formularentwurf", "Formularentwürfe")} ohne Prüfpunkte (und ohne aktives Formular) bleibt draußen.</p>` : ""}
+      ${(v.formular_liste || []).some((f) => f.demo) ? `<p class="help">Prüfformulare mit DEMO-Kennzeichen kommen mit, wenn sie aktiv sind – der Import nimmt „DEMO“ vorn aus dem Titel und übernimmt kein Kennzeichen: ${v.formular_liste.filter((f) => f.demo).map((f) => `„${esc(f.titel)}“`).join(", ")}.</p>` : ""}
+      ${v.ohne_aktive ? `<p class="help">${plural(v.ohne_aktive, "Prüfformular", "Prüfformulare")} ohne aktive Version ${v.ohne_aktive === 1 ? "bleibt" : "bleiben"} draußen.</p>` : ""}
       ${v.groesse ? `<p class="help">Dateien zusammen etwa ${esc(groesse(v.groesse))}.${e.bilder ? " Die Produktbilder gehen als Original mit – samt ihren Metadaten." : ""}</p>` : ""}
       ${v.groesse > v.grenze ? `<p class="error">Der Export wäre größer als ${esc(groesse(v.grenze))} – so groß wird er nicht gebaut.</p>` : ""}
       <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button>
@@ -4218,7 +4226,7 @@
   }
 
   function importBerichtHtml(b) {
-    const arten = b.version === 2 ? AUSTAUSCH_ARTEN : AUSTAUSCH_ARTEN.slice(0, 3);
+    const arten = b.version >= 2 ? AUSTAUSCH_ARTEN : AUSTAUSCH_ARTEN.slice(0, 3);
     const zeile = ([k, t]) => {
       const z = b[k] || {};
       const geaendert = k === "formulare" ? "–" : (z.geaendert || 0) + (z.neue_version || 0);
@@ -4233,10 +4241,14 @@
     // Bestandteil-Listen an Produkten (Schritt 25): neu (das Produkt hatte noch keine), ersetzt oder gleich geblieben.
     const bl = b.bestandteillisten || {};
     const flach = bl.neu || bl.geaendert || bl.unveraendert ? `<tr><th scope="row">Bestandteil-Listen</th><td>${bl.neu || 0}</td><td>${bl.geaendert || 0}</td><td>${bl.unveraendert || 0}</td></tr>` : "";
+    // Zuweisungen der Prüfformulare (Format 3, Formular-Pool): gesetzt, gelöst (die Datei ist maßgeblich), unverändert.
+    const zw = b.zuweisungen || {};
+    const zuweisungen = zw.neu || zw.geloest || zw.unveraendert ? `<p class="help">Zuweisungen der Prüfformulare: ${zw.neu || 0} gesetzt, ${zw.geloest || 0} gelöst, ${zw.unveraendert || 0} unverändert.</p>` : "";
     return `${stand}
       ${h.quelle || h.erstellt ? `<p class="help">Export von ${esc(h.quelle || "?")}${h.erstellt ? `, erstellt ${esc(fmtZeit(h.erstellt))}.` : /…$/.test(h.quelle || "") ? "" : "."}</p>` : ""}
-      <table class="mat-austausch"><thead><tr><th></th><th>neu</th><th>geändert${b.version === 2 ? infoKnopf("neu und geändert", "Eine geänderte Prüfliste wird eine neue Formularversion (zählt als neu); eine neue Dokumentversion zählt als geändert." + mehrDazu("katalogimport")) : ""}</th><th>unverändert</th></tr></thead>
+      <table class="mat-austausch"><thead><tr><th></th><th>neu</th><th>geändert${b.version >= 2 ? infoKnopf("neu und geändert", "Eine geänderte Prüfliste wird eine neue Formularversion (zählt als neu); eine neue Dokumentversion zählt als geändert." + mehrDazu("katalogimport")) : ""}</th><th>unverändert</th></tr></thead>
         <tbody>${arten.map(zeile).join("")}${flach}</tbody></table>
+      ${zuweisungen}
       ${austauschListe("Fehler", b.fehler, "fehler")}
       ${austauschListe("Achtung – betrifft vorhandene Artikel", b.warnungen, "warnung")}
       ${austauschListe("Hinweis", b.hinweise, "")}
@@ -4502,16 +4514,23 @@
     if (laeuft) importHinweisUhr = setTimeout(importHinweis, 5000);
   }
 
-  async function formularFuer(ziel) {
-    // Das aktive (oder neueste) Formular des Ziels öffnen – oder ein neues anlegen.
-    const q = ziel.kategorie_id ? `kategorie=${ziel.kategorie_id}` : `produkt=${ziel.produkt_id}`;
-    try {
-      const liste = (await api(`${API}/formulare?${q}`)).formulare;
-      const f = liste.find((x) => x.aktiv) || liste[0];
-      if (f) { location.href = S.ziel(`/materialablage/katalog/formular/${f.id}`); return; }
-      const r = await api(`${API}/formulare`, { method: "POST", body: ziel });
-      location.href = S.ziel(`/materialablage/katalog/formular/${r.formular.id}`);
-    } catch (e) { toast(e.message, true); }
+  /* Fiele beim Verschieben einer Kategorie oder eines Produkts eine Zuweisung eines Prüfformulars aus dem Teilbaum seiner
+     Heimat, wird sie beim Speichern gelöst (Entscheidung Z6) – der Dialog sagt es vorher, sobald die neue Stelle gewählt
+     ist (GET …/formular-pool/folgen; nur die Material-Verwaltung bearbeitet den Katalog). */
+  function verschiebenFolgen(feld, satz, abfrage, alt) {
+    if (!feld || !satz || !DARF.katalog) return;
+    let lauf = 0;
+    feld.addEventListener("change", async () => {
+      const meinLauf = ++lauf;
+      satz.hidden = true;
+      if (!feld.value || +feld.value === +(alt || 0)) return;
+      try {
+        const folgen = (await api(`${API}/formular-pool/folgen?${abfrage(feld.value)}`)).folgen;
+        if (meinLauf !== lauf || !folgen.length) return;
+        satz.textContent = `Beim Speichern ${folgen.length === 1 ? "wird diese Zuweisung" : "werden diese Zuweisungen"} eines Prüfformulars gelöst – an der neuen Stelle liegt das Ziel nicht mehr in seinem Pool: ${folgen.map((x) => `${x.ziel} („${x.formular || "ohne Titel"}“)`).join(", ")}.`;
+        satz.hidden = false;
+      } catch (e) { /* ohne Vorschau: der Server löst beim Speichern trotzdem */ }
+    });
   }
 
   async function kategorieDialog(k) {
@@ -4530,11 +4549,13 @@
       <label for="kd-ld">Lebensdauer (Jahre, Vorschlag – nur textil)${infoKnopf("Lebensdauer", "Nur ein Vorschlag beim Anlegen eines Produkts: Die Lebensdauer steht am Produkt, aus der Anleitung des Herstellers.")}</label><input type="number" id="kd-ld" min="1" max="50" value="${k.default_lifetime_years || ""}">
       <label class="inline mat-kd-laenge"><input type="checkbox" id="kd-laenge" ${k.items_have_length ? "checked" : ""}> Artikel haben eine Länge${infoKnopf("Artikel haben eine Länge", "Seile und Meterware: Artikel dieser Kategorie und aller Unterkategorien bekommen ein Feld „Länge (m)“; ein Prüfpunkt „Länge“ fragt sie bei der Prüfung ab.")}</label>
       ${geerbt ? '<div class="help">Hier schon durch eine Oberkategorie gesetzt.</div>' : ""}
+      ${neu ? "" : '<p class="notice" id="kd-folgen" aria-live="polite" hidden></p>'}
       <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button><button class="btn" id="kd-ok" type="button">${neu ? "Anlegen" : "Speichern"}</button></div>`,
     (dlg, body) => {
       const art = $("#kd-art", body), ld = $("#kd-ld", body);
       const pruefen = () => { ld.disabled = art.value !== "textil"; if (ld.disabled) ld.value = ""; };
       art.addEventListener("change", pruefen); pruefen();
+      if (!neu) verschiebenFolgen($("#kd-parent", body), $("#kd-folgen", body), (wert) => `kategorie=${k.id}&parent=${wert}`, k.parent_id);
       fokus($("#kd-name", body));
       $("#kd-ok", body).onclick = async () => {
         const daten = { name: $("#kd-name", body).value, parent_id: $("#kd-parent", body).value ? +$("#kd-parent", body).value : null,
@@ -4612,7 +4633,8 @@
         ${vorbildDoks.length ? vorbildDoks.map((d) => `<label class="inline"><input type="checkbox" class="pd-dok" value="${d.id}" checked> ${esc(d.title)}
           <span class="muted small">${esc(DOKART[d.kind] || d.kind)}${d.version ? `, ${esc(d.version)}` : ""}${d.datei ? "" : " · Link"}</span></label>`).join("") : '<p class="help">Das Produkt hat keine aktuellen Dokumente.</p>'}
         <p class="help">Das Produktbild wird nie übernommen. Dokumente der Kategorie gelten ohnehin für alle Produkte darin.</p></fieldset>` : ""}
-      ${p.meldung ? '<label for="pd-antwort">Anmerkung für den Melder (optional, steht in seiner Mail)</label><textarea id="pd-antwort" rows="2" maxlength="1000"></textarea>' : ""}`;
+      ${p.meldung ? '<label for="pd-antwort">Anmerkung für den Melder (optional, steht in seiner Mail)</label><textarea id="pd-antwort" rows="2" maxlength="1000"></textarea>' : ""}
+      ${p.id && !p.variante_von ? '<p class="notice" id="pd-folgen" aria-live="polite" hidden></p>' : ""}`;
     const titel = p.variante_von ? `Variante von „${esc(produktName(p.variante_von))}“`
       : p.meldung ? "Produkt aus Meldung anlegen" : neu ? "Produkt anlegen" : "Produkt bearbeiten";
     dialog(mitReiter ? `<h2 id="pd-titel">${titel}</h2>
@@ -4642,6 +4664,7 @@
         hilfen();
       });
       mk.addEventListener("change", hilfen);
+      if (p.id && !p.variante_von) verschiebenFolgen(katSel, $("#pd-folgen", body), (wert) => `produkt=${p.id}&kategorie=${wert}`, p.category_id);
       // Neu in einer Kategorie: deren Vorgaben übernehmen – nicht bei einer Variante, die hat ihre eigenen.
       if (neu && p.category_id && !p.variante_von) katSel.dispatchEvent(new Event("change"));
       hilfen();
@@ -4928,89 +4951,26 @@
       ${bestandteilZeilen(liste)}</section>`;
   }
 
-  /* --- Prüfformular eines anderen Produkts übernehmen (Schritt 35, Wunsch vom 04.11.2026) -------------------------------
-     B verweist auf A: Für B gilt immer das aktive spezifische Formular von A, auch nach jeder neuen Version dort. Die
-     Produktseite von B nennt die Quelle (oder warnt, wenn ihr Formular nicht aktiv ist), die von A und die Formularseite
-     von A nennen, wer übernimmt. Felder, die fehlen (Übungsantwort der Einführung), heißen „kein Verweis“. */
-  const produktLinks = (liste) => liste.map((x) => `<a class="mat-produktname" href="/materialablage/katalog/produkt/${x.id}">${nameHtml(x)}</a>${zusatzHtml(x)}`).join(", ");
+  /* --- Prüfformular am Produkt (Formular-Pool, Schritt 38) ------------------------------------------------------------
+     Die Produktseite zeigt nur, welches Formular gilt – dem Produkt zugewiesen oder als Standard einer Kategorie – mit
+     Link zur Version, für alle, die den Katalog lesen. Welches gilt, legt die Material-Verwaltung auf der Seite
+     „Prüfformulare“ fest; hier gibt es dafür keine Knöpfe mehr (Wunsch vom 04.11.2026). */
   function pruefformularHtml(p) {
     const f = p.formular;
-    const von = p.formular_von;
-    const formularLink = f ? `<a href="/materialablage/katalog/formular/${f.id}"><strong>${esc(f.title || "Formular")}</strong> · Version ${f.version}</a>` : "";
-    let html = "";
-    if (von && !von.aktiv) {
-      const gilt = !f ? "kein aktives Prüfformular" : f.art === "kategorie" ? `das generische Formular der ${esc(f.quelle)}` : "das eigene Formular des Produkts";
-      html += `<p class="mat-warn">Das übernommene Formular von ${produktLinks([von])} ist nicht aktiv – es gilt ${gilt}.</p>`;
-    }
-    if (f && f.art === "uebernommen" && von) {
-      html += `<p>Geprüft wird nach ${formularLink} – übernommen von ${produktLinks([von])} <span class="muted">(${plural(f.punkte, "Prüfpunkt", "Prüfpunkte")})</span>.</p>`;
-    } else if (f) {
-      html += `<p>Geprüft wird nach ${formularLink} <span class="muted">(${esc(f.quelle)}, ${plural(f.punkte, "Prüfpunkt", "Prüfpunkte")})</span>.</p>`;
-    } else if (!von) {
-      html += '<p class="mat-warn">Für dieses Produkt gilt kein aktives Prüfformular – weder ein spezifisches noch ein generisches der Kategorie.</p>';
-    }
-    const nutzer = p.formular_genutzt_von || [];
-    if (nutzer.length) html += `<p>Auch genutzt von: ${produktLinks(nutzer)} <span class="muted">– Änderungen am Formular gelten dort mit.</span></p>`;
-    return html;
+    if (!f) return '<p class="mat-warn">Für dieses Produkt gilt kein Prüfformular – weder ihm zugewiesen noch als Standard der Kategorie.</p>';
+    return `<p>Geprüft wird nach <a href="/materialablage/katalog/formular/${f.id}"><strong>${esc(f.title || "ohne Titel")}</strong> · Version ${f.version}</a>
+      <span class="muted">(${esc(f.quelle)}, ${plural(f.punkte, "Prüfpunkt", "Prüfpunkte")})</span>.</p>`;
   }
-  // Formularseite eines spezifischen Formulars: wer das Formular dieses Produkts übernimmt (formular.genutzt_von).
-  const formularNutzerHinweis = (liste) => ((liste || []).length
-    ? `<p class="notice">Das aktive Formular dieses Produkts gilt auch für ${produktLinks(liste)} – Änderungen und neue Versionen wirken auch dort.</p>` : "");
-
-  function formularUebernehmen(p) {
-    const eigenes = (p.formulare || []).find((f) => f.aktiv);
-    dialog(`<h2>Prüfformular übernehmen</h2>
-      <p>„${esc(produktName(p))}“ wird dann nach dem aktiven Formular des gewählten Produkts geprüft – auch nach jeder neuen Version dort.</p>
-      ${eigenes ? `<p class="notice">Das eigene aktive Formular (Version ${eigenes.version}) wird dabei deaktiviert.</p>` : ""}
-      <label for="fu-q">Produkt mit eigenem Prüfformular suchen</label>
-      <div class="mat-produktwahl"><input type="search" id="fu-q" autocomplete="off" ${TASTATUR_SUCHE}><div id="fu-treffer" class="mat-treffer"></div></div>
-      <div id="fu-gewaehlt" class="mat-gewaehlt" hidden></div>
-      <p class="help" id="fu-kategorie" hidden></p>
-      ${grundSatz("fu-grund", "Wähle zuerst ein Produkt aus der Trefferliste.")}
-      <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button><button class="btn" id="fu-ok" type="button"${knopfAus("fu-grund", true)}>Übernehmen</button></div>`,
-    (dlg, body) => {
-      let gewaehlt = null;
-      let los = null;
-      const leerText = '<p class="help">Kein passendes Produkt – übernehmen lässt sich nur ein Formular, das an seinem Produkt aktiv ist.</p>';
-      function suchen() {
-        produktTreffer($("#fu-treffer", body), $("#fu-q", body).value.trim(), (x) => {
-          gewaehlt = x;
-          $("#fu-gewaehlt", body).hidden = false;
-          $("#fu-gewaehlt", body).innerHTML = `<strong>${nameHtml(x)}</strong>${zusatzHtml(x)}${artNrKurz(x.article_no)}`;
-          const kat = $("#fu-kategorie", body);
-          kat.hidden = !x.andere_kategorie;
-          kat.textContent = x.andere_kategorie ? `Andere Kategorie: „${x.category_name || ""}“ – prüfe, ob die Prüfpunkte zu „${produktName(p)}“ passen.` : "";
-          trefferLeeren($("#fu-treffer", body));
-          knopfGrund($("#fu-ok", body), "");
-        }, leerText, { url: (q, seite) => `${API}/produkte/${p.id}/formularquellen?q=${encodeURIComponent(q)}&pro_seite=50&seite=${seite}` });
-      }
-      $("#fu-q", body).addEventListener("input", () => { clearTimeout(los); los = setTimeout(suchen, 200); });
-      suchen();
-      fokus($("#fu-q", body));
-      $("#fu-ok", body).onclick = async (ev) => {
-        const knopf = ev.currentTarget;
-        knopf.disabled = true;
-        try {
-          await api(`${API}/produkte/${p.id}/formular-von`, { method: "PUT", body: { quelle: gewaehlt.id, eigenes_deaktivieren: Boolean(eigenes) } });
-          dlg.close(); toast(`Prüfformular von „${produktName(gewaehlt)}“ übernommen`); zeigen(produkt);
-        } catch (e) { S.fehlschlag(knopf, e, body); }
-      };
-    });
-  }
-
-  async function formularLoesen(p) {
-    const von = p.formular_von;
-    if (!(await confirm(`Verknüpfung mit „${von.name}“ lösen? Danach gilt für „${produktName(p)}“ wieder das generische Formular der Kategorie – das Formular von „${von.name}“ bleibt, wie es ist.`, "Lösen", null, { endgueltig: false }))) return;
-    try { await api(`${API}/produkte/${p.id}/formular-von`, { method: "DELETE" }); toast("Verknüpfung gelöst"); zeigen(produkt); }
-    catch (e) { toast(e.message, true); }
-  }
+  // Das „i“ am Abschnitt „Prüfformular“ (Produkt, Artikel): wer festlegt, welches gilt – mit dem Weg dorthin für die
+  // Material-Verwaltung.
+  const pruefformularInfo = (kid) => infoKnopf("Prüfformular", `Welches Formular gilt, legt die Material-Verwaltung unter ${DARF.katalog
+    ? `<a href="/materialablage/katalog/formulare${kid ? `?kategorie=${kid}` : ""}">Prüfformulare</a>` : "„Prüfformulare“"} fest: dem Produkt zugewiesen oder als Standard seiner Kategorie (auch einer darüber).${mehrDazu("pruefformular")}`);
 
   async function produkt() {
     const p = (await api(`${API}/produkte/${DATEN.id}`)).produkt;
     leisteMarkieren(p.category_id);
     const k = DARF.katalog;
     const zeile = (t, w) => `<dt>${esc(t)}</dt><dd>${w}</dd>`;
-    const formulare = p.formulare || [];
     // Die Bemerkung steht als Zusatz in der Überschrift; nur eine ältere, dort gekürzte zusätzlich ganz hier.
     const zusatz = produktZusatz(p);
     // Seltene Funktionen im Untermenü statt als weitere Knöpfe neben „Bearbeiten“ (Knopfregel; Prüfung Browser,
@@ -5019,14 +4979,6 @@
       { text: "Als Variante kopieren", satz: "Neues Produkt mit diesen Stammdaten.", attrs: 'data-act="variante"' },
       { text: "Rückruf anlegen", satz: "Für alle oder bestimmte Seriennummern.", attrs: 'data-act="rr-neu"' },
       p.loeschbar && { text: "Löschen", satz: "Nur ohne Artikel dieses Produkts.", attrs: 'data-act="loeschen"' }] });
-    // Prüfformular (Schritt 35): ohne Verweis das eigene Formular bearbeiten oder eins übernehmen – ein Produkt, von dem
-    // andere übernehmen, übernimmt selbst keins (dann bleibt der eine Knopf); mit Verweis statt dessen „Anderes Produkt“
-    // und „Verknüpfung lösen“. Ein Menü „Bearbeiten“ wie im Kategoriekopf, die eine Abschnittsaktion neben der Überschrift.
-    const formularMenue = S.menue({ text: "Bearbeiten", art: "mat-menue", links: true, eintraege: p.formular_von
-      ? [{ text: "Anderes Produkt", satz: "Das Formular eines anderen übernehmen.", attrs: 'data-act="formular-uebernehmen"' },
-        { text: "Verknüpfung lösen", satz: "Danach gilt das generische Formular.", attrs: 'data-act="formular-loesen"' }]
-      : [{ text: "Spezifisches Formular bearbeiten", satz: "Eigenes Formular nur für dieses Produkt.", attrs: 'data-act="formular"' },
-        !(p.formular_genutzt_von || []).length && { text: "Von anderem Produkt übernehmen", satz: "Gilt auch mit jeder neuen Version dort.", attrs: 'data-act="formular-uebernehmen"' }] });
     seitenTitel(produktName(p));
     inhalt.innerHTML = `${p.demo ? '<p class="mat-demo-banner">DEMO – nicht für echte Prüfungen.</p>' : ""}
       <div class="mat-pfad">${pfadHtml(['<a href="/materialablage/katalog">Katalog</a>', ...p.kategorie_pfad.map((x) => `<a href="/materialablage/katalog?kategorie=${x.id}">${esc(x.name)}</a>`)])}</div>
@@ -5048,10 +5000,8 @@
           ${zusatz && zusatz.voll ? zeile("Bemerkung", `<span class="mat-text">${esc(p.description)}</span>
             <div class="help">Länger als ${BESCHREIBUNG_MAX} Zeichen, in der Überschrift gekürzt – gedacht ist ein kurzer Zusatz hinter dem Namen.${k ? " Bitte unter „Bearbeiten“ kürzen." : ""}</div>`) : ""}
         </dl></section>
-        <section class="section"><div class="abschnittskopf"><h2>Prüfformular${infoKnopf("Prüfformular", "Ein aktives spezifisches Formular ersetzt das generische der Kategorie. Übernimmt das Produkt das Formular eines anderen, gilt dessen aktives – auch nach jeder neuen Version." + mehrDazu("pruefformular"))}</h2>
-          ${k ? formularMenue : ""}</div>
+        <section class="section"><h2>Prüfformular${pruefformularInfo(p.category_id)}</h2>
           ${pruefformularHtml(p)}
-          ${formulare.length ? `<p class="small">Spezifische Versionen: ${formulare.map((f) => `<a href="/materialablage/katalog/formular/${f.id}">v${f.version}${f.aktiv ? " (aktiv)" : ""}</a>`).join(", ")}</p>` : ""}
         </section>
       </div>
       ${bestandteilListeHtml(p, k)}
@@ -5069,14 +5019,9 @@
       // Stammdaten vorbelegt, Artikelnummer leer (eine neue ist Pflicht), kein Bild.
       variante: () => produktDialog(Object.assign({}, p, { id: null, article_no: "", bild: null, vorschau: null, original: null, variante_von: p })),
       loeschen: async () => {
-        // Übernehmen andere das Prüfformular dieses Produkts, löst das Löschen ihre Verknüpfung (katalog.produkt_loeschen).
-        const nutzer = (p.formular_genutzt_von || []).map((x) => `„${x.name}“`).join(", ");
-        if (!(await confirm(`Produkt „${produktName(p)}“ aus dem Katalog löschen?${nutzer ? ` Das Prüfformular übernehmen ${nutzer} – die Verknüpfung wird gelöst, dort gilt dann das generische Formular.` : ""}`, "Löschen"))) return;
+        if (!(await confirm(`Produkt „${produktName(p)}“ aus dem Katalog löschen?`, "Löschen"))) return;
         try { await api(`${API}/produkte/${p.id}`, { method: "DELETE" }); location.href = S.ziel("/materialablage/katalog"); } catch (e) { toast(e.message, true); }
       },
-      formular: () => formularFuer({ produkt_id: p.id }),
-      "formular-uebernehmen": () => formularUebernehmen(p),
-      "formular-loesen": () => formularLoesen(p),
       "rr-neu": () => rueckrufDialog(p),
       "rr-beenden": (b) => rueckrufBeenden(p.rueckrufe.find((r) => r.id === +b.dataset.id)),
       ...dokAktionen(() => p.dokumente, `${API}/produkte/${p.id}/dokumente`, () => zeigen(produkt)),
@@ -5233,7 +5178,8 @@
   async function formular() {
     const d = await api(`${API}/formulare/${DATEN.id}`);
     const f = d.formular;
-    leisteMarkieren(f.ziel.art === "kategorie" ? f.ziel.id : f.ziel.kategorie_id);
+    const pool = f.formular;                 // das Formular im Pool: Heimat, Standard für, zugewiesen (Schritt 38)
+    leisteMarkieren(pool.heimat.id);
     const bearbeitbar = DARF.katalog && f.aenderbar;
     /* Gruppen als Zwischenzeile (Wunsch vom 04.11.2026: „Das Verschieben der Punkte besser gestalten und auch längere
        Gruppen lesbar machen“): Der Editor hält die Prüfpunkte in Blöcken – aufeinanderfolgende Punkte mit gleicher
@@ -5256,8 +5202,9 @@
     // entfernen, Art ändern) – vorher stand dort wieder der gespeicherte Titel und das Getippte war weg. Gruppennamen
     // und Prüfpunkte sammelt einsammeln() ebenso vor jedem Neuzeichnen ein.
     let titelEingabe = f.titel || "";
-    const zielText = f.ziel.art === "kategorie" ? `Kategorie ${f.ziel.pfad.map((x) => x.name).join(" / ")} (generisch)` : `Produkt ${f.ziel.name} (spezifisch)`;
-    const zielLink = f.ziel.art === "kategorie" ? `/materialablage/katalog?kategorie=${f.ziel.id}` : `/materialablage/katalog/produkt/${f.ziel.id}`;
+    const heimatText = pool.heimat.pfad.map((x) => x.name).join(" / ");
+    // Der Weg zurück: für die Material-Verwaltung in die Seite „Prüfformulare“ an diese Kategorie, sonst zur Kategorie.
+    const heimatLink = DARF.katalog ? `/materialablage/katalog/formulare?kategorie=${pool.heimat.id}` : `/materialablage/katalog?kategorie=${pool.heimat.id}`;
     // Das Menü „⋯“ einer Zeile nennt fürs Vorlesen, wozu es gehört (wie dokKnoepfe). Ersetzt über eine Funktion – ein
     // Gruppenname mit „$&“ bliebe sonst nicht, wie er ist.
     const zeilenMenue = (eintraege, name) => S.menue({ text: "⋯", art: "mat-menue", eintraege })
@@ -5337,23 +5284,37 @@
       const klasse = bearbeitbar ? "btn secondary small" : "btn small";
       const haupt = entwurf ? `<button class="${klasse}" data-act="aktivieren">Aktivieren</button>`
         : `<button class="${klasse}" data-act="neue-version">Neue Version</button>`;
+      // „Kopie anlegen“ (Entscheidung O4): ein neues Formular im Pool mit den Punkten dieser Version.
+      const kopie = { text: "Kopie anlegen", satz: "Neues Formular mit diesen Punkten.", attrs: 'data-act="kopie"' };
       return haupt + S.menue({ art: "mat-menue", links: true, eintraege: entwurf
-        ? [{ text: "Neue Version", satz: "Kopie als neuer Entwurf.", attrs: 'data-act="neue-version"' },
+        ? [{ text: "Neue Version", satz: "Kopie als neuer Entwurf.", attrs: 'data-act="neue-version"' }, kopie,
           { text: "Löschen", satz: "Nur nie benutzte Entwürfe.", attrs: 'data-act="loeschen"' }]
         : [f.aktiv ? { text: "Deaktivieren", satz: "Neue Prüfungen nehmen es nicht mehr.", attrs: 'data-act="deaktivieren"' }
-          : { text: "Aktivieren", satz: "Diese Version gilt wieder.", attrs: 'data-act="aktivieren"' }] });
+          : { text: "Aktivieren", satz: "Diese Version gilt wieder.", attrs: 'data-act="aktivieren"' }, kopie] });
+    }
+    /* „Gilt für“ (Formular-Pool): Standard für welche Kategorien, welchen Produkten zugewiesen, für wie viele Produkte
+       insgesamt (aufklappbar) – die eine Abschnittsaktion „Zuweisen“ rechts daneben (Material-Verwaltung). */
+    function giltFuerHtml() {
+      const kats = pool.standard_fuer.map((k) => `<a href="/materialablage/katalog?kategorie=${k.id}">${esc(k.name)}</a>`).join(", ");
+      const prods = pool.zugewiesen.map((p) => `<a class="mat-produktname" href="/materialablage/katalog/produkt/${p.id}">${nameHtml(p)}</a>${zusatzHtml(p)}`).join(", ");
+      const zeilen = `${kats ? `<dt>Standard für</dt><dd>${kats}</dd>` : ""}${prods ? `<dt>Zugewiesen</dt><dd>${prods}</dd>` : ""}`;
+      return `<section class="section mat-gilt-fuer"><div class="abschnittskopf"><h2>Gilt für${infoKnopf("Gilt für", GILT_FUER_INFO)}</h2>
+          ${DARF.katalog ? '<button class="btn secondary small" type="button" data-act="zuweisen">Zuweisen</button>' : ""}</div>
+        ${zeilen ? `<dl class="mat-daten">${zeilen}</dl>` : leer(pool.aktive_version ? "Nirgends zugewiesen – das Formular gilt für kein Produkt." : "Ohne aktive Version gilt das Formular für kein Produkt.")}
+        ${pool.wirksam_n ? `<details class="mat-auf mat-wirksam" data-version="${f.id}"><summary>Insgesamt für ${plural(pool.wirksam_n, "Produkt", "Produkte")}</summary><div class="mat-wirksam-liste"></div></details>` : ""}</section>`;
     }
     function zeichnen(ziel) {
-      // Im Reiter auch, wofür das Formular gilt (B13) – „Prüfformular“ allein stand vorher in jedem Tab.
-      seitenTitel(`Prüfformular ${f.ziel.art === "kategorie" ? (f.ziel.pfad.length ? f.ziel.pfad[f.ziel.pfad.length - 1].name : "") : f.ziel.name} v${f.version}`.replace(/\s+/g, " "));
+      // Im Reiter auch, wozu das Formular gehört (B13) – „Prüfformular“ allein stand vorher in jedem Tab.
+      seitenTitel(`${f.titel || "Prüfformular"} v${f.version}`.replace(/\s+/g, " "));
       inhalt.innerHTML = `${f.demo ? '<p class="mat-demo-banner">DEMO – nicht für echte Prüfungen.</p>' : ""}
-        <div class="mat-pfad">${pfadHtml(['<a href="/materialablage/katalog">Katalog</a>', `<a href="${zielLink}">${esc(zielText)}</a>`])}</div>
-        <div class="page-head"><h1>${esc(f.titel || "Prüfformular")} <span class="badge grey">Version ${f.version}</span> ${f.aktiv ? '<span class="mat-status s-einsatzbereit">aktiv</span>' : '<span class="badge grey">inaktiv</span>'} ${demoMarke(f.demo)}${anleitungKopf("formular")}</h1>
+        <div class="mat-pfad">${pfadHtml(['<a href="/materialablage/katalog">Katalog</a>', DARF.katalog ? '<a href="/materialablage/katalog/formulare">Prüfformulare</a>' : "",
+          `<a href="${heimatLink}">${esc(pool.heimat.name)}</a>`])}</div>
+        <div class="page-head"><h1>${f.titel ? esc(f.titel) : formularTitel({ titel: "", herkunft: pool.herkunft })} <span class="badge grey">Version ${f.version}</span> ${f.aktiv ? '<span class="mat-status s-einsatzbereit">aktiv</span>' : '<span class="badge grey">inaktiv</span>'} ${demoMarke(f.demo)}${anleitungKopf("formular")}</h1>
           ${DARF.katalog ? `<div class="btn-row">${formularKnoepfe()}</div>` : ""}</div>
-        ${formularNutzerHinweis(f.genutzt_von)}
-        <p class="help">${esc(zielText)}. ${f.gueltig_ab ? `Gültig ab ${esc(fmtTag(f.gueltig_ab))}.` : "Noch nie aktiviert."}
+        <p class="help">Im Pool von „${esc(heimatText)}“. ${f.gueltig_ab ? `Gültig ab ${esc(fmtTag(f.gueltig_ab))}.` : "Noch nie aktiviert."}
           ${f.benutzt ? " Diese Version wurde schon für Prüfungen benutzt und bleibt unverändert – Änderungen gehen über eine neue Version." : ""}</p>
-        ${bearbeitbar ? `<label for="fp-titel">Titel</label><input type="text" id="fp-titel" value="${esc(titelEingabe)}" maxlength="160">` : ""}
+        ${giltFuerHtml()}
+        ${bearbeitbar ? `<label for="fp-titel">Titel</label><input type="text" id="fp-titel" value="${esc(titelEingabe)}" maxlength="160" required>` : ""}
         <h2 class="mat-fp-punkte">Prüfpunkte${infoKnopf("Prüfpunkte", PRUEFPUNKTE_INFO + mehrDazu("pruefpunkte"))}</h2>
         ${punkteTabelle()}
         ${bearbeitbar ? `<div class="btn-row mat-knoepfe">${gruppen.length ? "" : '<button class="btn secondary" data-act="punkt-neu"><span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Prüfpunkt<span class="k-anlegen"> anlegen</span></span></button>'}<button class="btn secondary" data-act="gruppe-neu"><span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Gruppe<span class="k-anlegen"> anlegen</span></span></button><button class="btn" data-act="speichern">Speichern</button></div>` : ""}
@@ -5374,6 +5335,7 @@
       });
       const tabelle = $("#fp-tabelle.fp-editor", inhalt);
       if (tabelle) tabelle.addEventListener("pointerdown", ziehen);
+      wirksamVerdrahten(inhalt);
       if (ziel) zielFokus(ziel);
     }
     // Nach dem Neuzeichnen dorthin, wo man war: auf „⋯“ des verschobenen Punkts, ins neue Feld … Ein Textfeld bekommt am
@@ -5620,17 +5582,270 @@
       speichern,
       aktivieren: async () => { try { if (bearbeitbar) { einsammeln(); await api(`${API}/formulare/${f.id}`, { method: "PUT", body: { titel: $("#fp-titel").value, punkte: flach() } }); } await api(`${API}/formulare/${f.id}/aktivieren`, { method: "POST", body: {} }); toast("Aktiviert"); zeigen(formular); } catch (e) { toast(e.message, true); } },
       deaktivieren: async () => { try { await api(`${API}/formulare/${f.id}/deaktivieren`, { method: "POST", body: {} }); toast("Deaktiviert"); zeigen(formular); } catch (e) { toast(e.message, true); } },
+      // Neue Version desselben Formulars; trägt diese Version keinen Titel (ältere, benutzte), fragt ein Dialog nach
+      // einem – Titel sind seit dem Formular-Pool Pflicht.
       "neue-version": async () => {
-        const ziel = f.kategorie_id ? { kategorie_id: f.kategorie_id } : { produkt_id: f.produkt_id };
-        try { const r = await api(`${API}/formulare`, { method: "POST", body: Object.assign(ziel, { vorlage_id: f.id }) }); location.href = S.ziel(`/materialablage/katalog/formular/${r.formular.id}`); }
-        catch (e) { toast(e.message, true); }
+        const anlegen = async (titel, knopf, body, dlg) => {
+          try {
+            const r = await api(`${API}/formulare`, { method: "POST", body: Object.assign({ formular_id: f.formular_id, vorlage_id: f.id }, titel ? { titel } : {}) });
+            if (dlg) dlg.close();
+            location.href = S.ziel(`/materialablage/katalog/formular/${r.formular.id}`);
+          } catch (e) { if (knopf) S.fehlschlag(knopf, e, body); else toast(e.message, true); }
+        };
+        if (f.titel) { anlegen(); return; }
+        dialog(`<h2>Neue Version</h2><label for="nv-titel">Titel</label><input type="text" id="nv-titel" maxlength="160" required>
+          <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button><button class="btn" id="nv-ok" type="button">Anlegen</button></div>`,
+        (dlg, body) => {
+          fokus($("#nv-titel", body));
+          $("#nv-ok", body).onclick = (ev) => {
+            const titel = $("#nv-titel", body).value.trim();
+            if (!titel) { S.feldFehler($("#nv-titel", body), "Ein Prüfformular braucht einen Titel."); return; }
+            ev.currentTarget.disabled = true;
+            anlegen(titel, ev.currentTarget, body, dlg);
+          };
+        });
       },
+      kopie: () => formularAnlegenDialog({ kategorie: pool.heimat.id, vorlage: f }),
+      zuweisen: () => zuweisenDialog(f.formular_id, () => zeigen(formular)),
       loeschen: async () => {
         if (!(await confirm(`Version ${f.version} löschen?`, "Löschen"))) return;
-        try { await api(`${API}/formulare/${f.id}`, { method: "DELETE" }); location.href = S.ziel(zielLink); } catch (e) { toast(e.message, true); }
+        try {
+          const r = await api(`${API}/formulare/${f.id}`, { method: "DELETE" });
+          // War es die letzte Version, ist das Formular aus dem Pool – zurück auf die Seite „Prüfformulare“.
+          const andere = f.versionen.find((v) => v.id !== f.id);
+          location.href = S.ziel(r.formular_geloescht || !andere ? heimatLink : `/materialablage/katalog/formular/${andere.id}`);
+        } catch (e) { toast(e.message, true); }
       },
     };
     zeichnen();
+  }
+
+  /* --- Prüfformulare: der Formular-Pool (Schritt 38, Wunsch vom 04.11.2026) ---------------------------------------------
+     Jedes Formular steht im Pool genau einer Kategorie. Es gilt als Standard einer Kategorie (auch in Unterkategorien
+     ohne eigenen) oder einem Produkt zugewiesen (geht dem Standard vor). Die Seite „Prüfformulare“ zeigt den ganzen
+     Kategorienbaum mit Standard und Formularen je Pool – nur für die Material-Verwaltung (Entscheidung O6); Anlegen,
+     „Prüfpunkte übernehmen von …“ und je Zeile „Zuweisen“. Zuweisen nur im Teilbaum der Heimat (Z1), nur mit aktiver
+     Version (Z4); ein Haken holt eine Zuweisung von einem anderen Formular her (Z5, „bisher: …“). */
+  const GILT_FUER_INFO = "Als Standard gilt ein Formular für die Produkte der Kategorie und ihrer Unterkategorien ohne eigenen Standard; einem Produkt zugewiesen geht es dem Standard vor. Eine neue aktive Version gilt sofort überall, laufende Prüfungen behalten ihre.";
+  const formularTitel = (x) => (x.titel ? esc(x.titel)
+    : `<span class="muted">(ohne Titel${x.herkunft ? ` – bisher ${esc(x.herkunft)}` : ""})</span>`);
+  // Die Produkte, für die ein Formular gerade gilt – erst beim Aufklappen geladen (details.mat-wirksam, data-version).
+  function wirksamVerdrahten(wurzel) {
+    $$("details.mat-wirksam", wurzel).forEach((d) => d.addEventListener("toggle", async () => {
+      const ziel = $(".mat-wirksam-liste", d);
+      if (!d.open || ziel.dataset.geladen) return;
+      ziel.dataset.geladen = "1";
+      ziel.innerHTML = '<p class="help">Wird geladen …</p>';
+      try {
+        const liste = (await api(`${API}/formulare/${d.dataset.version}/wirksam`)).produkte;
+        ziel.innerHTML = liste.length ? `<ul class="mat-wirksam-ul">${liste.map((p) => `<li><a class="mat-produktname" href="/materialablage/katalog/produkt/${p.id}">${nameHtml(p)}</a>${zusatzHtml(p)}${artNrKurz(p.article_no)}</li>`).join("")}</ul>`
+          : leer("Für kein Produkt.");
+      } catch (e) { delete ziel.dataset.geladen; ziel.innerHTML = `<p class="error">${esc(e.message)}</p>`; }
+    }));
+  }
+
+  /* „+ Prüfformular anlegen“ (Seite „Prüfformulare“) und „Kopie anlegen“ (Formularseite, Entscheidung O4): Kategorie,
+     Titel (Pflicht, O5) und – beim Anlegen – „Prüfpunkte übernehmen von …“ (ein Formular des Pools, seine aktive bzw.
+     neueste Version). Danach geht es in den Editor des neuen Entwurfs. opt: { kategorie, vorlage: Version, quellen }. */
+  async function formularAnlegenDialog(opt) {
+    const kats = await kategorienLaden();
+    const kopie = opt.vorlage || null;
+    const quellen = opt.quellen || [];
+    dialog(`<h2>${kopie ? "Kopie anlegen" : "Prüfformular anlegen"}</h2>
+      ${kopie ? `<p>Ein neues Formular mit den Prüfpunkten von „${esc(kopie.titel || "ohne Titel")}“, Version ${kopie.version} – als Entwurf.</p>` : ""}
+      <label for="fa-kat">Kategorie (Pool)</label><select id="fa-kat"><option value="">– bitte wählen –</option>${kategorieOptionen(kats, opt.kategorie)}</select>
+      <label for="fa-titel">Titel</label><input type="text" id="fa-titel" maxlength="160" value="${esc(kopie ? `${kopie.titel || "Prüfformular"} (Kopie)` : "")}">
+      ${!kopie && quellen.length ? `<label for="fa-vorlage">Prüfpunkte übernehmen von</label><select id="fa-vorlage"><option value="">– keine, leer anlegen –</option>
+        ${quellen.map((g) => `<optgroup label="${esc(g.gruppe)}">${g.formulare.map((x) => `<option value="${x.version}">${esc(x.titel || "ohne Titel")} · Version ${x.nummer}</option>`).join("")}</optgroup>`).join("")}</select>` : ""}
+      <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button><button class="btn" id="fa-ok" type="button">Anlegen</button></div>`,
+    (dlg, body) => {
+      fokus($(opt.kategorie ? "#fa-titel" : "#fa-kat", body));
+      $("#fa-ok", body).onclick = async (ev) => {
+        const knopf = ev.currentTarget;
+        const kat = $("#fa-kat", body).value;
+        const titel = $("#fa-titel", body).value.trim();
+        if (!kat) { S.feldFehler($("#fa-kat", body), "Bitte eine Kategorie wählen."); return; }
+        if (!titel) { S.feldFehler($("#fa-titel", body), "Ein Prüfformular braucht einen Titel."); return; }
+        const wahl = kopie ? kopie.id : +(($("#fa-vorlage", body) || {}).value || 0);
+        knopf.disabled = true;
+        try {
+          const r = await api(`${API}/formular-pool`, { method: "POST", body: { kategorie_id: +kat, titel, vorlage_id: wahl || null } });
+          dlg.close();
+          location.href = S.ziel(`/materialablage/katalog/formular/${r.formular.id}`);
+        } catch (e) { S.fehlschlag(knopf, e, body); }
+      };
+    });
+  }
+
+  /* Dialog „„Titel“ zuweisen“ (Entscheidungen Z1–Z5): Häkchen je Kategorie (als Standard) und je Produkt im Teilbaum der
+     Heimat, die Produkte nach Kategorie gruppiert, darüber ein Suchfeld, das nur ausblendet. Je Zeile, was dort heute
+     gilt: „bisher: „X““ (ein Haken holt die Zuweisung her), „gilt über Standard …“; was sich nicht wählen lässt (Länge),
+     ist ausgegraut mit Grund. Über der Knopfzeile die Folge („2 Änderungen …“) bzw. – ohne aktive Version oder ohne
+     Änderung – der Grund, warum „Zuweisung speichern“ nicht geht. danach(): nach dem Speichern. */
+  async function zuweisenDialog(pf, danach) {
+    let d;
+    try { d = await api(`${API}/formular-pool/${pf}/kandidaten`); } catch (e) { toast(e.message, true); return; }
+    const titel = d.formular.titel || "ohne Titel";
+    const heimat = d.kategorien.length ? d.kategorien[0] : null;
+    // Unter der Heimat nur der Weg ab dort („Abseilgeräte › Mit Panik“), die Heimat selbst mit ihrem Namen.
+    const relativ = (k) => (heimat && k.pfad.length > heimat.pfad.length ? k.pfad.slice(heimat.pfad.length) : [k.name]).join(" › ");
+    const nachKat = {};
+    d.kategorien.forEach((k) => { nachKat[k.id] = k; });
+    const vorher = new Set([...d.kategorien.filter((k) => k.gewaehlt).map((k) => `k${k.id}`),
+                            ...d.produkte.filter((p) => p.gewaehlt).map((p) => `p${p.id}`)]);
+    const katZeile = (k) => {
+      const aus = !k.gewaehlt && d.grund;
+      const notiz = k.gewaehlt ? "" : k.bisher ? `bisher: „${esc(k.bisher.titel || "ohne Titel")}“`
+        : k.standard ? `geerbt: „${esc(k.standard.titel || "ohne Titel")}“` : "bisher kein Standard";
+      return `<label class="mat-zw-zeile${aus ? " aus" : ""}"><input type="checkbox" class="zw-wahl" data-schluessel="k${k.id}" value="${k.id}"${k.gewaehlt ? " checked" : ""}${aus ? " disabled" : ""}>
+        <span class="mat-zw-name">${esc(relativ(k))}</span><span class="mat-zw-notiz">${notiz}</span></label>`;
+    };
+    const prodZeile = (p) => {
+      const aus = !p.gewaehlt && (d.grund || p.grund);
+      const notiz = !p.gewaehlt && p.grund ? esc(p.grund) : p.bisher ? `bisher: „${esc(p.bisher.titel || "ohne Titel")}“`
+        : p.ueber_standard ? "gilt schon über den Standard" : p.standard ? `gilt über Standard „${esc(p.standard.titel || "ohne Titel")}“` : "";
+      return `<label class="mat-zw-zeile${aus ? " aus" : ""}" data-such="${esc(`${produktName(p)} ${p.article_no || ""}`.toLowerCase())}"><input type="checkbox" class="zw-wahl" data-schluessel="p${p.id}" value="${p.id}"${p.gewaehlt ? " checked" : ""}${aus ? " disabled" : ""}>
+        <span class="mat-zw-name"><span class="mat-produktname">${nameHtml(p)}</span>${zusatzHtml(p)}${artNrKurz(p.article_no)}</span><span class="mat-zw-notiz">${notiz}</span></label>`;
+    };
+    const gruppen = d.kategorien.map((k) => ({ k, produkte: d.produkte.filter((p) => p.category_id === k.id) })).filter((g) => g.produkte.length);
+    dialog(`<h2>„${esc(titel)}“ zuweisen</h2>
+      <p class="help">Im Pool von „${esc(d.formular.heimat.name)}“ – zuweisen lässt es sich dort und in den Unterkategorien.</p>
+      <fieldset class="mat-zw-teil"><legend>Standard für Kategorien</legend>${d.kategorien.map(katZeile).join("")}</fieldset>
+      <fieldset class="mat-zw-teil"><legend>Produkte</legend>
+        ${d.produkte.length ? `<div class="mat-zw-suche"><input type="search" id="zw-q" placeholder="Produkt suchen" aria-label="Produkt suchen" autocomplete="off" ${TASTATUR_SUCHE}>
+          <span class="small muted" id="zw-zahl" aria-live="polite"></span></div>
+          <div id="zw-produkte">${gruppen.map((g) => `<div class="mat-zw-gruppe"><p class="mat-zw-gruppenkopf small muted">${esc(relativ(g.k))}</p>${g.produkte.map(prodZeile).join("")}</div>`).join("")}
+          <p class="leerzustand" id="zw-leer" hidden>Kein Produkt passt. <button type="button" class="lnk" id="zw-leeren">Suche leeren</button></p></div>`
+        : leer("In diesen Kategorien gibt es noch keine Produkte.")}</fieldset>
+      <div class="dlg-actions"><p class="help mat-zw-folge" id="zw-folge" aria-live="polite" hidden></p>
+        ${grundSatz("zw-grund", d.grund || "Noch nichts geändert.")}<button class="btn secondary" data-close type="button">Abbrechen</button><button class="btn" id="zw-ok" type="button"${knopfAus("zw-grund", true)}>Zuweisung speichern</button></div>`,
+    (dlg, body) => {
+      dlg.classList.add("mat-zuweisen");
+      const wahl = () => $$(".zw-wahl", body).filter((c) => c.checked).map((c) => c.dataset.schluessel);
+      const aenderungen = () => {
+        const jetzt = new Set(wahl());
+        let n = 0;
+        jetzt.forEach((x) => { if (!vorher.has(x)) n += 1; });
+        vorher.forEach((x) => { if (!jetzt.has(x)) n += 1; });
+        return n;
+      };
+      const folge = $("#zw-folge", body);
+      const stand = () => {
+        const n = aenderungen();
+        folge.hidden = !n || Boolean(d.grund);
+        folge.textContent = n ? `${plural(n, "Änderung", "Änderungen")} – gilt ab sofort für neue Prüfungen.` : "";
+        knopfGrund($("#zw-ok", body), d.grund || (n ? "" : "Noch nichts geändert."));
+      };
+      body.addEventListener("change", (e) => { if (e.target.classList.contains("zw-wahl")) stand(); });
+      const q = $("#zw-q", body);
+      if (q) {
+        const zeilen = $$("#zw-produkte .mat-zw-zeile", body);
+        const suchen = () => {
+          const t = q.value.trim().toLowerCase();
+          let n = 0;
+          zeilen.forEach((z) => { z.hidden = Boolean(t) && !t.split(/\s+/).every((w) => z.dataset.such.includes(w)); if (!z.hidden) n += 1; });
+          $$(".mat-zw-gruppe", body).forEach((g) => { g.hidden = !$$(".mat-zw-zeile", g).some((z) => !z.hidden); });
+          $("#zw-zahl", body).textContent = t ? `${n} von ${zeilen.length}` : plural(zeilen.length, "Produkt", "Produkte");
+          $("#zw-leer", body).hidden = n > 0;
+        };
+        q.addEventListener("input", suchen);
+        $("#zw-leeren", body).onclick = () => { q.value = ""; suchen(); q.focus(); };
+        suchen();
+      }
+      stand();
+      $("#zw-ok", body).onclick = async (ev) => {
+        const knopf = ev.currentTarget;
+        const w = wahl();
+        knopf.disabled = true;
+        try {
+          const r = await api(`${API}/formular-pool/${pf}/zuweisung`, { method: "PUT", body: {
+            kategorien: w.filter((x) => x[0] === "k").map((x) => +x.slice(1)), produkte: w.filter((x) => x[0] === "p").map((x) => +x.slice(1)) } });
+          dlg.close();
+          toast(r.geaendert ? `Zuweisung gespeichert (${plural(r.geaendert, "Änderung", "Änderungen")})` : "Zuweisung gespeichert");
+          if (danach) danach();
+        } catch (e) { S.fehlschlag(knopf, e, body); }
+      };
+    });
+  }
+
+  async function formulare() {
+    const kategorie = DATEN.kategorie || null;
+    const d = await api(`${API}/formular-pool${kategorie ? `?kategorie=${kategorie}` : ""}`);
+    leisteMarkieren(kategorie);
+    seitenTitel("Prüfformulare", "Katalog");
+    let q = "";
+    const alle = d.kategorien.reduce((n, k) => n + k.formulare.length, 0);
+    const kurz = (name) => name.split(" / ").pop();
+    const standardHtml = (k) => (!k.standard ? '<span class="muted">kein Standard</span>'
+      : `Standard: <a href="/materialablage/katalog/formular/${k.standard.version_id}">„${esc(k.standard.titel || "ohne Titel")}“</a> · Version ${k.standard.version}${k.standard.geerbt_von ? ` <span class="muted">– geerbt von „${esc(k.standard.geerbt_von.name)}“</span>` : ""}`);
+    const statusHtml = (x) => {
+      const v = x.aktive_version || x.neueste_version;
+      const entwurf = x.neueste_version && x.neueste_version.entwurf && (!x.aktive_version || x.neueste_version.version > x.aktive_version.version);
+      return `<span class="badge grey">Version ${v.version}</span> ${x.aktive_version ? '<span class="mat-status s-einsatzbereit">aktiv</span>' : `<span class="badge grey">${entwurf ? "Entwurf" : "inaktiv"}</span>`}${x.aktive_version && entwurf ? ` <a class="small" href="/materialablage/katalog/formular/${x.neueste_version.id}">Entwurf ${x.neueste_version.version}</a>` : ""}`;
+    };
+    const giltHtml = (x, k) => {
+      const teile = [];
+      if (x.standard_fuer.length) {
+        teile.push(x.standard_fuer.length === 1 && x.standard_fuer[0].id === k.id ? "Standard"
+          : `Standard für ${x.standard_fuer.map((s) => `„${esc(kurz(s.name))}“`).join(", ")}`);
+      }
+      if (x.zugewiesen.length) {
+        teile.push(x.zugewiesen.length <= 3 ? `zugewiesen: ${x.zugewiesen.map((p) => `<a class="mat-produktname" href="/materialablage/katalog/produkt/${p.id}">${nameHtml(p)}</a>`).join(", ")}`
+          : `${plural(x.zugewiesen.length, "Produkt", "Produkten")} zugewiesen`);
+      }
+      const gilt = x.wirksam_n && x.link ? `<details class="mat-wirksam" data-version="${x.link}"><summary>gilt für ${plural(x.wirksam_n, "Produkt", "Produkte")}</summary><div class="mat-wirksam-liste"></div></details>`
+        : '<div class="muted">gilt für kein Produkt</div>';
+      return `${teile.length ? `<div>${teile.join(" · ")}</div>` : ""}${gilt}`;
+    };
+    const zeile = (x, k) => `<li class="mat-pool-zeile" data-such="${esc([x.titel, x.herkunft, ...x.standard_fuer.map((s) => s.name),
+      ...x.zugewiesen.map((p) => `${produktName(p)} ${p.article_no || ""}`)].join(" ").toLowerCase())}">
+        <div class="mat-pool-titel"><a href="/materialablage/katalog/formular/${x.link}"><strong>${formularTitel(x)}</strong></a> ${demoMarke(x.demo)}</div>
+        <div class="mat-pool-status small">${statusHtml(x)}</div>
+        <div class="mat-pool-gilt small">${giltHtml(x, k)}</div>
+        <div class="mat-pool-aktion"><button class="btn secondary small" type="button" data-act="zuweisen" data-id="${x.id}" aria-label="${esc(`„${x.titel || "ohne Titel"}“ zuweisen`)}">Zuweisen</button></div></li>`;
+    const gruppe = (k) => `<section class="mat-pool-gruppe" data-such="${esc(k.pfad.join(" ").toLowerCase())}">
+        <div class="mat-pool-kopf"><h2><a href="/materialablage/katalog?kategorie=${k.id}">${k.pfad.map(esc).join(" › ")}</a> ${demoMarke(k.demo)}</h2>
+          <p class="small mat-pool-standard">${standardHtml(k)}</p></div>
+        ${k.formulare.length ? `<ul class="mat-pool-liste">${k.formulare.map((x) => zeile(x, k)).join("")}</ul>` : ""}</section>`;
+    const pfadNur = kategorie && d.kategorien.length ? d.kategorien[0].pfad.join(" › ") : "";
+    inhalt.innerHTML = `<div class="mat-pfad">${pfadHtml(['<a href="/materialablage/katalog">Katalog</a>', kategorie ? '<a href="/materialablage/katalog/formulare">Prüfformulare</a>' : ""])}</div>
+      <div class="page-head"><h1>Prüfformulare${anleitungKopf("formulare")}</h1>
+        <div class="btn-row"><button class="btn secondary" type="button" data-act="anlegen"><span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Prüfformular<span class="k-anlegen"> anlegen</span></span></button></div></div>
+      ${kategorie ? `<p class="help mat-pool-nur">Nur „${esc(pfadNur)}“ und darunter · <a href="/materialablage/katalog/formulare">alle Kategorien</a></p>` : ""}
+      <div class="mat-suchzeile mat-pool-suche"><input type="search" id="pool-q" placeholder="Formular, Kategorie oder Produkt suchen" aria-label="Prüfformulare durchsuchen: Titel, Kategorie oder Produkt" autocomplete="off" ${TASTATUR_SUCHE}>
+        <span class="small muted mat-pool-zahl" id="pool-zahl" aria-live="polite"></span></div>
+      <div id="pool-liste">${d.kategorien.length ? d.kategorien.map(gruppe).join("") : leer("Noch keine Kategorien – erst im Katalog anlegen.")}
+        <p class="leerzustand" id="pool-leer" hidden>Kein Prüfformular passt. <button type="button" class="lnk" data-act="pool-leeren">Suche leeren</button></p></div>`;
+    leisteKnopfSetzen();
+    wirksamVerdrahten(inhalt);
+    function suchen() {
+      const woerter = q.toLowerCase().split(/\s+/).filter(Boolean);
+      const passt = (text) => woerter.every((w) => text.includes(w));
+      let n = 0;
+      $$(".mat-pool-gruppe", inhalt).forEach((g) => {
+        const kat = woerter.length && passt(g.dataset.such);
+        let sichtbar = 0;
+        $$(".mat-pool-zeile", g).forEach((z) => {
+          z.hidden = Boolean(woerter.length) && !kat && !passt(`${g.dataset.such} ${z.dataset.such}`);
+          if (!z.hidden) sichtbar += 1;
+        });
+        n += sichtbar;
+        g.hidden = Boolean(woerter.length) && !kat && !sichtbar;
+      });
+      $("#pool-zahl").textContent = woerter.length ? `${n} von ${alle}` : plural(alle, "Prüfformular", "Prüfformulare");
+      const leerEl = $("#pool-leer");
+      if (leerEl) leerEl.hidden = !woerter.length || $$(".mat-pool-gruppe", inhalt).some((g) => !g.hidden);
+    }
+    let los = null;
+    $("#pool-q").addEventListener("input", (e) => { clearTimeout(los); los = setTimeout(() => { q = e.target.value.trim(); suchen(); }, 150); });
+    suchen();
+    aktionen = {
+      anlegen: () => formularAnlegenDialog({ kategorie, quellen: d.kategorien.filter((k) => k.formulare.some((x) => x.link))
+        .map((k) => ({ gruppe: k.pfad.join(" › "), formulare: k.formulare.filter((x) => x.link).map((x) => ({
+          version: x.link, nummer: (x.aktive_version || x.neueste_version).version, titel: x.titel })) })) }),
+      zuweisen: (b) => zuweisenDialog(+b.dataset.id, () => zeigen(formulare)),
+      "pool-leeren": () => { const f = $("#pool-q"); f.value = ""; q = ""; suchen(); f.focus(); },
+    };
   }
 
   const PRUEFPUNKTE_INFO = "Jeder Prüfpunkt ist Pflicht: Ohne Befund lässt sich die Prüfung nicht festschreiben. Wo ein Punkt entfallen darf (etwa Wartung oder Pflege), setzt du das Häkchen „optional“. "
@@ -5690,7 +5905,7 @@
     if (a.lock_state === "ausgesondert") hinweis = "Ein ausgesonderter Artikel wird nicht mehr geprüft.";
     else if (!darf.pruefen) hinweis = pruefHinweis(a);
     else if (a.entwurf) hinweis = esc(`In Prüfung bei ${a.entwurf.pruefer} seit ${fmtZeit(a.entwurf.seit)}.${darf.verwalten ? " Eine liegen gebliebene Reservierung hebst du in der Artikelansicht auf." : " Eine liegen gebliebene Reservierung hebt der Materialwart auf."}`);
-    else if (!a.formular) hinweis = "Für dieses Produkt gibt es kein aktives Prüfformular – weder am Produkt noch in seiner Kategorie. Die Material-Verwaltung legt es im Katalog an.";
+    else if (!a.formular) hinweis = "Für dieses Produkt gilt kein Prüfformular – weder ihm zugewiesen noch als Standard seiner Kategorie. Die Material-Verwaltung legt es unter „Prüfformulare“ fest.";
     const ld = a.lebensdauer && a.lebensdauer.festgeschrieben ? { ende: a.lebensdauer.ende, rest_tage: a.lebensdauer.rest_tage, erreicht: a.lebensdauer.rest_tage <= 0 } : null;
     seitenTitel(`Prüfung ${a.inventory_no}`);
     inhalt.innerHTML = `${a.demo ? `<p class="mat-demo-banner">${DEMO_ARTIKEL}</p>` : ""}
@@ -8600,7 +8815,7 @@
     else inhalt.innerHTML = leer("Dieser Artikel gehört nicht zu deinem Bereich.");
   }
 
-  const ANSICHTEN = { dashboard, pruefungen, bestand, ordner, artikel, artikel_neu: artikelNeu, katalog, produkt, formular, suche,
+  const ANSICHTEN = { dashboard, pruefungen, bestand, ordner, artikel, artikel_neu: artikelNeu, katalog, produkt, formular, formulare, suche,
                       meldungen, pruefung_neu: pruefungNeu, pruefung: pruefungAnsicht, durchgang: durchgangAnsicht, durchgaenge: durchgaengeArchiv, fremd,
                       meine_psa: meinePsa, bestandsimport, bericht, antraege: antraegeSeite };
   leisteLaden();

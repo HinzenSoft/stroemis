@@ -5,7 +5,7 @@ Gliederungen, Prüfnachweise je Ausrüstungsteil, unveränderliche PDF-Prüfprot
 umgesetzt, Phase 2 (mehrere Gliederungen und externe Prüfer in einer Instanz) in drei, Phase 3 und 4 in Lieferungen
 und Wünschen des Nutzers; jede war für sich deploybar. Seit dem 26.10.2026 heißt das Modul „Materialablage“ (im Code,
 in Tabellen und unter `/api/material` weiter `material`). Ältere Abschnitte sagen noch „Modul Material“ – sie bleiben als
-Geschichte stehen. Schemaversion nach der Nachbesserung vor dem Merge: 30; mit der Prüfsumme für den Lebenslauf: 31; mit der Liste nach dem Merge (Teil A): 32; mit der Stufe Redakteur: 33; mit den Riegenkarten-Ausbildern nur mit Konto: 34; mit „Prüfformular eines anderen Produkts übernehmen“: 35; mit der Nachbesserung danach: 36; mit dem Aufräumen: 37.
+Geschichte stehen. Schemaversion nach der Nachbesserung vor dem Merge: 30; mit der Prüfsumme für den Lebenslauf: 31; mit der Liste nach dem Merge (Teil A): 32; mit der Stufe Redakteur: 33; mit den Riegenkarten-Ausbildern nur mit Konto: 34; mit „Prüfformular eines anderen Produkts übernehmen“: 35; mit der Nachbesserung danach: 36; mit dem Aufräumen: 37; mit dem Formular-Pool je Kategorie: 38.
 
 | Lieferung | Inhalt | Stand |
 | --- | --- | --- |
@@ -87,6 +87,7 @@ Geschichte stehen. Schemaversion nach der Nachbesserung vor dem Merge: 30; mit d
 | Nachbesserung nach der Sicherheitsprüfung vom 04.11.2026 (Schritt 36) | Bildausnahme der Übungssperre erst nach Anmeldung und Modulzugang, Auswahl prozessweit zwischengespeichert; Quelle mit benutzter Formularversion nicht löschbar (Klartext); Aktivieren prüft den Verweis unter der Schreibsperre, Trigger „Verweis oder eigenes Formular“; DEMO-Regel des Exports (DEMO-Kategorie) für Übung und Übernehmen, Trigger | gebaut 04.11.2026 (Schema 36), Zweig fix-0411, wartet auf Freigabe |
 | Prüfanleitung in der Strömipedia entfernt | Keine Verknüpfung einer Strömipedia-Seite am Prüfformular mehr: Zeile und Dialog am Formular, Einblendung in offenen Prüfungen, beide Routen (jetzt 404), Dienst `wikiverweis`, `formular.wiki`/`wiki_aendern`, `pruefung.anleitung` und die Kopie in neue Versionen entfallen; `mat_form.wiki_page_id` bleibt ungenutzt stehen, alte Journal-Einträge bleiben lesbar | gebaut 04.11.2026 (kein Schemaschritt, Schema bleibt 35), Zweig ohne-pruefanleitung, wartet auf Freigabe |
 | Aufräumen: Schema 37 und Reste entfernter Funktionen | Elf Spalten entfernter Funktionen per `DROP COLUMN` (Prüfanleitung, Sets, „kritisch“ am Prüfpunkt, Katalogpfleger, nie benutzte), Index und zwei Wächter mit ihnen; toter Code: `rechte.urkunde_fehlt`, alter Pfad `…/pruefungen/<id>/abschliessen`, `GET /api/wiki/watches`, Übungsbilder im Wurzelordner, CSS-Regel ohne Erzeuger, „Teile laut Meldung“ | gebaut 04.11.2026 (Schema 37), Zweig aufraeumen, wartet auf Freigabe |
+| Formular-Pool je Kategorie (Schritt 38) | Statt generischer Formulare je Kategorie, spezifischer je Produkt und „Prüfformular übernehmen“: jedes Formular im Pool seiner Kategorie, Standard je Kategorie (erbt in Unterkategorien) oder Zuweisung an Produkte; Seite „Prüfformulare“ (nur Material-Verwaltung) mit Anlegen und Dialog „Zuweisen“, Formularseite „Gilt für“ und „Kopie anlegen“, Produkt- und Kategorieseite nur Anzeige; Migration mit Vorher/Nachher-Vergleich je Produkt; Katalogdatei Format 3 (aktive Formulare samt Zuweisungen, Import ohne DEMO, Datei maßgeblich); Zähler `katalog_stand` für die Übung | gebaut 04.11.2026 (Schema 38), Zweig formular-pool, wartet auf Freigabe |
 
 ## Abgleich mit dem Bestand (vor Lieferung 1)
 
@@ -12532,3 +12533,156 @@ test_material_lebenslauf_summe und test_material_nach_merge); test_material_antr
 Trigger, Wiederholung bis 26 und 37), test_material_aussondern (Trigger/Indizes von Stand 27 ohne die drei Objekte),
 test_material_bestandteile (Zeilenvergleich je Spaltenname), test_material_laenge (Stand 19 mit Spaltenliste),
 test_material_formular_uebernahme (Endversion statt „36“).
+
+## Formular-Pool je Kategorie (Schema 38, Wunsch des Nutzers, 04.11.2026)
+
+Nutzer: „Statt der generischen Formulare je Kategorie, spezifischer Formulare je Produkt und der neuen
+Verlinkungsfunktion sollen alle Formulare (nach Kategorien bzw. Unterkategorien gruppiert) in einen Formular-Pool
+wandern. Das nach Kategorie Generische darin gilt weiterhin für alle per Default, außer man weist einem Produkt ein
+anderes aus dem Pool je Kategorie zu. […] Die Buttons an den Produkten und Kategorien können dann wegfallen; die
+Zuweisung soll in einem Untermenü je Formular per Checkboxen je Produkt und Kategorie für die jeweiligen Formulare
+zuweisbar sein.“ Grundlage `planung/formular-pool/entwurf.md` (Abschnitt 6 „Entscheidungen des Nutzers“: S1–S2, Z1–Z6,
+O1–O7, M1–M3, R1, E1–E3, U1; abweichend von den Empfehlungen O6 B, E2 B, U1 B) und `planung/formular-pool/auftrag_bau.md`
+mit Nachtrag; Export/Import nach den Entscheidungen aus `planung/katalog-transfer/auftrag.md` (dort angehalten, hier
+mitgebaut). Gebaut 04.11.2026 auf dem Zweig `formular-pool` von 8d91eca (**Schema 38**). **Aufgehoben**: „Prüfformular
+eines anderen Produkts übernehmen“ (Schritt 35/36) und die Entscheidung vom 26.10.2026 „Prüfformulare kommen nicht per
+Export“.
+
+**Begriffe.** Ein *Formular* (`mat_formular`) steht im Pool genau einer Kategorie (*Heimat*) und hat Versionen
+(`mat_form`, wie bisher: höchstens eine aktiv, eine benutzte bleibt unverändert, geändert wird über „Neue Version“).
+*Standard* einer Kategorie ist das Formular, das ihr zugewiesen ist (bisher „generisch“); es gilt auch in
+Unterkategorien ohne eigenen Standard (S1). *Zuweisung* an ein Produkt (bisher „spezifisch“ bzw. „übernommen“) geht dem
+Standard vor und bleibt, auch wenn sich der Standard ändert (Z3). Eine neue aktive Version gilt sofort für alle
+Zuweisungen. Ohne Zuweisung und ohne Standard (auch oben) ist ein Artikel nicht prüfbar (S2).
+
+**Regeln** (Dienste in `katalog.py`, Abschnitt „Prüfformulare: Formular-Pool“; Trigger als Netz): zuweisen nur im
+Teilbaum der Heimat – Produkte und (Unter-)Kategorien dort, eine Unterkategorie darf ihren Standard aus dem Pool darüber
+bekommen (Z1, Z2); nur mit aktiver Version, Deaktivieren und Löschen gesperrt, solange zugewiesen – die Meldung nennt,
+wo (Z4); ein Haken holt eine Zuweisung von einem anderen Formular her (Z5, „bisher: …“); ein Formular mit Prüfpunkt
+„Länge (m)“ nur an Produkte mit Artikellänge; fällt eine Zuweisung durch Verschieben eines Produkts oder einer Kategorie
+aus dem Teilbaum, wird sie in derselben Transaktion gelöst – die Dialoge sagen es vorher (Z6, `GET …/formular-pool/folgen`).
+Titel sind Pflicht für neue Formulare und Versionen (O5). Kein Verschieben eines Formulars (O7) – „Kopie anlegen“.
+Produkt löschen: die Zuweisung geht mit (Journal am Formular); die Sperre „Formular dieses Produkts benutzt“ entfällt
+(Formulare hängen nicht mehr am Produkt). Kategorie löschen: wie bisher nur leer, gesperrt, wenn eine Version eines
+Formulars ihres Pools benutzt ist; sonst gehen ihre Formulare und ein Standard dort mit (Journal).
+
+**Oberfläche** (Designsprache): Seite **„Prüfformulare“** `/materialablage/katalog/formulare` – **nur die
+Material-Verwaltung** (O6 B; andere bekommen 403 mit Satz, sehen aber an Produkt, Kategorie, Artikel und auf der
+Formularseite, welches Formular gilt): grauer Knopf im Katalogkopf, Link „Prüfformulare (n)“ in der Angabenzeile jeder
+Kategorie (`?kategorie=` – nur deren Teilbaum); ganzer Kategorienbaum als Gruppen mit Standard („geerbt von …“, „kein
+Standard“), je Formular Titel (Link zur aktiven, sonst neuesten Version; ohne Titel grau „(ohne Titel – bisher …)“),
+Version und Status, „Standard“/„Standard für …“, „zugewiesen: …“, „gilt für n Produkte“ (aufklappbar, geladen beim
+Öffnen) und „Zuweisen“; Suche über Formular, Kategorie und Produkt (blendet nur aus, „n von m“, Leerzustand); „+
+Prüfformular anlegen“ (Kategorie, Titel, „Prüfpunkte übernehmen von …“) führt in den Editor. **Dialog „„Titel“
+zuweisen“**: Häkchen je Kategorie (Standard) und je Produkt im Teilbaum (nach Kategorie gruppiert, Suche), je Zeile
+„bisher: …“ bzw. „gilt über Standard …“, Längen-Konflikte ausgegraut mit Grund; Folge („2 Änderungen – gilt ab sofort
+für neue Prüfungen“) bzw. Grund (ohne aktive Version, nichts geändert) steht in der Knopfzeile; am Telefon über die
+ganze Fläche, Zeilen 44 px am Finger. **Formularseite**: Pfad „Katalog / Prüfformulare / Heimat“, „Im Pool von …“,
+Abschnitt **„Gilt für“** (Standard für, zugewiesen, „Insgesamt für n Produkte“) mit der Abschnittsaktion „Zuweisen“,
+im Menü „Kopie anlegen“; „Neue Version“ fragt bei einer Version ohne Titel nach einem. **Produktseite**: Abschnitt
+„Prüfformular“ nur noch Anzeige („Geprüft wird nach „Titel“ · Version n (dem Produkt zugewiesen | Standard der
+Kategorie „X“, n Prüfpunkte)“, „i“ mit dem Weg), ohne Menü, ohne „Spezifische Versionen“, ohne Löschzusatz.
+**Kategoriekopf**: „Standard-Prüfformular „Titel““ (bzw. „… geerbt von „Ober““ oder „kein Standard-Prüfformular“),
+der Knopf „Generisches Formular“ entfällt. Artikelseite und Prüfung: nur die Quelle in Worten. Export-Dialog und
+Importbericht nennen DEMO-Formulare bzw. Zuweisungen.
+
+**Schnittstelle** (`/api/material`): neu `GET /formular-pool[?kategorie=]`, `POST /formular-pool` {kategorie_id, titel,
+vorlage_id?, punkte?}, `GET /formular-pool/<id>/kandidaten`, `PUT /formular-pool/<id>/zuweisung` {kategorien, produkte}
+(vollständige Menge; Antwort mit „geaendert“), `GET /formular-pool/folgen?kategorie=&parent=` bzw.
+`?produkt=&kategorie=` – alle nur Material-Verwaltung; `GET /formulare/<id>/wirksam` (Modulzugang). Geändert: `POST
+/formulare` nimmt `formular_id` (ein Ziel `kategorie_id`/`produkt_id` ist 400 mit dem neuen Weg), `GET /formulare`
+`?formular=`, `GET /formulare/<id>` mit `formular_id` und `formular` (Heimat, standard_fuer, zugewiesen, wirksam_n)
+statt `ziel`/`genutzt_von`, `DELETE /formulare/<id>` mit `formular_geloescht`; `produkt_json.formular` mit `art`
+(zugewiesen|standard), `formular` und `standard_von`, ohne `formular_von`, `formular_genutzt_von`, `formulare`;
+`kategorien()` mit `standard_formular` und `formulare` (Zahl im Pool) statt `aktives_formular`. **Entfallen** (404):
+`GET /produkte/<id>/formularquellen`, `PUT|DELETE /produkte/<id>/formular-von`.
+
+**Schritt 38** (`models._schritt_38`, `FORMULAR_38`, `FORM_38`, `TRIGGER_38`, `STAND_TRIGGER_38`): neue Tabellen
+`mat_formular` (uid, Heimat, `herkunft` – nur aus der Migration –, demo) und `mat_formular_zuweisung` (Kategorie oder
+Produkt, je eine höchstens; CASCADE); `mat_form` neu aufgebaut mit **unveränderten Kennungen** und `formular_id` statt
+`category_id`/`product_id` (AUTOINCREMENT, `sqlite_sequence` über jeder je vergebenen); Trigger, Index und Spalte
+`formular_von` aus Schritt 35/36 fallen (SQLite < 3.35: Spalte bleibt ungelesen). Datenteil, nur solange `mat_form`
+`category_id` hat: 1. je Produkt die bisher geltende Version festhalten; 2. je Kategorie mit Formularen ein Formular
+(Heimat diese Kategorie), aktive Version → Standard; 3. je Produkt mit spezifischen Formularen eins (Heimat: die heutige
+Kategorie des Produkts), aktive Version und kein Verweis → Zuweisung, sonst ohne (M2); 4. `formular_von` B → A: gilt A's
+Formular, wird B ihm zugewiesen – liegt B nicht im Teilbaum, wandert A's Formular in die nächste gemeinsame
+Oberkategorie, ohne eine bekommt B eine Kopie der aktiven Version in seiner Kategorie (M1); gilt A's Formular nicht,
+bleibt B beim Standard; 5. unbenutzte Versionen ohne Titel heißen „Prüfformular <Kategorie bzw. Produkt>“, benutzte
+bleiben (M3); 6. Umbau; 7. **Nachher je Produkt dieselbe Version** (Kopien: dieselben Prüfpunkte), Zahl der Versionen
+und Prüfpunkte, keine neue FK-Verletzung – sonst `IntegrityError`, die Datenbank bleibt auf 37. Journal „Migration
+Schritt 38“ (Formular angelegt mit Herkunft, verschoben, zugewiesen; Standard gesetzt an der Kategorie, Prüfformular
+zugewiesen am Produkt; Titel), Startprotokoll eine Zusammenfassung und je Sonderfall eine Zeile (`grep "Schritt 38"`;
+bei einer Datenbank ohne Formulare keine). Wiederholbar (Tabellen und Indizes IF NOT EXISTS, Trigger entfernt und
+neu, der Datenteil läuft nur einmal); ein zweiter Start ändert nichts. `_schritt_36` tut nichts mehr, wenn `mat_form`
+schon umgebaut ist (ein Test setzt den Versionsvermerk zurück). **Rückweg** nur über die Sicherung vor dem Deploy.
+
+**Prüfung und Protokoll**: Auflösung an einer Stelle `katalog.formular_fuer_produkt` (für alle Produkte auf einmal
+`models.geltend_je_produkt`, dieselbe Regel – Migration und Pool-Seite); ein Entwurf behält seine Version, auch wenn
+die Zuweisung wechselt; neue Protokolle nennen „„Titel“, Version n (Prüfformular der Kategorie „Heimat“)“, alte sind
+Dateien und bleiben.
+
+**Katalogdatei (Format 3)**: wie Format 2, dazu Formulare des Pools: `{uid, kategorie, kategorie_uid (Heimat), titel,
+punkte, standard_fuer: [{kategorie, kategorie_uid}], zugewiesen: [{uid, hersteller, modell, artikelnummer}]}` – kein
+`aktivieren`, kein `formular_von`. **Export**: je Formular mit aktiver Version genau diese (E1; auch mit DEMO-Kennzeichen
+und aktive Platzhalter der Skripte), Heimat nicht in einer DEMO-Kategorie, Zuweisungen nur an Ziele, die mitkommen;
+**kein Journal** und nichts Journalähnliches in `katalog.json` und `bericht.txt` (keine Konten, Namen, E-Mail,
+Bearbeitungszeiten – nur Zeitpunkt und Adresse des Exports); der Bericht nennt jedes Formular mit Heimat, Standards,
+Zuweisungen und „[auf dieser Instanz DEMO, Platzhalter]“ sowie die Zahl ohne aktive Version. **Import**: übernimmt nie
+ein DEMO-Kennzeichen (auch kein `"demo": true` der Datei – Kategorien, Produkte, Formulare), nimmt ein führendes
+„DEMO“ aus Formulartiteln („DEMO – “, „DEMO-“, „DEMO “), macht jedes Formular aktiv (neue Version, wenn Titel oder
+Punkte abweichen; sonst bleibt alles – zweiter Import ändert nichts); Abgleich über die uid, sonst Titel in derselben
+Heimat – die uid wird dann übernommen (Journal) (E3); eine andere Heimat bei gleicher uid ist ein Fehler. **Die Datei
+ist für Zuweisungen maßgeblich** (E2 B): Für jedes Formular und jedes Ziel der Datei gilt danach genau, was sie sagt;
+eine Zuweisung hier, an der ein Formular oder Ziel der Datei beteiligt ist und die sie nicht nennt, wird gelöst
+(Journal „steht nicht in der Katalogdatei“); Zuweisungen zwischen Formularen und Zielen, die es nur hier gibt, bleiben.
+Was hier nicht geht (Ziel fehlt, nicht unter der Heimat, Länge) ist ein Hinweis. Bericht `zuweisungen` {neu, geloest,
+unveraendert} (Oberfläche: Satz unter der Tabelle; Kommandozeile: Zeile „Zuweisungen“). **Format 1/2** weiter: ein
+Formular mit `kategorie` kommt in deren Pool und wird ihr Standard, eins mit `produkt` in den Pool der Kategorie des
+Produkts und wird ihm zugewiesen (abgeglichen über den Titel bzw. das dort schon zugewiesene Formular; `"aktivieren":
+false` nur als Version ohne Zuweisung; leerer Titel → „Prüfformular <Ziel>“), `formular_von` wird die Zuweisung an das
+Formular der Quelle (aus derselben Datei oder hier), sonst ein Hinweis; `null` ändert nichts mehr. Format 1/2 löst nie
+eine Zuweisung.
+
+**Übung** (`app/static/js/uebung/material.js`, `app/einfuehrung.py`): Antworten in der neuen Form (Produkt, Kategorien,
+Formularseite mit „Gilt für“, Pool, Kandidaten, Zuweisung, „wirksam“); neuer Ablauf **„Prüfformulare zuweisen“** im Teil
+„Material-Verwaltung“ (U1 B: Seite „Prüfformulare“, „Zuweisen“, Haken am Gurt, speichern – nur im Übungsbestand), der
+Satz am Produkt nennt „festgelegt unter „Prüfformulare““; die Auswahl aus dem Katalog nimmt das aktive Formular
+unabhängig vom DEMO-Kennzeichen (DEMO-Kategorien und -Produkte weiter ausgeschlossen) und gibt die Stelle von Standard
+und Heimat im Pfad mit. **Nachtrag – Zwischenspeicher**: Der Schlüssel der Auswahl folgt jetzt dem Zähler
+`mat_meta.katalog_stand`, den Trigger an allen Tabellen der Auswahl (Kategorien, Produkte, Dokumente, Rückrufe,
+Formulare, Versionen, Prüfpunkte, Zuweisungen) bei jeder Änderung hochzählen – auch zwei Änderungen in derselben
+Sekunde und SQL von Hand; Lesen schreibt nichts. Der alte Schlüssel aus Zahl und letzter Änderung bleibt dahinter,
+ebenso die Frist von 60 s für Bilddateien.
+
+**Beispielbestand** (`scripts/material_beispielbestand.py`): DEMO-Formulare entstehen im Pool der Kategorie, aktiv und
+als ihr Standard – für jede echte Kategorie ohne Standard (eigener oder geerbt), Petzl-Vorlage wie bisher, sonst
+Platzhalter so hoch wie möglich; die Sonderregel „Kategorie mit nur inaktivem echtem Formular bekommt keins“ entfällt
+(ein inaktives Formular kommt ohnehin nie in den Export), damit auch die Zeile „Ohne wirksames Formular“ im Bericht.
+Bericht: „(DEMO, Standard der Kategorie)“ statt „nicht im Katalog-Export“.
+
+**Anleitung** (`anleitung.THEMEN`): „pruefformular“ → „Prüfformulare“ `#formular-pool-standard-und-zuweisung`, neu
+„formulare“ (Seite) → `#seite-pruefformulare`; fehlt der Abschnitt im Artikel, führt der Link an den Seitenanfang.
+**Strömipedia** (nur genannt, Nachzug durch wiki-autor): Artikel „Prüfformulare“ (Abschnitte „generisch und
+spezifisch“ und „Formular eines anderen Produkts übernehmen“ neu als „Formular-Pool, Standard und Zuweisung“ und
+„Seite Prüfformulare“), „Katalog“ (Kategoriekopf, Knopf „Prüfformulare“) und „Katalog › Produktseite“ (keine Knöpfe
+mehr), „Katalogimport und -export“ (Format 3, Formulare kommen mit, DEMO, Datei maßgeblich), „Inbetriebnahme“.
+
+**Tests**: neu `tests/test_material_formular_pool.py` (ersetzt `test_material_formular_uebernahme.py`) und
+`tests/test_material_formular_transfer.py`. Angepasst (an Pool, Format 3, Import ohne DEMO, Schritt 38): test_material
+(Helfer `formular_neu`), _katalog (Rundlauf, `test_formular_titel_und_kennung` statt „ohne Titel“), _beispielbestand,
+_einfuehrung_katalog (+ zwei Änderungen in einer Sekunde), _einfuehrung_material, _trennung (`bis_schritt` rüstet für
+Stände vor 38 die Pool-Tabellen nach und baut ein leeres `mat_form` um – `formular_pool_nachruesten`; Helfer
+`trigger_38`), _antrag, _antrag_zustaendig, _aufraeumen (Vergleich 36 ↔ 37 statt 36 ↔ Ende), _aussondern,
+_vor_merge (`_zeilen_je_tabelle` ohne `formular_von`), _beschreibung, _dokumente, _formular_editor, _import, _laenge,
+_ohne_kritisch, _pruefpunkt_absatz, _stufen, _ueberblick, _wiki.
+
+**Bitte bestätigen**:
+1. E2 „Datei maßgeblich“ so gelesen: Gelöst wird eine Zuweisung, an der ein Formular **oder** ein Ziel der Datei
+   beteiligt ist und die die Datei nicht nennt; eine Zuweisung zwischen einem Formular und einem Ziel, die es nur auf
+   main gibt, bleibt. Format 1/2 löst nie.
+2. Formularseite: „Zuweisen“ steht als Abschnittsaktion an „Gilt für“, nicht zusätzlich im Menü (eine Aktion je
+   Abschnitt); im Menü neu „Kopie anlegen“.
+3. Beispielbestand: Die Regel „nur ein inaktives echtes Formular → kein Platzhalter“ entfällt (siehe oben).
+4. Übung: Der Ablauf „Prüfformulare zuweisen“ setzt den Haken am Gurt, dessen Formular schon gilt (Z3: ausdrücklich
+   zugewiesen bleibt es bei einem Wechsel des Standards) – zeigt das Prinzip ohne Wirkung auf die Prüfung.
+5. Startprotokoll und Journal nennen bei der Migration Produkte mit Kennung und Namen.
