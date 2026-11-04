@@ -9,7 +9,7 @@ an die Adresse, wenn die Seite eine Überschrift mit genau dieser Kennung hat (w
 sonst führt der Link an den Anfang der Seite.
 
 Rechte (Entscheidung des Nutzers vom 28.10.2026, „Nur wer lesen darf“): Jede Seite einzeln mit den Regeln der
-Strömipedia (wikiverweis.darf_lesen – Stufe in der Strömipedia: can_read samt Lesebeschränkung; Lesemodus: nur
+Strömipedia (app/anleitung.py darf_lesen – Stufe in der Strömipedia: can_read samt Lesebeschränkung; Lesemodus: nur
 öffentliche Seiten). Gibt es die Seite nicht, liegt sie im Papierkorb oder darf das Konto sie nicht lesen, fehlt der
 Schlüssel – kein Link, kein Titel, keine Meldung. An den Rechten der Strömipedia ändert sich nichts.
 
@@ -79,7 +79,6 @@ THEMEN = {
     "bestandteile": ("Katalog", "bestandteil-liste"),
     "pruefformular": ("Prüfformulare", "generisch-und-spezifisch"),
     "herstellerdokumente": ("Katalog", "herstellerdokumente"),
-    "pruefanleitung": ("Prüfformulare", "pruefanleitung-aus-der-stroemipedia"),
     "pruefpunkte": ("Prüfformulare", "pruefpunkte"),
     "eingangspruefung": ("Prüfung", "pruefarten"),
     "pruefsumme": ("Nachweise und Protokolle", "pruefsumme-und-stempel"),

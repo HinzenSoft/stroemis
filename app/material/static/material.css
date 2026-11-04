@@ -1338,12 +1338,12 @@ table.list.mat-artikel tr:has(.mat-wahl-art:checked) { background: var(--co-info
    auf Telefon und Tablet ändert sich nichts, dort ist die Spalte ohnehin schmaler. 100ch statt der damals genannten
    120ch: ch ist die Breite der Ziffer „0“, deutscher Text ist im Schnitt schmaler – 120ch ergaben gemessen rund 145
    Zeichen je Zeile, 100ch rund 120. ch zählt in der Schrift des Elements (.help ist kleiner – trotzdem rund 120 Zeichen).
-   Hinweiskästen (.notice, auch „notice small“, und die Zeile zur Prüfanleitung) laufen seit dem 01.11.2026 über die ganze
+   Hinweiskästen (.notice, auch „notice small“) laufen seit dem 01.11.2026 über die ganze
    Breite, nur ihr Inhalt bleibt bei 100ch (Entscheidung des Nutzers, ersetzt „der Kasten darf schmaler sein als Felder
    und Tabellen“ aus V10) – die Regel dafür steht in app.css bei .notice. Die Stammdatenwerte bleiben am breiten
    Bildschirm schmaler (--mat-lesemass). */
 #mat-inhalt .mat-daten dd { max-width: var(--mat-lesemass); }
-:where(#mat-inhalt, #mat-side) :is(.help, p.small, p.muted, .mat-bericht-fuss):not(.notice, .notice *, .mat-wikizeile *) { max-width: 100ch; }
+:where(#mat-inhalt, #mat-side) :is(.help, p.small, p.muted, .mat-bericht-fuss):not(.notice, .notice *) { max-width: 100ch; }
 
 /* Ordnerwahl (Dialog „verschieben nach …“): Ein langer Name bricht um, die Art-Marke daneben bleibt ganz. */
 .mat-wahl label .mat-art { flex: none; }
@@ -1538,7 +1538,8 @@ table.list.mat-runde tr.mat-fremd td { color: var(--grau); }
 .mat-mailtext { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 50vh; overflow: auto; margin: 0 0 10px;
   padding: 8px 10px; background: var(--grau-hell); font-size: var(--fs-klein); line-height: 1.45; }
 
-/* Phase 2 · Lieferung 3 – Bestandsimport und Prüfanleitung (material.js, bestandsimport, anleitungBauen, wikiWahl) */
+/* Phase 2 · Lieferung 3 – Bestandsimport (material.js, bestandsimport; die Prüfanleitung aus dem Wiki ist seit dem
+   04.11.2026 entfernt) */
 /* Untermenü „Export / Import“ im Ordnerkopf: ein Strich zwischen den Downloads und dem Import (.mat-menue-trenner, app.css). */
 /* Importseite: Ablagefläche, Stand des Probelaufs, Zuordnung der Spalten, Ergebnis je Reiter. Während ein neuer Probelauf
    läuft, steht der alte Bericht blass da. */
@@ -1599,32 +1600,7 @@ table.list.mat-na-zeilen tr:has(.mat-na-wahl:checked) { background: var(--co-inf
 .mat-na-offen { margin: 6px 0 0; padding-left: 18px; max-height: 40vh; overflow-y: auto; }
 .mat-na-offen li { margin: 4px 0; overflow-wrap: anywhere; }
 .mat-na-vorschlaege { border-top: 1px solid var(--linie); margin-bottom: 10px; }
-/* Formular: die Zeile „Prüfanleitung im Wiki“ (nur Material-Verwaltung) und die Seitenwahl. Ein Kasten über die ganze
-   Breite: den Innenabstand rechts gibt die Regel bei .notice in app.css (Inhalt höchstens 100ch). */
-.mat-wikizeile { margin: 4px 0 12px; padding-block: 8px; padding-left: 12px; border-left: 4px solid var(--linie); background: var(--grau-hell); }
-.mat-wikizeile p { margin: 2px 0; overflow-wrap: anywhere; }
-.mat-wikizeile .badge { vertical-align: middle; }
-.mat-warn-leise { color: var(--anthrazit); font-weight: 600; }
-.mat-wikiwahl { max-height: min(50vh, 420px); overflow-y: auto; border: 1px solid var(--linie); margin: 6px 0; }
-.mat-wikiwahl:empty { display: none; }
-.mat-wikiwahl button { display: block; width: 100%; text-align: left; background: var(--weiss); color: inherit; border: 0;
-  border-bottom: 1px solid var(--linie); padding: 8px 12px; font: inherit; cursor: pointer; overflow-wrap: anywhere; }
-.mat-wikiwahl button:last-child { border-bottom: 0; }
-.mat-wikiwahl button:focus-visible { background: var(--grau-hell); }
-@media (hover: hover) and (pointer: fine) { .mat-wikiwahl button:hover { background: var(--grau-hell); } }
-.mat-wikiwahl button[aria-pressed="true"] { background: var(--co-info-fl); box-shadow: inset 4px 0 0 var(--wasser); }
-.mat-wikiwahl-titel { font-weight: 600; margin-right: 6px; }
-.mat-wikiwahl-hinweis { display: block; margin-top: 2px; }
-/* Prüfung: die Anleitung aus dem Wiki im Kopf – aufklappbar, höchstens 60 % der Fensterhöhe, rollt in sich. Ihr Inhalt
-   steht im Schatten (eigene Stile dort, material.js ANLEITUNG_STIL). */
-.mat-anleitung { border: 1px solid var(--linie); border-left: 4px solid var(--wasser); margin: 6px 0 12px; background: var(--weiss); }
-.mat-anleitung > summary { cursor: pointer; padding: 8px 12px; font-weight: 600; overflow-wrap: anywhere; }
-.mat-anleitung-koerper { padding: 0 12px 8px; }
-.mat-anleitung-stand { margin: 4px 0; }
-.mat-anleitung-inhalt { max-height: 60vh; overflow: auto; overscroll-behavior: contain; border-top: 1px solid var(--linie); }
-.mat-anleitung-link { margin: 6px 0 0; }
 @media (pointer: coarse) {
-  .mat-anleitung > summary, .mat-wikiwahl button { min-height: 44px; box-sizing: border-box; }
   table.list.mat-spaltenwahl select { min-height: 44px; }
   /* „alle Werte“ der Nacharbeit: 44 px wie jedes summary des Moduls (vorher 35 px; UI/UX A8). */
   .mat-na-werte > summary { display: flex; align-items: center; min-height: 44px; box-sizing: border-box; padding: 8px 0; }
@@ -1900,9 +1876,9 @@ table.list.mat-na-zeilen tr:has(.mat-na-wahl:checked) { background: var(--co-inf
 .mat-ue th.mat-ue-zahl { white-space: normal; }
 /* Stammdaten: Lange Werte ohne Leerzeichen („von pruefer3@example.org“) brechen notfalls im Wort um. */
 #mat-inhalt .mat-daten dd { overflow-wrap: anywhere; }
-/* Rot auf grauem Grund (Formular-Editor: „Ändern“ in der Wiki-Zeile, Knopf-Links in Hinweisen) im dunklen Rot wie
-   die Links in Hinweisen – das Hausrot kam dort nur auf 4,4:1. */
-#mat-inhalt :is(.notice, .mat-wikizeile) :is(a:not(.btn), .lnk) { color: var(--rot-auf-flaeche); }
+/* Rot auf grauem Grund (Knopf-Links in Hinweisen) im dunklen Rot wie die Links in Hinweisen – das Hausrot kam dort
+   nur auf 4,4:1. */
+#mat-inhalt .notice :is(a:not(.btn), .lnk) { color: var(--rot-auf-flaeche); }
 
 /* Am Finger: echte 44-px-Flächen statt unsichtbarem ::after – Prüfdurchgang in der Liste, Prüfsumme zum Kopieren,
    Eingabefelder und Auswahllisten in Formularen und Dialogen, im Formular-Editor Griff, „⋯“, „+ Prüfpunkt“ und

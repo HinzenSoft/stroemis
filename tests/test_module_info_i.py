@@ -52,10 +52,9 @@ STELLEN = [
     ("M16", MAT, '<h2>Bestandteile${infoKnopf("Bestandteile", BESTANDTEILE_INFO + mehrDazu("bestandteile"))}</h2>', "Jede Prüfung fragt je Position ab"),
     ("M17", MAT, '<h2>Prüfformular${infoKnopf("Prüfformular", "Ein aktives spezifisches Formular', "Ein aktives spezifisches Formular"),
     ("M18", MAT, '<h2>Herstellerdokumente${infoKnopf("Herstellerdokumente", `Gelten für alle Artikel', "Gelten für alle Artikel dieses Produkts"),
-    ("M19", MAT, '<strong>Prüfanleitung in der Strömipedia${infoKnopf("Prüfanleitung in der Strömipedia", info + mehrDazu("pruefanleitung"))}:</strong>',
-     "Die Verknüpfung gehört nicht zum Prüfinhalt"),
+    # M19 (Zeile „Prüfanleitung in der Strömipedia“) und M21 (Dialog „Prüfanleitung aus der Strömipedia“) entfielen am
+    # 04.11.2026 mit der Funktion (tests/test_material_wiki.py).
     ("M20", MAT, '<h2 class="mat-fp-punkte">Prüfpunkte${infoKnopf("Prüfpunkte", PRUEFPUNKTE_INFO + mehrDazu("pruefpunkte"))}</h2>', "Bei der Prüfung ist jeder Befund"),
-    ("M21", MAT, 'Seite suchen (Titel)${infoKnopf("Seite suchen", `${WIKI_PRUEFUNG_INFO} Jeder sieht nur', "Jeder sieht nur, was er in der Strömipedia"),
     ("M22", MAT, 'infoKnopf("Eingangsprüfung", "Die erste Prüfung eines Artikels', "Die erste Prüfung eines Artikels ist"),
     ("M23", MAT, '<h2>Anhänge${bearbeitbar() ? infoKnopf("Anhänge", "Externe Prüfkarte', "Externe Prüfkarte, Bericht"),
     ("M24", MAT, '<h1>Änderungsanträge${infoKnopf("Änderungsanträge", "Seit der ersten Prüfung', "Seit der ersten Prüfung stehen die Stammdaten eines Artikels"),
@@ -147,8 +146,9 @@ def test_makro_wie_skript():
 def test_alle_stellen():
     texte = {d: lies(d) for d in {s[1] for s in STELLEN}}
     # R9 (ISC-Anleitung), W3 („Lesen einschränken“) und L5 (Herkunft der Einstellungen) stehen seit UI/UX vor dem Merge C8
-    # wieder als sichtbarer Satz da – geprüft in test_module_uiux_u3.py.
-    assert len(STELLEN) == 52
+    # wieder als sichtbarer Satz da – geprüft in test_module_uiux_u3.py. M19 und M21 entfielen am 04.11.2026 mit der
+    # Prüfanleitung aus der Strömipedia.
+    assert len(STELLEN) == 50
     # Der alte Satz steht nicht mehr als Hilfezeile da (class="help"/"notice" mit dem Satz) – er ist ins „i“ gewandert;
     # mit „!“ davor: dieses Stück (Markup oder Satzfolge von früher) darf gar nicht mehr vorkommen.
     for nr, datei, neu, alt in STELLEN:
@@ -158,7 +158,7 @@ def test_alle_stellen():
         else:
             assert alt in texte[datei], (nr, "Satz fehlt in der Info", alt)
             assert not re.search(r'class="(?:help|notice)[^"]*">[^<]{0,40}?' + re.escape(alt[:50]), texte[datei]), (nr, alt)
-    print("Alle 52 Stellen bestanden.")
+    print("Alle 50 Stellen bestanden.")
 
 
 def test_sichtbar_geblieben():
@@ -167,7 +167,7 @@ def test_sichtbar_geblieben():
     # Datenschutz sichtbar, aber eine Zeile; die Einzelheiten im „i“ (Auftrag „letzte offene Punkte“, test_module_letzte_offene).
     assert '<span class="help">Ohne Haken nennt keine Ausgabe einen Prüfer.</span>' in mat
     assert "Diese Version wurde schon für Prüfungen benutzt und bleibt unverändert" in mat
-    assert "Verknüpfen kann, wer in der Strömipedia mindestens Mitglied ist." in mat
+    # „Verknüpfen kann, wer in der Strömipedia mindestens Mitglied ist.“ entfiel am 04.11.2026 mit der Prüfanleitung.
     assert '`<p class="help">${esc(IMPORT_PERSONEN)}</p>`' in mat
     assert "Für „${esc(produktName(p))}“. Der Hinweis steht danach am Produkt" in mat          # Dialogeinleitung Rückruf
     assert '<p class="help">Alle mit Zugang zu den Ankerplätzen können es sehen.</p>' in karte   # berichtigt 01.11.2026

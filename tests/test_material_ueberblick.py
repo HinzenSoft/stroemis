@@ -241,9 +241,9 @@ AUSNAHMEN_LESEN = {
     "material_api.produkt_formularquellen": 403,   # Kandidaten für „Prüfformular übernehmen“ (Schritt 35): Katalogpflege
 }
 # Werkzeuge der Katalogpflege (Katalogaustausch, Lieferung 4) sind nur für die Material-Verwaltung; den Katalog selbst
-# liest die Führungskraft über /kategorien und /produkte. Ebenso der Probelauf der Erinnerungsmails (Phase 2 · L2) und
-# die Seitenwahl für die Prüfanleitung aus dem Wiki (Phase 2 · L3).
-NUR_KATALOGPFLEGE = ("/api/material/katalog/", "/api/material/erinnerungen/", "/api/material/wiki/")
+# liest die Führungskraft über /kategorien und /produkte. Ebenso der Probelauf der Erinnerungsmails (Phase 2 · L2); die
+# Seitenwahl für die Prüfanleitung aus dem Wiki (Phase 2 · L3) gibt es seit dem 04.11.2026 nicht mehr.
+NUR_KATALOGPFLEGE = ("/api/material/katalog/", "/api/material/erinnerungen/")
 # Phase 2: Freigaben eines Ordners oder Kontos, die Nutzersuche und das Protokoll der globalen Suche liest nur, wer
 # verwaltet (bzw. die Verwaltung) – die Führungskraft bekommt 403. „Meine Freigaben“ liest jeder Angemeldete. Ebenso
 # die Nacharbeit eines Bestandsimports (Phase 2 · L3).

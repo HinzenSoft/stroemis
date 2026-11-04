@@ -1,8 +1,13 @@
-"""Prüfanleitung aus dem Wiki (Phase 2 · Lieferung 3):  python tests/test_material_wiki.py  oder  pytest …
+"""Prüfanleitung aus dem Wiki – entfernt am 04.11.2026:  python tests/test_material_wiki.py  oder  pytest …
 
-Testplan 6.2 des Bauentwurfs L3 mit der Entscheidung vom 19.10.2026: Verknüpfen darf nur die Material-Verwaltung mit
-Stufe Mitglied im Wiki. Eine Wiki-Seite je Formularversion; eingeblendet nur in offenen Prüfungen, jeder sieht nur, was
-er im Wiki lesen darf, nichts davon kommt ins Protokoll. Alle Seiten, Titel und Konten sind Platzhalter."""
+Bis zum 04.11.2026 (Phase 2 · Lieferung 3) konnte die Material-Verwaltung eine Seite der Strömipedia als Prüfanleitung
+an eine Formularversion knüpfen; offene Prüfungen blendeten deren Abschnitt „Prüfung“ ein. Wunsch des Nutzers
+(04.11.2026): „Entferne die Prüfanleitung im Wiki Funktion.“ Festlegungen (planung/ohne-pruefanleitung/auftrag.md):
+Oberfläche, beide Routen, Dienst wikiverweis, formular.wiki/wiki_aendern, pruefung.anleitung und die Kopie in neue
+Versionen sind weg; die Spalte mat_form.wiki_page_id samt Index bleibt (Schema 35, kein Schemaschritt), vorhandene
+Werte bleiben stehen und werden nirgends mehr gelesen; Journal-Einträge „wiki“ bleiben lesbar. Diese Tests prüfen das
+Gegenteil der früheren: Route 404, kein Feld im JSON, keine Zeile, keine Einblendung. Seiten, Titel und Konten sind
+Platzhalter."""
 import io
 import json
 import os
@@ -13,16 +18,18 @@ from types import SimpleNamespace
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from test_material import (H, festschreiben, freigeben, gliederung, import_abwarten, katalog_grund,  # noqa: E402
-                           neuer_artikel, neues_konto, pdf_seiten, pruef_formulare, protokoll_zeile, starten, umgebung,
-                           unterschreiben)
+from test_material import (H, festschreiben, gliederung, import_abwarten, katalog_grund, neuer_artikel,  # noqa: E402
+                           neues_konto, pdf_seiten, pruef_formulare, protokoll_zeile, starten, umgebung, unterschreiben)
 from test_material_trennung import zeilen  # noqa: E402
 from test_material_ueberblick import ordner_neu  # noqa: E402
-from test_wiki_lesemodus import konto  # noqa: E402
 
-NUR_MIT_WIKI = "dir fehlt die Stufe in der Strömipedia"
-FEHLT = "Seite der Strömipedia nicht gefunden."
-GEHEIM = "Geheimtitel Platzhalter"
+WURZEL = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+TITEL = "Platzhalter Anleitung Alt"
+
+
+def lesen(pfad):
+    with open(os.path.join(WURZEL, pfad), encoding="utf-8") as f:
+        return f.read()
 
 
 def ok(r, code=200):
@@ -31,150 +38,93 @@ def ok(r, code=200):
 
 
 def aufbau(tmp):
-    """Konten: Material-Verwaltung mit Wiki-Stufe (mvw) und ohne (katalog aus umgebung), Prüfer mit Wiki-Stufe (pw),
-    externer Prüfer ohne Wiki-Stufe (extern, befristete Prüffreigabe), ein neues Konto mit der Vorgabe für neue Konten
-    (neu, Leserecht am Ordner), Führungskraft und Materialwart aus umgebung. Wiki-Seiten (vom Admin): offen
-    (öffentlich, mit Abschnitt „Prüfung“), intern, geheim (lesebeschränkt), weg (Papierkorb), vorlage. Ein Lager mit
-    drei Karabinern; aktive Formulare aus pruef_formulare."""
+    """Material-Verwaltung mit Wiki-Stufe (mvw, hätte früher verknüpfen dürfen), Material-Verwaltung ohne (mv),
+    Materialwart, Prüfer mit Wiki-Stufe (pw); eine öffentliche Wiki-Seite mit Abschnitt „Prüfung“; ein Lager mit zwei
+    Karabinern. Das generische Karabiner-Formular trägt eine Verknüpfung aus der Zeit vor dem 04.11.2026 (direkt in der
+    Datenbank – eine Route dafür gibt es nicht mehr)."""
     app, k = umgebung(tmp)
     adm = k["adm"]
-    mvw, mvw_id = neues_konto(app, "mvwiki@example.org", name="MV Wiki", rechte={"material": 3, "wiki": 1})
-    pw, pw_id = neues_konto(app, "pruefer3@example.org", "lesen", name="Prüfer Drei", mat_pruefer=True,
-                            urkundennummer="1012-4720", rechte={"material": 1, "wiki": 1})
-    extern, extern_id = neues_konto(app, "extern@example.org", name="Extern Platzhalter", mat_pruefer=True,
-                                    urkundennummer="1012-4721")
+    mvw, _ = neues_konto(app, "mvwiki@example.org", name="MV Wiki", rechte={"material": 3, "wiki": 1})
+    pw, _ = neues_konto(app, "pruefer3@example.org", "lesen", name="Prüfer Drei", mat_pruefer=True,
+                        urkundennummer="1012-4720", rechte={"material": 1, "wiki": 1})
     ids = katalog_grund(adm)
     formulare = pruef_formulare(k["katalog"], ids)
     gid, _ = gliederung(adm)
-    neu, neu_id = konto(app, adm, "neu@example.org", "Neues Konto Platzhalter")
-    freigeben(adm, gid, neu_id, "lesen")
     lager = ordner_neu(k["wart"], gid, "Lager Musterstadt")
-    art = [neuer_artikel(k["wart"], ids["hms"], lager, serial_no=f"WK-000{n}")["id"] for n in range(1, 4)]
-    for c in (pw, extern):
-        unterschreiben(c)
-
-    def seite(titel, inhalt):
-        return ok(adm.post("/api/wiki/pages", json={"title": titel, "content": inhalt}), 201)["page"]
-    p = SimpleNamespace(
-        offen=seite("Platzhalter Anleitung Offen", "# Karabiner\n\nEinleitung\n\n## Prüfung\n\nSchritt eins\n\n## Pflege\n"),
-        intern=seite("Platzhalter Anleitung Intern", "## Prüfung\n\nINTERN-MARKE\n"),
-        geheim=seite(GEHEIM, "## Prüfung\n\nGEHEIM-MARKE\n"),
-        weg=seite("Platzhalter Anleitung Weg", "## Prüfung\n"),
-        vorlage=seite("Platzhalter Anleitung Vorlage", "## Prüfung\n"))
-    ok(adm.put(f"/api/wiki/pages/{p.offen['id']}/share", json={"is_public": True, "public_children": False}))
-    ok(adm.put(f"/api/wiki/pages/{p.geheim['id']}/restrict", json={"read_restricted": True}))
-    ok(adm.put(f"/api/wiki/pages/{p.vorlage['id']}/options", json={"is_template": True}))
-    ok(adm.delete(f"/api/wiki/pages/{p.weg['id']}", headers=H))
-    return SimpleNamespace(app=app, k=k, adm=adm, mv=k["katalog"], mvw=mvw, mvw_id=mvw_id, pw=pw, pw_id=pw_id,
-                           extern=extern, extern_id=extern_id, neu=neu, ids=ids, formulare=formulare, gid=gid,
-                           lager=lager, art=art, p=p)
+    art = [neuer_artikel(k["wart"], ids["hms"], lager, serial_no=f"WK-000{n}")["id"] for n in range(1, 3)]
+    unterschreiben(pw)
+    seite = ok(adm.post("/api/wiki/pages", json={"title": TITEL, "content": "## Prüfung\n\nSchritt eins\n"}), 201)["page"]
+    ok(adm.put(f"/api/wiki/pages/{seite['id']}/share", json={"is_public": True, "public_children": False}))
+    fid = formulare["karabiner"]
+    with app.app_context():
+        from app import db
+        db.execute("UPDATE mat_form SET wiki_page_id = ? WHERE id = ?", (seite["id"], fid))
+    return SimpleNamespace(app=app, k=k, adm=adm, mv=k["katalog"], mvw=mvw, pw=pw, ids=ids, fid=fid, art=art,
+                           seite=seite)
 
 
-def verknuepfen(c, fid, seite):
-    return c.put(f"/api/material/formulare/{fid}/wiki", json={"seite": seite})
+def wiki_wert(t, fid):
+    return zeilen(t.app, "SELECT wiki_page_id FROM mat_form WHERE id = ?", (fid,))[0]["wiki_page_id"]
 
 
-# --- 1. Seitenwahl --------------------------------------------------------------------------------------------------
+# --- 1. Schnittstelle -----------------------------------------------------------------------------------------------
 
-def test_seitenwahl():
+def test_routen_und_formular():
     with tempfile.TemporaryDirectory() as tmp:
         t = aufbau(tmp)
-        p = t.p
-        r = ok(t.mvw.get("/api/material/wiki/seiten"))
-        seiten = {s["id"]: s for s in r["seiten"]}
-        assert not r["lesemodus"] and p.offen["id"] in seiten and p.intern["id"] in seiten
-        assert p.geheim["id"] not in seiten and p.weg["id"] not in seiten and p.vorlage["id"] not in seiten
-        assert (seiten[p.offen["id"]]["reichweite"], seiten[p.intern["id"]]["reichweite"]) == ("oeffentlich", "intern")
-        assert set(seiten[p.offen["id"]]) == {"id", "titel", "icon", "reichweite"}
-        assert GEHEIM not in json.dumps(r, ensure_ascii=False)
-        r = ok(t.mvw.get("/api/material/wiki/seiten?q=anleitung off"))
-        assert [s["id"] for s in r["seiten"]] == [p.offen["id"]]
-        # Freigegeben zum Bearbeiten: dann auch die beschränkte Seite.
-        ok(t.adm.put(f"/api/wiki/pages/{p.geheim['id']}/editors", json={"user_ids": [t.mvw_id]}))
-        seiten = {s["id"]: s for s in ok(t.mvw.get("/api/material/wiki/seiten"))["seiten"]}
-        assert seiten[p.geheim["id"]]["reichweite"] == "beschraenkt"
-        # Die Plattform-Verwaltung (Wiki-Verwaltung) sieht alles außer Papierkorb und Vorlagen.
-        seiten = {s["id"] for s in ok(t.adm.get("/api/material/wiki/seiten"))["seiten"]}
-        assert {p.offen["id"], p.intern["id"], p.geheim["id"]} <= seiten and p.weg["id"] not in seiten
-        # Material-Verwaltung ohne Wiki-Stufe: 403 mit Klartext (Entscheidung vom 19.10.2026); alle anderen 403.
-        r = t.mv.get("/api/material/wiki/seiten")
-        assert r.status_code == 403 and NUR_MIT_WIKI in r.json["error"], r.get_json()
-        for c in (t.k["wart"], t.k["fuehrung"], t.pw, t.extern, t.neu):
-            r = c.get("/api/material/wiki/seiten")
-            assert r.status_code == 403 and GEHEIM not in r.get_data(as_text=True), r.get_json()
-    print("Seitenwahl bestanden.")
-
-
-# --- 2. Setzen ------------------------------------------------------------------------------------------------------
-
-def test_setzen():
-    with tempfile.TemporaryDirectory() as tmp:
-        t = aufbau(tmp)
-        p, fid = t.p, t.formulare["karabiner"]
-
-        def journal():
-            return [(json.loads(j["before_json"]), json.loads(j["after_json"])) for j in zeilen(
-                t.app, "SELECT * FROM mat_audit WHERE entity = 'form' AND entity_id = ? AND action = 'wiki' ORDER BY id",
-                (fid,))]
-        f = ok(verknuepfen(t.mvw, fid, p.intern["id"]))["formular"]
-        assert f["wiki"] == {"seite": p.intern["id"], "titel": "Platzhalter Anleitung Intern", "reichweite": "intern",
-                             "url": f"/stroemipedia/{p.intern['slug']}", "zustand": "ok"} and f["wiki_aendern"]
-        assert journal() == [({"seite": None}, {"seite": p.intern["id"]})]
-        assert "Platzhalter Anleitung" not in json.dumps(zeilen(t.app, "SELECT * FROM mat_audit WHERE entity = 'form'"),
-                                                          ensure_ascii=False)
-        # Nicht lesbar, Papierkorb, unbekannt: dieselbe 404.
-        for seite in (p.geheim["id"], p.weg["id"], 999999):
-            r = verknuepfen(t.mvw, fid, seite)
-            assert r.status_code == 404 and r.json["error"] == FEHLT, (seite, r.get_json())
-        assert t.mvw.put(f"/api/material/formulare/{fid}/wiki", json={}).status_code == 400
-        assert ok(verknuepfen(t.mvw, fid, None))["formular"]["wiki"] is None
-        assert journal()[-1] == ({"seite": p.intern["id"]}, {"seite": None})
-        # Eine andere Verknüpfung, die diese MV nicht lesen darf: unverändert angenommen, ohne Journal.
-        ok(verknuepfen(t.adm, fid, p.geheim["id"]))
-        n = len(journal())
-        f = ok(verknuepfen(t.mvw, fid, p.geheim["id"]))["formular"]
-        assert len(journal()) == n and f["wiki"] == {"seite": p.geheim["id"], "titel": None, "url": None,
-                                                    "reichweite": None, "zustand": "kein_zugang"}
-        assert GEHEIM not in t.mvw.get(f"/api/material/formulare/{fid}").get_data(as_text=True)
-        # Ohne Wiki-Stufe: 403; sie sieht den Stand, darf ihn aber nicht ändern. Wer nicht Material-Verwaltung ist,
-        # sieht nichts davon.
-        r = verknuepfen(t.mv, fid, None)
-        assert r.status_code == 403 and NUR_MIT_WIKI in r.json["error"]
-        f = ok(t.mv.get(f"/api/material/formulare/{fid}"))["formular"]
-        assert f["wiki"]["zustand"] == "kein_zugang" and f["wiki_aendern"] is False
-        f = ok(t.k["wart"].get(f"/api/material/formulare/{fid}"))["formular"]
-        assert f["wiki"] is None and f["wiki_aendern"] is False
-        assert verknuepfen(t.k["wart"], fid, None).status_code == 403
-        # Benutztes Formular: Prüfung festgeschrieben – die Verknüpfung lässt sich trotzdem ändern, nichts sonst.
-        pid = ok(starten(t.pw, t.art[0]), 201)["pruefung"]["id"]
-        assert ok(festschreiben(t.pw, pid, ergebnis="einsatzbereit"))
-        vorher = zeilen(t.app, "SELECT * FROM mat_form WHERE id = ?", (fid,))[0]
-        punkte = zeilen(t.app, "SELECT * FROM mat_checklist_item WHERE form_id = ? ORDER BY id", (fid,))
-        ok(verknuepfen(t.mvw, fid, p.offen["id"]))
-        nachher = zeilen(t.app, "SELECT * FROM mat_form WHERE id = ?", (fid,))[0]
-        assert nachher.pop("wiki_page_id") == p.offen["id"] and vorher.pop("wiki_page_id") == p.geheim["id"]
-        assert nachher == vorher and zeilen(t.app, "SELECT * FROM mat_checklist_item WHERE form_id = ? ORDER BY id",
-                                            (fid,)) == punkte
-        r = t.mvw.put(f"/api/material/formulare/{fid}", json={"punkte": [{"text": "Anders", "art": "yesno", "soll": "ja"}]})
-        assert r.status_code == 409 and "benutzt" in r.json["error"], r.get_json()
-    print("Setzen bestanden.")
-
-
-# --- 3. Vererbung und Katalogaustausch ------------------------------------------------------------------------------
-
-def test_vererbung_und_katalog():
-    with tempfile.TemporaryDirectory() as tmp:
-        t = aufbau(tmp)
-        p, fid = t.p, t.formulare["karabiner"]
-        ok(verknuepfen(t.mvw, fid, p.intern["id"]))
+        # Beide Routen antworten wie unbekannte Wege – für jedes Konto, auch die Plattform-Verwaltung.
+        for c in (t.adm, t.mvw, t.mv, t.k["wart"], t.pw):
+            assert c.get("/api/material/wiki/seiten").status_code == 404
+            assert c.get("/api/material/wiki/seiten?q=anleitung").status_code == 404
+            assert c.put(f"/api/material/formulare/{t.fid}/wiki", json={"seite": None}).status_code == 404
+            assert c.put(f"/api/material/formulare/{t.fid}/wiki", json={"seite": t.seite["id"]}).status_code == 404
+        regeln = {r.rule for r in t.app.url_map.iter_rules()}
+        assert not any(r.startswith("/api/material/wiki") or (r.endswith("/wiki") and "/formulare/" in r)
+                       for r in regeln)
+        # formular_json ohne wiki und wiki_aendern – auch mit Altwert in der Spalte, der stehen bleibt.
+        for c in (t.adm, t.mvw, t.mv, t.k["wart"]):
+            text = c.get(f"/api/material/formulare/{t.fid}").get_data(as_text=True)
+            f = json.loads(text)["formular"]
+            assert "wiki" not in f and "wiki_aendern" not in f and TITEL not in text, sorted(f)
+        assert wiki_wert(t, t.fid) == t.seite["id"]
+        # Neue Version (mit und ohne Vorlage): keine Kopie der Verknüpfung, die alte Version behält ihren Wert.
         f2 = ok(t.mvw.post("/api/material/formulare", json={"kategorie_id": t.ids["karabiner"]}), 201)["formular"]
-        f3 = ok(t.mvw.post("/api/material/formulare", json={"kategorie_id": t.ids["karabiner"], "vorlage_id": fid}),
+        f3 = ok(t.mvw.post("/api/material/formulare", json={"kategorie_id": t.ids["karabiner"], "vorlage_id": t.fid}),
                 201)["formular"]
-        assert f2["wiki"]["seite"] == f3["wiki"]["seite"] == p.intern["id"]
-        ok(verknuepfen(t.mvw, f3["id"], None))
-        # Katalogaustausch: kein Wiki-Feld im Export; eine neue Version aus dem Import erbt von der letzten Version, ein
-        # „wiki“ in der Datei wird übergangen.
-        ok(verknuepfen(t.mvw, f3["id"], p.offen["id"]))
+        assert "wiki" not in f2 and "wiki" not in f3
+        assert wiki_wert(t, f2["id"]) is None and wiki_wert(t, f3["id"]) is None and wiki_wert(t, t.fid) == t.seite["id"]
+        # Alte Journal-Einträge „wiki“ bleiben lesbar (beschriftung.py und material.js).
+        from app.material.services import beschriftung
+        assert beschriftung.AKTION["wiki"] == "Prüfanleitung (Strömipedia) geändert"
+        assert 'wiki: "Prüfanleitung (Strömipedia) geändert",' in lesen("app/material/static/material.js")
+    print("Routen und Formular bestanden.")
+
+
+def test_pruefung_ohne_anleitung():
+    with tempfile.TemporaryDirectory() as tmp:
+        t = aufbau(tmp)
+        pid = ok(starten(t.pw, t.art[0]), 201)["pruefung"]["id"]
+        for c in (t.pw, t.adm):
+            text = c.get(f"/api/material/pruefungen/{pid}").get_data(as_text=True)
+            pr = json.loads(text)["pruefung"]
+            assert pr["entwurf"] and "anleitung" not in pr and TITEL not in text and t.seite["slug"] not in text
+        assert ok(festschreiben(t.pw, pid, ergebnis="einsatzbereit"))
+        text = t.pw.get(f"/api/material/pruefungen/{pid}").get_data(as_text=True)
+        assert "anleitung" not in json.loads(text)["pruefung"] and TITEL not in text
+        # Festgeschriebenes Protokoll: nichts von der Anleitung (wie vorher).
+        zeile = protokoll_zeile(t.app, pid)
+        assert "wiki" not in zeile["documents_json"].lower()
+        pdf = " ".join(pdf_seiten(os.path.join(tmp, zeile["pdf_path"])))
+        for wort in (TITEL, "Prüfanleitung", "Wiki", "wiki", t.seite["slug"]):
+            assert wort not in pdf, wort
+    print("Prüfung ohne Anleitung bestanden.")
+
+
+def test_katalog_ignoriert_altes_feld():
+    """Der Export schrieb die Verknüpfung nie; ein Feld „wiki“ oder „wiki_page_id“ in einer älteren oder fremden Datei
+    übergeht der Import ohne Fehler, und eine neue Formularversion aus dem Import erbt nichts mehr."""
+    with tempfile.TemporaryDirectory() as tmp:
+        t = aufbau(tmp)
         r = t.mv.get("/api/material/katalog/export")
         assert r.status_code == 200
         with zipfile.ZipFile(io.BytesIO(r.data)) as z:
@@ -183,7 +133,8 @@ def test_vererbung_und_katalog():
             for e in daten["formulare"]:
                 if e.get("kategorie") and e["punkte"]:
                     e["punkte"][0]["text"] += " (geändert)"
-                    e["wiki"] = t.p.geheim["id"]
+                    e["wiki"] = t.seite["id"]
+                    e["wiki_page_id"] = t.seite["id"]
             aus = io.BytesIO()
             with zipfile.ZipFile(aus, "w") as neu:
                 for info in z.infolist():
@@ -195,138 +146,55 @@ def test_vererbung_und_katalog():
         assert import_abwarten(t.mv, r)["bericht"]["gespeichert"]
         neue = zeilen(t.app, "SELECT * FROM mat_form WHERE id NOT IN (SELECT value FROM json_each(?)) ORDER BY id",
                       (json.dumps(sorted(vorher)),))
-        karabiner = [f for f in neue if f["category_id"] == t.ids["karabiner"]]
-        assert len(karabiner) == 1 and karabiner[0]["wiki_page_id"] == p.offen["id"], karabiner
-        assert all(f["wiki_page_id"] != p.geheim["id"] for f in neue)
-    print("Vererbung und Katalog bestanden.")
+        assert any(f["category_id"] == t.ids["karabiner"] for f in neue), neue
+        assert all(f["wiki_page_id"] is None for f in neue), neue
+    print("Katalog ignoriert das alte Feld bestanden.")
 
 
-# --- 4. Anleitung und Rechte ----------------------------------------------------------------------------------------
+# --- 2. Schema und Quelltext ----------------------------------------------------------------------------------------
 
-def test_anleitung_und_rechte():
+def test_spalte_bleibt():
+    """Kein Schemaschritt: Spalte und Index bleiben, Schema 35."""
     with tempfile.TemporaryDirectory() as tmp:
         t = aufbau(tmp)
-        p, fid = t.p, t.formulare["karabiner"]
-        ok(verknuepfen(t.mvw, fid, p.intern["id"]))
-        e_pw = ok(starten(t.pw, t.art[0]), 201)["pruefung"]["id"]
-        e_ex = ok(starten(t.extern, t.art[1]), 201)["pruefung"]["id"]
-
-        def anleitung(c, pid):
-            r = c.get(f"/api/material/pruefungen/{pid}")
-            assert r.status_code == 200, r.get_json()
-            return r.json["pruefung"]["anleitung"], r.get_data(as_text=True)
-        a, _ = anleitung(t.pw, e_pw)
-        assert a == {"titel": "Platzhalter Anleitung Intern", "url": f"/stroemipedia/{p.intern['slug']}",
-                     "quelle": f"/api/wiki/pages/{p.intern['slug']}?leise=1"}, a
-        for c, pid in ((t.extern, e_ex), (t.neu, e_pw)):
-            a, text = anleitung(c, pid)
-            assert a == {"kein_zugang": True} and "Platzhalter Anleitung Intern" not in text and p.intern["slug"] not in text
-        # Die Quelle liefert genau diesen Konten die Seite – und ein Abruf mit leise=1 ist kein Besuch.
-        besuche = len(zeilen(t.app, "SELECT 1 FROM wiki_views"))
-        assert t.pw.get(f"/api/wiki/pages/{p.intern['slug']}?leise=1").status_code == 200
-        assert len(zeilen(t.app, "SELECT 1 FROM wiki_views")) == besuche
-        assert t.extern.get(f"/api/wiki/pages/{p.intern['slug']}?leise=1").status_code == 403
-        assert t.extern.get(f"/api/public/pages/{p.intern['slug']}").status_code == 404
-        # Öffentliche Seite: ohne Wiki-Stufe über den öffentlichen Endpunkt.
-        ok(verknuepfen(t.mvw, fid, p.offen["id"]))
-        a, _ = anleitung(t.extern, e_ex)
-        assert a == {"titel": "Platzhalter Anleitung Offen", "url": f"/stroemipedia/{p.offen['slug']}",
-                     "quelle": f"/api/public/pages/{p.offen['slug']}"}, a
-        assert t.extern.get(a["quelle"]).status_code == 200 and t.neu.get(a["quelle"]).status_code == 200
-        assert anleitung(t.neu, e_pw)[0]["quelle"] == f"/api/public/pages/{p.offen['slug']}"
-        # Beschränkt: nur für Freigegebene.
-        ok(verknuepfen(t.adm, fid, p.geheim["id"]))
-        for c, pid in ((t.pw, e_pw), (t.extern, e_ex), (t.neu, e_pw)):
-            a, text = anleitung(c, pid)
-            assert a == {"kein_zugang": True} and GEHEIM not in text
-        ok(t.adm.put(f"/api/wiki/pages/{p.geheim['id']}/editors", json={"user_ids": [t.pw_id]}))
-        assert anleitung(t.pw, e_pw)[0]["titel"] == GEHEIM
-        # Papierkorb: nichts; wiederhergestellt: wieder da.
-        ok(t.adm.delete(f"/api/wiki/pages/{p.geheim['id']}", headers=H))
-        assert anleitung(t.pw, e_pw)[0] is None
-        assert t.mvw.get(f"/api/material/formulare/{fid}").json["formular"]["wiki"]["zustand"] == "papierkorb"
-        ok(t.adm.post(f"/api/wiki/pages/{p.geheim['id']}/restore", json={}))
-        assert anleitung(t.pw, e_pw)[0]["titel"] == GEHEIM
-        # Abgeschlossen: keine Anleitung.
-        assert ok(festschreiben(t.pw, e_pw, ergebnis="einsatzbereit"))
-        assert anleitung(t.pw, e_pw)[0] is None
-        # Endgültig gelöscht (purge) bei benutztem Formular: Spalte NULL, Prüfung lesbar.
-        ok(t.adm.delete(f"/api/wiki/pages/{p.geheim['id']}", headers=H))
-        ok(t.adm.delete(f"/api/wiki/trash/{p.geheim['id']}", headers=H))
-        assert zeilen(t.app, "SELECT wiki_page_id FROM mat_form WHERE id = ?", (fid,))[0]["wiki_page_id"] is None
-        assert anleitung(t.pw, e_pw)[0] is None and anleitung(t.extern, e_ex)[0] is None
-    print("Anleitung und Rechte bestanden.")
+        assert "wiki_page_id" in [s["name"] for s in zeilen(t.app, "PRAGMA table_info(mat_form)")]
+        assert zeilen(t.app, "SELECT 1 FROM sqlite_master WHERE type = 'index' AND name = 'idx_mat_form_wiki'")
+        from app.material import models
+        assert models.SCHEMA_VERSION == 35
+        assert "nicht mehr genutzt seit 04.11.2026" in lesen("app/material/models.py")
+    print("Spalte bleibt bestanden.")
 
 
-# --- 5. Kein Nachweis -----------------------------------------------------------------------------------------------
-
-def test_kein_nachweis():
-    with tempfile.TemporaryDirectory() as tmp:
-        t = aufbau(tmp)
-        p, fid = t.p, t.formulare["karabiner"]
-        ok(verknuepfen(t.mvw, fid, p.offen["id"]))
-        pid = ok(starten(t.pw, t.art[2]), 201)["pruefung"]["id"]
-        assert ok(festschreiben(t.pw, pid, ergebnis="einsatzbereit"))
-        zeile = protokoll_zeile(t.app, pid)
-        assert "wiki" not in zeile["documents_json"].lower() and "Platzhalter Anleitung" not in zeile["documents_json"]
-        text = " ".join(pdf_seiten(os.path.join(tmp, zeile["pdf_path"])))
-        for wort in ("Platzhalter Anleitung", "Prüfanleitung", "Wiki", "wiki"):
-            assert wort not in text, (wort, text[max(0, text.find(wort) - 200):text.find(wort) + 100])
-        assert p.offen["slug"] not in text and "Karabiner generisch" in text
-    print("Kein Nachweis bestanden.")
-
-
-# --- 6. Oberfläche (statisch) ---------------------------------------------------------------------------------------
-
-def test_oberflaeche_statisch():
-    """material.js (Paket OBERFLÄCHE, Bauentwurf 3.5.2 und 4.4): eigene strenge Reinigung der Einblendung, Abschnitt
-    „Prüfung“ im <template> ausgeschnitten, geschlossener Shadow-Root, kein MD.enhance; die Klick-Delegation übergeht
-    .mat-anleitung, Festschreiben liest Grund, Datum und Bemerkung nur aus den eigenen Behältern; Formularzeile mit
-    „Ändern“ nur bei wiki_aendern. Die Wirkung (DOM-Clobbering-Probe) prüft die Durchsicht im Browser."""
-    import re
-    wurzel = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    js = open(os.path.join(wurzel, "app/material/static/material.js"), encoding="utf-8").read()
-    rein = js[js.index("const ANLEITUNG_REINIGUNG = {"):js.index("ALLOW_DATA_ATTR: false };")]
-    tags = re.search(r"FORBID_TAGS: \[([^\]]*)\]", rein).group(1)
-    attr = re.search(r"FORBID_ATTR: \[([^\]]*)\]", rein).group(1)
-    for t_ in ("style", "form", "textarea", "select", "button", "dialog", "iframe", "input", "label", "output", "data",
-               "object", "embed", "base", "meta", "link"):
-        assert f'"{t_}"' in tags, t_
-    for a in ("style", "id", "name", "for", "form", "formaction", "target"):
-        assert f'"{a}"' in attr, a
-    assert '"target"' not in rein[rein.index("ADD_ATTR"):rein.index("FORBID_TAGS")]
-    teil = js[js.index("  function anleitungBauen(a) {"):js.index("  async function pruefungAnsicht() {")]
-    assert 'attachShadow({ mode: "closed" })' in teil and "DOMPurify.sanitize(MD.render(" in teil
-    # Klassen aus app.css mit position: fixed (.md-lightbox) bleiben im Kasten (Prüfung vor Auslieferung, Sicherheit 2).
-    assert "const ANLEITUNG_STIL = `:host { display: block; contain: paint; }" in js
-    assert "ANLEITUNG_REINIGUNG)" in teil and "MD.enhance" not in js[js.index("const ANLEITUNG_REINIGUNG"):js.index("  async function pruefungAnsicht() {")]
-    ab = js[js.index("  function abschnittPruefung(html) {"):js.index("  function anleitungBauen(a) {")]
-    assert 'document.createElement("template")' in ab and "/^H[1-5]$/" in ab and 'text(n) === "prüfung"' in ab
-    assert 'a.setAttribute("target", "_blank")' in ab and '".md-marker"' in ab and '".einbau"' in ab
-    # Härtung der Prüfansicht
-    assert 'if (b.closest(".mat-anleitung")) return;' in js
-    pr = js[js.index("  async function pruefungAnsicht() {"):js.index("  async function durchgangAnsicht() {")]
-    for sel in ('$("#pr-grund")', '$("#pr-due")', '$("#pr-bem")', '$("#pr-abschluss")', '$$("#pr-abschluss'):
-        assert sel not in pr, sel
-    # Grund und „Nächste Prüfung“ stehen seit UI/UX vor dem Merge (B2) im Dialog „Prüfung festschreiben“.
-    assert 'daten.grund = grundFeld ? grundFeld.value.trim() : "";' in pr
-    # Seit C2 (P4-L1) ist „Nächste Prüfung“ ein Textfeld TT.MM.JJJJ: datumWert mit Abbruch statt stillem „|| null“.
-    assert "bemerkung: bemFeld().value" in pr and "daten.next_due_on = due;" in pr
-    assert 'due = datumWert(dueFeld, "Nächste Prüfung") || null;' in pr and 'dueFeld.value || null' not in pr
-    assert "anleitungEinsetzen();" in pr and '${pr.anleitung ? \'<div class="mat-anleitung-platz"></div>\' : ""}' in pr
-    # Formularzeile und Seitenwahl
-    assert 'f.wiki_aendern ? \'<button type="button" class="lnk" data-act="wiki-waehlen">Ändern</button>\'' in js
-    assert "Verknüpfen kann, wer in der Strömipedia mindestens Mitglied ist." in js and "Seite Nr. ${esc(w.seite)} – du darfst sie nicht lesen" in js
-    ww = js[js.index("  function wikiWahl(formular, danach) {"):js.index("/* --- Suche ---")]
-    assert ww.count('class="btn"') == 1 and "Verknüpfung entfernen" in ww and "setTimeout(suchen, 300)" in ww
-    print("Oberfläche (statisch) bestanden.")
+def test_quelltext_ohne_funktion():
+    for pfad in ("app/material/services/wikiverweis.py", "app/material/routes_wiki.py"):
+        assert not os.path.exists(os.path.join(WURZEL, pfad)), pfad
+    js, css, app_css = (lesen("app/material/static/material.js"), lesen("app/material/static/material.css"),
+                        lesen("app/static/css/app.css"))
+    for wort in ("wikiZeile", "wikiWahl", "wiki-waehlen", "fp-wiki", "/wiki/seiten", "/wiki`", "wiki_aendern",
+                 "f.wiki", "anleitungBauen", "anleitungLaden", "anleitungEinsetzen", "abschnittPruefung",
+                 "ANLEITUNG_REINIGUNG", "markdownBereit", "pr.anleitung", "mat-anleitung\"", ".mat-anleitung",
+                 "mat-wikizeile", "mat-wikiwahl", "Prüfanleitung aus der Strömipedia", "Prüfanleitung in der Strömipedia",
+                 "Prüfanleitung verknüpft", 'mehrDazu("pruefanleitung")'):
+        assert wort not in js, wort
+    for wort in ("mat-wikizeile", "mat-wikiwahl", ".mat-anleitung {", ".mat-anleitung >", ".mat-anleitung-"):
+        assert wort not in css and wort not in app_css, wort
+    # Übung: keine Felder der Funktion in den Antworten, keine Schritte dazu.
+    uebung = lesen("app/static/js/uebung/material.js")
+    assert "wiki_aendern" not in uebung and "anleitung: null" not in uebung and "wiki: null" not in uebung
+    assert "Prüfanleitung" not in uebung and "Prüfanleitung" not in lesen("app/einfuehrung.py")
+    # Thema der Anleitung entfällt; die Leseregel der Strömipedia steht jetzt in app/anleitung.py.
+    assert '"pruefanleitung"' not in lesen("app/material/services/anleitung.py")
+    assert "def darf_lesen(page, user=None):" in lesen("app/anleitung.py")
+    for pfad in ("app/anleitung.py", "app/material/services/katalog.py", "app/material/services/pruefung.py",
+                 "app/material/routes.py"):
+        assert "wikiverweis import" not in lesen(pfad) and "import wikiverweis" not in lesen(pfad), pfad
+    print("Quelltext ohne Funktion bestanden.")
 
 
 if __name__ == "__main__":
-    test_seitenwahl()
-    test_setzen()
-    test_vererbung_und_katalog()
-    test_anleitung_und_rechte()
-    test_kein_nachweis()
-    test_oberflaeche_statisch()
-    print("Alle Tests zur Prüfanleitung aus dem Wiki bestanden.")
+    test_routen_und_formular()
+    test_pruefung_ohne_anleitung()
+    test_katalog_ignoriert_altes_feld()
+    test_spalte_bleibt()
+    test_quelltext_ohne_funktion()
+    print("Alle Tests zur entfernten Prüfanleitung bestanden.")

@@ -7,7 +7,7 @@ Schutz. Fachregeln stehen in services/, hier wird nur gelesen, aufgerufen und ge
 
 Die Routen der Lieferung 4 stehen in eigenen Modulen an denselben Blueprints – routes_export.py (CSV, Protokoll-ZIP,
 Lebenslauf), routes_katalog.py (Katalogaustausch) und routes_rueckruf.py –, eingebunden am Ende dieser Datei; ebenso die
-der Phase 2 (Freigaben, globale Suche, Zuordnung, Erinnerungen, Bestandsimport, Prüfanleitung aus dem Wiki) und der
+der Phase 2 (Freigaben, globale Suche, Zuordnung, Erinnerungen, Bestandsimport) und der
 Phase 3 (routes_psa.py: „Meine PSA“ und Mangelmeldung; routes_antrag.py: Änderungsanträge an festen Stammdaten) und
 der Phase 4 (routes_mailfehler.py: Mailfehler-Protokoll abhaken).
 
@@ -1331,7 +1331,7 @@ from . import routes_freigaben  # noqa: E402,F401
 from . import routes_global  # noqa: E402,F401
 from . import routes_zuordnung  # noqa: E402,F401
 from . import routes_erinnerung  # noqa: E402,F401
-from . import routes_import, routes_wiki  # noqa: E402,F401
+from . import routes_import  # noqa: E402,F401
 from . import routes_psa  # noqa: E402,F401
 from . import routes_antrag  # noqa: E402,F401
 from . import routes_mailfehler  # noqa: E402,F401

@@ -110,6 +110,7 @@ AKTION = {
     "freigabe_abgelaufen": "Freigabe abgelaufen",
     # Im Lebenslauf ohne Namen: Wem der Artikel zugeordnet war, gehört nicht in ein Dokument zur Weitergabe.
     "zugeordnet": "Zuordnung geändert", "zuordnung_geloest": "Zuordnung geändert",
+    # „wiki“: Altbestand der Prüfanleitung aus dem Wiki (entfernt am 04.11.2026), nur zum Lesen.
     "bestandsimport": "Bestandsimport", "nacharbeit_uebernommen": "Nacharbeit übernommen",
     "nacharbeit_verworfen": "Nacharbeit verworfen", "wiki": "Prüfanleitung (Strömipedia) geändert",
     "mangel_gemeldet": "Mangel gemeldet",

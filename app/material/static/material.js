@@ -153,7 +153,7 @@
      die noch kein „i“ hat (sonst trägt ihr „i“ den Link als mehrDazu) – seit dem 02.11.2026 statt des Textlinks „Anleitung“
      hinter ihr und statt des blauen Hinweiskastens auf der Übersicht (Wunsch des Nutzers: „Füge die Anleitungen
      einheitlich in einem i bei der Überschrift hinzu“; das Willkommen beim ersten Besuch bleibt). Alle öffnen
-     einen neuen Tab wie die Prüfanleitung: Eine angefangene Prüfung oder ein offener Dialog bleibt stehen. freigaben.js
+     einen neuen Tab: Eine angefangene Prüfung oder ein offener Dialog bleibt stehen. freigaben.js
      nimmt mehrDazu über window.MatAnleitung. */
   const ANLEITUNG = JSON.parse(root.dataset.anleitung || "{}");
   const anleitungUrl = (thema) => (typeof ANLEITUNG[thema] === "string" ? ANLEITUNG[thema] : "");
@@ -426,6 +426,7 @@
                    freigabe_entzogen: "Freigabe entzogen", freigabe_entfernt: "Freigabe entfernt",
                    freigabe_abgelaufen: "Freigabe abgelaufen",
                    zugeordnet: "Zuordnung geändert", zuordnung_geloest: "Zuordnung geändert",
+                   // „wiki“: Altbestand der Prüfanleitung aus dem Wiki (entfernt am 04.11.2026), nur zum Lesen.
                    bestandsimport: "Bestandsimport", nacharbeit_uebernommen: "Nacharbeit übernommen",
                    nacharbeit_verworfen: "Nacharbeit verworfen", wiki: "Prüfanleitung (Strömipedia) geändert",
                    mangel_gemeldet: "Mangel gemeldet", antrag_gestellt: "Änderung beantragt",
@@ -751,14 +752,11 @@
     if (document.fonts && document.fonts.ready) document.fonts.ready.then(navAnordnen);
   }
 
-  // Klicks auf [data-act] gehen an die Aktionen der gerade gezeichneten Ansicht. Was aus dem Wiki eingeblendet ist
-  // (Prüfanleitung, .mat-anleitung), löst nie eine Aktion aus – auch dann nicht, wenn dort ein Element data-act trüge:
-  // Die Reinigung nimmt es weg und der Schatten schirmt ab, das hier ist der dritte Riegel (Bauentwurf L3 3.5.2 Nr. 7).
+  // Klicks auf [data-act] gehen an die Aktionen der gerade gezeichneten Ansicht.
   let aktionen = {};
   inhalt.addEventListener("click", (e) => {
     const b = e.target.closest("[data-act]");
     if (!b || !inhalt.contains(b) || !aktionen[b.dataset.act]) return;
-    if (b.closest(".mat-anleitung")) return;
     if (b.tagName === "A" || b.tagName === "BUTTON") e.preventDefault();
     // Den Fokus nach Esc oder „Abbrechen“ gibt dialog() oben zurück (auf den Menüknopf, wenn der Eintrag in einem
     // details.menue stand) – auch wenn der Dialog erst nach einem Laden öffnet (B5 P4-L2, B2 vor dem Merge).
@@ -775,7 +773,6 @@
   });
   // „Sortieren nach“ über den Karten (kartenKopf): dieselbe Aktion wie ein Klick auf den Spaltenkopf.
   inhalt.addEventListener("change", (e) => {
-    if (e.target.closest(".mat-anleitung")) return;
     const s = e.target.closest("select[data-sortwahl]");
     if (s && aktionen.sortieren) aktionen.sortieren({ dataset: { feld: s.value } }, e);
     // Filter „Zugeordnet an …“ im Ordner.
@@ -5329,25 +5326,6 @@
         p.pflicht = !$(".fp-optional", tr).checked;
       });
     }
-    /* Prüfanleitung aus dem Wiki (Phase 2 · L3): nur die Material-Verwaltung sieht die Zeile (formular.wiki kommt sonst
-       null); „Ändern“ nur mit Stufe Mitglied im Wiki (wiki_aendern, Entscheidung vom 19.10.2026). Auch an benutzten
-       Versionen – die Verknüpfung gehört nicht zum Prüfinhalt. */
-    function wikiZeile() {
-      if (!DARF.katalog) return "";
-      const w = f.wiki;
-      let anzeige = '<span class="muted">keine</span>';
-      if (w && w.zustand === "ok") {
-        anzeige = `${w.url ? `<a href="${esc(w.url)}" target="_blank" rel="noopener">${esc(w.titel)}</a>` : `<strong>${esc(w.titel)}</strong>`}
-          ${w.reichweite ? `<span class="badge grey">${esc(REICHWEITE[w.reichweite] || w.reichweite)}</span>` : ""}`;
-      } else if (w && w.zustand === "papierkorb") anzeige = "Die verknüpfte Seite liegt im Papierkorb der Strömipedia.";
-      else if (w) anzeige = `Seite Nr. ${esc(w.seite)} – du darfst sie nicht lesen`;
-      const warnung = w && w.zustand === "ok" ? REICHWEITE_HINWEIS[w.reichweite] : "";
-      const info = `${f.benutzt && f.wiki_aendern ? "Die Verknüpfung gehört nicht zum Prüfinhalt und lässt sich auch an benutzten Versionen ändern. " : ""}${WIKI_PRUEFUNG_INFO} ${NEUE_KONTEN}`;
-      return `<div class="mat-wikizeile" id="fp-wiki"><p><strong>Prüfanleitung in der Strömipedia${infoKnopf("Prüfanleitung in der Strömipedia", info + mehrDazu("pruefanleitung"))}:</strong> ${anzeige}
-          ${f.wiki_aendern ? '<button type="button" class="lnk" data-act="wiki-waehlen">Ändern</button>' : ""}</p>
-        ${warnung ? `<p class="small mat-warn-leise">${esc(warnung)}</p>` : ""}
-        ${f.wiki_aendern ? "" : '<p class="help">Verknüpfen kann, wer in der Strömipedia mindestens Mitglied ist.</p>'}</div>`;
-    }
     /* Kopf des Formulars (UI/UX vor dem Merge, B6): EINE Hauptaktion als Knopf, der Rest im Menü „Mehr“ – vorher standen
        „Deaktivieren“, „Neue Version“ und „Löschen“ gleichrangig im Kopf. Ein Entwurf (nie benutzt, inaktiv) wird
        aktiviert; sonst ist die Hauptaktion „Neue Version“ – Änderungen an einer benutzten oder aktiven Version gehen nur
@@ -5370,7 +5348,6 @@
         <div class="mat-pfad">${pfadHtml(['<a href="/materialablage/katalog">Katalog</a>', `<a href="${zielLink}">${esc(zielText)}</a>`])}</div>
         <div class="page-head"><h1>${esc(f.titel || "Prüfformular")} <span class="badge grey">Version ${f.version}</span> ${f.aktiv ? '<span class="mat-status s-einsatzbereit">aktiv</span>' : '<span class="badge grey">inaktiv</span>'} ${demoMarke(f.demo)}${anleitungKopf("formular")}</h1>
           ${DARF.katalog ? `<div class="btn-row">${formularKnoepfe()}</div>` : ""}</div>
-        ${wikiZeile()}
         ${formularNutzerHinweis(f.genutzt_von)}
         <p class="help">${esc(zielText)}. ${f.gueltig_ab ? `Gültig ab ${esc(fmtTag(f.gueltig_ab))}.` : "Noch nie aktiviert."}
           ${f.benutzt ? " Diese Version wurde schon für Prüfungen benutzt und bleibt unverändert – Änderungen gehen über eine neue Version." : ""}</p>
@@ -5616,95 +5593,14 @@
         if (!(await confirm(`Version ${f.version} löschen?`, "Löschen"))) return;
         try { await api(`${API}/formulare/${f.id}`, { method: "DELETE" }); location.href = S.ziel(zielLink); } catch (e) { toast(e.message, true); }
       },
-      // Nur die Zeile neu – was in den Prüfpunkten getippt, aber noch nicht gespeichert ist, bleibt stehen.
-      "wiki-waehlen": () => wikiWahl(f, (neu) => {
-        f.wiki = neu.wiki;
-        f.wiki_aendern = neu.wiki_aendern;
-        const alt = $("#fp-wiki", inhalt);
-        if (alt) alt.outerHTML = wikiZeile();
-      }),
     };
     zeichnen();
   }
 
-  /* --- Prüfanleitung aus dem Wiki: Seitenwahl am Formular (Phase 2 · L3, nur Material-Verwaltung mit Wiki-Stufe) ---
-     Titelsuche über die Seiten, die dieses Konto im Wiki lesen darf (300 ms Ruhe; ohne Suchwort die zuletzt
-     geänderten); je Treffer die Reichweite als graue Marke und, bei interner oder beschränkter Seite, wer sie nicht sieht.
-     Gespeichert wird sofort (PUT …/formulare/<id>/wiki), danach zeichnet die Formularansicht ihre Zeile neu. */
-  const REICHWEITE = { oeffentlich: "öffentlich", intern: "intern", beschraenkt: "beschränkt" };
   const PRUEFPUNKTE_INFO = "Jeder Prüfpunkt ist Pflicht: Ohne Befund lässt sich die Prüfung nicht festschreiben. Wo ein Punkt entfallen darf (etwa Wartung oder Pflege), setzt du das Häkchen „optional“. "
     + "Bei der Prüfung ist jeder Befund mit „in Ordnung“ vorbelegt, Ja/Nein-Punkte mit ihrem Sollwert; bei Text und Zahl ist das Soll ein Hinweis für den Prüfer. "
     + "Ein Punkt der Art „Länge (m)“ ist mit der Länge des Artikels vorbelegt; trägt der Prüfer eine andere ein, "
     + "übernimmt das Festschreiben sie in den Artikel (nur bei Kategorien mit „Artikel haben eine Länge“).";
-  const WIKI_PRUEFUNG_INFO = "Hat die Seite eine Überschrift „Prüfung“, wird dieser Abschnitt in offenen Prüfungen eingeblendet, sonst nur verlinkt.";
-  // Wer die Anleitung sieht, steht sichtbar und in einer Zeile; dass neue Konten keinen Zugang haben, sagt das „i“ (NEUE_KONTEN).
-  const NEUE_KONTEN = "Neue Konten haben keine Stufe in der Strömipedia und sehen nur öffentliche Seiten.";
-  const REICHWEITE_HINWEIS = { intern: "Prüfer ohne Zugang zur Strömipedia sehen nur, dass es eine Anleitung gibt.",
-                               beschraenkt: "Nur für Freigegebene lesbar – die meisten Prüfer sehen sie nicht." };
-  function wikiWahl(formular, danach) {
-    const aktuell = formular.wiki ? formular.wiki.seite : null;
-    dialog(`<h2>Prüfanleitung aus der Strömipedia</h2>
-      <label for="ww-q">Seite suchen (Titel)${infoKnopf("Seite suchen", `${WIKI_PRUEFUNG_INFO} Jeder sieht nur, was er in der Strömipedia lesen darf. ${NEUE_KONTEN}`)}</label>
-      <input type="search" id="ww-q" autocomplete="off" ${TASTATUR_SUCHE} placeholder="z. B. Karabiner">
-      <p class="help" id="ww-lesemodus" hidden>Du siehst nur öffentliche Seiten.</p>
-      <div class="mat-wikiwahl" id="ww-liste"></div>
-      <p class="help" id="ww-stand" aria-live="polite">Wird geladen …</p>
-      ${grundSatz("ww-grund", aktuell ? "Wähle eine andere Seite als die verknüpfte." : "Wähle zuerst eine Seite aus der Liste.")}
-      <div class="dlg-actions">${aktuell ? '<button class="btn secondary dlg-neben" id="ww-weg" type="button">Verknüpfung entfernen</button>' : ""}
-        <button class="btn secondary" data-close type="button">Abbrechen</button>
-        <button class="btn" id="ww-ok" type="button"${knopfAus("ww-grund", true)}>Verknüpfen</button></div>`,
-    (dlg, body) => {
-      let gewaehlt = null;
-      let los = null;
-      let lauf = 0;
-      const liste = $("#ww-liste", body);
-      const stand = $("#ww-stand", body);
-      const ok = $("#ww-ok", body);
-      let seiten = [];
-      function zeichnen() {
-        liste.innerHTML = seiten.map((x, i) => `<button type="button" data-i="${i}" aria-pressed="${gewaehlt === x.id}">
-          <span class="mat-wikiwahl-titel">${x.icon ? `<span aria-hidden="true">${esc(x.icon)}</span> ` : ""}${esc(x.titel)}</span>
-          <span class="badge grey">${esc(REICHWEITE[x.reichweite] || x.reichweite)}</span>${x.id === aktuell ? ' <span class="small muted">verknüpft</span>' : ""}
-          ${REICHWEITE_HINWEIS[x.reichweite] ? `<span class="small muted mat-wikiwahl-hinweis">${esc(REICHWEITE_HINWEIS[x.reichweite])}</span>` : ""}</button>`).join("");
-      }
-      async function suchen() {
-        const meins = ++lauf;
-        const q = $("#ww-q", body).value.trim();
-        try {
-          const d = await api(`${API}/wiki/seiten?${new URLSearchParams({ q })}`);
-          if (meins !== lauf) return;
-          seiten = d.seiten;
-          $("#ww-lesemodus", body).hidden = !d.lesemodus;
-          stand.textContent = !seiten.length ? (q ? "Keine Seite gefunden." : "Keine Seite, die du lesen darfst.")
-            : q.length >= 2 ? plural(seiten.length, "Treffer", "Treffer") : "Zuletzt geänderte Seiten – oder oben nach dem Titel suchen.";
-          zeichnen();
-        } catch (e) { if (meins === lauf) { stand.textContent = e.message; seiten = []; zeichnen(); } }
-      }
-      $("#ww-q", body).addEventListener("input", () => { clearTimeout(los); los = setTimeout(suchen, 300); });
-      liste.addEventListener("click", (ev) => {
-        const b = ev.target.closest("button[data-i]");
-        if (!b) return;
-        gewaehlt = seiten[+b.dataset.i].id;
-        knopfGrund(ok, gewaehlt === aktuell ? "Diese Seite ist schon verknüpft – wähle eine andere." : "");
-        zeichnen();
-        const neu = $(`button[data-i="${b.dataset.i}"]`, liste);      // neu gezeichnet – sonst stünde der Fokus auf <body>
-        if (neu) neu.focus();
-      });
-      suchen();
-      async function speichern(seite, knopf) {
-        knopf.disabled = true;
-        try {
-          const r = await api(`${API}/formulare/${formular.id}/wiki`, { method: "PUT", body: { seite } });
-          dlg.close();
-          toast(seite ? "Prüfanleitung verknüpft" : "Verknüpfung entfernt");
-          danach(r.formular);
-        } catch (e) { S.fehlschlag(knopf, e, body); }
-      }
-      ok.onclick = () => { if (gewaehlt) speichern(gewaehlt, ok); };
-      const weg = $("#ww-weg", body);
-      if (weg) weg.onclick = () => speichern(null, weg);
-    });
-  }
 
   /* --- Suche -------------------------------------------------------------------------------------------- */
   async function suche() {
@@ -5802,142 +5698,6 @@
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   };
 
-  /* --- Prüfanleitung aus dem Wiki in offenen Prüfungen (Phase 2 · Lieferung 3) ----------------------------------
-     pruefung.anleitung: {titel, url, quelle} | {kein_zugang: true} | null (abgeschlossen, nichts verknüpft, Papierkorb).
-     Im Kopf der Prüfung steht dann „Prüfanleitung aus der Strömipedia“ zum Aufklappen. Erst beim ersten Öffnen lädt die Seite
-     marked, DOMPurify und markdown.js nach (gleiche Quelle, CSP „script-src 'self'“) und holt die Wiki-Seite über den
-     Endpunkt des Wikis selbst (anleitung.quelle – mit dessen Rechten). Eingeblendet wird nur der Abschnitt „Prüfung“.
-     Der Inhalt stammt aus einer Wiki-Seite, die andere ändern können als die, die verknüpft hat. Darum, in dieser Folge:
-     1. gerendert wie im Wiki (MD.render, mit dessen Reinigung), 2. ein zweites Mal streng gereinigt (ANLEITUNG_REINIGUNG:
-     keine ids, keine Namen, keine data-*, keine Formularelemente, keine Labels, keine Stile), 3. der Abschnitt
-     ausgeschnitten (abschnittPruefung), 4. eingesetzt in einen geschlossenen Shadow-Root: document.querySelector,
-     getElementById, $/$$, benannte Eigenschaften von window/document und die Klick-Delegation an #mat-inhalt reichen
-     nicht hinein, die Stile der Prüfansicht nicht hinein und die des Abschnitts nicht hinaus. Dazu übergeht die
-     Klick-Delegation alles in .mat-anleitung, und Festschreiben liest seine Felder nur aus dem eigenen Behälter.
-     MD.enhance läuft nicht (es lüde eingebundene Seiten nach und vergäbe ids); eingebundene Bausteine stehen als
-     Hinweis da, Inhaltsverzeichnis und Unterseiten-Liste entfallen, jeder Link öffnet einen neuen Tab. */
-  const ANLEITUNG_REINIGUNG = {
-    ADD_TAGS: ["video", "audio", "source"], ADD_ATTR: ["controls", "preload", "playsinline"],
-    FORBID_TAGS: ["style", "form", "textarea", "select", "button", "dialog", "iframe", "input", "label", "output",
-                  "data", "object", "embed", "base", "meta", "link"],
-    FORBID_ATTR: ["style", "id", "name", "for", "form", "formaction", "target"],
-    ALLOW_DATA_ATTR: false };
-  const ANLEITUNG_KEIN_ZUGANG = "Zu diesem Formular gibt es eine Prüfanleitung in der Strömipedia, die du nicht lesen darfst. Den Zugang zur Strömipedia vergibt die Plattform-Verwaltung in der Leitstelle.";
-  const ANLEITUNG_OHNE_ABSCHNITT = "Die Seite hat keinen Abschnitt „Prüfung“ – bitte in der Strömipedia lesen.";
-  const ANLEITUNG_ALT = "Diese Seite lässt sich hier nicht einblenden – bitte in der Strömipedia lesen.";
-  const ANLEITUNG_FEHLER = "Die Anleitung ließ sich nicht laden.";
-  const ANLEITUNG_EINBAU = "Eingebundener Abschnitt – nur in der Strömipedia sichtbar.";
-  // Stile nur im Schatten: Bilder und Filme höchstens so breit wie der Kasten, breite Tabellen und Code rollen seitlich.
-  // contain: paint – der Kasten ist Bezugsrahmen auch für position: fixed und schneidet ab: Klassen aus app.css, die im
-  // Abschnitt stehen dürfen (etwa .md-lightbox, fix über dem ganzen Fenster), legen sich nicht über die Prüfansicht.
-  const ANLEITUNG_STIL = `:host { display: block; contain: paint; }
-    article.wiki-content { padding: 2px 2px 6px; overflow-wrap: anywhere; }
-    article.wiki-content > :first-child { margin-top: 4px; }
-    img, video { max-width: 100%; height: auto; }
-    table { display: block; max-width: 100%; overflow-x: auto; }
-    th, td { overflow-wrap: normal; min-width: 4em; }
-    pre { max-width: 100%; overflow-x: auto; }
-    .anleitung-einbau { color: var(--grau); font-size: var(--fs-klein); font-style: italic; }`;
-  // Nur eigene Adressen („/stroemipedia/…“, „/api/…“) – was sonst käme, wird kein Link und keine Anfrage.
-  const eigeneAdresse = (u) => (typeof u === "string" && /^\/(?![/\\])/.test(u) ? u : null);
-  const skriptLaden = (src) => new Promise((fertig, fehler) => {
-    const el = document.createElement("script");
-    el.src = src;
-    el.onload = () => fertig();
-    el.onerror = () => fehler(new Error(`${src} ließ sich nicht laden.`));
-    document.head.appendChild(el);
-  });
-  let markdownLauf = null;
-  function markdownBereit() {
-    if (window.MD && window.DOMPurify) return Promise.resolve();
-    if (!markdownLauf) {
-      markdownLauf = (async () => {
-        if (!window.marked) await skriptLaden("/static/vendor/marked/marked.min.js");
-        if (!window.DOMPurify) await skriptLaden("/static/vendor/dompurify/purify.min.js");
-        if (!window.MD) await skriptLaden("/static/js/markdown.js");
-      })();
-      markdownLauf.catch(() => { markdownLauf = null; });
-    }
-    return markdownLauf;
-  }
-  /* Der Abschnitt „Prüfung“: die erste Überschrift h1–h5 der obersten Ebene (nicht in einem Kasten), deren Text ohne
-     Rand und ohne abschließenden Doppelpunkt, Groß/klein egal „Prüfung“ lautet – und alles bis vor die nächste
-     Überschrift gleicher oder höherer Ebene. html ist schon streng gereinigt; gelesen wird es in ein <template> (dort
-     lädt nichts und läuft nichts). Liefert ein DocumentFragment oder null. */
-  function abschnittPruefung(html) {
-    const t = document.createElement("template");
-    t.innerHTML = html;
-    const knoten = Array.from(t.content.childNodes);
-    const ebene = (n) => (n.nodeType === 1 && /^H[1-5]$/.test(n.tagName) ? +n.tagName[1] : 0);
-    const text = (n) => n.textContent.normalize("NFC").trim().replace(/\s*:$/, "").toLocaleLowerCase("de");
-    const start = knoten.findIndex((n) => ebene(n) && text(n) === "prüfung");
-    if (start < 0) return null;
-    const hoehe = ebene(knoten[start]);
-    const teil = document.createDocumentFragment();
-    for (let i = start; i < knoten.length; i++) {
-      if (i > start && ebene(knoten[i]) && ebene(knoten[i]) <= hoehe) break;
-      teil.appendChild(knoten[i]);
-    }
-    teil.querySelectorAll("a").forEach((a) => { a.setAttribute("target", "_blank"); a.setAttribute("rel", "noopener noreferrer"); });
-    teil.querySelectorAll(".einbau").forEach((el) => {
-      const p = document.createElement("p");
-      p.className = "anleitung-einbau";
-      p.textContent = ANLEITUNG_EINBAU;
-      el.replaceWith(p);
-    });
-    teil.querySelectorAll(".md-marker").forEach((el) => el.remove());
-    return teil;
-  }
-  function anleitungBauen(a) {
-    if (a.kein_zugang) {
-      const p = document.createElement("p");
-      p.className = "small muted mat-anleitung-kein";
-      p.textContent = ANLEITUNG_KEIN_ZUGANG;
-      return p;
-    }
-    const url = eigeneAdresse(a.url);
-    const d = document.createElement("details");
-    d.className = "mat-anleitung";
-    d.innerHTML = `<summary>Prüfanleitung aus der Strömipedia: <span class="mat-anleitung-titel">${esc(a.titel)}</span></summary>
-      <div class="mat-anleitung-koerper"><p class="help mat-anleitung-stand" aria-live="polite">wird geladen …</p>
-        ${url ? `<p class="small mat-anleitung-link"><a href="${esc(url)}" target="_blank" rel="noopener noreferrer">Ganze Seite in der Strömipedia öffnen ↗</a></p>` : ""}</div>`;
-    let geladen = false;
-    d.addEventListener("toggle", () => {
-      if (!d.open || geladen) return;
-      geladen = true;
-      anleitungLaden(d, a);
-    });
-    return d;
-  }
-  async function anleitungLaden(d, a) {
-    const stand = $(".mat-anleitung-stand", d);
-    const sagen = (text) => { stand.textContent = text; stand.className = "small mat-anleitung-stand"; };
-    let abschnitt;
-    try {
-      const quelle = eigeneAdresse(a.quelle);
-      if (!quelle) throw new Error(ANLEITUNG_FEHLER);
-      await markdownBereit();
-      const seite = (await api(quelle)).page;
-      if (!seite || seite.format !== "markdown") { sagen(ANLEITUNG_ALT); return; }
-      abschnitt = abschnittPruefung(DOMPurify.sanitize(MD.render(seite.content || ""), ANLEITUNG_REINIGUNG));
-    } catch (e) { sagen(ANLEITUNG_FEHLER); return; }
-    if (!abschnitt) { sagen(ANLEITUNG_OHNE_ABSCHNITT); return; }
-    const wirt = document.createElement("div");
-    wirt.className = "mat-anleitung-inhalt";
-    const schatten = wirt.attachShadow({ mode: "closed" });
-    const css = document.createElement("link");
-    css.rel = "stylesheet";
-    const seitenCss = document.querySelector('link[rel="stylesheet"][href*="/css/app.css"]');
-    css.href = seitenCss ? seitenCss.href : "/static/css/app.css";
-    const stil = document.createElement("style");
-    stil.textContent = ANLEITUNG_STIL;
-    const artikel = document.createElement("article");
-    artikel.className = "wiki-content";
-    artikel.appendChild(abschnitt);
-    schatten.append(css, stil, artikel);
-    stand.replaceWith(wirt);
-  }
-
   /* Befund- und Ergebniswahl als Radiogruppe (UI/UX vor dem Merge, B11): ein Tab-Stopp je Gruppe (der gewählte
      Knopf, sonst der erste), Pfeiltasten sowie Pos1/Ende wählen den nächsten – wie ein Klick. Vorher drei Tab-Stopps je
      Prüfpunkt, 91 bis „Festschreiben“ bei 15 Punkten. Ein Klick auf den gewählten Knopf wirkt wie bisher (n. z. und
@@ -5985,13 +5745,8 @@
     const darfHier = (r) => Boolean(pr.darf && pr.darf[r]);
     const bearbeitbar = () => pr.entwurf && pr.eigen && darfHier("pruefen");
     const punkt = (rid) => pr.punkte.find((x) => x.id === rid);
-    /* Abschlussleiste und Bemerkung nur aus ihren eigenen Behältern – nie etwas Gleichnamiges aus der eingeblendeten
-       Prüfanleitung (.mat-anleitung). Die Reinigung nimmt dort ids weg und der Schatten schirmt ab; das hier hält auch,
-       wenn sich eins davon einmal ändert (Bauentwurf L3 3.5.2 Nr. 7). */
-    const echt = (sel) => $$(sel, inhalt).find((el) => !el.closest(".mat-anleitung")) || null;
-    const abschlussBox = () => echt("#pr-abschluss");
-    const bemFeld = () => echt("#pr-bem");
-    let anleitungEl = null;          // die Prüfanleitung: einmal gebaut, bei jedem Zeichnen wieder eingesetzt (bleibt offen)
+    const abschlussBox = () => $("#pr-abschluss", inhalt);
+    const bemFeld = () => $("#pr-bem", inhalt);
 
     /* Getipptes speichern, während getippt wird: Wert und Bemerkung eines Prüfpunkts und die Bemerkung zur Prüfung
        gehen kurz nach dem letzten Tastendruck an den Server, nicht erst beim Verlassen des Feldes. Am Telefon
@@ -6307,16 +6062,7 @@
         <p class="mat-produktzeile"><strong>${nameHtml(pr.produkt)}</strong>${zusatzHtml(pr.produkt)}${artNrHtml(pr.produkt.article_no)} · ${nummerHtml("Seriennummer", a.serial_no)} ${statusMarke(a.status)}</p>
         <p class="small muted">${pr.formular ? `Formular ${esc(pr.formular.titel || "ohne Titel")}, Version ${pr.formular.version} · ` : ""}${pr.art === "aussonderung" ? "Ausgeführt von" : "Prüfer"} ${person(pr.pruefer || "–")}${pr.urkunde ? ` <span class="mat-ganz">(Urkundennummer ${esc(pr.urkunde)})</span>` : ""}
           · ${pr.entwurf && !pr.berichtigt ? `begonnen ${esc(fmtZeit(pr.begonnen_am))}` : `Prüftag ${esc(fmtTag(pr.datum))}`}
-          ${pr.durchgang ? ` · Prüfdurchgang ${pr.durchgang.sichtbar ? `<a href="/materialablage/durchgang/${pr.durchgang.id}">${esc(pr.durchgang.titel)}</a>` : `„${esc(pr.durchgang.titel)}“`}` : ""}</p>
-        ${pr.anleitung ? '<div class="mat-anleitung-platz"></div>' : ""}`;
-    }
-    // Die Prüfanleitung aus dem Wiki (nur offene Prüfungen, Phase 2 · L3) an ihren Platz im Kopf – dasselbe Element wie
-    // beim letzten Zeichnen, damit eine aufgeklappte Anleitung offen und geladen bleibt.
-    function anleitungEinsetzen() {
-      const platz = $(".mat-anleitung-platz", inhalt);
-      if (!platz) return;
-      if (!anleitungEl) anleitungEl = anleitungBauen(pr.anleitung);
-      platz.replaceWith(anleitungEl);
+          ${pr.durchgang ? ` · Prüfdurchgang ${pr.durchgang.sichtbar ? `<a href="/materialablage/durchgang/${pr.durchgang.id}">${esc(pr.durchgang.titel)}</a>` : `„${esc(pr.durchgang.titel)}“`}` : ""}</p>`;
     }
 
     /* Berichtigung: Die Berichtigung verweist auf ihr Original, das Original auf seine Berichtigung. */
@@ -6603,14 +6349,13 @@
       const ohneNummer = pr.entwurf && pr.eigen && !darfHier("pruefen") && (DARF.pruefer_haekchen || DARF.qualifiziert) ? `<p class="notice">${pruefHinweis(pr)}</p>` : "";
       seitenTitel(`${PRUEFART[pr.art] || pr.art} ${pr.artikel.inventory_no}`);
       inhalt.innerHTML = `<div class="mat-pruefung${bearbeitbar() ? " mat-mit-leiste" : ""}">${kopf()}${ohneNummer}${bearbeitbar() ? bearbeitenHtml() : leseHtml()}</div>`;
-      anleitungEinsetzen();
       doppelteZeigen(inhalt);
       if (leisteBeobachter) leisteBeobachter.disconnect();
       if (endeBeobachter) endeBeobachter.disconnect();
       if (bearbeitbar()) {
         binden(); abschlussAktualisieren(); abschlussZurueck(); seitenZeichnen(); tipptPruefen(false);
         if (leisteBeobachter) leisteBeobachter.observe(abschlussBox());
-        if (endeBeobachter) endeBeobachter.observe(echt(".mat-abschluss-ende"));
+        if (endeBeobachter) endeBeobachter.observe($(".mat-abschluss-ende", inhalt));
       } else {
         vergessen();
       }
@@ -6911,7 +6656,7 @@
       // Sprunglink über den Prüfpunkten (Tastatur) und „Zum Abschluss“ der eingeklappten Leiste: ans Ende des Formulars,
       // die Leiste steht dort voll da; der Fokus aufs Ergebnis.
       "zum-abschluss": () => {
-        const ende = echt(".mat-abschluss-ende");
+        const ende = $(".mat-abschluss-ende", inhalt);
         if (ende) ende.scrollIntoView({ block: "end", behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
         const r = $('.mat-ergebnis [role="radio"][tabindex="0"]', abschlussBox());
         if (r) r.focus({ preventScroll: true });

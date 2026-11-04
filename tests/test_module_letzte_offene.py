@@ -2,8 +2,8 @@
 python tests/test_module_letzte_offene.py  oder  pytest tests/test_module_letzte_offene.py
 
   1. Datenschutz-Sonderfälle: Wo ein „i“ und ein sichtbarer Satz am selben Begriff stehen, bleibt der Datenschutz als
-     eine Zeile sichtbar, der Rest steht im „i“ (Jahresbericht „Prüfer nennen“, Bestandsimport „Personen“, Prüfanleitung
-     „wer sieht sie“).
+     eine Zeile sichtbar, der Rest steht im „i“ (Jahresbericht „Prüfer nennen“, Bestandsimport „Personen“; die Prüfanleitung
+     „wer sieht sie“ entfiel am 04.11.2026 mit der Funktion).
   2. Strömipedia: über dem Seitenbaum „Neue Seite“ und „⋯“ (Papierkorb, Import) – die Zeile bricht nicht mehr um
      (Menü: test_wiki_import; Tippflächen gemessen, Bericht).
   3. „Angaben zur Seite“: ein gezeichnetes Blatt statt des kursiven „i“, das dem Info-„i“ glich.
@@ -43,13 +43,10 @@ def test_datenschutz_eine_zeile():
     assert ('${b.spalten.some((x) => x.gesperrt) ? `<span class="info-absatz">${esc(IMPORT_PERSONEN_INFO)}</span>` : ""}${mehrDazu("import_spalten")}`)}'
             '</summary>') in mat
     assert '${b.spalten.some((x) => x.gesperrt) ? `<p class="help">${esc(IMPORT_PERSONEN)}</p>` : ""}</details>' in mat
-    # Prüfanleitung: wer sie sieht, in einer Zeile; dass neue Konten keinen Zugang haben, im „i“ (Formular und Dialog).
-    assert 'intern: "Prüfer ohne Zugang zur Strömipedia sehen nur, dass es eine Anleitung gibt.",' in mat
-    assert "das sind alle neuen Konten" not in mat
-    assert mat.count("${NEUE_KONTEN}") == 2
+    # Die Prüfanleitung aus der Strömipedia (Zeile und Dialog) entfiel am 04.11.2026 (tests/test_material_wiki.py).
+    assert "das sind alle neuen Konten" not in mat and "NEUE_KONTEN" not in mat
     # Jeder sichtbare Satz ist kurz genug für eine Zeile (höchstens 80 Zeichen).
-    for satz in ("Ohne Haken nennt keine Ausgabe einen Prüfer.", "Personen werden nicht übernommen.",
-                 "Prüfer ohne Zugang zur Strömipedia sehen nur, dass es eine Anleitung gibt."):
+    for satz in ("Ohne Haken nennt keine Ausgabe einen Prüfer.", "Personen werden nicht übernommen."):
         assert len(satz) <= 80, satz
     print("Datenschutz eine Zeile bestanden.")
 

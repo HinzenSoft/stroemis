@@ -348,7 +348,7 @@ input[type=radio], input[type=checkbox] { accent-color: var(--anthrazit); }
    Bildschirm gehen“; vorher blieb der Inhalt höchstens 100ch breit, ein Knopf stand dadurch neben seinem Text). Rechts
    bleibt nur der eigene Abstand (--kasten-rand); Dialoge bleiben, wie sie sind. Eigene Kästen setzen den Innenabstand
    rechts nicht selbst, sondern über --kasten-rand. */
-:is(.notice, .mat-wikizeile):not(dialog *) { padding-right: var(--kasten-rand, 12px); }
+.notice:not(dialog *) { padding-right: var(--kasten-rand, 12px); }
 /* Text auf hellen Flächen (UI/UX A5, vorher nur in der Materialablage): Rot kommt auf --rot-hell, --grau-hell und den
    hellen Hinweisflächen nur auf 4,0–4,4 : 1, Grau auf 4,3–4,5 : 1 – unter WCAG AA (4,5 : 1). Links und Textknöpfe stehen
    dort im dunklen Rot (--rot-auf-flaeche, über 6 : 1), Nebentext in Anthrazit; auch beim Überfahren einer Tabellenzeile.

@@ -348,7 +348,7 @@
       produkt: { id: p.id, manufacturer: p.manufacturer, model: p.model, description: p.description, article_no: p.article_no,
                  material_kind: p.material_kind, norm: p.norm, name: `${p.manufacturer} ${p.model}`, demo: false },
       formular: (({ id, titel, version }) => ({ id, titel, version }))(formularVon(z, x.form_id)), punkte: kopie(x.punkte),
-      arten: x.entwurf ? artikelVoll(z, a).pruefarten.arten : [x.art], anhaenge: [], dokumente: [], anleitung: null, darf: ordnerDarf(),
+      arten: x.entwurf ? artikelVoll(z, a).pruefarten.arten : [x.art], anhaenge: [], dokumente: [], darf: ordnerDarf(),
       eigen: x.pruefer_id === ich().id, durchgang: null, einsatzbereit_gesperrt: [], freipruefung: x.entwurf && a.lock_state !== "frei",
       grund_berichtigung: "", intervall: intervall(p), laenge: { moeglich: false, text: "", wert: null }, lebensdauer: null,
       maengel: kopie(a.maengel.filter((m) => m.offen)), prueftag: x.datum,
@@ -423,7 +423,7 @@
     const ziel = p ? { art: "produkt", id: p.id, kategorie_id: p.category_id, name: nennung(p) }
       : { art: "kategorie", id: f.ziel.id, pfad: kategoriePfad(f.ziel.id) };
     const kopf = { id: f.id, version: f.version, titel: f.titel, aktiv: f.aktiv, benutzt: f.benutzt, aenderbar: !f.benutzt, demo: false,
-                   kategorie_id: p ? null : f.ziel.id, produkt_id: p ? p.id : null, gueltig_ab: "2026-01-01", wiki: null, wiki_aendern: false, ziel,
+                   kategorie_id: p ? null : f.ziel.id, produkt_id: p ? p.id : null, gueltig_ab: "2026-01-01", ziel,
                    created_at: "2026-01-01T00:00:00+00:00", updated_at: "2026-01-01T00:00:00+00:00" };
     return { editoren: { date: "Datum", laenge: "Länge (m)", number: "Zahl", photo: "Foto", signature: "Unterschrift", text: "Text", yesno: "Ja/Nein" },
              formular: Object.assign({}, kopf, { punkte: kopie(f.punkte), journal: [],

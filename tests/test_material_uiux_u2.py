@@ -56,7 +56,8 @@ def test_b1_ausgegraute_hauptknoepfe():
     abfang = abschnitt(js, "document.addEventListener(\"click\", (e) => {\n    const k = e.target.closest && e.target.closest('.btn[aria-disabled=\"true\"]');", "}, true);")
     assert "e.stopImmediatePropagation();" in abfang and 'classList.add("betont")' in abfang
     # Die sieben Knöpfe: kein disabled mehr im Markup.
-    for knopf in ('id="zp-ok"', 'id="ww-ok"', 'id="zu-ok"', 'id="nz-ok"', 'id="pr-ok"'):
+    # ww-ok (Seitenwahl der Prüfanleitung) entfiel am 04.11.2026.
+    for knopf in ('id="zp-ok"', 'id="zu-ok"', 'id="nz-ok"', 'id="pr-ok"'):
         zeile = next(z for z in js.splitlines() if knopf in z and "<button" in z)
         assert "disabled>" not in zeile and ("knopfAus(" in zeile or 'aria-disabled="true"' in zeile), zeile
     assert 'data-act="schliessen"${knopfAus("dg-abschluss", abschlussGrund)}>Durchgang abschließen' in js
@@ -201,7 +202,8 @@ def test_b13_kleinigkeiten():
     assert '>Protokoll (PDF)</a></li>' in js and '>Bericht (PDF)</a>' in js
     assert js.count('<span class="mat-nowrap">SHA-256</span>') == 3
     assert ".mat-erinnerungen { margin: 24px 0 20px;" in lies(CSS)
-    assert "Den Zugang zur Strömipedia vergibt die Plattform-Verwaltung in der Leitstelle." in js
+    # „Den Zugang zur Strömipedia vergibt …“ stand an der Prüfanleitung ohne Leserecht – entfiel am 04.11.2026.
+    assert "Den Zugang zur Strömipedia vergibt die Plattform-Verwaltung in der Leitstelle." not in js
     assert "const letztesGlied = (pfad) =>" in js and '${esc(letztesGlied(a.pfad))}</td>' in js
     # Set-Protokolle tragen Pfade mit „ › “ (protokoll.py) – letztesGlied trennt an beiden Zeichen (Faktenprüfung 28.10.2026).
     assert 'const letztesGlied = (pfad) => String(pfad || "").split(/ [/›] /).pop();' in js
