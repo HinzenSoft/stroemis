@@ -477,19 +477,17 @@
   ];
 
   /* --- Ziele, die erst nach einer Aktion feststehen ----------------------------------------------------------------- */
-  // Die Seite zeichnet nach jedem Laden und Speichern neu und schließt dabei Dialoge – ein Ziel zählt erst, wenn sie
-  // damit fertig ist und der Dialog samt seinem Verlaufseintrag weg ist (S.dialogVerlauf; das Zurück stellt sonst den
-  // Bildlauf nach dem Hinrollen noch einmal um); sonst stünde die Blase kurz an einem Element, das gleich ersetzt wird.
+  // Die Seite zeichnet nach jedem Laden und Speichern neu – ein Ziel zählt erst, wenn sie damit fertig ist; sonst stünde
+  // die Blase kurz an einem Element, das gleich ersetzt wird. Dass ein Dialog samt seinem Schritt im Verlauf zu ist und
+  // das Ziel ruht, wartet die Führung selbst ab (einfuehrung.js: Ziele hinter einem modalen Dialog zählen nicht).
   const da = (el) => Boolean(el && el.getClientRects().length && !el.closest("[hidden], [inert]"));
-  const ohneDialog = () => !document.querySelector("dialog[open]")
-    && !(history.state && typeof history.state.stroemisOverlay === "number");
   const sichtbares = (sel) => [...document.querySelectorAll(sel)].find(da) || null;
   // Eine Liste, die nicht mehr „Wird geladen …“ zeigt.
   const geladen = (sel) => () => { const el = sichtbares(sel); return el && !el.querySelector(":scope > p.help") ? el : null; };
   // Zeile der eben angelegten Person (Tabelle am Rechner) bzw. der Kopf ihrer Karte (Telefon – die ganze Karte passte
   // neben der Leiste der Führung nicht ins Bild).
   const neuePerson = () => {
-    if (!angelegt || !ohneDialog()) return null;
+    if (!angelegt) return null;
     const zeile = sichtbares(`.tn-desktop tr[data-tid="${angelegt}"]`);
     const knopf = zeile ? null : sichtbares(`.tn-mobil [data-tid="${angelegt}"]`);
     return zeile || (knopf ? knopf.closest(".tn-kopf") : null);
@@ -501,14 +499,14 @@
     return stand && !stand.classList.contains("speichert") ? stand : null;
   };
   // Die bewertete Zelle (Matrix: der Knopf selbst, „je Leistung“: die Zeile mit der Zelle darin), sobald sie nicht mehr
-  // „offen“ ist und der Dialog zu.
+  // „offen“ ist.
   const bewerteteZelle = () => {
-    const el = ohneDialog() ? sichtbares(zelle) : null;
+    const el = sichtbares(zelle);
     return el && !el.matches(".st-offen") && !el.querySelector(".st-offen") ? el : null;
   };
   // Das Ergebnis der Person in „je Teilnehmende“, sobald es vermerkt ist.
   const vermerkt = () => {
-    const el = ohneDialog() ? sichtbares(".tn-block .erg-block") : null;
+    const el = sichtbares(".tn-block .erg-block");
     return el && el.querySelector(".erg-knopf.sel") ? el : null;
   };
   const kasten = `input[data-vk][data-tid="${TN[0]}"][data-vid="${VOR[0]}"]`;
@@ -519,30 +517,6 @@
   // Blase nennt, was dasteht (deshalb als Getter: gelesen, wenn die Blase zeichnet; „+“ und Wort bleiben zusammen).
   const anlegen = (wort) => (window.matchMedia("(max-width: 600px)").matches ? `„+\u00a0${wort}“` : `„${wort} anlegen“`);
 
-  /* Jedes Ziel kommt ohne weichen Bildlauf ins Bild, am Telefon über der Leiste der Führung. Die Führung rollt es sonst
-     weich (und mittig im ganzen Fenster, also teils unter die Leiste) und meldet den Schritt schon bereit, solange es
-     noch unterwegs ist – der Durchlauftest prüfte die Lage dann zu früh und tippte daneben (Bewertungsdialog, Dialog
-     „Lehrgang anlegen“, Reiter am Telefon). Für das Grundgerüst: einfuehrung.js sollte das Ende des Bildlaufs abwarten
-     und die Leiste mitrechnen (scroll-padding-bottom); dann kann das hier weg. */
-  const insBild = (ziel) => () => {
-    const el = typeof ziel === "function" ? ziel() : sichtbares(ziel);
-    if (!el) return null;
-    const wurzel = document.documentElement;
-    // Die Leiste wächst mit dem Text des nächsten Schritts – mindestens ein gutes Drittel des Fensters einplanen.
-    const leiste = window.innerWidth < 600 ? Math.max(Math.round(window.innerHeight * 0.36),
-      parseFloat(getComputedStyle(wurzel).getPropertyValue("--fuehrung-hoehe")) || 0) : 0;
-    const imDialog = Boolean(el.closest("dialog"));
-    const r = el.getBoundingClientRect();
-    if (r.top < 0 || r.bottom > window.innerHeight - leiste) {
-      // Ein offener Dialog endet über der Leiste (app.css) und schrumpft mit ihr – dort an den oberen Rand.
-      el.scrollIntoView({ block: imDialog && leiste ? "start" : "center", behavior: "auto" });
-      // Auf der Seite noch um die halbe Leiste höher.
-      if (leiste && !imDialog) {
-        window.scrollBy({ top: Math.min(leiste / 2, Math.max(0, el.getBoundingClientRect().top - 80)), behavior: "auto" });
-      }
-    }
-    return el;
-  };
   const teile = {
     grund: { ablaeufe: [
       { titel: "Lehrgang öffnen", start: "/riegenkarten", schritte: [
@@ -556,7 +530,7 @@
         { ziel: abgehakterStand, text: "Darunter steht, wer wann abgehakt hat – jede Änderung bleibt im Verlauf nachlesbar." },
       ] },
       { titel: "Bewerten", start: `/riegenkarten/${LG}#bewertung`, schritte: [
-        // Folgt der Ablauf auf derselben Seite, bleibt der Reiter stehen – der Wechsel gehört deshalb dazu.
+        // Der Wechsel in den Reiter gehört zum Ablauf (die Seite lädt zu Beginn neu und öffnet ihn schon über den Anker).
         { ziel: "[data-reiter=bewertung]", text: "Bewertet wird im Reiter „Bewertung“. Tippe darauf.",
           warten: { klick: "[data-reiter=bewertung]" } },
         { ziel: zelle, text: "Tippe auf eine Zelle, um die Leistung zu bewerten.", warten: { klick: zelle } },
@@ -614,12 +588,11 @@
         { ziel: ".ausb-treffer .ausb-konto", text: "Wähle „Übungsperson A“.", warten: { klick: ".ausb-treffer .ausb-konto" } },
         { ziel: "#lg-katalog", text: "Prüfungsleistungen kannst du einmalig aus einem Katalog übernehmen, etwa aus dem Übungskatalog." },
         { ziel: "#lg-save", text: "Leg den Lehrgang an.", warten: { anfrage: `POST ${API}/lehrgaenge` }, probe: { klick: "#lg-save" } },
-        { ziel: () => (ohneDialog() && sichtbares("#reiter-inhalt .leerzustand") ? sichtbares("[data-reiter=teilnehmer]") : null),
+        { ziel: () => (sichtbares("#reiter-inhalt .leerzustand") ? sichtbares("[data-reiter=teilnehmer]") : null),
           text: "Der neue Lehrgang beginnt bei den Teilnehmenden: Als Leitung legst du sie hier an oder importierst die Excel-Teilnehmerliste." },
       ] },
     ] },
   };
-  Object.values(teile).forEach((t) => t.ablaeufe.forEach((a) => a.schritte.forEach((x) => { if (x.ziel) x.ziel = insBild(x.ziel); })));
 
   S.einfuehrung.modul("pruefungen", {
     bestand,

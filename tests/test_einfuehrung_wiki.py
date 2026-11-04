@@ -9,7 +9,7 @@ python tests/test_einfuehrung_wiki.py  oder  pytest tests/test_einfuehrung_wiki.
    Schublade, Suchzeile #zeilen-suche) – je Schritt Ziel sichtbar, Probe ausgeführt, keine Anfrage an /api/ (außer
    Merker) und /media/, jede Seite mit Übungskennung, keine Konsolenfehler, kein waagerechter Bildlauf. Dazu: eine echte
    Seite erscheint in der Übung nicht, der Router behält die Kennung (auch mit Zurück), der Export meldet „In der Übung
-   nicht verfügbar.“ statt die Seite zu verlassen, nach der Übung liegt kein Entwurf mit Übungskennung im Browser, und die
+   gibt es diese Datei nicht.“ statt die Seite zu verlassen (die Sprechblase überdeckt das Menü dabei nicht), nach der Übung liegt kein Entwurf mit Übungskennung im Browser, und die
    Datenbank ist danach dieselbe (iterdump-Prüfsumme).
 Alle Inhalte sind Platzhalter."""
 import hashlib
@@ -117,15 +117,16 @@ def _router_export_echt(u):
         assert s.warte("document.querySelector('h1.seitentitel')?.textContent.startsWith('Übung: Start')", 5)
         s.js("history.forward()")
         assert s.warte("location.pathname === '/stroemipedia/uebung-seite-lesen' && location.search.includes('uebung=grund')", 5)
-        # Export aus dem Menü „⋯“: Hinweis statt Seitenwechsel, das Menü schließt.
+        # Export aus dem Menü „⋯“ (wiki.js: location.href auf die Datei): Hinweis statt Seitenwechsel, das Menü schließt.
+        # Die Sprechblase des laufenden Schritts überdeckt das geöffnete Menü nicht – gewählt wird mit einem echten Klick.
         assert s.warte("document.querySelector('h1.seitentitel')?.textContent.startsWith('Übung: Seite lesen')", 5)
         s.sammeln()
         vorher = len(s.anfragen)
         assert s.klick("#pg-more") is None
         assert s.warte("Boolean(document.querySelector('.menue-schwebend button[data-a=\"export\"]'))", 5)
-        # Die Sprechblase des laufenden Schritts kann das Menü überdecken – gewählt wird hier per Skript.
-        s.js("document.querySelector('.menue-schwebend button[data-a=\"export\"]').click()")
-        assert s.warte("[...document.querySelectorAll('.toast, [role=status]')].some((t) => t.textContent.includes('In der Übung nicht verfügbar.'))", 5)
+        s.ruhe()
+        assert s.klick('.menue-schwebend button[data-a="export"]') is None
+        assert s.warte("[...document.querySelectorAll('.toast, [role=status]')].some((t) => t.textContent.includes('In der Übung gibt es diese Datei nicht.'))", 5)
         s.b.warten(0.5)
         assert s.js("location.pathname") == "/stroemipedia/uebung-seite-lesen"
         assert not s.js("Boolean(document.querySelector('.menue-schwebend'))")

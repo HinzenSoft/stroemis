@@ -7,7 +7,7 @@ python tests/test_einfuehrung_material.py  oder  pytest tests/test_einfuehrung_m
    Teile und Abläufe stimmen mit app/einfuehrung.py überein.
 2. Durchlauf jedes Teils (Grundteil, Prüfer, Materialwart, Material-Verwaltung) bei 1280×900 (Maus) und 360×740
    (Telefon, Touch) mit der Hilfe tests/einfuehrung_browser.py bis „Geschafft“ – ohne fehlendes oder verdecktes Ziel,
-   ohne unbeantwortete Anfrage (auf jeder Seite der Übung gesammelt), ohne Anfrage an /api/ (außer Merker, /api/me) oder
+   ohne unbeantwortete Anfrage (die Hilfe sammelt sie auf jeder Seite der Übung), ohne Anfrage an /api/ (außer Merker, /api/me) oder
    /media/, ohne Seite ohne Übungskennung, ohne Konsolenfehler und ohne waagerechten Bildlauf. Danach ist der Bestand der
    Datenbank unverändert (Prüfsumme ohne die Merker der Einführung). Ohne Chromium „übersprungen“ mit rc 0.
 Alle Inhalte sind Platzhalter."""
@@ -107,24 +107,6 @@ def test_statisch():
 
 # --- 2. Durchläufe -----------------------------------------------------------------------------------------------------
 
-class SammelSeite(Seite):
-    """Wie Seite – sammelt dazu auf jeder Seite der Übung die unbeantworteten Anfragen (S.einfuehrung.zustand().unbekannt
-    gilt nur für die Seite, auf der man gerade ist; der Durchlauf der Hilfe fragt ihn nur am Ende)."""
-
-    def __init__(self, *a, **k):
-        super().__init__(*a, **k)
-        self.unbekannt = set()
-
-    def sammeln(self):
-        super().sammeln()
-        try:
-            z = self.b.js("window.S && S.einfuehrung ? S.einfuehrung.zustand() : null")
-        except RuntimeError:
-            z = None
-        if z and z.get("unbekannt"):
-            self.unbekannt.update(z["unbekannt"])
-
-
 def pruefsumme(u):
     """Prüfsumme der Datenbank ohne die Merker der Einführung (die schreibt die Übung mit Absicht)."""
     with u.app.app_context():
@@ -136,15 +118,13 @@ def pruefsumme(u):
 def durchlauf(u, teil, breite, hoehe, touch):
     rolle = KONTO_JE_TEIL[("material", teil)]
     u.merker_leeren(rolle)
-    s = SammelSeite(u, rolle, breite, hoehe, touch)
+    s = Seite(u, rolle, breite, hoehe, touch)
     u.seiten.append(s)
     try:
         vorher = pruefsumme(u)
         los = time.time()
         befunde = s.durchlauf("material", teil)
         dauer = time.time() - los
-        if s.unbekannt:
-            befunde.append(f"Unbeantwortete Anfragen unterwegs: {sorted(s.unbekannt)}")
         if pruefsumme(u) != vorher:
             befunde.append("Die Datenbank hat sich in der Übung verändert.")
         return befunde, dauer

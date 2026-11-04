@@ -489,11 +489,6 @@
   const formularLink = `#mat-inhalt a[href^="/materialablage/katalog/formular/${ID.formular}"]`;
   const neuerPunkt = "#fp-tabelle tbody tr:last-child .fp-text";
   const rolle = "label.mf-vorlage:has(> input[value=pruefer])";
-  const nachDialog = (sel) => () => {
-    const st = history.state;
-    if (document.querySelector("dialog[open]") || (st && typeof st === "object" && typeof st.stroemisOverlay === "number")) return null;
-    return document.querySelector(sel);
-  };
   // Die Prüfung ist bewertet, wenn kein Pflichtpunkt mehr ohne Befund ist (wie „Pflichtpunkte ohne Befund“ in der Leiste).
   const bewertet = (z) => {
     const x = (z.pruefungen || []).find((p) => p.id === ID.pruefung);
@@ -525,9 +520,9 @@
         warten: { klick: "#mat-suche button[type=submit], #mat-vorschlaege a", da: `#mat[data-ansicht=suche] ${artikelLink(ID.gurt)}` },
         // Probe: am Rechner „Suchen“, am Telefon (ohne den Knopf) die Trefferliste in den Vorschlägen.
         probe: { klick: "#mat-suche button[type=submit], #mat-vorschlaege .mv-alle a" } },
-      // Nur, wenn ein Vorschlag nicht schon zum Artikel geführt hat. Die Führung fragt „wenn“ gleich nach dem Klick, oft
-      // noch auf der alten Seite – darum „nicht auf der Artikelseite“ statt „auf der Trefferseite“.
-      { ziel: artikelLink(ID.gurt), wenn: () => ansicht() !== "artikel", text: "Öffne den Treffer.", warten: { klick: artikelLink(ID.gurt) } },
+      // Nur auf der Trefferseite – hat ein Vorschlag schon zum Artikel geführt, entfällt der Schritt. (Die Führung fragt
+      // „wenn“ erst auf der neuen Seite, nicht während der Seitenwechsel läuft.)
+      { ziel: artikelLink(ID.gurt), wenn: () => ansicht() === "suche", text: "Öffne den Treffer.", warten: { klick: artikelLink(ID.gurt) } },
       { ziel: ".mat-artikeltitel", text: "Die Artikelansicht: Status, Stammdaten, Prüfungen und Verlauf. Ein roter Banner hieße: nicht verwenden." },
       { ziel: "#mat-qr", text: "Über den QR-Code auf dem Etikett kommst du direkt hierher – ganz ohne Suche." },
     ] },
@@ -555,9 +550,7 @@
       { ziel: "#pr-ok", text: "Schreib die Prüfung fest.", warten: { klick: "#pr-ok" } },
       { ziel: "#fs-ok", text: "Mit dem Festschreiben wird das Protokoll unveränderlich und trägt deine Unterschrift. In der Übung wird nichts unterschrieben.",
         warten: { anfrage: /^POST \/api\/material\/pruefungen\/\d+\/festschreiben$/ }, probe: { klick: "#fs-ok" } },
-      // Erst, wenn der Dialog samt seinem Verlaufseintrag weg ist: Das Zurück stellt die alte Bildlaufhöhe wieder her und
-      // schöbe ein schon ins Bild geholtes Ziel wieder hinaus.
-      { ziel: nachDialog(".mat-protokoll a.btn"), text: "Das Protokoll gibt es als PDF – hier eine Übungsdatei." },
+      { ziel: ".mat-protokoll a.btn", text: "Das Protokoll gibt es als PDF – hier eine Übungsdatei." },
     ] },
   ] };
 
@@ -603,21 +596,6 @@
       { ziel: "#fp-tabelle", text: "Gespeichert. Ist eine Version schon für Prüfungen benutzt, änderst du sie nur über „Neue Version“ – alte Protokolle bleiben, wie sie waren." },
     ] },
   ] };
-
-  /* Ziele erst nach den Webschriften: Bis „DLRG Univers“ geladen ist, stehen Zeilen und Navigation anders – ein früh
-     gefundenes Ziel rutschte danach unter die Leiste der Führung, und die Führung holt es nicht noch einmal ins Bild.
-     Jedes Ziel als Selektor wird deshalb eine Funktion, die bis dahin nichts liefert (die Führung wartet bis 5 s). */
-  const geladen = () => !document.fonts || document.fonts.status === "loaded";
-  const zuSehen = (el) => el.getClientRects().length && getComputedStyle(el).visibility !== "hidden" && !el.closest("[hidden], [inert], .fuehrung-blase");
-  const nachSchrift = (z) => (typeof z === "string" ? () => (geladen() ? [...document.querySelectorAll(z)].find(zuSehen) || null : null)
-    : typeof z === "function" ? () => (geladen() ? z() : null) : z);
-  /* Der erste Schritt eines Ablaufs außerdem erst, wenn ein eben geschlossener Dialog (Hinweis „Entwicklungsserver“) seinen
-     Verlaufseintrag zurückgenommen hat: Das Zurück stellt die alte Bildlaufhöhe her und schöbe das Ziel wieder hinaus. */
-  const zurueckOffen = () => { const st = history.state; return Boolean(st && typeof st === "object" && typeof st.stroemisOverlay === "number" && !document.querySelector("dialog[open]")); };
-  [grund, pruefer, materialwart, verwaltung].forEach((teil) => teil.ablaeufe.forEach((a) => a.schritte.forEach((s, i) => {
-    const f = nachSchrift(s.ziel);
-    s.ziel = i || typeof f !== "function" ? f : () => (zurueckOffen() ? null : f());
-  })));
 
   S.einfuehrung.modul("material", {
     bestand,

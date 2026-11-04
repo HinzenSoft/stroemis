@@ -220,23 +220,8 @@
   ];
 
   /* --- Abläufe ---------------------------------------------------------------------------------------------------- */
-  /* Das Ziel eines Schritts – ruhig und im Bild:
-     - Erst, wenn die Seitenleiste steht: Sie gleitet beim Öffnen herein und beim Schließen hinaus (am Telefon als
-       Schublade von unten, transform mit Übergang) – vorher läge ein Ziel in ihr noch unterhalb des Fensters, und ein
-       Ziel neben ihr (Positionsbanner) läge noch unter ihr.
-     - Liegt es außerhalb des Fensters oder unter der Leiste der Führung (Telefon: Seitenleiste und Positionsbanner
-       reichen bis an den unteren Rand), holt es ein sofortiger Bildlauf herein. Weich gerollt stünden Rahmen und Blase
-       erst nach dem Rollen richtig – und ein Tipp währenddessen ginge daneben. */
-  const imBild = (sel) => () => {
-    const panel = document.querySelector("#panel");
-    if (panel && panel.getAnimations && panel.getAnimations().some((a) => a.playState === "running")) return null;
-    const el = [...document.querySelectorAll(sel)].find((x) => x.getClientRects().length && !x.closest(".fuehrung-blase"));
-    if (!el) return null;
-    const leiste = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--fuehrung-hoehe")) || 0;
-    const r = el.getBoundingClientRect();
-    if (r.top < 0 || r.bottom > window.innerHeight - leiste) el.scrollIntoView({ block: "center", behavior: "instant" });
-    return el;
-  };
+  /* Ziele sind einfache Selektoren: Die Führung wartet, bis die Seitenleiste nicht mehr gleitet (am Telefon eine
+     Schublade von unten), und holt das Ziel sofort über die Leiste der Führung (einfuehrung.js, beruhigen/insBild). */
   const BILD_PUT = /^PUT \/api\/photos\/\d+$/;
 
   S.einfuehrung.modul("karte", {
@@ -248,66 +233,67 @@
       grund: { ablaeufe: [
         { titel: "Karte und Album", start: "/ankerplaetze", schritte: [
           { ziel: "#map", text: "Auf der Karte stehen die Ankerplätze mit ihren Bildern." },
-          { ziel: imBild("#btn-albums"), text: "Tippe auf „Alben“ – die Liste zeigt alle Alben.", warten: { klick: "#btn-albums" } },
-          { ziel: imBild(`.album-wahl[data-id="${ALBUM_A}"]`), text: "Öffne Übungsalbum A.",
+          { ziel: "#btn-albums", text: "Tippe auf „Alben“ – die Liste zeigt alle Alben.", warten: { klick: "#btn-albums" } },
+          { ziel: `.album-wahl[data-id="${ALBUM_A}"]`, text: "Öffne Übungsalbum A.",
             warten: { klick: `.album-wahl[data-id="${ALBUM_A}"]` } },
-          { ziel: imBild('.photo-grid button[data-i="0"]'), text: "Tippe auf ein Bild, um es groß zu sehen.",
+          { ziel: '.photo-grid button[data-i="0"]', text: "Tippe auf ein Bild, um es groß zu sehen.",
             warten: { klick: ".photo-grid button" }, probe: { klick: '.photo-grid button[data-i="0"]' } },
-          { ziel: imBild("#lb-next"), text: "Blättern geht mit den Pfeilen oder durch Wischen.", warten: { klick: "#lb-next" } },
-          { ziel: imBild("#lb-close"), text: "Schließ die Großansicht – das Album bleibt offen.", warten: { klick: "#lb-close" } },
+          { ziel: "#lb-next", text: "Blättern geht mit den Pfeilen oder durch Wischen.", warten: { klick: "#lb-next" } },
+          { ziel: "#lb-close", text: "Schließ die Großansicht – das Album bleibt offen.", warten: { klick: "#lb-close" } },
         ] },
         { titel: "Suchen und filtern", start: "/ankerplaetze", schritte: [
-          { ziel: imBild("#alben-suche"), text: "Such nach „Übung“ – gesucht wird in Titel, Beschreibung und Gliederung der Alben.",
+          { ziel: "#alben-suche", text: "Such nach „Übung“ – gesucht wird in Titel, Beschreibung und Gliederung der Alben.",
             warten: { wert: ["#alben-suche", /\S{3}/] }, probe: { tippen: ["#alben-suche", "Übung"] } },
-          { ziel: imBild('.chip[data-cat="wasser"]'), text: "Die Knöpfe filtern nach Art. Tippe auf „Gewässer“.",
+          { ziel: '.chip[data-cat="wasser"]', text: "Die Knöpfe filtern nach Art. Tippe auf „Gewässer“.",
             warten: { klick: '.chip[data-cat="wasser"]' } },
-          { ziel: imBild("#panel.open #al-liste"),
+          { ziel: "#panel.open #al-liste",
             text: "Jetzt stehen nur noch die Alben da, die zu Suche und Art passen. „Alle“ hebt den Filter wieder auf." },
         ] },
       ] },
       redakteur: { ablaeufe: [
         { titel: "Album anlegen", start: "/ankerplaetze", schritte: [
-          { ziel: imBild("#btn-new-album"), text: "Als Redakteur legst du eigene Alben an. Tippe auf „Album anlegen“.",
+          { ziel: "#btn-new-album", text: "Als Redakteur legst du eigene Alben an. Tippe auf „Album anlegen“.",
             warten: { klick: "#btn-new-album" } },
-          { ziel: imBild("#al-title"), text: "Gib dem Album einen Titel, hier „Übungsalbum D“.",
+          { ziel: "#al-title", text: "Gib dem Album einen Titel, hier „Übungsalbum D“.",
             warten: { wert: ["#al-title", /\S{3}/] }, probe: { tippen: ["#al-title", "Übungsalbum D"] } },
-          { ziel: imBild("#al-cat"), text: "Wähle die Art: Übungsobjekt Seiltechnik, Übungsgewässer oder Sonstiges." },
-          { ziel: imBild("label:has(> #al-upload)"), text: "Nimm den Haken heraus – Bilder lädst du im nächsten Ablauf hoch.",
+          { ziel: "#al-cat", text: "Wähle die Art: Übungsobjekt Seiltechnik, Übungsgewässer oder Sonstiges." },
+          { ziel: "label:has(> #al-upload)", text: "Nimm den Haken heraus – Bilder lädst du im nächsten Ablauf hoch.",
             warten: { bedingung: () => !(document.querySelector("#al-upload") || {}).checked }, probe: { klick: "label:has(> #al-upload)" } },
-          { ziel: imBild("#al-save"), text: "Leg das Album an.", warten: { anfrage: "POST /api/albums" }, probe: { klick: "#al-save" } },
-          { ziel: imBild("#panel.open #panel-body > p.help"),
+          { ziel: "#al-save", text: "Leg das Album an.", warten: { anfrage: "POST /api/albums" }, probe: { klick: "#al-save" } },
+          { ziel: "#panel.open #panel-body > p.help",
             text: "Das Album ist angelegt. Auf die Karte kommt es mit dem ersten Bild, das eine Position hat." },
         ] },
-        // Ohne Anker: Nach „Album anlegen“ zeigt die Seitenleiste das neue Album, und map.js liest #album=… nur beim
-        // Laden – der Weg über „Alben“ führt in beiden Fällen (weiter oder fortgesetzt) zu Übungsalbum A.
+        // Ohne Anker: Die Seite lädt neu und zeigt die Karte ohne offenes Album – der Weg über „Alben“ zu Übungsalbum A
+        // gehört zum Ablauf (weiter wie fortgesetzt).
         { titel: "Bilder hochladen", start: "/ankerplaetze", schritte: [
-          { ziel: imBild("#btn-albums"), text: "Öffne die Liste der Alben.", warten: { klick: "#btn-albums" } },
-          { ziel: imBild(`.album-wahl[data-id="${ALBUM_A}"]`),
+          { ziel: "#btn-albums", text: "Öffne die Liste der Alben.", warten: { klick: "#btn-albums" } },
+          { ziel: `.album-wahl[data-id="${ALBUM_A}"]`,
             text: "Öffne Übungsalbum A. Es gehört dir – Bilder hochladen darfst du nur in eigenen Alben.",
             warten: { klick: `.album-wahl[data-id="${ALBUM_A}"]` } },
-          { ziel: imBild("#a-upload"), text: "Tippe auf „Bilder / Videos hochladen“ – oder nimm hier ein Übungsbild.",
+          { ziel: "#a-upload", text: "Tippe auf „Bilder / Videos hochladen“ – oder nimm hier ein Übungsbild.",
             datei: { input: "#file-input", bild: BILD(HOCHLADEBILD) },
             warten: { anfrage: `POST /api/albums/${ALBUM_A}/photos` }, probe: { datei: true } },
-          { ziel: imBild("#loc-start"), text: "Das Bild hat keinen Geotag. Platzier es jetzt auf der Karte.",
+          { ziel: "#loc-start", text: "Das Bild hat keinen Geotag. Platzier es jetzt auf der Karte.",
             warten: { klick: "#loc-start" } },
-          { ziel: imBild("#loc-q"), text: "Such den Ort: Gib „Übungsort“ ein.",
+          { ziel: "#loc-q", text: "Such den Ort: Gib „Übungsort“ ein.",
             warten: { wert: ["#loc-q", /\S{3}/] }, probe: { tippen: ["#loc-q", "Übungsort"] } },
-          { ziel: imBild("#loc-form button[type=submit]"), text: "Tippe auf „Suchen“.", warten: { anfrage: "GET /api/geocode" },
+          { ziel: "#loc-form button[type=submit]", text: "Tippe auf „Suchen“.", warten: { anfrage: "GET /api/geocode" },
             probe: { klick: "#loc-form button[type=submit]" } },
-          { ziel: imBild("#loc-treffer button"), text: "Wähle den Treffer – die Karte fährt dorthin.", warten: { klick: "#loc-treffer button" } },
+          { ziel: "#loc-treffer button", text: "Wähle den Treffer – die Karte fährt dorthin.", warten: { klick: "#loc-treffer button" } },
           { ziel: "#map", text: "Tippe jetzt auf die Karte, an die Stelle, an der das Bild entstanden ist.",
-            warten: { da: "#loc-ok" }, probe: { klick: "#map" } },
-          { ziel: imBild("#loc-ok"), text: "Speichere die Position.", warten: { anfrage: BILD_PUT }, probe: { klick: "#loc-ok" } },
-          { ziel: imBild("#panel.open .photo-grid"), text: "Das Bild liegt jetzt mit Position im Album und auf der Karte." },
+            // Die Probe tippt auf eine freie Stelle der Karte – in ihrer Mitte liegt am Telefon das Positionsbanner.
+            warten: { da: "#loc-ok" }, probe: { klick: "#map", frei: true } },
+          { ziel: "#loc-ok", text: "Speichere die Position.", warten: { anfrage: BILD_PUT }, probe: { klick: "#loc-ok" } },
+          { ziel: "#panel.open .photo-grid", text: "Das Bild liegt jetzt mit Position im Album und auf der Karte." },
         ] },
-        // Weiter aus „Bilder hochladen“ ist Übungsalbum A schon offen; fortgesetzt öffnet map.js es über den Anker.
+        // Die Seite lädt zu Beginn jedes Ablaufs neu; map.js öffnet Übungsalbum A über den Anker.
         { titel: "Bild beschreiben", start: `/ankerplaetze#album=${ALBUM_A}`, schritte: [
-          { ziel: imBild('.photo-grid button[data-i="0"]'), text: "Öffne das erste Bild.",
+          { ziel: '.photo-grid button[data-i="0"]', text: "Öffne das erste Bild.",
             warten: { klick: '.photo-grid button[data-i="0"]' } },
-          { ziel: imBild("#lb-edit"), text: "Tippe auf „Bearbeiten“.", warten: { klick: "#lb-edit" } },
-          { ziel: imBild("#p-title"), text: "Gib dem Bild einen Titel, hier „Übung: Ansicht“.",
+          { ziel: "#lb-edit", text: "Tippe auf „Bearbeiten“.", warten: { klick: "#lb-edit" } },
+          { ziel: "#p-title", text: "Gib dem Bild einen Titel, hier „Übung: Ansicht“.",
             warten: { wert: ["#p-title", /\S{3}/] }, probe: { tippen: ["#p-title", "Übung: Ansicht"] } },
-          { ziel: imBild("#p-save"), text: "Speichere – Titel, Notiz und weitere Infos stehen dann in der Großansicht.",
+          { ziel: "#p-save", text: "Speichere – Titel, Notiz und weitere Infos stehen dann in der Großansicht.",
             warten: { anfrage: BILD_PUT }, probe: { klick: "#p-save" } },
         ] },
       ] },

@@ -473,20 +473,6 @@ Platzhaltertext mit einem Verweis auf die [zweite Übungsseite](/stroemipedia/ue
     ["DELETE", /^\/api\/wiki\/trash\/\d+$/, () => NICHT],
   ];
 
-  /* Export: Die Seite holt die Markdown-Datei bzw. das ZIP per Seitenwechsel (location.href in wiki.js) – in der Übung
-     verließe das die Übungsseite, und die Sperre des Servers antwortete mit 403. Der Wächter fängt die beiden
-     Menüeinträge vor dem Menü ab: Er benennt die Wahl um, damit das Menü wie nach jeder Wahl schließt und nichts tut, und
-     meldet, dass es das in der Übung nicht gibt. Diese Datei läuft nur im Übungsmodus (base.html). */
-  if (typeof document.addEventListener === "function") {
-    document.addEventListener("click", (e) => {
-      const wahl = e.target && e.target.closest
-        && e.target.closest('.tree-menu button[data-a="export"], .tree-menu button[data-a="exportzip"]');
-      if (!wahl) return;
-      wahl.dataset.a = "nicht-in-der-uebung";
-      S.toast("In der Übung nicht verfügbar.");
-    }, true);
-  }
-
   /* --- Abläufe -------------------------------------------------------------------------------------------------------- */
   const $ = (sel) => document.querySelector(sel);
   const passt = (abfrage) => window.matchMedia(abfrage).matches;
@@ -497,55 +483,16 @@ Platzhaltertext mit einem Verweis auf die [zweite Übungsseite](/stroemipedia/ue
   const sichtbar = (el) => Boolean(el && el.isConnected && el.getClientRects().length && getComputedStyle(el).visibility !== "hidden"
     && !el.closest("[hidden], [inert], .fuehrung-blase, .fuehrung-rahmen"));
   const finde = (sel) => [...document.querySelectorAll(sel)].find(sichtbar) || null;
-  /* Das Ziel ganz ins Bild holen – sofort, nicht weich. Die Führung rollt nur, wenn ein Ziel außerhalb des Fensters
-     liegt; hier liegt es oft unter einer klebenden Leiste (Suchzeile über der Artikel-Leiste, wenn die Kommentare offen
-     sind), unter der Sprechblase am Telefon oder unten in einem Dialog, der in sich rollt. Getroffen wird die Mitte (oben
-     höchstens 20 px tief) – trifft sie etwas anderes, rollt das Ziel in die Mitte seines Rahmens. */
-  function imBild(el) {
-    if (!el) return null;
-    const r = el.getBoundingClientRect();
-    const x = r.left + r.width / 2;
-    const y = r.top + Math.min(r.height / 2, 20);
-    const t = y >= 0 && y < window.innerHeight && x >= 0 && x < window.innerWidth ? document.elementFromPoint(x, y) : null;
-    if (!t || !(t === el || el.contains(t))) el.scrollIntoView({ block: "center", behavior: "instant" });
-    return el;
-  }
-  /* Den Editor oben unter die klebenden Leisten holen: Seine Titelzeile ist das, worum es geht, und ein Ziel im Text des
-     Editors kann die Führung nicht einrahmen (ProseMirror zeichnet ein Element neu, sobald jemand ein Attribut daran
-     setzt – die Führung setzt aria-describedby). Gerollt wird nur, wenn er oben verdeckt ist oder unten unter der
-     Sprechblase verschwindet. */
-  function obenImBild(el) {
-    if (!el) return null;
-    let verdeckt = 0;
-    document.querySelectorAll(".bauchbinde, .wiki-suchzeile, .wiki-head").forEach((leiste) => {
-      const lage = getComputedStyle(leiste).position;
-      const r = leiste.getBoundingClientRect();
-      if ((lage === "sticky" || lage === "fixed") && r.height && r.top <= verdeckt + 1) verdeckt = Math.max(verdeckt, r.bottom);
-    });
-    const blase = document.querySelector(".fuehrung-blase.als-leiste");
-    const unten = window.innerHeight - (blase ? blase.offsetHeight : 0);
-    const r = el.getBoundingClientRect();
-    if (r.top < verdeckt || (r.bottom > unten && r.top > verdeckt + 8)) window.scrollBy({ top: r.top - verdeckt - 8, behavior: "instant" });
-    return el;
-  }
-  // Ruhe nach einem Dialog: zu, und sein Schritt im Verlauf ist zurückgenommen (S.dialogVerlauf) – der Browser stellt
-  // dabei die Bildlaufhöhe von vorher wieder her, ein Ziel davor wäre gleich wieder aus dem Bild.
   const offenerDialog = () => [...document.querySelectorAll("dialog[open]")].pop() || null;
-  const ruhig = () => !offenerDialog() && !(history.state && typeof history.state === "object"
-    && typeof history.state.stroemisOverlay === "number");
   // Die Seite mit diesem Titel ist gezeichnet (Lesen, nicht der Editor) – Ziele davor gehörten noch zur vorigen Seite.
   const aufSeite = (titel) => {
     const h = $("#wiki-content h1.seitentitel");
     return Boolean(h) && !document.body.classList.contains("editing") && h.textContent.trim().startsWith(titel);
   };
-  const ziel = (sel) => () => imBild(finde(sel));
-  const aufSeiteZiel = (titel, sel) => () => (aufSeite(titel) && ruhig() ? imBild(finde(sel)) : null);
-  // Im Seitenbaum: am Telefon erst, wenn die Schublade ganz aufgefahren ist (sie gleitet 0,2 s herein).
-  const baumZiel = (sel) => () => {
-    const seite = $("#wiki-side");
-    if (schublade() && (!seite || !seite.classList.contains("open") || seite.getBoundingClientRect().left < -1)) return null;
-    return imBild(finde(sel));
-  };
+  /* Ziele: Dass sie im Bild stehen, nicht unter einem Dialog liegen, der gerade zugeht, und nicht in der Schublade, die
+     noch hereingleitet, wartet die Führung selbst ab (einfuehrung.js, beruhigen) – hier steht nur, wann ein Ziel zur
+     richtigen Seite gehört. */
+  const aufSeiteZiel = (titel, sel) => () => (aufSeite(titel) ? finde(sel) : null);
   // „Teilen“ steht als Knopf im Seitenkopf – am Telefon und in schmalen Köpfen am Finger im Menü „⋯“ (app.css, pageMenu).
   const teilenAlsKnopf = () => {
     const k = $("#pg-share");
@@ -557,21 +504,21 @@ Platzhaltertext mit einem Verweis auf die [zweite Übungsseite](/stroemipedia/ue
   const SEITENTITEL = "#wiki-content h1.seitentitel";
   const neueSeite = () => {
     const h = $(SEITENTITEL);
-    return h && ruhig() && !document.body.classList.contains("editing")
-      && !/^Übung: (Start|Seite lesen|Zweite Seite|Vorlage)/.test(h.textContent.trim()) ? imBild(h) : null;
+    return h && !document.body.classList.contains("editing")
+      && !/^Übung: (Start|Seite lesen|Zweite Seite|Vorlage)/.test(h.textContent.trim()) ? h : null;
   };
-  const baumAuf = (text) => ({ wenn: schublade, ziel: ziel("#wiki-menu"), text, warten: { klick: "#wiki-menu" } });
+  const baumAuf = (text) => ({ wenn: schublade, ziel: "#wiki-menu", text, warten: { klick: "#wiki-menu" } });
   const teilenSchritte = (titel) => [
     { wenn: teilenAlsKnopf, ziel: aufSeiteZiel(titel, "#pg-share"), text: "Tippe auf „Teilen“.", warten: { klick: "#pg-share" } },
     { wenn: () => !teilenAlsKnopf(), ziel: aufSeiteZiel(titel, "#pg-more"), text: "„Teilen“ steckt hier im Menü „⋯“. Tippe darauf.",
       warten: { klick: "#pg-more" } },
-    { wenn: () => !teilenAlsKnopf(), ziel: ziel(MENUE("share")), text: "Tippe auf „Teilen“.", warten: { klick: MENUE("share") } },
+    { wenn: () => !teilenAlsKnopf(), ziel: MENUE("share"), text: "Tippe auf „Teilen“.", warten: { klick: MENUE("share") } },
   ];
 
   const grund = [
     { titel: "Lesen", start: "/stroemipedia/uebung-start", schritte: [
       baumAuf("Tippe auf „☰“ für den Seitenbaum."),
-      { ziel: baumZiel('#tree li[data-id="910000002"] > .row > a'), text: "Links steht der Seitenbaum. Öffne „Übung: Seite lesen“.",
+      { ziel: '#tree li[data-id="910000002"] > .row > a', text: "Links steht der Seitenbaum. Öffne „Übung: Seite lesen“.",
         warten: { klick: '#tree li[data-id="910000002"] > .row > a' }, probe: { klick: '#tree li[data-id="910000002"] > .row > a' } },
       { wenn: () => !gliederungImMenue() && !document.body.classList.contains("toc-aus"),
         ziel: () => (aufSeite("Übung: Seite lesen") && $("#toc a") ? $("#toc") : null),
@@ -580,17 +527,17 @@ Platzhaltertext mit einem Verweis auf die [zweite Übungsseite](/stroemipedia/ue
         text: "Die Gliederung springt zu den Abschnitten der Seite. Bei dir ist sie ausgeblendet – „☰“ oben rechts blendet sie ein." },
       { wenn: gliederungImMenue, ziel: aufSeiteZiel("Übung: Seite lesen", "#pg-more"),
         text: "Die Gliederung der Seite steckt hier im Menü „⋯“. Tippe darauf.", warten: { klick: "#pg-more" } },
-      { wenn: gliederungImMenue, ziel: ziel(MENUE("toc")), text: "Tippe auf „Inhaltsverzeichnis“.", warten: { klick: MENUE("toc") } },
-      { wenn: gliederungImMenue, ziel: ziel("dialog[open] nav.toc"),
+      { wenn: gliederungImMenue, ziel: MENUE("toc"), text: "Tippe auf „Inhaltsverzeichnis“.", warten: { klick: MENUE("toc") } },
+      { wenn: gliederungImMenue, ziel: "dialog[open] nav.toc",
         text: "Die Gliederung springt zu den Abschnitten der Seite. Tippe auf einen Abschnitt.",
         warten: { klick: "dialog[open] nav.toc a" }, probe: { klick: "dialog[open] nav.toc a" } },
     ] },
     { titel: "Suchen", start: "/stroemipedia/uebung-start", schritte: [
-      { wenn: schublade, ziel: ziel("#zeilen-suche"), text: "Such nach „Zweite“.", warten: { wert: ["#zeilen-suche", /zweite/i] },
+      { wenn: schublade, ziel: "#zeilen-suche", text: "Such nach „Zweite“.", warten: { wert: ["#zeilen-suche", /zweite/i] },
         probe: { tippen: ["#zeilen-suche", "Zweite"] } },
-      { wenn: () => !schublade(), ziel: ziel("#wiki-search"), text: "Such nach „Zweite“.", warten: { wert: ["#wiki-search", /zweite/i] },
+      { wenn: () => !schublade(), ziel: "#wiki-search", text: "Such nach „Zweite“.", warten: { wert: ["#wiki-search", /zweite/i] },
         probe: { tippen: ["#wiki-search", "Zweite"] } },
-      { ziel: ziel("#zeilen-treffer a, #search-results a"), text: "Gesucht wird in Titel und Text aller Seiten. Öffne den ersten Treffer.",
+      { ziel: "#zeilen-treffer a, #search-results a", text: "Gesucht wird in Titel und Text aller Seiten. Öffne den ersten Treffer.",
         warten: { klick: "#zeilen-treffer a, #search-results a" }, probe: { klick: "#zeilen-treffer a, #search-results a" } },
       { ziel: aufSeiteZiel("Übung: Zweite Seite", SEITENTITEL),
         text: "Das ist die gefundene Seite. Am Telefon steht die Suche oben über jeder Seite." },
@@ -599,12 +546,12 @@ Platzhaltertext mit einem Verweis auf die [zweite Übungsseite](/stroemipedia/ue
       { ziel: aufSeiteZiel("Übung: Seite lesen", "#pg-comment"),
         text: "Mit diesem Knopf kommentierst du die ganze Seite. Für eine bestimmte Stelle markierst du vorher Text im Artikel.",
         warten: { klick: "#pg-comment" } },
-      { ziel: ziel("#c-text"), text: "Schreib einen Kommentar – Fragen und Hinweise an die Autoren gehören hierher.",
+      { ziel: "#c-text", text: "Schreib einen Kommentar – Fragen und Hinweise an die Autoren gehören hierher.",
         warten: { wert: ["#c-text", /\S{3}/] }, probe: { tippen: ["#c-text", "Übung: ein Platzhalter-Kommentar"] } },
-      { ziel: ziel("#c-save"), text: "Speichere den Kommentar.", warten: { anfrage: "POST /api/wiki/pages/910000002/comments" },
+      { ziel: "#c-save", text: "Speichere den Kommentar.", warten: { anfrage: "POST /api/wiki/pages/910000002/comments" },
         probe: { klick: "#c-save" } },
       // Neben dem Text (ab 1181 px) steht der Kommentar in der Spur rechts; schmaler stehen die Kommentare unter dem Artikel.
-      { wenn: () => !gliederungImMenue(), ziel: () => (ruhig() ? imBild(finde('#comments .comment[data-cid="910000061"]')) : null),
+      { wenn: () => !gliederungImMenue(), ziel: '#comments .comment[data-cid="910000061"]',
         text: "Dein Kommentar steht jetzt bei der Seite. In der Übung wurde nichts gespeichert." },
       { wenn: gliederungImMenue, ziel: null,
         text: "Dein Kommentar steht jetzt unten bei den Kommentaren der Seite. In der Übung wurde nichts gespeichert." },
@@ -612,29 +559,29 @@ Platzhaltertext mit einem Verweis auf die [zweite Übungsseite](/stroemipedia/ue
     { titel: "Bearbeiten", start: "/stroemipedia/uebung-seite-lesen", schritte: [
       { ziel: aufSeiteZiel("Übung: Seite lesen", "#pg-edit"),
         text: "Seiten, die für dich freigegeben sind, kannst du bearbeiten. Tippe auf „Bearbeiten“.", warten: { klick: "#pg-edit" } },
-      { ziel: () => obenImBild(finde(".toastui-editor-ww-container")), text: "Schreib einen Satz dazu.",
+      { ziel: EDITOR, text: "Schreib einen Satz dazu.",
         warten: { wert: [EDITOR, /\S/] }, probe: { tippen: [EDITOR, "Übung: ein Satz. "] } },
-      { ziel: ziel("#ed-status"), text: "Gespeichert wird von selbst – hier steht der Stand.",
+      { ziel: "#ed-status", text: "Gespeichert wird von selbst – hier steht der Stand.",
         warten: { bedingung: () => /Gespeichert/.test(($("#ed-status") || {}).textContent || "") }, probe: { klick: "#ed-status" } },
-      { ziel: ziel("#ed-read"), text: "Zurück zum Lesen.", warten: { klick: "#ed-read" } },
+      { ziel: "#ed-read", text: "Zurück zum Lesen.", warten: { klick: "#ed-read" } },
     ] },
   ];
 
   const redakteur = [
     { titel: "Seite anlegen", start: "/stroemipedia/uebung-start", schritte: [
       baumAuf("Tippe auf „☰“ – über dem Seitenbaum steht „Neue Seite“."),
-      { ziel: () => (aufSeite("Übung: Start") ? baumZiel("#btn-new-page")() : null),
+      { ziel: aufSeiteZiel("Übung: Start", "#btn-new-page"),
         text: "Über „Neue Seite“ legst du eine Seite an – als Unterseite der Seite, die gerade offen ist.",
         warten: { klick: "#btn-new-page" }, probe: { klick: "#btn-new-page" } },
-      { ziel: ziel("#nv-los"), text: "Leer beginnen oder den Inhalt einer Vorlage übernehmen. Lass „Leer“ gewählt und tippe auf „Weiter“.",
+      { ziel: "#nv-los", text: "Leer beginnen oder den Inhalt einer Vorlage übernehmen. Lass „Leer“ gewählt und tippe auf „Weiter“.",
         warten: { klick: "#nv-los" } },
       // Am Telefon passt der leere Editor (480 px hoch) nicht über die Sprechblase – dort ohne Rahmen, der Editor steht oben.
-      { wenn: () => !leiste(), ziel: () => (ruhig() ? obenImBild(finde(".toastui-editor-ww-container")) : null),
+      { wenn: () => !leiste(), ziel: EDITOR,
         text: "Die erste Zeile ist der Seitentitel. Ergänze ihn, etwa zu „Übung: Neue Seite“.",
         warten: { wert: [EDITOR, /\S/] }, probe: { tippen: [EDITOR, "Übung: "] } },
       { wenn: leiste, ziel: null, text: "Die erste Zeile im Editor ist der Seitentitel. Ergänze ihn, etwa zu „Übung: Neue Seite“.",
         warten: { wert: [EDITOR, /\S/] }, probe: { tippen: [EDITOR, "Übung: "] } },
-      { ziel: ziel("#ed-save"), text: "Leg die Seite an. Danach speichert der Editor von selbst.", warten: { anfrage: "POST /api/wiki/pages" },
+      { ziel: "#ed-save", text: "Leg die Seite an. Danach speichert der Editor von selbst.", warten: { anfrage: "POST /api/wiki/pages" },
         probe: { klick: "#ed-save" } },
       { ziel: neueSeite, text: "Die neue Seite steht jetzt im Seitenbaum unter „Übung: Start“." },
     ] },
@@ -642,12 +589,12 @@ Platzhaltertext mit einem Verweis auf die [zweite Übungsseite](/stroemipedia/ue
       { ziel: aufSeiteZiel("Übung: Zweite Seite", SEITENTITEL),
         text: "„Übung: Zweite Seite“ hast du angelegt. Deshalb legst du fest, wer sie außer dir bearbeiten darf." },
       ...teilenSchritte("Übung: Zweite Seite"),
-      { ziel: ziel("#sh-filter"), text: "Such „Übungsperson“.", warten: { wert: ["#sh-filter", /übungsperson/i] },
+      { ziel: "#sh-filter", text: "Such „Übungsperson“.", warten: { wert: ["#sh-filter", /übungsperson/i] },
         probe: { tippen: ["#sh-filter", "Übungsperson"] } },
-      { ziel: ziel('#sh-users label:has(input[value="910000051"])'),
+      { ziel: '#sh-users label:has(input[value="910000051"])',
         text: "Hak „Übungsperson A“ an. Freigegebene bearbeiten die Seite und ihre Unterseiten.",
         warten: { klick: '#sh-users label:has(input[value="910000051"])' }, probe: { klick: '#sh-users label:has(input[value="910000051"])' } },
-      { ziel: ziel("#sh-save"), text: "Speichere die Freigabe.", warten: { anfrage: "PUT /api/wiki/pages/910000003/editors" },
+      { ziel: "#sh-save", text: "Speichere die Freigabe.", warten: { anfrage: "PUT /api/wiki/pages/910000003/editors" },
         probe: { klick: "#sh-save" } },
       { ziel: aufSeiteZiel("Übung: Zweite Seite", SEITENTITEL),
         text: "Übungsperson A darf die Seite jetzt bearbeiten. Zurücknehmen geht ebenso über „Teilen“." },
@@ -655,12 +602,12 @@ Platzhaltertext mit einem Verweis auf die [zweite Übungsseite](/stroemipedia/ue
     { titel: "Verlauf", start: "/stroemipedia/uebung-zweite-seite", schritte: [
       { ziel: aufSeiteZiel("Übung: Zweite Seite", "#pg-more"), text: "Im Menü „⋯“ steht der Verlauf der Seite. Tippe darauf.",
         warten: { klick: "#pg-more" } },
-      { ziel: ziel(MENUE("history")), text: "Tippe auf „Verlauf“.", warten: { klick: MENUE("history") } },
-      { ziel: ziel(".rev-list [data-restore]"), text: "Jede gespeicherte Fassung bleibt im Verlauf. Hol die ältere Fassung zurück.",
+      { ziel: MENUE("history"), text: "Tippe auf „Verlauf“.", warten: { klick: MENUE("history") } },
+      { ziel: ".rev-list [data-restore]", text: "Jede gespeicherte Fassung bleibt im Verlauf. Hol die ältere Fassung zurück.",
         warten: { klick: ".rev-list [data-restore]" }, probe: { klick: ".rev-list [data-restore]" } },
-      { ziel: ziel("dialog[open] #c-ok"), text: "Die aktuelle Fassung bleibt dabei im Verlauf erhalten. Bestätige mit „Wiederherstellen“.",
+      { ziel: "dialog[open] #c-ok", text: "Die aktuelle Fassung bleibt dabei im Verlauf erhalten. Bestätige mit „Wiederherstellen“.",
         warten: { anfrage: /^POST \/api\/wiki\/revisions\/\d+\/restore$/ }, probe: { klick: "dialog[open] #c-ok" } },
-      { ziel: () => (ruhig() && /Ältere Fassung/.test(($("#article") || {}).textContent || "") ? imBild($("#article")) : null),
+      { ziel: () => (/Ältere Fassung/.test(($("#article") || {}).textContent || "") ? $("#article") : null),
         text: "Die Seite zeigt wieder die ältere Fassung." },
     ] },
   ];
@@ -669,27 +616,27 @@ Platzhaltertext mit einem Verweis auf die [zweite Übungsseite](/stroemipedia/ue
     { titel: "Für alle Angemeldeten freigeben", start: "/stroemipedia/uebung-seite-lesen", schritte: [
       { ziel: aufSeiteZiel("Übung: Seite lesen", SEITENTITEL), text: "Als Wiki-Verwaltung gibst du Seiten für alle Angemeldeten frei." },
       ...teilenSchritte("Übung: Seite lesen"),
-      { ziel: ziel("label:has(> #sh-public)"),
+      { ziel: "label:has(> #sh-public)",
         text: "Freigegebene Seiten lesen auch Konten ohne Stufe in der Strömipedia. Hak „Diese Seite für alle Angemeldeten freigeben“ an.",
         warten: { klick: "label:has(> #sh-public)" }, probe: { klick: "label:has(> #sh-public)" } },
-      { ziel: ziel("#sh-save"), text: "Speichere die Freigabe.", warten: { anfrage: "PUT /api/wiki/pages/910000002/share" },
+      { ziel: "#sh-save", text: "Speichere die Freigabe.", warten: { anfrage: "PUT /api/wiki/pages/910000002/share" },
         probe: { klick: "#sh-save" } },
       { ziel: aufSeiteZiel("Übung: Seite lesen", "#wiki-content .pubbadge"),
         text: "Die Marke zeigt: Diese Seite lesen jetzt alle Angemeldeten." },
     ] },
     { titel: "Papierkorb", start: "/stroemipedia/uebung-start", schritte: [
       baumAuf("Tippe auf „☰“ für den Seitenbaum."),
-      { ziel: baumZiel("#btn-baum-mehr"), text: "Seltene Aktionen stehen im Menü „⋯“ über dem Seitenbaum. Tippe darauf.",
+      { ziel: "#btn-baum-mehr", text: "Seltene Aktionen stehen im Menü „⋯“ über dem Seitenbaum. Tippe darauf.",
         warten: { klick: "#btn-baum-mehr" }, probe: { klick: "#btn-baum-mehr" } },
-      { ziel: ziel(MENUE("trash")), text: "Tippe auf „Papierkorb“.", warten: { klick: MENUE("trash") } },
-      { ziel: ziel('.trash-list li[data-id="910000004"] [data-a="restore"]'),
+      { ziel: MENUE("trash"), text: "Tippe auf „Papierkorb“.", warten: { klick: MENUE("trash") } },
+      { ziel: '.trash-list li[data-id="910000004"] [data-a="restore"]',
         text: "Gelöschte Seiten liegen hier, bis jemand sie wiederherstellt oder endgültig löscht. Hol „Übung: Alte Seite“ zurück.",
         warten: { anfrage: "POST /api/wiki/pages/910000004/restore" },
         probe: { klick: '.trash-list li[data-id="910000004"] [data-a="restore"]' } },
       // Erst der neu geöffnete, leere Papierkorb – nicht der, der gerade zugeht.
       { ziel: () => {
         const d = offenerDialog();
-        return d && !d.querySelector(".trash-list") ? imBild(d.querySelector(".dlg-actions [data-close]")) : null;
+        return d && !d.querySelector(".trash-list") ? d.querySelector(".dlg-actions [data-close]") : null;
       }, text: "„Übung: Alte Seite“ steht wieder an ihrem alten Platz im Seitenbaum. Schließ den Papierkorb.",
         warten: { klick: "dialog[open] .dlg-actions [data-close]" } },
     ] },
@@ -698,8 +645,8 @@ Platzhaltertext mit einem Verweis auf die [zweite Übungsseite](/stroemipedia/ue
   S.einfuehrung.modul("wiki", {
     bestand,
     antworten,
-    // Eine Übungsdatei gibt es in der Strömipedia nicht (keine Anhänge im Übungsbestand); der Export meldet sich über den
-    // Wächter oben.
+    // Eine Übungsdatei gibt es in der Strömipedia nicht (keine Anhänge im Übungsbestand); der Export (Seitenwechsel auf die
+    // Datei) meldet in der Übung „In der Übung gibt es diese Datei nicht.“ (einfuehrung.js).
     dateien: [],
     teile: { grund: { ablaeufe: grund }, redakteur: { ablaeufe: redakteur }, verwaltung: { ablaeufe: verwaltung } },
   });

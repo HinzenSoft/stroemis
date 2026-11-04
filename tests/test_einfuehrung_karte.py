@@ -18,11 +18,10 @@ import io
 import os
 import re
 import sys
-import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from einfuehrung_browser import WURZEL, Seite, Umgebung, uebersprungen  # noqa: E402
+from einfuehrung_browser import WURZEL, Umgebung, uebersprungen  # noqa: E402
 
 GROESSEN = ((1280, 900, False), (360, 740, True))
 ECHT = "Echtes Album Probe"
@@ -137,63 +136,10 @@ def _echtes_bleibt_draussen(u, breite, hoehe, touch):
         s.schliessen()
 
 
-class KartenSeite(Seite):
-    """Wie Seite, mit zwei Abweichungen für den Teil „Redakteur“ (im Bericht unter „Für das Grundgerüst“):
-    - Der Tipp auf die Karte (probe {klick: "#map"} beim Platzieren) trifft eine freie Stelle der Karte statt ihrer
-      Mitte: Am Telefon liegt dort das Positionsbanner, und auch ein Mensch tippt daneben auf die Karte.
-    - Nach „bereit“ wartet die Prüfung, bis das Ziel ruht (höchstens 2 s): Wächst die Leiste der Führung mit einem
-      längeren Text, rollt einfuehrung.js das Ziel weich darüber – gemessen wird die Lage danach, nicht unterwegs."""
-
-    BEREIT = "(z.bereit || z.geschafft || z.sackgasse)"
-
-    def warte(self, ausdruck, sek=10):
-        z = super().warte(ausdruck, sek)
-        if not (z and self.BEREIT in ausdruck and isinstance(z, dict) and z.get("bereit")):
-            return z
-        vorher = None
-        ende = time.time() + 2
-        while time.time() < ende:
-            jetzt = self.js("JSON.stringify([S.einfuehrung.zustand().zielRect, S.einfuehrung.zustand().blaseRect])")
-            if jetzt == vorher:
-                break
-            vorher = jetzt
-            self.b.warten(0.15)
-        return self.zustand()
-
-    def klick(self, sel, blase=False):
-        if sel != "#map":
-            return super().klick(sel, blase)
-        p = self.js("""(() => {
-          const m = document.querySelector('#map'), r = m.getBoundingClientRect(), x = r.left + r.width / 2;
-          let best = null, lauf = null;
-          for (let y = Math.ceil(r.top) + 1; y < r.bottom - 1; y += 4) {
-            const t = document.elementFromPoint(x, y);
-            if (t && m.contains(t) && !t.closest('.leaflet-marker-icon, .leaflet-control, .leaflet-popup')) {
-              lauf = lauf ? [lauf[0], y] : [y, y];
-              if (!best || lauf[1] - lauf[0] > best[1] - best[0]) best = lauf.slice();
-            } else lauf = null;
-          }
-          return best && best[1] - best[0] >= 40 ? { x, y: (best[0] + best[1]) / 2 } : null; })()""")
-        if not p:
-            return "Keine freie Stelle der Karte für einen Tipp (mindestens 40 px hoch)"
-        if self.touch:
-            self.b.rufen("Input.dispatchTouchEvent", type="touchStart", touchPoints=[{"x": p["x"], "y": p["y"]}])
-            self.b.rufen("Input.dispatchTouchEvent", type="touchEnd", touchPoints=[])
-        else:
-            for art in ("mouseMoved", "mousePressed", "mouseReleased"):
-                self.b.rufen("Input.dispatchMouseEvent", type=art, x=p["x"], y=p["y"], button="left", clickCount=1)
-        return None
-
-
 def _durchlauf(u, teil, breite, hoehe, touch):
     rolle = "mitglied" if teil == "grund" else "redakteur"
     u.merker_leeren(rolle)
-    s = KartenSeite(u, rolle, breite, hoehe, touch)
-    u.seiten.append(s)
-    try:
-        return s.durchlauf("karte", teil)
-    finally:
-        s.schliessen()
+    return u.durchlauf("karte", teil, breite, hoehe, touch, rolle=rolle)
 
 
 def test_browser():
@@ -207,12 +153,10 @@ def test_browser():
         assert medien, "das echte Bild liegt im Medienordner"
         for breite, hoehe, touch in GROESSEN:
             _echtes_bleibt_draussen(u, breite, hoehe, touch)
-            # Der Grundteil auch über die gemeinsame Hilfe (so läuft er in tests/test_einfuehrung_browser.py).
-            u.merker_leeren("mitglied")
-            befunde = u.durchlauf("karte", "grund", breite, hoehe, touch)
-            assert not befunde, ("grund", breite, befunde)
-            befunde = _durchlauf(u, "redakteur", breite, hoehe, touch)
-            assert not befunde, ("redakteur", breite, befunde)
+            # Beide Teile über die gemeinsame Hilfe (der Tipp auf die Karte: probe {klick: "#map", frei: true}).
+            for teil in ("grund", "redakteur"):
+                befunde = _durchlauf(u, teil, breite, hoehe, touch)
+                assert not befunde, (teil, breite, befunde)
         # Echte Alben und Bilder unverändert – bis auf die Merker der Einführung (mat_meta, „einfuehrung:…“).
         u.sql("DELETE FROM mat_meta WHERE schluessel LIKE 'einfuehrung:%'")
         # Die Konten tragen ihre letzte Anmeldung (die Seiten der Durchläufe melden sich an) – dort zählen nur die Zeilen.
