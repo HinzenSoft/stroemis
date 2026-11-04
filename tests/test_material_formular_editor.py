@@ -17,6 +17,10 @@ planung/formular-editor/auftrag.md): python tests/test_material_formular_editor.
    bleibt Text (Formular und Prüfung). Server, Import/Export und PDF: tests/test_material_pruefpunkt_absatz.py.
 4. Häkchen „optional“ statt „Pflicht“ (Zusatz vom 04.11.2026): leer bei Pflichtpunkten, gesetzt = pflicht false beim
    Speichern (Datenbank); ohne Bearbeiten nur bei optionalen Punkten die Marke „optional“, sonst nichts.
+5. Gruppen per Griff ⠿ am Kopf ziehen (Bauauftrag planung/gruppe-ziehen/auftrag.md): echte Maus- bzw. Touch-Ereignisse,
+   beim Ziehen rückt keine Zeile, Einfügemarke an einer Grenze zwischen Gruppen, Esc bricht ab, an den Anfang (auch mit
+   Bildlauf am Rand) und ans Ende, Getipptes zieht mit, Reihenfolge in der Datenbank nach dem Speichern; Griff in der Flucht
+   der Punktgriffe, Namensfeld mit dem Rest der Zeile, am Finger ≥ 44 px (gemessen); bei nur einer Gruppe kein Griff.
 Alle Inhalte sind Platzhalter."""
 import json
 import os
@@ -75,6 +79,12 @@ def test_statisch():
                   ".mat-formtabelle .fp-menue :is(summary.btn, .btn) { min-width: 44px; min-height: 44px;"):
         i = css.index(regel)
         assert any(c < i for c in coarse) and css.rfind("@media (pointer: coarse)", 0, i) > css.rfind("\n}\n", 0, i), regel
+    # Gruppe ziehen (Wunsch vom 04.11.2026): Griff am Kopf nur bei mehr als einer Gruppe, der Block mit Einfügemarke.
+    assert """${gruppen.length > 1 ? '<span class="fp-griff" aria-hidden="true" title="Gruppe zum Verschieben ziehen">⠿</span>' : ""}""" in editor
+    assert 'const block = zeile.classList.contains("fp-gruppenzeile") ? zeile.parentElement : null;' in editor
+    assert 'marke.className = "fp-einfuegemarke"' in editor and "marke.remove()" in editor
+    assert "pointer-events: none" in abschnitt(css, ".fp-einfuegemarke {", "}")
+    assert "var(--wasser)" in abschnitt(css, ".fp-einfuegemarke {", "}")
     # Die Einführung kennt den neuen Editor (seit der Übung mit Katalog, 04.11.2026: der neue Punkt in der ersten Gruppe –
     # ein Formular aus dem Katalog hat oft mehrere).
     uebung = lies("app/static/js/uebung/material.js")
@@ -138,10 +148,10 @@ def lage(s, sel, anteil=0.5):
       return [r.left + r.width / 2, r.top + r.height * {anteil}]; }})()""")
 
 
-def ziehen(s, von, nach, anteil=0.75, halten=0.0, esc=False):
+def ziehen(s, von, nach, anteil=0.75, halten=0.0, esc=False, waehrend=None):
     """Am Griff der Zeile von bis auf die Stelle anteil (0 oben, 1 unten) der Zeile nach ziehen – echte Maus- bzw.
     Touch-Ereignisse. Liegt das Ziel unter dem Bild (Karten am Telefon), bleibt der Finger am unteren Rand, bis der
-    Bildlauf es heraufholt. nach als (x, y): dorthin, ohne Ziel."""
+    Bildlauf es heraufholt. nach als (x, y): dorthin, ohne Ziel. waehrend(s) prüft vor dem Loslassen (Finger liegt noch)."""
     # Start und Ziel mittig ins Bild, wenn beide hineinpassen, sonst die gezogene Zeile ins obere Viertel (Ziel darunter)
     # bzw. tief ins Bild (Ziel darüber); dann messen –
     # ohne weiteren Bildlauf (sonst stimmte der Start nicht).
@@ -190,6 +200,8 @@ def ziehen(s, von, nach, anteil=0.75, halten=0.0, esc=False):
         hin(*nach)
     if halten:
         s.b.warten(halten)
+    if waehrend:
+        waehrend(s)
     if esc:
         s.taste()
     if s.touch:
@@ -213,6 +225,75 @@ def tippflaechen(s, sel):
     assert werte, f"„{sel}“ nicht gefunden"
     b, h, trifft = werte[0]
     assert b >= 44 and h >= 44 and trifft, (sel, werte[0])
+
+
+def gruppe_ziehen(s, touch):
+    """Gruppen per Griff am Kopf ziehen (Wunsch vom 04.11.2026): Beim Ziehen bleibt jede Zeile stehen, der Block ist blau
+    hinterlegt und eine Einfügemarke steht an einer Grenze zwischen Gruppen (nie mitten in einer); Esc bricht ab; der Block
+    kommt an den Anfang und wieder ans Ende – mit seinen Punkten und dem eben getippten Namen."""
+    tippen(s, f"{kopf(2)} .fp-gruppenname", " gezogen")
+    vorher = struktur(s)
+    assert [g[0] for g in vorher] == ["Gruppe C", "Gruppe A neu", "Gruppe B gezogen"], vorher
+    assert s.js("[...document.querySelectorAll('#fp-tabelle tr.fp-gruppenzeile')].map((tr) => tr.querySelectorAll('.fp-griff').length)") == [1, 1, 1]
+    assert s.js("[...document.querySelectorAll('#fp-tabelle tr.fp-gruppenzeile .fp-griff')].every((g) => g.getAttribute('aria-hidden') === 'true')")
+    # Der Griff steht vorn in der Flucht der Griffe darunter, das Namensfeld behält den Rest der Zeile.
+    lage_kopf = s.js("""(() => { const tr = document.querySelector('#fp-tabelle tr.fp-gruppenzeile'); const g = tr.querySelector('.fp-griff').getBoundingClientRect();
+      const n = tr.querySelector('.fp-gruppenname').getBoundingClientRect(), m = tr.querySelector('.fp-menue').getBoundingClientRect();
+      const p = document.querySelector('#fp-tabelle tr.fp-punkt .fp-griff').getBoundingClientRect();
+      return [g.left - p.left, n.left - g.right, m.left - n.right, n.width / tr.getBoundingClientRect().width]; })()""")
+    assert abs(lage_kopf[0]) <= 10 and 0 <= lage_kopf[1] <= 12 and 0 <= lage_kopf[2] <= 12 and lage_kopf[3] > 0.6, lage_kopf
+
+    def mitten(s):
+        assert struktur(s) == vorher, struktur(s)
+        assert s.js("document.querySelector('#fp-tabelle tbody.fp-zieht') === document.querySelectorAll('#fp-tabelle tbody')[2]")
+        marke = s.js("""(() => { const m = document.querySelector('.fp-einfuegemarke'); if (!m || m.hidden) return null;
+          const r = m.getBoundingClientRect(); return [r.top + r.height / 2, r.width, r.height, getComputedStyle(m).backgroundColor]; })()""")
+        assert marke and marke[1] > 200 and marke[2] >= 3, ("keine Einfügemarke", marke)
+        grenzen = s.js("""(() => { const r = [...document.querySelectorAll('#fp-tabelle tbody')].map((tb) => tb.getBoundingClientRect());
+          return r.map((x, i) => (i ? (r[i - 1].bottom + x.top) / 2 : x.top)).concat(r[r.length - 1].bottom); })()""")
+        # Über dem ersten Punkt von „Gruppe A neu“: die Marke steht an deren Anfang (Grenze 1), nicht zwischen den Punkten.
+        assert abs(marke[0] - grenzen[1]) <= 2, (marke, grenzen)
+
+    # Esc bricht ab: der Zeiger steht über einem Punkt einer anderen Gruppe – nichts rückt, die Marke steht an der Grenze.
+    ziehen(s, kopf(2), zeile(1, 0), anteil=0.5, esc=True, waehrend=mitten)
+    assert struktur(s) == vorher
+    assert not s.js("document.querySelector('.fp-einfuegemarke, #fp-tabelle .fp-zieht, #fp-tabelle.fp-ziehen')")
+    # An den Anfang …
+    ziehen(s, kopf(2), kopf(0), anteil=0.1)
+    assert struktur(s) == [vorher[2], vorher[0], vorher[1]], struktur(s)
+    assert not s.js("document.querySelector('.fp-einfuegemarke')")
+    assert s.js("document.querySelector('#fp-titel').value") == "Platzhalter Editor getippt"
+    # … und wieder ans Ende (unter „+ Prüfpunkt“ der letzten Gruppe).
+    ziehen(s, kopf(0), "#fp-tabelle tbody:last-of-type tr.fp-fuss", anteil=0.9)
+    assert struktur(s) == vorher, struktur(s)
+    # Das Menü „⋯“ der Gruppe bleibt (Tastatur).
+    klick(s, f"{kopf(1)} .fp-menue summary")
+    assert s.js("[...document.querySelectorAll('#fp-tabelle details.menue[open] .menue-liste button')].map((b) => b.textContent.trim())") == [
+        "Gruppe nach oben", "Gruppe nach unten", "Gruppe entfernen"]
+    s.taste()
+    s.b.warten(0.2)
+
+
+def eine_gruppe(u, kategorie, breite, hoehe, touch):
+    """Bei nur einer Gruppe kein Griff am Kopf (die Punkte behalten ihren); mit „+ Gruppe“ haben beide Köpfe einen."""
+    r = u.adm.post("/api/material/formulare", json={"kategorie_id": kategorie, "titel": "Platzhalter eine Gruppe", "punkte": [
+        {"gruppe": "Gruppe A", "text": "Platzhalter 1", "art": "yesno", "soll": "nein"},
+        {"gruppe": "Gruppe A", "text": "Platzhalter 2", "art": "yesno", "soll": "ja"}]})
+    assert r.status_code == 201, r.get_json()
+    s = u.seite("matverwaltung", breite, hoehe, touch)
+    try:
+        oeffnen(s, r.json["formular"]["id"])
+        assert s.js("document.querySelectorAll('#fp-tabelle tr.fp-gruppenzeile').length") == 1
+        assert not s.js("document.querySelector('#fp-tabelle tr.fp-gruppenzeile .fp-griff')")
+        assert s.js("document.querySelectorAll('#fp-tabelle tr.fp-punkt .fp-griff').length") == 2
+        klick(s, '[data-act="gruppe-neu"]')
+        assert s.js("document.querySelectorAll('#fp-tabelle tr.fp-gruppenzeile .fp-griff').length") == 2
+        if touch:
+            tippflaechen(s, "#fp-tabelle tr.fp-gruppenzeile .fp-griff")
+        s.sammeln()
+        assert not s.fehler, s.fehler
+    finally:
+        s.schliessen()
 
 
 def formular_anlegen(u, kategorie):
@@ -331,6 +412,9 @@ def ablauf(u, kategorie, breite, hoehe, touch):
         klick(s, "dialog[open] #c-no")
         assert [g[0] for g in struktur(s)] == ["Gruppe C", "Gruppe A neu", "Gruppe B"]
 
+        # Gruppe ziehen (Wunsch vom 04.11.2026): am Griff des Kopfs der ganze Block, nur zwischen Gruppen; Getipptes bleibt.
+        gruppe_ziehen(s, touch)
+
         # Punkt entfernen (Menü), „+ Prüfpunkt“ in Gruppe C (am Ende der Gruppe), „+ Gruppe“ mit Fokus aufs Namensfeld.
         menue(s, zeile(2, 0), "punkt-weg")
         assert struktur(s)[2][1] == ["Platzhalter 3 getippt"]
@@ -360,18 +444,25 @@ def ablauf(u, kategorie, breite, hoehe, touch):
             assert s.js("document.activeElement.matches(" + json.dumps(f"{kopf(3)} .fp-gruppenname") + ")")
         tippen(s, f"{kopf(3)} .fp-gruppenname", LANG)
         tippen(s, f"{zeile(3, 0)} .fp-text", "Platzhalter lang")
+        # Die neue Gruppe gleich nach dem Tippen am Griff an den Anfang ziehen – das Getippte zieht mit.
+        ziehen(s, kopf(3), kopf(0), anteil=0.1)
+        assert struktur(s) == [[LANG, ["Platzhalter lang"], False], ["Gruppe C", ["Platzhalter 4", "Platzhalter neu\nAbsatz zwei"], False],
+                               ["Gruppe A neu", ["Platzhalter 2", "Platzhalter 5"], False],
+                               ["Gruppe B gezogen", ["Platzhalter 3 getippt"], False]], struktur(s)
+        assert s.js("document.querySelector(" + json.dumps(f"{zeile(1, 1)} .fp-optional") + ").checked")
         # Ein Neuzeichnen (Art ändern) – der lange Name steht danach ganz da (Feld bricht um, nichts abgeschnitten).
-        s.js("(() => { const a = document.querySelector(" + json.dumps(f"{zeile(3, 0)} .fp-art") + "); a.value = 'text';"
+        s.js("(() => { const a = document.querySelector(" + json.dumps(f"{zeile(0, 0)} .fp-art") + "); a.value = 'text';"
              " a.dispatchEvent(new Event('change', { bubbles: true })); })()")
         s.b.warten(0.2)
-        lang = s.js("(() => { const t = document.querySelector(" + json.dumps(f"{kopf(3)} .fp-gruppenname") + ");"
+        lang = s.js("(() => { const t = document.querySelector(" + json.dumps(f"{kopf(0)} .fp-gruppenname") + ");"
                     " return [t.value, t.scrollHeight - t.clientHeight, t.scrollWidth - t.clientWidth]; })()")
         assert lang[0] == LANG and len(LANG) == 80 and lang[1] <= 1 and lang[2] <= 1, lang
         assert s.js("document.querySelector('#fp-titel').value") == "Platzhalter Editor getippt"
 
         # Tippflächen am Finger (Griff, „⋯“ an Punkt und Gruppe) – gemessen; kein waagerechter Bildlauf.
         if touch:
-            for sel in ("#fp-tabelle .fp-griff", "#fp-tabelle tr.fp-punkt .fp-menue summary", "#fp-tabelle tr.fp-gruppenzeile .fp-menue summary",
+            for sel in ("#fp-tabelle .fp-griff", "#fp-tabelle tr.fp-gruppenzeile .fp-griff", "#fp-tabelle tr.fp-punkt .fp-menue summary",
+                        "#fp-tabelle tr.fp-gruppenzeile .fp-menue summary",
                         "#fp-tabelle .fp-z-pflicht label"):
                 tippflaechen(s, sel)
             assert s.js("getComputedStyle(document.querySelector('#fp-tabelle .fp-griff')).touchAction") == "none"
@@ -384,14 +475,14 @@ def ablauf(u, kategorie, breite, hoehe, touch):
         s.b.warten(0.8)
         zeilen = u.sql("SELECT group_name, label, editor, mandatory FROM mat_checklist_item WHERE form_id = ? ORDER BY position", (fid,))
         assert [(z["group_name"], z["label"]) for z in zeilen] == [
-            ("Gruppe C", "Platzhalter 4"), ("Gruppe C", "Platzhalter neu\nAbsatz zwei"),
+            (LANG, "Platzhalter lang"), ("Gruppe C", "Platzhalter 4"), ("Gruppe C", "Platzhalter neu\nAbsatz zwei"),
             ("Gruppe A neu", "Platzhalter 2"), ("Gruppe A neu", "Platzhalter 5"),
-            ("Gruppe B", "Platzhalter 3 getippt"), (LANG, "Platzhalter lang")], zeilen
-        assert zeilen[-1]["editor"] == "text"
+            ("Gruppe B gezogen", "Platzhalter 3 getippt")], zeilen
+        assert zeilen[0]["editor"] == "text"
         # Häkchen „optional“ ↔ pflicht: nur Platzhalter 4 und der neue Punkt sind optional.
-        assert [z["mandatory"] for z in zeilen] == [0, 0, 1, 1, 1, 1], zeilen
+        assert [z["mandatory"] for z in zeilen] == [1, 0, 0, 1, 1, 1], zeilen
         assert u.sql("SELECT title FROM mat_form WHERE id = ?", (fid,))[0]["title"] == "Platzhalter Editor getippt"
-        assert struktur(s)[3][0] == LANG
+        assert struktur(s)[0][0] == LANG
         s.sammeln()
         assert not s.fehler, s.fehler
     finally:
@@ -402,10 +493,10 @@ def ablauf(u, kategorie, breite, hoehe, touch):
     try:
         oeffnen(m, fid)
         koepfe = m.js("[...document.querySelectorAll('#fp-tabelle tr.fp-gruppenzeile th')].map((t) => t.textContent.trim())")
-        assert koepfe == ["Gruppe C", "Gruppe A neu", "Gruppe B", LANG], koepfe
+        assert koepfe == [LANG, "Gruppe C", "Gruppe A neu", "Gruppe B gezogen"], koepfe
         assert not m.js("document.querySelector('#fp-tabelle .fp-griff, #fp-tabelle .fp-menue, #fp-tabelle textarea, [data-act=speichern]')")
         assert m.js("document.querySelectorAll('#fp-tabelle tbody tr:not(.fp-gruppenzeile)').length") == 6
-        hoch = m.js("(() => { const t = [...document.querySelectorAll('#fp-tabelle tr.fp-gruppenzeile th')].pop();"
+        hoch = m.js("(() => { const t = document.querySelector('#fp-tabelle tr.fp-gruppenzeile th');"
                     " return t.scrollWidth <= t.clientWidth; })()")
         assert hoch, "langer Gruppenname abgeschnitten"
         # Der Absatz steht als Umbruch da (pre-line), nicht als eine Zeile.
@@ -415,8 +506,8 @@ def ablauf(u, kategorie, breite, hoehe, touch):
         # Nur optionale Punkte tragen eine Marke, Pflichtpunkte nichts.
         marken = m.js("""[...document.querySelectorAll('#fp-tabelle tbody tr:not(.fp-gruppenzeile)')].map((tr) =>
           [tr.querySelector('.mat-mehrzeilig').textContent, tr.lastElementChild.innerText.trim()])""")
-        assert marken == [["Platzhalter 4", "optional"], ["Platzhalter neu\nAbsatz zwei", "optional"], ["Platzhalter 2", ""],
-                          ["Platzhalter 5", ""], ["Platzhalter 3 getippt", ""], ["Platzhalter lang", ""]], marken
+        assert marken == [["Platzhalter lang", ""], ["Platzhalter 4", "optional"], ["Platzhalter neu\nAbsatz zwei", "optional"],
+                          ["Platzhalter 2", ""], ["Platzhalter 5", ""], ["Platzhalter 3 getippt", ""]], marken
         assert m.js("document.querySelectorAll('#fp-tabelle .badge').length") == 2
         assert "Pflicht" not in m.js("document.querySelector('#fp-tabelle').innerText")
         assert m.js("document.documentElement.scrollWidth <= document.documentElement.clientWidth")
@@ -477,6 +568,8 @@ def test_browser():
             los = time.time()
             fid = ablauf(u, ids["gurte"], breite, hoehe, touch)
             print(f"Editor {breite}×{hoehe}{' Touch' if touch else ''}: bestanden ({time.time() - los:.1f} s)")
+            eine_gruppe(u, ids["gurte"], breite, hoehe, touch)
+            print(f"Eine Gruppe ohne Griff {breite}×{hoehe}: bestanden")
         pruefung_und_xss(u, ids, fid)
         print("Absatz in der Prüfung, HTML bleibt Text: bestanden.")
 

@@ -5288,14 +5288,16 @@
         <td class="fp-z-pflicht"><label class="inline"><input type="checkbox" class="fp-optional" ${p.pflicht ? "" : "checked"}> optional</label></td>
         <td class="fp-menue">${menue}</td></tr>`;
     }
-    // Die Zwischenzeile einer Gruppe: Name in voller Breite und „⋯“ (nach oben, nach unten, entfernen) – bei einer
-    // einzigen Gruppe bleibt nur „Gruppe entfernen“, das S.menue als Knopf zeichnet.
+    // Die Zwischenzeile einer Gruppe: vorn der Griff ⠿ (Wunsch vom 04.11.2026: „Die einzelnen Gruppen müssen sich auch in
+    // der Reihenfolge verschieben lassen“ – nur, wenn es mehr als eine Gruppe gibt), Name in voller Breite und „⋯“ (nach
+    // oben, nach unten, entfernen) – bei einer einzigen Gruppe bleibt nur „Gruppe entfernen“, das S.menue als Knopf zeichnet.
     function gruppenKopf(g, gi) {
       const menue = zeilenMenue([
         gi > 0 && { text: "Gruppe nach oben", attrs: `data-act="gruppe-hoch" data-g="${gi}"` },
         gi < gruppen.length - 1 && { text: "Gruppe nach unten", attrs: `data-act="gruppe-runter" data-g="${gi}"` },
         { text: "Gruppe entfernen", attrs: `data-act="gruppe-weg" data-g="${gi}"` }], gruppeText(g));
       return `<tr class="fp-gruppenzeile" data-g="${gi}"><td colspan="6"><div class="fp-gruppenkopf">
+        ${gruppen.length > 1 ? '<span class="fp-griff" aria-hidden="true" title="Gruppe zum Verschieben ziehen">⠿</span>' : ""}
         <textarea class="fp-gruppenname" rows="1" maxlength="80" aria-label="Gruppe" placeholder="ohne Gruppe – Name eintragen">${esc(g.name)}</textarea>
         <span class="fp-menue">${menue}</span></div></td></tr>`;
     }
@@ -5419,7 +5421,11 @@
        auch in eine andere oder leere Gruppe. Am oberen und unteren Rand rollt die Seite. Beim Loslassen entsteht die neue
        Ordnung aus der Reihenfolge der Zeilen; Esc oder ein vom Browser abgebrochenes Ziehen lässt die alte stehen. Nur
        der Griff hat touch-action: none (material.css) – daneben rollt die Seite am Finger wie immer. Mit der Tastatur
-       geht dasselbe über das Menü „⋯“. */
+       geht dasselbe über das Menü „⋯“.
+       Am Griff eines Gruppenkopfs zieht der ganze Block (Kopf, Punkte, „+ Prüfpunkt“ – ein tbody) und kommt nur zwischen
+       zwei Gruppen, nie mitten in eine. Der Block bleibt beim Ziehen stehen (blau hinterlegt) – ein langer Block, der
+       mitwanderte, schöbe die Seite unter dem Finger hin und her; eine blaue Einfügemarke zeigt die Grenze zwischen zwei
+       Gruppen, die dem Zeiger am nächsten liegt. An seiner eigenen Stelle steht keine Marke. */
     function ziehen(e) {
       const griff = e.target.closest(".fp-griff");
       if (!griff || (e.pointerType === "mouse" && e.button !== 0)) return;
@@ -5427,11 +5433,15 @@
       einsammeln();
       const zeile = griff.closest("tr");
       const tabelle = zeile.closest("table");
+      const block = zeile.classList.contains("fp-gruppenzeile") ? zeile.parentElement : null;
       const alt = gruppen.map((g) => g.punkte);
       const id = e.pointerId;
       let y = e.clientY;
       let lauf = 0;
-      zeile.classList.add("fp-zieht");
+      let grenze = -1;   // beim Block: vor welchen Block er kommt (Anzahl Blöcke = ans Ende), -1 = bleibt stehen
+      const marke = block ? document.createElement("div") : null;
+      if (marke) { marke.className = "fp-einfuegemarke"; marke.hidden = true; document.body.append(marke); }
+      (block || zeile).classList.add("fp-zieht");
       tabelle.classList.add("fp-ziehen");
       try { griff.setPointerCapture(id); } catch (x) { /* dann ohne Fang – die Ereignisse kommen trotzdem am Fenster an */ }
       // Die Zeile vor bzw. hinter ref – nur, wenn sie dort nicht schon steht (sonst rechnete der Browser bei jeder Bewegung neu).
@@ -5440,7 +5450,22 @@
         else if (!vor && ref.nextElementSibling !== zeile) ref.after(zeile);
       };
       const ansEnde = (tbody) => setzen(true, $(":scope > tr.fp-leer, :scope > tr.fp-fuss", tbody));
+      // Block: die Grenzen zwischen den Blöcken (Mitte des Abstands), dazu Anfang und Ende – die nächste gilt.
+      function grenzeWaehlen() {
+        const bloecke = [...tabelle.tBodies];
+        const r = bloecke.map((tb) => tb.getBoundingClientRect());
+        const lagen = r.map((x, i) => (i ? (r[i - 1].bottom + x.top) / 2 : x.top)).concat(r[r.length - 1].bottom);
+        let k = 0;
+        lagen.forEach((l, i) => { if (Math.abs(l - y) < Math.abs(lagen[k] - y)) k = i; });
+        const eigen = bloecke.indexOf(block);
+        grenze = k === eigen || k === eigen + 1 ? -1 : k;
+        marke.hidden = grenze < 0;
+        if (grenze < 0) return;
+        const t = tabelle.getBoundingClientRect();
+        Object.assign(marke.style, { top: `${Math.round(lagen[k] - 2)}px`, left: `${Math.round(t.left)}px`, width: `${Math.round(t.width)}px` });
+      }
       function platzieren() {
+        if (block) { grenzeWaehlen(); return; }
         const tr = $$(":scope > tbody > tr", tabelle).find((x) => x !== zeile && x.getBoundingClientRect().bottom >= y);
         if (!tr) { ansEnde(tabelle.tBodies[tabelle.tBodies.length - 1]); return; }
         const r = tr.getBoundingClientRect();
@@ -5463,7 +5488,7 @@
           const vorher = window.scrollY;
           window.scrollBy(0, schritt);
           if (window.scrollY !== vorher) platzieren();
-        }
+        } else if (block) grenzeWaehlen();   // die feste Marke folgt auch einem Bildlauf mit dem Mausrad
         lauf = requestAnimationFrame(rollen);
       }
       const bewegen = (ev) => { if (ev.pointerId === id) { y = ev.clientY; platzieren(); } };
@@ -5473,11 +5498,22 @@
         window.removeEventListener("pointerup", los);
         window.removeEventListener("pointercancel", abbruch);
         document.removeEventListener("keydown", taste, true);
-        if (!abbrechen) {
+        if (marke) marke.remove();
+        let bewegt = null;
+        if (abbrechen) { /* alles bleibt */ } else if (block) {
+          if (grenze >= 0) {
+            const gi = +zeile.dataset.g;
+            [bewegt] = gruppen.splice(gi, 1);
+            gruppen.splice(grenze > gi ? grenze - 1 : grenze, 0, bewegt);
+          }
+        } else {
           const neu = [...tabelle.tBodies].map((tb) => $$(":scope > tr.fp-punkt", tb).map((tr) => alt[+tr.dataset.g][+tr.dataset.i]));
           neu.forEach((liste, gi) => { gruppen[gi].punkte = liste; });
         }
         zeichnen();
+        // Die verschobene Gruppe ins Bild holen – ihr Kopf kann nach dem Umstellen außerhalb liegen.
+        const kopfZeile = bewegt && $(`#fp-tabelle tr.fp-gruppenzeile[data-g="${gruppen.indexOf(bewegt)}"]`, inhalt);
+        if (kopfZeile) kopfZeile.scrollIntoView({ block: "nearest" });
       }
       const los = (ev) => { if (ev.pointerId === id) fertig(false); };
       const abbruch = (ev) => { if (ev.pointerId === id) fertig(true); };
