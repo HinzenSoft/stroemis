@@ -12247,7 +12247,8 @@ Angepasst: `tests/test_material_formular_editor.py` (Selektor des neuen Punkts i
 2. **„Nicht zurückgezogen“** als „ohne laufenden Rückruf“ umgesetzt (Produkte haben keinen Stand „zurückgezogen“;
    zurückgezogene Herstellerdokumente zeigt die Übung ohnehin nicht).
 3. **Rollen über den Kategorienamen** (Endung „Gurt(e)“, „Seil(e)“, „Helm(e)“, „Karabiner“ irgendwo im Pfad) und die
-   Materialart textil für Gurt und Seil.
+   Materialart textil für Gurt und Seil. **Entschieden am 04.11.2026**: keine weiteren Rollen (etwa Abseilgeräte) – ohne
+   Produkt mit geltendem Formular in diesen Kategorien bleibt der Platzhalter.
 4. **Vorab gefüllte Pflichtpunkte** in der Übungsprüfung (Text „Übung“, Zahl „1“, Datum heute, Foto und Unterschrift der
    Übung) – sonst wäre ein langes Formular ein langer Schritt; einen Zahl- oder Textpunkt trägt man selbst ein.
 5. **Beschreibung und Dokumentgröße** gehen zusätzlich zu den Feldern des Auftrags mit (beide Katalogfelder; die
