@@ -434,8 +434,11 @@ def test_oberflaeche_statisch():
     # und ohne Link; 29 seit P4-L2 O2: Kopf der Seite „Set prüfen“; 30 seit dem Feintuning (23.10.2026): Produkt im
     # Dialog „Bearbeiten“; 31 seit den Anträgen an alle Stammdaten (24.10.2026): das feste Produkt im Antragsdialog
     # an Set und Teil; 24 seit dem Rückbau der Set-Funktion (Schritt 26): die sieben Stellen der Sets sind weg; 26 seit
-    # der Prüfformular-Übernahme (Schritt 35): Produktlinks (produktLinks) und gewähltes Produkt im Dialog.
-    assert len(stellen) == js.count("${nameHtml(") == 26, (len(stellen), js.count("${nameHtml("))
+    # der Prüfformular-Übernahme (Schritt 35): Produktlinks (produktLinks) und gewähltes Produkt im Dialog; 28 seit dem
+    # Formular-Pool (Schritt 38): die zwei Stellen der Übernahme sind weg, dazu „Gilt für“ der Formularseite, die
+    # aufgeklappte Liste „gilt für n Produkte“, die Zeile im Dialog „Zuweisen“ und „zugewiesen: …“ der Seite
+    # „Prüfformulare“.
+    assert len(stellen) == js.count("${nameHtml(") == 28, (len(stellen), js.count("${nameHtml("))
     assert all(name == zusatz for name, _, zusatz in stellen), stellen
     assert not re.search(r"\$\{zusatzHtml\([^)]*\)\}(</strong>|</a>)", js)      # nie im Link, nie in <strong>
     # Die Katalogliste wie im Bildschirmfoto: Name fett im roten Link, dann grau Zusatz und Artikelnummer.

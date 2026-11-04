@@ -12660,8 +12660,10 @@ Platzhalter so hoch wie möglich; die Sonderregel „Kategorie mit nur inaktivem
 (ein inaktives Formular kommt ohnehin nie in den Export), damit auch die Zeile „Ohne wirksames Formular“ im Bericht.
 Bericht: „(DEMO, Standard der Kategorie)“ statt „nicht im Katalog-Export“.
 
-**Anleitung** (`anleitung.THEMEN`): „pruefformular“ → „Prüfformulare“ `#formular-pool-standard-und-zuweisung`, neu
-„formulare“ (Seite) → `#seite-pruefformulare`; fehlt der Abschnitt im Artikel, führt der Link an den Seitenanfang.
+**Anleitung** (`anleitung.THEMEN`): „pruefformular“ und neu „formulare“ (Seite) führen an den Anfang von
+„Prüfformulare“ – der Abschnitt „generisch und spezifisch“ beschreibt Aufgehobenes, und `test_material_anleitung`
+prüft die Anker gegen den Artikel. Nach dem Nachzug des Artikels: `#formular-pool-standard-und-zuweisung` bzw.
+`#seite-pruefformulare` eintragen.
 **Strömipedia** (nur genannt, Nachzug durch wiki-autor): Artikel „Prüfformulare“ (Abschnitte „generisch und
 spezifisch“ und „Formular eines anderen Produkts übernehmen“ neu als „Formular-Pool, Standard und Zuweisung“ und
 „Seite Prüfformulare“), „Katalog“ (Kategoriekopf, Knopf „Prüfformulare“) und „Katalog › Produktseite“ (keine Knöpfe

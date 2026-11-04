@@ -5705,7 +5705,7 @@
       const notiz = !p.gewaehlt && p.grund ? esc(p.grund) : p.bisher ? `bisher: „${esc(p.bisher.titel || "ohne Titel")}“`
         : p.ueber_standard ? "gilt schon über den Standard" : p.standard ? `gilt über Standard „${esc(p.standard.titel || "ohne Titel")}“` : "";
       return `<label class="mat-zw-zeile${aus ? " aus" : ""}" data-such="${esc(`${produktName(p)} ${p.article_no || ""}`.toLowerCase())}"><input type="checkbox" class="zw-wahl" data-schluessel="p${p.id}" value="${p.id}"${p.gewaehlt ? " checked" : ""}${aus ? " disabled" : ""}>
-        <span class="mat-zw-name"><span class="mat-produktname">${nameHtml(p)}</span>${zusatzHtml(p)}${artNrKurz(p.article_no)}</span><span class="mat-zw-notiz">${notiz}</span></label>`;
+        <span class="mat-zw-name">${nameHtml(p)}${zusatzHtml(p)}${artNrKurz(p.article_no)}</span><span class="mat-zw-notiz">${notiz}</span></label>`;
     };
     const gruppen = d.kategorien.map((k) => ({ k, produkte: d.produkte.filter((p) => p.category_id === k.id) })).filter((g) => g.produkte.length);
     dialog(`<h2>„${esc(titel)}“ zuweisen</h2>
@@ -5790,7 +5790,7 @@
           : `Standard für ${x.standard_fuer.map((s) => `„${esc(kurz(s.name))}“`).join(", ")}`);
       }
       if (x.zugewiesen.length) {
-        teile.push(x.zugewiesen.length <= 3 ? `zugewiesen: ${x.zugewiesen.map((p) => `<a class="mat-produktname" href="/materialablage/katalog/produkt/${p.id}">${nameHtml(p)}</a>`).join(", ")}`
+        teile.push(x.zugewiesen.length <= 3 ? `zugewiesen: ${x.zugewiesen.map((p) => `<a class="mat-produktname" href="/materialablage/katalog/produkt/${p.id}">${nameHtml(p)}</a>${zusatzHtml(p)}`).join(", ")}`
           : `${plural(x.zugewiesen.length, "Produkt", "Produkten")} zugewiesen`);
       }
       const gilt = x.wirksam_n && x.link ? `<details class="mat-wirksam" data-version="${x.link}"><summary>gilt für ${plural(x.wirksam_n, "Produkt", "Produkte")}</summary><div class="mat-wirksam-liste"></div></details>`
