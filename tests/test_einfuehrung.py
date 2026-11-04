@@ -169,7 +169,7 @@ def test_merker():
         assert put(t.person, "material", "grund", zustand="abgelehnt").status_code == 403
         assert put(t.mitglied, "material", "pruefer", zustand="abgelehnt").status_code == 403
         assert put(t.mitglied, "wiki", "grund", zustand="abgelehnt").status_code == 403
-        for falsch in ({"zustand": "fertig"}, {"zustand": "offen"}, {"zustand": "unterbrochen", "ablauf": 1},
+        for falsch in ({"zustand": "fertig"}, {"zustand": "offen"}, {"zustand": "unterbrochen", "ablauf": 3},
                        {"zustand": "unterbrochen", "ablauf": -1}, {"zustand": "unterbrochen", "ablauf": "0"},
                        {"zustand": "unterbrochen", "ablauf": True}, {"zustand": "unterbrochen", "ablauf": 0.0}, {}):
             r = put(t.mitglied, "material", "grund", **falsch)
@@ -240,7 +240,7 @@ def test_angebot_je_rolle():
         assert e["modul"] == "material" and e["name"] == "Materialablage" and e["uebung"] is None
         assert e["zu"] == "zur Materialablage" and e["bleibt"] == "Dein echter Bestand bleibt unverändert."
         assert e["angebot"][0] == {"teil": "grund", "titel": "Grundteil", "minuten": 5, "zustand": "offen", "ablauf": 0,
-                                   "ablaeufe": 1, "ablauf_titel": "Zurechtfinden", "am": "",
+                                   "ablaeufe": 3, "ablauf_titel": "Zurechtfinden", "am": "",
                                    "adresse": "/materialablage?uebung=grund"}
         # Jede Seite des Moduls, auch die Artikelseite nach einem QR-Scan.
         assert teile_im_angebot(t.w, f"/materialablage/artikel/{t.art[0]}")[0] == ["grund", "materialwart"]
@@ -397,7 +397,7 @@ def test_profil():
         assert teil.count('class="einf-zeile"') == 2 and '<h3 class="einf-modul">Materialablage</h3>' in teil
         assert "Grundteil · etwa 5 Min." in teil and "Prüfer · etwa 4 Min." in teil
         assert teil.count("noch nicht begonnen") == 2 and teil.count(">Starten</a>") == 2
-        assert 'href="/materialablage?uebung=pruefer"' in teil and 'class="btn secondary small"' in teil
+        assert 'href="/materialablage/artikel/900000012?uebung=pruefer"' in teil and 'class="btn secondary small"' in teil
         assert put(t.k["pruefer"], "material", "grund", zustand="erledigt").status_code == 200
         assert put(t.k["pruefer"], "material", "pruefer", zustand="unterbrochen", ablauf=0).status_code == 200
         html = t.k["pruefer"].get("/profil").get_data(as_text=True)
