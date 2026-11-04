@@ -941,7 +941,7 @@
     el.classList.add("mf");
     el.innerHTML = '<p class="help">Wird geladen …</p>';
     const stand = { vorlage: opt.vorlage && opt.vorlage !== "verlaengern" ? opt.vorlage : null, daten: null, hinweis: "" };
-    const dort = opt.dort || ((oid) => { location.href = `/materialablage/ordner/${oid}?freigaben`; });
+    const dort = opt.dort || ((oid) => { location.href = S.ziel(`/materialablage/ordner/${oid}?freigaben`); });
     try { stand.daten = await api(`${API}/ordner/${id}/freigaben`); }
     catch (e) { el.innerHTML = `<p class="notice">${esc(e.message)}</p>`; return; }
     const d = stand.daten;

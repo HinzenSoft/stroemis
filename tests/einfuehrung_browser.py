@@ -263,6 +263,22 @@ class Seite:
     def zustand(self):
         return self.js("window.S && S.einfuehrung ? S.einfuehrung.zustand() : null")
 
+    def ruhe(self, sek=2.5):
+        """Bis Bildlauf, Ziel und Blase ruhen: Die Führung rollt das Ziel weich ins Bild, Schubladen gleiten herein – ein
+        Tipp mitten in der Bewegung hält am Telefon nur den Bildlauf an (kein Klick), und gemessen wäre eine Zwischenlage."""
+        letzte, ruhig, ende = None, 0, time.time() + sek
+        while time.time() < ende:
+            try:
+                lage = self.b.js("(() => { const z = window.S && S.einfuehrung && S.einfuehrung.zustand();"
+                                 " return JSON.stringify([scrollX, scrollY, z && z.zielRect, z && z.blaseRect]); })()")
+            except RuntimeError:
+                return
+            ruhig = ruhig + 1 if lage == letzte else 0
+            if ruhig >= 2:
+                return
+            letzte = lage
+            self.b.warten(0.08)
+
     # --- Bedienen --------------------------------------------------------------------------------------------------
     def punkt(self, sel, blase=False):
         """Mitte des ersten sichtbaren Elements zu sel (ohne Blase und Rahmen, außer blase=True), ins Bild geholt, und
@@ -338,6 +354,7 @@ class Seite:
             z = self.warte("(() => { const z = window.S && S.einfuehrung && S.einfuehrung.zustand();"
                            " return z && (z.bereit || z.geschafft || z.sackgasse) && !z.umgeleitet ? z : null; })()", 15)
             self.sammeln()
+            self.ruhe()
             if not z:
                 befunde.append("Die Führung zeigt keinen Schritt (15 s).")
                 break

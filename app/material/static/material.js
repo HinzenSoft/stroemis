@@ -1964,7 +1964,7 @@
         knopf.disabled = true;
         try {
           const r = await api(`${API}/durchgaenge`, { method: "POST", body: { titel: $("#rd-titel", body).value, folder_id: +$("#rd-ordner", body).value } });
-          location.href = `/materialablage/durchgang/${r.durchgang.id}`;
+          location.href = S.ziel(`/materialablage/durchgang/${r.durchgang.id}`);
         } catch (e) { S.fehlschlag(knopf, e, body); }
       };
     });
@@ -2385,7 +2385,7 @@
           dlg.close();
           // Eine neue Gliederung braucht als Erstes ihren Materialwart: „Ordner bearbeiten“ öffnet dort im Reiter
           // „Freigaben“ mit der Rolle „Materialwart“.
-          location.href = `/materialablage/ordner/${oid}${oben ? "?freigaben=materialwart" : ""}`;
+          location.href = S.ziel(`/materialablage/ordner/${oid}${oben ? "?freigaben=materialwart" : ""}`);
         } catch (e) { S.fehlschlag(knopf, e, body); }
       };
     });
@@ -2428,7 +2428,7 @@
           vorlage: opt.vorlage, fokus: !!fokusInhalt,
           geaendert: () => { geaendert = true; },
           // „Dort öffnen“ (geerbte Zeile): zum Oberordner, dort gleich in diesen Reiter.
-          dort: async (id) => { if (await verlassenOk()) location.href = `/materialablage/ordner/${id}?freigaben`; },
+          dort: async (id) => { if (await verlassenOk()) location.href = S.ziel(`/materialablage/ordner/${id}?freigaben`); },
         });
       } else if (name === "ordner" && fokusInhalt) {
         fokus($("#od-name", body));
@@ -2692,7 +2692,7 @@
         },
         loeschen: async () => {
           if (!(await confirm(`Ordner „${d.name}“ endgültig löschen? Danach ist er weg. Das geht nur bei einem leeren Ordner – ohne Unterordner und Artikel, ohne Prüfdurchgänge und Set-Protokolle, ohne offene Nacharbeit und ohne gesperrte Artikel, die hierher zurückkehren.`, "Löschen"))) return;
-          try { await api(`${API}/ordner/${d.id}`, { method: "DELETE" }); location.href = d.parent_id && offenbar(d.parent_id) ? `/materialablage/ordner/${d.parent_id}` : "/materialablage/bestand"; }
+          try { await api(`${API}/ordner/${d.id}`, { method: "DELETE" }); location.href = S.ziel(d.parent_id && offenbar(d.parent_id) ? `/materialablage/ordner/${d.parent_id}` : "/materialablage/bestand"); }
           catch (e) { toast(e.message, true); }
         },
         "sammel-verschieben": async () => {
@@ -3195,7 +3195,7 @@
       bearbeiten: () => artikelDialog(a),
       antrag: () => antragDialog(a),
       "antrag-zurueck": (b) => antragZurueckziehen((a.antraege || []).find((x) => x.id === +b.dataset.id), () => zeigen(artikel)),
-      pruefen: () => { location.href = eigenerEntwurf ? `/materialablage/pruefung/${a.entwurf.id}` : `/materialablage/artikel/${a.id}/pruefung/neu`; },
+      pruefen: () => { location.href = S.ziel(eigenerEntwurf ? `/materialablage/pruefung/${a.entwurf.id}` : `/materialablage/artikel/${a.id}/pruefung/neu`); },
       verlust: () => sperrDialog(a, "verlust"),
       mangel: () => mangelDialog(a, (r, q) => { quittung = q; return zeigen(artikel); }, { verwaltet: Boolean(darf.verwalten), gesperrt: a.lock_state !== "frei" }),
       "mangel-weiterlesen": (b) => mangelWeiterlesen(b),
@@ -3222,7 +3222,7 @@
       loeschen: async () => {
         const frage = `Artikel ${a.inventory_no} löschen? Das ist nur für falsch angelegte Artikel ohne Prüfung gedacht; die Inventarnummer wird nicht wieder vergeben.`;
         if (!(await confirm(frage, "Löschen"))) return;
-        try { await api(`${API}/artikel/${a.id}`, { method: "DELETE" }); location.href = `/materialablage/ordner/${a.folder_id}`; }
+        try { await api(`${API}/artikel/${a.id}`, { method: "DELETE" }); location.href = S.ziel(`/materialablage/ordner/${a.folder_id}`); }
         catch (e) { toast(e.message, true); }
       },
     };
@@ -3889,10 +3889,10 @@
             <ul class="mat-an-hinweise">${r.hinweise.map((h) => `<li>${esc(h)}</li>`).join("")}</ul>
             <div class="dlg-actions">${weiter ? '<button class="btn" type="button" data-close>Nächsten anlegen</button>'
               : `<a class="btn" href="/materialablage/artikel/${r.artikel.id}">Zum Artikel</a>`}</div>`,
-          (dlg) => { if (weiter) dlg.addEventListener("close", weiterHier, { once: true }); else dlg.addEventListener("close", () => { location.href = `/materialablage/artikel/${r.artikel.id}`; }, { once: true }); });
+          (dlg) => { if (weiter) dlg.addEventListener("close", weiterHier, { once: true }); else dlg.addEventListener("close", () => { location.href = S.ziel(`/materialablage/artikel/${r.artikel.id}`); }, { once: true }); });
           return;
         }
-        if (!weiter) { location.href = `/materialablage/artikel/${r.artikel.id}`; return; }
+        if (!weiter) { location.href = S.ziel(`/materialablage/artikel/${r.artikel.id}`); return; }
         toast(`${r.artikel.inventory_no} angelegt (Seriennummer ${r.artikel.serial_no})`);
         weiterHier();
       } catch (e) { toast(e.message, true); }
@@ -4122,7 +4122,7 @@
       "kat-loeschen": async () => {
         const k = kats.find((x) => x.id === kategorie);
         if (!(await confirm(`Kategorie „${k.name}“ löschen? Das geht nur ohne Unterkategorien und Produkte.`, "Löschen"))) return;
-        try { await api(`${API}/kategorien/${k.id}`, { method: "DELETE" }); location.href = "/materialablage/katalog"; } catch (e) { toast(e.message, true); }
+        try { await api(`${API}/kategorien/${k.id}`, { method: "DELETE" }); location.href = S.ziel("/materialablage/katalog"); } catch (e) { toast(e.message, true); }
       },
       "kat-formular": () => formularFuer({ kategorie_id: kategorie }),
       "produkt-neu": () => produktDialog({ category_id: kategorie }),
@@ -4502,9 +4502,9 @@
     try {
       const liste = (await api(`${API}/formulare?${q}`)).formulare;
       const f = liste.find((x) => x.aktiv) || liste[0];
-      if (f) { location.href = `/materialablage/katalog/formular/${f.id}`; return; }
+      if (f) { location.href = S.ziel(`/materialablage/katalog/formular/${f.id}`); return; }
       const r = await api(`${API}/formulare`, { method: "POST", body: ziel });
-      location.href = `/materialablage/katalog/formular/${r.formular.id}`;
+      location.href = S.ziel(`/materialablage/katalog/formular/${r.formular.id}`);
     } catch (e) { toast(e.message, true); }
   }
 
@@ -4537,7 +4537,7 @@
                         items_have_length: $("#kd-laenge", body).checked };
         try {
           const r = neu ? await api(`${API}/kategorien`, { method: "POST", body: daten }) : await api(`${API}/kategorien/${k.id}`, { method: "PUT", body: daten });
-          dlg.close(); location.href = `/materialablage/katalog?kategorie=${r.kategorie.id}`;
+          dlg.close(); location.href = S.ziel(`/materialablage/katalog?kategorie=${r.kategorie.id}`);
         } catch (e) { toast(e.message, true); }
       };
     });
@@ -4696,7 +4696,7 @@
           }
           dlg.close();
           if (opt.danach) await opt.danach(r.produkt);
-          else location.href = `/materialablage/katalog/produkt/${pid}`;
+          else location.href = S.ziel(`/materialablage/katalog/produkt/${pid}`);
         } catch (e) { S.fehlschlag(knopf, e, body); }
       };
     });
@@ -4979,7 +4979,7 @@
       variante: () => produktDialog(Object.assign({}, p, { id: null, article_no: "", bild: null, vorschau: null, original: null, variante_von: p })),
       loeschen: async () => {
         if (!(await confirm(`Produkt „${produktName(p)}“ aus dem Katalog löschen?`, "Löschen"))) return;
-        try { await api(`${API}/produkte/${p.id}`, { method: "DELETE" }); location.href = "/materialablage/katalog"; } catch (e) { toast(e.message, true); }
+        try { await api(`${API}/produkte/${p.id}`, { method: "DELETE" }); location.href = S.ziel("/materialablage/katalog"); } catch (e) { toast(e.message, true); }
       },
       formular: () => formularFuer({ produkt_id: p.id }),
       "rr-neu": () => rueckrufDialog(p),
@@ -5250,12 +5250,12 @@
       deaktivieren: async () => { try { await api(`${API}/formulare/${f.id}/deaktivieren`, { method: "POST", body: {} }); toast("Deaktiviert"); zeigen(formular); } catch (e) { toast(e.message, true); } },
       "neue-version": async () => {
         const ziel = f.kategorie_id ? { kategorie_id: f.kategorie_id } : { produkt_id: f.produkt_id };
-        try { const r = await api(`${API}/formulare`, { method: "POST", body: Object.assign(ziel, { vorlage_id: f.id }) }); location.href = `/materialablage/katalog/formular/${r.formular.id}`; }
+        try { const r = await api(`${API}/formulare`, { method: "POST", body: Object.assign(ziel, { vorlage_id: f.id }) }); location.href = S.ziel(`/materialablage/katalog/formular/${r.formular.id}`); }
         catch (e) { toast(e.message, true); }
       },
       loeschen: async () => {
         if (!(await confirm(`Version ${f.version} löschen?`, "Löschen"))) return;
-        try { await api(`${API}/formulare/${f.id}`, { method: "DELETE" }); location.href = zielLink; } catch (e) { toast(e.message, true); }
+        try { await api(`${API}/formulare/${f.id}`, { method: "DELETE" }); location.href = S.ziel(zielLink); } catch (e) { toast(e.message, true); }
       },
       // Nur die Zeile neu – was in den Prüfpunkten getippt, aber noch nicht gespeichert ist, bleibt stehen.
       "wiki-waehlen": () => wikiWahl(f, (neu) => {
@@ -5391,7 +5391,7 @@
     const a = antwort.artikel;
     const darf = a.darf || {};
     leisteMarkieren(a.folder_id);
-    if (a.entwurf && a.entwurf.pruefer_id === DARF.uid && darf.pruefen) { location.replace(`/materialablage/pruefung/${a.entwurf.id}`); return; }
+    if (a.entwurf && a.entwurf.pruefer_id === DARF.uid && darf.pruefen) { location.replace(S.ziel(`/materialablage/pruefung/${a.entwurf.id}`)); return; }
     const p = a.produkt;
     const pa = a.pruefarten || { arten: [], vorschlag: null };
     let hinweis = "";                     // HTML – nur der Hinweis zum Prüferwerden enthält einen Link
@@ -5425,7 +5425,7 @@
         const wahl = $('input[name="art"]:checked');
         const body = { art: wahl ? wahl.value : null };
         if (DATEN.durchgang) body.durchgang_id = DATEN.durchgang;
-        try { const r = await api(`${API}/artikel/${a.id}/pruefungen`, { method: "POST", body }); location.href = `/materialablage/pruefung/${r.pruefung.id}`; }
+        try { const r = await api(`${API}/artikel/${a.id}/pruefungen`, { method: "POST", body }); location.href = S.ziel(`/materialablage/pruefung/${r.pruefung.id}`); }
         catch (e) { S.fehlschlag(b, e); }
       },
     };
@@ -6638,7 +6638,7 @@
             if (!grund) { S.feldFehler(feld, "Bitte den Grund der Berichtigung angeben."); return; }
             const knopf = ev.currentTarget;
             knopf.disabled = true;
-            try { const r = await api(`${API}/pruefungen/${pr.id}/berichtigen`, { method: "POST", body: { grund } }); location.href = `/materialablage/pruefung/${r.pruefung.id}`; }
+            try { const r = await api(`${API}/pruefungen/${pr.id}/berichtigen`, { method: "POST", body: { grund } }); location.href = S.ziel(`/materialablage/pruefung/${r.pruefung.id}`); }
             catch (e) {
               if (e.status === 409) {
                 // Inzwischen nicht mehr berichtigbar (etwa anderswo schon begonnen): neu laden – dann steht oben,
@@ -6660,10 +6660,10 @@
           : "Den Entwurf verwerfen? Befunde, Fotos und Anhänge dieser Prüfung gehen verloren, der Artikel ist wieder frei.";
         if (!(await confirm(frage, "Verwerfen"))) return;
         // Eine verworfene Berichtigung führt zurück zum Original, das weiter gilt.
-        try { await api(`${API}/pruefungen/${pr.id}`, { method: "DELETE" }); vergessen(); location.href = b ? `/materialablage/pruefung/${b.id}` : `/materialablage/artikel/${pr.item_id}`; }
+        try { await api(`${API}/pruefungen/${pr.id}`, { method: "DELETE" }); vergessen(); location.href = S.ziel(b ? `/materialablage/pruefung/${b.id}` : `/materialablage/artikel/${pr.item_id}`); }
         catch (e) { toast(e.message, true); }
       },
-      freigeben: () => reservierungFreigeben(pr.id, pr.pruefer, async () => { location.href = `/materialablage/artikel/${pr.item_id}`; }),
+      freigeben: () => reservierungFreigeben(pr.id, pr.pruefer, async () => { location.href = S.ziel(`/materialablage/artikel/${pr.item_id}`); }),
     };
     await aussonderungLaden();
     zeichnen();
@@ -6927,7 +6927,7 @@
         b.disabled = true;
         try {
           const r = await api(`${API}/durchgaenge/${d.id}/abbrechen`, { method: "POST", body: {} });
-          if (!r.durchgang) { location.href = "/materialablage/pruefungen"; return; }
+          if (!r.durchgang) { location.href = S.ziel("/materialablage/pruefungen"); return; }
           filter = "";
           toast(r.durchgang.protokoll ? `Prüfdurchgang abgebrochen – Sammelprotokoll ${r.durchgang.protokoll.id}` : "Prüfdurchgang abgebrochen"); await neu();
         } catch (e) { S.fehlschlag(b, e); }

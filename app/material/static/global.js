@@ -149,7 +149,7 @@ window.MatGlobal = (function () {
       knopf.disabled = true;
       try {
         const d = await api(`${API}/qr`, { method: "POST", body: { token, bestaetigt: true } });
-        if (d.weiter) { location.replace(d.weiter); return; }
+        if (d.weiter) { location.replace(S.ziel(d.weiter)); return; }
         aus.innerHTML = ergebnis(d, "");
         knopf.closest(".btn-row").remove();
       } catch (e) {
