@@ -592,7 +592,7 @@ Ohne `ADMIN_EMAIL`/`ADMIN_PASSWORD` bekommt der erste Nutzer, der ein Konto anfr
 - **Protokolle (Materialablage):** Festgeschriebene Prüfungen, Aussonderungen und Durchgänge ändert auch die Datenbank nicht mehr (Trigger); die PDF-Dateien liegen schreibgeschützt unter `/data/pdf` und werden nur ausgeliefert, wenn ihre Prüfsumme noch stimmt. WeasyPrint lädt beim Rendern nichts aus dem Netz und keine fremden Dateien – nur die eigenen Schriften; Bilder kommen eingebettet. Die öffentliche Seite „Echtheit prüfen“ `/materialablage/pruefen` speichert nichts, nennt keine Personendaten und ist je Adresse auf 20 Prüfungen in 15 Minuten und 200 MB je Datei gebremst.
 - **Trennung je Gliederung (Materialablage):** Rechte am Bestand gibt es für Mitglieder nur über Freigaben je Ordner (alle Bestände sieht nur die Material-Verwaltung); der Server prüft sie bei jeder Anfrage, und ohne Stufe im Modul wirkt keine. `tests/test_material_stufen.py` ruft jede Route des Moduls mit einem Konto auf, das Freigaben, aber keine Stufe hat (403 vor jeder Frage nach dem Gegenstand). Was ein Konto nicht sieht, antwortet wie etwas, das es nicht gibt – 404 mit derselben Meldung, ob die Kennung im Pfad oder im Inhalt der Anfrage steht; 403 nur, wenn man den Gegenstand sieht, die Aktion aber nicht darf. Listen, Zählungen, Suche, Exporte, Rückrufe und Meldungen filtert der Server, nicht die Oberfläche. Mediendateien prüft er je Datei (Ordnerfoto am Ordner, Befundfoto und Prüfanhang am Artikel, Meldungsfoto an der Meldung; Produktbilder und Herstellerdokumente für alle mit Zugang). Die globale Seriennummernsuche, der Steckbrief nach einem QR-Scan und die Meldung „gibt es schon in einem Bereich, den du nicht siehst“ beim Anlegen stehen jedes Mal zwölf Monate mit Namen im Protokoll – ungebremst, die Kontrolle ist dieses Protokoll; gesucht wird nur nach der ganzen Herstellerseriennummer, nach ausdrücklicher Bestätigung und nur unter dem, was man nicht sieht. Die Personensuche für Freigaben und Zuordnung zeigt ab drei Zeichen nur Name, Gliederung und ob jemand Prüfer ist – keine E-Mail. `tests/test_material_trennung.py` ruft jede Route des Moduls mit Kennungen einer fremden Gliederung auf und sucht deren Merkmale in allen Antworten.
 - **Export und Katalogaustausch (Materialablage):** Exporte gibt es nur mit lesen oder verwalten am Ordner (Freigaben je Ordner); Werte, die eine Tabellenkalkulation als Formel läse (`=`, `+`, `-`, `@` am Anfang), stehen in der CSV mit vorangestelltem `'`. Das Protokoll-ZIP gibt nur Dateien heraus, deren Prüfsumme noch stimmt, und entsteht als Zwischendatei unter `/data/tmp` (höchstens 2 GB). Den Katalog exportieren und importieren nur die Material-Verwaltung. Der Import liest aus dem ZIP nur die Einträge, auf die `katalog.json` verweist (keine absoluten Pfade, kein `..`, keine doppelten Namen), prüft Zahl, Größe und Packverhältnis der Einträge vor dem Lesen und lässt Bilder und Dokumente durch dieselben Prüfungen wie beim Hochladen (Endung, Inhalt, Größe, Pixel); ein Fehler irgendwo speichert nichts.
-- **Übungssperre (Einführung):** Eine Übung läuft ganz im Browser – die Schicht in `einfuehrung.js` beantwortet jede Anfrage der Seite aus dem Übungsbestand. Zweite Absicherung auf dem Server (`einfuehrung.sperre`, erster Schritt von `csrf_guard`): Eine Übungsanfrage – Kopfzeile `X-Uebung: 1` oder ein Referer derselben Herkunft mit `uebung=` im Abfrageteil (so auch Bilder, Beacons, Datei-Links und neue Fenster) – bekommt an `/api/` und `/media/` (auch lesend), mit jeder schreibenden Methode und an jede Datei (Endung, `…/pdf`, `…/sammelprotokoll`) 403 „In der Übung gesperrt – es wird nichts gespeichert.“. Durch gehen nur der Merker (`/api/einfuehrung/…`), `GET /api/me`, Abmelden (`POST /api/auth/logout`, ändert nur die Sitzung), `/static/` und Seitenaufrufe. Seiten gibt es in der Übung nur mit Übungszweig (`einfuehrung.UEBUNGSSEITEN`): Jeder andere Seitenaufruf mit `uebung=` – oder aus einer Übungsseite heraus unter einem Modulpfad (Meine PSA, Echtheit prüfen, Bericht, Bestandsimport, Druck der Riegenkarten …) – bekommt vor der Route die Fehlerseite „In der Übung nicht verfügbar“ (403) mit „Zurück zur Übung“; die Kopfleiste führt ohne Referer hinaus. Eine Übungsseite hat eine engere CSP: Bilder, Medien und Rahmen nur aus `/static/` (dazu `data:`, `blob:`, Kartenkacheln), Verbindungen nur zu den Ausnahmen – so erreicht auch ein Element mit `referrerpolicy="no-referrer"` `/api/` und `/media/` nicht. Eine Übung gilt nur, wenn ihr Teil für das Konto gilt – die Stufe in der Übung ist nie höher als die echte. `tests/test_einfuehrung.py` ruft jede Regel unter `/api/` mit jeder Methode und jede Seitenregel der Module mit `uebung=` auf und prüft, dass sich die Datenbank nicht ändert.
+- **Übungssperre (Einführung):** Eine Übung läuft ganz im Browser – die Schicht in `einfuehrung.js` beantwortet jede Anfrage der Seite aus dem Übungsbestand. Zweite Absicherung auf dem Server (`einfuehrung.sperre`, erster Schritt von `csrf_guard`): Eine Übungsanfrage – Kopfzeile `X-Uebung: 1` oder ein Referer derselben Herkunft mit `uebung=` im Abfrageteil (so auch Bilder, Beacons, Datei-Links und neue Fenster) – bekommt an `/api/` und `/media/` (auch lesend), mit jeder schreibenden Methode und an jede Datei (Endung, `…/pdf`, `…/sammelprotokoll`) 403 „In der Übung gesperrt – es wird nichts gespeichert.“. Durch gehen nur der Merker (`/api/einfuehrung/…`), `GET /api/me`, Abmelden (`POST /api/auth/logout`, ändert nur die Sitzung), `/static/` und Seitenaufrufe. Seiten gibt es in der Übung nur mit Übungszweig (`einfuehrung.UEBUNGSSEITEN`): Jeder andere Seitenaufruf mit `uebung=` – oder aus einer Übungsseite heraus unter einem Modulpfad (Meine PSA, Echtheit prüfen, Bericht, Bestandsimport, Druck der Riegenkarten …) – bekommt vor der Route die Fehlerseite „In der Übung nicht verfügbar“ (403) mit „Zurück zur Übung“; die Kopfleiste führt ohne Referer hinaus. Eine Übungsseite hat eine engere CSP: Bilder, Medien und Rahmen nur aus `/static/` (dazu `data:`, `blob:`, Kartenkacheln), Verbindungen nur zu den Ausnahmen, `default-src 'none'` (kein Prefetch) mit `manifest-src 'self'`, Worker nur der Service Worker (`worker-src …/sw.js`) – so erreicht auch ein Element mit `referrerpolicy="no-referrer"` `/api/` und `/media/` nicht; dazu `Cache-Control: no-store`. Die Schicht hält auch Downloads (`<a download>`, auch losgelöst) an. Alte Adressen leiten aus der Übung mit der Kennung weiter (`einfuehrung.mit_kennung`, ohne Zwischenspeicher). Eine Übung gilt nur, wenn ihr Teil für das Konto gilt – die Stufe in der Übung ist nie höher als die echte. `tests/test_einfuehrung.py` ruft jede Regel unter `/api/` mit jeder Methode und jede Seitenregel der Module mit `uebung=` auf und prüft, dass sich die Datenbank nicht ändert.
 
 ## Damit Mails ankommen
 
@@ -962,9 +962,10 @@ Aufruf, danach läuft alles wie ohne Worker.
 
 Seit dem 03.11.2026 bietet jedes Modul außer der Leitstelle eine kurze Übung an (Wunsch des Nutzers vom 28.10.2026,
 Entscheidungen vom 03.11.2026; Bauvorlage `planung/tutorial/entwurf.md`). Freiwillig: Beim Betreten eines Moduls
-erscheint ein Angebot – unten rechts als schwebende Karte, am Telefon als Leiste unten, nicht modal und erst, wenn der
-Hinweis „Entwicklungsserver“ und das Willkommen der Materialablage geschlossen sind. „Nicht jetzt“ gilt für alle
-angebotenen Teile, danach nur noch das Profil (Abschnitt „Einführungen“: Starten, Fortsetzen, Erneut ansehen). Keine
+erscheint ein Angebot – unten rechts als schwebende Karte, am Telefon (unter 600 px Breite oder 520 px Höhe, also auch
+quer) als Leiste unten, nicht modal und erst, wenn der Hinweis „Entwicklungsserver“ und das Willkommen der Materialablage
+geschlossen sind. „Kurze Übung …“ heißt es nur, wenn die genannte Dauer höchstens 5 Minuten ist. „Nicht jetzt“ gilt für
+alle angebotenen Teile, danach nur noch das Profil (Abschnitt „Einführungen“: Starten, Fortsetzen, Erneut ansehen). Keine
 Sperre, keine Weiterleitung; kein Angebot auf der Startseite, im Profil, in der Leitstelle, auf Druck- und Fehlerseiten,
 im Lesemodus der Strömipedia und in „Meine PSA“.
 
@@ -989,21 +990,40 @@ Hinweis bleiben, wie sie sind. Hochgeladene Dateien bleiben im
 Browser („Übungsbild nehmen“ setzt ein Bild aus `/static/uebung/` in die Dateiwahl); Dateien öffnen eine Übungsdatei
 (`/static/uebung/uebungsdatei.pdf`) oder melden „In der Übung gibt es diese Datei nicht.“. Seitenwechsel behalten die
 Kennung (Links und Formulare des Moduls, Verlauf, im Code `S.ziel(adresse)` aus `common.js`); die Kopfleiste und ein neuer
-Reiter führen auf die echten Seiten. Seiten des Moduls ohne Übungszweig (nicht in `STROEMIS.einfuehrung.seiten`, vom
+Reiter führen auf die echten Seiten – auch ein Klick mit Strg, Cmd, Umschalt oder Alt wie der Mittelklick: Der Link bekommt
+keine Kennung, der neue Reiter (das neue Fenster, der Download) zeigt die echte Seite, die Übung in diesem Reiter läuft
+weiter, und ihr Merker bleibt. Öffnet ein Reiter ohne Übungszustand die Übung (Lesezeichen, Link mit Kennung), beginnt er
+beim gemerkten Ablauf und setzt den Merker nie auf einen kleineren zurück. Seiten des Moduls ohne Übungszweig (nicht in `STROEMIS.einfuehrung.seiten`, vom
 Server aus `UEBUNGSSEITEN`) öffnen sich in der Übung nicht: Links, Formulare und Seitenwechsel per Code (Navigation API)
 bleiben auf der Seite mit dem Toast „In der Übung nicht verfügbar.“; ohne Navigation API antwortet der Server mit der
-Fehlerseite und „Zurück zur Übung“ (Übungszustand bleibt). Abmelden geht auch aus der Übung und leert die echte Ablage
+Fehlerseite und „Zurück zur Übung“ (Übungszustand bleibt). Ebenso die alten Adressen der Module (`/material…`, `/wiki/…`,
+`/karte`, `/pruefungen…`, Schreibweisen mit Umlaut): Ihre Weiterleitung behält aus der Übung die Kennung (Kennung in der
+Adresse oder Referer derselben Übung, `einfuehrung.mit_kennung`; auch `…/katalog/meldungen?bereich=antraege`) und landet
+nie auf der echten Seite im selben Reiter. Zurück im Browser nach dem Verlassen der Übung („Übung unterbrechen“,
+„Geschafft“, Kopfleiste) zeigt die echte Startseite des Moduls, keine Übungsseite ohne Führung: Übungsseiten kommen mit
+`Cache-Control: no-store`, und eine Übungsseite aus dem Verlauf (auch aus dem Seitenspeicher des Browsers, `pageshow`)
+ohne laufende Übung dieses Teils geht mit `location.replace` zur Startseite. Abmelden geht auch aus der Übung und leert die echte Ablage
 samt Übungszustand. Kartenkacheln laden wie sonst. Zweite Absicherung ist die Sperre auf dem Server
 (siehe „Wie die Anwendung abgesichert ist“). Übungs-Kennungen: Materialablage 9000000xx, Strömipedia 9100000xx,
 Ankerplätze 9200000xx, Riegenkarten 9300000xx – echte Zeilen erreichen sie nie; beim Ende, beim Unterbrechen und auf
 jeder echten Seite räumt `einfuehrung.js` die Übungsablage und den Übungszustand weg (beim Abmelden gehen sie ohnehin mit).
 
-**Führung:** ein Rahmen in `--wasser` um das Ziel (die Seite bleibt bedienbar), eine Sprechblase daneben bzw. am Telefon
-als Leiste unten mit „Übung · Schritt n von m“, Ablauftitel, Text, „Zurück“/„Weiter“ und „Übung unterbrechen“; in einem
-offenen Dialog wandert sie in den Dialog. Esc fragt „Übung unterbrechen?“. Führt eine Aktion auf eine andere Seite, setzt
-die neue Seite fort (bis 5 s Warten auf das Ziel, sonst „Hier geht es in der Übung nicht weiter.“ mit „Ablauf neu
-beginnen“). Am Ende eines Teils der Dialog „Geschafft“ – mit der Anleitung des Moduls in der Strömipedia, wenn das Konto
-sie lesen darf, und „Weiter mit „…““, wenn ein weiterer Teil offen ist.
+**Führung:** ein Rahmen in `--wasser` um das Ziel (die Seite bleibt bedienbar), eine Sprechblase daneben bzw. als Leiste
+unten mit „Übung · Schritt n von m“, Ablauftitel, Text, „Zurück“/„Weiter“ (grau umrandet – der rote Hauptknopf im Bild
+gehört der Seite) und „Übung unterbrechen“; in einem offenen Dialog wandert sie in den Dialog. Als **Leiste** steht sie
+unter 600 px Breite oder 520 px Höhe (Telefon hochkant und quer) und in jedem Schritt, in dem die schwebende Blase neben
+dem Ziel keinen Platz findet; ist die Leiste breit (ab 600 px), stehen ihre Knöpfe rechts neben dem Text. Die schwebende
+Blase steht unter, über, rechts oder links neben dem Ziel (samt aufgeklappter Liste eines Kombinationsfelds, etwa der
+Vorschläge der Suche) und deckt nie das Ziel, die Kopfleiste, die Leisten darüber, offene Menüs oder die Knöpfe des
+Dialogs (`.dlg-actions`); auf einem faltbaren Gerät bleibt sie in einem Bildschirmsegment (`viewport.segments`). Jeden
+Schritt sagt eine Live-Region an („Übung · Schritt n von m: Text“). „Tippe“ in den Texten der Übungsdateien heißt ohne
+Touch-Zeiger „Klicke“. Esc fragt „Übung unterbrechen?“ – mit dem Satz, dass du im Profil unter „Einführungen“ fortsetzen
+kannst. Führt eine Aktion auf eine andere Seite, setzt die neue Seite fort (bis 5 s Warten auf das Ziel, sonst „Hier geht
+es in der Übung nicht weiter.“ mit „Ablauf neu beginnen“); kommst du per Zurück im Browser auf eine Seite eines früheren
+Schritts, sagt die Blase, dass „Vor“ zum Schritt zurückführt oder der Ablauf neu beginnen kann. Nach dem Neuladen setzt
+die Führung am gespeicherten Schritt fort – nach einer Eingabe in diesem Ablauf (Text, Suchbegriff, die das Neuladen
+löscht) am Anfang des Ablaufs. Am Ende eines Teils der Dialog „Geschafft“ – mit der Anleitung des Moduls in der
+Strömipedia, wenn das Konto sie lesen darf, und „Nicht jetzt“/„Weiter mit „…““, wenn ein weiterer Teil offen ist.
 
 Wie die Führung ein Ziel zeigt (seit 04.11.2026, „Führung robust“): Sie holt es **sofort** (ohne weichen Bildlauf) in die
 Mitte des freien Bereichs – zwischen festen bzw. klebenden Leisten oben (Kopfleiste, Suchzeile, Reiter; gesucht mit
@@ -1047,10 +1067,15 @@ Lebensdauern):
   Voraussetzungen und Leistungen gibt es in der Übung nicht. Test `tests/test_einfuehrung_riegen.py`.
 
 **Merker** ohne Schemaschritt in `mat_meta` (Schema bleibt 34): Schlüssel `einfuehrung:<Konto>`, Wert
-`{"<modul>:<teil>": {"zustand": "abgelehnt" | "unterbrochen" | "erledigt", "ablauf": n, "am": …}}`, geschrieben über
-`PUT /api/einfuehrung/<modul>/<teil>` (`{zustand, ablauf}`; 404 unbekannter Teil, 403 wenn der Teil nicht für das
-Konto gilt, 400 falscher Zustand oder Ablauf; aus „erledigt“ wird nichts anderes). „unterbrochen“ trägt den nächsten
-unfertigen Ablauf, fortgesetzt wird an seinem Anfang. Kein Journal, keine Mail, keine Anzeige in der Leitstelle. Der
+`{"<modul>:<teil>": {"zustand": "abgelehnt" | "unterbrochen" | "erledigt", "ablauf": n, "am": …}}`; ein unlesbarer Wert
+(kein JSON, falsche Typen, tief geschachtelt) gilt als leer. „unterbrochen“ trägt den nächsten unfertigen Ablauf,
+fortgesetzt wird an seinem Anfang. Schnittstelle: `PUT /api/einfuehrung/<modul>/<teil>` mit
+`{"zustand": "abgelehnt" | "unterbrochen" | "erledigt", "ablauf": n}` (`ablauf` ganzzahlig ab 0, kleiner als die Zahl der
+Abläufe, fehlt → 0) → `{"ok": true}`; nur angemeldet (401) und aus eigenem Skript (JSON, wie alle schreibenden
+Schnittstellen; fremde Seite 403), 404 unbekannter Teil, 403 wenn der Teil nicht für das Konto gilt, 400 falscher Zustand
+oder Ablauf; aus „erledigt“ wird nichts anderes (Antwort trotzdem ok); unter der Schreibsperre, gleichzeitige Aufrufe
+verlieren nichts. Lesen tut ihn nur der Server (Angebot, Profil, `STROEMIS.einfuehrung.teile`) – eine Leseschnittstelle
+gibt es nicht. Die Übung darf ihn auch aus der Übung heraus schreiben (Ausnahme der Sperre). Kein Journal, keine Mail, keine Anzeige in der Leitstelle. Der
 Merker geht mit dem Konto (`api_admin.delete_user`); ein Zurücksetzen der Materialablage auf dev leert `mat_meta` und
 damit auch ihn – alle bekommen das Angebot dann wieder. Rückweg: `DELETE FROM mat_meta WHERE schluessel LIKE
 'einfuehrung:%'`.
@@ -1069,8 +1094,11 @@ Ein Schritt: `ziel` (Selektor, Funktion → Element oder `null` = Blase mittig o
 bis zwei Sätze), `warten` (fehlt → Knopf „Weiter“; `{klick: sel}`, `{wert: [sel, RegExp]}`, `{anfrage: "METHODE /pfad"}`
 oder RegExp, `{da: sel}`, `{bedingung: (z) => bool}`), `wenn` (`() => bool`, Schritt nur, wenn zutreffend), `datei`
 (`{input: sel, bild: "/static/uebung/…"}` – Knopf „Übungsbild nehmen“), `probe` (nur für den Durchlauftest: `{klick: sel}`,
-`{klick: sel, frei: true}` – Tipp auf die Mitte der größten freien Stelle, etwa auf die Karte –, `{tippen: [sel, text]}`,
-`{datei: true}`; ohne probe klickt der Test `warten.klick` bzw. „Weiter“). Ziele sind einfache Selektoren oder
+`{klick: sel, frei: true}` – Tipp auf die Mitte der größten freien Stelle, etwa auf die Karte; gibt es keine, mit
+`sonst: sel` auf jenes –, `{tippen: [sel, text]}`, `{datei: true}`; ohne probe klickt der Test `warten.klick` bzw.
+„Weiter“). Mehrere Angaben in `warten`: was zuerst eintritt. `text` darf ein Getter sein und `ziel` eine Funktion – beide
+fragt die Führung immer wieder neu (die Lupe der Materialablage, bis das Suchfeld offen ist). Texte schreiben „Tippe“; am
+Rechner sagt die Blase „Klicke“. Ziele sind einfache Selektoren oder
 Funktionen, die sagen, wann ein Ziel zur richtigen Seite gehört – Bildlauf, Dialoge, Schriften und Schubladen wartet die
 Führung selbst ab. Testschnittstelle
 (nur lesend): `S.einfuehrung.zustand()`, `S.einfuehrung.teile(modul)`. Übungsbilder und die Übungsdatei erzeugt

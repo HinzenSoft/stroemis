@@ -79,7 +79,7 @@ Geschichte stehen. Schemaversion nach der Nachbesserung vor dem Merge: 30; mit d
 | Rechte ändern mit Rollen | Dialog „Rechte ändern“ mit denselben Rollenkarten wie „Freigabe anlegen“ (vorgewählt die Rolle zu den heutigen Rechten, seltene Fälle unter „Einzeln“), Gültigkeit als Radiogruppe „dauerhaft / bis [Datum]“ in Dialog und Anlegen-Formular, nicht wählbare Rollen ausgegraut mit Grund als Satz, Erklärungen im „i“, Notiz zugeklappt; ohne Änderung schließt „Speichern“ ohne Anfrage; Server und Schnittstelle unverändert | gebaut 02.11.2026 (kein Schemaschritt) |
 | Prüfen folgt dem Grundrecht | Bei internen Rollen („Prüfer“, „Materialwart und Prüfer“) ist Prüfen immer dauerhaft und gilt, solange das Grundrecht gilt – auch vom befristeten Verwalter (Server: dauerhafte Prüffreigabe mit Grundrecht dort oder darüber auch von ihm; ändern nur, solange das tragende Grundrecht nicht länger läuft als sein Verwalten); kein vorbelegtes Datum außer beim externen Prüfer, „bis“ mit leerem Feld, wo „dauerhaft“ nicht geht; Rollenwechsel lässt die eigene Wahl; behebt den ungekappten Datumsvorschlag (eigenes Ende > 24 Monate → Ablehnung) | gebaut 03.11.2026 (kein Schemaschritt) |
 | „kritisch“ entfernt | Die Markierung „kritisch“ an Prüfpunkten ist ganz entfernt: kein Häkchen im Formular-Editor, keine Marke, Spalte und kein „i“ in Prüfung, Befunden und neuem Prüfprotokoll, keine Sperre von „einsatzbereit“ wegen eines kritischen Mangels (Oberfläche und Server) – bei einem Mangel wählt der Prüfer das Ergebnis selbst; Jahresbericht ohne „mit kritischem Mangel“, CSV ohne „kritischer Mangel“; Katalogexport ohne `kritisch`, der Import übergeht es; `is_critical` bleibt, wird nicht mehr gelesen | gebaut 03.11.2026 (kein Schemaschritt), Zweig kritisch-weg |
-| Interaktive Einführung je Modul | Übungsmodus mit Übungsbestand, Sperre, Angebot, Führung, Profil „Einführungen“, Übungen für Materialablage, Strömipedia, Ankerplätze, Riegenkarten | Grundgerüst gebaut 03.11.2026 (kein Schemaschritt), Übungen je Modul und robuste Führung gebaut 04.11.2026, Zweig tutorial |
+| Interaktive Einführung je Modul | Übungsmodus mit Übungsbestand, Sperre, Angebot, Führung, Profil „Einführungen“, Übungen für Materialablage, Strömipedia, Ankerplätze, Riegenkarten | Grundgerüst gebaut 03.11.2026 (kein Schemaschritt), Übungen je Modul und robuste Führung gebaut 04.11.2026, nach den Endprüfungen nachgebessert 04.11.2026, Zweig tutorial |
 
 ## Abgleich mit dem Bestand (vor Lieferung 1)
 
@@ -11898,3 +11898,52 @@ Daten unverändert); angepasst `tests/test_geraetetest_riegen.py` (Sprung nach �
   gegen den Nutzer). Der Export der Strömipedia meldet jetzt „In der Übung gibt es diese Datei nicht.“ (wie jede andere
   Datei) statt „In der Übung nicht verfügbar.“. Klebende Leisten unten als Regel mit `--fuehrung-hoehe` statt einer
   eigenen Klasse.
+
+**Nach den Endprüfungen nachgebessert** (04.11.2026, Auftrag `planung/tutorial/auftrag_fix_end.md`, Prüfberichte
+`pruefung_sicherheit_end.md` und `pruefung_browser.md`, Bericht `bericht_fix_end.md`):
+- **Zusatztaste** (Befund 1 Sicherheit): Ein Klick mit Strg, Cmd, Umschalt oder Alt gilt wie der Mittelklick – der Link
+  bekommt keine Kennung, der neue Reiter zeigt die echte Seite, die Übung in diesem Reiter bleibt. Ein Reiter ohne
+  Übungszustand beginnt beim gemerkten Ablauf, und kein Reiter setzt den Merker auf einen kleineren Ablauf zurück.
+- **Merker** (Befund 2): ein tief geschachtelter Wert gilt wie jeder unlesbare als leer (`RecursionError`) – keine 500.
+- **Härtung** (Hinweise): Downloads hält die Schicht auch an (Navigation API, auch losgelöste Links); Übungsseiten mit
+  `default-src 'none'` (dazu `manifest-src 'self'`), `worker-src` nur für den Service Worker und `Cache-Control:
+  no-store`; Weiterleitungen alter Adressen und `…/katalog/meldungen?bereich=antraege` behalten aus der Übung die Kennung
+  (`einfuehrung.mit_kennung`, ohne Zwischenspeicher), die Schicht hält Links auf alte Adressen an; „Zurück zur Übung“
+  nimmt auch einen Rückstrich vorn weg.
+- **Telefon quer** (Befund B1 Browser): Leiste unten auch unter 520 px Höhe (`schmal`, ebenso das Angebot); eine breite
+  Leiste trägt die Knöpfe rechts neben dem Text. Die schwebende Blase sucht ihren Platz unter, über, rechts und links
+  neben dem Ziel, dann um Dialog und Menüs, deckt nie Ziel (samt aufgeklappter Vorschlagsliste), Kopfleiste und Leisten
+  darüber – findet sie keinen, steht sie für den Schritt als Leiste unten. Offene Dialoge rücken über jede Leiste (vorher
+  nur unter 600 px Breite).
+- **Zurück** (B2, V2): Eine Übungsseite aus dem Verlauf (auch aus dem Seitenspeicher, `pageshow`) ohne laufende Übung
+  dieses Teils führt zur echten Startseite des Moduls; mit laufender Übung, aber fehlendem Ziel sagt die Blase „Du bist im
+  Browser zurückgegangen. Mit „Vor“ geht es beim letzten Schritt weiter – oder beginne den Ablauf neu.“
+- **Dialogknöpfe** (B3): Die Blase weicht der Knopfzeile des obersten Dialogs (`.dlg-actions`, `.c-actions`,
+  `.lb-aktionen`) aus wie Menüs.
+- **Faltbare Geräte** (B4): Die Blase bleibt in einem Bildschirmsegment (`viewport.segments`); „Artikel finden“ nennt die
+  Lupe, solange das Suchfeld hinter ihr liegt (Text als Getter, Ziel und Text folgen der Lage).
+- **iPhone SE** (B5): „Tippe auf die Karte“ geht auch über „Album-Position übernehmen“ weiter („Position speichern“
+  entfällt dann); die Probe des Durchlauftests nimmt diesen Weg, wenn keine 40 px Karte frei sind (`probe.sonst`).
+- **Verbesserungen**: Rückfrage „Übung unterbrechen?“ nennt das Fortsetzen im Profil (V1); jede Schrittänderung in der
+  Live-Region (V3); „Tippe“ heißt ohne Touch-Zeiger „Klicke“ (V5a); „Tippe auf „☰““ (V5b); „Nicht jetzt“ statt „Später“
+  im Dialog „Geschafft“ (V5c); „Kurze Übung“ nur bis 5 Minuten (V5d); der erste Schritt der Materialablage sagt, dass die
+  Übung die Ansicht mit Freigabe zeigt (V6); Schritttext zum Speicherstand der Strömipedia ohne „hier steht der Stand“
+  (V7); kein Fokusring auf dem Blasentext (V8); nach dem Neuladen nach einer Eingabe beginnt der Ablauf von vorn (V9);
+  Schriftgröße, Breiten und Ebenen im Abschnitt „Einführung“ als Tokens (`--fs-karte`, `--einf-*-breite`,
+  `--z-fuehrung*`, V10); „Weiter“ grau umrandet, ebenso „Ablauf neu beginnen“ (V11).
+
+**Tests**: Durchlauf der Grundteile aller vier Module bei 844×390 Touch; die Testhilfe prüft je Schritt, dass die Blase
+weder Ziel noch Kopfleiste noch einen sichtbaren Knopf des obersten Dialogs deckt (`deckt_befund`); Strg-Klick und
+gemerkter Ablauf; Zurück nach „Übung unterbrechen“ (1280 und 360); Live-Region, Fokusring und „Klicke“; Merker mit tiefer
+Schachtelung → 200; CSP, `no-store`, Weiterleitungen mit Kennung, Rückstrich (`tests/test_einfuehrung.py`).
+
+**Bitte bestätigen – Nachbesserung nach den Endprüfungen** (04.11.2026, vorläufig angenommen):
+- „Weiter“ der Blase immer grau umrandet (einfachste Lösung für höchstens einen roten Knopf im Bild), ebenso „Ablauf neu
+  beginnen“; das Angebot behält „Übung starten“ rot (Designsprache).
+- Findet die Blase am Rechner keinen Platz neben dem Ziel (hohe Ziele wie der Editor), steht sie für diesen Schritt als
+  Leiste unten über die ganze Breite (vorher unten im Fenster über dem Ziel).
+- Zurück nach dem Verlassen der Übung führt zur echten **Startseite** des Moduls (nicht zur gleichen Seite ohne Kennung –
+  Übungskennungen gibt es echt nicht).
+- Nach dem Neuladen beginnt der Ablauf nur dann von vorn, wenn in ihm schon etwas eingegeben wurde; sonst wie bisher am
+  gespeicherten Schritt.
+- Strömipedia-Editor am Telefon: Der Speicherstand bleibt gekürzt („Ungespeic…“), nur der Schritttext ist angepasst.
