@@ -48,20 +48,6 @@ EXPORT_MAX_BYTES = importer.ZIP_MAX_BYTES
 _UNGEPACKT = zipfile.ZIP_STORED
 
 
-def _ausgeschlossen(kats):
-    """Kennungen der Kategorien, die nicht mitkommen: jede mit DEMO-Kennzeichen samt ihrem ganzen Teilbaum."""
-    kinder = {}
-    for k in kats:
-        kinder.setdefault(k["parent_id"], []).append(k["id"])
-    raus, stapel = set(), [k["id"] for k in kats if k["demo"]]
-    while stapel:
-        kid = stapel.pop()
-        if kid not in raus:
-            raus.add(kid)
-            stapel.extend(kinder.get(kid, []))
-    return raus
-
-
 def _summe(pfad):
     summe = hashlib.sha256()
     with open(pfad, "rb") as fh:
@@ -81,7 +67,9 @@ def sammeln(mit_dateien=True):
     werden die Produktbilder nicht gelesen – ihre Verweise fehlen dann, Zahlen und Größe stimmen."""
     medien = os.path.realpath(katalog.medien_dir())
     kats = db.query("SELECT * FROM mat_category ORDER BY position, name COLLATE NOCASE, id")
-    raus = _ausgeschlossen(kats)
+    # Kategorien, die nicht mitkommen: jede mit DEMO-Kennzeichen samt ihrem ganzen Teilbaum (die DEMO-Regel des Katalogs,
+    # katalog.demo_kategorien – dieselbe für die Übung der Einführung und „Prüfformular übernehmen“).
+    raus = katalog.demo_kategorien()
     nach_id = {k["id"]: k for k in kats}
     kinder = {}
     for k in kats:
@@ -211,7 +199,7 @@ def sammeln(mit_dateien=True):
     produkte, exportiert = [], []
     for p in db.query("SELECT * FROM mat_product ORDER BY manufacturer COLLATE NOCASE, model COLLATE NOCASE, id"):
         name = katalog.produktname(p)
-        if p["demo"] or p["category_id"] in raus:
+        if katalog.produkt_ist_demo(p, raus):
             raus_n["produkte"] += 1
             raus_n["ohne_kennzeichen"] += 0 if p["demo"] else 1
             if p["demo"] and p["category_id"] not in raus:

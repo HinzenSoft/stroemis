@@ -10,6 +10,10 @@ python tests/test_einfuehrung_katalog.py  oder  pytest tests/test_einfuehrung_ka
 3. Sperre und CSP: Aus der Übung laden genau die Bilder der Auswahl (Web- und Vorschaufassung, nur GET); ein fremdes
    Bild, das Original, ein Herstellerdokument, eine andere Methode → gesperrt. Die CSP der Übungsseite nennt genau diese
    Bilder; die Datenbank bleibt unverändert.
+4. Nachbesserung nach der Sicherheitsprüfung vom 04.11.2026: Die Bildausnahme prüft erst Methode, Pfad, Dateiname und
+   Anmeldung mit Modulzugang – ohne das rechnet keine Anfrage die Auswahl (Befund 1); die Auswahl liegt prozessweit im
+   Zwischenspeicher und wird erst nach einer Änderung am Katalog oder nach Ablauf der Frist neu gerechnet. DEMO nach der
+   Regel des Katalog-Exports: ein Produkt in einer DEMO-Kategorie zählt als DEMO, auch ohne eigenes Kennzeichen (Befund 4).
 Alle Inhalte sind Platzhalter (Hersteller „Platzhalter“, Kategorien nach den Rollen benannt)."""
 import hashlib
 import json
@@ -113,6 +117,12 @@ def auswahl(app):
         return einfuehrung.katalog_material()
 
 
+def vergessen(app):
+    with app.app_context():
+        from app import einfuehrung
+        einfuehrung.katalog_vergessen()
+
+
 def modelle(a):
     return {r: (p["modell"] if p else None) for r, p in a["produkte"].items()}
 
@@ -155,18 +165,22 @@ def test_auswahl():
             katalog.produkt_anlegen({"category_id": helme, "manufacturer": "Platzhalter", "model": "Helm",
                                      "material_kind": "sonstiges"})
         assert modelle(auswahl(app))["helm"] == "Helm"
-        # Die eine Stelle für das geltende Formular: Gilt für den Gurt keins mehr, nimmt die Auswahl den nächsten.
+        # Die eine Stelle für das geltende Formular: Gilt für den Gurt keins mehr, nimmt die Auswahl den nächsten. (Am
+        # Katalog ändert sich dabei nichts – den Zwischenspeicher leert der Test selbst, ebenso nach SQL von Hand.)
         from app.material.services import katalog
         echt = katalog.formular_fuer_produkt
         try:
             katalog.formular_fuer_produkt = lambda pid: None if pid == ids["gurt"] else echt(pid)
+            vergessen(app)
             assert modelle(auswahl(app))["gurt"] == "Gurt ohne Bild"
         finally:
             katalog.formular_fuer_produkt = echt
+            vergessen(app)
         # Ohne echtes aktives Formular: nur Platzhalter.
         with app.test_request_context():
             from app import db
             db.execute("UPDATE mat_form SET active = 0")
+        vergessen(app)
         assert modelle(auswahl(app)) == {"gurt": None, "seil": None, "helm": None}
     print("Auswahl bestanden.")
 
@@ -250,7 +264,103 @@ def test_sperre_und_csp():
     print("Sperre und CSP bestanden.")
 
 
+# --- 4. Nachbesserung nach der Sicherheitsprüfung vom 04.11.2026 -------------------------------------------------------------
+
+def test_zwischenspeicher_und_bildausnahme():
+    """Befund 1: Ohne Anmeldung, ohne Modulzugang, mit anderer Methode oder an einem anderen Pfad rechnet keine
+    Übungsanfrage die Auswahl; mit Anmeldung rechnet sie einmal je Katalog-Stand – nicht je Seite und Bild."""
+    import time
+    with tempfile.TemporaryDirectory() as tmp:
+        app, k = umgebung(tmp)
+        ids = katalog_platzhalter(app)
+        mitglied, _ = neues_konto(app, "mitglied-katalog@example.invalid", name="Mitglied Platzhalter", stufe=1)
+        ohne_zugang, _ = neues_konto(app, "ohne-zugang@example.invalid", name="Ohne Zugang", stufe=0)
+        bilder = sorted(u for p in auswahl(app)["produkte"].values() if p["bild"] for u in p["bild"].values())
+        assert len(bilder) == 4, bilder
+        vergessen(app)
+        from app import einfuehrung
+        echt, aufrufe = einfuehrung._katalog_rechnen, []
+
+        def zaehlen():
+            aufrufe.append(1)
+            return echt()
+
+        anon = app.test_client()
+        ref = {"Referer": "http://localhost/materialablage?uebung=grund"}
+        einfuehrung._katalog_rechnen = zaehlen
+        try:
+            for c in (anon, ohne_zugang):
+                for kopf in ({"X-Uebung": "1"}, ref):
+                    for url in bilder + ["/media/material/web/x.jpg", "/media/material/orig/x.jpg", "/media/web/x.jpg"]:
+                        r = c.get(url, headers=kopf)
+                        assert r.status_code == 403 and SATZ in r.get_data(as_text=True), (url, r.status_code)
+            for methode in ("head", "post", "put", "delete"):
+                assert getattr(mitglied, methode)(bilder[0], headers={"X-Uebung": "1"}).status_code == 403, methode
+            for url in ("/media/material/web/x y.jpg", "/media/material/dok/x.pdf", "/media/material/web/"):
+                assert mitglied.get(url, headers={"X-Uebung": "1"}).status_code == 403, url
+            assert aufrufe == [], "Auswahl ohne Anmeldung, Zugang, mit anderer Methode oder an anderem Pfad gerechnet"
+            # Zeit: ohne Anmeldung kostet die Anfrage mit X-Uebung nicht mehr als ohne (kein Rechnen; großzügige Grenze).
+            def dauer(**kw):
+                t = time.perf_counter()
+                for _ in range(20):
+                    anon.get(bilder[0], **kw)
+                return (time.perf_counter() - t) / 20
+            assert dauer(headers={"X-Uebung": "1"}) < dauer() * 3 + 0.01
+            # Angemeldet mit Zugang: zwei Übungsseiten und alle Bilder – einmal gerechnet.
+            for _ in range(2):
+                e, r, _html = einf(mitglied, "/materialablage?uebung=grund")
+                assert modelle(e["katalog"])["gurt"] == "Gurt mit Bild"
+                for url in bilder:
+                    assert mitglied.get(url, headers={"X-Uebung": "1"}).status_code == 200, url
+            assert len(aufrufe) == 1, aufrufe
+            # Eine Änderung über die Dienste (Gurt-Formular deaktiviert) rechnet sofort neu.
+            assert k["katalog"].post(f"/api/material/formulare/{ids['form_gurte']}/deaktivieren", json={}).status_code == 200
+            e, r, _html = einf(mitglied, "/materialablage?uebung=grund")
+            assert len(aufrufe) == 2 and modelle(e["katalog"])["gurt"] is None, (aufrufe, modelle(e["katalog"]))
+            assert mitglied.get(bilder[0], headers={"X-Uebung": "1"}).status_code in (200, 403)
+            assert len(aufrufe) == 2
+            # Nach Ablauf der Frist rechnet die nächste Anfrage neu, auch ohne erkannte Änderung.
+            frist = einfuehrung.KATALOG_FRIST
+            einfuehrung.KATALOG_FRIST = 0
+            try:
+                einf(mitglied, "/materialablage?uebung=grund")
+            finally:
+                einfuehrung.KATALOG_FRIST = frist
+            assert len(aufrufe) == 3
+        finally:
+            einfuehrung._katalog_rechnen = echt
+    print("Zwischenspeicher und Bildausnahme bestanden.")
+
+
+def test_demo_kategorie():
+    """Befund 4: Ein Produkt ohne eigenes Kennzeichen in einer Kategorie unter einer DEMO-Kategorie (so legt es die
+    Oberfläche an) mit einem generischen Formular ohne Kennzeichen – die Übung nimmt es nicht, wie der Export."""
+    from werkzeug.datastructures import FileStorage
+    with tempfile.TemporaryDirectory() as tmp:
+        app, k = umgebung(tmp)
+        with app.test_request_context():
+            from app.material.services import katalog
+            wurzel = katalog.kategorie_anlegen({"name": "DEMO-Beispiel (Platzhalter)"}, demo=True)
+            gurte = katalog.kategorie_anlegen({"name": "Gurte", "parent_id": wurzel, "default_interval_months": 6})
+            # Zuerst angelegt (kleinste Kennung) und mit Bild – ohne die DEMO-Regel stünde es vorn.
+            pid = katalog.produkt_anlegen({"category_id": gurte, "manufacturer": "Platzhalter", "model": "Gurt in DEMO",
+                                           "material_kind": "textil", "lifetime_years": 10})
+            katalog.produkt_bild_setzen(pid, FileStorage(stream=jpeg(), filename=f"{pid}.jpg", content_type="image/jpeg"))
+            fid = katalog.formular_anlegen({"kategorie_id": gurte, "titel": "Platzhalter DEMO-Kategorie",
+                                            "punkte": [{"text": "Platzhalter", "art": "yesno", "soll": "ja"}]})
+            katalog.formular_aktivieren(fid)
+            assert katalog.produkt_ist_demo(katalog.produkt(pid)) and katalog.formular_ist_demo(katalog.formular(fid))
+        assert modelle(auswahl(app))["gurt"] is None
+        katalog_platzhalter(app)
+        a = auswahl(app)
+        assert modelle(a)["gurt"] == "Gurt mit Bild", modelle(a)
+        assert "Platzhalter DEMO-Kategorie" not in [f["titel"] for f in a["formulare"]]
+    print("DEMO-Kategorie bestanden.")
+
+
 if __name__ == "__main__":
     test_auswahl()
     test_uebungsseite()
     test_sperre_und_csp()
+    test_zwischenspeicher_und_bildausnahme()
+    test_demo_kategorie()

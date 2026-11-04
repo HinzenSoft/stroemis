@@ -236,10 +236,12 @@ def test_schritt_28():
         schema = _schema(pfad)
         assert schema == schema_frisch, _unterschied(schema, schema_frisch)
         conn = sqlite3.connect(pfad)
-        # Schritt 28 legt jeden Trigger und Index in seiner genauen Fassung wieder an; Schritt 30, 31, 32 und 35 kommen nur
-        # dazu (32 ersetzt fünf Trigger aus 30 unter demselben Namen; 35: Trigger und Index der Prüfformular-Übernahme).
+        # Schritt 28 legt jeden Trigger und Index in seiner genauen Fassung wieder an; Schritt 30, 31, 32, 35 und 36 kommen
+        # nur dazu (32 ersetzt fünf Trigger aus 30 unter demselben Namen; 35: Trigger und Index der Prüfformular-Übernahme,
+        # 36 fasst drei davon neu und bringt vier dazu).
         neu_30 = {x.split("CREATE TRIGGER IF NOT EXISTS ", 1)[1].split()[0]
-                  for x in models.SCHRITT_30 + models.TRIGGER_32_ZEILE + models.TRIGGER_32_ARTIKEL + models.TRIGGER_35}
+                  for x in models.SCHRITT_30 + models.TRIGGER_32_ZEILE + models.TRIGGER_32_ARTIKEL + models.TRIGGER_35
+                  + models.TRIGGER_36}
         neu_30.add("idx_mat_product_formular_von")
         nachher = sorted(r for r in conn.execute("SELECT name, sql FROM sqlite_master WHERE type IN ('trigger', 'index')")
                          if r[0] not in neu_30 and "mat_lebenslauf" not in r[0])

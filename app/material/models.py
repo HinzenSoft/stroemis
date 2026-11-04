@@ -284,6 +284,16 @@ Feldnamen folgen dem Konzept vom 16.10.2026 (englisch, wie dort festgelegt). Abw
     oder demo. Rein additiv: Die Spalte kommt leer dazu, keine Zeile ändert sich. Wiederholbar (Spalte nur, wenn sie
     fehlt; Trigger entfernt und neu; IF NOT EXISTS). Rückweg: Ein älterer Stand übergeht Spalte und Trigger – seine
     Produkte mit Verweis werden dort wieder nach dem eigenen oder generischen Formular geprüft.
+  - Schritt 36 (Nachbesserung nach der Sicherheitsprüfung vom 04.11.2026, Befunde 3 und 4): Die Trigger aus Schritt 35
+    vergleichen die DEMO-Art nach der Regel des Katalog-Exports (DEMO_KATEGORIEN: ein Produkt in einer DEMO-Kategorie
+    oder darunter zählt als DEMO) und greifen auch beim Wechsel der Kategorie eines Produkts; neu ein Trigger beim
+    Umhängen einer Kategorie (oder ihrem DEMO-Kennzeichen) und – Verweis oder eigenes Formular – drei Trigger gegen ein
+    aktives spezifisches Formular an einem Produkt mit Verweis (TRIGGER_36). Was diese Regeln schon verletzt (nur über
+    die Rennlücke beim Aktivieren bzw. vor der DEMO-Regel möglich), richtet der Schritt vorher: Verweise zwischen DEMO
+    und echt werden gelöst, ein eigenes aktives Formular neben einem Verweis wird deaktiviert (es galt ohnehin der
+    Verweis) – je eine Zeile im Startprotokoll, kein Journal. Wiederholbar (Trigger entfernt und neu; der zweite Lauf
+    findet nichts mehr). Rückweg: Ein älterer Stand behält die strengeren Trigger – sie sperren nur, was seine Dienste
+    ohnehin abweisen (außer dem Umhängen einer Kategorie über die DEMO-Grenze: dort dann 409 statt Klartext).
 """
 import json
 import logging
@@ -292,7 +302,7 @@ import sqlite3
 import unicodedata
 from datetime import datetime, timezone
 
-SCHEMA_VERSION = 35
+SCHEMA_VERSION = 36
 
 # --- Wertelisten -------------------------------------------------------------------------------
 # Was die Datenbank per CHECK erzwingt, steht hier ein zweites Mal – mit den Wörtern, die die
@@ -2989,6 +2999,78 @@ def _schritt_35(conn):
         conn.execute(sql)
 
 
+# --- Schritt 36: Nachbesserung nach der Sicherheitsprüfung vom 04.11.2026 (Befunde 3 und 4) ------------------------------
+# Die DEMO-Regel des Katalogs – dieselbe wie im Katalog-Export (katalog_export.sammeln lässt all das aus): Als DEMO zählt
+# eine Kategorie mit DEMO-Kennzeichen samt ihrem ganzen Teilbaum und ein Produkt mit Kennzeichen oder in einer solchen
+# Kategorie (ein Formular mit Kennzeichen oder an einem solchen Ziel: katalog.formular_ist_demo). Die eine Fassung in SQL
+# für Trigger und Dienste (katalog.demo_kategorien, katalog.produkt_ist_demo, Übung der Einführung, Übernehmen).
+DEMO_KATEGORIEN = ("WITH RECURSIVE demo_kategorie(id) AS (SELECT id FROM mat_category WHERE demo = 1 UNION "
+                   "SELECT c.id FROM mat_category c JOIN demo_kategorie d ON c.parent_id = d.id) "
+                   "SELECT id FROM demo_kategorie")
+
+
+def produkt_demo_sql(p):
+    """SQL-Ausdruck (1 oder 0): Zählt das Produkt p – Tabellenalias oder NEW – als DEMO (DEMO_KATEGORIEN)?"""
+    return f"({p}.demo = 1 OR {p}.category_id IN ({DEMO_KATEGORIEN}))"
+
+
+_VERWEIS_UNZULAESSIG_36 = ("NEW.formular_von IS NOT NULL AND (NEW.formular_von = NEW.id "
+                           "OR NOT EXISTS (SELECT 1 FROM mat_product q WHERE q.id = NEW.formular_von "
+                           f"AND q.formular_von IS NULL AND {produkt_demo_sql('q')} = {produkt_demo_sql('NEW')}) "
+                           "OR EXISTS (SELECT 1 FROM mat_product b WHERE b.formular_von = NEW.id))")
+# Der Teilbaum einer umgehängten Kategorie (NEW) – nur Verweise, an denen ein Produkt darin beteiligt ist, zählen; ein
+# älterer Fehlstand anderswo sperrt so nicht jedes Umhängen.
+_TEILBAUM_36 = ("(WITH RECURSIVE teil(id) AS (SELECT NEW.id UNION SELECT c.id FROM mat_category c JOIN teil t "
+                "ON c.parent_id = t.id) SELECT id FROM teil)")
+FORMULAR_EIGENES = "'Ein Produkt, das ein Prüfformular übernimmt, hat kein eigenes aktives Formular.'"
+_EIGENES_AKTIV_36 = ("NEW.active = 1 AND NEW.product_id IS NOT NULL AND EXISTS (SELECT 1 FROM mat_product p "
+                     "WHERE p.id = NEW.product_id AND p.formular_von IS NOT NULL)")
+TRIGGER_36 = [
+    # Die drei aus Schritt 35 unter demselben Namen, mit der DEMO-Regel und auch beim Wechsel der Kategorie.
+    _trigger("mat_product_formular_von_neu", "BEFORE INSERT ON mat_product", _VERWEIS_UNZULAESSIG_36, FORMULAR_KETTE),
+    _trigger("mat_product_formular_von", "BEFORE UPDATE OF formular_von, demo, category_id ON mat_product",
+             _VERWEIS_UNZULAESSIG_36, FORMULAR_KETTE),
+    _trigger("mat_product_formular_quelle", "BEFORE UPDATE OF demo, category_id ON mat_product",
+             "EXISTS (SELECT 1 FROM mat_product b WHERE b.formular_von = NEW.id AND b.id <> NEW.id "
+             f"AND {produkt_demo_sql('b')} <> {produkt_demo_sql('NEW')})", FORMULAR_KETTE),
+    # Umhängen einer Kategorie (oder ihr Kennzeichen): danach gelesen, darum AFTER – RAISE nimmt die Änderung zurück.
+    _trigger("mat_category_formular_demo", "AFTER UPDATE OF demo, parent_id ON mat_category",
+             "EXISTS (SELECT 1 FROM mat_product b JOIN mat_product q ON q.id = b.formular_von "
+             f"WHERE (b.category_id IN {_TEILBAUM_36} OR q.category_id IN {_TEILBAUM_36}) "
+             f"AND {produkt_demo_sql('b')} <> {produkt_demo_sql('q')})", FORMULAR_KETTE),
+    # Verweis oder eigenes Formular (Befund 3): kein aktives spezifisches Formular an einem Produkt mit Verweis.
+    _trigger("mat_form_aktiv_verweis_neu", "BEFORE INSERT ON mat_form", _EIGENES_AKTIV_36, FORMULAR_EIGENES),
+    _trigger("mat_form_aktiv_verweis", "BEFORE UPDATE OF active, product_id ON mat_form", _EIGENES_AKTIV_36,
+             FORMULAR_EIGENES),
+    _trigger("mat_product_verweis_eigenes", "BEFORE UPDATE OF formular_von ON mat_product",
+             "NEW.formular_von IS NOT NULL AND EXISTS (SELECT 1 FROM mat_form f WHERE f.product_id = NEW.id "
+             "AND f.active = 1)", FORMULAR_EIGENES),
+]
+
+
+def _schritt_36(conn):
+    """Bestand richten, den TRIGGER_36 künftig ausschließt (siehe Kopf), dann die Trigger (entfernt und neu)."""
+    namen = dict(conn.execute("SELECT id, trim(manufacturer || ' ' || model) FROM mat_product "
+                              "WHERE formular_von IS NOT NULL OR id IN (SELECT formular_von FROM mat_product)"))
+    for bid, qid in conn.execute(
+            "SELECT b.id, q.id FROM mat_product b JOIN mat_product q ON q.id = b.formular_von "
+            f"WHERE {produkt_demo_sql('b')} <> {produkt_demo_sql('q')} ORDER BY b.id").fetchall():
+        conn.execute("UPDATE mat_product SET formular_von = NULL WHERE id = ?", (bid,))
+        _NACH_DEM_FESTSCHREIBEN.append(f"Schritt 36 (Materialablage): Produkt {bid} „{namen.get(bid, '')}“ übernimmt "
+                                       f"das Prüfformular von Produkt {qid} „{namen.get(qid, '')}“ nicht mehr – eins "
+                                       "ist DEMO (auch über die Kategorie), das andere nicht.")
+    for fid, version, pid in conn.execute(
+            "SELECT f.id, f.version, f.product_id FROM mat_form f JOIN mat_product p ON p.id = f.product_id "
+            "WHERE f.active = 1 AND p.formular_von IS NOT NULL ORDER BY f.id").fetchall():
+        conn.execute("UPDATE mat_form SET active = 0 WHERE id = ?", (fid,))
+        _NACH_DEM_FESTSCHREIBEN.append(f"Schritt 36 (Materialablage): Produkt {pid} „{namen.get(pid, '')}“ übernimmt "
+                                       f"ein Prüfformular – sein eigenes Formular (Version {version}, Kennung {fid}) "
+                                       "ist jetzt nicht mehr aktiv.")
+    for sql in TRIGGER_36:
+        conn.execute("DROP TRIGGER IF EXISTS " + sql.split("CREATE TRIGGER IF NOT EXISTS ", 1)[1].split()[0])
+        conn.execute(sql)
+
+
 # Je Version die Schritte, die von der Vorversion dorthin führen: eine Liste von SQL-Befehlen (für sich
 # wiederholbar, IF NOT EXISTS) oder eine Funktion. Alle Schritte eines Starts laufen in EINER
 # Transaktion – bricht einer ab, bleibt die Datenbank, wie sie war, und der nächste Start versucht es neu.
@@ -2997,7 +3079,8 @@ SCHRITTE = {1: SCHRITT_1, 2: _schritt_2, 3: _schritt_3, 4: SCHRITT_4, 5: _schrit
             14: _schritt_14, 15: _schritt_15, 16: _schritt_16, 17: _schritt_17, 18: SCHRITT_18, 19: SCHRITT_19,
             20: _schritt_20, 21: _schritt_21, 22: _schritt_22, 23: _schritt_23, 24: _schritt_24,
             25: _schritt_25, 26: _schritt_26, 27: _schritt_27, 28: _schritt_28, 29: SCHRITT_29, 30: SCHRITT_30,
-            31: SCHRITT_31, 32: _schritt_32, 33: _schritt_33, 34: _schritt_34, 35: _schritt_35}
+            31: SCHRITT_31, 32: _schritt_32, 33: _schritt_33, 34: _schritt_34, 35: _schritt_35,
+            36: _schritt_36}
 
 
 def _meta(conn, schluessel, vorgabe=None):
