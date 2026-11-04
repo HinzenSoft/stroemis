@@ -5167,10 +5167,13 @@
     // Gruppenname mit „$&“ bliebe sonst nicht, wie er ist.
     const zeilenMenue = (eintraege, name) => S.menue({ text: "⋯", art: "mat-menue", eintraege })
       .replace('<summary class="btn secondary small" aria-haspopup="menu">', () => `<summary class="btn secondary small" aria-haspopup="menu" aria-label="${esc(`Mehr zu ${name}`)}">`);
+    /* „optional“ statt „Pflicht“ (Wunsch vom 04.11.2026: „das meiste in Prüfungen ist Pflicht, es soll stattdessen
+       ausgewählt werden, wenn etwas optional ist“): Das Häkchen ist normal leer, gesetzt heißt pflicht = false. Datenmodell
+       und Schnittstelle bleiben (pflicht je Punkt); ohne Bearbeiten trägt nur ein optionaler Punkt eine Marke. */
     function punktZeile(p, gi, pi, nr) {
       if (!bearbeitbar) {
         return `<tr><td data-l="Prüfpunkt"><span class="mat-mehrzeilig">${esc(p.text)}</span></td><td data-l="Art">${esc(EDITOR[p.art])}</td>
-          <td data-l="Soll">${esc(p.soll || "–")}</td><td>${p.pflicht ? "Pflicht" : "optional"}</td></tr>`;
+          <td data-l="Soll">${esc(p.soll || "–")}</td><td>${p.pflicht ? "" : '<span class="badge grey">optional</span>'}</td></tr>`;
       }
       const ort = `data-g="${gi}" data-i="${pi}"`;
       const menue = zeilenMenue([
@@ -5184,7 +5187,7 @@
         <td data-l="Soll" class="fp-z-soll">${p.art === "yesno" ? `<select class="fp-soll"><option value="">–</option><option value="ja" ${p.soll === "ja" ? "selected" : ""}>ja</option><option value="nein" ${p.soll === "nein" ? "selected" : ""}>nein</option></select>`
           : p.art === "text" || p.art === "number" ? `<input type="text" class="fp-soll" value="${esc(p.soll || "")}" maxlength="60" placeholder="optional">`
             : p.art === "laenge" ? '<span class="muted" title="Das Soll ist die am Artikel hinterlegte Länge">Artikellänge</span>' : '<span class="muted">–</span>'}</td>
-        <td class="fp-z-pflicht"><label class="inline"><input type="checkbox" class="fp-pflicht" ${p.pflicht ? "checked" : ""}> Pflicht</label></td>
+        <td class="fp-z-pflicht"><label class="inline"><input type="checkbox" class="fp-optional" ${p.pflicht ? "" : "checked"}> optional</label></td>
         <td class="fp-menue">${menue}</td></tr>`;
     }
     // Die Zwischenzeile einer Gruppe: Name in voller Breite und „⋯“ (nach oben, nach unten, entfernen) – bei einer
@@ -5225,7 +5228,7 @@
         const p = gruppen[+tr.dataset.g].punkte[+tr.dataset.i];
         p.text = $(".fp-text", tr).value; p.art = $(".fp-art", tr).value;
         const soll = $(".fp-soll", tr); p.soll = soll ? soll.value : "";
-        p.pflicht = $(".fp-pflicht", tr).checked;
+        p.pflicht = !$(".fp-optional", tr).checked;
       });
     }
     /* Prüfanleitung aus dem Wiki (Phase 2 · L3): nur die Material-Verwaltung sieht die Zeile (formular.wiki kommt sonst
@@ -5530,7 +5533,8 @@
      geänderten); je Treffer die Reichweite als graue Marke und, bei interner oder beschränkter Seite, wer sie nicht sieht.
      Gespeichert wird sofort (PUT …/formulare/<id>/wiki), danach zeichnet die Formularansicht ihre Zeile neu. */
   const REICHWEITE = { oeffentlich: "öffentlich", intern: "intern", beschraenkt: "beschränkt" };
-  const PRUEFPUNKTE_INFO = "Bei der Prüfung ist jeder Befund mit „in Ordnung“ vorbelegt, Ja/Nein-Punkte mit ihrem Sollwert; bei Text und Zahl ist das Soll ein Hinweis für den Prüfer. "
+  const PRUEFPUNKTE_INFO = "Jeder Prüfpunkt ist Pflicht: Ohne Befund lässt sich die Prüfung nicht festschreiben. Wo ein Punkt entfallen darf (etwa Wartung oder Pflege), setzt du das Häkchen „optional“. "
+    + "Bei der Prüfung ist jeder Befund mit „in Ordnung“ vorbelegt, Ja/Nein-Punkte mit ihrem Sollwert; bei Text und Zahl ist das Soll ein Hinweis für den Prüfer. "
     + "Ein Punkt der Art „Länge (m)“ ist mit der Länge des Artikels vorbelegt; trägt der Prüfer eine andere ein, "
     + "übernimmt das Festschreiben sie in den Artikel (nur bei Kategorien mit „Artikel haben eine Länge“).";
   const WIKI_PRUEFUNG_INFO = "Hat die Seite eine Überschrift „Prüfung“, wird dieser Abschnitt in offenen Prüfungen eingeblendet, sonst nur verlinkt.";

@@ -15,6 +15,8 @@ planung/formular-editor/auftrag.md): python tests/test_material_formular_editor.
 3. Absätze im Prüfpunkt (Zusatz vom 04.11.2026): Enter fügt im Prüfpunkt einen Umbruch ein (im Gruppennamen nicht), das
    Feld wächst, gespeichert wird „\n“; Nur-Lese-Ansicht und offene Prüfung zeigen ihn (pre-line), HTML im Punkttext
    bleibt Text (Formular und Prüfung). Server, Import/Export und PDF: tests/test_material_pruefpunkt_absatz.py.
+4. Häkchen „optional“ statt „Pflicht“ (Zusatz vom 04.11.2026): leer bei Pflichtpunkten, gesetzt = pflicht false beim
+   Speichern (Datenbank); ohne Bearbeiten nur bei optionalen Punkten die Marke „optional“, sonst nichts.
 Alle Inhalte sind Platzhalter."""
 import json
 import os
@@ -58,6 +60,11 @@ def test_statisch():
     assert not re.search(r'text: "[^"]*…"', editor)
     assert '<textarea class="fp-gruppenname" rows="1" maxlength="80" aria-label="Gruppe" placeholder="Gruppe (optional)">' in editor
     assert "fp-gruppe\"" not in editor and 'data-l="Gruppe"' not in editor
+    # „optional“ statt „Pflicht“: Häkchen leer = Pflicht; ohne Bearbeiten nur die Marke „optional“.
+    assert '<input type="checkbox" class="fp-optional" ${p.pflicht ? "" : "checked"}> optional</label>' in editor
+    assert 'p.pflicht = !$(".fp-optional", tr).checked;' in editor and "fp-pflicht\"" not in editor
+    assert '${p.pflicht ? "" : \'<span class="badge grey">optional</span>\'}' in editor and '"Pflicht" : "optional"' not in editor
+    assert 'const neuerPunkt = () => ({ text: "", art: "yesno", soll: "nein", pflicht: true });' in editor
     # Schnittstelle unverändert: die flache Liste mit „gruppe“ je Punkt.
     assert editor.count("punkte: flach()") == 2 and 'Object.assign({}, p, { gruppe: g.name })' in editor
     css = lies("app/material/static/material.css")
@@ -235,6 +242,11 @@ def ablauf(u, kategorie, breite, hoehe, touch):
         assert struktur(s) == [["Gruppe A", ["Platzhalter 1", "Platzhalter 2"], False],
                                ["Gruppe B", ["Platzhalter 3", "Platzhalter 4"], False], ["", ["Platzhalter 5"], False]]
         assert not s.js("document.querySelector('#fp-tabelle .zeichenknopf, #fp-tabelle [data-act=hoch]')")
+        # Häkchen „optional“ (Zusatz vom 04.11.2026): leer bei Pflichtpunkten, gesetzt nur bei Platzhalter 4.
+        assert s.js("[...document.querySelectorAll('#fp-tabelle tr.fp-punkt .fp-optional')].map((x) => x.checked)") == [
+            False, False, False, True, False]
+        assert s.js("[...document.querySelectorAll('#fp-tabelle .fp-z-pflicht label')].every((l) => l.textContent.trim() === 'optional')")
+        assert "Pflicht" not in s.js("document.querySelector('#fp-tabelle').innerText")
         assert s.js("document.querySelector(" + json.dumps(kopf(2) + " .fp-gruppenname") + ").placeholder") == "Gruppe (optional)"
 
         # Getipptes: Titel, Gruppenname und Prüfpunkt – überlebt die folgenden Neuzeichnungen.
@@ -333,6 +345,9 @@ def ablauf(u, kategorie, breite, hoehe, touch):
         feld = s.js("(() => { const t = document.querySelector(" + json.dumps(f"{zeile(0, 1)} .fp-text") + ");"
                     " return [t.value, t.offsetHeight]; })()")
         assert feld[0] == "Platzhalter neu\nAbsatz zwei" and feld[1] > hoehe_vorher, (feld, hoehe_vorher)
+        # Der neue Punkt wird optional (echter Klick bzw. Tipp aufs Häkchen) – das überlebt die folgenden Neuzeichnungen.
+        klick(s, f"{zeile(0, 1)} .fp-z-pflicht label")
+        assert s.js("document.querySelector(" + json.dumps(f"{zeile(0, 1)} .fp-optional") + ").checked")
         # Im Gruppennamen bleibt Enter ohne Absatz.
         tippen(s, f"{kopf(0)} .fp-gruppenname", "")
         enter(s)
@@ -355,7 +370,8 @@ def ablauf(u, kategorie, breite, hoehe, touch):
 
         # Tippflächen am Finger (Griff, „⋯“ an Punkt und Gruppe) – gemessen; kein waagerechter Bildlauf.
         if touch:
-            for sel in ("#fp-tabelle .fp-griff", "#fp-tabelle tr.fp-punkt .fp-menue summary", "#fp-tabelle tr.fp-gruppenzeile .fp-menue summary"):
+            for sel in ("#fp-tabelle .fp-griff", "#fp-tabelle tr.fp-punkt .fp-menue summary", "#fp-tabelle tr.fp-gruppenzeile .fp-menue summary",
+                        "#fp-tabelle .fp-z-pflicht label"):
                 tippflaechen(s, sel)
             assert s.js("getComputedStyle(document.querySelector('#fp-tabelle .fp-griff')).touchAction") == "none"
             assert s.js("getComputedStyle(document.querySelector('#fp-tabelle tr.fp-punkt')).touchAction") == "auto"
@@ -365,12 +381,14 @@ def ablauf(u, kategorie, breite, hoehe, touch):
         klick(s, '[data-act="speichern"]')
         assert s.warte("!document.querySelector('#fp-tabelle .fp-text') || document.querySelector('#fp-titel').value === 'Platzhalter Editor getippt'")
         s.b.warten(0.8)
-        zeilen = u.sql("SELECT group_name, label, editor FROM mat_checklist_item WHERE form_id = ? ORDER BY position", (fid,))
+        zeilen = u.sql("SELECT group_name, label, editor, mandatory FROM mat_checklist_item WHERE form_id = ? ORDER BY position", (fid,))
         assert [(z["group_name"], z["label"]) for z in zeilen] == [
             ("Gruppe C", "Platzhalter 4"), ("Gruppe C", "Platzhalter neu\nAbsatz zwei"),
             ("Gruppe A neu", "Platzhalter 2"), ("Gruppe A neu", "Platzhalter 5"),
             ("Gruppe B", "Platzhalter 3 getippt"), (LANG, "Platzhalter lang")], zeilen
         assert zeilen[-1]["editor"] == "text"
+        # Häkchen „optional“ ↔ pflicht: nur Platzhalter 4 und der neue Punkt sind optional.
+        assert [z["mandatory"] for z in zeilen] == [0, 0, 1, 1, 1, 1], zeilen
         assert u.sql("SELECT title FROM mat_form WHERE id = ?", (fid,))[0]["title"] == "Platzhalter Editor getippt"
         assert struktur(s)[3][0] == LANG
         s.sammeln()
@@ -393,6 +411,13 @@ def ablauf(u, kategorie, breite, hoehe, touch):
         absatz = m.js("""(() => { const t = [...document.querySelectorAll('#fp-tabelle .mat-mehrzeilig')].find((x) => x.textContent.includes('Absatz zwei'));
           return t && [t.innerText, getComputedStyle(t).whiteSpace, t.getClientRects().length]; })()""")
         assert absatz and absatz[0] == "Platzhalter neu\nAbsatz zwei" and absatz[1] == "pre-line", absatz
+        # Nur optionale Punkte tragen eine Marke, Pflichtpunkte nichts.
+        marken = m.js("""[...document.querySelectorAll('#fp-tabelle tbody tr:not(.fp-gruppenzeile)')].map((tr) =>
+          [tr.querySelector('.mat-mehrzeilig').textContent, tr.lastElementChild.innerText.trim()])""")
+        assert marken == [["Platzhalter 4", "optional"], ["Platzhalter neu\nAbsatz zwei", "optional"], ["Platzhalter 2", ""],
+                          ["Platzhalter 5", ""], ["Platzhalter 3 getippt", ""], ["Platzhalter lang", ""]], marken
+        assert m.js("document.querySelectorAll('#fp-tabelle .badge').length") == 2
+        assert "Pflicht" not in m.js("document.querySelector('#fp-tabelle').innerText")
         assert m.js("document.documentElement.scrollWidth <= document.documentElement.clientWidth")
         m.sammeln()
         assert not m.fehler, m.fehler

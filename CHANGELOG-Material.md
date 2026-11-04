@@ -80,7 +80,7 @@ Geschichte stehen. Schemaversion nach der Nachbesserung vor dem Merge: 30; mit d
 | Prüfen folgt dem Grundrecht | Bei internen Rollen („Prüfer“, „Materialwart und Prüfer“) ist Prüfen immer dauerhaft und gilt, solange das Grundrecht gilt – auch vom befristeten Verwalter (Server: dauerhafte Prüffreigabe mit Grundrecht dort oder darüber auch von ihm; ändern nur, solange das tragende Grundrecht nicht länger läuft als sein Verwalten); kein vorbelegtes Datum außer beim externen Prüfer, „bis“ mit leerem Feld, wo „dauerhaft“ nicht geht; Rollenwechsel lässt die eigene Wahl; behebt den ungekappten Datumsvorschlag (eigenes Ende > 24 Monate → Ablehnung) | gebaut 03.11.2026 (kein Schemaschritt) |
 | „kritisch“ entfernt | Die Markierung „kritisch“ an Prüfpunkten ist ganz entfernt: kein Häkchen im Formular-Editor, keine Marke, Spalte und kein „i“ in Prüfung, Befunden und neuem Prüfprotokoll, keine Sperre von „einsatzbereit“ wegen eines kritischen Mangels (Oberfläche und Server) – bei einem Mangel wählt der Prüfer das Ergebnis selbst; Jahresbericht ohne „mit kritischem Mangel“, CSV ohne „kritischer Mangel“; Katalogexport ohne `kritisch`, der Import übergeht es; `is_critical` bleibt, wird nicht mehr gelesen | gebaut 03.11.2026 (kein Schemaschritt), Zweig kritisch-weg |
 | Interaktive Einführung je Modul | Übungsmodus mit Übungsbestand, Sperre, Angebot, Führung, Profil „Einführungen“, Übungen für Materialablage, Strömipedia, Ankerplätze, Riegenkarten | Grundgerüst gebaut 03.11.2026 (kein Schemaschritt), Übungen je Modul und robuste Führung gebaut 04.11.2026, nach den Endprüfungen nachgebessert 04.11.2026, Zweig tutorial |
-| Prüfformular-Editor: Gruppen und Verschieben; Absätze im Prüfpunkt | Gruppe als Zwischenzeile (Name in voller Breite), Ziehgriff ⠿ und Menü „⋯“ statt ↑/↓/✕, „+ Prüfpunkt“ je Gruppe, „+ Gruppe“; Enter fügt im Prüfpunkt einen Absatz ein (Server, Prüfung, PDF, Katalog) | gebaut 04.11.2026 (kein Schemaschritt), Zweig formular-editor |
+| Prüfformular-Editor: Gruppen und Verschieben; Absätze im Prüfpunkt; „optional“ statt „Pflicht“ | Gruppe als Zwischenzeile (Name in voller Breite), Ziehgriff ⠿ und Menü „⋯“ statt ↑/↓/✕, „+ Prüfpunkt“ je Gruppe, „+ Gruppe“; Enter fügt im Prüfpunkt einen Absatz ein (Server, Prüfung, PDF, Katalog); Häkchen „optional“ statt „Pflicht“, Marke nur an optionalen Punkten | gebaut 04.11.2026 (kein Schemaschritt), Zweig formular-editor |
 
 ## Abgleich mit dem Bestand (vor Lieferung 1)
 
@@ -11949,7 +11949,7 @@ Schachtelung → 200; CSP, `no-store`, Weiterleitungen mit Kennung, Rückstrich 
   gespeicherten Schritt.
 - Strömipedia-Editor am Telefon: Der Speicherstand bleibt gekürzt („Ungespeic…“), nur der Schritttext ist angepasst.
 
-## Prüfformular-Editor: Gruppen als Zwischenzeile, Verschieben per Ziehgriff und Menü; Absätze im Prüfpunkt (Wünsche des Nutzers, 04.11.2026)
+## Prüfformular-Editor: Gruppen als Zwischenzeile, Verschieben per Ziehgriff und Menü; Absätze im Prüfpunkt; „optional“ statt „Pflicht“ (Wünsche des Nutzers, 04.11.2026)
 
 Nutzer (mit Bildschirmfoto des Editors „Edelrid Megawatt“): „Das Verschieben der Punkte besser gestalten und auch längere
 Gruppen lesbar machen.“ Vorher: Spalte „Gruppe“ (13 %, abgeschnitten: „Vorgeschich“, „Beweglicher“), kleine ↑/↓/✕ unter
@@ -12005,6 +12005,16 @@ festgeschriebene Prüfung (`.mat-mehrzeilig`); das Prüfprotokoll-PDF und die Fo
 (`pruefung.punktname`). Andere PDFs (Lebenslauf, Sammel-, Set-, Aussonderungsprotokoll, Jahresbericht) zeigen keine
 Punkttexte. Die Übung (`uebung/material.js`) nimmt den Text wie getippt.
 
+**„optional“ statt „Pflicht“** (zweiter Zusatz): Nutzer: „Drehe die Logik um, das meiste in Prüfungen ist Pflicht, es
+soll stattdessen ausgewählt werden, wenn etwas optional ist (Wartung/Pflege z. B.).“ Im Editor steht statt des (meist
+gesetzten) Häkchens „Pflicht“ ein Häkchen „optional“, normal leer; gesetzt heißt `pflicht: false`. Datenmodell,
+Schnittstelle (`pflicht` je Punkt), Katalogdatei und Bedeutung bleiben, kein Schemaschritt; neue Punkte sind Pflicht
+(Häkchen leer). Ohne Bearbeiten steht nur bei optionalen Punkten die graue Marke „optional“, bei Pflichtpunkten nichts
+(vorher „Pflicht“ bzw. „optional“ in jeder Zeile). Die Prüfungsansicht zeigte schon nur „optional“ (unverändert), das
+Prüfprotokoll-PDF und die Übung zeigen Pflicht je Punkt nicht (unverändert). Das „i“ an „Prüfpunkte“ beginnt jetzt mit
+„Jeder Prüfpunkt ist Pflicht: Ohne Befund lässt sich die Prüfung nicht festschreiben. Wo ein Punkt entfallen darf (etwa
+Wartung oder Pflege), setzt du das Häkchen „optional“.“ Am Finger ist das Häkchen samt Wort 44 px hoch (gemessen).
+
 **Einführung** (app/static/js/uebung/material.js, Teil „Material-Verwaltung“): Ziel des neuen Punkts jetzt der letzte Punkt
 vor dem Fuß seiner Gruppe (`#fp-tabelle tr.fp-punkt:has(+ tr.fp-fuss) .fp-text`), Texte zur Gruppenzeile, neuer Schritt am
 „⋯“ des neuen Punkts (verschieben, Griff). Übungsantwort `PUT …/formulare/<id>` unverändert (sie nahm `gruppe` schon).
@@ -12014,7 +12024,8 @@ echten Ereignissen: Ziehen in der Gruppe, in eine andere, über den Gruppenkopf,
 Menü nach oben/unten auch über die Grenze, In Gruppe verschieben in bestehende und neue Gruppe, Entfernen; Gruppe leer
 entfernen, nach oben/unten, mit Punkten Rückfrage mit Anzahl; + Prüfpunkt, + Gruppe mit Fokus, 80 Zeichen ganz sichtbar,
 Getipptes überlebt; Enter im Prüfpunkt, nicht im Gruppennamen; Speichern in der Datenbank; Nur-Lese-Ansicht; Prüfungsansicht
-mit Absatz und HTML im Punkttext als Text; Tippflächen gemessen; keine Konsolenfehler, kein waagerechter Bildlauf) und
+mit Absatz und HTML im Punkttext als Text; Häkchen „optional“ leer bei Pflichtpunkten, gesetzt → `mandatory` 0 in der
+Datenbank, Marke nur an optionalen Punkten; Tippflächen gemessen; keine Konsolenfehler, kein waagerechter Bildlauf) und
 `tests/test_material_pruefpunkt_absatz.py` (punkt_text, Speichern, neue Version, Export → Import in eine zweite Anlage,
 Prüfung, Meldung einzeilig, Prüfprotokoll-PDF mit eigenen Zeilen und Leerzeile, HTML als Text). Angepasst:
 `tests/test_material_formular_titel.py` (jedes Neuzeichnen nach einsammeln(), auch das Ende des Ziehens),
@@ -12036,3 +12047,5 @@ Prüfung, Meldung einzeilig, Prüfprotokoll-PDF mit eigenen Zeilen und Leerzeile
 7. Ein leeres Formular zeigt unten zusätzlich „+ Prüfpunkt“ (Punkt ohne Gruppe) neben „+ Gruppe“.
 8. Absätze: Gruppennamen bleiben einzeilig; das Journal der Formulare zeigt einen Punkt mit Absatz in einer Zeile (die
    Oberfläche fasst den Umbruch zusammen, gespeichert ist er).
+9. „optional“: Marke ohne Bearbeiten als graue Pille in der letzten Spalte (ohne Spaltenkopf); die Prüfungsansicht behält
+   ihr kleines graues „optional“.
