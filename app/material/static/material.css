@@ -587,10 +587,10 @@ html:has(.mat-mit-leiste) { scroll-padding-bottom: 210px; }
   font-size: var(--fs-klein); font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .mat-pruefung:not(.tippt) .mat-abschluss.kompakt .mat-abschluss-auf { display: inline-flex; flex: none; margin: 0 0 0 auto; }
 .mat-abschluss-ende { height: 1px; }
-/* Einführung (app/static/js/einfuehrung.js): Steht die Sprechblase am Telefon als Leiste unten (html.fuehrung-leiste,
-   ihre Höhe in --fuehrung-hoehe), klebt die Abschlussleiste über ihr statt dahinter – sonst wären Ergebnis und
-   „Festschreiben“ in der Übung zum Prüfen verdeckt. */
-html.fuehrung-leiste .mat-abschluss { bottom: var(--fuehrung-hoehe, 0px); }
+/* Einführung (app/static/js/einfuehrung.js; allgemeine Regel in app.css, Abschnitt „Einführung“): Steht die Sprechblase
+   am Telefon als Leiste unten (html.fuehrung-leiste, ihre Höhe in --fuehrung-hoehe), kleben Abschlussleiste und
+   Mehrfachauswahl über ihr statt dahinter – sonst wären Ergebnis und „Festschreiben“ in der Übung zum Prüfen verdeckt. */
+html.fuehrung-leiste :is(.mat-abschluss, .mat-sammel) { bottom: var(--fuehrung-hoehe, 0px); }
 html.fuehrung-leiste .mat-pruefung:not(.tippt) .mat-abschluss.kompakt { bottom: calc(var(--fuehrung-hoehe, 0px) - var(--mat-leiste-weg, 0px)); }
 .mat-abschluss-hinweis.warn { color: var(--rot); font-weight: 600; }
 /* Am Rechner auch die Leiste niedriger – nach den Grundregeln, damit sie gilt (siehe Prüfpunkte oben). */
@@ -1051,6 +1051,9 @@ html:has(.mat-mit-leiste) { scroll-padding-top: calc(var(--topbar) + 8px); scrol
 .mat-pruefung.tippt .mat-abschluss { position: static; }
 html:has(.mat-pruefung.tippt) .bauchbinde { position: relative; }
 html:has(.mat-pruefung.tippt) { scroll-padding-top: 8px; scroll-padding-bottom: 12px; }
+/* Mit der Leiste der Einführung darunter (app.css „Einführung“): beide Höhen. */
+html.fuehrung-leiste:has(.mat-mit-leiste) { scroll-padding-bottom: calc(var(--mat-leiste-h, 198px) + 12px + var(--fuehrung-hoehe, 0px)); }
+html.fuehrung-leiste:has(.mat-pruefung.tippt) { scroll-padding-bottom: calc(12px + var(--fuehrung-hoehe, 0px)); }
 
 /* Abschlussleiste in einer Zeile, wo Platz ist: Ergebnisse links, Fälligkeit oder Grund und Festschreiben rechts
    daneben; reicht die Breite nicht, rutscht der rechte Teil als Ganzes in die zweite Zeile. */

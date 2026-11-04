@@ -579,7 +579,17 @@ def test_statisch():
     # Die Schicht deckt alle Wege ab (Bauvorlage 2.3); Kopfzeile nur an Merker, /api/me und /static/.
     for wort in ("window.fetch = ", "window.XMLHttpRequest = UebungXHR", '"sendBeacon"', "window.open = function",
                  "history[art] = function", 'document.addEventListener("submit"', '"X-Uebung": "1"', "ablageAufraeumen",
-                 'role", "dialog"', 'aria-modal", "false"', 'role", "region"', "dialog[open]", "S.weich()"):
+                 'role", "dialog"', 'aria-modal", "false"', 'role", "region"', "dialog[open]"):
+        assert wort in js, wort
+    # Führung robust (04.11.2026): Ziele sofort ins Bild (kein weicher Bildlauf – auch nicht ohne „Bewegung reduzieren“),
+    # bereit erst nach Schrift, Zurück eines Overlays und Animationen, kein Auswerten während eines Seitenwechsels, „m“
+    # beim Betreten des Ablaufs festgehalten, jeder Ablauf mit neu geladener Startseite, Editor ohne aria-describedby,
+    # Seitenwechsel auf Dateien, Menüs frei.
+    assert "S.weich()" not in js and 'behavior: "instant"' in js and "smooth" not in js
+    for wort in ("function beruhigen(s, el, lauf)", "document.fonts.ready", "document.getAnimations()", "overlaySchliesst()",
+                 "elementsFromPoint", "seiteGehtGerade()", "function zaehlungFesthalten()", "location.reload()",
+                 "el.isContentEditable", 'setAttribute("aria-live", "polite")', "istDatei(u) && !(ausgang",
+                 'classList.toggle("unter-menue"', 'd.matches(":modal")'):
         assert wort in js, wort
     # Nachbesserung nach der Sicherheitsprüfung: Übungsablage, Seiten ohne Übungszweig, Referer, Abmelden.
     for wort in ("ablageUmlegen()", 'const ABLAGE = "stroemis-uebung-ablage"', 'addEventListener("navigate"',

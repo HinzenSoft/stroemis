@@ -15,12 +15,14 @@ KONTO_JE_TEIL. Chromium über /home/harness/devtools/cdp/cdp.py mit freiem CDP-P
 /home/harness/cdp-profile (das snap-Chromium liest /tmp nicht); Touch per Emulation (pointer: coarse, mobil, Tippen als
 Geste), sonst Maus (pointer: fine, hover). Alle Anfragen kommen aus Network.requestWillBeSent ins Netzprotokoll.
 
-durchlauf(modul, teil, breite, hoehe, touch) führt alle Schritte eines Teils aus – je Schritt die probe der Übungsdatei,
-ohne probe einen Klick auf warten.klick bzw. auf „Weiter“ – und liefert Befunde als Sätze (leer = bestanden). Rot wird
-es, wenn ein Ziel fehlt oder nicht im Bild ist (auch verdeckt von der Leiste), eine Anfrage unbeantwortet bleibt, eine
-Anfrage an /api/ (außer Merker und /api/me) oder /media/ das Netz erreicht, eine Seite ohne Übungskennung lädt, die
-Konsole einen Fehler zeigt, die Seite waagerecht rollt, ein Schritt nicht weiterzählt oder am Ende nicht „Geschafft“ mit
-dem Merker „erledigt“ steht."""
+durchlauf(modul, teil, breite, hoehe, touch) führt alle Schritte eines Teils aus – je Schritt die probe der Übungsdatei
+({klick: sel} auf die Mitte, {klick: sel, frei: true} auf die Mitte der größten freien Stelle, {tippen: …}, {datei: true}),
+ohne probe einen Klick auf warten.klick bzw. auf „Weiter“ – und liefert Befunde als Sätze (leer = bestanden). Vor dem
+Messen und Tippen wartet sie, bis Bildlauf, Ziel und Blase ruhen (Seite.ruhe). Rot wird es, wenn ein Ziel fehlt oder
+nicht im Bild ist (auch verdeckt von einer Leiste oder der Blase), eine Anfrage unbeantwortet bleibt (auf jeder Seite
+gesammelt), eine Anfrage an /api/ (außer Merker und /api/me) oder /media/ das Netz erreicht, eine Seite ohne
+Übungskennung lädt, die Konsole einen Fehler zeigt, die Seite waagerecht rollt, ein Schritt nicht weiterzählt oder am
+Ende nicht „Geschafft“ mit dem Merker „erledigt“ steht."""
 import json
 import os
 import shutil
@@ -191,6 +193,7 @@ class Seite:
         self.b.cookie("session", anmelden(umgebung.basis, mail(rolle), PASSWORT))
         self.anfragen = []           # (url, typ, documentURL)
         self.fehler = []             # Konsolenfehler und Ausnahmen (eigene Herkunft)
+        self.unbekannt = set()       # unbeantwortete Anfragen der Übung, auf jeder Seite gesammelt
         self.offen = True
 
     def schliessen(self):
@@ -230,6 +233,13 @@ class Seite:
                 if not url or url.startswith(self.u.basis):
                     self.fehler.append("Log: " + p["entry"]["text"] + " " + url)
         self.b.ereignisse = []
+        # S.einfuehrung.zustand().unbekannt gilt nur für die Seite, auf der man gerade ist – darum bei jedem Sammeln.
+        try:
+            z = self.b.js("window.S && S.einfuehrung ? S.einfuehrung.zustand() : null")
+        except RuntimeError:
+            z = None
+        if z and z.get("unbekannt"):
+            self.unbekannt.update(z["unbekannt"])
 
     def oeffnen(self, pfad, warten=0.3):
         self.sammeln()
@@ -295,11 +305,33 @@ class Seite:
           return {{ x, y, trifft: Boolean(t && (t === el || el.contains(t))), was: t ? t.outerHTML.slice(0, 120) : '' }};
         }})()""")
 
-    def klick(self, sel, blase=False):
-        """Ein echter Klick (Maus) bzw. Tipp (Touch) auf die Mitte des Elements. Liefert einen Befund oder None."""
-        p = self.punkt(sel, blase)
+    def freier_punkt(self, sel):
+        """Die Mitte der größten freien Stelle des Elements (senkrecht an seiner waagerechten Mitte): ohne Knöpfe, Links,
+        Felder und Bedienelemente darin – etwa ein Tipp auf die Karte, wo in der Mitte das Positionsbanner liegt."""
+        return self.js(f"""(() => {{
+          const m = [...document.querySelectorAll({json.dumps(sel)})].find((e) => e.getClientRects().length
+            && !e.closest('.fuehrung-blase, .fuehrung-rahmen'));
+          if (!m) return null;
+          const r = m.getBoundingClientRect(), x = r.left + r.width / 2;
+          const BEDIENT = 'a, button, input, select, textarea, label, summary, [role=button], [tabindex], .leaflet-control, .leaflet-popup';
+          let best = null, lauf = null;
+          for (let y = Math.max(0, Math.ceil(r.top) + 1); y < Math.min(innerHeight, r.bottom - 1); y += 4) {{
+            const t = document.elementFromPoint(x, y);
+            const frei = t && m.contains(t) && !(t !== m && t.closest(BEDIENT) && m.contains(t.closest(BEDIENT)));
+            if (frei) {{
+              lauf = lauf ? [lauf[0], y] : [y, y];
+              if (!best || lauf[1] - lauf[0] > best[1] - best[0]) best = lauf.slice();
+            }} else lauf = null;
+          }}
+          return best && best[1] - best[0] >= 40 ? {{ x, y: (best[0] + best[1]) / 2, trifft: true, was: '' }} : null; }})()""")
+
+    def klick(self, sel, blase=False, frei=False):
+        """Ein echter Klick (Maus) bzw. Tipp (Touch) auf die Mitte des Elements (frei=True: auf die Mitte seiner größten
+        freien Stelle, probe {klick: sel, frei: true}). Liefert einen Befund oder None."""
+        p = self.freier_punkt(sel) if frei else self.punkt(sel, blase)
         if not p:
-            return f"„{sel}“ nicht gefunden"
+            return (f"Keine freie Stelle in „{sel}“ für einen Tipp (mindestens 40 px hoch)" if frei
+                    else f"„{sel}“ nicht gefunden")
         if not p["trifft"]:
             return f"Ein Tipp auf die Mitte von „{sel}“ trifft etwas anderes: {p['was']}"
         if self.touch:
@@ -339,6 +371,51 @@ class Seite:
                 out.append(f"Seite ohne Übungskennung geladen: {url}")
         return out
 
+    def lage_befund(self):
+        """Steht das Ziel des Schritts im Bild? Frei ist das Fenster zwischen festen bzw. klebenden Leisten oben (an der
+        waagerechten Mitte des Ziels gesucht) und dem Fensterrand bzw. der Leiste der Führung unten. Rot, wenn das Ziel
+        dort nicht ganz steht (höhere Ziele: gar nicht) oder ein Tipp auf die Mitte seines sichtbaren Teils etwas
+        anderes trifft (eine Leiste, die Blase). Liefert einen Satz oder None."""
+        lage = self.js("""(() => {
+          const z = S.einfuehrung.zustand(), r = z.zielRect;
+          if (!r) return { fehlt: true };
+          const unten = z.leiste && z.blaseRect ? z.blaseRect.top : innerHeight;
+          const x = Math.min(Math.max((Math.max(r.left, 0) + Math.min(r.right, innerWidth)) / 2, 1), innerWidth - 2);
+          const klebend = (t) => { for (let n = t; n && n !== document.body; n = n.parentElement) {
+            const p = getComputedStyle(n).position; if (p === 'fixed' || p === 'sticky') return n; } return null; };
+          // Das Ziel selbst oder ein Rahmen darum: n oder ein Nachfahre hat genau das Rechteck des Ziels.
+          const gleich = (n) => { const q = n.getBoundingClientRect();
+            return Math.abs(q.left - r.left) < 1 && Math.abs(q.top - r.top) < 1 && Math.abs(q.width - r.width) < 1 && Math.abs(q.height - r.height) < 1; };
+          const mitZiel = (n) => gleich(n) || [...n.querySelectorAll('*')].some(gleich);
+          let oben = 0;
+          for (let i = 0; i < 6; i++) {
+            const t = document.elementFromPoint(x, oben + 1);
+            const n = t && !t.closest('.fuehrung-blase') ? klebend(t) : null;
+            // Nur flache Leisten – eine klebende Spalte (Seitenbaum, Gliederung) liegt neben dem Ziel.
+            if (!n || mitZiel(n) || n.getBoundingClientRect().height > innerHeight / 2 || n.getBoundingClientRect().bottom <= oben + 0.5) break;
+            oben = n.getBoundingClientRect().bottom;
+          }
+          const y = (Math.max(r.top, oben) + Math.min(r.bottom, unten)) / 2;
+          const t = y > 0 && y < innerHeight ? document.elementFromPoint(x, y) : null;
+          let drin = false;
+          for (let n = t; n && n !== document.documentElement; n = n.parentElement) if (gleich(n)) { drin = true; break; }
+          let verdeckt = '';
+          if (t && t.closest('.fuehrung-blase')) verdeckt = 'von der Sprechblase';
+          else if (t && !drin) { const n = klebend(t); if (n && !mitZiel(n) && n.getBoundingClientRect().height <= innerHeight / 2) verdeckt = 'von ' + n.tagName.toLowerCase() + (n.id ? '#' + n.id : '')
+            + (n.classList.length ? '.' + [...n.classList].join('.') : ''); }
+          return { r, oben, unten, verdeckt };
+        })()""")
+        if lage.get("fehlt"):
+            return "fehlt (kein Rechteck)."
+        r, oben, unten = lage["r"], lage["oben"], lage["unten"]
+        if r["bottom"] <= oben or r["top"] >= unten:
+            return f"nicht im Bild ({r}, frei {oben:.0f}–{unten:.0f})."
+        if r["height"] <= unten - oben + 1 and (r["top"] < oben - 1 or r["bottom"] > unten + 1):
+            return f"nicht ganz im Bild bzw. von einer Leiste verdeckt ({r}, frei {oben:.0f}–{unten:.0f})."
+        if lage["verdeckt"]:
+            return f"in der Mitte verdeckt {lage['verdeckt']} ({r})."
+        return None
+
     def durchlauf(self, modul, teil, max_schritte=200):
         befunde = []
         rolle = self.rolle
@@ -367,13 +444,10 @@ class Seite:
             if self.js("document.documentElement.scrollWidth > document.documentElement.clientWidth + 1"):
                 befunde.append(f"{wo}: Die Seite rollt waagerecht.")
             schritt = beschreibung[teil]["ablaeufe"][z["ablauf"]]["schritte"][z["schritt"]]
-            lage = self.js("""(() => { const z = S.einfuehrung.zustand(); return { ziel: z.zielRect, blase: z.blaseRect,
-                leiste: z.leiste, hoehe: innerHeight }; })()""")
             if z["ziel"] is not None:
-                r = lage["ziel"]
-                unten = lage["blase"]["top"] if lage["leiste"] and lage["blase"] else lage["hoehe"]
-                if not r or r["bottom"] <= 0 or r["top"] >= unten or (r["height"] < unten and r["bottom"] > unten + 1):
-                    befunde.append(f"{wo}: Ziel {z['ziel']!r} nicht ganz im Bild bzw. von der Leiste verdeckt ({r}).")
+                fehler = self.lage_befund()
+                if fehler:
+                    befunde.append(f"{wo}: Ziel {z['ziel']!r} {fehler}")
             probe = schritt.get("probe") or {}
             warten = schritt.get("warten") or {}
             vorher = (z["ablauf"], z["schritt"])
@@ -382,7 +456,7 @@ class Seite:
             elif "datei" in probe:
                 fehler = self.klick(".fuehrung-blase .fuehrung-bild", blase=True)
             elif "klick" in probe or "klick" in warten:
-                fehler = self.klick(probe.get("klick") or warten["klick"])
+                fehler = self.klick(probe.get("klick") or warten["klick"], frei=bool(probe.get("frei")))
             elif not warten:
                 fehler = self.klick(".fuehrung-blase .fuehrung-weiter", blase=True)
             else:
@@ -405,9 +479,6 @@ class Seite:
                 fokus = self.js("document.activeElement && document.activeElement.id")
                 if fokus not in ("fg-ende", "fg-weiter"):
                     befunde.append(f"Fokus im Dialog „Geschafft“ nicht auf der Hauptaktion ({fokus}).")
-                unbekannt = self.zustand()["unbekannt"]
-                if unbekannt:
-                    befunde.append(f"Unbeantwortete Anfragen: {unbekannt}")
                 self.sammeln()
                 ende_netz = len(self.anfragen)
                 knopf = "#fg-ende" if self.js("Boolean(document.querySelector('#fg-ende'))") else "#fg-spaeter"
@@ -420,6 +491,8 @@ class Seite:
                 if stand.get("zustand") != "erledigt":
                     befunde.append(f"Merker nach „Geschafft“ nicht „erledigt“: {stand}")
         self.sammeln()
+        if self.unbekannt:
+            befunde.append(f"Unbeantwortete Anfragen unterwegs: {sorted(self.unbekannt)}")
         befunde += self.netz_befunde(ende_netz)
         befunde += [f"Konsole: {f}" for f in self.fehler]
         return befunde

@@ -3092,6 +3092,12 @@ main.start { container: start / inline-size; }
   border-radius: var(--radius-gross) var(--radius-gross) 0 0; box-shadow: var(--schatten-leiste);
   padding: 10px calc(12px + var(--sicher-rechts)) calc(12px + var(--sicher-unten)) calc(12px + var(--sicher-links)); }
 html.fuehrung-leiste body { padding-bottom: var(--fuehrung-hoehe, 0px); }
+/* Klebende Leisten unten und fensterhohe Flächen (allgemeine Regel, 04.11.2026): --fuehrung-hoehe steht nur, solange
+   die Leiste der Führung bzw. des Angebots unten steht – sonst gilt 0. Eine Leiste mit position: sticky/fixed;
+   bottom: 0 bekommt unter html.fuehrung-leiste bottom: var(--fuehrung-hoehe, 0px), eine fensterhohe Fläche zieht die
+   Höhe ab (Materialablage: Abschlussleiste der Prüfung und Mehrfachauswahl in material.css; Ankerplätze: Karte und
+   Großansicht hier). Was der Browser selbst ins Bild rollt (Fokus, Anker), landet ebenfalls darüber. */
+html.fuehrung-leiste { scroll-padding-bottom: var(--fuehrung-hoehe, 0px); }
 /* Die Karte der Ankerplätze füllt das Fenster – mit der Leiste endet sie über ihr. Sonst lägen Seitenleiste (Telefon:
    Schublade von unten) und Positionsbanner unter der Leiste, und die ganze Seite rollte samt Kopfleiste (Übung der
    Ankerplätze, 04.11.2026). */
@@ -3116,6 +3122,10 @@ html.fuehrung-leiste .map-shell { height: calc(100vh - var(--kopf-hoehe) - var(-
 .fuehrung-rahmen { position: fixed; z-index: 2400; pointer-events: none; box-sizing: border-box; border: 3px solid var(--wasser);
   border-radius: var(--radius-gross); box-shadow: 0 0 0 200vmax var(--abdunkeln-leicht); }
 .fuehrung-rahmen[hidden], .fuehrung-blase[hidden] { display: none; }
+/* Ein vom Nutzer geöffnetes schwebendes Menü (.menue-schwebend, z-index 1400) bleibt frei: Der Rahmen dunkelt es nicht ab,
+   und die Blase liegt darunter, wenn sie ihm nicht ausweichen kann (einfuehrung.js, lage). */
+.fuehrung-rahmen.unter-menue { z-index: 1380; }
+.fuehrung-blase.unter-menue { z-index: 1390; }
 @media (prefers-reduced-motion: no-preference) {
   .fuehrung-rahmen { transition: left .15s ease-out, top .15s ease-out, width .15s ease-out, height .15s ease-out; }
 }

@@ -137,6 +137,9 @@
   const beantwortet = [];         // „METHODE /pfad“ seit dem Laden der Seite
   const unbekannt = [];           // ohne Antwort in der Übungsdatei
   const fuehrung = { bereit: false, geschafft: false, sackgasse: false, ziel: null };
+  let seiteGeht = 0;              // seit wann diese Seite verlassen wird (Link, Formular, location …) – bis die neue da ist
+  let zurueckSeit = 0;            // ein Schritt zurück im Verlauf läuft (common.js schließt ein Overlay) – bis popstate
+  let dialogZuSeit = 0;           // eben hat sich ein Dialog geschlossen – sein Schritt zurück kommt gleich
 
   /* --- Ohne Übung -------------------------------------------------------------------------------------------------- */
   if (!UEBUNG) {
@@ -411,15 +414,41 @@
     // Jeder andere Seitenwechsel dorthin (location.href = S.ziel(…), assign, replace, Verlauf) – wo der Browser die
     // Navigation API hat (Chromium, Firefox, Safari 26): anhalten, Toast. Ohne sie antwortet der Server mit der Fehlerseite
     // „In der Übung nicht verfügbar“ und dem Weg zurück. Die Kopfleiste (ausgang) führt hinaus.
+    // Ebenso Seitenwechsel auf Dateien (/api/, /media/, Endung – dieselbe Regel wie bei Links), etwa der Export der
+    // Strömipedia über location.href: die Übungsdatei aus der Dateitabelle oder der Hinweis, dass es sie nicht gibt.
     if (window.navigation && typeof window.navigation.addEventListener === "function") {
       window.navigation.addEventListener("navigate", (e) => {
         if (!e.cancelable || e.hashChange || e.downloadRequest || e.navigationType === "reload" || e.navigationType === "traverse") return;
         const u = adresse(e.destination && e.destination.url);
+        if (u && u.origin === location.origin && istDatei(u) && !(ausgang && u.href === ausgang)) {
+          e.preventDefault();
+          const datei = dateiFuer(u);
+          if (datei) echtOpen(datei, "_blank", "noopener");
+          else S.toast("In der Übung gibt es diese Datei nicht.");
+          return;
+        }
         if (!ohneUebung(u) || (ausgang && u.href === ausgang)) return;
         e.preventDefault();
         S.toast(NICHT_HIER);
       });
+      // Ein Seitenwechsel, den niemand angehalten hat, läuft: Bis die neue Seite da ist, wertet die Führung auf dieser
+      // nichts mehr aus (schrittZeigen – kein Überspringen, nichts speichern).
+      window.navigation.addEventListener("navigate", (e) => {
+        if (!e.defaultPrevented && !e.downloadRequest && !(e.destination && e.destination.sameDocument)) seiteGeht = Date.now();
+      });
     }
+    window.addEventListener("pagehide", () => { seiteGeht = seiteGeht || Date.now(); });
+    window.addEventListener("pageshow", () => { seiteGeht = 0; });
+    // Schließt ein Overlay, nimmt common.js seinen Schritt im Verlauf zurück (S.overlayVerlauf: history.go, dann popstate),
+    // und der Browser stellt dabei die Bildlaufhöhe von vorher wieder her. Die Führung wartet das ab (overlaySchliesst).
+    for (const art of ["back", "go"]) {
+      const vorher = history[art];
+      history[art] = function (...a) { zurueckSeit = Date.now(); return vorher.apply(history, a); };
+    }
+    window.addEventListener("popstate", () => { zurueckSeit = 0; }, true);
+    new MutationObserver((liste) => {
+      if (liste.some((m) => m.target instanceof HTMLDialogElement && !m.target.open)) dialogZuSeit = Date.now();
+    }).observe(document.documentElement, { subtree: true, attributes: true, attributeFilter: ["open"] });
     // Ohne Referer erkennt der Server eine Anfrage aus der Übung nicht (Hinweis 1 der Sicherheitsprüfung): Außerhalb der
     // Kopfleiste trägt in der Übung kein Element referrerpolicy oder rel="noreferrer". Bilder, Medien und Rahmen hält
     // zusätzlich die engere CSP der Übungsseite von /api/ und /media/ fern (app/einfuehrung.py, csp_quellen) – für sie
@@ -473,17 +502,31 @@
     k.searchParams.delete("ablauf");
     return k.pathname + k.search;
   }
-  function zumStart(start, ersetzen) {
+  /* Zur Startadresse eines Ablaufs. frisch: die Seite lädt auf jeden Fall neu – auch bei gleicher Adresse oder nur anderem
+     Anker –, damit sie zum frischen Übungsbestand passt (sonst zeigte sie noch, was der vorige Ablauf geändert hat, und
+     bliebe im alten Reiter). Ohne frisch (beim Laden der Seite, vor ihren Skripten) genügt an der Startadresse der Anker. */
+  function zumStart(start, ersetzen, frisch) {
     const u = adresse(start || E.start);
     if (!u) return false;
     const hier = new URL(location.href);
     if (ohneKennung(u) === ohneKennung(hier)) {
       if (u.hash !== hier.hash) history.replaceState(history.state, "", S.ziel(u.pathname + hier.search + u.hash));
-      return false;
+      if (!frisch) return false;
+      umgeleitet = true;
+      window.scrollTo({ top: 0, left: 0, behavior: "instant" });     // neu geladen von oben, nicht an der alten Stelle
+      location.reload();
+      return true;
     }
     umgeleitet = true;
     if (ersetzen) location.replace(S.ziel(u.href)); else location.href = S.ziel(u.href);
     return true;
+  }
+  // Erst, wenn kein Overlay mehr seinen Schritt zurück im Verlauf nimmt (höchstens 1 s) – ein Seitenwechsel davor würde
+  // von diesem Schritt abgebrochen.
+  function nachDemZurueck(fn) {
+    const ende = Date.now() + 1000;
+    const los = () => { if (overlaySchliesst() && Date.now() < ende) { setTimeout(los, 30); return; } fn(); };
+    setTimeout(los, 0);
   }
 
   function starten() {
@@ -510,16 +553,156 @@
 
   let blase = null;
   let rahmen = null;
+  let ansage = null;                    // Live-Region: der Text des Schritts bei Zielen im Editor (zielBeschreiben)
   let zielEl = null;
   let laufNr = 0;                       // jede Anzeige eines Schritts; ältere Wartende geben auf
   let aufraeumen = [];                  // Wächter des gezeigten Schritts
   let planung = 0;
+  let bereitSeit = 0;                   // seit wann der gezeigte Schritt bereit ist
+  let nachgeholt = 0;                   // wie oft lage() das Ziel dieses Schritts wieder ins Bild geholt hat
+  let selbstGerollt = false;            // in diesem Schritt hast du selbst gerollt – dann holt lage() nichts zurück
 
+  // Ein Bild weiter (requestAnimationFrame; im verdeckten Reiter nach spätestens 80 ms).
+  const bild = () => new Promise((r) => { requestAnimationFrame(() => r()); setTimeout(r, 80); });
+  // Ein Overlay schließt gerade: sein Schritt zurück im Verlauf steht aus oder läuft (siehe schichtEinschalten).
+  const overlaySchliesst = () => Boolean((zurueckSeit && Date.now() - zurueckSeit < 1500) || (dialogZuSeit && Date.now() - dialogZuSeit < 150));
+  const seiteGehtGerade = () => umgeleitet || Boolean(seiteGeht && Date.now() - seiteGeht < 4000);
+  function obersterDialog() {
+    const offen = [...document.querySelectorAll("dialog[open]")].filter((d) => sicher(() => d.matches(":modal")));
+    return offen.length ? offen[offen.length - 1] : null;
+  }
+  // Sichtbar: mit Fläche, nicht unsichtbar, nicht in [hidden]/[inert] – und bei offenem modalem Dialog nur in ihm (alles
+  // dahinter ist für dich gerade nicht erreichbar, auch wenn der Browser es noch zeichnet).
   function sichtbar(el) {
     if (!el || !el.isConnected || !el.getClientRects().length) return false;
     if (el.closest(".fuehrung-blase, .fuehrung-rahmen")) return false;
     const cs = getComputedStyle(el);
-    return cs.visibility !== "hidden" && !el.closest("[hidden], [inert]");
+    if (cs.visibility === "hidden" || el.closest("[hidden], [inert]")) return false;
+    const d = obersterDialog();
+    return !d || d.contains(el);
+  }
+  // Läuft eine Animation am Ziel oder einem Vorfahren (Schublade, Seitenleiste gleitet herein)? Endlose zählen nicht.
+  function animiert(el) {
+    if (typeof document.getAnimations !== "function") return false;
+    return document.getAnimations().some((an) => {
+      const t = an.effect && an.effect.target;
+      if (an.playState !== "running" || !(t instanceof Element) || !t.contains(el)) return false;
+      const zeit = typeof an.effect.getComputedTiming === "function" ? an.effect.getComputedTiming() : {};
+      return zeit.iterations !== Infinity;
+    });
+  }
+
+  /* --- Ins Bild holen ---------------------------------------------------------------------------------------------
+     Der freie Bereich für ein Ziel: das Fenster, begrenzt von den Rahmen, die es abschneiden (Dialog, Schublade, Liste,
+     die in sich rollt), von klebenden oder festen Leisten darüber und darunter (Kopfleiste, Suchzeile, Reiter,
+     Abschlussleiste – gesucht mit elementsFromPoint an der waagerechten Mitte des Ziels) und am Telefon von der Leiste der
+     Führung. Darin holt insBild das Ziel sofort (ohne weichen Bildlauf) in die Mitte; ist es höher als der Bereich, steht
+     sein Anfang oben. */
+  const klebt = (n) => { const p = getComputedStyle(n).position; return p === "fixed" || p === "sticky"; };
+  function leisteBei(el, x, y) {
+    if (y < 0 || y >= window.innerHeight) return null;
+    for (const t of document.elementsFromPoint(x, y)) {
+      if (t.closest(".fuehrung-blase, .fuehrung-rahmen")) continue;
+      for (let n = t; n && n !== document.body && n !== document.documentElement; n = n.parentElement) {
+        if (n.contains(el)) return null;                 // das Ziel selbst oder sein Rahmen
+        // Eine Leiste ist flach; eine klebende Spalte (Seitenbaum, Gliederung, Seitenleiste) liegt neben dem Ziel.
+        if (klebt(n)) return n.getBoundingClientRect().height <= window.innerHeight / 2 ? n : null;
+      }
+      return null;
+    }
+    return null;
+  }
+  function freieFlaeche(el) {
+    let oben = 0;
+    let unten = window.innerHeight;
+    if (blase && !blase.hidden && blase.classList.contains("als-leiste")) unten = Math.min(unten, blase.getBoundingClientRect().top);
+    for (let n = el.parentElement; n && n !== document.body && n !== document.documentElement; n = n.parentElement) {
+      if (getComputedStyle(n).overflowY === "visible") continue;
+      const r = n.getBoundingClientRect();
+      oben = Math.max(oben, r.top + n.clientTop);
+      unten = Math.min(unten, r.top + n.clientTop + n.clientHeight);
+    }
+    const r = el.getBoundingClientRect();
+    const x = Math.min(Math.max((Math.max(r.left, 0) + Math.min(r.right, window.innerWidth)) / 2, 1), window.innerWidth - 2);
+    for (let i = 0; i < 6; i++) {
+      const n = leisteBei(el, x, oben + 1);
+      const b = n ? n.getBoundingClientRect().bottom : oben;
+      if (b <= oben + 0.5) break;
+      oben = b;
+    }
+    for (let i = 0; i < 6; i++) {
+      const n = leisteBei(el, x, unten - 2);
+      const t = n ? n.getBoundingClientRect().top : unten;
+      if (t >= unten - 0.5) break;
+      unten = t;
+    }
+    return { oben, unten: Math.max(unten, oben + 1) };
+  }
+  // Steht das Ziel im freien Bereich? (Höhere Ziele: wenn sie seine Mitte bedecken.)
+  function imFreien(el) {
+    const f = freieFlaeche(el);
+    const r = el.getBoundingClientRect();
+    if (r.height <= f.unten - f.oben + 1) return r.top >= f.oben - 1 && r.bottom <= f.unten + 1;
+    const mitte = (f.oben + f.unten) / 2;
+    return r.top <= mitte && r.bottom >= mitte;
+  }
+  // Das Ziel um m Pixel verschieben (positiv: nach unten) – erst mit dem Fenster, dann mit den Rahmen, die in sich rollen.
+  function verschieben(el, m) {
+    const kette = [null];
+    for (let n = el.parentElement; n && n !== document.body && n !== document.documentElement; n = n.parentElement) {
+      if (/(auto|scroll|hidden)/.test(getComputedStyle(n).overflowY) && n.scrollHeight > n.clientHeight + 1) kette.splice(1, 0, n);
+    }
+    for (const c of kette) {
+      if (Math.abs(m) < 1) return;
+      const vorher = el.getBoundingClientRect().top;
+      (c || window).scrollBy({ top: -m, left: 0, behavior: "instant" });
+      m -= el.getBoundingClientRect().top - vorher;
+    }
+  }
+  function insBild(el) {
+    if (!el || !sichtbar(el)) return;
+    for (let i = 0; i < 3 && !imFreien(el); i++) {
+      if (i === 0) el.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "instant" });   // in jedem Rahmen sichtbar
+      const f = freieFlaeche(el);
+      const r = el.getBoundingClientRect();
+      const frei = f.unten - f.oben;
+      verschieben(el, (r.height <= frei ? f.oben + (frei - r.height) / 2 : f.oben) - r.top);
+    }
+  }
+  const lageText = (el) => { const r = el.getBoundingClientRect(); return [r.left, r.top, r.width, r.height].map(Math.round).join(","); };
+  /* Vor „bereit“: Webschriften geladen, kein Overlay schließt mehr, keine Animation am Ziel – dann ins Bild holen, und erst
+     wenn das Ziel zwei Bilder lang still steht, gilt der Schritt als bereit (höchstens 3 s). Zeichnet die Seite das Ziel
+     dabei neu, gilt das neue. */
+  async function beruhigen(s, el, lauf) {
+    const ende = Date.now() + 3000;
+    while (Date.now() < ende) {
+      await bild();
+      if (lauf !== laufNr) return null;
+      if (!sichtbar(el)) {
+        el = zielSuchen(s.ziel);
+        if (!el) continue;
+        zielBeschreiben(el, s);
+      }
+      if (overlaySchliesst() || (document.fonts && document.fonts.status !== "loaded") || animiert(el)) continue;
+      insBild(el);
+      lage();
+      const vorher = lageText(el);
+      await bild();
+      await bild();
+      if (lauf !== laufNr) return null;
+      if (sichtbar(el) && lageText(el) === vorher && !overlaySchliesst() && !animiert(el)) return el;
+    }
+    return sichtbar(el) ? el : zielSuchen(s.ziel);
+  }
+  // Vor dem Auswerten eines Schritts: ein, zwei Bilder für Seitenwechsel, die die Aktion eben geplant hat (Formulare),
+  // dann Webschriften und das Zurück eines eben geschlossenen Overlays (höchstens 3 s).
+  async function abwarten(lauf) {
+    await bild();
+    await bild();
+    if (document.fonts && document.fonts.ready) await Promise.race([document.fonts.ready, pause(3000)]);
+    const ende = Date.now() + 3000;
+    while (lauf === laufNr && Date.now() < ende && !seiteGehtGerade()
+           && (overlaySchliesst() || (document.fonts && document.fonts.status !== "loaded"))) await pause(30);
   }
   function zielSuchen(z) {
     if (z === null || z === undefined) return null;
@@ -538,7 +721,7 @@
       const versuch = () => { const r = pruefen(); if (r) { aus(); fertig(r); } };
       const mo = new MutationObserver(versuch);
       mo.observe(document.documentElement, { childList: true, subtree: true, attributes: true });
-      const takt = setInterval(versuch, 250);
+      const takt = setInterval(versuch, 120);
       const ende = ms === Infinity ? null : setTimeout(() => { aus(); fertig(null); }, ms);
       aus = () => { mo.disconnect(); clearInterval(takt); if (ende) clearTimeout(ende); };
       aufraeumen.push(aus);
@@ -553,9 +736,14 @@
   }
   function einhaengen() {
     const b = behaelter();
-    for (const el of [rahmen, blase]) if (el && el.parentElement !== b) b.appendChild(el);
+    for (const el of [rahmen, blase, ansage]) if (el && el.parentElement !== b) b.appendChild(el);
   }
   const schmal = () => window.innerWidth < 600;
+  // Offene Menüs: schwebende (am Ende der Seite, über allem außer Führung und Dialogen) und aufgeklappte.
+  const MENUES = ".menue-schwebend, details[open] > :is(.menue-liste, .mat-menue-liste, .zeilenmenue-liste)";
+  const menues = () => [...document.querySelectorAll(MENUES)].filter((m) => m.getClientRects().length && !m.closest("[hidden], [inert]"));
+  const ueber = (a, b) => a.left < b.right - 1 && a.right > b.left + 1 && a.top < b.bottom - 1 && a.bottom > b.top + 1;
+  const kasten = (left, top, w, h) => ({ left, top, right: left + w, bottom: top + h });
   function lage() {
     planung = 0;
     if (!blase) return;
@@ -571,17 +759,39 @@
     const s = aktuellerSchritt();
     if (s && s.ziel !== null && s.ziel !== undefined && !sichtbar(zielEl)) {
       const neu = zielSuchen(s.ziel);
-      if (neu) zielBeschreiben(neu);
+      if (neu) zielBeschreiben(neu, s);
     }
     // Steht die Blase in einem Dialog, das Ziel aber dahinter (inert), bleibt der Dialog ohne Abdunkelung.
     const imDialog = blase.parentElement !== document.body;
     const r = zielEl && sichtbar(zielEl) && (!imDialog || blase.parentElement.contains(zielEl)) ? zielEl.getBoundingClientRect() : null;
+    // Rutscht das Ziel kurz nach dem Zeigen unter eine Leiste oder die Blase (das Zurück eines Dialogs stellt die alte
+    // Bildlaufhöhe her, Inhalt lädt nach), holt die Führung es noch einmal ins Bild – nicht, wenn du selbst gerollt hast.
+    if (r && fuehrung.bereit && !selbstGerollt && nachgeholt < 4 && Date.now() - bereitSeit < 2500 && !overlaySchliesst()
+        && !animiert(zielEl) && !imFreien(zielEl)) {
+      nachgeholt += 1;
+      insBild(zielEl);
+      lagePlanen();
+      return;
+    }
+    // Ein offenes Menü (vom Nutzer geöffnet) bleibt frei: Der Rahmen dunkelt ein schwebendes Menü nicht ab, wenn das Ziel
+    // nicht darin liegt, und die Blase weicht jedem aus – unter, über, neben das Menü; passt sie nirgends hin (oder steht
+    // sie als Leiste unten), liegt sie unter einem schwebenden Menü.
+    const offen = menues();
+    const zielImMenue = Boolean(zielEl && offen.some((m) => m.contains(zielEl)));
+    rahmen.classList.toggle("unter-menue", offen.some((m) => m.matches(".menue-schwebend")) && !zielImMenue);
+    const flaechen = offen.map((m) => m.getBoundingClientRect());
     rahmen.hidden = !r;
     if (r) {
       Object.assign(rahmen.style, { left: `${Math.round(r.left - 4)}px`, top: `${Math.round(r.top - 4)}px`,
         width: `${Math.round(r.width + 8)}px`, height: `${Math.round(r.height + 8)}px` });
     }
-    if (leiste) { blase.style.left = ""; blase.style.top = ""; return; }
+    if (leiste) {
+      blase.style.left = "";
+      blase.style.top = "";
+      const b = blase.getBoundingClientRect();
+      blase.classList.toggle("unter-menue", flaechen.some((m) => ueber(m, b)));
+      return;
+    }
     const vw = wurzel.clientWidth;
     const vh = window.innerHeight;
     const w = blase.offsetWidth;
@@ -600,8 +810,22 @@
       if (top < 8) top = Math.max(8, vh - h - 8);            // … sonst unten im Fenster
       left = Math.min(Math.max(8, r.left), vw - w - 8);
     }
-    blase.style.left = `${Math.round(Math.max(8, left))}px`;
-    blase.style.top = `${Math.round(Math.max(8, top))}px`;
+    left = Math.max(8, left);
+    top = Math.max(8, top);
+    let unter = false;
+    const m = flaechen.find((x) => ueber(x, kasten(left, top, w, h)));
+    if (m) {
+      const quer = Math.min(left, vw - w - 8);
+      const hoch = Math.min(top, vh - h - 8);
+      const passt = [[quer, m.bottom + 12], [quer, m.top - 12 - h], [m.right + 12, hoch], [m.left - 12 - w, hoch]].find(([x, y]) => {
+        const k = kasten(x, y, w, h);
+        return x >= 8 && y >= 8 && k.right <= vw - 8 && k.bottom <= vh - 8 && !flaechen.some((f) => ueber(f, k)) && !(r && ueber(r, k));
+      });
+      if (passt) [left, top] = passt; else unter = true;
+    }
+    blase.classList.toggle("unter-menue", unter);
+    blase.style.left = `${Math.round(left)}px`;
+    blase.style.top = `${Math.round(top)}px`;
   }
   const lagePlanen = () => { if (!planung) planung = requestAnimationFrame(lage); };
 
@@ -609,23 +833,42 @@
     const a = ablaufDef();
     return a && zustand && a.schritte ? a.schritte[zustand.schritt] || null : null;
   }
-  // „Schritt n von m“ über den ganzen Teil; Schritte, die gerade nicht zutreffen (wenn), zählen nicht.
+  /* „Schritt n von m“ über den ganzen Teil; Schritte, die nicht zutreffen (wenn), zählen nicht. Welche das sind, hält die
+     Führung beim Betreten eines Ablaufs fest (zaehlungFesthalten) – kippt ein „wenn“ durch die Aktion eines Schritts,
+     springt m nicht. Zeigt sie einen Schritt, der beim Betreten nicht zutraf, zählt er als nächster. */
+  function zaehlungFesthalten() {
+    if (zustand.zahl && zustand.zahl.ablauf === zustand.ablauf) return;
+    const aus = [];
+    teilDef().ablaeufe.forEach((a, i) => (a.schritte || []).forEach((s, j) => { if (s.wenn && !sicher(s.wenn)) aus.push(`${i}:${j}`); }));
+    zustand.zahl = { ablauf: zustand.ablauf, aus };
+  }
   function zaehlung() {
-    const t = teilDef();
+    const aus = new Set((zustand.zahl && zustand.zahl.aus) || []);
     let n = 0;
     let m = 0;
-    t.ablaeufe.forEach((a, i) => (a.schritte || []).forEach((s, j) => {
-      if (s.wenn && !sicher(s.wenn)) return;
+    teilDef().ablaeufe.forEach((a, i) => (a.schritte || []).forEach((s, j) => {
+      if (aus.has(`${i}:${j}`)) return;
       m += 1;
-      if (i < zustand.ablauf || (i === zustand.ablauf && j <= zustand.schritt)) n += 1;
+      if (i < zustand.ablauf || (i === zustand.ablauf && j < zustand.schritt)) n += 1;
     }));
-    return { n: Math.max(1, n), m: Math.max(1, m) };
+    return { n: Math.min(Math.max(1, m), n + 1), m: Math.max(1, m) };
   }
 
-  function zielBeschreiben(el) {
+  /* Das Ziel bekommt den Text des Schritts als Beschreibung (aria-describedby). Nicht in einem Editor (contenteditable):
+     ProseMirror zeichnet einen Knoten neu, sobald jemand ein Attribut daran setzt – dort sagt die Live-Region der Blase
+     den Text an. */
+  function zielBeschreiben(el, s) {
     if (zielEl && zielEl !== el) zielLoesen();
+    const neu = el && el !== zielEl;
     zielEl = el;
     if (!el) return;
+    if (el.isContentEditable || el.closest("[contenteditable]:not([contenteditable=false])")) {
+      if (neu && ansage && s) {
+        ansage.textContent = "";
+        setTimeout(() => { if (ansage && zielEl === el) ansage.textContent = s.text || ""; }, 120);
+      }
+      return;
+    }
     const alt = (el.getAttribute("aria-describedby") || "").split(/\s+/).filter(Boolean);
     if (!alt.includes("fuehrung-text")) {
       el.dataset.fuehrungBeschrieben = "1";
@@ -655,8 +898,18 @@
     blase.setAttribute("aria-modal", "false");
     blase.setAttribute("aria-labelledby", "fuehrung-titel");
     blase.setAttribute("aria-describedby", "fuehrung-text");
-    document.body.append(rahmen, blase);
+    ansage = document.createElement("p");
+    ansage.className = "nur-vorlesen fuehrung-ansage";
+    ansage.setAttribute("aria-live", "polite");
+    document.body.append(rahmen, blase, ansage);
     window.addEventListener("scroll", lagePlanen, { capture: true, passive: true });
+    // Rollst du selbst (Rad, Wischen, Tasten zum Rollen), holt lage() das Ziel dieses Schritts nicht zurück.
+    const selbst = (e) => {
+      if (e.type === "keydown" && (!/^(ArrowUp|ArrowDown|PageUp|PageDown|Home|End| )$/.test(e.key)
+          || (e.target instanceof Element && e.target.closest("input, textarea, select, [contenteditable]")))) return;
+      selbstGerollt = true;
+    };
+    for (const art of ["wheel", "touchmove", "keydown"]) window.addEventListener(art, selbst, { capture: true, passive: true });
     window.addEventListener("resize", lagePlanen);
     if (window.visualViewport) window.visualViewport.addEventListener("resize", lagePlanen);
     new MutationObserver(lagePlanen).observe(document.documentElement,
@@ -682,26 +935,38 @@
     aufraeumen.splice(0).forEach((f) => sicher(f));
     zielLoesen();
     fuehrung.bereit = false;
+    nachgeholt = 0;
+    selbstGerollt = false;
   }
+  // Noch einmal, wenn die Seite doch bleibt (ein Seitenwechsel, der abbricht).
+  const nochmal = (lauf) => { if (!umgeleitet) setTimeout(() => { if (lauf === laufNr) schrittZeigen(); }, 300); };
 
   async function schrittZeigen() {
     schrittVerlassen();
     const lauf = laufNr;
     const a = ablaufDef();
     if (!a) { sackgasse("Diese Übung gibt es hier noch nicht."); return; }
+    // Läuft ein Seitenwechsel (die Aktion des Schritts führt auf eine andere Seite), wertet die Führung hier nichts mehr aus
+    // – kein Überspringen, nichts speichern; die neue Seite zeigt den Schritt.
+    if (seiteGehtGerade()) { nochmal(lauf); return; }
+    await abwarten(lauf);
+    if (lauf !== laufNr) return;
+    if (seiteGehtGerade()) { nochmal(lauf); return; }
     const liste = a.schritte || [];
     while (zustand.schritt < liste.length && liste[zustand.schritt].wenn && !sicher(liste[zustand.schritt].wenn)) zustand.schritt += 1;
+    zaehlungFesthalten();
     speichern();
     if (zustand.schritt >= liste.length) { ablaufFertig(); return; }
     const s = liste[zustand.schritt];
     fuehrung.ziel = s.ziel === null || s.ziel === undefined ? null : alsText(s.ziel);
     let el = null;
     if (s.ziel !== null && s.ziel !== undefined) {
-      el = await warteAuf(() => zielSuchen(s.ziel), 5000);
+      el = await warteAuf(() => (overlaySchliesst() || seiteGehtGerade() ? null : zielSuchen(s.ziel)), 5000);
       if (lauf !== laufNr) return;
+      if (seiteGehtGerade()) { nochmal(lauf); return; }
       if (!el) { sackgasse("Hier geht es in der Übung nicht weiter."); return; }
     }
-    zielBeschreiben(el);
+    zielBeschreiben(el, s);
     const { n, m } = zaehlung();
     const knoepfe = [];
     const vorige = liste.slice(0, zustand.schritt).filter((x) => !x.wenn || sicher(x.wenn));
@@ -709,19 +974,22 @@
     if (s.datei) knoepfe.push({ text: "Übungsbild nehmen", klasse: "btn secondary fuehrung-bild", aktion: () => bildNehmen(s.datei) });
     if (!s.warten) knoepfe.push({ text: "Weiter", klasse: "btn fuehrung-weiter", aktion: () => weiter() });
     blaseZeigen(`Übung · Schritt ${n} von ${m}`, a.titel || "", s.text || "", knoepfe);
+    wachen(s, lauf);
+    // Ins Bild holen und abwarten, bis das Ziel ruht (beruhigen) – erst dann ist der Schritt bereit.
     if (el) {
-      const r = el.getBoundingClientRect();
-      const unten = window.innerHeight - (schmal() ? blase.offsetHeight : 0);
-      if (r.top < 0 || r.bottom > unten) el.scrollIntoView({ block: "center", behavior: S.weich() });
+      el = await beruhigen(s, el, lauf);
+      if (lauf !== laufNr) return;
+      if (!el) { sackgasse("Hier geht es in der Übung nicht weiter."); return; }
+      zielBeschreiben(el, s);
     }
     lage();
-    wachen(s, lauf);
     // Fokus: ohne Aktion auf „Weiter“, mit Aktion auf das Ziel (wenn fokussierbar), sonst auf den Text.
     const weiterKnopf = blase.querySelector(".fuehrung-weiter");
     if (weiterKnopf) weiterKnopf.focus({ preventScroll: true });
     else if (el && el.matches("a[href], button, input, select, textarea, summary, [tabindex], [contenteditable]") && !el.disabled) el.focus({ preventScroll: true });
     else blase.querySelector(".fuehrung-text").focus({ preventScroll: true });
     fuehrung.bereit = true;
+    bereitSeit = Date.now();
   }
 
   function wachen(s, lauf) {
@@ -786,7 +1054,8 @@
     const n = zustand ? zustand.ablauf : 0;
     neuerAblauf(n);
     const start = t && t.ablaeufe[n] ? t.ablaeufe[n].start : E.start;
-    if (!zumStart(start, false)) location.reload();
+    umgeleitet = true;
+    nachDemZurueck(() => zumStart(start, false, true));
   }
 
   async function bildNehmen(datei) {
@@ -810,8 +1079,10 @@
     const t = teilDef();
     const n = zustand.ablauf + 1;
     if (n < t.ablaeufe.length) {
+      // Jeder Ablauf beginnt frisch: mit frischem Übungsbestand und neu geladener Startseite (auch bei gleicher Adresse).
       neuerAblauf(n);
-      if (!zumStart(t.ablaeufe[n].start, false)) schrittZeigen();
+      umgeleitet = true;
+      nachDemZurueck(() => zumStart(t.ablaeufe[n].start, false, true));
       return;
     }
     geschafft();
@@ -819,9 +1090,10 @@
 
   function fuehrungWeg() {
     schrittVerlassen();
-    for (const el of [blase, rahmen]) if (el) el.remove();
+    for (const el of [blase, rahmen, ansage]) if (el) el.remove();
     blase = null;
     rahmen = null;
+    ansage = null;
     document.documentElement.classList.remove("fuehrung-leiste");
     document.documentElement.style.removeProperty("--fuehrung-hoehe");
   }
