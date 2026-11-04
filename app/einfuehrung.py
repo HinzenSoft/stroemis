@@ -25,6 +25,7 @@ jedem fertigen Ablauf), fortgesetzt wird an seinem Anfang. Aus „erledigt“ wi
 dem Konto (konto_vergessen in api_admin.delete_user); ein Zurücksetzen der Materialablage auf dev leert mat_meta und
 damit auch ihn. Kein Journal, keine Mail, keine Anzeige in der Leitstelle (Entscheidung 1)."""
 import json
+import os
 import re
 from urllib.parse import parse_qs, quote, urlencode, urlsplit, urlunsplit
 
@@ -193,6 +194,130 @@ def darf_material(teil, user=None):
     return dict(DARF_MATERIAL[teil], uid=user["id"] if user else None)
 
 
+# --- Katalog in der Übung der Materialablage (Wunsch vom 04.11.2026) -----------------------------------------------------
+# „Falls möglich nutze für die Materialablage-Übungen Produkte und Prüfbögen, die im Katalog sind. Natürlich ohne, dass
+# sie mit den Echtdaten der Artikel interagieren.“ Eine Übungsseite der Materialablage trägt eine kleine, feste Auswahl
+# echter Katalogprodukte samt ihrem geltenden Prüfformular (STROEMIS.einfuehrung.katalog, aus seite()) – kein neuer Weg
+# unter /api/, die Sperre bleibt ganz. Die Übungsdatei (app/static/js/uebung/material.js) füllt damit ihre
+# Übungsprodukte (deren Kennungen im Übungsbereich bleiben); Artikel, Ordner, Personen und Prüfungen bleiben Übung.
+# Mitgegeben werden nur Katalogfelder: Hersteller, Modell, Beschreibung, Artikelnummer, Norm, Materialart, Kategoriepfad
+# (Namen), Prüfintervall und Lebensdauer (mit Quelle), das Produktbild und die Namen der geltenden Herstellerdokumente;
+# vom Formular Titel, Version, Quelle und Prüfpunkte. Nichts über Artikel, Ordner, Bestand, Personen, Journal, Prüfungen
+# oder Meldungen. Die Produktbilder der Auswahl (Web- und Vorschaufassung) sind die einzige Ausnahme der Sperre unter
+# /media/ – nur GET, nur genau diese Dateien (sperre, csp_quellen).
+#
+# Je Rolle der Übung: Muster für den Namen einer Kategorie im Pfad des Produkts (der Reihe nach – das erste Muster mit
+# einem passenden Produkt gilt) und die Materialart (None: jede). Der Katalog hat (Stand 04.11.2026) keine Helme – dann
+# nimmt die Rolle „helm“ (der neue Artikel im Teil „Materialwart“) einen Karabiner; sonst bleibt der Platzhalter.
+KATALOG_ROLLEN = (
+    ("gurt", (r"gurte?",), "textil"),
+    ("seil", (r"seile?",), "textil"),
+    ("helm", (r"helme?", r"karabiner"), None),
+)
+# Dateinamen der Produktbilder, die als Ausnahme in Sperre und CSP stehen dürfen (kein Leerzeichen, kein „;“).
+_BILDNAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,200}")
+
+
+def _katalog_bild(p):
+    """Web- und Vorschaufassung des Produktbilds als {"web", "vorschau"} – nur, wenn beide Dateien da sind (sonst lüde
+    die Übung ein kaputtes Bild) und ihre Namen harmlos sind. Sonst None."""
+    from .material.services import katalog
+    if not _BILDNAME.fullmatch(p.get("image") or ""):
+        return None
+    out = {"web": katalog.bild_url(p["image"]), "vorschau": katalog.bild_url(p["image"], "thumb")}
+    for art, url in (("web", out["web"]), ("thumb", out["vorschau"])):
+        name = url.rsplit("/", 1)[1]
+        if not _BILDNAME.fullmatch(name) or not os.path.isfile(os.path.join(katalog.medien_dir(), art, name)):
+            return None
+    return out
+
+
+def _katalog_auswahl():
+    """Je Rolle (KATALOG_ROLLEN) ein Produkt mit seinem geltenden Formular: nicht DEMO, ohne laufenden Rückruf,
+    Kategorie und Materialart passend, mit geltendem Formular (katalog.formular_fuer_produkt – die eine Stelle, die das
+    Formular eines Produkts bestimmt), das nicht DEMO ist und Prüfpunkte hat. Produkte mit Bild zuerst, dann die kleinste
+    Kennung – dieselbe Auswahl für alle. {rolle: (Produktzeile, Formularzeile, Kategoriepfad, Bild)}; fehlt eine Rolle,
+    bleibt in der Übung ihr Platzhalter."""
+    from .material.services import katalog
+    # Ohne ein aktives echtes Formular gilt für kein Produkt eins – dann muss niemand die Produkte durchgehen.
+    if not db.query("SELECT 1 FROM mat_form WHERE active = 1 AND demo = 0 LIMIT 1", one=True):
+        return {}
+    produkte = db.query("SELECT * FROM mat_product p WHERE p.demo = 0 AND NOT EXISTS (SELECT 1 FROM mat_recall r "
+                        "WHERE r.product_id = p.id AND r.closed_at IS NULL) ORDER BY p.id")
+    pfade, bilder, out, vergeben = {}, {}, {}, set()
+
+    def pfad(kid):
+        if kid not in pfade:
+            pfade[kid] = katalog.kategorie_pfad(kid)
+        return pfade[kid]
+
+    def bild(p):
+        if p["id"] not in bilder:
+            bilder[p["id"]] = _katalog_bild(p)
+        return bilder[p["id"]]
+
+    for rolle, muster, materialart in KATALOG_ROLLEN:
+        for m in muster:
+            passt = re.compile(rf"(?:{m})$", re.IGNORECASE)
+            kandidaten = sorted((p for p in produkte if p["id"] not in vergeben
+                                 and (materialart is None or p["material_kind"] == materialart)
+                                 and any(passt.search(k["name"].strip()) for k in pfad(p["category_id"]))),
+                                key=lambda p: (bild(p) is None, p["id"]))
+            for p in kandidaten:
+                f = katalog.formular_fuer_produkt(p["id"])
+                if f and not f["demo"] and f["punkte_anzahl"]:
+                    out[rolle] = (p, f, pfad(p["category_id"]), bild(p))
+                    vergeben.add(p["id"])
+                    break
+            if rolle in out:
+                break
+    return out
+
+
+def katalog_material():
+    """Die Auswahl für die Übungsseite (STROEMIS.einfuehrung.katalog): {"produkte": {rolle: {…} | None},
+    "formulare": [{…}]} – je Produkt nur Katalogfelder (siehe oben); „formular“ ist die Stelle in „formulare“ (ein
+    Formular, das für zwei Produkte gilt, steht dort einmal), „kategorie“ im Formular die Stelle seiner Kategorie im
+    Kategoriepfad des Produkts (None: ein spezifisches Formular). Je Anfrage einmal gerechnet."""
+    if has_request_context() and "einfuehrung_katalog" in g:
+        return g.einfuehrung_katalog
+    from .material.services import katalog
+    from .material.services.interval import herstellerseite
+    auswahl = _katalog_auswahl()
+    formulare, stelle, produkte = [], {}, {}
+    for rolle, _muster, _art in KATALOG_ROLLEN:
+        if rolle not in auswahl:
+            produkte[rolle] = None
+            continue
+        p, f, kpfad, bild = auswahl[rolle]
+        if f["id"] not in stelle:
+            stelle[f["id"]] = len(formulare)
+            ids = [k["id"] for k in kpfad]
+            formulare.append({"titel": f["title"], "version": f["version"], "quelle": f["quelle"],
+                              "kategorie": ids.index(f["category_id"]) if f["category_id"] in ids else None,
+                              "punkte": [{k: v for k, v in katalog.punkt_json(x).items() if k not in ("id", "position")}
+                                         for x in katalog.punkte(f["id"])]})
+        monate, quelle = herstellerseite(p)
+        produkte[rolle] = {
+            "hersteller": p["manufacturer"], "modell": p["model"], "beschreibung": p["description"],
+            "artikelnummer": p["article_no"], "norm": p["norm"], "materialart": p["material_kind"],
+            "kategorie": [k["name"] for k in kpfad], "intervall": {"monate": monate, "quelle": quelle or ""},
+            "lebensdauer": {"jahre": p["lifetime_years"], "quelle": p["lifetime_source"]}, "bild": bild,
+            "dokumente": [{"titel": d["title"], "art": d["kind"], "version": d["version"], "gueltig_ab": d["valid_from"],
+                           "datei": bool(d["datei"]), "groesse": d["size"]}
+                          for d in katalog.dokumente(p["id"]) if d["gilt"]],
+            "formular": stelle[f["id"]]}
+    out = {"produkte": produkte, "formulare": formulare}
+    if has_request_context():
+        g.einfuehrung_katalog = out
+    return out
+
+
+def katalog_bilder():
+    """Die Adressen der Produktbilder der Auswahl (Web- und Vorschaufassung) – die Ausnahme in Sperre und CSP."""
+    return {u for p in katalog_material()["produkte"].values() if p and p["bild"] for u in p["bild"].values()}
+
+
 # --- Merker ----------------------------------------------------------------------------------------------------------
 
 def merker(uid):
@@ -271,6 +396,9 @@ def seite(modul):
         # Für einfuehrung.js und S.ziel: welche Adressen unter den Modulpfaden eine Übungsseite haben.
         daten["seiten"] = seiten_muster()
         daten["bereiche"] = list(_bereiche() + _alte_bereiche())
+        if modul == "material":
+            # Echte Katalogprodukte und ihre Prüfformulare für die Übungsprodukte (katalog_material).
+            daten["katalog"] = katalog_material()
     g.einfuehrung = daten
     return teil
 
@@ -457,6 +585,12 @@ def _nicht_in_uebung():
                            message="Diese Seite gibt es in der Übung nicht.", zurueck=_zurueck()), 403
 
 
+def _katalogbild(pfad):
+    """Die eine Ausnahme unter /media/: ein Produktbild der Auswahl für die Übung (katalog_bilder) – nur mit GET, nur
+    genau diese Dateien. Die Medienroute prüft danach wie immer Anmeldung und Modulzugang."""
+    return request.method == "GET" and pfad.startswith("/media/material/") and pfad in katalog_bilder()
+
+
 def sperre():
     """Erster Schritt von csrf_guard: Eine Übungsanfrage an /api/ oder /media/, mit schreibender Methode oder an eine
     Datei bekommt 403 mit GESPERRT (Schnittstelle als JSON, sonst die deutsche Fehlerseite). Erlaubt bleiben der Merker,
@@ -467,6 +601,8 @@ def sperre():
     if _frei(pfad):
         return None
     uebungsanfrage = _uebungsanfrage()
+    if uebungsanfrage and _katalogbild(pfad):
+        return None
     if uebungsanfrage and (pfad.startswith(("/api/", "/media/")) or request.method not in ("GET", "HEAD")
                            or _datei(pfad)):
         if pfad.startswith("/api/"):
@@ -484,13 +620,17 @@ def csp_quellen():
     lädt der Browser Bilder, Medien und Rahmen nur aus /static/ und verbindet sich nur mit den Ausnahmen der Sperre – so
     erreicht auch ein Element mit referrerpolicy="no-referrer" (das der Server nicht als Übung erkennen könnte) /api/ und
     /media/ nicht. Dazu (Hinweis 1 der Endprüfung) ein enges default-src (kein Prefetch an /api/ ohne Referer) und kein
-    Worker außer dem Service Worker. {"bild": …, "netz": …, "worker": …} – oder None für jede andere Seite (dann gilt
+    Worker außer dem Service Worker. In der Materialablage kommen in img-src die Produktbilder der Auswahl dazu („bilder“,
+    katalog_material). {"bild": …, "bilder": …, "netz": …, "worker": …} – oder None für jede andere Seite (dann gilt
     'self')."""
     e = getattr(g, "einfuehrung", None) if has_request_context() else None
     host = request.host if has_request_context() else ""
     if not e or not e.get("uebung") or not re.fullmatch(r"[A-Za-z0-9.-]+(?::\d{1,5})?", host or ""):
         return None
-    return {"bild": f"{host}/static/",
+    # Genau die Dateien, die auch die Sperre durchlässt (_katalogbild).
+    bilder = sorted(u for p in ((e.get("katalog") or {}).get("produkte") or {}).values() if p and p.get("bild")
+                    for u in p["bild"].values())
+    return {"bild": f"{host}/static/", "bilder": " ".join(f"{host}{u}" for u in bilder),
             "netz": " ".join(f"{host}{p}" for p in ("/static/", "/api/einfuehrung/", "/api/me", "/api/auth/logout")),
             # Kein Worker außer dem Service Worker (ein Worker hätte die weite CSP seiner Datei und keinen Übungs-Referer)
             "worker": f"{host}/sw.js"}

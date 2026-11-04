@@ -738,15 +738,17 @@ def create_app():
         resp.headers.setdefault("Permissions-Policy", "geolocation=(self), camera=(), microphone=(self)")
         # Eine Übungsseite der Einführung lädt Bilder, Medien und Rahmen nur aus /static/ und verbindet sich nur mit den
         # Ausnahmen der Sperre (einfuehrung.csp_quellen) – auch ohne Referer erreicht so kein Element /api/ oder /media/.
+        # In der Übung der Materialablage dürfen dazu die Produktbilder der Katalogauswahl laden (genau diese Dateien).
         # Dazu dort ein enges default-src (Prefetch) und kein Worker außer dem Service Worker; die Seite selbst kommt nicht
         # aus dem Zwischenspeicher (Zurück nach dem Verlassen der Übung zeigt sonst die alte Übungsseite).
         uebung = einfuehrung.csp_quellen()
         bild, netz = (uebung["bild"], uebung["netz"]) if uebung else ("'self'", "'self'")
+        bilder = f"{uebung['bilder']} " if uebung and uebung.get("bilder") else ""
         resp.headers.setdefault(
             "Content-Security-Policy",
             ("default-src 'none'; manifest-src 'self'; " if uebung else "default-src 'self'; ")
             + f"script-src 'self' 'nonce-{nonce}'; style-src 'self' 'unsafe-inline'; "
-            f"img-src {bild} data: blob: {_kachel_quellen(app.config)}; media-src {bild} blob:; "
+            f"img-src {bild} {bilder}data: blob: {_kachel_quellen(app.config)}; media-src {bild} blob:; "
             f"font-src 'self' data:; connect-src {netz}; "
             + (f"frame-src {bild} blob:; worker-src {uebung['worker']}; " if uebung else "")
             + "frame-ancestors 'self'; form-action 'self'; base-uri 'self'; object-src 'none'")
