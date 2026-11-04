@@ -80,6 +80,7 @@ Geschichte stehen. Schemaversion nach der Nachbesserung vor dem Merge: 30; mit d
 | Prüfen folgt dem Grundrecht | Bei internen Rollen („Prüfer“, „Materialwart und Prüfer“) ist Prüfen immer dauerhaft und gilt, solange das Grundrecht gilt – auch vom befristeten Verwalter (Server: dauerhafte Prüffreigabe mit Grundrecht dort oder darüber auch von ihm; ändern nur, solange das tragende Grundrecht nicht länger läuft als sein Verwalten); kein vorbelegtes Datum außer beim externen Prüfer, „bis“ mit leerem Feld, wo „dauerhaft“ nicht geht; Rollenwechsel lässt die eigene Wahl; behebt den ungekappten Datumsvorschlag (eigenes Ende > 24 Monate → Ablehnung) | gebaut 03.11.2026 (kein Schemaschritt) |
 | „kritisch“ entfernt | Die Markierung „kritisch“ an Prüfpunkten ist ganz entfernt: kein Häkchen im Formular-Editor, keine Marke, Spalte und kein „i“ in Prüfung, Befunden und neuem Prüfprotokoll, keine Sperre von „einsatzbereit“ wegen eines kritischen Mangels (Oberfläche und Server) – bei einem Mangel wählt der Prüfer das Ergebnis selbst; Jahresbericht ohne „mit kritischem Mangel“, CSV ohne „kritischer Mangel“; Katalogexport ohne `kritisch`, der Import übergeht es; `is_critical` bleibt, wird nicht mehr gelesen | gebaut 03.11.2026 (kein Schemaschritt), Zweig kritisch-weg |
 | Interaktive Einführung je Modul | Übungsmodus mit Übungsbestand, Sperre, Angebot, Führung, Profil „Einführungen“, Übungen für Materialablage, Strömipedia, Ankerplätze, Riegenkarten | Grundgerüst gebaut 03.11.2026 (kein Schemaschritt), Übungen je Modul und robuste Führung gebaut 04.11.2026, nach den Endprüfungen nachgebessert 04.11.2026, Zweig tutorial |
+| Prüfformular-Editor: Gruppen und Verschieben; Absätze im Prüfpunkt | Gruppe als Zwischenzeile (Name in voller Breite), Ziehgriff ⠿ und Menü „⋯“ statt ↑/↓/✕, „+ Prüfpunkt“ je Gruppe, „+ Gruppe“; Enter fügt im Prüfpunkt einen Absatz ein (Server, Prüfung, PDF, Katalog) | gebaut 04.11.2026 (kein Schemaschritt), Zweig formular-editor |
 
 ## Abgleich mit dem Bestand (vor Lieferung 1)
 
@@ -11947,3 +11948,91 @@ Schachtelung → 200; CSP, `no-store`, Weiterleitungen mit Kennung, Rückstrich 
 - Nach dem Neuladen beginnt der Ablauf nur dann von vorn, wenn in ihm schon etwas eingegeben wurde; sonst wie bisher am
   gespeicherten Schritt.
 - Strömipedia-Editor am Telefon: Der Speicherstand bleibt gekürzt („Ungespeic…“), nur der Schritttext ist angepasst.
+
+## Prüfformular-Editor: Gruppen als Zwischenzeile, Verschieben per Ziehgriff und Menü; Absätze im Prüfpunkt (Wünsche des Nutzers, 04.11.2026)
+
+Nutzer (mit Bildschirmfoto des Editors „Edelrid Megawatt“): „Das Verschieben der Punkte besser gestalten und auch längere
+Gruppen lesbar machen.“ Vorher: Spalte „Gruppe“ (13 %, abgeschnitten: „Vorgeschich“, „Beweglicher“), kleine ↑/↓/✕ unter
+„Pflicht“. Entschieden: Gruppe als Zwischenzeile; Verschieben per Ziehgriff und Menü. Zusatz am selben Tag: „Möglichkeit,
+Absätze in den Prüfpunkt einzufügen.“ Gebaut 04.11.2026 (kein Schemaschritt, Schnittstelle unverändert), Zweig
+`formular-editor` von 5300c57.
+
+**Gruppen als Zwischenzeile** (material.js `formular()`, material.css): Der Editor hält die Punkte in Blöcken –
+aufeinanderfolgende Punkte mit gleicher `gruppe`; Punkte ohne Gruppe sind ein Block ohne Namen (Feld mit Platzhalter
+„Gruppe (optional)“), zwei getrennte Blöcke gleichen Namens bleiben zwei. Jeder Block steht als eigene Zeile (grau) über
+seinen Punkten, der Name in einem Textfeld über die ganze Breite (`maxlength` 80, bricht um und wächst mit, Enter fügt
+dort nichts ein); Umbenennen gilt für alle Punkte darunter. Am Ende jeder Gruppe „+ Prüfpunkt“, unten „+ Gruppe“ (legt eine
+Gruppe mit einem leeren Punkt an, Fokus aufs Namensfeld; am Finger nur ins Bild) und das rote „Speichern“. Eine Gruppe
+ohne Punkte bleibt bis zum Speichern mit dem Hinweis „Die Gruppe ist leer – leer wird sie nicht gespeichert.“ stehen.
+Ohne Bearbeiten (Mitglied, benutzte Version) dieselben Zwischenzeilen (`th scope="rowgroup"`), ohne Griff und Menü; ein
+Block ohne Namen heißt dort „Ohne Gruppe“, wenn es weitere Blöcke gibt. Gespeichert wird wie bisher die flache Liste mit
+`gruppe` je Punkt (`PUT /api/material/formulare/<id>`); ein leerer Block fällt dabei weg.
+
+**Verschieben**: Links an jeder Punktzeile ein Griff ⠿ (Pointer Events – Maus, Finger, Stift; `touch-action: none` nur
+am Griff, daneben rollt die Seite wie immer). Die Zeile wandert beim Ziehen mit: über die obere/untere Hälfte einer
+Punktzeile davor/dahinter, über die untere Hälfte eines Gruppenkopfs an den Anfang dieser Gruppe, über seine obere Hälfte
+ans Ende der Gruppe davor, über „+ Prüfpunkt“ bzw. den Leer-Hinweis ans Ende dieser Gruppe – also auch in eine andere oder
+leere Gruppe. Am oberen und unteren Rand (56 px, unter der Kopfleiste) rollt die Seite (bis 14 px je Bild). Beim Loslassen
+entsteht die Ordnung aus der Reihenfolge der Zeilen; Esc oder ein vom Browser abgebrochenes Ziehen lässt die alte stehen.
+Während des Ziehens ist die Verankerung des Bildlaufs aus (`overflow-anchor: none` am Dokument) – Chromium rollte sonst
+um die Höhe der wandernden Zeile mit, der Finger stand über einer anderen Zeile. Je Punktzeile ein Menü „⋯“ (`S.menue`,
+aria-label „Mehr zu Prüfpunkt n“) mit „Nach oben“, „Nach unten“ (über die Gruppengrenze als letzter bzw. erster Punkt der
+Nachbargruppe – seine Gruppe wechselt; am ersten bzw. letzten Punkt fehlt der Eintrag), „In Gruppe verschieben“ (Dialog
+mit den Gruppen, die eigene ausgegraut, und „Neue Gruppe“ mit Namensfeld; der Punkt kommt ans Ende der gewählten, eine
+neue Gruppe ans Ende des Formulars; Toast „Prüfpunkt n in Gruppe „X“ verschoben“) und „Entfernen“ (ohne Rückfrage, wie
+das bisherige ✕). Je Gruppe „⋯“ mit „Gruppe nach oben“, „Gruppe nach unten“ (der ganze Block) und „Gruppe entfernen“
+(mit Punkten Rückfrage „Gruppe „X“ mit n Prüfpunkten entfernen?“, leer ohne; Toast „Gruppe „X“ entfernt“); bei nur einer
+Gruppe bleibt ein Eintrag, den S.menue als grauen Knopf „Gruppe entfernen“ zeichnet. Nach jeder Menüaktion steht der Fokus
+auf „⋯“ des verschobenen Punkts bzw. der Gruppe – alles geht auch per Tastatur. Die Pfeile und ✕ an den Punkten sind weg;
+die übrigen Nutzer von `S.reihenfolgeKnoepfe`/`S.entfernenKnopf` (Positionen der Bestandteile, Riegenkarten) bleiben.
+
+**Getipptes bleibt**: Vor jedem Neuzeichnen (Art ändern, jede Menüaktion, „+ Prüfpunkt“, „+ Gruppe“, beim Aufsetzen des
+Ziehens, vor dem Dialog und der Rückfrage) sammelt `einsammeln()` Titel, Gruppennamen und Punkte ein.
+
+**Am Finger** (`@media (pointer: coarse)`): Griff 44 × 44 px, „⋯“ mindestens 44 × 44, „+ Prüfpunkt“ und „Pflicht“ 44 px
+hoch, Gruppenwahl im Dialog 44 px je Zeile. In der Kartenansicht (Container „mat-seite“ bis 600 px, am Finger bis 820 px)
+steht die Gruppenzeile über die ganze Breite, je Punkt links der Griff, rechts „⋯“, dazwischen Prüfpunkt, Art, Soll und
+Pflicht untereinander. Gemessen (getBoundingClientRect, Tipp auf die Mitte trifft) im Test und in der Browserprobe.
+
+**Absätze im Prüfpunkt** (Zusatz): Enter fügt im Prüfpunkt-Feld einen Zeilenumbruch ein, das Feld wächst mit. Server
+(`katalog.punkt_text`, genutzt von `punkte_pruefen` – also Speichern, Anlegen und Katalogimport): `\r\n` und `\r` werden
+`\n`, je Zeile wie bisher Steuerzeichen und mehrfache Leerzeichen zu einem und kein Rand, mehr als eine Leerzeile wird eine,
+Leerzeilen am Anfang und Ende fallen weg; ein einzeiliger Text kommt genau so heraus wie vorher; höchstens 1000 Zeichen.
+Neue Version, Katalog-Export (`katalog.json`) und Prüfung übernehmen den Text unverändert. Anzeige mit Umbrüchen
+(`white-space: pre-line`, Text immer mit `esc`): Formular ohne Bearbeiten, offene Prüfung bzw. Entwurf (`.mat-punkt-text`),
+festgeschriebene Prüfung (`.mat-mehrzeilig`); das Prüfprotokoll-PDF und die Fotounterschriften hatten schon `.text` mit
+`pre-wrap`. Meldungen, die den Punkt nennen („Noch ohne Befund: …“, „… ist kein Datum“), nennen ihn in einer Zeile
+(`pruefung.punktname`). Andere PDFs (Lebenslauf, Sammel-, Set-, Aussonderungsprotokoll, Jahresbericht) zeigen keine
+Punkttexte. Die Übung (`uebung/material.js`) nimmt den Text wie getippt.
+
+**Einführung** (app/static/js/uebung/material.js, Teil „Material-Verwaltung“): Ziel des neuen Punkts jetzt der letzte Punkt
+vor dem Fuß seiner Gruppe (`#fp-tabelle tr.fp-punkt:has(+ tr.fp-fuss) .fp-text`), Texte zur Gruppenzeile, neuer Schritt am
+„⋯“ des neuen Punkts (verschieben, Griff). Übungsantwort `PUT …/formulare/<id>` unverändert (sie nahm `gruppe` schon).
+
+**Tests**: neu `tests/test_material_formular_editor.py` (statisch; Browser bei 1280 × 900 Maus und 360 × 740 Touch mit
+echten Ereignissen: Ziehen in der Gruppe, in eine andere, über den Gruppenkopf, mit Randbildlauf nach unten und oben, Esc;
+Menü nach oben/unten auch über die Grenze, In Gruppe verschieben in bestehende und neue Gruppe, Entfernen; Gruppe leer
+entfernen, nach oben/unten, mit Punkten Rückfrage mit Anzahl; + Prüfpunkt, + Gruppe mit Fokus, 80 Zeichen ganz sichtbar,
+Getipptes überlebt; Enter im Prüfpunkt, nicht im Gruppennamen; Speichern in der Datenbank; Nur-Lese-Ansicht; Prüfungsansicht
+mit Absatz und HTML im Punkttext als Text; Tippflächen gemessen; keine Konsolenfehler, kein waagerechter Bildlauf) und
+`tests/test_material_pruefpunkt_absatz.py` (punkt_text, Speichern, neue Version, Export → Import in eine zweite Anlage,
+Prüfung, Meldung einzeilig, Prüfprotokoll-PDF mit eigenen Zeilen und Leerzeile, HTML als Text). Angepasst:
+`tests/test_material_formular_titel.py` (jedes Neuzeichnen nach einsammeln(), auch das Ende des Ziehens),
+`tests/test_material_l5.py` (44-px-Regel für Griff statt für die Pfeilknöpfe). `tests/test_einfuehrung_material.py` grün
+(dreimal hintereinander).
+
+**Nicht angefasst**: Prüfungsansicht (bis auf die Umbrüche), Prüfprotokoll-PDF, Schema, die übrigen Nutzer von
+`S.reihenfolgeKnoepfe`.
+
+**Bitte bestätigen**:
+1. Menüeintrag „In Gruppe verschieben“ statt „In Gruppe …“ (Designsprache: keine Auslassungspunkte in Menütexten).
+2. Punkt „Entfernen“ ohne Rückfrage (wie das bisherige ✕; gespeichert wird erst mit „Speichern“); Toast nur bei „In Gruppe
+   verschieben“ und „Gruppe entfernen“, sonst folgt der Fokus dem Punkt.
+3. Eine neue Gruppe (über „+ Gruppe“ oder „In Gruppe verschieben“ → „Neue Gruppe“) kommt ans Ende des Formulars.
+4. Bei nur einer Gruppe steht statt „⋯“ der graue Knopf „Gruppe entfernen“ (Regel „ein Eintrag → Knopf“).
+5. Der Griff ⠿ ist kein Tastaturziel (aria-hidden) – per Tastatur geht alles über „⋯“.
+6. Zwei Blöcke gleichen Namens, die durch Verschieben nebeneinander geraten, sind nach dem Speichern ein Block (Datenmodell:
+   aufeinanderfolgende Punkte gleicher Gruppe).
+7. Ein leeres Formular zeigt unten zusätzlich „+ Prüfpunkt“ (Punkt ohne Gruppe) neben „+ Gruppe“.
+8. Absätze: Gruppennamen bleiben einzeilig; das Journal der Formulare zeigt einen Punkt mit Absatz in einer Zeile (die
+   Oberfläche fasst den Umbruch zusammen, gespeichert ist er).

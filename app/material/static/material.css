@@ -460,7 +460,7 @@ table.list.mat-formtabelle tr.fp-gruppenzeile > :is(td, th) { background: var(--
 html:has(.mat-formtabelle.fp-ziehen) { overflow-anchor: none; }
 .mat-formtabelle.fp-ziehen, .mat-formtabelle.fp-ziehen * { cursor: grabbing; }
 table.list.mat-formtabelle tr.fp-zieht > td { background: var(--co-info-fl); }
-table.list.mat-formtabelle tr.fp-zieht { outline: 2px solid var(--wasser); outline-offset: -2px; }
+table.list.mat-formtabelle tr.fp-zieht { background: var(--co-info-fl); outline: 2px solid var(--wasser); outline-offset: -2px; }
 /* „In Gruppe verschieben“: je Gruppe eine Zeile, lange Namen brechen um. */
 .fp-gruppenwahl { margin: 10px 0 0; }
 .fp-gruppenwahl .fp-wahl { display: flex; align-items: baseline; gap: 8px; margin: 0 0 8px; font-weight: 400; overflow-wrap: anywhere; cursor: pointer; }
