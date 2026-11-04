@@ -1,0 +1,395 @@
+"""Prüfformular-Editor mit Gruppen als Zwischenzeile, Ziehgriff und Menü „⋯“ (Wunsch vom 04.11.2026, Bauauftrag
+planung/formular-editor/auftrag.md): python tests/test_material_formular_editor.py  oder  pytest
+
+1. Statisch: keine Pfeile und kein ✕ mehr an den Prüfpunkten (die übrigen Nutzer von S.reihenfolgeKnoepfe bleiben),
+   Griff mit touch-action: none nur am Griff, Tippflächen nur unter (pointer: coarse), Menütexte ohne „…“.
+2. Browser bei 1280×900 (Maus) und 360×740 (Touch) mit der Hilfe tests/einfuehrung_browser.py: Ziehen innerhalb einer
+   Gruppe und in eine andere (echte Maus- bzw. Touch-Ereignisse), Bildlauf am Rand, Esc bricht ab; Menü „Nach oben“/„Nach
+   unten“ (auch über die Gruppengrenze), „In Gruppe verschieben“ (bestehende und neue Gruppe), „Entfernen“; Gruppe
+   umbenennen, nach oben/unten, entfernen (mit Rückfrage samt Anzahl, leer ohne); „+ Prüfpunkt“ je Gruppe; „+ Gruppe“;
+   ein Name mit 80 Zeichen ganz sichtbar; Getipptes (Titel, Gruppenname, Prüfpunkt) überlebt jedes Neuzeichnen;
+   „Speichern“ schickt Reihenfolge und Gruppe richtig (geprüft in der Datenbank, leere Gruppe fällt weg); die
+   Nur-Lese-Ansicht zeigt dieselben Zwischenzeilen ohne Griff und Menü. Am Finger sind Griff, „⋯“, „+ Prüfpunkt“, die
+   Menüeinträge und die Gruppenwahl im Dialog mindestens 44 × 44 px (gemessen, nicht nur die Regel), ein Tipp auf ihre
+   Mitte trifft sie; keine Konsolenfehler, kein waagerechter Bildlauf. Ohne Chromium „übersprungen“ mit rc 0.
+Alle Inhalte sind Platzhalter."""
+import json
+import os
+import re
+import sys
+import time
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+from einfuehrung_browser import Umgebung, uebersprungen  # noqa: E402
+
+WURZEL = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+GROESSEN = ((1280, 900, False), (360, 740, True))
+LANG = ("Platzhalter-Gruppe mit einem sehr langen Namen, der in der Zwischenzeile ganz zu lesen ist" + "x" * 80)[:80]
+
+
+def lies(pfad):
+    with open(os.path.join(WURZEL, pfad), encoding="utf-8") as fh:
+        return fh.read()
+
+
+def abschnitt(text, anfang, ende):
+    i = text.index(anfang)
+    return text[i:text.index(ende, i + len(anfang))]
+
+
+# --- 1. Statisch ---------------------------------------------------------------------------------------------------------
+
+def test_statisch():
+    js = lies("app/material/static/material.js")
+    editor = abschnitt(js, "  async function formular() {", "\n  }\n")
+    # Keine Pfeile und kein ✕ mehr an den Punkten; die Positionen (Bestandteile) behalten ihre.
+    assert "reihenfolgeKnoepfe" not in editor and "entfernenKnopf" not in editor
+    assert js.count("S.reihenfolgeKnoepfe(") == 1 and 'data-bt="hoch"' in js
+    assert "S.reihenfolgeKnoepfe(i, n, hoch, runter)" in lies("app/static/js/pruefungen.js")
+    # Menü „⋯“ über S.menue, Einträge ohne Auslassungspunkte; die Gruppe als Zwischenzeile mit Feld (80 Zeichen).
+    assert 'S.menue({ text: "⋯", art: "mat-menue", eintraege })' in editor
+    for text in ("Nach oben", "Nach unten", "In Gruppe verschieben", "Entfernen", "Gruppe nach oben", "Gruppe nach unten",
+                 "Gruppe entfernen"):
+        assert f'text: "{text}"' in editor, text
+    assert not re.search(r'text: "[^"]*…"', editor)
+    assert '<textarea class="fp-gruppenname" rows="1" maxlength="80" aria-label="Gruppe" placeholder="Gruppe (optional)">' in editor
+    assert "fp-gruppe\"" not in editor and 'data-l="Gruppe"' not in editor
+    # Schnittstelle unverändert: die flache Liste mit „gruppe“ je Punkt.
+    assert editor.count("punkte: flach()") == 2 and 'Object.assign({}, p, { gruppe: g.name })' in editor
+    css = lies("app/material/static/material.css")
+    assert "touch-action: none" in abschnitt(css, ".mat-formtabelle .fp-griff {", "}")
+    assert ".mat-formtabelle .btn-row .btn.small" not in css
+    coarse = [m.start() for m in re.finditer(r"@media \(pointer: coarse\) \{", css)]
+    for regel in (".mat-formtabelle .fp-griff { width: 44px; height: 44px; }",
+                  ".mat-formtabelle .fp-menue :is(summary.btn, .btn) { min-width: 44px; min-height: 44px;"):
+        i = css.index(regel)
+        assert any(c < i for c in coarse) and css.rfind("@media (pointer: coarse)", 0, i) > css.rfind("\n}\n", 0, i), regel
+    # Die Einführung kennt den neuen Editor.
+    uebung = lies("app/static/js/uebung/material.js")
+    assert 'const neuerPunkt = "#fp-tabelle tr.fp-punkt:has(+ tr.fp-fuss) .fp-text";' in uebung
+    assert "tbody tr:last-child" not in uebung
+    print("Statisch bestanden.")
+
+
+# --- 2. Browser ------------------------------------------------------------------------------------------------------
+
+STRUKTUR = """JSON.stringify([...document.querySelectorAll('#fp-tabelle tbody')].map((tb) => [
+  (tb.querySelector('.fp-gruppenname') || {}).value, [...tb.querySelectorAll('tr.fp-punkt .fp-text')].map((t) => t.value),
+  Boolean(tb.querySelector('tr.fp-leer'))]))"""
+
+
+def struktur(s):
+    return json.loads(s.js(STRUKTUR))
+
+
+def zeile(gi, pi):
+    return f'#fp-tabelle tr.fp-punkt[data-g="{gi}"][data-i="{pi}"]'
+
+
+def kopf(gi):
+    return f'#fp-tabelle tr.fp-gruppenzeile[data-g="{gi}"]'
+
+
+def klick(s, sel):
+    befund = s.klick(sel)
+    assert not befund, befund
+    s.b.warten(0.25)
+
+
+def tippen(s, sel, text):
+    """Text am Ende eines Felds tippen (echte Eingabe; focus() setzt die Marke in einem Textfeld an den Anfang)."""
+    ok = s.js(f"""(() => {{ const el = document.querySelector({json.dumps(sel)}); if (!el) return false; el.focus();
+      el.setSelectionRange(el.value.length, el.value.length); return true; }})()""")
+    assert ok, f"Feld „{sel}“ nicht gefunden"
+    s.b.rufen("Input.insertText", text=text)
+
+
+def menue(s, zeilen_sel, act):
+    """„⋯“ einer Zeile öffnen und einen Eintrag wählen – beides als echter Klick bzw. Tipp."""
+    klick(s, f"{zeilen_sel} .fp-menue summary")
+    assert s.js("Boolean(document.querySelector('#fp-tabelle details.menue[open]'))"), "Menü nicht offen"
+    klick(s, f'#fp-tabelle details.menue[open] [data-act="{act}"]')
+
+
+def mitte(s, sel, anteil=0.5):
+    return s.js(f"""(() => {{ const el = document.querySelector({json.dumps(sel)}); el.scrollIntoView({{ block: 'nearest' }});
+      const r = el.getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height * {anteil}]; }})()""")
+
+
+def lage(s, sel, anteil=0.5):
+    return s.js(f"""(() => {{ const r = document.querySelector({json.dumps(sel)}).getBoundingClientRect();
+      return [r.left + r.width / 2, r.top + r.height * {anteil}]; }})()""")
+
+
+def ziehen(s, von, nach, anteil=0.75, halten=0.0, esc=False):
+    """Am Griff der Zeile von bis auf die Stelle anteil (0 oben, 1 unten) der Zeile nach ziehen – echte Maus- bzw.
+    Touch-Ereignisse. Liegt das Ziel unter dem Bild (Karten am Telefon), bleibt der Finger am unteren Rand, bis der
+    Bildlauf es heraufholt. nach als (x, y): dorthin, ohne Ziel."""
+    # Start und Ziel mittig ins Bild, wenn beide hineinpassen, sonst die gezogene Zeile ins obere Viertel (Ziel darunter)
+    # bzw. tief ins Bild (Ziel darüber); dann messen –
+    # ohne weiteren Bildlauf (sonst stimmte der Start nicht).
+    s.js(f"""(() => {{ const a = document.querySelector({json.dumps(von)}).getBoundingClientRect();
+      const z = {json.dumps(nach)}; const b = typeof z === 'string' ? document.querySelector(z).getBoundingClientRect() : a;
+      const oben = Math.min(a.top, b.top), unten = Math.max(a.bottom, b.bottom);
+      window.scrollBy(0, unten - oben < innerHeight - 160 ? (oben + unten) / 2 - innerHeight / 2
+        : b.top < a.top ? a.top - innerHeight * 0.7 : a.top - innerHeight * 0.25); }})()""")
+    x0, y0 = lage(s, f"{von} .fp-griff")
+    stand = [x0, y0]
+
+    def hin(x, y, schritte=12):
+        xa, ya = stand
+        for k in range(1, schritte + 1):
+            xk, yk = xa + (x - xa) * k / schritte, ya + (y - ya) * k / schritte
+            if s.touch:
+                s.b.rufen("Input.dispatchTouchEvent", type="touchMove", touchPoints=[{"x": xk, "y": yk}])
+            else:
+                s.b.rufen("Input.dispatchMouseEvent", type="mouseMoved", x=xk, y=yk, button="left", buttons=1)
+            s.b.warten(0.02)
+        stand[:] = [x, y]
+
+    if s.touch:
+        s.b.rufen("Input.dispatchTouchEvent", type="touchStart", touchPoints=[{"x": x0, "y": y0}])
+    else:
+        s.b.rufen("Input.dispatchMouseEvent", type="mouseMoved", x=x0, y=y0)
+        s.b.rufen("Input.dispatchMouseEvent", type="mousePressed", x=x0, y=y0, button="left", buttons=1, clickCount=1)
+    if isinstance(nach, str):
+        x1, y1 = lage(s, nach, anteil)
+        kopf = s.js("Math.max(0, document.querySelector('header.bauchbinde').getBoundingClientRect().bottom)")
+        if y1 > s.hoehe - 80 or y1 < kopf + 80:
+            runter = y1 > s.hoehe - 80
+            hin(x0, s.hoehe - 8 if runter else kopf + 8)
+            ende = time.time() + 10
+            im_bild = lambda y: s.hoehe * 0.3 <= y <= s.hoehe * 0.6   # noqa: E731
+            while time.time() < ende and not im_bild(lage(s, nach, anteil)[1]):
+                s.b.warten(0.03)
+            assert im_bild(lage(s, nach, anteil)[1]), ("Bildlauf am Rand holt das Ziel nicht ins Bild", nach)
+            hin(x0, s.hoehe * 0.5, 2)            # aus dem Randbereich, dann aufs Ziel
+            x1, y1 = lage(s, nach, anteil)
+        assert 60 < y1 < s.hoehe - 60, ("Ziel nicht im Bild", nach, y1)
+        hin(x1, y1)
+        x1, y1 = lage(s, nach, anteil)           # die gezogene Zeile hat die Lage verschoben – einmal nachfassen
+        hin(x1, y1, 3)
+    else:
+        hin(*nach)
+    if halten:
+        s.b.warten(halten)
+    if esc:
+        s.taste()
+    if s.touch:
+        s.b.rufen("Input.dispatchTouchEvent", type="touchEnd", touchPoints=[])
+    else:
+        s.b.rufen("Input.dispatchMouseEvent", type="mouseReleased", x=stand[0], y=stand[1], button="left", buttons=0, clickCount=1)
+    s.b.warten(0.3)
+
+
+def flaeche(s, sel):
+    """Breite, Höhe und ob ein Tipp auf die Mitte das Element trifft – für alle sichtbaren Treffer, das kleinste zuerst."""
+    return s.js(f"""(() => [...document.querySelectorAll({json.dumps(sel)})].filter((e) => e.getClientRects().length).map((e) => {{
+      e.scrollIntoView({{ block: 'nearest' }}); const r = e.getBoundingClientRect();
+      const t = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+      return [Math.round(r.width), Math.round(r.height), Boolean(t && (t === e || e.contains(t)))]; }})
+      .sort((a, b) => Math.min(a[0], a[1]) - Math.min(b[0], b[1])))()""")
+
+
+def tippflaechen(s, sel):
+    werte = flaeche(s, sel)
+    assert werte, f"„{sel}“ nicht gefunden"
+    b, h, trifft = werte[0]
+    assert b >= 44 and h >= 44 and trifft, (sel, werte[0])
+
+
+def formular_anlegen(u, kategorie):
+    r = u.adm.post("/api/material/formulare", json={"kategorie_id": kategorie, "titel": "Platzhalter Editor", "punkte": [
+        {"gruppe": "Gruppe A", "text": "Platzhalter 1", "art": "yesno", "soll": "nein"},
+        {"gruppe": "Gruppe A", "text": "Platzhalter 2", "art": "yesno", "soll": "ja"},
+        {"gruppe": "Gruppe B", "text": "Platzhalter 3", "art": "text"},
+        {"gruppe": "Gruppe B", "text": "Platzhalter 4", "art": "number", "pflicht": False},
+        {"gruppe": "", "text": "Platzhalter 5", "art": "date"}]})
+    assert r.status_code == 201, r.get_json()
+    return r.json["formular"]["id"]
+
+
+def oeffnen(s, fid):
+    s.oeffnen(f"/materialablage/katalog/formular/{fid}", warten=0.6)
+    s.warte("!!document.querySelector('#fp-tabelle')")
+    # Angebot der Einführung und Hinweise beiseite – sie liegen sonst über Zeilen.
+    s.js("""(() => { const k = [...document.querySelectorAll('button')].find((b) => b.textContent.trim() === 'Nicht jetzt');
+      if (k) k.click(); document.querySelectorAll('dialog[open]').forEach((d) => d.close()); })()""")
+    s.b.warten(0.3)
+
+
+def ablauf(u, kategorie, breite, hoehe, touch):
+    fid = formular_anlegen(u, kategorie)
+    s = u.seite("matverwaltung", breite, hoehe, touch)
+    try:
+        oeffnen(s, fid)
+        assert struktur(s) == [["Gruppe A", ["Platzhalter 1", "Platzhalter 2"], False],
+                               ["Gruppe B", ["Platzhalter 3", "Platzhalter 4"], False], ["", ["Platzhalter 5"], False]]
+        assert not s.js("document.querySelector('#fp-tabelle .zeichenknopf, #fp-tabelle [data-act=hoch]')")
+        assert s.js("document.querySelector(" + json.dumps(kopf(2) + " .fp-gruppenname") + ").placeholder") == "Gruppe (optional)"
+
+        # Getipptes: Titel, Gruppenname und Prüfpunkt – überlebt die folgenden Neuzeichnungen.
+        tippen(s, "#fp-titel", " getippt")
+        tippen(s, f"{kopf(0)} .fp-gruppenname", " neu")
+        tippen(s, f"{zeile(1, 0)} .fp-text", " getippt")
+
+        # Menü: „Nach unten“ über die Grenze (letzter von A → erster von B), „Nach oben“ zurück, innerhalb der Gruppe.
+        menue(s, zeile(0, 1), "punkt-runter")
+        assert struktur(s)[:2] == [["Gruppe A neu", ["Platzhalter 1"], False],
+                                   ["Gruppe B", ["Platzhalter 2", "Platzhalter 3 getippt", "Platzhalter 4"], False]]
+        assert s.js("document.querySelector('#fp-titel').value") == "Platzhalter Editor getippt"
+        if not touch:   # Der Fokus folgt dem Punkt (am Finger ebenso, dort ohne sichtbaren Ring).
+            assert s.js("document.activeElement.matches(" + json.dumps(f"{zeile(1, 0)} .fp-menue summary") + ")")
+        menue(s, zeile(1, 0), "punkt-hoch")
+        assert struktur(s)[0][1] == ["Platzhalter 1", "Platzhalter 2"]
+        menue(s, zeile(0, 1), "punkt-hoch")
+        assert struktur(s)[0][1] == ["Platzhalter 2", "Platzhalter 1"]
+        # Der erste Punkt hat kein „Nach oben“, der letzte kein „Nach unten“.
+        klick(s, f"{zeile(0, 0)} .fp-menue summary")
+        assert not s.js("document.querySelector('#fp-tabelle details.menue[open] [data-act=punkt-hoch]')")
+        if touch:
+            tippflaechen(s, "#fp-tabelle details.menue[open] .menue-liste button")
+        s.taste()
+        s.b.warten(0.2)
+
+        # Ziehen: innerhalb der Gruppe (Platzhalter 1 vor Platzhalter 2), dann in eine andere (ans Ende von B).
+        ziehen(s, zeile(0, 1), zeile(0, 0), anteil=0.2)
+        assert struktur(s)[0][1] == ["Platzhalter 1", "Platzhalter 2"], struktur(s)
+        ziehen(s, zeile(0, 0), zeile(1, 1), anteil=0.8)
+        assert struktur(s)[:2] == [["Gruppe A neu", ["Platzhalter 2"], False],
+                                   ["Gruppe B", ["Platzhalter 3 getippt", "Platzhalter 4", "Platzhalter 1"], False]]
+        # Über die untere Hälfte eines Gruppenkopfs: an den Anfang dieser Gruppe.
+        ziehen(s, zeile(1, 2), kopf(1), anteil=0.8)
+        assert struktur(s)[1][1] == ["Platzhalter 1", "Platzhalter 3 getippt", "Platzhalter 4"]
+        # Esc bricht ab – alles bleibt.
+        vorher = struktur(s)
+        ziehen(s, zeile(1, 0), zeile(2, 0), anteil=0.8, esc=True)
+        assert struktur(s) == vorher
+        assert s.js("document.querySelector('#fp-titel').value") == "Platzhalter Editor getippt"
+        # Bildlauf am Rand: Mit dem Finger bzw. der Maus am unteren Rand rollt die Seite.
+        s.js("window.scrollTo(0, 0)")
+        s.js("document.querySelector(" + json.dumps(f"{zeile(0, 0)}") + ").scrollIntoView({ block: 'start' })")
+        s.js("window.scrollBy(0, -120)")
+        y_vorher = s.js("scrollY")
+        ziehen(s, zeile(0, 0), (breite / 2, hoehe - 6), halten=0.6, esc=True)
+        assert s.js("scrollY") > y_vorher + 20, ("kein Bildlauf am Rand", y_vorher, s.js("scrollY"))
+        assert struktur(s) == vorher
+
+        # „In Gruppe verschieben“: Platzhalter 5 (ohne Gruppe) ans Ende von „Gruppe A neu“, Platzhalter 4 in eine neue Gruppe.
+        menue(s, zeile(2, 0), "punkt-gruppe")
+        assert s.warte("!!document.querySelector('#dlg[open] .fp-gruppenwahl')")
+        if touch:
+            tippflaechen(s, "#dlg[open] .fp-wahl:not(.fp-wahl-weg)")
+        assert s.js("document.querySelector('#dlg[open] input[name=fp-ziel][value=\"2\"]').disabled")
+        klick(s, '#dlg[open] .fp-wahl:has(input[value="0"])')
+        klick(s, "#fp-gruppe-ok")
+        assert struktur(s) == [["Gruppe A neu", ["Platzhalter 2", "Platzhalter 5"], False],
+                               ["Gruppe B", ["Platzhalter 1", "Platzhalter 3 getippt", "Platzhalter 4"], False],
+                               ["", [], True]]
+        menue(s, zeile(1, 2), "punkt-gruppe")
+        assert s.warte("!!document.querySelector('#dlg[open] .fp-gruppenwahl')")
+        tippen(s, "#fp-neue-gruppe", "Gruppe C")
+        assert s.js("document.querySelector('#dlg[open] input[name=fp-ziel][value=neu]').checked")
+        klick(s, "#fp-gruppe-ok")
+        st = struktur(s)
+        assert st[3] == ["Gruppe C", ["Platzhalter 4"], False] and st[2] == ["", [], True], st
+        assert s.js("document.querySelector('#fp-tabelle tr.fp-leer').textContent").strip().startswith("Die Gruppe ist leer")
+
+        # Gruppe: leer ohne Rückfrage entfernen; nach oben/unten; mit Punkten nur nach Rückfrage mit Anzahl.
+        menue(s, kopf(2), "gruppe-weg")
+        assert not s.js("document.querySelector('dialog[open]')")
+        assert [g[0] for g in struktur(s)] == ["Gruppe A neu", "Gruppe B", "Gruppe C"]
+        menue(s, kopf(2), "gruppe-hoch")
+        assert [g[0] for g in struktur(s)] == ["Gruppe A neu", "Gruppe C", "Gruppe B"]
+        menue(s, kopf(0), "gruppe-runter")
+        assert [g[0] for g in struktur(s)] == ["Gruppe C", "Gruppe A neu", "Gruppe B"]
+        menue(s, kopf(1), "gruppe-weg")
+        assert s.warte("!!document.querySelector('dialog[open] #c-titel')")
+        assert s.js("document.querySelector('dialog[open] #c-titel').textContent") == "Gruppe „Gruppe A neu“ mit 2 Prüfpunkten entfernen?"
+        klick(s, "dialog[open] #c-no")
+        assert [g[0] for g in struktur(s)] == ["Gruppe C", "Gruppe A neu", "Gruppe B"]
+
+        # Punkt entfernen (Menü), „+ Prüfpunkt“ in Gruppe C (am Ende der Gruppe), „+ Gruppe“ mit Fokus aufs Namensfeld.
+        menue(s, zeile(2, 0), "punkt-weg")
+        assert struktur(s)[2][1] == ["Platzhalter 3 getippt"]
+        if touch:
+            tippflaechen(s, "#fp-tabelle tr.fp-fuss .btn")
+        klick(s, '#fp-tabelle tr.fp-fuss [data-act="punkt-neu"][data-g="0"]')
+        assert struktur(s)[0][1] == ["Platzhalter 4", ""]
+        tippen(s, f"{zeile(0, 1)} .fp-text", "Platzhalter neu")
+        klick(s, '[data-act="gruppe-neu"]')
+        st = struktur(s)
+        assert st[3] == ["", [""], False], st
+        if not touch:
+            assert s.js("document.activeElement.matches(" + json.dumps(f"{kopf(3)} .fp-gruppenname") + ")")
+        tippen(s, f"{kopf(3)} .fp-gruppenname", LANG)
+        tippen(s, f"{zeile(3, 0)} .fp-text", "Platzhalter lang")
+        # Ein Neuzeichnen (Art ändern) – der lange Name steht danach ganz da (Feld bricht um, nichts abgeschnitten).
+        s.js("(() => { const a = document.querySelector(" + json.dumps(f"{zeile(3, 0)} .fp-art") + "); a.value = 'text';"
+             " a.dispatchEvent(new Event('change', { bubbles: true })); })()")
+        s.b.warten(0.2)
+        lang = s.js("(() => { const t = document.querySelector(" + json.dumps(f"{kopf(3)} .fp-gruppenname") + ");"
+                    " return [t.value, t.scrollHeight - t.clientHeight, t.scrollWidth - t.clientWidth]; })()")
+        assert lang[0] == LANG and len(LANG) == 80 and lang[1] <= 1 and lang[2] <= 1, lang
+        assert s.js("document.querySelector('#fp-titel').value") == "Platzhalter Editor getippt"
+
+        # Tippflächen am Finger (Griff, „⋯“ an Punkt und Gruppe) – gemessen; kein waagerechter Bildlauf.
+        if touch:
+            for sel in ("#fp-tabelle .fp-griff", "#fp-tabelle tr.fp-punkt .fp-menue summary", "#fp-tabelle tr.fp-gruppenzeile .fp-menue summary"):
+                tippflaechen(s, sel)
+            assert s.js("getComputedStyle(document.querySelector('#fp-tabelle .fp-griff')).touchAction") == "none"
+            assert s.js("getComputedStyle(document.querySelector('#fp-tabelle tr.fp-punkt')).touchAction") == "auto"
+        assert s.js("document.documentElement.scrollWidth <= document.documentElement.clientWidth")
+
+        # Speichern: Reihenfolge und Gruppe je Punkt in der Datenbank.
+        klick(s, '[data-act="speichern"]')
+        assert s.warte("!document.querySelector('#fp-tabelle .fp-text') || document.querySelector('#fp-titel').value === 'Platzhalter Editor getippt'")
+        s.b.warten(0.8)
+        zeilen = u.sql("SELECT group_name, label, editor FROM mat_checklist_item WHERE form_id = ? ORDER BY position", (fid,))
+        assert [(z["group_name"], z["label"]) for z in zeilen] == [
+            ("Gruppe C", "Platzhalter 4"), ("Gruppe C", "Platzhalter neu"),
+            ("Gruppe A neu", "Platzhalter 2"), ("Gruppe A neu", "Platzhalter 5"),
+            ("Gruppe B", "Platzhalter 3 getippt"), (LANG, "Platzhalter lang")], zeilen
+        assert zeilen[-1]["editor"] == "text"
+        assert u.sql("SELECT title FROM mat_form WHERE id = ?", (fid,))[0]["title"] == "Platzhalter Editor getippt"
+        assert struktur(s)[3][0] == LANG
+        s.sammeln()
+        assert not s.fehler, s.fehler
+    finally:
+        s.schliessen()
+
+    # Nur lesen (Mitglied): dieselben Zwischenzeilen, ohne Griff, Menü und Felder.
+    m = u.seite("mitglied", breite, hoehe, touch)
+    try:
+        oeffnen(m, fid)
+        koepfe = m.js("[...document.querySelectorAll('#fp-tabelle tr.fp-gruppenzeile th')].map((t) => t.textContent.trim())")
+        assert koepfe == ["Gruppe C", "Gruppe A neu", "Gruppe B", LANG], koepfe
+        assert not m.js("document.querySelector('#fp-tabelle .fp-griff, #fp-tabelle .fp-menue, #fp-tabelle textarea, [data-act=speichern]')")
+        assert m.js("document.querySelectorAll('#fp-tabelle tbody tr:not(.fp-gruppenzeile)').length") == 6
+        hoch = m.js("(() => { const t = [...document.querySelectorAll('#fp-tabelle tr.fp-gruppenzeile th')].pop();"
+                    " return t.scrollWidth <= t.clientWidth; })()")
+        assert hoch, "langer Gruppenname abgeschnitten"
+        assert m.js("document.documentElement.scrollWidth <= document.documentElement.clientWidth")
+        m.sammeln()
+        assert not m.fehler, m.fehler
+    finally:
+        m.schliessen()
+
+
+def test_browser():
+    if uebersprungen():
+        print("übersprungen – kein Chromium")
+        return
+    from test_material import katalog_grund
+    with Umgebung() as u:
+        kategorie = katalog_grund(u.adm)["gurte"]
+        for breite, hoehe, touch in GROESSEN:
+            los = time.time()
+            ablauf(u, kategorie, breite, hoehe, touch)
+            print(f"Editor {breite}×{hoehe}{' Touch' if touch else ''}: bestanden ({time.time() - los:.1f} s)")
+
+
+if __name__ == "__main__":
+    test_statisch()
+    test_browser()

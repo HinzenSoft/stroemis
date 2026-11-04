@@ -453,7 +453,8 @@ def test_geraete_nachbesserung_zwei():
     assert "#mat-inhalt .mat-runden li > a { display: inline-flex; align-items: center; min-height: 44px; }" in css
     assert "#mat-inhalt .mat-summe { display: inline-flex;" in css
     assert re.search(r":is\(#mat-inhalt, #dlg\) :is\(input:not\([^)]*\), select, textarea\) \{\s*min-height: 44px; \}", css)
-    assert ".mat-formtabelle .btn-row .btn.small { min-width: 44px;" in css
+    # Formular-Editor: Griff und „⋯“ statt Pfeil- und Entfernen-Knöpfen (04.11.2026, test_material_formular_editor).
+    assert ".mat-formtabelle .fp-griff { width: 44px; height: 44px; }" in css
     # V1: Nullen im Dokument hinten, kein CSS order mehr.
     assert not re.search(r"mat-kachel\.null \{[^}]*order:", css)
     assert '[...kacheln.filter(([s]) => z[s]), ...kacheln.filter(([s]) => !z[s])].map(kachel)' in js
