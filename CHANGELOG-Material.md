@@ -12692,7 +12692,8 @@ Ziehen, Lage des Knopfs, 44 px am Finger; das Band, in dem `ziehen()` das Ziel n
 20–75 % statt 30–60 % der Höhe – am Telefon springt das Ziel um eine Kartenhöhe, sobald die gezogene Zeile davor
 rückt) und `test_material_formular_titel` (8 statt 10 Stellen, die neu zeichnen); die Übung nutzte die Einträge nicht.
 
-**Bitte bestätigen**:
+**Bitte bestätigen** – **vom Nutzer bestätigt am 04.11.2026** („Punkte bestätigt“; dazu die Anleitungsanker nach dem
+Nachzug des Artikels „Prüfformulare“):
 1. E2 „Datei maßgeblich“ so gelesen: Gelöst wird eine Zuweisung, an der ein Formular **oder** ein Ziel der Datei
    beteiligt ist und die die Datei nicht nennt; eine Zuweisung zwischen einem Formular und einem Ziel, die es nur auf
    main gibt, bleibt. Format 1/2 löst nie.
