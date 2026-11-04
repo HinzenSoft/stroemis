@@ -12,7 +12,11 @@ einer Rolle, die er nicht hat, und die Übungsstufe ist nie höher als die echte
 Zweite Absicherung ist die Sperre (sperre, aus csrf_guard in app/__init__.py): Eine Übungsanfrage – Kopfzeile
 „X-Uebung: 1“ oder ein Referer derselben Herkunft mit „uebung=“ im Abfrageteil – kommt an /api/ und /media/ nicht
 durch (auch nicht lesend), ebenso wenig jede schreibende Methode und jede Datei. Ausnahmen: der Merker
-(/api/einfuehrung/…), GET /api/me, /static/ und Seitenaufrufe – so führt die Kopfleiste aus der Übung hinaus.
+(/api/einfuehrung/…), GET /api/me, Abmelden, /static/ und Seitenaufrufe – so führt die Kopfleiste aus der Übung hinaus.
+Seiten gibt es in der Übung nur, wenn sie einen Übungszweig haben (UEBUNGSSEITEN); jede andere Seite unter einem
+Modulpfad antwortet aus der Übung mit „In der Übung nicht verfügbar.“ (Sicherheitsprüfung vom 04.11.2026). Eine
+Übungsseite lädt Bilder, Medien und Rahmen außerdem nur aus /static/ (csp_quellen) – auch ein Element ohne Referer
+erreicht so /api/ und /media/ nicht.
 
 Merker ohne Schemaschritt in mat_meta (wie Startseite und Willkommen der Materialablage; Schema bleibt 34):
   einfuehrung:<Konto>  {"<modul>:<teil>": {"zustand": "abgelehnt" | "unterbrochen" | "erledigt", "ablauf": n, "am": …}}
@@ -24,7 +28,7 @@ import json
 import re
 from urllib.parse import parse_qs, urlencode, urlsplit, urlunsplit
 
-from flask import Blueprint, abort, g, has_request_context, jsonify, request
+from flask import Blueprint, abort, current_app, g, has_request_context, jsonify, render_template, request
 
 from . import auth, db, module
 
@@ -34,6 +38,7 @@ auth.eingabefehler_abfangen(bp)
 SCHLUESSEL = "einfuehrung:{uid}"            # in mat_meta
 ZUSTAENDE = ("abgelehnt", "unterbrochen", "erledigt")
 GESPERRT = "In der Übung gesperrt – es wird nichts gespeichert."
+NICHT_IN_UEBUNG = "In der Übung nicht verfügbar"
 
 # Je Modul die Wörter für Angebot und Abschluss („Bestand“ heißt in der Strömipedia „Seiten“ usw.).
 MODULE = {
@@ -100,6 +105,23 @@ DARF_MATERIAL = {
     "materialwart": dict(_DARF_AUS, verwalten=True, unterschrift=True),
     "verwaltung": dict(_DARF_AUS, verwalten=True, katalog=True, alles=True, gliederung_anlegen=True, unterschrift=True),
 }
+
+# Die Seiten mit Übungszweig (Befund 2 der Sicherheitsprüfung vom 04.11.2026): Nur diese Endpunkte zeichnen mit
+# ?uebung= die Hülle, bevor sie Daten anfassen. Jeder andere Seitenaufruf mit „uebung=“ – oder aus einer Übungsseite
+# heraus unter einem Modulpfad (Meine PSA, Echtheit prüfen, Bericht, Bestandsimport, Druck der Riegenkarten …) – bekommt
+# vor der Route die Fehlerseite „In der Übung nicht verfügbar“ (sperre); einfuehrung.js hält Links, Formulare und
+# Seitenwechsel dorthin schon im Browser an (seiten_muster). Bekommt eine Seite einen Übungszweig, gehört sie hierher –
+# tests/test_einfuehrung.py ruft jede Seitenregel der Module mit „uebung=“ auf.
+UEBUNGSSEITEN = frozenset({
+    # Materialablage: _seite (Übungszweig vor Bezug, Banner, Willkommen) bzw. eigener Zweig vor jedem Datenzugriff
+    "material.dashboard", "material.pruefungen", "material.bestand_seite", "material.antraege_seite",
+    "material.ordner_seite", "material.artikel_neu", "material.artikel_seite", "material.pruefung_neu",
+    "material.pruefung_seite", "material.durchgang_seite", "material.durchgaenge_seite", "material.katalog_seite",
+    "material.produkt_seite", "material.formular_seite", "material.meldungen_seite", "material.suche_seite",
+    # Strömipedia (_wiki), Ankerplätze, Riegenkarten (_pruefungen_seite ohne Druck)
+    "pages.wiki", "pages.wiki_page", "pages.karte", "pages.pruefungen", "pages.pruefungen_lehrgang",
+    "pages.pruefungen_kataloge", "pages.pruefungen_katalog",
+})
 
 
 # --- Wer welchen Teil hat (Bauvorlage 1.6) ---------------------------------------------------------------------------
@@ -245,6 +267,9 @@ def seite(modul):
     if teil:
         daten["stufe"] = stufe(modul, teil)
         daten["anleitung"] = _anleitung_uebersicht(modul, user)
+        # Für einfuehrung.js und S.ziel: welche Adressen unter den Modulpfaden eine Übungsseite haben.
+        daten["seiten"] = seiten_muster()
+        daten["bereiche"] = list(_bereiche())
     g.einfuehrung = daten
     return teil
 
@@ -310,18 +335,21 @@ def _uebungsanfrage():
     """Kopfzeile X-Uebung: 1 oder ein Referer derselben Herkunft mit „uebung=“ im Abfrageteil (fängt, was keine
     Kopfzeile tragen kann: <img>, Beacon, Datei-Links, window.open; die Referrer-Policy schickt bei gleicher Herkunft die
     volle Adresse)."""
-    if request.headers.get("X-Uebung") == "1":
-        return True
+    return request.headers.get("X-Uebung") == "1" or _uebungs_referer() is not None
+
+
+def _uebungs_referer():
+    """Der Referer als urlsplit-Ergebnis, wenn er eine Übungsseite derselben Herkunft nennt – sonst None."""
     ref = request.headers.get("Referer") or ""
     if not ref:
-        return False
+        return None
     try:
         teile_ref = urlsplit(ref)
     except ValueError:
-        return False
+        return None
     if teile_ref.netloc.lower() != (request.host or "").lower():
-        return False
-    return "uebung" in parse_qs(teile_ref.query, keep_blank_values=True)
+        return None
+    return teile_ref if "uebung" in parse_qs(teile_ref.query, keep_blank_values=True) else None
 
 
 def _datei(pfad):
@@ -334,22 +362,99 @@ def _datei(pfad):
 _FREI = ("/static/", "/sw.js", "/manifest.webmanifest", "/offline")
 
 
+def _frei(pfad):
+    """Was eine Übungsanfrage immer darf: der Merker, GET /api/me, Abmelden (ändert nur die Sitzung – Befund 1 der
+    Sicherheitsprüfung vom 04.11.2026) und was zur App gehört (/static/, Worker, Manifest, Hinweisseite)."""
+    return (pfad.startswith("/api/einfuehrung/") or pfad.startswith(_FREI) or pfad in _FREI
+            or (pfad == "/api/me" and request.method in ("GET", "HEAD"))
+            or (pfad == "/api/auth/logout" and request.method == "POST"))
+
+
+def _bereiche():
+    """Die Pfade der Module mit Übung (/materialablage, /stroemipedia, …)."""
+    return tuple(module.PFAD[m] for m in TEILE)
+
+
+def _modul_von(pfad):
+    """Das Modul mit Übung, unter dessen Pfad die Adresse liegt – oder None."""
+    return next((m for m in TEILE if pfad == module.PFAD[m] or pfad.startswith(module.PFAD[m] + "/")), None)
+
+
+_PLATZHALTER = re.compile(r"<(?:(\w+)(?:\([^)]*\))?:)?(\w+)>")
+
+
+def _muster(regel):
+    """Die Regel als regulärer Ausdruck, den auch JavaScript versteht (Teile der Werkzeug-Umwandler: int → \\d+, sonst
+    [^/]+ bzw. der Ausdruck des Umwandlers)."""
+    teile, pos = [], 0
+    for m in _PLATZHALTER.finditer(regel.rule):
+        umwandler = current_app.url_map.converters.get(m.group(1) or "default")
+        teile += [re.escape(regel.rule[pos:m.start()]), f"(?:{getattr(umwandler, 'regex', '[^/]+')})"]
+        pos = m.end()
+    teile.append(re.escape(regel.rule[pos:]))
+    return "^" + "".join(teile) + "$"
+
+
+def seiten_muster():
+    """Die Adressen der Seiten mit Übungszweig (UEBUNGSSEITEN) als Ausdrücke für einfuehrung.js und S.ziel."""
+    return sorted({_muster(r) for r in current_app.url_map.iter_rules() if r.endpoint in UEBUNGSSEITEN})
+
+
+def _zurueck():
+    """Wohin „Zurück zur Übung“ auf der Fehlerseite führt: die Übungsseite, von der die Anfrage kam (nur Pfad und Abfrage
+    derselben Herkunft), sonst die Übungsadresse des Teils aus der Adresse bzw. die Startseite des Moduls."""
+    ref = _uebungs_referer()
+    if ref:
+        return urlunsplit(("", "", "/" + ref.path.lstrip("/"), ref.query, ""))
+    modul = _modul_von(request.path)
+    if not modul:
+        return "/"
+    teil = request.args.get("uebung")
+    return adresse(modul, teil) if teil_von(modul, teil) else module.PFAD[modul]
+
+
+def _nicht_in_uebung():
+    """Die Fehlerseite „In der Übung nicht verfügbar“ (403) mit dem Weg zurück – vor der Route, ohne Datenzugriff.
+    STROEMIS.einfuehrung trägt nur „gesperrt“: einfuehrung.js lässt Übungszustand und Übungsablage dann stehen, damit
+    „Zurück zur Übung“ an derselben Stelle weitermacht."""
+    g.einfuehrung = {"uebung": None, "gesperrt": True}
+    return render_template("error.html", user=auth.current_user(), code=403, titel=NICHT_IN_UEBUNG,
+                           message="Diese Seite gibt es in der Übung nicht.", zurueck=_zurueck()), 403
+
+
 def sperre():
     """Erster Schritt von csrf_guard: Eine Übungsanfrage an /api/ oder /media/, mit schreibender Methode oder an eine
     Datei bekommt 403 mit GESPERRT (Schnittstelle als JSON, sonst die deutsche Fehlerseite). Erlaubt bleiben der Merker,
-    GET /api/me, /static/ (und was zur App gehört: Worker, Manifest, Hinweisseite) und Seitenaufrufe. Sonst None."""
-    if not _uebungsanfrage():
-        return None
+    GET /api/me, Abmelden, /static/ (und was zur App gehört: Worker, Manifest, Hinweisseite) und Seitenaufrufe.
+    Seitenaufrufe mit „uebung=“ – und aus einer Übungsseite heraus unter einem Modulpfad – gehen nur an Seiten mit
+    Übungszweig (UEBUNGSSEITEN), sonst die Fehlerseite „In der Übung nicht verfügbar“. Sonst None."""
     pfad = request.path
-    if pfad.startswith("/api/einfuehrung/") or pfad.startswith(_FREI) or pfad in _FREI:
+    if _frei(pfad):
         return None
-    if pfad == "/api/me" and request.method in ("GET", "HEAD"):
+    uebungsanfrage = _uebungsanfrage()
+    if uebungsanfrage and (pfad.startswith(("/api/", "/media/")) or request.method not in ("GET", "HEAD")
+                           or _datei(pfad)):
+        if pfad.startswith("/api/"):
+            return jsonify(error=GESPERRT), 403
+        abort(403, description=GESPERRT)
+    if (request.method in ("GET", "HEAD") and not pfad.startswith(("/api/", "/media/"))
+            and ("uebung" in request.args or (uebungsanfrage and _modul_von(pfad)))
+            and request.endpoint not in UEBUNGSSEITEN):
+        return _nicht_in_uebung()
+    return None
+
+
+def csp_quellen():
+    """Für security_headers (app/__init__.py): Auf einer Übungsseite (Hinweis 1 der Sicherheitsprüfung vom 04.11.2026)
+    lädt der Browser Bilder, Medien und Rahmen nur aus /static/ und verbindet sich nur mit den Ausnahmen der Sperre – so
+    erreicht auch ein Element mit referrerpolicy="no-referrer" (das der Server nicht als Übung erkennen könnte) /api/ und
+    /media/ nicht. {"bild": …, "netz": …} – oder None für jede andere Seite (dann gilt 'self')."""
+    e = getattr(g, "einfuehrung", None) if has_request_context() else None
+    host = request.host if has_request_context() else ""
+    if not e or not e.get("uebung") or not re.fullmatch(r"[A-Za-z0-9.-]+(?::\d{1,5})?", host or ""):
         return None
-    if not (pfad.startswith(("/api/", "/media/")) or request.method not in ("GET", "HEAD") or _datei(pfad)):
-        return None
-    if pfad.startswith("/api/"):
-        return jsonify(error=GESPERRT), 403
-    abort(403, description=GESPERRT)
+    return {"bild": f"{host}/static/",
+            "netz": " ".join(f"{host}{p}" for p in ("/static/", "/api/einfuehrung/", "/api/me", "/api/auth/logout"))}
 
 
 # --- Schnittstelle: Merker -------------------------------------------------------------------------------------------

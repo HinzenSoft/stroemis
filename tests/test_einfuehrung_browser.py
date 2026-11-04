@@ -11,7 +11,16 @@ Je 1280×900 (Maus) und 360×740 (Telefon, Touch):
   4. Esc fragt „Übung unterbrechen?“ („Weiter üben“ bleibt, „Unterbrechen“ führt hinaus, Merker „unterbrochen“).
   5. Fokus auf „Weiter“; in einem offenen Dialog steht die Blase im Dialog und ist bedienbar.
   6. „Bewegung reduzieren“: der Rahmen ohne Übergang.
+  Nachbesserung nach der Sicherheitsprüfung (04.11.2026):
+  7. Ablage: Die Übung liest und schreibt nicht die echte Ablage (Stoppuhr, zugeklappte Ordner, ausgeblendeter Hinweis,
+     sessionStorage); ihre Werte überstehen Seitenwechsel in der Übung, nach dem Verlassen ist alles Echte wie vorher.
+  8. Seiten ohne Übungszweig: Link auf Meine PSA, Knopf „Echtheit prüfen“ und Seitenwechsel per Code → Toast „In der
+     Übung nicht verfügbar.“, die Übung läuft weiter, keine Anfrage; „Meine PSA“ der Kopfleiste führt hinaus.
+  9. Ohne Referer: Bild, Rahmen und Video an /api/ bzw. /media/ erreichen den Server nicht (CSP), rel="noreferrer" und
+     referrerpolicy verschwinden.
+  10. Abmelden aus der Übung: /login, Sitzung weg, Übungszustand und Übungsablage leer, echte Entwürfe weg.
 Alle Inhalte sind Platzhalter."""
+import json
 import os
 import sys
 
@@ -165,6 +174,185 @@ def _esc_dialog_bewegung(u, breite, hoehe, touch):
         s.schliessen()
 
 
+BEREIT = "(() => { const z = window.S && S.einfuehrung && S.einfuehrung.zustand(); return z && z.bereit ? z : null; })()"
+NICHT_HIER = "In der Übung nicht verfügbar."
+# Echte Werte in der Ablage, wie Riegenkarten (Stoppuhr), Materialablage (Ordner, Katalogimport) und Strömipedia sie legen.
+ECHT_LOKAL = {"pruef:stoppuhr": '{"lehrgang":5,"start":1}', "mat-ordner-klapp": '{"7":true}',
+              "mat-katalogimport-ausgeblendet": "3", "stroemis-sidebar": "300"}
+ECHT_SITZUNG = {"pruef:meldung": "echt", "stroemis-reiter": "echt"}
+
+
+def _ablage_setzen(s):
+    s.js(f"""(() => {{ for (const [k, v] of Object.entries({json.dumps(ECHT_LOKAL)})) localStorage.setItem(k, v);
+      for (const [k, v] of Object.entries({json.dumps(ECHT_SITZUNG)})) sessionStorage.setItem(k, v); }})()""")
+
+
+def _ablage(s):
+    return s.js("""(() => { const l = {}, z = {};
+      for (let i = 0; i < localStorage.length; i++) l[localStorage.key(i)] = localStorage.getItem(localStorage.key(i));
+      for (let i = 0; i < sessionStorage.length; i++) z[sessionStorage.key(i)] = sessionStorage.getItem(sessionStorage.key(i));
+      return { lokal: l, sitzung: z }; })()""")
+
+
+def _toast_leeren(s):
+    s.js("(() => { const t = document.getElementById('toast'); t.textContent = ''; t.className = ''; })()")
+
+
+def _ablage_abgeschottet(u, breite, hoehe, touch):
+    wo = f"{breite}×{hoehe}"
+    s = u.seite("mitglied", breite, hoehe, touch)
+    try:
+        s.oeffnen("/profil", warten=0.3)
+        _ablage_setzen(s)
+        vorher = _ablage(s)
+        s.oeffnen("/materialablage?uebung=grund", warten=0.3)
+        assert s.warte(BEREIT, 10), wo
+        # In der Übung: nichts Echtes zu lesen; was die Seite ablegt, bleibt in der Übungsablage – auch über Seitenwechsel.
+        assert s.js("localStorage.length === 0 && localStorage.getItem('pruef:stoppuhr') === null"), wo
+        assert s.js("sessionStorage.getItem('pruef:meldung') === null && sessionStorage.getItem('stroemis-uebung') === null")
+        s.js("""(() => { localStorage.setItem('pruef:stoppuhr', 'UEBUNG'); localStorage.setItem('mat-ordner-klapp', '{"900000001":true}');
+          localStorage.setItem('mat-katalogimport-ausgeblendet', '900000002'); localStorage.removeItem('stroemis-sidebar');
+          sessionStorage.setItem('pruef:meldung', 'UEBUNG'); })()""")
+        s.js("location.href = S.ziel('/materialablage/bestand')")
+        assert s.warte("location.pathname === '/materialablage/bestand' && document.readyState === 'complete'", 10), wo
+        assert s.warte(BEREIT, 10), wo
+        assert s.js("localStorage.getItem('pruef:stoppuhr')") == "UEBUNG"
+        assert s.js("sessionStorage.getItem('pruef:meldung')") == "UEBUNG"
+        assert s.js("localStorage.length") == 3 and s.js("localStorage.key(5)") is None
+        # Hinaus über die Kopfleiste (Profil): alles Echte wie vorher, Übungsablage und Übungszustand weg.
+        if not s.js("Boolean([...document.querySelectorAll('header.bauchbinde a[href=\"/profil\"]')].find((a) => a.getClientRects().length))"):
+            assert s.klick("#nav-mehr-knopf") is None, wo
+        assert s.klick("header.bauchbinde a[href='/profil']") is None, wo
+        assert s.warte("location.pathname === '/profil' && document.readyState === 'complete'", 10), wo
+        nachher = _ablage(s)
+        assert nachher["lokal"] == vorher["lokal"], (nachher, vorher)
+        assert {k: v for k, v in nachher["sitzung"].items() if k in ECHT_SITZUNG} == ECHT_SITZUNG, nachher
+        assert not any(k.startswith("stroemis-uebung") and k != "stroemis-uebung-ruhe" for k in nachher["sitzung"]), nachher
+    finally:
+        s.schliessen()
+
+
+def _seiten_ohne_uebung(u, breite, hoehe, touch):
+    wo = f"{breite}×{hoehe}"
+    s = u.seite("mitglied", breite, hoehe, touch)
+    try:
+        s.oeffnen("/profil", warten=0.3)
+        s.oeffnen("/materialablage?uebung=grund", warten=0.3)
+        assert s.warte(BEREIT, 10), wo
+        s.sammeln()
+        von, server_von = len(s.anfragen), len(u.protokoll)
+        # Link wie „Meine PSA ansehen →“ der Übersicht (material.js): Toast, die Übung bleibt auf der Seite.
+        s.js("document.querySelector('main').insertAdjacentHTML('afterbegin', "
+             "'<p><a id=\"probe-psa\" href=\"/materialablage/meine-psa\">Meine PSA ansehen</a></p>')")
+        _toast_leeren(s)
+        assert s.klick("#probe-psa") is None, wo
+        assert s.warte(f"document.getElementById('toast').textContent === {json.dumps(NICHT_HIER)}", 5), wo
+        s.b.warten(0.8)
+        assert s.js("location.pathname + location.search") == "/materialablage?uebung=grund", wo
+        assert s.js(BEREIT), wo
+        # Seitenwechsel per Code – mit S.ziel und ohne (vergessen): angehalten (Navigation API), Toast.
+        for befehl in ("location.href = S.ziel('/materialablage/ordner/900000001/bericht')",
+                       "location.assign('/materialablage/pruefen')", "location.replace('/materialablage/meine-psa/900000001')"):
+            _toast_leeren(s)
+            s.js(befehl)
+            assert s.warte(f"document.getElementById('toast').textContent === {json.dumps(NICHT_HIER)}", 5), (wo, befehl)
+            s.b.warten(0.5)
+            assert s.js("location.pathname + location.search") == "/materialablage?uebung=grund", (wo, befehl)
+        assert s.js("S.ziel('/materialablage/meine-psa')") == "/materialablage/meine-psa"
+        assert s.js("S.ziel('/materialablage/bestand')") == "/materialablage/bestand?uebung=grund"
+        # Knopf „Echtheit prüfen“ im Reiter „Prüfungen“ (material.js).
+        s.js("location.href = S.ziel('/materialablage/pruefungen')")
+        assert s.warte("location.pathname === '/materialablage/pruefungen' && document.readyState === 'complete'", 10), wo
+        assert s.warte(BEREIT, 10), wo
+        assert s.warte("Boolean(document.querySelector('a[href=\"/materialablage/pruefen\"]'))", 10), wo
+        s.b.warten(0.5)
+        _toast_leeren(s)
+        assert s.klick("a[href='/materialablage/pruefen']") is None, wo
+        assert s.warte(f"document.getElementById('toast').textContent === {json.dumps(NICHT_HIER)}", 5), wo
+        s.b.warten(0.8)
+        assert s.js("location.pathname + location.search") == "/materialablage/pruefungen?uebung=grund", wo
+        assert s.js(BEREIT), wo
+        s.sammeln()
+        befunde = s.netz_befunde(von=von)
+        assert not befunde, befunde
+        erreicht = [x for x in u.protokoll[server_von:] if x[1].startswith(("/materialablage/meine-psa", "/materialablage/pruefen",
+                                                                            "/materialablage/ordner/"))]
+        assert not erreicht, erreicht
+        # „Meine PSA“ der Kopfleiste (für Konten mit Zuordnung) führt hinaus – ohne Übungs-Referer, also die echte Seite.
+        s.js("document.querySelector('header.bauchbinde').insertAdjacentHTML('beforeend', "
+             "'<a id=\"probe-kopf\" href=\"/materialablage/meine-psa\">Meine PSA</a>')")
+        server_von = len(u.protokoll)
+        assert s.klick("#probe-kopf") is None, wo
+        assert s.warte("location.pathname === '/materialablage/meine-psa' && document.readyState === 'complete'", 10), wo
+        assert s.js("document.title").startswith("Meine PSA") and not s.js("document.title").startswith("Übung")
+        assert s.js("sessionStorage.getItem('stroemis-uebung')") is None
+        seite = [x for x in u.protokoll[server_von:] if x[1] == "/materialablage/meine-psa"]
+        assert seite and seite[0][2] == "", seite
+    finally:
+        s.schliessen()
+
+
+def _ohne_referer(u, breite, hoehe, touch):
+    wo = f"{breite}×{hoehe}"
+    s = u.seite("mitglied", breite, hoehe, touch)
+    try:
+        s.oeffnen("/profil", warten=0.3)
+        s.oeffnen("/stroemipedia?uebung=grund", warten=0.3)
+        assert s.warte(BEREIT, 10), wo
+        s.sammeln()
+        server_von = len(u.protokoll)
+        s.js("""(() => { window.__csp = [];
+          document.addEventListener('securitypolicyviolation', (e) => window.__csp.push(e.effectiveDirective + ' ' + e.blockedURI));
+          document.querySelector('main, body').insertAdjacentHTML('beforeend',
+            '<div id="probe-referer"><img id="p-bild" referrerpolicy="no-referrer" src="/api/material/start" alt="">'
+            + '<iframe id="p-rahmen" referrerpolicy="no-referrer" src="/media/wiki/probe.html"></iframe>'
+            + '<video id="p-video" src="/media/probe.mp4"></video>'
+            + '<a id="p-link" rel="noopener noreferrer" target="_blank" href="/media/probe.pdf">Probe</a></div>');
+          const b = document.createElement('img'); b.setAttribute('referrerpolicy', 'no-referrer'); b.src = '/media/thumb/probe.jpg';
+          document.getElementById('probe-referer').appendChild(b); })()""")
+        s.b.warten(1.5)
+        erreicht = [x for x in u.protokoll[server_von:] if x[1].startswith(("/api/", "/media/"))
+                    and not x[1].startswith("/api/einfuehrung/") and x[1] != "/api/me"]
+        assert not erreicht, (wo, erreicht)
+        csp = s.js("window.__csp")
+        for teil in ("img-src", "frame-src", "media-src"):
+            assert any(c.startswith(teil) for c in csp), (wo, teil, csp)
+        assert s.js("document.getElementById('p-link').getAttribute('rel')") == "noopener"
+        assert s.js("document.querySelectorAll('#probe-referer [referrerpolicy]').length") == 0
+        # Die Kopfleiste behält ihren Ausgang ohne Referer.
+        assert s.js("[...document.querySelectorAll('header.bauchbinde a[href]')].every((a) => a.referrerPolicy === 'no-referrer')")
+        s.sammeln()
+        # Die CSP meldet die Sperre als Fehler in der Konsole – das ist hier gewollt.
+        s.fehler = [f for f in s.fehler if "Content Security Policy" not in f]
+        assert not s.fehler, s.fehler
+    finally:
+        s.schliessen()
+
+
+def _abmelden(u, breite, hoehe, touch):
+    wo = f"{breite}×{hoehe}"
+    s = u.seite("mitglied", breite, hoehe, touch)
+    try:
+        s.oeffnen("/profil", warten=0.3)
+        s.js("localStorage.setItem('stroemis-entwurf-probe', 'echt'); localStorage.setItem('stroemis-sidebar', '280')")
+        s.oeffnen("/ankerplaetze?uebung=grund", warten=0.3)
+        assert s.warte(BEREIT, 10), wo
+        s.js("localStorage.setItem('stroemis-entwurf-uebung', 'UEBUNG')")
+        assert s.js("sessionStorage.getItem('stroemis-entwurf-uebung') === null")
+        _toast_leeren(s)
+        if not s.js("Boolean(document.querySelector('#logout').getClientRects().length)"):
+            assert s.klick("#nav-mehr-knopf") is None, wo
+        assert s.klick("#logout") is None, wo
+        assert s.warte("location.pathname === '/login' && document.readyState === 'complete'", 10), \
+            (wo, s.js("location.href"), s.js("document.getElementById('toast') && document.getElementById('toast').textContent"))
+        a = _ablage(s)
+        assert not any(k.startswith("stroemis-uebung") for k in a["sitzung"]), a
+        assert "stroemis-entwurf-probe" not in a["lokal"] and a["lokal"].get("stroemis-sidebar") == "280", a
+        assert s.js("fetch('/api/me').then((r) => r.status)") == 401
+    finally:
+        s.schliessen()
+
+
 def test_browser():
     if uebersprungen():
         print("übersprungen – kein Chromium")
@@ -174,6 +362,10 @@ def test_browser():
         for breite, hoehe, touch in GROESSEN:
             _angebot_und_profil(u, breite, hoehe, touch)
             _esc_dialog_bewegung(u, breite, hoehe, touch)
+            _ablage_abgeschottet(u, breite, hoehe, touch)
+            _seiten_ohne_uebung(u, breite, hoehe, touch)
+            _ohne_referer(u, breite, hoehe, touch)
+            _abmelden(u, breite, hoehe, touch)
             for modul in ("material", "wiki", "karte", "pruefungen"):
                 befunde = u.durchlauf(modul, "grund", breite, hoehe, touch)
                 assert not befunde, (modul, breite, befunde)

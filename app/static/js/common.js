@@ -438,7 +438,9 @@ window.S = (function () {
      sie wieder her. */
   const BLEIBT = new Set(["stroemis-sidebar", "stroemis-toc-aus"]);
   function ablageLeeren() {
-    for (const speicher of [window.localStorage, window.sessionStorage]) {
+    // In einer Übung zeigen localStorage und sessionStorage auf die Übungsablage (einfuehrung.js) – geleert wird die echte.
+    const echt = window.S && window.S.einfuehrung && window.S.einfuehrung.echteAblage;
+    for (const speicher of echt ? echt() : [window.localStorage, window.sessionStorage]) {
       try {
         const weg = [];
         for (let i = 0; i < speicher.length; i++) {
@@ -1117,7 +1119,9 @@ window.S = (function () {
   /* Einführung (app/einfuehrung.py, einfuehrung.js): Im Übungsmodus (STROEMIS.einfuehrung.uebung) behält jede Adresse
      einer Seite desselben Moduls die Kennung „uebung=<teil>“ – sonst lüde der Seitenwechsel die echte Seite. Die Module
      setzen jeden programmatischen Wechsel (location.href = …, location.replace/assign, window.open) mit S.ziel(adresse);
-     außerhalb der Übung kommt die Adresse unverändert zurück, ebenso fremde Adressen und Seiten anderer Module. */
+     außerhalb der Übung kommt die Adresse unverändert zurück, ebenso fremde Adressen und Seiten anderer Module. Seiten
+     ohne Übungszweig (nicht in STROEMIS.einfuehrung.seiten: Meine PSA, Echtheit prüfen, Bericht …) bekommen keine
+     Kennung – den Wechsel dorthin hält einfuehrung.js an („In der Übung nicht verfügbar.“), der Server sperrt ihn auch. */
   function ziel(url) {
     const e = window.STROEMIS && window.STROEMIS.einfuehrung;
     if (!e || !e.uebung) return url;
@@ -1126,6 +1130,8 @@ window.S = (function () {
     const pfad = ((window.STROEMIS.module && window.STROEMIS.module.pfad) || {})[e.modul];
     if (u.origin !== location.origin || !pfad || !(u.pathname === pfad || u.pathname.startsWith(`${pfad}/`))
         || u.searchParams.has("uebung")) return url;
+    const mitUebung = (e.seiten || []).some((s) => { try { return new RegExp(s).test(u.pathname); } catch (err) { return false; } });
+    if (!mitUebung) return url;
     u.searchParams.set("uebung", e.uebung);
     return u.pathname + u.search + u.hash;
   }

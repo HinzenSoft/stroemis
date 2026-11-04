@@ -733,12 +733,16 @@ def create_app():
         resp.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
         # Mikrofon nur für die eigene Seite: das Diktat der Prüfungen (Web Speech API) braucht es.
         resp.headers.setdefault("Permissions-Policy", "geolocation=(self), camera=(), microphone=(self)")
+        # Eine Übungsseite der Einführung lädt Bilder, Medien und Rahmen nur aus /static/ und verbindet sich nur mit den
+        # Ausnahmen der Sperre (einfuehrung.csp_quellen) – auch ohne Referer erreicht so kein Element /api/ oder /media/.
+        uebung = einfuehrung.csp_quellen()
+        bild, netz = (uebung["bild"], uebung["netz"]) if uebung else ("'self'", "'self'")
         resp.headers.setdefault(
             "Content-Security-Policy",
             f"default-src 'self'; script-src 'self' 'nonce-{nonce}'; style-src 'self' 'unsafe-inline'; "
-            f"img-src 'self' data: blob: {_kachel_quellen(app.config)}; media-src 'self' blob:; "
-            "font-src 'self' data:; connect-src 'self'; "
-            "frame-ancestors 'self'; form-action 'self'; base-uri 'self'; object-src 'none'")
+            f"img-src {bild} data: blob: {_kachel_quellen(app.config)}; media-src {bild} blob:; "
+            f"font-src 'self' data:; connect-src {netz}; " + (f"frame-src {bild} blob:; " if uebung else "")
+            + "frame-ancestors 'self'; form-action 'self'; base-uri 'self'; object-src 'none'")
         return resp
 
     @app.context_processor

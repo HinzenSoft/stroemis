@@ -592,7 +592,7 @@ Ohne `ADMIN_EMAIL`/`ADMIN_PASSWORD` bekommt der erste Nutzer, der ein Konto anfr
 - **Protokolle (Materialablage):** Festgeschriebene Prüfungen, Aussonderungen und Durchgänge ändert auch die Datenbank nicht mehr (Trigger); die PDF-Dateien liegen schreibgeschützt unter `/data/pdf` und werden nur ausgeliefert, wenn ihre Prüfsumme noch stimmt. WeasyPrint lädt beim Rendern nichts aus dem Netz und keine fremden Dateien – nur die eigenen Schriften; Bilder kommen eingebettet. Die öffentliche Seite „Echtheit prüfen“ `/materialablage/pruefen` speichert nichts, nennt keine Personendaten und ist je Adresse auf 20 Prüfungen in 15 Minuten und 200 MB je Datei gebremst.
 - **Trennung je Gliederung (Materialablage):** Rechte am Bestand gibt es für Mitglieder nur über Freigaben je Ordner (alle Bestände sieht nur die Material-Verwaltung); der Server prüft sie bei jeder Anfrage, und ohne Stufe im Modul wirkt keine. `tests/test_material_stufen.py` ruft jede Route des Moduls mit einem Konto auf, das Freigaben, aber keine Stufe hat (403 vor jeder Frage nach dem Gegenstand). Was ein Konto nicht sieht, antwortet wie etwas, das es nicht gibt – 404 mit derselben Meldung, ob die Kennung im Pfad oder im Inhalt der Anfrage steht; 403 nur, wenn man den Gegenstand sieht, die Aktion aber nicht darf. Listen, Zählungen, Suche, Exporte, Rückrufe und Meldungen filtert der Server, nicht die Oberfläche. Mediendateien prüft er je Datei (Ordnerfoto am Ordner, Befundfoto und Prüfanhang am Artikel, Meldungsfoto an der Meldung; Produktbilder und Herstellerdokumente für alle mit Zugang). Die globale Seriennummernsuche, der Steckbrief nach einem QR-Scan und die Meldung „gibt es schon in einem Bereich, den du nicht siehst“ beim Anlegen stehen jedes Mal zwölf Monate mit Namen im Protokoll – ungebremst, die Kontrolle ist dieses Protokoll; gesucht wird nur nach der ganzen Herstellerseriennummer, nach ausdrücklicher Bestätigung und nur unter dem, was man nicht sieht. Die Personensuche für Freigaben und Zuordnung zeigt ab drei Zeichen nur Name, Gliederung und ob jemand Prüfer ist – keine E-Mail. `tests/test_material_trennung.py` ruft jede Route des Moduls mit Kennungen einer fremden Gliederung auf und sucht deren Merkmale in allen Antworten.
 - **Export und Katalogaustausch (Materialablage):** Exporte gibt es nur mit lesen oder verwalten am Ordner (Freigaben je Ordner); Werte, die eine Tabellenkalkulation als Formel läse (`=`, `+`, `-`, `@` am Anfang), stehen in der CSV mit vorangestelltem `'`. Das Protokoll-ZIP gibt nur Dateien heraus, deren Prüfsumme noch stimmt, und entsteht als Zwischendatei unter `/data/tmp` (höchstens 2 GB). Den Katalog exportieren und importieren nur die Material-Verwaltung. Der Import liest aus dem ZIP nur die Einträge, auf die `katalog.json` verweist (keine absoluten Pfade, kein `..`, keine doppelten Namen), prüft Zahl, Größe und Packverhältnis der Einträge vor dem Lesen und lässt Bilder und Dokumente durch dieselben Prüfungen wie beim Hochladen (Endung, Inhalt, Größe, Pixel); ein Fehler irgendwo speichert nichts.
-- **Übungssperre (Einführung):** Eine Übung läuft ganz im Browser – die Schicht in `einfuehrung.js` beantwortet jede Anfrage der Seite aus dem Übungsbestand. Zweite Absicherung auf dem Server (`einfuehrung.sperre`, erster Schritt von `csrf_guard`): Eine Übungsanfrage – Kopfzeile `X-Uebung: 1` oder ein Referer derselben Herkunft mit `uebung=` im Abfrageteil (so auch Bilder, Beacons, Datei-Links und neue Fenster) – bekommt an `/api/` und `/media/` (auch lesend), mit jeder schreibenden Methode und an jede Datei (Endung, `…/pdf`, `…/sammelprotokoll`) 403 „In der Übung gesperrt – es wird nichts gespeichert.“. Durch gehen nur der Merker (`/api/einfuehrung/…`), `GET /api/me`, `/static/` und Seitenaufrufe. Eine Übung gilt nur, wenn ihr Teil für das Konto gilt – die Stufe in der Übung ist nie höher als die echte. `tests/test_einfuehrung.py` ruft jede Regel unter `/api/` mit jeder Methode und prüft, dass sich die Datenbank nicht ändert.
+- **Übungssperre (Einführung):** Eine Übung läuft ganz im Browser – die Schicht in `einfuehrung.js` beantwortet jede Anfrage der Seite aus dem Übungsbestand. Zweite Absicherung auf dem Server (`einfuehrung.sperre`, erster Schritt von `csrf_guard`): Eine Übungsanfrage – Kopfzeile `X-Uebung: 1` oder ein Referer derselben Herkunft mit `uebung=` im Abfrageteil (so auch Bilder, Beacons, Datei-Links und neue Fenster) – bekommt an `/api/` und `/media/` (auch lesend), mit jeder schreibenden Methode und an jede Datei (Endung, `…/pdf`, `…/sammelprotokoll`) 403 „In der Übung gesperrt – es wird nichts gespeichert.“. Durch gehen nur der Merker (`/api/einfuehrung/…`), `GET /api/me`, Abmelden (`POST /api/auth/logout`, ändert nur die Sitzung), `/static/` und Seitenaufrufe. Seiten gibt es in der Übung nur mit Übungszweig (`einfuehrung.UEBUNGSSEITEN`): Jeder andere Seitenaufruf mit `uebung=` – oder aus einer Übungsseite heraus unter einem Modulpfad (Meine PSA, Echtheit prüfen, Bericht, Bestandsimport, Druck der Riegenkarten …) – bekommt vor der Route die Fehlerseite „In der Übung nicht verfügbar“ (403) mit „Zurück zur Übung“; die Kopfleiste führt ohne Referer hinaus. Eine Übungsseite hat eine engere CSP: Bilder, Medien und Rahmen nur aus `/static/` (dazu `data:`, `blob:`, Kartenkacheln), Verbindungen nur zu den Ausnahmen – so erreicht auch ein Element mit `referrerpolicy="no-referrer"` `/api/` und `/media/` nicht. Eine Übung gilt nur, wenn ihr Teil für das Konto gilt – die Stufe in der Übung ist nie höher als die echte. `tests/test_einfuehrung.py` ruft jede Regel unter `/api/` mit jeder Methode und jede Seitenregel der Module mit `uebung=` auf und prüft, dass sich die Datenbank nicht ändert.
 
 ## Damit Mails ankommen
 
@@ -982,14 +982,21 @@ besucht“, keine Suche mit Weiterleitung, kein `_sichtbar` der Riegenkarten); T
 Browser legt `app/static/js/einfuehrung.js` vor den Skripten der Seite eine Schicht um `fetch`, `XMLHttpRequest`,
 `sendBeacon`, `window.open`, Datei-Links, GET-Formulare und den Verlauf: Anfragen an `/api/` und `/media/` beantwortet die
 Übungsdatei des Moduls (`app/static/js/uebung/<modul>.js`) aus ihrem Übungsbestand, Schreibvorgänge spielt sie darin
-nach (je Ablauf frisch, im `sessionStorage` des Reiters unter `stroemis-uebung`). Hochgeladene Dateien bleiben im
+nach (je Ablauf frisch, im `sessionStorage` des Reiters unter `stroemis-uebung`). `localStorage` und `sessionStorage`
+zeigen in der Übung auf eine eigene Übungsablage (`stroemis-uebung-ablage` im `sessionStorage` des Reiters): Kein Skript
+der Seite liest oder schreibt die echte Ablage – eine laufende echte Stoppuhr, zugeklappte Ordner oder ein ausgeblendeter
+Hinweis bleiben, wie sie sind. Hochgeladene Dateien bleiben im
 Browser („Übungsbild nehmen“ setzt ein Bild aus `/static/uebung/` in die Dateiwahl); Dateien öffnen eine Übungsdatei
 (`/static/uebung/uebungsdatei.pdf`) oder melden „In der Übung gibt es diese Datei nicht.“. Seitenwechsel behalten die
 Kennung (Links und Formulare des Moduls, Verlauf, im Code `S.ziel(adresse)` aus `common.js`); die Kopfleiste und ein neuer
-Reiter führen auf die echten Seiten. Kartenkacheln laden wie sonst. Zweite Absicherung ist die Sperre auf dem Server
+Reiter führen auf die echten Seiten. Seiten des Moduls ohne Übungszweig (nicht in `STROEMIS.einfuehrung.seiten`, vom
+Server aus `UEBUNGSSEITEN`) öffnen sich in der Übung nicht: Links, Formulare und Seitenwechsel per Code (Navigation API)
+bleiben auf der Seite mit dem Toast „In der Übung nicht verfügbar.“; ohne Navigation API antwortet der Server mit der
+Fehlerseite und „Zurück zur Übung“ (Übungszustand bleibt). Abmelden geht auch aus der Übung und leert die echte Ablage
+samt Übungszustand. Kartenkacheln laden wie sonst. Zweite Absicherung ist die Sperre auf dem Server
 (siehe „Wie die Anwendung abgesichert ist“). Übungs-Kennungen: Materialablage 9000000xx, Strömipedia 9100000xx,
-Ankerplätze 9200000xx, Riegenkarten 9300000xx – echte Zeilen erreichen sie nie; beim Ende und beim Unterbrechen räumt
-`einfuehrung.js` Ablage-Schlüssel mit solchen Kennungen weg (beim Abmelden geht `stroemis-uebung` ohnehin mit).
+Ankerplätze 9200000xx, Riegenkarten 9300000xx – echte Zeilen erreichen sie nie; beim Ende, beim Unterbrechen und auf
+jeder echten Seite räumt `einfuehrung.js` die Übungsablage und den Übungszustand weg (beim Abmelden gehen sie ohnehin mit).
 
 **Führung:** ein Rahmen in `--wasser` um das Ziel (die Seite bleibt bedienbar), eine Sprechblase daneben bzw. am Telefon
 als Leiste unten mit „Übung · Schritt n von m“, Ablauftitel, Text, „Zurück“/„Weiter“ und „Übung unterbrechen“; in einem
@@ -1028,7 +1035,8 @@ oder RegExp, `{da: sel}`, `{bedingung: (z) => bool}`), `wenn` (`() => bool`, Sch
 **Nach einer Änderung an der Oberfläche nachziehen:** Wird ein Durchlauftest rot (`tests/test_einfuehrung_browser.py`,
 je Modul `tests/test_einfuehrung_<modul>.py`; Befunde nennen Ablauf, Schritt und Ziel), stimmt meist ein Selektor in
 `uebung/<modul>.js` nicht mehr, oder die Seite stellt eine neue Anfrage, die die Antworttabelle noch nicht kennt
-(„Unbeantwortete Anfragen“). Neue programmatische Seitenwechsel im Modul gehen über `S.ziel(…)`. Ändern sich Abläufe
+(„Unbeantwortete Anfragen“). Neue programmatische Seitenwechsel im Modul gehen über `S.ziel(…)`. Bekommt eine Seite einen
+Übungszweig, gehört ihr Endpunkt in `UEBUNGSSEITEN` (sonst „In der Übung nicht verfügbar“). Ändern sich Abläufe
 (Titel, Startadresse des ersten), gehören sie auch in `TEILE`. Die Browser-Tests laufen mit Chromium über
 `/home/harness/devtools/cdp` (Hilfe `tests/einfuehrung_browser.py`); ohne Chromium melden sie „übersprungen“.
 
@@ -1151,9 +1159,11 @@ python tests/test_material_ohne_kritisch.py  # „kritisch“ entfernt (03.11.20
                                              # Markierung, Protokoll/Lebenslauf/Jahresbericht/CSV ohne, gespeichertes Protokoll unverändert,
                                              # Katalogimport mit (übergangen, keine neue Version) und Export ohne, Oberfläche statisch
 python tests/test_einfuehrung.py         # Einführung je Modul: Übungssperre (jede /api/-Regel × Methode), Merker, Angebot je Rolle,
-                                        # Übungsseiten ohne echte Daten, Profil „Einführungen“, Übungsdateien gegen TEILE (statisch)
+                                        # Übungsseiten ohne echte Daten, Seiten ohne Übungszweig (jede Seitenregel), engere CSP, Abmelden,
+                                        # Profil „Einführungen“, Übungsdateien gegen TEILE (statisch)
 python tests/test_einfuehrung_browser.py # Einführung im Browser (Chromium, sonst „übersprungen“): Angebot, „Nicht jetzt“, Profil, Gerüst-
-                                        # Übung je Modul bis „Geschafft“, Esc, Blase im Dialog, kein /api/ und /media/ im Übungsmodus
+                                        # Übung je Modul bis „Geschafft“, Esc, Blase im Dialog, kein /api/ und /media/ im Übungsmodus,
+                                        # Übungsablage, Seiten ohne Übungszweig (Toast), ohne Referer (CSP), Abmelden aus der Übung
 python tests/test_material_stufen.py     # Phase 2: Modulstufe (Migration 9 → 10, ohne Stufe wirkt nichts – alle Routen, Material-Verwaltung,
                                         # Personensuche je Zweck, Mails, Profil, Vorgabe neuer Konten)
 python tests/test_material_beispielbestand.py  # Beispielbestand: Katalog unverändert bis auf DEMO-Formulare (nicht im Export), Struktur, Geschichte über zwei Jahre,

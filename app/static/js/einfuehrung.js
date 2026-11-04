@@ -8,7 +8,9 @@
      Wege, auf denen die Seite Daten holt oder schreibt (fetch, XMLHttpRequest, sendBeacon, window.open, Datei-Links,
      GET-Formulare, Verlauf): Anfragen an /api/ und /media/ beantwortet die Übungsdatei des Moduls
      (app/static/js/uebung/<modul>.js) aus ihrem Übungsbestand – ans Netz gehen nur der Merker (/api/einfuehrung/…),
-     GET /api/me und /static/, mit der Kopfzeile „X-Uebung: 1“; der Server sperrt alles andere ein zweites Mal.
+     GET /api/me, Abmelden und /static/, mit der Kopfzeile „X-Uebung: 1“; der Server sperrt alles andere ein zweites Mal.
+     localStorage und sessionStorage zeigen auf eine eigene Übungsablage; Seiten eines Moduls ohne Übungszweig (Meine
+     PSA, Echtheit prüfen …) melden „In der Übung nicht verfügbar.“ statt zu laden (Sicherheitsprüfung vom 04.11.2026).
      Dazu die Führung: ein Rahmen um das Ziel, eine Sprechblase daneben (am Telefon als Leiste unten), Schritt für
      Schritt durch die Abläufe des Teils bis zum Dialog „Geschafft“.
 
@@ -34,33 +36,60 @@
   const UEBUNG = E && E.uebung ? E.uebung : null;
   const ZUSTAND = "stroemis-uebung";          // Übungszustand dieses Reiters: {modul, teil, ablauf, schritt, z}
   const RUHE = "stroemis-uebung-ruhe";        // Module, deren Angebot in diesem Reiter schweigt (nach Ende/Unterbrechen)
-  const KENNUNG = /\b9[0-3]\d{7}\b/;          // Kennungen des Übungsbestands (Bauvorlage 2.2)
+  const ABLAGE = "stroemis-uebung-ablage";    // Übungsablage dieses Reiters: {lokal: {…}, sitzung: {…}}
   const echtFetch = window.fetch.bind(window);
   const echtOpen = window.open.bind(window);
   const esc = S.esc;
   const registriert = {};                     // Modul → Übungsdatei
 
   /* --- Ablage ------------------------------------------------------------------------------------------------------ */
+  // Die echte Ablage des Browsers – gefasst, bevor die Übung localStorage und sessionStorage umlegt (ablageUmlegen).
+  const echt = { lokal: null, sitzung: null };
+  try { echt.lokal = window.localStorage; echt.sitzung = window.sessionStorage; } catch (e) { /* kein Speicher */ }
   const sitzung = {
-    lesen(k) { try { return JSON.parse(sessionStorage.getItem(k) || "null"); } catch (e) { return null; } },
-    schreiben(k, v) { try { sessionStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* kein Speicher */ } },
-    weg(k) { try { sessionStorage.removeItem(k); } catch (e) { /* kein Speicher */ } },
+    lesen(k) { try { return JSON.parse(echt.sitzung.getItem(k) || "null"); } catch (e) { return null; } },
+    schreiben(k, v) { try { echt.sitzung.setItem(k, JSON.stringify(v)); } catch (e) { /* kein Speicher */ } },
+    weg(k) { try { echt.sitzung.removeItem(k); } catch (e) { /* kein Speicher */ } },
   };
-  /* Übungsreste weg: jeder Schlüssel, dessen Name eine Übungs-Kennung trägt (Prüfentwurf, Entwurf der Strömipedia,
-     Ansicht der Riegenkarten), die Werte nur bei den Schlüsseln der Riegenkarten („pruef:“, die Stoppuhr nennt ihren
-     Lehrgang im Wert) – ein echter Entwurf mit einer neunstelligen Zahl im Text bleibt. Dazu der Übungszustand. */
+  /* Übungsreste weg: die Übungsablage und der Übungszustand dieses Reiters. Was die Seite in der Übung abgelegt hat
+     (Prüfentwurf, Stoppuhr, Entwürfe, zugeklappte Ordner), lag nur dort (ablageUmlegen) – die echte Ablage bleibt. */
   function ablageAufraeumen() {
-    for (const speicher of [window.localStorage, window.sessionStorage]) {
-      try {
-        const weg = [];
-        for (let i = 0; i < speicher.length; i++) {
-          const k = speicher.key(i);
-          if (!k) continue;
-          if (k === ZUSTAND || KENNUNG.test(k) || (k.startsWith("pruef:") && KENNUNG.test(speicher.getItem(k) || ""))) weg.push(k);
-        }
-        weg.forEach((k) => speicher.removeItem(k));
-      } catch (e) { /* kein Speicher (privater Modus, abgeschaltet) */ }
-    }
+    sitzung.weg(ABLAGE);
+    sitzung.weg(ZUSTAND);
+  }
+
+  /* Im Übungsmodus liest und schreibt kein Skript der Seite die echte Ablage (Sicherheitsprüfung vom 04.11.2026):
+     localStorage und sessionStorage zeigen vor den Skripten der Seite auf je einen Bereich der Übungsablage – im echten
+     sessionStorage unter ABLAGE, damit sie Seitenwechsel innerhalb der Übung übersteht und mit dem Reiter vergeht. Eine
+     echte Stoppuhr, zugeklappte Ordner oder ausgeblendete Hinweise bleiben so, wie sie sind; überschreibt die Übung sie,
+     dann nur in ihrem Bereich. */
+  function ablageBereich(name) {
+    const alles = () => { const a = sitzung.lesen(ABLAGE); return a && typeof a === "object" ? a : {}; };
+    // Ohne Prototyp: ein Schlüssel „__proto__“ ist dann ein gewöhnlicher Eintrag.
+    const lesen = () => { const b = alles()[name]; return Object.assign(Object.create(null), b && typeof b === "object" ? b : {}); };
+    const schreiben = (werte) => {
+      if (!echt.sitzung) throw new DOMException("Kein Speicher", "SecurityError");
+      const a = alles();
+      a[name] = werte;
+      echt.sitzung.setItem(ABLAGE, JSON.stringify(a));   // voll: QuotaExceededError wie beim echten Speicher
+    };
+    return {
+      get length() { return Object.keys(lesen()).length; },
+      key(i) { const k = Object.keys(lesen()); const n = Math.trunc(Number(i)); return n >= 0 && n < k.length ? k[n] : null; },
+      getItem(k) { const w = lesen(); return Object.prototype.hasOwnProperty.call(w, String(k)) ? w[String(k)] : null; },
+      setItem(k, v) { const w = lesen(); w[String(k)] = String(v); schreiben(w); },
+      removeItem(k) { const w = lesen(); delete w[String(k)]; schreiben(w); },
+      clear() { schreiben(Object.create(null)); },
+    };
+  }
+  let ablageUmgelegt = false;
+  function ablageUmlegen() {
+    try {
+      for (const [eigenschaft, bereich] of [["localStorage", ablageBereich("lokal")], ["sessionStorage", ablageBereich("sitzung")]]) {
+        Object.defineProperty(window, eigenschaft, { configurable: true, enumerable: true, get: () => bereich });
+      }
+      ablageUmgelegt = window.localStorage !== echt.lokal && window.sessionStorage !== echt.sitzung;
+    } catch (e) { ablageUmgelegt = false; }
   }
   const ruhe = () => sitzung.lesen(RUHE) || [];
   function ruhig(modul) { const r = ruhe(); if (!r.includes(modul)) sitzung.schreiben(RUHE, r.concat(modul)); }
@@ -111,11 +140,12 @@
 
   /* --- Ohne Übung -------------------------------------------------------------------------------------------------- */
   if (!UEBUNG) {
-    // Wer aus einer Übung herauskommt (Kopfleiste, Zurück), landet auf einer echten Seite: der Zustand dieses Reiters und
-    // die Übungsreste gehen still, der Merker steht schon auf „unterbrochen“.
-    if (sitzung.lesen(ZUSTAND)) ablageAufraeumen();
-    // Eine Adresse mit „uebung=“, die der Server nicht als Übung zeichnet (Teil gilt nicht für das Konto, Seite ohne
-    // Übung): Die Kennung kommt aus der Adresse, bevor die Seite Anfragen stellt – der Server sperrte sie sonst.
+    // Wer aus einer Übung herauskommt (Kopfleiste: Startseite, Profil, andere Module, Meine PSA; Zurück), landet auf
+    // einer echten Seite: Zustand und Übungsablage dieses Reiters gehen still, der Merker steht schon auf „unterbrochen“.
+    // Nicht auf der Fehlerseite „In der Übung nicht verfügbar“ (E.gesperrt) – „Zurück zur Übung“ macht dort weiter.
+    if (!(E && E.gesperrt)) ablageAufraeumen();
+    // Eine Adresse mit „uebung=“, die der Server nicht als Übung zeichnet (Teil gilt nicht für das Konto, Fehlerseite):
+    // Die Kennung kommt aus der Adresse, bevor die Seite Anfragen stellt – der Server sperrte sie sonst.
     const hier = new URL(location.href);
     if (hier.searchParams.has("uebung") || hier.searchParams.has("ablauf")) {
       hier.searchParams.delete("uebung");
@@ -147,14 +177,25 @@
                leiste: Boolean(blase && blase.classList.contains("als-leiste")) };
     },
     teile(modul) { return beschreiben(registriert[modul || (E && E.modul)]); },
+    // Nur für das Abmelden (common.js, ablageLeeren): die echte Ablage, auch wenn die Übung sie umgelegt hat.
+    echteAblage() { return [echt.lokal, echt.sitzung].filter(Boolean); },
   };
 
   /* ================================================================================================================
      Schicht (nur im Übungsmodus, Bauvorlage 2.3)
      ================================================================================================================ */
-  // Was ans Netz darf – mit X-Uebung: 1 (der Server lässt genau das durch).
+  // Was ans Netz darf – mit X-Uebung: 1 (der Server lässt genau das durch). Abmelden ändert nur die Sitzung.
   const ausnahme = (pfad, methode) => pfad.startsWith("/api/einfuehrung/") || pfad.startsWith("/static/")
-    || (pfad === "/api/me" && (methode === "GET" || methode === "HEAD"));
+    || (pfad === "/api/me" && (methode === "GET" || methode === "HEAD")) || (pfad === "/api/auth/logout" && methode === "POST");
+  /* Seiten eines Moduls ohne Übungszweig (Meine PSA, Echtheit prüfen, Bericht, Druck …): Die Liste der Seiten mit
+     Übungszweig gibt der Server mit (STROEMIS.einfuehrung.seiten, app/einfuehrung.py UEBUNGSSEITEN). Links, Formulare und
+     Seitenwechsel dorthin bleiben auf der Seite und melden „In der Übung nicht verfügbar.“. */
+  const SEITEN = ((E && E.seiten) || []).map((s) => { try { return new RegExp(s); } catch (e) { return null; } }).filter(Boolean);
+  const BEREICHE = (E && E.bereiche) || [];
+  const ohneUebung = (u) => Boolean(u && u.origin === location.origin
+    && BEREICHE.some((b) => u.pathname === b || u.pathname.startsWith(`${b}/`)) && !SEITEN.some((r) => r.test(u.pathname)));
+  const NICHT_HIER = "In der Übung nicht verfügbar.";
+  let ausgang = null;                   // Adresse eines Links der Kopfleiste, der gerade aus der Übung hinausführt
   const antwortJson = (status, daten) => new Response(JSON.stringify(daten === undefined ? {} : daten),
     { status, headers: { "Content-Type": "application/json" } });
   function dateiFuer(u) {
@@ -315,11 +356,15 @@
       return null;
     };
     // Links: Dateien öffnen die Übungsdatei (oder melden, dass es sie nicht gibt); Seiten desselben Moduls behalten die
-    // Kennung. Die Kopfleiste führt aus der Übung hinaus, ein neuer Reiter (target) öffnet die echte Seite.
+    // Kennung. Die Kopfleiste führt aus der Übung hinaus – ohne Referer, sonst hielte der Server auch „Meine PSA“ der
+    // Kopfleiste für eine Seite aus der Übung; ein neuer Reiter (target) öffnet die echte Seite.
+    const kopfleiste = (el) => Boolean(el && el.closest && el.closest("header.bauchbinde"));
+    document.querySelectorAll("header.bauchbinde a[href]").forEach((a) => { a.referrerPolicy = "no-referrer"; });
     document.addEventListener("click", (e) => {
       if (e.button !== 0) return;
       const a = e.target.closest && e.target.closest("a[href]");
-      if (!a || a.closest("header.bauchbinde, .fuehrung-blase, .einfuehrung-angebot")) return;
+      if (a && kopfleiste(a)) { ausgang = a.href; a.referrerPolicy = "no-referrer"; return; }
+      if (!a || a.closest(".fuehrung-blase, .einfuehrung-angebot")) return;
       const roh = a.getAttribute("href") || "";
       if (!roh || roh.startsWith("#") || /^(javascript|mailto|tel|blob|data):/i.test(roh)) return;
       const u = adresse(a.href);
@@ -335,16 +380,65 @@
       const neu = S.ziel(u.href);
       if (neu !== u.href) a.setAttribute("href", neu);
     }, true);
+    // Links auf Seiten ohne Übungszweig: erst nach den Handlern der Seite (die einen Link selbst behandeln dürfen), auch mit
+    // target – stattdessen der Toast, die Übung läuft weiter.
+    window.addEventListener("click", (e) => {
+      if (e.button !== 0 || e.defaultPrevented) return;
+      const a = e.target.closest && e.target.closest("a[href]");
+      if (!a || kopfleiste(a) || a.closest(".fuehrung-blase, .einfuehrung-angebot") || !ohneUebung(adresse(a.href))) return;
+      e.preventDefault();
+      S.toast(NICHT_HIER);
+    });
     // GET-Formulare des Moduls (Nummernsuche der Materialablage): die Kennung als verstecktes Feld.
+    const formZiel = (f, e) => adresse((e && e.submitter && e.submitter.hasAttribute("formaction") && e.submitter.formAction)
+      || (f.hasAttribute("action") ? f.action : location.href));
     document.addEventListener("submit", (e) => {
       const f = e.target;
       if (!(f instanceof HTMLFormElement) || (f.getAttribute("method") || "get").toLowerCase() !== "get") return;
-      const u = adresse(f.action || location.href);
+      const u = formZiel(f, e);
       if (!u || S.ziel(u.href) === u.href || f.querySelector("input[name=uebung]")) return;
       const feld = document.createElement("input");
       Object.assign(feld, { type: "hidden", name: "uebung", value: UEBUNG });
       f.appendChild(feld);
     }, true);
+    // Formulare an Seiten ohne Übungszweig (nach den Handlern der Seite): Toast statt Seitenwechsel.
+    window.addEventListener("submit", (e) => {
+      const f = e.target;
+      if (e.defaultPrevented || !(f instanceof HTMLFormElement) || !ohneUebung(formZiel(f, e))) return;
+      e.preventDefault();
+      S.toast(NICHT_HIER);
+    });
+    // Jeder andere Seitenwechsel dorthin (location.href = S.ziel(…), assign, replace, Verlauf) – wo der Browser die
+    // Navigation API hat (Chromium, Firefox, Safari 26): anhalten, Toast. Ohne sie antwortet der Server mit der Fehlerseite
+    // „In der Übung nicht verfügbar“ und dem Weg zurück. Die Kopfleiste (ausgang) führt hinaus.
+    if (window.navigation && typeof window.navigation.addEventListener === "function") {
+      window.navigation.addEventListener("navigate", (e) => {
+        if (!e.cancelable || e.hashChange || e.downloadRequest || e.navigationType === "reload" || e.navigationType === "traverse") return;
+        const u = adresse(e.destination && e.destination.url);
+        if (!ohneUebung(u) || (ausgang && u.href === ausgang)) return;
+        e.preventDefault();
+        S.toast(NICHT_HIER);
+      });
+    }
+    // Ohne Referer erkennt der Server eine Anfrage aus der Übung nicht (Hinweis 1 der Sicherheitsprüfung): Außerhalb der
+    // Kopfleiste trägt in der Übung kein Element referrerpolicy oder rel="noreferrer". Bilder, Medien und Rahmen hält
+    // zusätzlich die engere CSP der Übungsseite von /api/ und /media/ fern (app/einfuehrung.py, csp_quellen) – für sie
+    // käme dieser Beobachter zu spät, für Links (neuer Reiter) nicht.
+    const refererBehalten = (wurzel) => {
+      if (!(wurzel instanceof Element)) return;
+      for (const el of [wurzel, ...wurzel.querySelectorAll("[referrerpolicy], [rel]")]) {
+        if (kopfleiste(el)) continue;
+        if (el.hasAttribute("referrerpolicy")) el.removeAttribute("referrerpolicy");
+        const rel = el.getAttribute("rel");
+        if (rel && /(^|\s)noreferrer(\s|$)/i.test(rel)) {
+          el.setAttribute("rel", rel.split(/\s+/).filter((t) => t && t.toLowerCase() !== "noreferrer").join(" "));
+        }
+      }
+    };
+    new MutationObserver((liste) => liste.forEach((m) => {
+      if (m.type === "attributes") refererBehalten(m.target); else m.addedNodes.forEach(refererBehalten);
+    })).observe(document.documentElement, { subtree: true, childList: true, attributes: true, attributeFilter: ["referrerpolicy", "rel"] });
+    refererBehalten(document.body);
     // Verlauf: Adressen, die die Seite selbst schreibt (Strömipedia, Filter, Reiter), behalten die Kennung.
     for (const art of ["pushState", "replaceState"]) {
       const vorher = history[art];
@@ -797,6 +891,7 @@
   }
 
   if (UEBUNG) {
+    ablageUmlegen();
     schichtEinschalten();
     // Esc (nur ohne offenen Dialog, Menü oder Info – und wenn die Seite die Taste nicht schon behandelt hat) fragt, ob
     // die Übung unterbrochen werden soll. Am window, also nach den Handlern der Seite am document.
@@ -812,7 +907,7 @@
       // Der Hinweis „Entwicklungsserver“ (erste Seite nach der Anmeldung auf dev) zuerst – dann die Führung.
       const dev = document.getElementById("dev-hinweis");
       if (dev && dev.open) { dev.addEventListener("close", () => setTimeout(los, 0), { once: true }); return; }
-      if (!DEF) {
+      if (!DEF || !ablageUmgelegt) {
         zustand = zustand || { modul: E.modul, teil: UEBUNG, ablauf: 0, schritt: 0, z: {} };
         sackgasse("Die Übung ließ sich nicht laden.");
         return;

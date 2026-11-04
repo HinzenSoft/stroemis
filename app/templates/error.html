@@ -11,7 +11,9 @@
      (Bericht, Ordner, Artikel, Dateien des Moduls) führt mit Modulzugang zur Übersicht der Materialablage (Browserprüfung
      P4-L1); sonst seit dem 02.11.2026 zur Startseite über alle Module (app/start.py) – sie zeigt genau die Module des
      Kontos. Ohne Startseite (kein Bereich freigeschaltet) zum Profil, ohne Anmeldung zur Startseite (die Anmeldung davor). #}
-  <p>{% if user and material_zugang and (request.path == "/materialablage" or request.path.startswith("/materialablage/")) %}<a href="/materialablage">Zur Übersicht der Materialablage</a>
+  {# Aus einer Übung (app/einfuehrung.py, Seite ohne Übungszweig): zurück an die Stelle der Übung. #}
+  <p>{% if zurueck %}<a href="{{ zurueck }}">Zurück zur Übung</a>
+  {%- elif user and material_zugang and (request.path == "/materialablage" or request.path.startswith("/materialablage/")) %}<a href="/materialablage">Zur Übersicht der Materialablage</a>
   {%- elif user and startseite %}<a href="/">Zur Startseite</a>
   {%- elif user %}<a href="/profil">Zum Profil</a>
   {%- else %}<a href="/">Zur Startseite</a>{% endif %}</p>

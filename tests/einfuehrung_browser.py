@@ -10,7 +10,7 @@ Test (kein „test_“ im Namen). Genutzt von tests/test_einfuehrung_browser.py 
         assert not befunde, befunde
 
 Server: werkzeug.serving.make_server im Faden (freier Port, Datenordner in einem eigenen Temp-Ordner, nie Mails – kein
-SMTP_HOST). Konten über die Nutzerverwaltung: je Rolle eines (KONTEN), welcher Teil welches Konto nimmt, sagt
+SMTP_HOST); jede Anfrage, die ihn erreicht, steht in Umgebung.protokoll (Methode, Pfad, Referer). Konten über die Nutzerverwaltung: je Rolle eines (KONTEN), welcher Teil welches Konto nimmt, sagt
 KONTO_JE_TEIL. Chromium über /home/harness/devtools/cdp/cdp.py mit freiem CDP-Port und eigenem Profil unter
 /home/harness/cdp-profile (das snap-Chromium liest /tmp nicht); Touch per Emulation (pointer: coarse, mobil, Tippen als
 Geste), sonst Maus (pointer: fine, hover). Alle Anfragen kommen aus Network.requestWillBeSent ins Netzprotokoll.
@@ -94,7 +94,14 @@ class Umgebung:
         self.app = make_app(self._tmp.name)
         self.port = frei()
         self.basis = f"http://127.0.0.1:{self.port}"
-        self._server = make_server("127.0.0.1", self.port, self.app, threaded=True)
+        self.protokoll = []          # (Methode, Pfad, Referer) jeder Anfrage, die den Server erreicht
+        app = self.app
+
+        def mitschreiben(environ, start_response):
+            self.protokoll.append((environ.get("REQUEST_METHOD", ""), environ.get("PATH_INFO", ""),
+                                   environ.get("HTTP_REFERER", "")))
+            return app(environ, start_response)
+        self._server = make_server("127.0.0.1", self.port, mitschreiben, threaded=True)
         self._faden = threading.Thread(target=self._server.serve_forever, daemon=True)
         self._faden.start()
         self.adm = self._anmelden("admin@example.org", "geheim123")

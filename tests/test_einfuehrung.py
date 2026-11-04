@@ -2,8 +2,10 @@
 python tests/test_einfuehrung.py  oder  pytest tests/test_einfuehrung.py
 
   1. Sperre: jede Regel unter /api/ mit jeder Methode und „X-Uebung: 1“ → 403 mit dem Satz; die schreibenden auch mit
-     einem Übungs-Referer; /media/ und Protokolle; Datenbank vorher/nachher gleich; Ausnahmen (Merker, /api/me) gehen;
-     ohne Kennung unverändert.
+     einem Übungs-Referer; /media/ und Protokolle; Datenbank vorher/nachher gleich; Ausnahmen (Merker, /api/me,
+     Abmelden) gehen; ohne Kennung unverändert. Seiten ohne Übungszweig: jede Seitenregel der Module mit „uebung=“ bzw.
+     Übungs-Referer → Übungszweig (UEBUNGSSEITEN) oder „In der Übung nicht verfügbar“, nie echte Daten; die Muster für
+     den Browser decken genau diese Seiten; engere CSP der Übungsseite (Sicherheitsprüfung vom 04.11.2026).
   2. Merker: 401, 404, 403, 400, CSRF, „erledigt“ bleibt, gleichzeitige Aufrufe, Konto löschen räumt ihn weg.
   3. Angebot je Rolle (Materialablage, Strömipedia, Ankerplätze, Riegenkarten), „Nicht jetzt“, neue Rolle, „unterbrochen“;
      kein Angebot auf Startseite, Profil, Leitstelle, Druck-, Fehler- und Lesemodusseiten.
@@ -115,7 +117,8 @@ def test_sperre():
             url = _adresse(regel)
             for methode in sorted(regel.methods):
                 ausnahme = (regel.rule.startswith("/api/einfuehrung/")
-                            or (regel.rule == "/api/me" and methode in ("GET", "HEAD")))
+                            or (regel.rule == "/api/me" and methode in ("GET", "HEAD"))
+                            or (regel.rule == "/api/auth/logout" and methode == "POST"))
                 if ausnahme:
                     continue
                 r = adm.open(url, method=methode, headers=dict(H, **{"X-Uebung": "1"}), json={})
@@ -152,7 +155,119 @@ def test_sperre():
             assert adm.get(url).status_code == 200, url
         with post_mangel():
             assert melden(t.w, t.art[0]).status_code == 201
+        # Abmelden aus der Übung (Befund 1 der Sicherheitsprüfung): geht – mit Referer wie mit Kopfzeile; die Sitzung ist weg.
+        from test_material import anmelden
+        for kopf in (UEBUNG_REF, {"X-Uebung": "1", **UEBUNG_REF}, {"X-Uebung": "1"}):
+            c = anmelden(t.app, "mitglied@example.org", "passwort1")
+            assert c.get("/api/me").status_code == 200
+            r = c.post("/api/auth/logout", json={}, headers=kopf)
+            assert r.status_code == 200, (kopf, r.status_code, r.get_data(as_text=True)[:200])
+            assert c.get("/api/me").status_code == 401, kopf
+        # Nur POST: ein GET an dieselbe Adresse bleibt aus der Übung gesperrt.
+        assert t.mitglied.get("/api/auth/logout", headers=UEBUNG_REF).status_code == 403
     print("Sperre bestanden.")
+
+
+# --- 1b. Seiten ohne Übungszweig (Befund 2 der Sicherheitsprüfung vom 04.11.2026) --------------------------------------
+
+NICHT = "In der Übung nicht verfügbar"
+
+
+def _modul_von(pfad):
+    from app import einfuehrung, module
+    return next((m for m in einfuehrung.TEILE if pfad == module.PFAD[m] or pfad.startswith(module.PFAD[m] + "/")), None)
+
+
+def test_seiten_ohne_uebung():
+    from app import einfuehrung
+    with tempfile.TemporaryDirectory() as tmp:
+        t = aufbau(tmp)
+        adm = t.adm
+        lid = lehrgang(adm, "Geheimer Platzhalter-Lehrgang")
+        geheim = ("Lager Platzhalter", "PSA-1", "OG Musterstadt", "Geheimer Platzhalter-Lehrgang")
+        regeln = [r for r in t.app.url_map.iter_rules() if "GET" in r.methods and _modul_von(r.rule)
+                  and not r.rule.startswith(("/api/", "/media/"))]
+        endpunkte = {r.endpoint for r in regeln}
+        # Die Liste nennt nur Seiten, die es gibt – und jede davon hat einen Übungszweig.
+        assert einfuehrung.UEBUNGSSEITEN <= endpunkte, einfuehrung.UEBUNGSSEITEN - endpunkte
+        vorher = pruefsumme(t.app)
+        mit, ohne = 0, 0
+        for regel in regeln:
+            url = _adresse(regel)
+            modul = _modul_von(regel.rule)
+            if regel.endpoint in einfuehrung.UEBUNGSSEITEN:
+                # Übungszweig: mit einem der Teile des Moduls die Hülle (Kataloge der Riegenkarten nur im Teil „Redakteur“;
+                # ein Teil, der für das Konto nicht gilt, wird übergangen – dann die normale Seite, hier 404).
+                gefunden = []
+                for t_ in einfuehrung.TEILE[modul]:
+                    e, r, html = einf(adm, f"{url}?uebung={t_['teil']}")
+                    assert r.status_code in (200, 403, 404) and NICHT not in html, (url, t_["teil"], r.status_code)
+                    assert not any(x in html for x in geheim), (url, t_["teil"])
+                    if r.status_code == 200 and e and e["uebung"] == t_["teil"]:
+                        gefunden.append(t_["teil"])
+                assert gefunden, (regel.endpoint, url)
+                mit += 1
+                continue
+            # Ohne Übungszweig: mit Kennung in der Adresse und aus einer Übungsseite heraus die Fehlerseite, vor der Route.
+            for pfad, kopf in ((f"{url}?uebung=grund", {}), (url, UEBUNG_REF), (f"{url}?uebung=gibtsnicht", {})):
+                r = adm.get(pfad, headers=kopf)
+                html = r.get_data(as_text=True)
+                if kopf and einfuehrung._datei(url):            # Dateien aus der Übung: schon die Dateisperre
+                    assert r.status_code == 403 and SATZ in html, (regel.endpoint, pfad, r.status_code)
+                    continue
+                assert r.status_code == 403 and f"<h1>{NICHT}</h1>" in html, (regel.endpoint, pfad, r.status_code)
+                assert "Diese Seite gibt es in der Übung nicht." in html and ">Zurück zur Übung</a>" in html
+                assert "einfuehrung: {\"gesperrt\": true, \"uebung\": null}" in html, html[html.find("einfuehrung:"):][:80]
+                assert "js/uebung/" not in html and not any(x in html for x in geheim), pfad
+            ohne += 1
+        assert mit == len(einfuehrung.UEBUNGSSEITEN) and ohne >= 15, (mit, ohne)
+        # Mit echten Kennungen ebenso – die Sperre kommt vor jeder Frage nach dem Gegenstand.
+        for pfad in (f"/materialablage/ordner/{t.lager}/bericht", f"/materialablage/meine-psa/{t.art[0]}",
+                     f"/riegenkarten/{lid}/druck", "/materialablage/meine-psa", "/materialablage/pruefen",
+                     f"/materialablage/ordner/{t.lager}/import", f"/materialablage/artikel/{t.art[0]}/lebenslauf.pdf"):
+            r = adm.get(pfad + "?uebung=grund")
+            assert r.status_code == 403 and NICHT in r.get_data(as_text=True), (pfad, r.status_code)
+            assert not any(x in r.get_data(as_text=True) for x in geheim), pfad
+        assert pruefsumme(t.app) == vorher, "Die Datenbank hat sich durch gesperrte Seiten geändert."
+        # Der Weg zurück: an die Übungsseite des Referers (nur Pfad und Abfrage, kein fremder Host, kein „//“), sonst die
+        # Übungsadresse des Teils aus der Adresse.
+        r = adm.get("/materialablage/meine-psa", headers={"Referer": "http://localhost/materialablage/bestand?uebung=grund#x"})
+        assert 'href="/materialablage/bestand?uebung=grund"' in r.get_data(as_text=True)
+        r = adm.get("/materialablage/meine-psa", headers={"Referer": "http://localhost//fremd.example/?uebung=grund"})
+        assert 'href="/fremd.example/?uebung=grund"' in r.get_data(as_text=True)
+        r = adm.get("/riegenkarten/5/druck?uebung=leitung")
+        assert 'href="/riegenkarten?uebung=leitung"' in r.get_data(as_text=True)
+        r = adm.get("/materialablage/pruefen?uebung=gibtsnicht")
+        assert 'href="/materialablage"' in r.get_data(as_text=True)
+        # Außerhalb der Module mit Übungs-Referer: Ausgang (Kopfleiste) – die echte Seite. Mit Kennung in der Adresse nicht.
+        for pfad in ("/", "/profil", "/leitstelle"):
+            assert adm.get(pfad, headers=UEBUNG_REF).status_code == 200, pfad
+        assert adm.get("/profil?uebung=grund").status_code == 403
+        # Ohne Übung (kein Referer, keine Kennung) unverändert erreichbar.
+        for pfad in ("/materialablage/meine-psa", "/materialablage/pruefen", f"/riegenkarten/{lid}/druck"):
+            assert adm.get(pfad).status_code == 200, pfad
+        # Die Muster für den Browser (STROEMIS.einfuehrung.seiten) treffen genau die Seiten mit Übungszweig.
+        e, r, html = einf(adm, "/materialablage?uebung=grund")
+        muster = [re.compile(m) for m in e["seiten"]]
+        assert e["bereiche"] == ["/materialablage", "/stroemipedia", "/ankerplaetze", "/riegenkarten"], e["bereiche"]
+        for regel in regeln:
+            url = _adresse(regel)
+            assert any(m.match(url) for m in muster) == (regel.endpoint in einfuehrung.UEBUNGSSEITEN), (regel.endpoint, url)
+        assert not any(m.match("/materialablage/meine-psa") for m in muster)
+        # Ohne Übung trägt STROEMIS.einfuehrung keine Muster.
+        e, r, html = einf(adm, "/materialablage")
+        assert "seiten" not in e and "bereiche" not in e
+        # Engere CSP nur auf Übungsseiten: Bilder, Medien und Rahmen nur aus /static/, Netz nur die Ausnahmen der Sperre.
+        csp = adm.get("/stroemipedia?uebung=grund").headers["Content-Security-Policy"]
+        assert "img-src localhost/static/ data: blob:" in csp and "media-src localhost/static/ blob:" in csp, csp
+        assert "frame-src localhost/static/ blob:" in csp, csp
+        assert ("connect-src localhost/static/ localhost/api/einfuehrung/ localhost/api/me localhost/api/auth/logout;"
+                in csp), csp
+        assert "'unsafe-eval'" not in csp and "script-src 'self' 'nonce-" in csp
+        for pfad in ("/stroemipedia", "/materialablage/meine-psa", "/materialablage/meine-psa?uebung=grund"):
+            csp = adm.get(pfad).headers["Content-Security-Policy"]
+            assert "img-src 'self' data: blob:" in csp and "connect-src 'self';" in csp and "frame-src" not in csp, pfad
+    print("Seiten ohne Übungszweig bestanden.")
 
 
 # --- 2. Merker ---------------------------------------------------------------------------------------------------------
@@ -347,7 +462,7 @@ def test_uebungsseiten():
         # Kataloge in der Übung nur im Teil „Redakteur“; die Druckansicht kennt keine Übung.
         assert k["riegen_redakteur"][0].get("/riegenkarten/kataloge?uebung=grund").status_code == 403
         assert k["riegen_redakteur"][0].get("/riegenkarten/kataloge?uebung=redakteur").status_code == 200
-        assert c.get(f"/riegenkarten/{lid}/druck?uebung=grund").status_code == 404
+        assert c.get(f"/riegenkarten/{lid}/druck?uebung=grund").status_code == 403      # ohne Übungszweig
         # Stufe des Teils in rechte[modul] – nie höher als die echte.
         e, r, html = einf(k["wiki_verwaltung"][0], "/stroemipedia?uebung=grund")
         assert rechte_im_html(html)["wiki"] == 1 and 'id="btn-new-page"' not in html
@@ -465,9 +580,17 @@ def test_statisch():
                  "history[art] = function", 'document.addEventListener("submit"', '"X-Uebung": "1"', "ablageAufraeumen",
                  'role", "dialog"', 'aria-modal", "false"', 'role", "region"', "dialog[open]", "S.weich()"):
         assert wort in js, wort
-    # common.js: nur der Helfer S.ziel, in der Rückgabe von window.S.
+    # Nachbesserung nach der Sicherheitsprüfung: Übungsablage, Seiten ohne Übungszweig, Referer, Abmelden.
+    for wort in ("ablageUmlegen()", 'const ABLAGE = "stroemis-uebung-ablage"', 'addEventListener("navigate"',
+                 "echteAblage()", '(pfad === "/api/auth/logout" && methode === "POST")', "E.seiten", "E.gesperrt",
+                 'a.referrerPolicy = "no-referrer"', 'attributeFilter: ["referrerpolicy", "rel"]'):
+        assert wort in js, wort
+    assert "KENNUNG" not in js, "Aufräumen nur noch die Übungsablage"
+    # common.js: der Helfer S.ziel (nur Seiten mit Übungszweig bekommen die Kennung), in der Rückgabe von window.S; das
+    # Abmelden leert die echte Ablage.
     common = lies("app/static/js/common.js")
     assert "function ziel(url)" in common and "reihenfolgeKnoepfe, ziel };" in common
+    assert "(e.seiten || []).some(" in common and "window.S.einfuehrung.echteAblage" in common
     # CSS: Abschnitt „Einführung“ nur mit Tokens, :hover nur mit Maus, 44 px nur am Finger, Bewegung reduzieren.
     css = lies("app/static/css/app.css")
     teil = css[css.index("/* --- Einführung: Angebot, Führung, Profil"):]
@@ -523,12 +646,15 @@ def test_statisch():
     # README und CHANGELOG nennen die Einführung.
     readme = lies("README.md")
     assert "## Einführungen (Übungen je Modul)" in readme and "**Übungssperre (Einführung):**" in readme
+    assert "`einfuehrung.UEBUNGSSEITEN`" in readme and "stroemis-uebung-ablage" in readme
+    assert "**Nach der Sicherheitsprüfung nachgebessert**" in lies("CHANGELOG-Material.md")
     assert "| Interaktive Einführung je Modul |" in lies("CHANGELOG-Material.md")
     print("Statisch bestanden.")
 
 
 if __name__ == "__main__":
     test_sperre()
+    test_seiten_ohne_uebung()
     test_merker()
     test_angebot_je_rolle()
     test_uebungsseiten()

@@ -11764,7 +11764,8 @@ Nachtrag des Hauptagenten (03.11.2026): Ein Übungsteil wirkt nur, wenn er für 
   „Übung fortsetzen“.
 - Schicht im Übungsmodus: `fetch`, `XMLHttpRequest` (Fortschritt in vier Stufen), `sendBeacon`, `window.open`,
   Datei-Links, GET-Formulare, `history.pushState/replaceState`; Übungszustand je Reiter in `sessionStorage`
-  (`stroemis-uebung`), Ablage-Reste mit Übungs-Kennung werden beim Ende und Unterbrechen weggeräumt.
+  (`stroemis-uebung`), Übungsablage (`stroemis-uebung-ablage`) statt der echten – siehe „Nach der Sicherheitsprüfung
+  nachgebessert“.
 - Führung mit Rahmen und Sprechblase (Leiste unten am Telefon), Schritte mit Warten auf Klick, Eingabe, Anfrage,
   Element oder Bedingung, „Übungsbild nehmen“, Sprung in offene Dialoge, Esc → „Übung unterbrechen?“, Fortsetzen über
   Seitenwechsel, „Hier geht es in der Übung nicht weiter.“ nach 5 s ohne Ziel, Abschluss „Geschafft“ mit Anleitung
@@ -11772,6 +11773,20 @@ Nachtrag des Hauptagenten (03.11.2026): Ein Übungsteil wirkt nur, wenn er für 
 - Übungsdateien als Gerüst (`app/static/js/uebung/{material,wiki,karte,pruefungen}.js`): je Teil ein Ablauf mit einem
   Info-Schritt an der Startseite und die Antworten, die sie zum Zeichnen braucht. Übungsbilder 1–3 und
   `uebungsdatei.pdf` unter `app/static/uebung/`, erzeugt von `scripts/uebungsdateien.py`.
+
+**Nach der Sicherheitsprüfung nachgebessert** (04.11.2026, `planung/tutorial/pruefung_sicherheit_grund.md`, Auftrag
+`planung/tutorial/auftrag_fix_grund.md`): Abmelden geht auch aus der Übung (`POST /api/auth/logout` als Ausnahme in Schicht
+und Sperre) und leert die echte Ablage samt `stroemis-uebung`, Übungsablage und Ruhe-Merker; Seiten der Module ohne
+Übungszweig (Meine PSA, Echtheit prüfen, Bericht, Bestandsimport, Druck der Riegenkarten, Dateien …) gibt es in der
+Übung nicht – eine zentrale Liste `UEBUNGSSEITEN` in `app/einfuehrung.py`, der Server antwortet auf jeden anderen
+Seitenaufruf mit `uebung=` oder aus einer Übungsseite heraus unter einem Modulpfad mit der Fehlerseite „In der Übung nicht
+verfügbar“ (403, „Zurück zur Übung“, ohne Datenzugriff), der Browser hält Links, Formulare und Seitenwechsel dorthin mit
+dem Toast „In der Übung nicht verfügbar.“ an (Liste als `STROEMIS.einfuehrung.seiten`; `S.ziel` gibt solchen Adressen
+keine Kennung; die Kopfleiste führt ohne Referer hinaus, auch zu „Meine PSA“); `localStorage` und `sessionStorage`
+zeigen in der Übung auf eine eigene Übungsablage, aufgeräumt wird nur sie – eine echte Stoppuhr, zugeklappte Ordner
+oder ein ausgeblendeter Hinweis bleiben unberührt; eine Übungsseite lädt Bilder, Medien und Rahmen nur aus `/static/`
+und verbindet sich nur mit den Ausnahmen der Sperre (engere CSP), und außerhalb der Kopfleiste verlieren Elemente
+`referrerpolicy` und `rel="noreferrer"` – so erreicht nichts ohne Referer `/api/` oder `/media/`.
 
 **Übungen je Modul**: folgt (Modul-Teile Materialablage, Strömipedia, Ankerplätze, Riegenkarten liefern ihre Abläufe und
 Sätze).
@@ -11786,8 +11801,8 @@ Datenbank unverändert; Merker; Angebot je Rolle; Übungsseiten ohne echte Daten
 - Der Merker antwortet 403, wenn der Teil nicht für das Konto gilt (nicht nur ohne Modulzugang); Kataloge der
   Riegenkarten gibt es in der Übung nur im Teil „Redakteur“ (Nachtrag: keine Oberfläche einer fremden Rolle).
 - Die Sperre lässt neben `/static/` auch `/sw.js`, `/manifest.webmanifest` und `/offline` durch (App-Dateien ohne Daten).
-- Beim Aufräumen der Ablage zählen Namen mit Übungs-Kennung immer, Werte nur bei den Schlüsseln der Riegenkarten
-  („pruef:“) – ein echter Entwurf mit einer neunstelligen Zahl im Text bleibt.
+- (Ersetzt am 04.11.2026 durch die Übungsablage:) Beim Aufräumen der Ablage zählten Namen mit Übungs-Kennung immer,
+  Werte nur bei den Schlüsseln der Riegenkarten („pruef:“).
 - Nach „Übung unterbrechen“ und „Geschafft“ schweigt das Angebot im selben Reiter (`stroemis-uebung-ruhe` im
   `sessionStorage`); „Geschafft“ merkt „erledigt“ schon beim Erscheinen, jedes Schließen führt zur Startseite des Moduls.
 - `einfuehrung.js` läuft auf jeder Seite mit Konto: Es räumt Übungsreste weg und nimmt ein übergangenes `uebung=` aus der
