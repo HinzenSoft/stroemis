@@ -3092,6 +3092,23 @@ main.start { container: start / inline-size; }
   border-radius: var(--radius-gross) var(--radius-gross) 0 0; box-shadow: var(--schatten-leiste);
   padding: 10px calc(12px + var(--sicher-rechts)) calc(12px + var(--sicher-unten)) calc(12px + var(--sicher-links)); }
 html.fuehrung-leiste body { padding-bottom: var(--fuehrung-hoehe, 0px); }
+/* Die Karte der Ankerplätze füllt das Fenster – mit der Leiste endet sie über ihr. Sonst lägen Seitenleiste (Telefon:
+   Schublade von unten) und Positionsbanner unter der Leiste, und die ganze Seite rollte samt Kopfleiste (Übung der
+   Ankerplätze, 04.11.2026). */
+html.fuehrung-leiste .map-shell { height: calc(100vh - var(--kopf-hoehe) - var(--fuehrung-hoehe, 0px));
+  height: calc(100dvh - var(--kopf-hoehe) - var(--fuehrung-hoehe, 0px)); }
+/* Ebenso ihre Großansicht, die am Telefon das ganze Fenster füllt: „Speichern“ am Ende des Formulars läge sonst unter
+   der Leiste und ließe sich nicht darüber rollen. */
+@media (max-width: 760px) {
+  html.fuehrung-leiste dialog.lightbox, html.fuehrung-leiste .lb { height: calc(100dvh - var(--fuehrung-hoehe, 0px));
+    max-height: calc(100dvh - var(--fuehrung-hoehe, 0px)); }
+}
+/* Die kürzere Karte rückt die Kartenknöpfe über offener Seitenleiste (bottom: 70 %) auf Suchfeld und Filter – sie
+   weichen dann wie bei wenig Fensterhöhe. */
+@media (max-width: 640px) {
+  html.fuehrung-leiste .map-shell:has(.panel.open) .leaflet-bottom.leaflet-right .leaflet-control:not(.leaflet-control-attribution) {
+    display: none; }
+}
 @media (max-width: 599px) {
   html.fuehrung-leiste dialog[open]:modal { bottom: var(--fuehrung-hoehe, 0px); }
   html.fuehrung-leiste dialog[open] .dlg-body { max-height: calc(80dvh - var(--fuehrung-hoehe, 0px)); }

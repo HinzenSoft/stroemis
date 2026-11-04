@@ -80,9 +80,9 @@ TEILE = {
     ),
     "karte": (
         {"teil": "grund", "titel": "Grundteil", "minuten": 3, "stufe": auth.MITGLIED, "start": "/ankerplaetze",
-         "ablaeufe": ("Karte und Album",)},
+         "ablaeufe": ("Karte und Album", "Suchen und filtern")},
         {"teil": "redakteur", "titel": "Redakteur", "minuten": 4, "stufe": auth.REDAKTEUR, "start": "/ankerplaetze",
-         "ablaeufe": ("Album anlegen",)},
+         "ablaeufe": ("Album anlegen", "Bilder hochladen", "Bild beschreiben")},
     ),
     "pruefungen": (
         {"teil": "grund", "titel": "Grundteil", "minuten": 5, "stufe": auth.MITGLIED, "start": "/riegenkarten",
