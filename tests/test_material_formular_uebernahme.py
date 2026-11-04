@@ -4,8 +4,8 @@ python tests/test_material_formular_uebernahme.py  oder  pytest tests/test_mater
 Produkt B verweist auf Produkt A (mat_product.formular_von): Für B gilt immer das aktive spezifische Formular von A, mit
 jeder neuen Version dort; fällt es weg, gilt das generische der Kategorie. Geprüft: Auflösung, Ketten, Selbstverweis,
 DEMO-Mischung (Dienst und Trigger), Länge, Rechte, Journal, eigenes Formular von B, Löschen der Quelle, Prüfung und
-Protokoll an einem Artikel von B, Katalog-Export/-Import (mit und ohne Quelle, null löst) und Migration 34 → 35.
-Alle Namen, Hersteller und Prüfpunkte hier sind erfundene Platzhalter."""
+Protokoll an einem Artikel von B, Katalog-Export/-Import (mit und ohne Quelle, null löst), Migration 34 → 35 und die
+Oberfläche statisch. Alle Namen, Hersteller und Prüfpunkte hier sind erfundene Platzhalter."""
 import json
 import os
 import sqlite3
@@ -429,6 +429,25 @@ def test_migration_34_35():
         print("Migration 34 → 35 bestanden.")
 
 
+def test_oberflaeche_statisch():
+    with open(os.path.join(WURZEL, "app", "material", "static", "material.js"), encoding="utf-8") as fh:
+        js = fh.read()
+    produkt = js[js.index("  async function produkt() {"):js.index("  // Mehrere Dokumente auf einmal:")]
+    # Ohne Verweis: „Spezifisches Formular bearbeiten“ und „Von anderem Produkt übernehmen“ im Menü „Bearbeiten“; mit
+    # Verweis statt dessen „Anderes Produkt“ und „Verknüpfung lösen“.
+    for stelle in ('text: "Spezifisches Formular bearbeiten"', 'text: "Von anderem Produkt übernehmen"',
+                   'text: "Anderes Produkt"', 'text: "Verknüpfung lösen"', '"formular-uebernehmen": () => formularUebernehmen(p)',
+                   '"formular-loesen": () => formularLoesen(p)', "Auch genutzt von"):
+        assert stelle in produkt or stelle in js, stelle
+    # Felder dürfen fehlen (Übungsantwort der Einführung kennt sie nicht).
+    assert "(p.formular_genutzt_von || [])" in produkt and "eintraege: p.formular_von\n" in produkt
+    assert "Das übernommene Formular von" in js
+    # Formularseite der Quelle: derselbe Hinweis.
+    editor = js[js.index("  async function formular() {"):]
+    assert "${formularNutzerHinweis(f.genutzt_von)}" in editor[:editor.index("\n  }\n")]
+    print("Oberfläche (statisch) bestanden.")
+
+
 if __name__ == "__main__":
     test_aufloesung_und_neue_version()
     test_regeln_ketten_selbst_demo_laenge_rechte()
@@ -437,4 +456,5 @@ if __name__ == "__main__":
     test_pruefung_und_protokoll()
     test_export_import()
     test_migration_34_35()
+    test_oberflaeche_statisch()
     print(json.dumps({"ok": True}))

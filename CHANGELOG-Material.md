@@ -5,7 +5,7 @@ Gliederungen, Prüfnachweise je Ausrüstungsteil, unveränderliche PDF-Prüfprot
 umgesetzt, Phase 2 (mehrere Gliederungen und externe Prüfer in einer Instanz) in drei, Phase 3 und 4 in Lieferungen
 und Wünschen des Nutzers; jede war für sich deploybar. Seit dem 26.10.2026 heißt das Modul „Materialablage“ (im Code,
 in Tabellen und unter `/api/material` weiter `material`). Ältere Abschnitte sagen noch „Modul Material“ – sie bleiben als
-Geschichte stehen. Schemaversion nach der Nachbesserung vor dem Merge: 30; mit der Prüfsumme für den Lebenslauf: 31; mit der Liste nach dem Merge (Teil A): 32; mit der Stufe Redakteur: 33; mit den Riegenkarten-Ausbildern nur mit Konto: 34.
+Geschichte stehen. Schemaversion nach der Nachbesserung vor dem Merge: 30; mit der Prüfsumme für den Lebenslauf: 31; mit der Liste nach dem Merge (Teil A): 32; mit der Stufe Redakteur: 33; mit den Riegenkarten-Ausbildern nur mit Konto: 34; mit „Prüfformular eines anderen Produkts übernehmen“: 35.
 
 | Lieferung | Inhalt | Stand |
 | --- | --- | --- |
@@ -80,6 +80,7 @@ Geschichte stehen. Schemaversion nach der Nachbesserung vor dem Merge: 30; mit d
 | Prüfen folgt dem Grundrecht | Bei internen Rollen („Prüfer“, „Materialwart und Prüfer“) ist Prüfen immer dauerhaft und gilt, solange das Grundrecht gilt – auch vom befristeten Verwalter (Server: dauerhafte Prüffreigabe mit Grundrecht dort oder darüber auch von ihm; ändern nur, solange das tragende Grundrecht nicht länger läuft als sein Verwalten); kein vorbelegtes Datum außer beim externen Prüfer, „bis“ mit leerem Feld, wo „dauerhaft“ nicht geht; Rollenwechsel lässt die eigene Wahl; behebt den ungekappten Datumsvorschlag (eigenes Ende > 24 Monate → Ablehnung) | gebaut 03.11.2026 (kein Schemaschritt) |
 | „kritisch“ entfernt | Die Markierung „kritisch“ an Prüfpunkten ist ganz entfernt: kein Häkchen im Formular-Editor, keine Marke, Spalte und kein „i“ in Prüfung, Befunden und neuem Prüfprotokoll, keine Sperre von „einsatzbereit“ wegen eines kritischen Mangels (Oberfläche und Server) – bei einem Mangel wählt der Prüfer das Ergebnis selbst; Jahresbericht ohne „mit kritischem Mangel“, CSV ohne „kritischer Mangel“; Katalogexport ohne `kritisch`, der Import übergeht es; `is_critical` bleibt, wird nicht mehr gelesen | gebaut 03.11.2026 (kein Schemaschritt), Zweig kritisch-weg |
 | Interaktive Einführung je Modul | Übungsmodus mit Übungsbestand, Sperre, Angebot, Führung, Profil „Einführungen“, Übungen für Materialablage, Strömipedia, Ankerplätze, Riegenkarten | Grundgerüst gebaut 03.11.2026 (kein Schemaschritt), Übungen je Modul und robuste Führung gebaut 04.11.2026, nach den Endprüfungen nachgebessert 04.11.2026, Zweig tutorial |
+| Prüfformular eines anderen Produkts übernehmen (Schritt 35) | Ein Produkt verweist auf ein anderes und wird nach dessen aktivem spezifischem Formular geprüft – mit jeder neuen Version dort; Anzeige an beiden Produkten und an der Formularseite, Lösen, Löschen der Quelle, Katalogdatei `formular_von` | gebaut 04.11.2026 (Schema 35), Zweig formular-uebernahme, wartet auf Freigabe |
 
 ## Abgleich mit dem Bestand (vor Lieferung 1)
 
@@ -9939,6 +9940,7 @@ ist ein Verweis auf eine Datei (`bild`, `datei`) ein Fehler.
 | `quelle`, `erstellt` | woher und wann (nur zur Anzeige) |
 | `set` (Produkt) | Seit dem Rückbau der Set-Funktion (Schritt 26): `true` ist ein **Fehler dieses Produkts** („Sets gibt es nicht mehr …“, nichts wird gespeichert), `false` wird übergangen. Der Export schreibt es nie. (Bis Schritt 26: das Häkchen „Set“.) Optional |
 | `bestandteile` (Produkt) | Seit Schritt 25 die Bestandteil-Liste eines Produkts – je Position `{bezeichnung, anzahl}` (Bezeichnung eine Zeile, höchstens 120 Zeichen, je Liste eindeutig; Anzahl 1–20, Vorgabe 1), höchstens 30 Positionen; `einzeln: true`, `produkt` und `austausch` außer `nicht_belegt` sind Fehler; `[]` entfernt die Liste, fehlt der Schlüssel, bleibt sie. Eine Liste aus Texten (Recherche-Manifeste) ist ein Hinweis und wird übergangen. Bericht `bestandteillisten`. Vorlage: `docs/material-katalog-bestandteile-vorlage.json`. Auch in Format 1 gelesen. Optional |
+| `formular_von` (Produkt) | Seit Schritt 35 das Produkt, dessen aktives spezifisches Prüfformular dieses übernimmt – angegeben wie `produkt` eines spezifischen Formulars (`uid`, sonst Hersteller + Modell + Artikelnummer). Aufgelöst nach den Formularen der Datei; ein eigenes aktives Formular des Produkts wird dabei deaktiviert (Änderungsliste). Fehlt die Quelle oder passt sie nicht (keine Ketten, gleiche DEMO-Art, eigenes aktives Formular, Länge), ist das ein Hinweis, kein Fehler. `null` löst den Verweis (vor den Formularen), ohne den Schlüssel bleibt er. Ein Formular der Datei für ein Produkt mit Verweis wird angelegt, aber nicht aktiviert (Hinweis). Der Export schreibt es nur, wenn die Quelle mitkommt (sonst `bericht.txt`). Auch in Format 1 gelesen. Optional |
 
 Was hier mehr ist als in der Datei, bleibt: Der Import löscht, deaktiviert und zieht nie etwas zurück. Ein Fehler
 irgendwo: nichts gespeichert, auch keine Datei abgelegt. Der Probelauf (`--trocken`, in der Oberfläche immer zuerst)
@@ -9981,6 +9983,10 @@ oder Plattform-Verwaltung).
 | `GET /api/material/produkte/artikelnummer?nr=&ausser=` | lesen | Wem gehört diese Artikelnummer schon? (`produkt` oder `null`) |
 | `POST /api/material/produkte/<id>/variante` (Felder wie `POST /produkte`, `dokumente`: Kennungen) | Katalog | Kopie als neue Variante; Bild nie, Dokumente nach Wahl |
 | `PUT /api/material/produkte/<id>/bestandteile` (`bestandteile`: Liste der Positionen) | Katalog | Bestandteil-Liste als Ganzes ersetzen (nur Bezeichnung und Anzahl) → `produkt`, `geaendert`; Lesefelder `bestandteile` `[{id, position, bezeichnung, anzahl}]`, `stueckliste_grenzen` – Einzelheiten im Abschnitt „Bestandteil-Liste an normalen Produkten“ (Schritt 25) |
+| `GET /api/material/produkte/<id>/formularquellen?q=&seite=&pro_seite=` | Katalog | seit Schritt 35: Produkte, deren Prüfformular `<id>` übernehmen kann (eigenes aktives spezifisches Formular, ohne eigenen Verweis, gleiche DEMO-Art, nicht `<id>`), Suche und Sortierung wie `GET /produkte` (nach Kategorie) → `produkte` (je mit `waehlbar`, `grund`, `andere_kategorie`), `gesamt`, `seite`, `pro_seite` |
+| `PUT /api/material/produkte/<id>/formular-von` (`quelle`, `eigenes_deaktivieren`) | Katalog | seit Schritt 35: Formular von `quelle` übernehmen → `produkt` (voll), `geaendert`; 404 unbekannte Quelle, 409 bei Selbstverweis, Kette, DEMO-Mischung, Quelle ohne eigenes aktives Formular, Länge, oder eigenem aktivem Formular ohne `eigenes_deaktivieren` |
+| `DELETE /api/material/produkte/<id>/formular-von` | Katalog | seit Schritt 35: Verweis lösen → `produkt`, `geaendert` (ohne Verweis `false`) |
+| `GET /api/material/produkte/<id>`, `GET /api/material/formulare/<id>` | wie bisher | seit Schritt 35: `produkt.formular` mit `art` (`uebernommen`, `produkt`, `kategorie`) und `von` ({`id`, `name`} der Quelle); `produkt.formular_von` ({`id`, `name`, Hersteller, Modell, Bemerkung, `aktiv`, `formular`} oder `null`), `produkt.formular_genutzt_von` (Liste); `formular.genutzt_von` (Produkte, die das Formular dieses Produkts übernehmen) |
 | `POST/DELETE /api/material/produkte/<id>/bild` | Katalog | Produktbild |
 | `POST /api/material/produkte/<id>/dokumente`, `POST /api/material/dokumente/<id>/version`, `…/zurueckziehen` | Katalog | Herstellerdokumente |
 | `GET/POST /api/material/formulare`, `GET/PUT/DELETE …/<id>`, `POST …/<id>/aktivieren`, `…/deaktivieren` | lesen / Katalog | Prüfformulare |
@@ -11961,3 +11967,101 @@ Min.“). Etwa halb so hoch wie vorher. Tests: `test_einfuehrung.py` (Profil, St
 - **Einführung, Eingabeschritte**: Ein Schritt mit `warten: { wert }` geht erst weiter, wenn du fertig bist – nach 1,5 s
   ohne Tastendruck (`RUHE_TIPPEN`), beim Verlassen des Felds, mit Enter oder bei einer Auswahl (`change`), jeweils nur,
   wenn das Muster passt. Vorher sprang z. B. die Materialwart-Übung schon nach dem ersten Zeichen der Seriennummer.
+
+## Prüfformular eines anderen Produkts übernehmen (Schritt 35, Wunsch des Nutzers, 04.11.2026)
+
+Nutzer (Bildschirmfoto Produktseite, Abschnitt „Prüfformular“): „Möglichkeit, das spezifische Formular eines anderen
+Produkts zu übernehmen, inkl. zukünftiger Veränderungen.“ Beispiel: Petzl I'D S und I'D L werden nach demselben Formular
+geprüft – gepflegt wird es einmal, beide folgen jeder neuen Version. Gebaut 04.11.2026 (Schema 35), Zweig
+`formular-uebernahme` (Auftrag planung/formular-uebernahme/auftrag.md).
+
+**Verknüpfung statt Kopie**: Produkt B verweist auf Produkt A (`mat_product.formular_von`). Für B gilt immer das
+**aktive spezifische Formular von A** – jede neue Version von A gilt sofort auch für B, kopiert wird nichts.
+
+**Auflösung an einer Stelle** (`katalog.formular_fuer_produkt`, von Prüfbeginn, Produkt- und Artikelseite, Prüfung und
+Übersichten genutzt): Verweis mit aktivem Formular der Quelle → eigenes aktives spezifisches → aktives generisches der
+Kategorie (oder der nächsten Oberkategorie mit einem). Neu dazu `art` (`uebernommen`, `produkt`, `kategorie`) und bei
+einem übernommenen Formular `quelle` = „übernommen von „A““ (so steht es auch auf der Artikelseite und vor dem
+Prüfbeginn). Hat die Quelle kein aktives Formular mehr, gilt still das Nächste; der Verweis bleibt.
+
+**Regeln** (Dienst, die DEMO- und Kettenregeln zusätzlich als Trigger):
+- Keine Ketten: Die Quelle hat ein **eigenes** aktives spezifisches Formular und verweist selbst nicht; ein Produkt, von
+  dem andere übernehmen, übernimmt keins. Kein Verweis auf sich selbst.
+- DEMO nur mit DEMO, echt nur mit echt (DEMO-Kennzeichen der Produkte).
+- Eine andere Kategorie ist erlaubt (Hinweis im Dialog). Hat das Formular der Quelle einen Punkt „Länge (m)“ und haben
+  die Artikel von B keine Länge (Kategorie), ist die Quelle nicht wählbar (Grund im Dialog, 409 am Dienst). Geprüft wird
+  das beim Verknüpfen; kommt ein Längenpunkt später dazu, steht er in der Prüfung auf „nicht zutreffend“ wie bei einem
+  generischen Formular.
+- Entweder Verweis oder eigenes Formular: Hat B ein eigenes aktives Formular, deaktiviert das Übernehmen es in derselben
+  Transaktion (Journal am Formular mit Grund) – der Dialog sagt es vorher; ohne `eigenes_deaktivieren` antwortet der
+  Dienst 409. Mit Verweis lässt sich kein eigenes Formular aktivieren (409 „… übernimmt das Prüfformular von „A“ – erst die
+  Verknüpfung auf der Produktseite lösen.“); Entwürfe gehen.
+- Rechte wie beim spezifischen Formular: Katalog (Material-Verwaltung). Lesen (Produkt- und Formularseite) wie bisher.
+- Journal am Produkt B: „Prüfformular übernommen“ (vorher/nachher `formular_von` und `produkt` mit Namen der Quelle) und
+  „Übernahme des Prüfformulars gelöst“ (vorher die Quelle, nachher ggf. `grund`), Beschriftungen in beschriftung.py und
+  material.js.
+- Laufende und festgeschriebene Prüfungen behalten ihr Formular (`form_id` der Prüfung). Das Prüfprotokoll nennt bei
+  einem Formular, das zu einem anderen Produkt gehört, dieses: „„Titel“, Version n (spezifisch für das Produkt „A“)“ –
+  das stimmt auch, wenn die Verknüpfung später gelöst wird.
+- **Quelle gelöscht** (nur ohne Artikel möglich): Das Löschen löst die Verweise aller Produkte, die von ihr übernehmen
+  (Journal dort mit Grund „„A“ gelöscht“); die Rückfrage nennt sie vorher. `ON DELETE SET NULL` steht nur als Netz da.
+  Produkte haben keinen Zustand „zurückgezogen“ – dieser Fall aus dem Auftrag entfällt.
+
+**Oberfläche** (material.js, material.css):
+- Produktseite, Abschnitt „Prüfformular“: neben der Überschrift ein Menü „Bearbeiten“ – ohne Verweis „Spezifisches
+  Formular bearbeiten“ und „Von anderem Produkt übernehmen“ (ein Produkt, von dem andere übernehmen, behält den einen Knopf
+  „Spezifisches Formular bearbeiten“); mit Verweis „Anderes Produkt“ und „Verknüpfung lösen“. Text mit Verweis: „Geprüft
+  wird nach <Formular> · Version n – übernommen von <A> (n Prüfpunkte).“ Ist das Formular der Quelle nicht aktiv, steht
+  darüber rot „Das übernommene Formular von <A> ist nicht aktiv – es gilt das generische Formular der Kategorie „…““ (bzw.
+  „kein aktives Prüfformular“).
+- Produktseite A: „Auch genutzt von: <B>, <C> – Änderungen am Formular gelten dort mit.“; Formularseite eines
+  spezifischen Formulars von A: Hinweiskasten „Das aktive Formular dieses Produkts gilt auch für <B>, <C> – Änderungen und
+  neue Versionen wirken auch dort.“ (`formularNutzerHinweis`, eine Zeile in `formular()`).
+- Dialog „Prüfformular übernehmen“: Satz zur Folge, ggf. Hinweis, dass das eigene aktive Formular deaktiviert wird,
+  Suche wie die Produktsuche (`produktTreffer` mit eigener Liste `…/formularquellen`; ohne Suchwort alle Kandidaten,
+  nach Kategorie), nicht wählbare Treffer leise ohne Knopf mit Grund darunter (`.mat-treffer-aus`), gewähltes Produkt mit
+  Hinweis bei anderer Kategorie, „Abbrechen“ und rot „Übernehmen“ (ausgegraut mit Grund, bis gewählt). Toast
+  „Prüfformular von „A“ übernommen“. Lösen mit Rückfrage (nicht endgültig): „Verknüpfung mit „A“ lösen?“.
+- Löschen eines Produkts, von dem andere übernehmen: Die Rückfrage nennt sie und dass die Verknüpfung gelöst wird.
+- Felder, die fehlen (Übungsantwort der Einführung), heißen „kein Verweis“ – die Einführung blieb unverändert.
+
+**Katalogdatei (Format 2, auch Format 1)**: Produkt-Schlüssel `formular_von` (siehe Tabelle „Katalogdatei (Format 2)“).
+Export nur, wenn die Quelle mit exportiert wird (sonst Zeile in `bericht.txt`); Import nach den Formularen, fehlende
+oder unpassende Quelle = Hinweis; `null` löst, ohne Schlüssel bleibt der Verweis; Kataloge ohne das Feld laufen wie
+bisher.
+
+**Datenbank – Schritt 35**: Spalte `mat_product.formular_von INTEGER REFERENCES mat_product(id) ON DELETE SET NULL`
+(nur, wenn sie fehlt), Teilindex `idx_mat_product_formular_von`, Trigger `mat_product_formular_von_neu` (INSERT),
+`mat_product_formular_von` (UPDATE OF formular_von, demo) und `mat_product_formular_quelle` (UPDATE OF demo) gegen
+Selbstverweis, Ketten, unbekannte Quelle und DEMO-Mischung („Ein Produkt übernimmt das Prüfformular nur von einem Produkt
+mit eigenem Formular – keine Ketten, nicht von sich selbst, DEMO nur von DEMO.“). Rein additiv, wiederholbar (Trigger
+entfernt und neu). Rückweg: ein älterer Stand übergeht Spalte und Trigger; seine Produkte mit Verweis werden dort nach
+dem eigenen oder generischen Formular geprüft. Geprüft an Kopien: frisch, 34 → 35 mit Altbestand (Test; dazu eine Kopie
+einer lokalen Datenbank mit Beispielbestand, Schema 34, 3860 Zeilen in den mat_-Tabellen: Zeilen je Tabelle und Produkte
+unverändert, kein Journaleintrag, Spalte leer, `integrity_check` ok, `foreign_key_check` leer), zweiter Lauf des Schritts
+und zweiter Start ohne Änderung.
+
+**Sonst**: `search.produkte` nimmt eine feste Zusatzbedingung aus dem Dienst (`zusatz`, nie aus der Anfrage).
+
+**Tests**: neu `tests/test_material_formular_uebernahme.py` – Auflösung (Verweis aktiv, Quelle inaktiv, ohne Verweis),
+neue Version der Quelle gilt sofort, Lösen, Journal; Selbstverweis, Ketten (beide Richtungen), Quelle ohne Formular,
+eigenes aktives Formular (409 / Deaktivieren mit Journal / Aktivieren mit Verweis 409), Wechsel der Quelle, Länge
+(nicht wählbar, gleiche Längen-Kategorie geht), andere Kategorie, DEMO-Mischung, Kandidatenliste mit Suche, Rechte je
+Rolle; Trigger gegen SQL von Hand; Löschen der Quelle; Prüfung an einem Artikel von B mit dem Formular von A, laufende
+Prüfung behält Version 1, Protokoll-PDF nennt A; Export/Import rund, Wiederholung unverändert, ohne Schlüssel bleibt,
+`null` löst, fehlende Quelle als Hinweis, eigenes Formular am Ziel deaktiviert, Formular der Datei für B nicht aktiviert,
+Katalog ohne Feld, Bericht bei Quelle außerhalb des Exports; Migration 34 → 35 mit Altbestand und Wiederholung;
+Oberfläche statisch. Angepasst: `test_module_letzte_offene` (Abschnittsaktion ist jetzt das Menü), `test_rechte_redakteur`
+und `test_rechte_ausbilder` (Schemaversion aus `models.SCHEMA_VERSION` statt fest 34).
+
+**Bitte bestätigen** (vorläufig so gebaut):
+1. Löschen der Quelle löst die Verweise gleich mit (Rückfrage nennt die Produkte, Journal dort), statt das Löschen
+   abzuweisen, solange andere übernehmen.
+2. Ein eigenes aktives Formular von B wird beim Übernehmen deaktiviert (Dialog sagt es), statt den Dialog abzuweisen; mit
+   Verweis lässt sich kein eigenes Formular aktivieren.
+3. Katalogimport: Ein Verweis aus der Datei deaktiviert ein eigenes aktives Formular des Produkts hier (sonst käme ein auf
+   dev gesetzter Verweis nie an) – eine Ausnahme von „der Import deaktiviert nie etwas“. Ein auf dev gelöster Verweis
+   kommt über den Export nicht an (der Schlüssel fehlt dann; nur `null` von Hand löst).
+4. Zum Abschnittskopf: ein Menü „Bearbeiten“ statt des Knopfs „Spezifisches Formular bearbeiten“ (bleibt als Knopf, wo
+   nur er möglich ist); „Als Variante kopieren“ übernimmt einen Verweis nicht.
+5. DEMO-Art heißt DEMO-Kennzeichen des Produkts; „zurückgezogen“ gibt es bei Produkten nicht.

@@ -94,9 +94,11 @@ def test_abschnittsaktion_in_der_kopfzeile():
             'Protokoll (PDF)</a>`}</div>') in mat
     assert "Sammelprotokoll (PDF)</a>" not in mat
     # Produkt: Prüfformular und Herstellerdokumente – je eine Aktion neben der Überschrift.
-    assert ('Ein aktives spezifisches Formular ersetzt das generische der Kategorie." + mehrDazu("pruefformular"))}</h2>\n          ${k ? \'<button class="btn '
-            'secondary small" data-act="formular">Spezifisches Formular bearbeiten</button>\' : ""}</div>') in mat
-    assert mat.count('data-act="formular">Spezifisches Formular bearbeiten</button>') == 1
+    # Seit Schritt 35 (Prüfformular übernehmen, 04.11.2026) ist die eine Aktion ein Menü „Bearbeiten“ (formularMenue) –
+    # mit nur einem Eintrag zeichnet S.menue den Knopf „Spezifisches Formular bearbeiten“ wie vorher.
+    assert ('auch nach jeder neuen Version." + mehrDazu("pruefformular"))}</h2>\n          ${k ? formularMenue : ""}</div>') in mat
+    assert mat.count('text: "Spezifisches Formular bearbeiten", satz: "Eigenes Formular nur für dieses Produkt.", '
+                     'attrs: \'data-act="formular"\'') == 1
     doks = mat[mat.index('<div class="abschnittskopf"><h2>Herstellerdokumente'):]
     doks = doks[:doks.index("</section>")]
     assert doks.index('data-act="dok-neu"') < doks.index("</div>") < doks.index("dokTabelle(p.dokumente, k)")

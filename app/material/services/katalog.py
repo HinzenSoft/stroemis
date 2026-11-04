@@ -1252,8 +1252,7 @@ def _quelle_grund(b, q):
     if not f:
         return f"„{produktname(q)}“ hat kein eigenes aktives Prüfformular."
     if _hat_laengenpunkt(f["id"]) and not laenge_wirksam(b["category_id"]):
-        return ("Das Formular hat einen Prüfpunkt „Länge (m)“, die Artikel dieses Produkts haben aber keine Länge "
-                "(Kategorie).")
+        return f"Das Formular hat einen Prüfpunkt „Länge (m)“, Artikel von „{produktname(b)}“ haben aber keine Länge."
     return ""
 
 
