@@ -790,7 +790,8 @@
       { ziel: neuerPunkt, text: "Gib ihm einen Text, hier „Platzhalter“.", warten: { wert: [neuerPunkt, /\S/] }, probe: { tippen: [neuerPunkt, "Platzhalter"] } },
       { ziel: neuerPunktMenue, text: "Über „⋯“ schiebst du einen Punkt nach oben, nach unten oder in eine andere Gruppe. Am Griff ⠿ links ziehst du ihn an seinen Platz." },
       { ziel: "[data-act=speichern]", text: "Speichere das Formular.", warten: { anfrage: `PUT ${API}/formulare/${formGurt.id}` }, probe: { klick: "[data-act=speichern]" } },
-      { ziel: "#fp-tabelle", text: "Gespeichert. Ist eine Version schon für Prüfungen benutzt, änderst du sie nur über „Neue Version“ – alte Protokolle bleiben, wie sie waren." },
+      // Ziel ist „Neue Version“ oben – bei einem langen Formular stünde die ganze Tabelle nicht im Bild.
+      { ziel: "[data-act=neue-version]", text: `Gespeichert${ausKatalog("gurt") ? " – in der Übung nur die Kopie" : ""}. Ist eine Version schon für Prüfungen benutzt, änderst du sie nur über „Neue Version“ – alte Protokolle bleiben, wie sie waren.` },
     ] },
   ] };
 
