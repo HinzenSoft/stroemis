@@ -11947,3 +11947,11 @@ Schachtelung → 200; CSP, `no-store`, Weiterleitungen mit Kennung, Rückstrich 
 - Nach dem Neuladen beginnt der Ablauf nur dann von vorn, wenn in ihm schon etwas eingegeben wurde; sonst wie bisher am
   gespeicherten Schritt.
 - Strömipedia-Editor am Telefon: Der Speicherstand bleibt gekürzt („Ungespeic…“), nur der Schritttext ist angepasst.
+
+**Kleinigkeiten vom 04.11.2026** (Wünsche des Nutzers):
+- **Mangel-Banner**: Die Fotos der Meldung stehen links neben dem Text in einer Reihe (schmale Spalte, 64 px je Foto,
+  untereinander), nicht mehr darunter – am Artikel, in der Prüfung und in Meine PSA (`mangelReihe` in material.js,
+  `.mat-mangel-reihe` in material.css). Ohne Foto bleibt der Banner wie bisher.
+- **Einführung, Eingabeschritte**: Ein Schritt mit `warten: { wert }` geht erst weiter, wenn du fertig bist – nach 1,5 s
+  ohne Tastendruck (`RUHE_TIPPEN`), beim Verlassen des Felds, mit Enter oder bei einer Auswahl (`change`), jeweils nur,
+  wenn das Muster passt. Vorher sprang z. B. die Materialwart-Übung schon nach dem ersten Zeichen der Seriennummer.
