@@ -12718,8 +12718,8 @@ heißt das: keine weitere Zuweisung, kein Standard – ausgenommen die Produkte,
 zugewiesen ist, zählt auch (sonst legte jeder Import mit `"aktivieren": false` ein weiteres an). Das gilt für den
 Abgleich über den Titel (das erste passende Formular gleichen Titels) wie für den Rückfall auf das schon zugewiesene.
 Findet sich keins, kommt ein neues Formular in den Pool und wird zugewiesen bzw. Standard (Z5); das geteilte bleibt
-unverändert. Der Hinweis dazu lautet „Das Prüfformular „…“ hier gilt nicht nur für … (Standard für …, zugewiesen an …)
-– es bleibt unverändert, … bekommt ein neues im Pool.“ Die Berichtszeile jeder neuen oder aktivierten Version nennt,
+unverändert. Der Hinweis dazu lautet „Das Prüfformular „…“ hier ist Standard für „…“ und zugewiesen an „…“ – … bekommt
+ein neues im Pool, das bestehende bleibt unverändert.“ Die Berichtszeile jeder neuen oder aktivierten Version nennt,
 wofür das Formular bisher gilt: „– gilt bisher: Standard für „…“ und zugewiesen an „…““, „– bisher nirgends
 zugewiesen“ oder „– neu im Pool“. Das gilt auch für Format 3.
 

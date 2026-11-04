@@ -1085,9 +1085,9 @@ def _formular_alt(e, ort, lauf):
         geteilt = None if pf_row else (_formular_mit_titel(heimat, titel) or z)
         if geteilt:
             lauf.bericht["hinweise"].append(
-                f"{ort} ({titel}): Das Prüfformular „{katalog._anzeige_titel(geteilt['id'])}“ hier gilt nicht nur für "
-                f"{zielname} ({katalog._ziele_text(geteilt['id'])}) – es bleibt unverändert, {zielname} bekommt ein "
-                "neues im Pool.")
+                f"{ort} ({titel}): Das Prüfformular „{katalog._anzeige_titel(geteilt['id'])}“ hier ist "
+                f"{katalog._ziele_text(geteilt['id'])} – {zielname} bekommt ein neues im Pool, das bestehende bleibt "
+                "unverändert.")
     pf = pf_row["id"] if pf_row else _neues_formular(heimat, titel, e.get("punkte"), lauf)
     _versionen(pf, titel, e.get("punkte"), aktivieren, zielname, lauf, frisch=not pf_row)
     if aktivieren:

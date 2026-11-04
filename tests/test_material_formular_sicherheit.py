@@ -117,8 +117,9 @@ def test_fall_1_gleicher_titel_wie_der_standard():
             assert nachher[n] == vorher[n] == ("Karabinerprüfung", "standard", ["Standardpunkt"], ids["s"]), nachher
         assert nachher["p1"][:3] == ("Karabinerprüfung", "zugewiesen", ["Nur für P1"]) and nachher["p1"][3] != ids["s"]
         assert versionen(app, ids["s"]) == 1
-        assert any("gilt nicht nur für Produkt „Testwerk Platzhalter P1“ (Standard für „PSA gegen Absturz / Karabiner“)"
-                   in h and "bleibt unverändert" in h for h in ber["hinweise"]), ber["hinweise"]
+        assert any(h.endswith(": Das Prüfformular „Karabinerprüfung“ hier ist Standard für „PSA gegen Absturz / Karabiner“ "
+                              "– Produkt „Testwerk Platzhalter P1“ bekommt ein neues im Pool, das bestehende bleibt "
+                              "unverändert.") for h in ber["hinweise"]), ber["hinweise"]
         assert "Formular „Karabinerprüfung“ (Produkt „Testwerk Platzhalter P1“): neue Version 1, aktiv – neu im Pool" in \
             ber["aenderungen"], ber["aenderungen"]
     print("Fall 1 bestanden.")
@@ -184,7 +185,9 @@ def test_fall_5_kategorie_mit_titel_eines_eigenen_formulars():
         assert nachher["p3"][:3] == ("Sichtprüfung", "standard", ["Generisch neuer"]) and nachher["p3"][3] not in (
             ids["s"], eigen), nachher
         assert nachher["p1"][3] == eigen and versionen(app, ids["s"]) == 2
-        assert any("gilt nicht nur für Kategorie" in h for h in ber["hinweise"]), ber["hinweise"]
+        assert any("hier ist Standard für „PSA gegen Absturz / Karabiner“ und zugewiesen an „Testwerk Platzhalter P2“ – "
+                   "Kategorie „PSA gegen Absturz / Karabiner“ bekommt ein neues im Pool" in h for h in ber["hinweise"]), \
+            ber["hinweise"]
     print("Fall 5 bestanden.")
 
 
