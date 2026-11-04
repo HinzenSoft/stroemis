@@ -5,8 +5,10 @@ python tests/test_einfuehrung.py  oder  pytest tests/test_einfuehrung.py
      einem Übungs-Referer; /media/ und Protokolle; Datenbank vorher/nachher gleich; Ausnahmen (Merker, /api/me,
      Abmelden) gehen; ohne Kennung unverändert. Seiten ohne Übungszweig: jede Seitenregel der Module mit „uebung=“ bzw.
      Übungs-Referer → Übungszweig (UEBUNGSSEITEN) oder „In der Übung nicht verfügbar“, nie echte Daten; die Muster für
-     den Browser decken genau diese Seiten; engere CSP der Übungsseite (Sicherheitsprüfung vom 04.11.2026).
-  2. Merker: 401, 404, 403, 400, CSRF, „erledigt“ bleibt, gleichzeitige Aufrufe, Konto löschen räumt ihn weg.
+     den Browser decken genau diese Seiten; engere CSP der Übungsseite (Sicherheitsprüfung vom 04.11.2026), dazu
+     default-src 'none', worker-src, no-store, Weiterleitungen mit Kennung, Rückstrich im Referer (Endprüfung).
+  2. Merker: 401, 404, 403, 400, CSRF, „erledigt“ bleibt, gleichzeitige Aufrufe, Konto löschen räumt ihn weg, tief
+     geschachtelter Wert → 200.
   3. Angebot je Rolle (Materialablage, Strömipedia, Ankerplätze, Riegenkarten), „Nicht jetzt“, neue Rolle, „unterbrochen“;
      kein Angebot auf Startseite, Profil, Leitstelle, Druck-, Fehler- und Lesemodusseiten.
   4. Übungsseiten ohne echte Daten (kein Banner, kein „Zuletzt besucht“, kein Willkommen, keine Weiterleitung der Suche,
@@ -250,7 +252,9 @@ def test_seiten_ohne_uebung():
         # Die Muster für den Browser (STROEMIS.einfuehrung.seiten) treffen genau die Seiten mit Übungszweig.
         e, r, html = einf(adm, "/materialablage?uebung=grund")
         muster = [re.compile(m) for m in e["seiten"]]
-        assert e["bereiche"] == ["/materialablage", "/stroemipedia", "/ankerplaetze", "/riegenkarten"], e["bereiche"]
+        # Dazu die alten Pfade und die Schreibweisen mit Umlaut (sie leiten nur weiter – Hinweis 3 der Endprüfung).
+        assert e["bereiche"] == ["/materialablage", "/stroemipedia", "/ankerplaetze", "/riegenkarten", "/material", "/wiki",
+                                 "/str%C3%B6mipedia", "/karte", "/ankerpl%C3%A4tze", "/pruefungen"], e["bereiche"]
         for regel in regeln:
             url = _adresse(regel)
             assert any(m.match(url) for m in muster) == (regel.endpoint in einfuehrung.UEBUNGSSEITEN), (regel.endpoint, url)
@@ -266,8 +270,40 @@ def test_seiten_ohne_uebung():
                 in csp), csp
         assert "'unsafe-eval'" not in csp and "script-src 'self' 'nonce-" in csp
         for pfad in ("/stroemipedia", "/materialablage/meine-psa", "/materialablage/meine-psa?uebung=grund"):
-            csp = adm.get(pfad).headers["Content-Security-Policy"]
+            r = adm.get(pfad)
+            csp = r.headers["Content-Security-Policy"]
             assert "img-src 'self' data: blob:" in csp and "connect-src 'self';" in csp and "frame-src" not in csp, pfad
+            assert csp.startswith("default-src 'self'; ") and "worker-src" not in csp, pfad
+            assert r.headers.get("Cache-Control") != "no-store", pfad
+        # Hinweis 1 der Endprüfung: enges default-src (Prefetch an /api/ ohne Referer), kein Worker außer dem Service Worker;
+        # die Übungsseite kommt nicht aus dem Zwischenspeicher (Zurück nach dem Verlassen der Übung, Befund B2).
+        r = adm.get("/stroemipedia?uebung=grund")
+        csp = r.headers["Content-Security-Policy"]
+        assert csp.startswith("default-src 'none'; manifest-src 'self'; script-src 'self' 'nonce-"), csp
+        assert "worker-src localhost/sw.js;" in csp and r.headers["Cache-Control"] == "no-store", (csp, r.headers)
+        # Hinweis 3: Weiterleitungen aus der Übung behalten die Kennung (Adresse oder Referer derselben Übung) und bleiben
+        # nicht im Zwischenspeicher; ohne Übung und in ein anderes Modul wie bisher.
+        for pfad, kopf, ziel in (
+                ("/material/artikel/900000001", UEBUNG_REF, "/materialablage/artikel/900000001?uebung=grund"),
+                ("/material/artikel/900000001?uebung=grund", {}, "/materialablage/artikel/900000001?uebung=grund"),
+                ("/materialablage/katalog/meldungen?bereich=antraege&uebung=grund", {},
+                 "/materialablage/bestand/antraege?uebung=grund"),
+                ("/materialablage/katalog/meldungen?bereich=antraege", UEBUNG_REF, "/materialablage/bestand/antraege?uebung=grund")):
+            r = adm.get(pfad, headers=kopf)
+            assert r.status_code in (301, 302) and r.headers["Location"].endswith(ziel), (pfad, r.status_code, r.headers)
+            if r.status_code == 301:
+                assert r.headers["Cache-Control"] == "no-store", pfad
+            e, r2, html = einf(adm, ziel)
+            assert r2.status_code == 200 and e["uebung"] == "grund" and not any(x in html for x in geheim), ziel
+        for pfad, kopf, ziel in (("/material/artikel/900000001", {}, "/materialablage/artikel/900000001"),
+                                 ("/wiki/probe", UEBUNG_REF, "/stroemipedia/probe"),
+                                 ("/materialablage/katalog/meldungen?bereich=antraege", {}, "/materialablage/bestand/antraege")):
+            r = adm.get(pfad, headers=kopf)
+            assert r.status_code in (301, 302) and r.headers["Location"].endswith(ziel), (pfad, r.status_code, r.headers)
+            assert r.status_code == 302 or r.headers["Cache-Control"] == "public, max-age=86400", pfad
+        # Hinweis 4: Ein Rückstrich vorn im Referer fällt wie „/“ weg (Browser lesen „/\\“ wie „//“).
+        r = adm.get("/materialablage/meine-psa", headers={"Referer": "http://localhost/\\fremd.example/?uebung=grund"})
+        assert 'href="/fremd.example/?uebung=grund"' in r.get_data(as_text=True)
     print("Seiten ohne Übungszweig bestanden.")
 
 
@@ -297,6 +333,14 @@ def test_merker():
                            headers={"Sec-Fetch-Site": "cross-site"})
         assert r.status_code == 403
         assert merker(t.app, t.mitglied_id) == {}
+        # Ein tief geschachtelter Wert (nur über die Datenbank zu erzeugen) gilt wie jeder unlesbare als leer – keine 500 auf
+        # Modulseiten, Profil und Merker (Befund 2 der Endprüfung).
+        sql(t.app, "INSERT INTO mat_meta (schluessel, wert) VALUES (?, ?)",
+            (f"einfuehrung:{t.mitglied_id}", "[" * 100000 + "]" * 100000))
+        for pfad in ("/materialablage", "/materialablage?uebung=grund", "/profil"):
+            assert t.mitglied.get(pfad).status_code == 200, pfad
+        assert put(t.mitglied, "material", "grund", zustand="abgelehnt", ablauf=0).status_code == 200
+        assert merker(t.app, t.mitglied_id)["material:grund"]["zustand"] == "abgelehnt"
         assert put(t.mitglied, "material", "grund", zustand="unterbrochen", ablauf=0).json == {"ok": True}
         m = merker(t.app, t.mitglied_id)["material:grund"]
         assert m["zustand"] == "unterbrochen" and m["ablauf"] == 0 and m["am"]
@@ -552,7 +596,7 @@ def _uebungsdatei_teile(modul):
     pfad = os.path.join(WURZEL, "app", "static", "js", "uebung", f"{modul}.js")
     node = _node()
     if node:
-        skript = ("const reg = {}; globalThis.window = globalThis; globalThis.document = { getElementById: () => null };"
+        skript = ("const reg = {}; globalThis.window = globalThis; globalThis.document = { getElementById: () => null, addEventListener() {} };"
                   "globalThis.S = { einfuehrung: { modul(n, d) { reg[n] = d; } } };"
                   f"require({json.dumps(pfad)});"
                   "const out = {}; for (const [n, d] of Object.entries(reg)) { out[n] = {};"
@@ -571,7 +615,8 @@ def test_statisch():
     assert not re.search(r"https?://", js), "keine fremden Adressen"
     assert not re.search(r"^\s*import\b|\bimport\(|require\(", js, flags=re.M) and "/vendor/" not in js
     assert "Übung · Schritt ${n} von ${m}" in js and "Übung unterbrechen" in js and "Übungsbild nehmen" in js
-    assert 'S.confirm("Übung unterbrechen?", "Unterbrechen", "Weiter üben", { endgueltig: false })' in js
+    assert ('S.confirm("Übung unterbrechen? Fortsetzen kannst du später im Profil unter „Einführungen“.", "Unterbrechen", '
+            '"Weiter üben",\n      { endgueltig: false })') in js
     assert '"In der Übung nicht verfügbar."' in js and '"In der Übung gibt es diese Datei nicht."' in js
     # Knopftexte ohne „…“ (Designsprache) – in der Führung und im Angebot.
     for knopf in re.findall(r'(?:text|knopf): "([^"]*)"', js) + re.findall(r">([^<>]*)</button>", js):
@@ -588,7 +633,7 @@ def test_statisch():
     assert "S.weich()" not in js and 'behavior: "instant"' in js and "smooth" not in js
     for wort in ("function beruhigen(s, el, lauf)", "document.fonts.ready", "document.getAnimations()", "overlaySchliesst()",
                  "elementsFromPoint", "seiteGehtGerade()", "function zaehlungFesthalten()", "location.reload()",
-                 "el.isContentEditable", 'setAttribute("aria-live", "polite")', "istDatei(u) && !(ausgang",
+                 "el.isContentEditable", 'setAttribute("aria-live", "polite")', "(istDatei(u) || download) && !(ausgang",
                  'classList.toggle("unter-menue"', 'd.matches(":modal")'):
         assert wort in js, wort
     # Nachbesserung nach der Sicherheitsprüfung: Übungsablage, Seiten ohne Übungszweig, Referer, Abmelden.

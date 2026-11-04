@@ -665,8 +665,11 @@ def create_app():
         ziel = module.weiterleitung(request.path, request.query_string.decode("latin-1"))
         if ziel is None:
             return None
-        resp = redirect(ziel, 301)
-        resp.headers["Cache-Control"] = "public, max-age=86400"
+        # Aus der Übung (Kennung in der Adresse oder Referer einer Übungsseite desselben Moduls) behält die Weiterleitung
+        # die Kennung und landet nie auf der echten Seite (einfuehrung.mit_kennung) – und bleibt nicht im Zwischenspeicher.
+        uebung = einfuehrung.kennung(ziel) is not None
+        resp = redirect(einfuehrung.mit_kennung(ziel), 301)
+        resp.headers["Cache-Control"] = "no-store" if uebung else "public, max-age=86400"
         return resp
 
     @app.before_request
@@ -735,14 +738,20 @@ def create_app():
         resp.headers.setdefault("Permissions-Policy", "geolocation=(self), camera=(), microphone=(self)")
         # Eine Übungsseite der Einführung lädt Bilder, Medien und Rahmen nur aus /static/ und verbindet sich nur mit den
         # Ausnahmen der Sperre (einfuehrung.csp_quellen) – auch ohne Referer erreicht so kein Element /api/ oder /media/.
+        # Dazu dort ein enges default-src (Prefetch) und kein Worker außer dem Service Worker; die Seite selbst kommt nicht
+        # aus dem Zwischenspeicher (Zurück nach dem Verlassen der Übung zeigt sonst die alte Übungsseite).
         uebung = einfuehrung.csp_quellen()
         bild, netz = (uebung["bild"], uebung["netz"]) if uebung else ("'self'", "'self'")
         resp.headers.setdefault(
             "Content-Security-Policy",
-            f"default-src 'self'; script-src 'self' 'nonce-{nonce}'; style-src 'self' 'unsafe-inline'; "
+            ("default-src 'none'; manifest-src 'self'; " if uebung else "default-src 'self'; ")
+            + f"script-src 'self' 'nonce-{nonce}'; style-src 'self' 'unsafe-inline'; "
             f"img-src {bild} data: blob: {_kachel_quellen(app.config)}; media-src {bild} blob:; "
-            f"font-src 'self' data:; connect-src {netz}; " + (f"frame-src {bild} blob:; " if uebung else "")
+            f"font-src 'self' data:; connect-src {netz}; "
+            + (f"frame-src {bild} blob:; worker-src {uebung['worker']}; " if uebung else "")
             + "frame-ancestors 'self'; form-action 'self'; base-uri 'self'; object-src 'none'")
+        if uebung:
+            resp.headers["Cache-Control"] = "no-store"
         return resp
 
     @app.context_processor

@@ -349,7 +349,9 @@ def meldungen_seite():
     ?bereich=antraege – alte Links (Mails, Lesezeichen) führen jetzt auf ihre Seite im Bestand."""
     if request.args.get("bereich") == "antraege":
         status = request.args.get("status")
-        return redirect("/materialablage/bestand/antraege" + (f"?status={status}" if status in antrag.FILTER else ""))
+        # Aus der Übung mit der Kennung (Hinweis 3 der Endprüfung) – sonst landete sie auf den echten Anträgen.
+        return redirect(einfuehrung.mit_kennung(
+            "/materialablage/bestand/antraege" + (f"?status={status}" if status in antrag.FILTER else "")))
     return _seite("meldungen", katalog_seite=True, status=request.args.get("status"))
 
 

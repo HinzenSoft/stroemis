@@ -26,7 +26,7 @@ dem Konto (konto_vergessen in api_admin.delete_user); ein Zurücksetzen der Mate
 damit auch ihn. Kein Journal, keine Mail, keine Anzeige in der Leitstelle (Entscheidung 1)."""
 import json
 import re
-from urllib.parse import parse_qs, urlencode, urlsplit, urlunsplit
+from urllib.parse import parse_qs, quote, urlencode, urlsplit, urlunsplit
 
 from flask import Blueprint, abort, current_app, g, has_request_context, jsonify, render_template, request
 
@@ -200,7 +200,7 @@ def merker(uid):
     row = db.query("SELECT wert FROM mat_meta WHERE schluessel = ?", (SCHLUESSEL.format(uid=int(uid)),), one=True)
     try:
         wert = json.loads(row["wert"]) if row else {}
-    except ValueError:
+    except (ValueError, RecursionError):           # auch ein tief geschachtelter Wert (Befund 2 der Endprüfung)
         return {}
     return wert if isinstance(wert, dict) else {}
 
@@ -270,7 +270,7 @@ def seite(modul):
         daten["anleitung"] = _anleitung_uebersicht(modul, user)
         # Für einfuehrung.js und S.ziel: welche Adressen unter den Modulpfaden eine Übungsseite haben.
         daten["seiten"] = seiten_muster()
-        daten["bereiche"] = list(_bereiche())
+        daten["bereiche"] = list(_bereiche() + _alte_bereiche())
     g.einfuehrung = daten
     return teil
 
@@ -376,6 +376,13 @@ def _bereiche():
     return tuple(module.PFAD[m] for m in TEILE)
 
 
+def _alte_bereiche():
+    """Ihre alten Pfade und die Schreibweisen mit Umlaut (module.ALT, module.UMLAUT) – sie leiten nur weiter. In der
+    Übung hält einfuehrung.js Links und Seitenwechsel dorthin an (Hinweis 3 der Endprüfung). Kodiert wie im Browser
+    (URL.pathname: „/str%C3%B6mipedia“)."""
+    return tuple(quote(p) for m in TEILE for p in (module.ALT.get(m), module.UMLAUT.get(m)) if p)
+
+
 def _modul_von(pfad):
     """Das Modul mit Übung, unter dessen Pfad die Adresse liegt – oder None."""
     return next((m for m in TEILE if pfad == module.PFAD[m] or pfad.startswith(module.PFAD[m] + "/")), None)
@@ -401,12 +408,39 @@ def seiten_muster():
     return sorted({_muster(r) for r in current_app.url_map.iter_rules() if r.endpoint in UEBUNGSSEITEN})
 
 
+def kennung(ziel):
+    """Der Teil, den eine Weiterleitung aus der Übung an ziel (eigener Pfad) weitergibt (Hinweis 3 der Endprüfung):
+    ?uebung= der Anfrage oder – kommt sie ohne Kennung von einer Übungsseite desselben Moduls – „uebung=“ des Referers.
+    Sonst None (dann führt die Weiterleitung wie bisher auf die echte Seite)."""
+    if not has_request_context():
+        return None
+    if "uebung" in request.args:
+        return request.args.get("uebung")
+    ref = _uebungs_referer()
+    modul = _modul_von(urlsplit(ziel).path)
+    if not ref or not modul or _modul_von(ref.path) != modul:
+        return None
+    return (parse_qs(ref.query, keep_blank_values=True).get("uebung") or [""])[0]
+
+
+def mit_kennung(ziel):
+    """ziel einer Weiterleitung, aus der Übung mit der Kennung (kennung) – die Zielseite zeichnet dann ihren Übungszweig
+    bzw. die Sperre die Fehlerseite, nie die echte Seite im selben Reiter. Ohne Übung unverändert."""
+    teil = kennung(ziel)
+    s = urlsplit(ziel)
+    if teil is None or "uebung" in parse_qs(s.query, keep_blank_values=True):
+        return ziel
+    abfrage = s.query + ("&" if s.query else "") + urlencode({"uebung": teil})
+    return urlunsplit(("", "", s.path, abfrage, s.fragment))
+
+
 def _zurueck():
     """Wohin „Zurück zur Übung“ auf der Fehlerseite führt: die Übungsseite, von der die Anfrage kam (nur Pfad und Abfrage
     derselben Herkunft), sonst die Übungsadresse des Teils aus der Adresse bzw. die Startseite des Moduls."""
     ref = _uebungs_referer()
     if ref:
-        return urlunsplit(("", "", "/" + ref.path.lstrip("/"), ref.query, ""))
+        # Auch ein Rückstrich vorn fällt weg – Browser lesen „/\“ wie „//“ (Hinweis 4 der Endprüfung).
+        return urlunsplit(("", "", "/" + ref.path.lstrip("/\\"), ref.query, ""))
     modul = _modul_von(request.path)
     if not modul:
         return "/"
@@ -449,13 +483,17 @@ def csp_quellen():
     """Für security_headers (app/__init__.py): Auf einer Übungsseite (Hinweis 1 der Sicherheitsprüfung vom 04.11.2026)
     lädt der Browser Bilder, Medien und Rahmen nur aus /static/ und verbindet sich nur mit den Ausnahmen der Sperre – so
     erreicht auch ein Element mit referrerpolicy="no-referrer" (das der Server nicht als Übung erkennen könnte) /api/ und
-    /media/ nicht. {"bild": …, "netz": …} – oder None für jede andere Seite (dann gilt 'self')."""
+    /media/ nicht. Dazu (Hinweis 1 der Endprüfung) ein enges default-src (kein Prefetch an /api/ ohne Referer) und kein
+    Worker außer dem Service Worker. {"bild": …, "netz": …, "worker": …} – oder None für jede andere Seite (dann gilt
+    'self')."""
     e = getattr(g, "einfuehrung", None) if has_request_context() else None
     host = request.host if has_request_context() else ""
     if not e or not e.get("uebung") or not re.fullmatch(r"[A-Za-z0-9.-]+(?::\d{1,5})?", host or ""):
         return None
     return {"bild": f"{host}/static/",
-            "netz": " ".join(f"{host}{p}" for p in ("/static/", "/api/einfuehrung/", "/api/me", "/api/auth/logout"))}
+            "netz": " ".join(f"{host}{p}" for p in ("/static/", "/api/einfuehrung/", "/api/me", "/api/auth/logout")),
+            # Kein Worker außer dem Service Worker (ein Worker hätte die weite CSP seiner Datei und keinen Übungs-Referer)
+            "worker": f"{host}/sw.js"}
 
 
 # --- Schnittstelle: Merker -------------------------------------------------------------------------------------------
