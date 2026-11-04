@@ -79,7 +79,7 @@ Geschichte stehen. Schemaversion nach der Nachbesserung vor dem Merge: 30; mit d
 | Rechte ändern mit Rollen | Dialog „Rechte ändern“ mit denselben Rollenkarten wie „Freigabe anlegen“ (vorgewählt die Rolle zu den heutigen Rechten, seltene Fälle unter „Einzeln“), Gültigkeit als Radiogruppe „dauerhaft / bis [Datum]“ in Dialog und Anlegen-Formular, nicht wählbare Rollen ausgegraut mit Grund als Satz, Erklärungen im „i“, Notiz zugeklappt; ohne Änderung schließt „Speichern“ ohne Anfrage; Server und Schnittstelle unverändert | gebaut 02.11.2026 (kein Schemaschritt) |
 | Prüfen folgt dem Grundrecht | Bei internen Rollen („Prüfer“, „Materialwart und Prüfer“) ist Prüfen immer dauerhaft und gilt, solange das Grundrecht gilt – auch vom befristeten Verwalter (Server: dauerhafte Prüffreigabe mit Grundrecht dort oder darüber auch von ihm; ändern nur, solange das tragende Grundrecht nicht länger läuft als sein Verwalten); kein vorbelegtes Datum außer beim externen Prüfer, „bis“ mit leerem Feld, wo „dauerhaft“ nicht geht; Rollenwechsel lässt die eigene Wahl; behebt den ungekappten Datumsvorschlag (eigenes Ende > 24 Monate → Ablehnung) | gebaut 03.11.2026 (kein Schemaschritt) |
 | „kritisch“ entfernt | Die Markierung „kritisch“ an Prüfpunkten ist ganz entfernt: kein Häkchen im Formular-Editor, keine Marke, Spalte und kein „i“ in Prüfung, Befunden und neuem Prüfprotokoll, keine Sperre von „einsatzbereit“ wegen eines kritischen Mangels (Oberfläche und Server) – bei einem Mangel wählt der Prüfer das Ergebnis selbst; Jahresbericht ohne „mit kritischem Mangel“, CSV ohne „kritischer Mangel“; Katalogexport ohne `kritisch`, der Import übergeht es; `is_critical` bleibt, wird nicht mehr gelesen | gebaut 03.11.2026 (kein Schemaschritt), Zweig kritisch-weg |
-| Interaktive Einführung je Modul | Übungsmodus mit Übungsbestand, Sperre, Angebot, Führung, Profil „Einführungen“, Übungen für Materialablage, Strömipedia, Ankerplätze, Riegenkarten | Grundgerüst gebaut 03.11.2026 (kein Schemaschritt); Übungen je Modul folgen |
+| Interaktive Einführung je Modul | Übungsmodus mit Übungsbestand, Sperre, Angebot, Führung, Profil „Einführungen“, Übungen für Materialablage, Strömipedia, Ankerplätze, Riegenkarten | Grundgerüst gebaut 03.11.2026 (kein Schemaschritt), Übungen je Modul und robuste Führung gebaut 04.11.2026, Zweig tutorial |
 
 ## Abgleich mit dem Bestand (vor Lieferung 1)
 
@@ -11788,12 +11788,59 @@ oder ein ausgeblendeter Hinweis bleiben unberührt; eine Übungsseite lädt Bild
 und verbindet sich nur mit den Ausnahmen der Sperre (engere CSP), und außerhalb der Kopfleiste verlieren Elemente
 `referrerpolicy` und `rel="noreferrer"` – so erreicht nichts ohne Referer `/api/` oder `/media/`.
 
-**Übungen je Modul**: folgt (Modul-Teile Materialablage, Strömipedia, Ankerplätze, Riegenkarten liefern ihre Abläufe und
-Sätze).
+**Übungen je Modul** (gebaut 04.11.2026 auf den Zweigen tutorial-material, -wiki, -karte, -riegen, zusammengeführt im
+Zweig `tutorial`; Berichte `planung/tutorial/bericht_{materialablage,stroemipedia,ankerplaetze,riegenkarten}.md`; nur
+Platzhalter „Übung“, keine erfundenen Fachdaten):
+- **Materialablage**: Grundteil (Zurechtfinden, Artikel finden, Mangel melden), Prüfer (Prüfung durchführen),
+  Materialwart (Artikel anlegen, Freigabe erteilen, Prüfdurchgang), Material-Verwaltung (Katalog und Prüfformular) –
+  Übungsbestand mit Gliederung, Lager, Fahrzeug, drei Übungsartikeln, Platzhalter-Prüfformular und Übungsperson A/B; kein
+  Intervall, keine Lebensdauer. `material.js`, `suche.js`, `global.js`, `freigaben.js` wechseln Seiten über `S.ziel`. Die
+  Abschlussleiste der Prüfung klebt am Telefon über der Führungs- bzw. Angebotsleiste.
+- **Strömipedia**: drei Teile mit 4/3/2 Abläufen am Übungsabschnitt „Übung: Start“ (drei Seiten, eine im Papierkorb,
+  Kommentar, Verlauf, eine Übungsvorlage); `wiki.js` wechselt Seiten und öffnet Fenster über `S.ziel`; der Export meldet in
+  der Übung „In der Übung gibt es diese Datei nicht.“ statt die Seite zu verlassen.
+- **Ankerplätze**: Grundteil 2 Abläufe/9 Schritte, Redakteur 3 Abläufe/20 Schritte; im Teil „Redakteur“ gehört
+  Übungsalbum A dem Konto. Am Telefon enden Karte und Großansicht über der Leiste der Führung.
+- **Riegenkarten**: Übungsdatei mit Übungsbestand und 18 Antworten nach der Schnittstelle der Riegenkarten, drei Teile mit
+  13/10/9 Schritten; `pruefungen.js` wechselt Seiten und öffnet Druckansichten über `S.ziel` (Druck in der Übung: Toast,
+  kein Seitenwechsel). Der Teil „Leitung“ beginnt im Übungslehrgang.
+
+**Führung robust gemacht, Umgehungen zurückgebaut** (04.11.2026, Auftrag `planung/tutorial/auftrag_fuehrung_robust.md`,
+Bericht `planung/tutorial/bericht_robust.md`; nur `einfuehrung.js`, `app.css`/`material.css` Abschnitt „Einführung“, die
+Übungsdateien und die Einführungs-Tests):
+- Ziele kommen **sofort** (ohne weichen Bildlauf) in die Mitte des freien Bereichs zwischen festen/klebenden Leisten oben
+  und unten (gesucht mit `elementsFromPoint`) bzw. der Leiste der Führung, begrenzt von Rahmen, die in sich rollen; „bereit“
+  erst nach den Webschriften, dem Zurück eines eben geschlossenen Overlays, ohne laufende Animation am Ziel oder einem
+  Vorfahren (Schublade) und wenn das Ziel zwei Bilder lang ruht; rutscht es kurz danach unter eine Leiste, holt `lage()`
+  es zurück (nicht nach eigenem Rollen). `html.fuehrung-leiste` setzt `scroll-padding-bottom`.
+- Bei offenem modalem Dialog zählen nur Ziele in ihm.
+- Während eines Seitenwechsels wertet die Führung auf der alten Seite nichts aus (kein `wenn`, nichts gespeichert);
+  „Schritt n von m“: die nicht zutreffenden Schritte werden beim Betreten eines Ablaufs festgehalten.
+- Jeder Ablauf beginnt mit frischem Übungsbestand **und neu geladener Startseite** (auch bei gleicher Adresse oder nur
+  anderem Anker).
+- Ziele im Editor (`contenteditable`) ohne `aria-describedby` – den Text sagt eine Live-Region an; die Editor-Schritte der
+  Strömipedia zeigen wieder auf das Editorfeld.
+- Seitenwechsel auf Dateien (`/api/`, `/media/`, Endung) hält die Schicht über die Navigation API an: Übungsdatei oder
+  „In der Übung gibt es diese Datei nicht.“ (ersetzt den Klick-Wächter für den Export der Strömipedia).
+- Ein geöffnetes Menü bleibt frei: Die Blase weicht aus (unter, über, neben das Menü) oder liegt unter einem schwebenden
+  Menü; der Rahmen dunkelt es nicht ab.
+- Klebende Leisten unten: allgemeine Regel in `app.css` (Abschnitt „Einführung“): unter `html.fuehrung-leiste`
+  `bottom: var(--fuehrung-hoehe, 0px)` bzw. abgezogene Höhe; Materialablage (Abschlussleiste, jetzt auch die
+  Mehrfachauswahl, `scroll-padding` mit beiden Leisten) und Ankerplätze (Karte, Großansicht) folgen ihr.
+- Zurückgebaut: `imBild`, `obenImBild`, `ruhig`, `baumZiel` und der Export-Wächter (Strömipedia), der sofortige Bildlauf im
+  Ziel-Helfer (Ankerplätze), `insBild` und die Zielbedingungen „Dialog zu“ (Riegenkarten), `nachSchrift`, `zurueckOffen`
+  und die `wenn`-Umgehung (Materialablage: der Schritt „Öffne den Treffer“ gilt jetzt auf der Trefferseite). Die
+  didaktischen Zusatzschritte (Reiter-Klick, „Haken heraus“ …) bleiben.
+- Testhilfe `tests/einfuehrung_browser.py`: `Seite.ruhe` für alle, unbeantwortete Anfragen auf jeder Seite gesammelt,
+  `probe: {klick: sel, frei: true}`, Lageprüfung mit Leisten oben und Treffer in der Mitte; die Unterklassen
+  `SammelSeite`/`KartenSeite` der Modultests sind weg.
 
 **Tests**: neu `tests/test_einfuehrung.py` (Sperre über jede Regel unter `/api/` × Methode mit Kopfzeile und Referer,
 Datenbank unverändert; Merker; Angebot je Rolle; Übungsseiten ohne echte Daten und der Nachtrag; Profil; statisch),
-`tests/test_einfuehrung_browser.py` mit der Hilfe `tests/einfuehrung_browser.py` (Chromium; ohne „übersprungen“).
+`tests/test_einfuehrung_browser.py` mit der Hilfe `tests/einfuehrung_browser.py` (Chromium; ohne „übersprungen“),
+`tests/test_einfuehrung_material.py`, `tests/test_einfuehrung_wiki.py`, `tests/test_einfuehrung_karte.py`,
+`tests/test_einfuehrung_riegen.py` (alle Teile je Modul bei 1280×900 Maus und 360×740 Touch bis „Geschafft“, echte
+Daten unverändert); angepasst `tests/test_geraetetest_riegen.py` (Sprung nach „Lehrgang anlegen“ über `S.ziel`).
 
 **Abweichungen von der Bauvorlage** (im Bericht unter „Bitte bestätigen“):
 - `TEILE` führt die Titel aller Abläufe (die Zahl ist ihre Länge) – Angebot und Profil nennen „unterbrochen bei „…““,
@@ -11830,3 +11877,23 @@ Datenbank unverändert; Merker; Angebot je Rolle; Übungsseiten ohne echte Daten
     meldet „In der Übung nicht verfügbar.“ bzw. öffnet die Übungsdatei (PDF-Protokoll).
 11. Kein Angebot auf der Startseite „/“, im Profil und in der Leitstelle.
 12. Suite wird um etwa 7–10 Minuten länger (Browser-Durchläufe je Modul).
+
+**Bitte bestätigen – Übungen je Modul und robuste Führung** (04.11.2026; Einzelheiten in den Berichten unter
+`planung/tutorial/`, vorläufig angenommen):
+- Materialablage: Gliederung „Übung – Gliederung“ über Lager und Fahrzeug 1 (mit den Systemordnern); **kein
+  Prüfintervall und keine Lebensdauer** an den Übungsprodukten (Artikelseite „kein Intervall“; Alternative: ein
+  Platzhalter-Intervall); Mangelquittung wie mit Mailserver, die Führung sagt „In der Übung ging nichts raus.“;
+  QR-Feld mit Platzhaltertext; zusätzliche Info- und Teilschritte.
+- Strömipedia: eine Übungsvorlage (sonst gäbe es den Vorlagen-Dialog nicht); „Übung: Zweite Seite“ gehört ab Redakteur dem
+  eigenen Konto; am Telefon kein Rahmen um den leeren Editor und den neuen Kommentar; Startadressen und Zusatzschritte.
+- Ankerplätze: Suche „Übung“ statt „Album B“; Schritt „Nimm den Haken heraus“; „Bilder hochladen“ über „Alben“;
+  Adresssuche in vier Schritten; Album A gehört im Teil „Redakteur“ dem Konto; hochgeladene Dateien haben in der Übung nie
+  einen Geotag; Bild löschen gibt es in der Übung nicht.
+- Riegenkarten: keine Profilbilder (Initialen); kein Zeitansatz (keine Stoppuhr in der Übung); der Teil „Leitung“
+  beginnt im Übungslehrgang; Reiter-Klick als eigener Schritt; mehr „nicht in der Übung“ (Voraussetzungen, Leistungen,
+  Kriterien verwalten).
+- Führung: Jeder Ablauf lädt seine Startseite neu (kurz sichtbarer Neuaufbau, auch bei gleicher Adresse). Ein Ziel,
+  das nach dem Zeigen verrutscht, holt sie nur in den ersten 2,5 s und nur ohne eigenes Rollen zurück (sonst zöge sie
+  gegen den Nutzer). Der Export der Strömipedia meldet jetzt „In der Übung gibt es diese Datei nicht.“ (wie jede andere
+  Datei) statt „In der Übung nicht verfügbar.“. Klebende Leisten unten als Regel mit `--fuehrung-hoehe` statt einer
+  eigenen Klasse.

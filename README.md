@@ -1005,6 +1005,47 @@ die neue Seite fort (bis 5 s Warten auf das Ziel, sonst „Hier geht es in der �
 beginnen“). Am Ende eines Teils der Dialog „Geschafft“ – mit der Anleitung des Moduls in der Strömipedia, wenn das Konto
 sie lesen darf, und „Weiter mit „…““, wenn ein weiterer Teil offen ist.
 
+Wie die Führung ein Ziel zeigt (seit 04.11.2026, „Führung robust“): Sie holt es **sofort** (ohne weichen Bildlauf) in die
+Mitte des freien Bereichs – zwischen festen bzw. klebenden Leisten oben (Kopfleiste, Suchzeile, Reiter; gesucht mit
+`elementsFromPoint` an der waagerechten Mitte des Ziels) und unten (Abschlussleiste, am Telefon die Leiste der Führung),
+begrenzt von Rahmen, die in sich rollen (Dialog, Schublade); höhere Ziele stehen mit ihrem Anfang oben. „Bereit“ ist ein
+Schritt erst, wenn die Webschriften geladen sind (`document.fonts`), kein Overlay mehr seinen Schritt zurück im Verlauf
+nimmt (`S.dialogVerlauf`: das Zurück stellt die alte Bildlaufhöhe her), keine Animation am Ziel oder einem Vorfahren
+läuft (Schublade) und das Ziel zwei Bilder lang still steht. Rutscht es in den 2,5 s danach doch unter eine Leiste, holt
+die Führung es noch einmal ins Bild (nicht, wenn du selbst rollst). Bei offenem modalem Dialog zählen nur Ziele in ihm.
+Während ein Seitenwechsel läuft, wertet sie auf der alten Seite nichts aus (kein `wenn`, nichts gespeichert); welche
+Schritte nicht zutreffen, hält sie beim Betreten eines Ablaufs fest – „Schritt n von m“ springt nicht. **Jeder Ablauf
+beginnt mit frischem Übungsbestand und neu geladener Startseite**, auch bei gleicher Adresse oder nur anderem Anker. Ziele
+im Editor (`contenteditable`) bekommen kein `aria-describedby` (ProseMirror zeichnete sonst neu) – den Text sagt eine
+Live-Region an. Seitenwechsel auf Dateien (`/api/`, `/media/`, Endung – wie bei Links, etwa der Export der Strömipedia)
+hält die Schicht über die Navigation API an: Übungsdatei oder „In der Übung gibt es diese Datei nicht.“. Ein vom Nutzer
+geöffnetes Menü bleibt frei (die Blase weicht aus oder liegt unter einem schwebenden Menü, der Rahmen dunkelt es nicht
+ab). Klebende Leisten unten (`position: sticky/fixed; bottom: 0`) und fensterhohe Flächen enden über der Leiste der
+Führung: unter `html.fuehrung-leiste` mit `bottom: var(--fuehrung-hoehe, 0px)` bzw. abgezogener Höhe (Regel in `app.css`,
+Abschnitt „Einführung“; `scroll-padding-bottom` ebenso).
+
+**Übungen je Modul** (Bau 04.11.2026; Übungsdateien `app/static/js/uebung/<modul>.js`, Bilder unter
+`app/static/uebung/<modul>/` aus `scripts/uebungsdateien.py`; nur Platzhalter „Übung“, keine Fachdaten wie Intervalle oder
+Lebensdauern):
+- **Materialablage**: Grundteil (Zurechtfinden, Artikel finden, Mangel melden), „Prüfer“ (Prüfung durchführen),
+  „Materialwart“ (Artikel anlegen, Freigabe erteilen, Prüfdurchgang), „Material-Verwaltung“ (Katalog und Prüfformular).
+  Übungsbestand: „Übung – Gliederung“ mit Lager und Fahrzeug 1 (und den Systemordnern), drei Übungsartikel, ein
+  Platzhalter-Prüfformular, Übungsperson A/B; Kennungen 9000000xx. Jeder Seitenwechsel in `material.js`, `suche.js`,
+  `global.js`, `freigaben.js` geht über `S.ziel`. Test `tests/test_einfuehrung_material.py`.
+- **Strömipedia**: Grundteil (Lesen, Suchen, Kommentieren, Bearbeiten), „Redakteur“ (Seite anlegen, Bearbeiten erlauben,
+  Verlauf), „Verwaltung“ (Für alle Angemeldeten freigeben, Papierkorb) am Übungsabschnitt „Übung: Start“ (Adressen
+  `/stroemipedia/uebung-…`, Kennungen 9100000xx). Löschen, Verschieben, Duplizieren, Lesebeschränkung, Hochladen, Import
+  und Export gibt es in der Übung nicht. Test `tests/test_einfuehrung_wiki.py`.
+- **Ankerplätze**: Grundteil (Karte und Album; Suchen und filtern), „Redakteur“ (Album anlegen; Bilder hochladen mit
+  Rückfrage „ohne Geotag“, Adresssuche und Tipp auf die Karte; Bild beschreiben). Drei Übungsalben um den
+  Kartenmittelpunkt, die Adresssuche findet nur den „Übungsort“; nicht in der Übung: Löschen, Zusammenlegen, Deckblatt,
+  Ziehen und Ablegen. Test `tests/test_einfuehrung_karte.py`.
+- **Riegenkarten**: Grundteil (Lehrgang öffnen, Voraussetzung abhaken, Bewerten, Mängel), „Leitung“ (Teilnehmende
+  eintragen, Lehrgangsergebnis; beginnt im Übungslehrgang), „Redakteur“ (Lehrgang anlegen). „Übungslehrgang“ mit
+  „Teilnehmer Übung 1–3“, Leistungen, Kriterien und Voraussetzungen als Platzhalter, ohne Zeitansatz (keine Stoppuhr);
+  Kennungen 9300000xx. Druckansichten, Import, Kopieren, Löschen, Profilbilder, Medien und das Bearbeiten von Katalogen,
+  Voraussetzungen und Leistungen gibt es in der Übung nicht. Test `tests/test_einfuehrung_riegen.py`.
+
 **Merker** ohne Schemaschritt in `mat_meta` (Schema bleibt 34): Schlüssel `einfuehrung:<Konto>`, Wert
 `{"<modul>:<teil>": {"zustand": "abgelehnt" | "unterbrochen" | "erledigt", "ablauf": n, "am": …}}`, geschrieben über
 `PUT /api/einfuehrung/<modul>/<teil>` (`{zustand, ablauf}`; 404 unbekannter Teil, 403 wenn der Teil nicht für das
@@ -1028,7 +1069,10 @@ Ein Schritt: `ziel` (Selektor, Funktion → Element oder `null` = Blase mittig o
 bis zwei Sätze), `warten` (fehlt → Knopf „Weiter“; `{klick: sel}`, `{wert: [sel, RegExp]}`, `{anfrage: "METHODE /pfad"}`
 oder RegExp, `{da: sel}`, `{bedingung: (z) => bool}`), `wenn` (`() => bool`, Schritt nur, wenn zutreffend), `datei`
 (`{input: sel, bild: "/static/uebung/…"}` – Knopf „Übungsbild nehmen“), `probe` (nur für den Durchlauftest: `{klick: sel}`,
-`{tippen: [sel, text]}`, `{datei: true}`; ohne probe klickt der Test `warten.klick` bzw. „Weiter“). Testschnittstelle
+`{klick: sel, frei: true}` – Tipp auf die Mitte der größten freien Stelle, etwa auf die Karte –, `{tippen: [sel, text]}`,
+`{datei: true}`; ohne probe klickt der Test `warten.klick` bzw. „Weiter“). Ziele sind einfache Selektoren oder
+Funktionen, die sagen, wann ein Ziel zur richtigen Seite gehört – Bildlauf, Dialoge, Schriften und Schubladen wartet die
+Führung selbst ab. Testschnittstelle
 (nur lesend): `S.einfuehrung.zustand()`, `S.einfuehrung.teile(modul)`. Übungsbilder und die Übungsdatei erzeugt
 `python3 scripts/uebungsdateien.py` (Pillow; `--ziel`, `--von`, `--bis` für weitere Bilder gleicher Art).
 
@@ -1164,6 +1208,14 @@ python tests/test_einfuehrung.py         # Einführung je Modul: Übungssperre (
 python tests/test_einfuehrung_browser.py # Einführung im Browser (Chromium, sonst „übersprungen“): Angebot, „Nicht jetzt“, Profil, Gerüst-
                                         # Übung je Modul bis „Geschafft“, Esc, Blase im Dialog, kein /api/ und /media/ im Übungsmodus,
                                         # Übungsablage, Seiten ohne Übungszweig (Toast), ohne Referer (CSP), Abmelden aus der Übung
+python tests/test_einfuehrung_material.py # Übungen der Materialablage: S.ziel in den Modulskripten, Platzhalter, alle vier Teile bei
+                                          # 1280 (Maus) und 360 (Touch) bis „Geschafft“, Datenbank unverändert
+python tests/test_einfuehrung_wiki.py   # Übungen der Strömipedia: drei Teile bei 1280/360, Router mit Kennung, Export als Hinweis (Menü
+                                        # frei), echte Seite nicht in der Übung, wiki_*-Tabellen unverändert
+python tests/test_einfuehrung_karte.py  # Übungen der Ankerplätze: beide Teile bei 1280/360, echtes Album nicht in der Übung, Datenbank
+                                        # und Medienordner unverändert
+python tests/test_einfuehrung_riegen.py # Übungen der Riegenkarten: drei Teile bei 1280/360, echter Lehrgang nicht in der Übung, Druck →
+                                        # Toast, Stoppuhr-Reste, pruef_*-Tabellen unverändert
 python tests/test_material_stufen.py     # Phase 2: Modulstufe (Migration 9 → 10, ohne Stufe wirkt nichts – alle Routen, Material-Verwaltung,
                                         # Personensuche je Zweck, Mails, Profil, Vorgabe neuer Konten)
 python tests/test_material_beispielbestand.py  # Beispielbestand: Katalog unverändert bis auf DEMO-Formulare (nicht im Export), Struktur, Geschichte über zwei Jahre,

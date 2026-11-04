@@ -660,6 +660,11 @@ def test_statisch():
     assert "`einfuehrung.UEBUNGSSEITEN`" in readme and "stroemis-uebung-ablage" in readme
     assert "**Nach der Sicherheitsprüfung nachgebessert**" in lies("CHANGELOG-Material.md")
     assert "| Interaktive Einführung je Modul |" in lies("CHANGELOG-Material.md")
+    # Übungen je Modul und robuste Führung (04.11.2026): kein „folgt“ mehr, die Durchlauftests in der Testliste.
+    changelog = lies("CHANGELOG-Material.md")
+    assert "**Übungen je Modul**: folgt" not in changelog and "**Führung robust gemacht" in changelog
+    for t in ("material", "wiki", "karte", "riegen"):
+        assert f"python tests/test_einfuehrung_{t}.py" in readme, t
     print("Statisch bestanden.")
 
 
