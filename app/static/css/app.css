@@ -3065,3 +3065,54 @@ main.start { container: start / inline-size; }
   .start-wiki .abschnittskopf > .start-alle { display: inline-flex; align-items: center; justify-content: center;
     min-width: 44px; min-height: 44px; }
 }
+
+/* --- Einführung: Angebot, Führung, Profil „Einführungen“ (app/einfuehrung.py, einfuehrung.js; Bauvorlage
+   planung/tutorial/entwurf.md, 03.11.2026) ----------------------------------------------------------------------------
+   Angebot und Sprechblase sind schwebende Flächen (--radius-gross, --schatten-dialog) mit einer Kante in --wasser; unter
+   600 px Fensterbreite stehen sie als Leiste unten über die ganze Breite (--schatten-leiste, --sicher-*), und die Seite
+   bekommt unten so viel Platz, wie die Leiste hoch ist (--fuehrung-hoehe, gesetzt von einfuehrung.js) – auch ein
+   offener Dialog rückt darüber. Der Rahmen um das Ziel ist ein Rand in --wasser mit leichter Abdunkelung rundum; er
+   nimmt keine Klicks an, die Seite bleibt ganz bedienbar. */
+.einfuehrung-angebot, .fuehrung-blase {
+  position: fixed; z-index: 2500; box-sizing: border-box;
+  padding: 12px 16px 14px; background: var(--weiss); color: var(--anthrazit); border-top: 4px solid var(--wasser);
+  border-radius: var(--radius-gross); box-shadow: var(--schatten-dialog); font-size: var(--fs-mittel); }
+.einfuehrung-angebot { right: calc(16px + var(--sicher-rechts)); bottom: calc(16px + var(--sicher-unten)); width: min(380px, calc(100vw - 32px)); }
+.fuehrung-blase { width: min(360px, calc(100vw - 16px)); }
+.einfuehrung-angebot h2 { font-size: 1.05rem; margin: 0 0 6px; }
+.einfuehrung-angebot p, .fuehrung-blase p { margin: 0; }
+.einf-angebot-knoepfe, .fuehrung-knoepfe { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px;
+  margin-top: 12px; }
+.fuehrung-kopf { color: var(--grau); font-size: var(--fs-klein); }
+.fuehrung-titel { font-weight: 700; margin-top: 2px; }
+.fuehrung-blase .fuehrung-text { margin-top: 4px; }
+.fuehrung-knoepfe > .fuehrung-unterbrechen { margin-right: auto; }
+.einfuehrung-angebot.als-leiste, .fuehrung-blase.als-leiste {
+  left: 0; right: 0; top: auto; bottom: 0; width: auto; max-height: 60vh; max-height: 60dvh; overflow: auto;
+  border-radius: var(--radius-gross) var(--radius-gross) 0 0; box-shadow: var(--schatten-leiste);
+  padding: 10px calc(12px + var(--sicher-rechts)) calc(12px + var(--sicher-unten)) calc(12px + var(--sicher-links)); }
+html.fuehrung-leiste body { padding-bottom: var(--fuehrung-hoehe, 0px); }
+@media (max-width: 599px) {
+  html.fuehrung-leiste dialog[open]:modal { bottom: var(--fuehrung-hoehe, 0px); }
+  html.fuehrung-leiste dialog[open] .dlg-body { max-height: calc(80dvh - var(--fuehrung-hoehe, 0px)); }
+}
+.fuehrung-rahmen { position: fixed; z-index: 2400; pointer-events: none; box-sizing: border-box; border: 3px solid var(--wasser);
+  border-radius: var(--radius-gross); box-shadow: 0 0 0 200vmax var(--abdunkeln-leicht); }
+.fuehrung-rahmen[hidden], .fuehrung-blase[hidden] { display: none; }
+@media (prefers-reduced-motion: no-preference) {
+  .fuehrung-rahmen { transition: left .15s ease-out, top .15s ease-out, width .15s ease-out, height .15s ease-out; }
+}
+/* Profil „Einführungen“: je Teil eine Zeile mit Stand und Knopf; ist die Spalte schmal (Telefon), steht der Knopf unter
+   dem Text. */
+.einf-liste { container: einf / inline-size; }
+.einf-modul { margin: 14px 0 2px; }
+.einf-zeilen { list-style: none; margin: 0; padding: 0; }
+.einf-zeile { display: flex; align-items: center; gap: 6px 12px; padding: 6px 0; border-bottom: 1px solid var(--linie); }
+.einf-zeile:last-child { border-bottom: 0; }
+.einf-text { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
+.einf-stand { color: var(--grau); font-size: var(--fs-klein); }
+.einf-zeile > .btn { flex: none; }
+@container einf (max-width: 420px) { .einf-zeile { flex-direction: column; align-items: flex-start; } }
+@media (pointer: coarse) {
+  .einf-angebot-knoepfe .btn, .fuehrung-knoepfe .btn, .einf-zeile > .btn { min-height: 44px; }
+}

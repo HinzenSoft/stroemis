@@ -79,6 +79,7 @@ Geschichte stehen. Schemaversion nach der Nachbesserung vor dem Merge: 30; mit d
 | Rechte ändern mit Rollen | Dialog „Rechte ändern“ mit denselben Rollenkarten wie „Freigabe anlegen“ (vorgewählt die Rolle zu den heutigen Rechten, seltene Fälle unter „Einzeln“), Gültigkeit als Radiogruppe „dauerhaft / bis [Datum]“ in Dialog und Anlegen-Formular, nicht wählbare Rollen ausgegraut mit Grund als Satz, Erklärungen im „i“, Notiz zugeklappt; ohne Änderung schließt „Speichern“ ohne Anfrage; Server und Schnittstelle unverändert | gebaut 02.11.2026 (kein Schemaschritt) |
 | Prüfen folgt dem Grundrecht | Bei internen Rollen („Prüfer“, „Materialwart und Prüfer“) ist Prüfen immer dauerhaft und gilt, solange das Grundrecht gilt – auch vom befristeten Verwalter (Server: dauerhafte Prüffreigabe mit Grundrecht dort oder darüber auch von ihm; ändern nur, solange das tragende Grundrecht nicht länger läuft als sein Verwalten); kein vorbelegtes Datum außer beim externen Prüfer, „bis“ mit leerem Feld, wo „dauerhaft“ nicht geht; Rollenwechsel lässt die eigene Wahl; behebt den ungekappten Datumsvorschlag (eigenes Ende > 24 Monate → Ablehnung) | gebaut 03.11.2026 (kein Schemaschritt) |
 | „kritisch“ entfernt | Die Markierung „kritisch“ an Prüfpunkten ist ganz entfernt: kein Häkchen im Formular-Editor, keine Marke, Spalte und kein „i“ in Prüfung, Befunden und neuem Prüfprotokoll, keine Sperre von „einsatzbereit“ wegen eines kritischen Mangels (Oberfläche und Server) – bei einem Mangel wählt der Prüfer das Ergebnis selbst; Jahresbericht ohne „mit kritischem Mangel“, CSV ohne „kritischer Mangel“; Katalogexport ohne `kritisch`, der Import übergeht es; `is_critical` bleibt, wird nicht mehr gelesen | gebaut 03.11.2026 (kein Schemaschritt), Zweig kritisch-weg |
+| Interaktive Einführung je Modul | Übungsmodus mit Übungsbestand, Sperre, Angebot, Führung, Profil „Einführungen“, Übungen für Materialablage, Strömipedia, Ankerplätze, Riegenkarten | Grundgerüst gebaut 03.11.2026 (kein Schemaschritt); Übungen je Modul folgen |
 
 ## Abgleich mit dem Bestand (vor Lieferung 1)
 
@@ -11699,3 +11700,118 @@ beide Server.“ Ursache: Der Editor wird bei „+ Prüfpunkt anlegen“, ↑/�
 Getippte war weg. Jetzt merkt sich `einsammeln()` auch den Titel (`titelEingabe`, material.js `formular()`), das Feld
 wird damit gezeichnet; die Überschrift zeigt weiter den gespeicherten Titel, Speichern und Aktivieren nehmen den Titel
 aus dem Feld. Kein Schemaschritt. Test: `tests/test_material_formular_titel.py` (statisch; ohne die Korrektur rot).
+
+## Interaktive Einführung je Modul – Grundgerüst (Wunsch des Nutzers, 28.10.2026; gebaut 03.11.2026)
+
+Wunsch (28.10.2026): „Wäre es möglich, für jedes Modul ein interaktives Tutorial für den Nutzer zu implementieren, das
+ihn durch die wichtigsten verschiedenen Oberflächen und Funktionen leitet, ohne den echten Bestand zu verändern? Jeder
+Nutzer soll das nur einmal durchlaufen müssen, bevor er das jeweilige Modul nutzen kann. Am Ende soll auf die
+Dokumentation im Wiki verwiesen werden, die es in einem separaten Auftrag wie für die Materialablage dann geben soll.“
+Start (03.11.2026): „Baue die interaktiven Tutorials nach dem Konzept. Pusche nur auf dev.“ Bauvorlage
+`planung/tutorial/entwurf.md`, Auftrag `planung/tutorial/auftrag_bau_grundgeruest.md`, Bericht
+`planung/tutorial/bericht_grundgeruest.md`. Gebaut 03.11.2026, **kein Schemaschritt** (Schema bleibt 34; Merker in
+`mat_meta`). Zweig `tutorial-grund` von 90cec41.
+
+**Entscheidungen des Nutzers (03.11.2026)**, wörtlich:
+1. **Freiwillig mit Angebot** (statt Pflicht): Beim ersten Betreten eines Moduls erscheint ein Angebot zur Übung, das
+   man überspringen kann. Keine Sperre, keine Weiterleitung, kein Gating. (Damit entfallen Ausnahmen für QR/„Mangel
+   melden“/„Meine PSA“ und das Markieren/Zurücksetzen durch die Leitstelle.)
+2. **Alle Konten**: Ab dem Tag der Einführung bekommen auch alle bestehenden Konten das Angebot beim nächsten Betreten
+   des jeweiligen Moduls (keine Migration, die Bestehende als erledigt markiert).
+3. **Grundteil + Zusatz je Rolle**: Alle machen den Grundteil; dazu ein Zusatzteil je Rolle (z. B. Prüfer,
+   Materialwart, Material-Verwaltung; Redakteur/Verwaltung der Strömipedia; Leitung/Prüfer der Riegenkarten – was es im
+   Code an Rollen je Modul wirklich gibt). Kommt einem Konto später eine Rolle hinzu, wird nur deren Zusatzteil
+   angeboten.
+4. **Wichtige Abläufe selbst ausführen**: je Modul 3–6 Abläufe, die der Nutzer selbst anklickt (z. B. Materialablage:
+   Artikel finden, Mangel melden, Prüfung durchführen und festschreiben; Strömipedia: Seite lesen, suchen, bearbeiten und
+   speichern, kommentieren; Ankerplätze: Karte/Album/Bild hochladen; Riegenkarten: Lehrgang öffnen, bewerten – am Code
+   prüfen, was es gibt). Grundteil höchstens ~5 Minuten je Modul; jederzeit unterbrechen und später fortsetzen.
+5. **Leitstelle: keine Übung.** Übungen für Materialablage, Strömipedia, Ankerplätze, Riegenkarten.
+6. **Wiederholen im Profil**: Abschnitt „Einführungen“ im Profil, je Modul (und Teil) „erneut ansehen“ bzw.
+   „fortsetzen“/„starten“, ohne Pflicht.
+
+Nachtrag des Hauptagenten (03.11.2026): Ein Übungsteil wirkt nur, wenn er für das Konto gilt – sonst wird `?uebung=`
+übergangen (normale Seite); die Stufe in der Übung ist nie höher als die echte.
+
+**Server** (`app/einfuehrung.py`, neu)
+- `TEILE` je Modul (Titel, Minuten, Stufe in der Übung, Startadresse des ersten Ablaufs, Titel der Abläufe) und die
+  Prädikate der Rollen: Materialablage Grundteil (Modulzugang), „Prüfer“ (`qualifiziert`), „Materialwart“ (Verwalten
+  irgendwo), „Material-Verwaltung“; Strömipedia Grundteil/„Redakteur“/„Verwaltung“ (Stufe; nicht im Lesemodus);
+  Ankerplätze Grundteil/„Redakteur“; Riegenkarten Grundteil/„Leitung“ (Leitung in einem Lehrgang oder Redakteur)/
+  „Redakteur“. Je Anfrage einmal gerechnet.
+- Übungsmodus `?uebung=<teil>` (nur mit geltendem Teil): `seite(modul)` setzt `g.einfuehrung` (Angebot, Teile mit
+  Stand, Anleitung, Stufe); der Kontextprozessor legt `rechte[modul]` auf die Stufe des Teils, `base.html` gibt alles als
+  `STROEMIS.einfuehrung` an die Seite und lädt `einfuehrung.js` (jede Seite mit Konto) und im Übungsmodus
+  `uebung/<modul>.js` nach `common.js` und vor den Skripten der Seite; Titelvorsatz „Übung · “.
+- Seitenrouten im Übungsmodus nur als Hülle: Materialablage (`_seite`, `suche_seite`, `artikel_neu`, `artikel_seite`:
+  kein Bezug, keine Warnung, kein Willkommen, kein „Zuletzt besucht“, keine Suche/Weiterleitung, kein
+  `globalsuche.angebot`, `data-darf` mit den Rechten des Teils); Riegenkarten (`_pruefungen_seite`: kein `_sichtbar`, kein
+  „Zuletzt besucht“, Kataloge nur im Teil „Redakteur“, Druckansicht ohne Übung); Strömipedia und Ankerplätze zeichnen
+  ohnehin keine Daten. Fehlerseiten bieten keine Übung an.
+- Sperre (`sperre()`, erster Schritt von `csrf_guard`): Übungsanfragen (Kopfzeile `X-Uebung: 1` oder Referer derselben
+  Herkunft mit `uebung=`) an `/api/`, `/media/`, mit schreibender Methode oder an Dateien → 403 „In der Übung gesperrt –
+  es wird nichts gespeichert.“; frei bleiben Merker, `GET /api/me`, `/static/` (und Worker, Manifest, Hinweisseite der
+  App) und Seitenaufrufe.
+- Merker `einfuehrung:<Konto>` in `mat_meta` über `PUT /api/einfuehrung/<modul>/<teil>` (`{zustand, ablauf}`, unter der
+  Schreibsperre; aus „erledigt“ wird nichts anderes); geht mit dem Konto (`api_admin.delete_user`).
+- Profil „Einführungen“ (`profil(u)`, Abschnitt vor „Passwort ändern“): je Modul mit Übung die geltenden Teile mit
+  Minuten, Stand („erledigt am …“, „unterbrochen bei „…““, „noch nicht begonnen“) und „Starten“/„Fortsetzen“/„Erneut
+  ansehen“.
+
+**Oberfläche** (`app/static/js/einfuehrung.js`, neu; `common.js` nur `S.ziel`; `app.css` Abschnitt „Einführung“)
+- Angebot als schwebende Karte unten rechts (unter 600 px Leiste unten), nicht modal, nach Hinweis „Entwicklungsserver“
+  und Willkommen; „Nicht jetzt“ (alle angebotenen Teile → abgelehnt, Toast mit dem Weg ins Profil), „Übung starten“ bzw.
+  „Übung fortsetzen“.
+- Schicht im Übungsmodus: `fetch`, `XMLHttpRequest` (Fortschritt in vier Stufen), `sendBeacon`, `window.open`,
+  Datei-Links, GET-Formulare, `history.pushState/replaceState`; Übungszustand je Reiter in `sessionStorage`
+  (`stroemis-uebung`), Ablage-Reste mit Übungs-Kennung werden beim Ende und Unterbrechen weggeräumt.
+- Führung mit Rahmen und Sprechblase (Leiste unten am Telefon), Schritte mit Warten auf Klick, Eingabe, Anfrage,
+  Element oder Bedingung, „Übungsbild nehmen“, Sprung in offene Dialoge, Esc → „Übung unterbrechen?“, Fortsetzen über
+  Seitenwechsel, „Hier geht es in der Übung nicht weiter.“ nach 5 s ohne Ziel, Abschluss „Geschafft“ mit Anleitung
+  (nur für Lesende) und „Weiter mit „…““. Testschnittstelle `S.einfuehrung.zustand()`/`teile()`.
+- Übungsdateien als Gerüst (`app/static/js/uebung/{material,wiki,karte,pruefungen}.js`): je Teil ein Ablauf mit einem
+  Info-Schritt an der Startseite und die Antworten, die sie zum Zeichnen braucht. Übungsbilder 1–3 und
+  `uebungsdatei.pdf` unter `app/static/uebung/`, erzeugt von `scripts/uebungsdateien.py`.
+
+**Übungen je Modul**: folgt (Modul-Teile Materialablage, Strömipedia, Ankerplätze, Riegenkarten liefern ihre Abläufe und
+Sätze).
+
+**Tests**: neu `tests/test_einfuehrung.py` (Sperre über jede Regel unter `/api/` × Methode mit Kopfzeile und Referer,
+Datenbank unverändert; Merker; Angebot je Rolle; Übungsseiten ohne echte Daten und der Nachtrag; Profil; statisch),
+`tests/test_einfuehrung_browser.py` mit der Hilfe `tests/einfuehrung_browser.py` (Chromium; ohne „übersprungen“).
+
+**Abweichungen von der Bauvorlage** (im Bericht unter „Bitte bestätigen“):
+- `TEILE` führt die Titel aller Abläufe (die Zahl ist ihre Länge) – Angebot und Profil nennen „unterbrochen bei „…““,
+  ohne dass der Browser Text an den Server schickt.
+- Der Merker antwortet 403, wenn der Teil nicht für das Konto gilt (nicht nur ohne Modulzugang); Kataloge der
+  Riegenkarten gibt es in der Übung nur im Teil „Redakteur“ (Nachtrag: keine Oberfläche einer fremden Rolle).
+- Die Sperre lässt neben `/static/` auch `/sw.js`, `/manifest.webmanifest` und `/offline` durch (App-Dateien ohne Daten).
+- Beim Aufräumen der Ablage zählen Namen mit Übungs-Kennung immer, Werte nur bei den Schlüsseln der Riegenkarten
+  („pruef:“) – ein echter Entwurf mit einer neunstelligen Zahl im Text bleibt.
+- Nach „Übung unterbrechen“ und „Geschafft“ schweigt das Angebot im selben Reiter (`stroemis-uebung-ruhe` im
+  `sessionStorage`); „Geschafft“ merkt „erledigt“ schon beim Erscheinen, jedes Schließen führt zur Startseite des Moduls.
+- `einfuehrung.js` läuft auf jeder Seite mit Konto: Es räumt Übungsreste weg und nimmt ein übergangenes `uebung=` aus der
+  Adresse, bevor die Seite fragt (sonst sperrte die Referer-Regel die echte Seite).
+- Die Führung beginnt nach dem Hinweis „Entwicklungsserver“; steht die Blase in einem Dialog und das Ziel dahinter, gibt
+  es keinen Rahmen, und die Blase steht neben dem Dialog.
+
+**Bitte bestätigen** (aus der Bauvorlage, Abschnitt 8; vorläufig angenommen):
+1. Merker ohne Schemaschritt in `mat_meta` (`einfuehrung:<uid>`, wie Startseite und Willkommen); Schema bleibt 34.
+2. Angebot als schwebende, nicht modale Karte (Telefon: Leiste unten) auf jeder Seite des Moduls, bis man antwortet;
+   nach Hinweis „Entwicklungsserver“ und Willkommen; „Nicht jetzt“ gilt für alle angebotenen Teile, danach nur noch das
+   Profil – außer ein Teil kommt durch eine neue Rolle hinzu. Eine unterbrochene Übung wird beim nächsten Betreten zum
+   Fortsetzen angeboten.
+3. Fortsetzen am Anfang des unterbrochenen Ablaufs (nicht genau beim Schritt).
+4. Übungsadresse = gewohnte Seite mit `?uebung=<teil>`; der Server zeichnet dann nur die Hülle mit den Rechten des Teils.
+5. Sperre über Kopfzeile `X-Uebung: 1` oder einen Übungs-Referer; sperrt /api/ und /media/ ganz (auch Lesen), jede
+   schreibende Methode und Dateien; Ausnahmen Merker und `/api/me`.
+6. Teile: Materialablage Grund/Prüfer/Materialwart/Material-Verwaltung; Strömipedia Grund/Redakteur/Verwaltung;
+   Ankerplätze Grund/Redakteur (Verwaltung ohne eigenen Teil); Riegenkarten Grund/Leitung/Redakteur. Keine Übung im
+   Lesemodus der Strömipedia und für „Meine PSA“ ohne Modulzugang.
+7. Kartenkacheln laden in der Übung wie sonst (öffentliche Karten); die Adresssuche antwortet aus dem Übungsbestand.
+8. Hochladen mit „Übungsbild nehmen“ in der Sprechblase; eine eigene Datei geht auch und bleibt auf dem Gerät.
+9. Abschluss als Dialog „Geschafft“ statt eigener Seite; Anleitungslink nur für Lesende.
+10. Nicht in der Übung: Druckansichten, Exporte, Importe aus Dateien, Löschen, Ziehen und Ablegen – ein Klick darauf
+    meldet „In der Übung nicht verfügbar.“ bzw. öffnet die Übungsdatei (PDF-Protokoll).
+11. Kein Angebot auf der Startseite „/“, im Profil und in der Leitstelle.
+12. Suite wird um etwa 7–10 Minuten länger (Browser-Durchläufe je Modul).

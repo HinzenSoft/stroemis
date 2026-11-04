@@ -592,6 +592,7 @@ Ohne `ADMIN_EMAIL`/`ADMIN_PASSWORD` bekommt der erste Nutzer, der ein Konto anfr
 - **Protokolle (Materialablage):** Festgeschriebene Prüfungen, Aussonderungen und Durchgänge ändert auch die Datenbank nicht mehr (Trigger); die PDF-Dateien liegen schreibgeschützt unter `/data/pdf` und werden nur ausgeliefert, wenn ihre Prüfsumme noch stimmt. WeasyPrint lädt beim Rendern nichts aus dem Netz und keine fremden Dateien – nur die eigenen Schriften; Bilder kommen eingebettet. Die öffentliche Seite „Echtheit prüfen“ `/materialablage/pruefen` speichert nichts, nennt keine Personendaten und ist je Adresse auf 20 Prüfungen in 15 Minuten und 200 MB je Datei gebremst.
 - **Trennung je Gliederung (Materialablage):** Rechte am Bestand gibt es für Mitglieder nur über Freigaben je Ordner (alle Bestände sieht nur die Material-Verwaltung); der Server prüft sie bei jeder Anfrage, und ohne Stufe im Modul wirkt keine. `tests/test_material_stufen.py` ruft jede Route des Moduls mit einem Konto auf, das Freigaben, aber keine Stufe hat (403 vor jeder Frage nach dem Gegenstand). Was ein Konto nicht sieht, antwortet wie etwas, das es nicht gibt – 404 mit derselben Meldung, ob die Kennung im Pfad oder im Inhalt der Anfrage steht; 403 nur, wenn man den Gegenstand sieht, die Aktion aber nicht darf. Listen, Zählungen, Suche, Exporte, Rückrufe und Meldungen filtert der Server, nicht die Oberfläche. Mediendateien prüft er je Datei (Ordnerfoto am Ordner, Befundfoto und Prüfanhang am Artikel, Meldungsfoto an der Meldung; Produktbilder und Herstellerdokumente für alle mit Zugang). Die globale Seriennummernsuche, der Steckbrief nach einem QR-Scan und die Meldung „gibt es schon in einem Bereich, den du nicht siehst“ beim Anlegen stehen jedes Mal zwölf Monate mit Namen im Protokoll – ungebremst, die Kontrolle ist dieses Protokoll; gesucht wird nur nach der ganzen Herstellerseriennummer, nach ausdrücklicher Bestätigung und nur unter dem, was man nicht sieht. Die Personensuche für Freigaben und Zuordnung zeigt ab drei Zeichen nur Name, Gliederung und ob jemand Prüfer ist – keine E-Mail. `tests/test_material_trennung.py` ruft jede Route des Moduls mit Kennungen einer fremden Gliederung auf und sucht deren Merkmale in allen Antworten.
 - **Export und Katalogaustausch (Materialablage):** Exporte gibt es nur mit lesen oder verwalten am Ordner (Freigaben je Ordner); Werte, die eine Tabellenkalkulation als Formel läse (`=`, `+`, `-`, `@` am Anfang), stehen in der CSV mit vorangestelltem `'`. Das Protokoll-ZIP gibt nur Dateien heraus, deren Prüfsumme noch stimmt, und entsteht als Zwischendatei unter `/data/tmp` (höchstens 2 GB). Den Katalog exportieren und importieren nur die Material-Verwaltung. Der Import liest aus dem ZIP nur die Einträge, auf die `katalog.json` verweist (keine absoluten Pfade, kein `..`, keine doppelten Namen), prüft Zahl, Größe und Packverhältnis der Einträge vor dem Lesen und lässt Bilder und Dokumente durch dieselben Prüfungen wie beim Hochladen (Endung, Inhalt, Größe, Pixel); ein Fehler irgendwo speichert nichts.
+- **Übungssperre (Einführung):** Eine Übung läuft ganz im Browser – die Schicht in `einfuehrung.js` beantwortet jede Anfrage der Seite aus dem Übungsbestand. Zweite Absicherung auf dem Server (`einfuehrung.sperre`, erster Schritt von `csrf_guard`): Eine Übungsanfrage – Kopfzeile `X-Uebung: 1` oder ein Referer derselben Herkunft mit `uebung=` im Abfrageteil (so auch Bilder, Beacons, Datei-Links und neue Fenster) – bekommt an `/api/` und `/media/` (auch lesend), mit jeder schreibenden Methode und an jede Datei (Endung, `…/pdf`, `…/sammelprotokoll`) 403 „In der Übung gesperrt – es wird nichts gespeichert.“. Durch gehen nur der Merker (`/api/einfuehrung/…`), `GET /api/me`, `/static/` und Seitenaufrufe. Eine Übung gilt nur, wenn ihr Teil für das Konto gilt – die Stufe in der Übung ist nie höher als die echte. `tests/test_einfuehrung.py` ruft jede Regel unter `/api/` mit jeder Methode und prüft, dass sich die Datenbank nicht ändert.
 
 ## Damit Mails ankommen
 
@@ -957,6 +958,80 @@ sollte: `app/static/js/sw.js` durch einen Worker ersetzen, der sich bei `activat
 (`self.registration.unregister()`) und keinen `fetch`-Haken hat, und ausrollen – die Browser holen ihn beim nächsten
 Aufruf, danach läuft alles wie ohne Worker.
 
+## Einführungen (Übungen je Modul)
+
+Seit dem 03.11.2026 bietet jedes Modul außer der Leitstelle eine kurze Übung an (Wunsch des Nutzers vom 28.10.2026,
+Entscheidungen vom 03.11.2026; Bauvorlage `planung/tutorial/entwurf.md`). Freiwillig: Beim Betreten eines Moduls
+erscheint ein Angebot – unten rechts als schwebende Karte, am Telefon als Leiste unten, nicht modal und erst, wenn der
+Hinweis „Entwicklungsserver“ und das Willkommen der Materialablage geschlossen sind. „Nicht jetzt“ gilt für alle
+angebotenen Teile, danach nur noch das Profil (Abschnitt „Einführungen“: Starten, Fortsetzen, Erneut ansehen). Keine
+Sperre, keine Weiterleitung; kein Angebot auf der Startseite, im Profil, in der Leitstelle, auf Druck- und Fehlerseiten,
+im Lesemodus der Strömipedia und in „Meine PSA“.
+
+**Teile** (`app/einfuehrung.py`, `TEILE`): je Modul ein Grundteil für alle mit Modulzugang und ein Zusatzteil je Rolle –
+Materialablage: Grundteil, „Prüfer“ (Häkchen und Urkundennummer), „Materialwart“ (Verwalterfreigabe irgendwo),
+„Material-Verwaltung“; Strömipedia: Grundteil, „Redakteur“, „Verwaltung“; Ankerplätze: Grundteil, „Redakteur“;
+Riegenkarten: Grundteil, „Leitung“ (Leitung in einem Lehrgang oder Redakteur), „Redakteur“. Die Rollen rechnet der
+Server bei jedem Seitenaufruf: Kommt eine Rolle hinzu, wird nur ihr Teil angeboten; fällt sie weg, verschwindet der Teil
+aus Angebot und Profil (sein Stand bleibt).
+
+**Übungsmodus:** die gewohnte Seite mit `?uebung=<teil>` (etwa `/materialablage?uebung=grund`) – nur, wenn der Teil für
+das Konto gilt, sonst wird der Parameter übergangen. Der Server zeichnet dann nur die Hülle ohne echte Daten mit den
+Rechten des Teils (`rechte[modul]` und in der Materialablage `data-darf`; kein Banner, kein Willkommen, kein „Zuletzt
+besucht“, keine Suche mit Weiterleitung, kein `_sichtbar` der Riegenkarten); Titel mit dem Vorsatz „Übung · “. Im
+Browser legt `app/static/js/einfuehrung.js` vor den Skripten der Seite eine Schicht um `fetch`, `XMLHttpRequest`,
+`sendBeacon`, `window.open`, Datei-Links, GET-Formulare und den Verlauf: Anfragen an `/api/` und `/media/` beantwortet die
+Übungsdatei des Moduls (`app/static/js/uebung/<modul>.js`) aus ihrem Übungsbestand, Schreibvorgänge spielt sie darin
+nach (je Ablauf frisch, im `sessionStorage` des Reiters unter `stroemis-uebung`). Hochgeladene Dateien bleiben im
+Browser („Übungsbild nehmen“ setzt ein Bild aus `/static/uebung/` in die Dateiwahl); Dateien öffnen eine Übungsdatei
+(`/static/uebung/uebungsdatei.pdf`) oder melden „In der Übung gibt es diese Datei nicht.“. Seitenwechsel behalten die
+Kennung (Links und Formulare des Moduls, Verlauf, im Code `S.ziel(adresse)` aus `common.js`); die Kopfleiste und ein neuer
+Reiter führen auf die echten Seiten. Kartenkacheln laden wie sonst. Zweite Absicherung ist die Sperre auf dem Server
+(siehe „Wie die Anwendung abgesichert ist“). Übungs-Kennungen: Materialablage 9000000xx, Strömipedia 9100000xx,
+Ankerplätze 9200000xx, Riegenkarten 9300000xx – echte Zeilen erreichen sie nie; beim Ende und beim Unterbrechen räumt
+`einfuehrung.js` Ablage-Schlüssel mit solchen Kennungen weg (beim Abmelden geht `stroemis-uebung` ohnehin mit).
+
+**Führung:** ein Rahmen in `--wasser` um das Ziel (die Seite bleibt bedienbar), eine Sprechblase daneben bzw. am Telefon
+als Leiste unten mit „Übung · Schritt n von m“, Ablauftitel, Text, „Zurück“/„Weiter“ und „Übung unterbrechen“; in einem
+offenen Dialog wandert sie in den Dialog. Esc fragt „Übung unterbrechen?“. Führt eine Aktion auf eine andere Seite, setzt
+die neue Seite fort (bis 5 s Warten auf das Ziel, sonst „Hier geht es in der Übung nicht weiter.“ mit „Ablauf neu
+beginnen“). Am Ende eines Teils der Dialog „Geschafft“ – mit der Anleitung des Moduls in der Strömipedia, wenn das Konto
+sie lesen darf, und „Weiter mit „…““, wenn ein weiterer Teil offen ist.
+
+**Merker** ohne Schemaschritt in `mat_meta` (Schema bleibt 34): Schlüssel `einfuehrung:<Konto>`, Wert
+`{"<modul>:<teil>": {"zustand": "abgelehnt" | "unterbrochen" | "erledigt", "ablauf": n, "am": …}}`, geschrieben über
+`PUT /api/einfuehrung/<modul>/<teil>` (`{zustand, ablauf}`; 404 unbekannter Teil, 403 wenn der Teil nicht für das
+Konto gilt, 400 falscher Zustand oder Ablauf; aus „erledigt“ wird nichts anderes). „unterbrochen“ trägt den nächsten
+unfertigen Ablauf, fortgesetzt wird an seinem Anfang. Kein Journal, keine Mail, keine Anzeige in der Leitstelle. Der
+Merker geht mit dem Konto (`api_admin.delete_user`); ein Zurücksetzen der Materialablage auf dev leert `mat_meta` und
+damit auch ihn – alle bekommen das Angebot dann wieder. Rückweg: `DELETE FROM mat_meta WHERE schluessel LIKE
+'einfuehrung:%'`.
+
+**Übungsdateien** (`app/static/js/uebung/<modul>.js`) registrieren sich mit
+`S.einfuehrung.modul(modul, { bestand, antworten, dateien, teile })`:
+
+| Feld | Inhalt |
+| --- | --- |
+| `bestand` | `() => ({ … })` – Übungsbestand, frisch je Ablauf; nur Platzhalter „Übung“, Kennungen im Bereich des Moduls |
+| `antworten` | `[[methode, muster, (treffer, body, z, url) => antwort], …]` – `methode` „GET“ … oder „*“, `muster` RegExp auf den Pfad oder genauer Pfad; Antwort: Objekt (JSON 200), `{status, error}` (Fehler), `{datei: "/static/…"}` (Datei) oder eine `Response`, auch als Promise; was sie in `z` ändert, bleibt bis zum Ende des Ablaufs |
+| `dateien` | `[[RegExp, "/static/uebung/…"], …]` – Datei-Adressen, die in der Übung eine Übungsdatei öffnen |
+| `teile` | `{ <teil>: { ablaeufe: [{ titel, start, schritte: [schritt, …] }, …] }, … }` – genau die Teile aus `TEILE`, die Titel der Abläufe und die Startadresse des ersten wie dort (`tests/test_einfuehrung.py` vergleicht) |
+
+Ein Schritt: `ziel` (Selektor, Funktion → Element oder `null` = Blase mittig ohne Rahmen), `text` (reiner Text, du, ein
+bis zwei Sätze), `warten` (fehlt → Knopf „Weiter“; `{klick: sel}`, `{wert: [sel, RegExp]}`, `{anfrage: "METHODE /pfad"}`
+oder RegExp, `{da: sel}`, `{bedingung: (z) => bool}`), `wenn` (`() => bool`, Schritt nur, wenn zutreffend), `datei`
+(`{input: sel, bild: "/static/uebung/…"}` – Knopf „Übungsbild nehmen“), `probe` (nur für den Durchlauftest: `{klick: sel}`,
+`{tippen: [sel, text]}`, `{datei: true}`; ohne probe klickt der Test `warten.klick` bzw. „Weiter“). Testschnittstelle
+(nur lesend): `S.einfuehrung.zustand()`, `S.einfuehrung.teile(modul)`. Übungsbilder und die Übungsdatei erzeugt
+`python3 scripts/uebungsdateien.py` (Pillow; `--ziel`, `--von`, `--bis` für weitere Bilder gleicher Art).
+
+**Nach einer Änderung an der Oberfläche nachziehen:** Wird ein Durchlauftest rot (`tests/test_einfuehrung_browser.py`,
+je Modul `tests/test_einfuehrung_<modul>.py`; Befunde nennen Ablauf, Schritt und Ziel), stimmt meist ein Selektor in
+`uebung/<modul>.js` nicht mehr, oder die Seite stellt eine neue Anfrage, die die Antworttabelle noch nicht kennt
+(„Unbeantwortete Anfragen“). Neue programmatische Seitenwechsel im Modul gehen über `S.ziel(…)`. Ändern sich Abläufe
+(Titel, Startadresse des ersten), gehören sie auch in `TEILE`. Die Browser-Tests laufen mit Chromium über
+`/home/harness/devtools/cdp` (Hilfe `tests/einfuehrung_browser.py`); ohne Chromium melden sie „übersprungen“.
+
 ## DLRG-Wortmarke einsetzen
 
 Die Kopfzeile ist als rote Bauchbinde mit Wortmarke, Trennstrich und Funktionsbezeichnung aufgebaut. Bis die offizielle Wortmarke vorliegt, steht dort der Schriftzug „DLRG“ in Gelb. Die SVG-Wortmarke aus dem DLRG-Downloadbereich als `app/static/img/dlrg-wortmarke.svg` ablegen und den Container neu bauen – sie wird dann automatisch verwendet.
@@ -1075,6 +1150,10 @@ python tests/test_material_bestandteile.py  # Bestandteil-Liste an Produkten und
 python tests/test_material_ohne_kritisch.py  # „kritisch“ entfernt (03.11.2026): Formular-Editor und Schnittstelle, „einsatzbereit“ trotz alter
                                              # Markierung, Protokoll/Lebenslauf/Jahresbericht/CSV ohne, gespeichertes Protokoll unverändert,
                                              # Katalogimport mit (übergangen, keine neue Version) und Export ohne, Oberfläche statisch
+python tests/test_einfuehrung.py         # Einführung je Modul: Übungssperre (jede /api/-Regel × Methode), Merker, Angebot je Rolle,
+                                        # Übungsseiten ohne echte Daten, Profil „Einführungen“, Übungsdateien gegen TEILE (statisch)
+python tests/test_einfuehrung_browser.py # Einführung im Browser (Chromium, sonst „übersprungen“): Angebot, „Nicht jetzt“, Profil, Gerüst-
+                                        # Übung je Modul bis „Geschafft“, Esc, Blase im Dialog, kein /api/ und /media/ im Übungsmodus
 python tests/test_material_stufen.py     # Phase 2: Modulstufe (Migration 9 → 10, ohne Stufe wirkt nichts – alle Routen, Material-Verwaltung,
                                         # Personensuche je Zweck, Mails, Profil, Vorgabe neuer Konten)
 python tests/test_material_beispielbestand.py  # Beispielbestand: Katalog unverändert bis auf DEMO-Formulare (nicht im Export), Struktur, Geschichte über zwei Jahre,

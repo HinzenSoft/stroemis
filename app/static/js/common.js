@@ -1114,10 +1114,26 @@ window.S = (function () {
     zeigen();
   })();
 
+  /* Einführung (app/einfuehrung.py, einfuehrung.js): Im Übungsmodus (STROEMIS.einfuehrung.uebung) behält jede Adresse
+     einer Seite desselben Moduls die Kennung „uebung=<teil>“ – sonst lüde der Seitenwechsel die echte Seite. Die Module
+     setzen jeden programmatischen Wechsel (location.href = …, location.replace/assign, window.open) mit S.ziel(adresse);
+     außerhalb der Übung kommt die Adresse unverändert zurück, ebenso fremde Adressen und Seiten anderer Module. */
+  function ziel(url) {
+    const e = window.STROEMIS && window.STROEMIS.einfuehrung;
+    if (!e || !e.uebung) return url;
+    let u;
+    try { u = new URL(String(url), location.href); } catch (err) { return url; }
+    const pfad = ((window.STROEMIS.module && window.STROEMIS.module.pfad) || {})[e.modul];
+    if (u.origin !== location.origin || !pfad || !(u.pathname === pfad || u.pathname.startsWith(`${pfad}/`))
+        || u.searchParams.has("uebung")) return url;
+    u.searchParams.set("uebung", e.uebung);
+    return u.pathname + u.search + u.hash;
+  }
+
   return { esc, api, toast, dialog, confirm, fmtDate, fmtCoord, CAT, titel, info, overlayVerlauf, dialogVerlauf, klassenVerlauf,
            schubladeZustand,
            feldFehler, feldOk, fehlschlag, menue, menueSchwebend, plural, rollen, weich, schliessenKnopf, entfernenKnopf,
-           reihenfolgeKnoepfe };
+           reihenfolgeKnoepfe, ziel };
 })();
 
 /* Stufen der Rechte-Matrix (Stufe Redakteur, 01.11.2026) – dieselben Zahlen wie app/auth.py (KEIN_ZUGRIFF … VERWALTUNG;
