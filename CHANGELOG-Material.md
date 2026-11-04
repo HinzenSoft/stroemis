@@ -12705,3 +12705,63 @@ Nachzug des Artikels „Prüfformulare“):
 5. Startprotokoll und Journal nennen bei der Migration Produkte mit Kennung und Namen.
 6. Editor: Gruppen lassen sich per Tastatur nicht mehr verschieben (der Griff ⠿ ist kein Tastaturziel) – siehe
    „Zusatz“ unten.
+
+### Nachbesserung nach der Sicherheitsprüfung (04.11.2026)
+
+Grundlage: `planung/formular-pool/pruefung_sicherheit.md` (Befunde 1–2, Hinweise 1–4). Kein neuer Schemaschritt.
+
+**Befund 1 (mittel) – alte Katalogdatei schreibt ein geteiltes Formular um** (`importer._formular_alt`): Ein Eintrag
+aus Format 1/2 schreibt ein Formular hier nur noch um, wenn es allein seinem Ziel gilt (`_nur_fuer`). Bei `produkt`
+heißt das: keine weitere Zuweisung, kein Standard – ausgenommen die Produkte, die es laut derselben Datei übernehmen
+(`formular_von`, `_uebernehmer`; sonst wechselte ein zweiter Import der Datei das Formular hin und her). Bei
+`kategorie` heißt es: nur Standard dieser Kategorie, keine Zuweisung an ein Produkt. Ein Formular, das nirgends
+zugewiesen ist, zählt auch (sonst legte jeder Import mit `"aktivieren": false` ein weiteres an). Das gilt für den
+Abgleich über den Titel (das erste passende Formular gleichen Titels) wie für den Rückfall auf das schon zugewiesene.
+Findet sich keins, kommt ein neues Formular in den Pool und wird zugewiesen bzw. Standard (Z5); das geteilte bleibt
+unverändert. Der Hinweis dazu lautet „Das Prüfformular „…“ hier gilt nicht nur für … (Standard für …, zugewiesen an …)
+– es bleibt unverändert, … bekommt ein neues im Pool.“ Die Berichtszeile jeder neuen oder aktivierten Version nennt,
+wofür das Formular bisher gilt: „– gilt bisher: Standard für „…“ und zugewiesen an „…““, „– bisher nirgends
+zugewiesen“ oder „– neu im Pool“. Das gilt auch für Format 3.
+
+**Befund 2 (niedrig) – `PUT /formular-pool/<id>/zuweisung` mit kaputtem Rumpf** (`katalog.zuweisung_rumpf`, Route):
+Die Antwort ist 400 „Bitte „kategorien“ und „produkte“ als Listen von Kennungen angeben – die vollständige Menge, auch
+leer.“, wenn
+- der Rumpf kein Objekt ist (Array, `null`, Text, kaputtes JSON),
+- ein Schlüssel fehlt oder keine Liste ist.
+
+Keine Kennung in der Liste ergibt wie bisher 400. Die Zuweisungen bleiben dabei unverändert. Die Oberfläche schickt
+immer beide Schlüssel. Die Dienstfunktion `zuweisung_setzen` (Skripte, Tests) nimmt weiter einen fehlenden Schlüssel
+als leer.
+
+**Hinweise**:
+1. Format 3: Ordnet der Import ein Formular über den Titel zu (E3), steht im Bericht eine Zeile „über den Titel dem
+   Prüfformular hier im Pool von „…“ zugeordnet – es übernimmt die Katalogkennung der Datei; bisher …“. `_abschluss`
+   zählt Prüfformulare mit („1 Prüfformular gab es hier schon …“).
+2. Format 3 mit `"formulare": []` oder ganz ohne Formulare: Löst der Import dadurch Zuweisungen (E2), erscheint eine
+   Warnung mit Zahl und Liste (höchstens 10): „Die Datei enthält keine Prüfformulare. Weil sie maßgeblich ist, löst der
+   Import n Zuweisungen an ihre Kategorien und Produkte: „…“ an … . Diese Produkte fallen auf den Standard darüber
+   zurück oder sind danach nicht prüfbar.“
+3. Trigger `mat_formular_ersetzen` (`BEFORE INSERT … WHEN EXISTS` gleiche Kennung, wie `mat_product_ersetzen`) und
+   `mat_formular_kennung` (`BEFORE UPDATE OF id`). Meldung: „Prüfformulare lassen sich nicht ersetzen und ihre
+   Kennung nicht ändern.“ Sie stehen in `TRIGGER_38`, weil Schritt 38 noch nirgends ausgeliefert ist (`origin/dev`
+   steht auf Schema 37). Ein frischer Start und die Migration 37 → 38 legen sie an. Eine Datenbank, die schon auf 38
+   steht (nur lokale Prüfstände), bekommt sie nicht.
+4. „DEMO“ vorn im Formulartitel fällt beim Import in jeder Schreibweise weg (`re.IGNORECASE`: „demo - …“, „Demo – …“).
+   „Demonstration …“ bleibt.
+
+**Tests**:
+- Neu `tests/test_material_formular_sicherheit.py`:
+  - Fälle 1–5 der Probe `probe_import_alt.py`, je mit zweitem Import ohne Änderung
+  - kaputte Rümpfe
+  - Hinweise 1 und 2
+  - „DEMO“-Schreibweisen
+  - Trigger mit und ohne Fremdschlüssel
+- Angepasst sind Aufrufe von `PUT …/zuweisung` mit nur einem Schlüssel oder `{}`. Sie schicken jetzt beide Listen:
+  `test_material` (zwei Stellen und Helfer `formular_neu`), `test_material_dokumente`,
+  `test_material_pruefpunkt_absatz`, `test_einfuehrung_katalog`.
+
+**Bitte bestätigen**:
+1. Ein nirgends zugewiesenes Formular gleichen Titels nimmt ein Eintrag aus Format 1/2 weiter. Das schreibt der
+   Auftrag für `kategorie` nicht ausdrücklich vor, ist aber nötig, damit `"aktivieren": false` wiederholbar bleibt.
+2. Für `produkt` zählen die Übernehmer derselben Datei mit (siehe oben).
+3. Die Trigger stehen in Schritt 38 statt in einem neuen Schritt.
