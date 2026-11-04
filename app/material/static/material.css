@@ -587,6 +587,11 @@ html:has(.mat-mit-leiste) { scroll-padding-bottom: 210px; }
   font-size: var(--fs-klein); font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .mat-pruefung:not(.tippt) .mat-abschluss.kompakt .mat-abschluss-auf { display: inline-flex; flex: none; margin: 0 0 0 auto; }
 .mat-abschluss-ende { height: 1px; }
+/* Einführung (app/static/js/einfuehrung.js): Steht die Sprechblase am Telefon als Leiste unten (html.fuehrung-leiste,
+   ihre Höhe in --fuehrung-hoehe), klebt die Abschlussleiste über ihr statt dahinter – sonst wären Ergebnis und
+   „Festschreiben“ in der Übung zum Prüfen verdeckt. */
+html.fuehrung-leiste .mat-abschluss { bottom: var(--fuehrung-hoehe, 0px); }
+html.fuehrung-leiste .mat-pruefung:not(.tippt) .mat-abschluss.kompakt { bottom: calc(var(--fuehrung-hoehe, 0px) - var(--mat-leiste-weg, 0px)); }
 .mat-abschluss-hinweis.warn { color: var(--rot); font-weight: 600; }
 /* Am Rechner auch die Leiste niedriger – nach den Grundregeln, damit sie gilt (siehe Prüfpunkte oben). */
 @media (hover: hover) and (pointer: fine) and (min-width: 700px) {

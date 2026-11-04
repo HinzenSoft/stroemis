@@ -219,7 +219,7 @@
       e.preventDefault();
       const o = optionen[aktiv];
       if (o.dataset.global) globalSuchen(feld.value.trim());
-      else if (o.querySelector("a")) location.href = o.querySelector("a").href;   // ein Steckbrief öffnet nichts
+      else if (o.querySelector("a")) location.href = S.ziel(o.querySelector("a").href);   // ein Steckbrief öffnet nichts
     } else if (e.key === "Escape" && !liste.hidden) {
       e.preventDefault();
       schliessen();

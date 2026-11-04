@@ -56,13 +56,14 @@ MODULE = {
 TEILE = {
     "material": (
         {"teil": "grund", "titel": "Grundteil", "minuten": 5, "stufe": auth.MITGLIED, "start": "/materialablage",
-         "ablaeufe": ("Zurechtfinden",)},
-        {"teil": "pruefer", "titel": "Prüfer", "minuten": 4, "stufe": auth.MITGLIED, "start": "/materialablage",
-         "ablaeufe": ("Prüfung durchführen",)},
-        {"teil": "materialwart", "titel": "Materialwart", "minuten": 4, "stufe": auth.MITGLIED, "start": "/materialablage",
-         "ablaeufe": ("Artikel anlegen",)},
+         "ablaeufe": ("Zurechtfinden", "Artikel finden", "Mangel melden")},
+        {"teil": "pruefer", "titel": "Prüfer", "minuten": 4, "stufe": auth.MITGLIED,
+         "start": "/materialablage/artikel/900000012", "ablaeufe": ("Prüfung durchführen",)},
+        {"teil": "materialwart", "titel": "Materialwart", "minuten": 4, "stufe": auth.MITGLIED,
+         "start": "/materialablage/artikel/neu?ordner=900000002",
+         "ablaeufe": ("Artikel anlegen", "Freigabe erteilen", "Prüfdurchgang")},
         {"teil": "verwaltung", "titel": "Material-Verwaltung", "minuten": 3, "stufe": auth.VERWALTUNG,
-         "start": "/materialablage", "ablaeufe": ("Katalog und Prüfformular",)},
+         "start": "/materialablage/katalog", "ablaeufe": ("Katalog und Prüfformular",)},
     ),
     "wiki": (
         {"teil": "grund", "titel": "Grundteil", "minuten": 5, "stufe": auth.MITGLIED, "start": "/stroemipedia",
