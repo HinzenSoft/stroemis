@@ -154,13 +154,14 @@ def test_katalog_ignoriert_altes_feld():
 # --- 2. Schema und Quelltext ----------------------------------------------------------------------------------------
 
 def test_spalte_bleibt():
-    """Kein Schemaschritt: Spalte und Index bleiben, Schema 35."""
+    """Kein eigener Schemaschritt: Spalte und Index bleiben (Schema ab 35; fix-0411 brachte Schritt 36). Das Aufräumen
+    (Schritt 37) entfernt sie."""
     with tempfile.TemporaryDirectory() as tmp:
         t = aufbau(tmp)
         assert "wiki_page_id" in [s["name"] for s in zeilen(t.app, "PRAGMA table_info(mat_form)")]
         assert zeilen(t.app, "SELECT 1 FROM sqlite_master WHERE type = 'index' AND name = 'idx_mat_form_wiki'")
         from app.material import models
-        assert models.SCHEMA_VERSION == 35
+        assert models.SCHEMA_VERSION >= 35
         assert "nicht mehr genutzt seit 04.11.2026" in lesen("app/material/models.py")
     print("Spalte bleibt bestanden.")
 
