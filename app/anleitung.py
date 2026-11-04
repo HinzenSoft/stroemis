@@ -20,7 +20,7 @@ gewinnt die neueste mit Unterseiten. Der Artikel wird also erst verlinkt, wenn d
 „Für alle Angemeldeten freigeben“ (samt Unterseiten) freigibt.
 
 Rechte (Entscheidung des Nutzers vom 28.10.2026, „Nur wer lesen darf“): Zusätzlich jede Seite einzeln mit den Regeln
-der Strömipedia (wikiverweis.darf_lesen) – bei freigegebenen Seiten heißt das: jedes angemeldete Konto. Gibt es die
+der Strömipedia (darf_lesen) – bei freigegebenen Seiten heißt das: jedes angemeldete Konto. Gibt es die
 Seite nicht, ist sie nicht freigegeben, liegt sie im Papierkorb oder darf das Konto sie nicht lesen, fehlt der Schlüssel
 – kein Link, kein Titel, keine Meldung. An den Rechten der Strömipedia ändert sich nichts.
 
@@ -185,6 +185,22 @@ def _user(user=None):
     return current_user()
 
 
+def darf_lesen(page, user=None):
+    """Genau die Regel der Strömipedia: keine Seite oder im Papierkorb – nein; mit Stufe in der Strömipedia
+    api_wiki.can_read (Beschränkung samt Vererbung, Ersteller, Freigegebene, Wiki-Verwaltung); ohne Stufe (Lesemodus)
+    nur, was der öffentliche Teil zeigt (api_wiki.is_public – eine beschränkte Seite ist nie öffentlich). Stand bis zum
+    04.11.2026 bei der Prüfanleitung der Materialablage (services/wikiverweis.py, entfernt). api_wiki und auth werden
+    erst hier eingebunden – keine Ringabhängigkeit beim Start."""
+    from .api_wiki import can_read, is_public
+    from .auth import nutzt
+    user = _user(user)
+    if not page or page.get("deleted_at") or not user:
+        return False
+    if nutzt("wiki", user):
+        return can_read(page, user)
+    return is_public(page)
+
+
 def _url(seite, anker=""):
     url = f"/stroemipedia/{quote(seite['slug'], safe='')}"
     return f"{url}#{anker}" if anker and _hat_anker(seite, anker) else url
@@ -193,8 +209,6 @@ def _url(seite, anker=""):
 def aufloesen(wurzel_titel, themen, user=None):
     """{Thema: Adresse} für alles aus themen, was das Konto in der Strömipedia lesen darf – leer ohne Konto oder ohne
     Artikel. Je Anfrage und Wurzel einmal gerechnet (g)."""
-    # Die Leseregel der Strömipedia steht an einer Stelle (Prüfanleitung der Materialablage, Phase 2 · L3).
-    from .material.services.wikiverweis import darf_lesen
     user = _user(user)
     if not user:
         return {}

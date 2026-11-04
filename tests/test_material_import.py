@@ -1697,7 +1697,6 @@ def test_oberflaeche_statisch():
     assert js.count('mat-ungeteilt') >= 5
     assert "if (titel) { titel.tabIndex = -1; titel.focus(); }" in block and '$("#nz-ok", body).focus();' in block
     assert 'const fokus = fertig ? $(".mat-austausch-stand", berichtEl)' in block and 'ok" tabindex="-1">Übernommen:' in block
-    assert "if (neu) neu.focus();" in js[js.index("  function wikiWahl(formular, danach) {"):js.index("/* --- Suche ---")]
     assert "zeilenweise zugeordnet: ${g.zugeordnet} von ${g.offen}" in block and "Das ersetzt die zeilenweise Zuordnung" in block
     assert 'esc(g.produkt ? "zugeordnet" : PRODUKT_ART[g.art] || g.art)' in block and "if (!g.produkt && DARF.katalog)" in block
     assert '${x.status === "erledigt" ? "–" : "ohne"}' in block and "white-space: pre-line;" in teil

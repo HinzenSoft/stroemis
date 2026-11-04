@@ -465,7 +465,7 @@ def test_geraete_nachbesserung_zwei():
     for ansicht in ("pruefung", "pruefung_neu", "artikel_neu", "formular"):
         assert f'[data-ansicht="{ansicht}"]' in css
     assert "--mat-kastenmass" not in css and "#mat-inhalt .notice { max-width" not in css      # seit dem 25.10.2026
-    assert "#mat-inhalt :is(.notice, .mat-wikizeile) :is(a:not(.btn), .lnk) { color: var(--rot-auf-flaeche); }" in css
+    assert "#mat-inhalt .notice :is(a:not(.btn), .lnk) { color: var(--rot-auf-flaeche); }" in css   # ohne .mat-wikizeile seit 04.11.2026
     # V7: Artikelnummern als ein Stück – keine nackte, leise Artikelnummer mehr.
     assert 'const artNrKurz = (nr) => (nr ? ` <span class="muted mat-ganz">${esc(nr)}</span>` : "");' in js
     assert not re.search(r'<span class="muted">\$\{esc\(\w+(\.\w+)?\.article_no', js)

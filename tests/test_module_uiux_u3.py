@@ -175,7 +175,6 @@ def test_c1_c5_anmeldung_und_texte():
             assert r.status_code == 403 and '<a href="/">Zur Startseite</a>' in r.get_data(as_text=True), pfad
             assert "Zur Strömipedia" not in r.get_data(as_text=True)
     for pfad, alt in (("app/material/services/rechte.py", "„Prüfer“ in der Nutzerverwaltung"),
-                      ("app/material/services/wikiverweis.py", "(Nutzerverwaltung)."),
                       ("app/material/services/zuruecksetzen.py", "über die Nutzerverwaltung löschen"),
                       (ADM, '"Nutzerverwaltung"')):
         assert alt not in lies(pfad), (pfad, alt)

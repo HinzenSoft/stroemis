@@ -291,10 +291,6 @@ def pruefung_json(p, pruefer_id=None):
         # und Materialwart (mangel.darf_inhalt) und die eigene Meldung.
         from . import mangel
         out["maengel"] = mangel.offene_json(item, mangel.darf_inhalt(item))
-    # Prüfanleitung aus dem Wiki (Phase 2 · L3) – nur in offenen Prüfungen; an abgeschlossenen nichts (die heutige
-    # Fassung ist nicht die, nach der geprüft wurde). Festgehalten wird sie nirgends.
-    from . import wikiverweis
-    out["anleitung"] = wikiverweis.anleitung(p["form_id"]) if out["entwurf"] else None
     return out
 
 

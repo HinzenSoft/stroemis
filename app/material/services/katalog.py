@@ -1146,8 +1146,7 @@ def _punkte_kurz(liste):
 
 def formular_anlegen(d, demo=False):
     """Neue Version für eine Kategorie (generisch) oder ein Produkt (spezifisch). Ohne Vorlage
-    übernimmt sie die Prüfpunkte der letzten Version desselben Ziels – der Normalfall ist „ändern“. Die Verknüpfung
-    mit einer Wiki-Seite (Prüfanleitung) kommt von der Vorlage mit."""
+    übernimmt sie die Prüfpunkte der letzten Version desselben Ziels – der Normalfall ist „ändern“."""
     kid = kennung(d.get("kategorie_id"), "Kategorie", leer_erlaubt=True)
     pid = kennung(d.get("produkt_id"), "Produkt", leer_erlaubt=True)
     if bool(kid) == bool(pid):
@@ -1171,12 +1170,9 @@ def formular_anlegen(d, demo=False):
         # „Neue Version“ in den Katalog-Export (Sicherheitsprüfung vom 25.10.2026, Befund 5). Mit eigenen Punkten
         # (Katalogimport) zählt nur der Parameter.
         demo = demo or bool("punkte" not in d and vorlage and vorlage["demo"])
-        # Die Prüfanleitung aus dem Wiki erbt die neue Version von der Vorlage – wie den Titel (Phase 2 · L3); d setzt
-        # sie nie (Katalogimport und „Neue Version“ gleich).
-        fid = db.execute(f"INSERT INTO mat_form ({spalte}, version, title, active, demo, wiki_page_id, created_by, "
-                         "created_at, updated_at) VALUES (?,?,?,0,?,?,?,?,?)",
-                         (ziel, version, titel, int(bool(demo)), vorlage.get("wiki_page_id") if vorlage else None, uid,
-                          ts, ts))
+        # mat_form.wiki_page_id (Prüfanleitung aus dem Wiki) bleibt seit dem 04.11.2026 leer – keine Kopie mehr.
+        fid = db.execute(f"INSERT INTO mat_form ({spalte}, version, title, active, demo, created_by, created_at, "
+                         "updated_at) VALUES (?,?,?,0,?,?,?,?)", (ziel, version, titel, int(bool(demo)), uid, ts, ts))
         if "punkte" in d:
             liste = punkte_pruefen(d.get("punkte"))
         elif vorlage:
@@ -1443,13 +1439,6 @@ def formular_json(f, mit_punkten=True):
                        "name": produktname(p) if p else "?"}
     if mit_punkten:
         out["punkte"] = [punkt_json(p) for p in punkte(f["id"])]
-    # Prüfanleitung aus dem Wiki (Phase 2 · L3): nur für die Material-Verwaltung; wiki_aendern: darf sie ändern (dazu
-    # gehört die Stufe Mitglied im Wiki).
-    from . import wikiverweis
-    from .rechte import ist_material_verwaltung
-    mv = has_request_context() and ist_material_verwaltung()
-    out["wiki"] = wikiverweis.editor_json(f.get("wiki_page_id")) if mv else None
-    out["wiki_aendern"] = bool(mv and wikiverweis.darf_verknuepfen())
     return out
 
 

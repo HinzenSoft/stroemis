@@ -9,8 +9,9 @@ Aufbau:
   routes.py      Seiten (/materialablage/…, /m/<token>), Schnittstelle (/api/material/…), Medien
   routes_export.py, routes_katalog.py, routes_rueckruf.py
                  Routen der Lieferung 4: Export (CSV, Protokoll-ZIP, Lebenslauf), Katalogaustausch, Rückrufe
-  routes_import.py, routes_wiki.py
-                 Routen der Phase 2 · Lieferung 3: Bestandsimport und Nacharbeit, Prüfanleitung aus dem Wiki
+  routes_import.py
+                 Routen der Phase 2 · Lieferung 3: Bestandsimport und Nacharbeit (die Prüfanleitung aus dem Wiki,
+                 routes_wiki.py, ist seit dem 04.11.2026 entfernt)
   routes_psa.py  Routen der Phase 3 · Lieferung 1: „Meine PSA“ (auch ohne Modulstufe) und Mangelmeldung
   cli.py         flask material import-catalog, export-catalog, remind, dok-zusammenfuehren, dev-zuruecksetzen
   tageslauf.py   Thread je Arbeitsprozess: einmal am Tag ab 6 Uhr Pflege und Erinnerungsmails (seit Phase 2 · L2)
@@ -20,7 +21,8 @@ Aufbau:
                  Ordner), export, lebenslauf, beschriftung (Journal als Text), rueckruf; seit Phase 2 dazu
                  globalprotokoll (Protokoll der Blicke über den eigenen Bereich) und globalsuche, seit Lieferung 2
                  erinnerung (Erinnerungsmails, Pflege, Laufstand und Probelauf), seit Lieferung 3 tabelle und
-                 bestandsimport (Bestandsimport mit Nacharbeit) und wikiverweis (Prüfanleitung aus dem Wiki); seit
+                 bestandsimport (Bestandsimport mit Nacharbeit; wikiverweis, die Prüfanleitung aus dem Wiki, ist seit
+                 dem 04.11.2026 entfernt); seit
                  Phase 3 psa („Meine PSA“) und mangel (Mangelmeldung mit sofortiger Sperre); seit Schritt 18 dokablage
                  (Herstellerdokumente einmal je Inhalt – Zusammenführen des Altbestands beim Start und von Hand); seit
                  Phase 4 · L2 stueckliste (seit dem Rückbau der Set-Funktion, Schritt 26, nur noch die

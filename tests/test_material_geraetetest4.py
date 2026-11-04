@@ -92,7 +92,7 @@ def test_m1_leiste_eingeklappt():
     # Eingeklappt nur, solange die Leiste klebt (Marke am Ende nicht im Bild) und kein Fokus in Ergebnis/Festschreiben.
     assert "const kompakt = !amEnde && !fokusDrin;" in js
     assert "amEnde = eintraege[eintraege.length - 1].isIntersecting;" in js
-    assert 'if (endeBeobachter) endeBeobachter.observe(echt(".mat-abschluss-ende"));' in js
+    assert 'if (endeBeobachter) endeBeobachter.observe($(".mat-abschluss-ende", inhalt));' in js
     assert 'box.style.setProperty("--mat-leiste-weg", `${weg}px`);' in js
     assert 'document.documentElement.style.setProperty("--mat-leiste-h", `${box.offsetHeight - weg}px`);' in js
     # Klebt tiefer statt sich umzubauen; mit offener Tastatur (.tippt) gilt das nicht.

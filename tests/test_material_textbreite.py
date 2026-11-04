@@ -5,8 +5,8 @@ haben genau eine Höchstbreite: 100ch (Entscheidung des Nutzers vom 27.10.2026, 
 Zeile; ch ist die Breite der Ziffer „0“, Text ist im Schnitt schmaler) – keine andere Regel setzt eine eigene. Die
 Hilfetexte der Leitstelle ebenso. Der lange Fließtext im Wiki behält seine Lesebreite (app.css, --lesebreite).
 
-Hinweiskästen (.notice, die Zeile zur Prüfanleitung .mat-wikizeile) laufen seit dem 01.11.2026 über die ganze Breite
-ihrer Spalte (Entscheidung des Nutzers, ersetzt „der Kasten darf schmaler sein als Felder und Tabellen“ aus V10), seit
+Hinweiskästen (.notice; bis zum 04.11.2026 auch die Zeile zur Prüfanleitung .mat-wikizeile) laufen seit dem 01.11.2026
+über die ganze Breite ihrer Spalte (Entscheidung des Nutzers, ersetzt „der Kasten darf schmaler sein als Felder und Tabellen“ aus V10), seit
 dem 02.11.2026 auch ihr Text (Nutzer: „Text soll über die Breite vom Bildschirm gehen“; vorher Inhalt höchstens 100ch):
 Kein Kasten und kein Hilfetext darin hat eine Höchstbreite – EINE Regel in app.css setzt nur den eigenen Abstand rechts.
 Damit sie wirkt, setzt keine spätere Regel den Innenabstand rechts eines Kastens selbst (eigener Abstand über
@@ -15,10 +15,10 @@ import os
 import re
 
 WURZEL = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-TEXTKLASSEN = re.compile(r"\.(notice|help|muted|mat-text|mat-wikizeile)\b|p\.small\b|\.mat-bericht-fuss\b")
-REGEL_120 = ":where(#mat-inhalt, #mat-side) :is(.help, p.small, p.muted, .mat-bericht-fuss):not(.notice, .notice *, .mat-wikizeile *) { max-width: 100ch; }"
-REGEL_KASTEN = ":is(.notice, .mat-wikizeile):not(dialog *) { padding-right: var(--kasten-rand, 12px); }"
-KASTEN = re.compile(r"\.(notice|mat-wikizeile|mat-anleitung-hinweis)\b")
+TEXTKLASSEN = re.compile(r"\.(notice|help|muted|mat-text)\b|p\.small\b|\.mat-bericht-fuss\b")
+REGEL_120 = ":where(#mat-inhalt, #mat-side) :is(.help, p.small, p.muted, .mat-bericht-fuss):not(.notice, .notice *) { max-width: 100ch; }"
+REGEL_KASTEN = ".notice:not(dialog *) { padding-right: var(--kasten-rand, 12px); }"
+KASTEN = re.compile(r"\.(notice|mat-anleitung-hinweis)\b")
 # Alle Stylesheets, die auf Seiten mit Hinweiskästen geladen werden (app.css zuerst, dann die der Module).
 BLAETTER = ("app/static/css/app.css", "app/static/css/pruefungen.css", "app/material/static/material.css",
             "app/material/static/freigaben.css", "app/material/static/global.css")
@@ -97,7 +97,9 @@ def test_kaesten_und_ihr_text_ganze_breite():
     assert "mat-anleitung-hinweis {" not in lesen("app/material/static/material.css")
     # Gegenprobe der Prüfung selbst: Diese Regeln wären Verstöße bzw. keine.
     assert _trifft_kasten(".notice.mat-anleitung-hinweis") and _trifft_kasten("#mat-inhalt p.notice")
-    assert not _trifft_kasten("#mat-inhalt :is(.notice, .mat-wikizeile) :is(a:not(.btn), .lnk)")
+    assert not _trifft_kasten("#mat-inhalt .notice :is(a:not(.btn), .lnk)")
+    # Die Zeile zur Prüfanleitung (.mat-wikizeile) entfiel am 04.11.2026 mit der Funktion.
+    assert not any("mat-wikizeile" in lesen(b) for b in BLAETTER)
     assert not _trifft_kasten(":where(#mat-inhalt, #mat-side) :is(.help, p.small, p.muted, .mat-bericht-fuss):not(.notice)")
     print("Kästen über die ganze Breite bestanden.")
 

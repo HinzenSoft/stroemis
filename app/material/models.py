@@ -82,7 +82,8 @@ Feldnamen folgen dem Konzept vom 16.10.2026 (englisch, wie dort festgelegt). Abw
     und mat_import_row – eine Zeile der Nacharbeit mit den zugeordneten Werten (nur solange sie offen ist), Gründen,
     Produktangabe, Produktwahl und Meldung; beide mit AUTOINCREMENT (das Journal nennt Importe). Dazu
     mat_form.wiki_page_id: die Wiki-Seite mit der Prüfanleitung zur Formularversion (ON DELETE SET NULL beim
-    endgültigen Löschen der Seite). Rein additiv, wiederholbar. Wer mat_folder künftig neu aufbaut, muss den Verweis
+    endgültigen Löschen der Seite) – nicht mehr genutzt seit 04.11.2026 (Funktion entfernt; Spalte, Index und
+    vorhandene Werte bleiben, gelesen und geschrieben wird sie nirgends mehr). Rein additiv, wiederholbar. Wer mat_folder künftig neu aufbaut, muss den Verweis
     mat_import.folder_id (ON DELETE CASCADE) bedenken – wie mat_reminder_log.grant_id bei mat_folder_grant.
   - Schritt 13 (Phase 3 · Lieferung 1, Mangelmeldung): mat_defect_report – ein Mangel, den die zugeordnete Person oder
     ein Konto mit Leserecht am Artikel meldet: Beschreibung, Fotos (nur Web- und Vorschaufassung, das Original wird
@@ -1507,8 +1508,10 @@ SCHRITT_12_IMPORT = [
     "CREATE INDEX IF NOT EXISTS idx_mat_import_row_meldung ON mat_import_row(request_id) WHERE request_id IS NOT NULL",
 ]
 SCHRITT_12_WIKI = [
-    # Prüfanleitung zur Formularversion: eine Wiki-Seite. Kein Abschnitt, kein Anker – eingeblendet wird immer der
-    # Abschnitt „Prüfung“, wenn die Seite ihn hat. ADD COLUMN mit REFERENCES geht in SQLite nur mit Vorgabe NULL.
+    # Prüfanleitung zur Formularversion: eine Wiki-Seite. Kein Abschnitt, kein Anker – eingeblendet wurde der Abschnitt
+    # „Prüfung“, wenn die Seite ihn hatte. ADD COLUMN mit REFERENCES geht in SQLite nur mit Vorgabe NULL.
+    # Nicht mehr genutzt seit 04.11.2026: Die Funktion ist entfernt, Spalte und Index bleiben unverändert (kein
+    # Schemaschritt); vorhandene Werte bleiben stehen und werden nirgends mehr gelesen.
     ("mat_form", "wiki_page_id", "INTEGER REFERENCES wiki_pages(id) ON DELETE SET NULL"),
 ]
 WIKI_INDIZES = [
@@ -1520,8 +1523,9 @@ WIKI_INDIZES = [
 def _schritt_12(conn):
     """Phase 2 · Lieferung 3: Bestandsimport (mat_import, mat_import_row) und Wiki-Verknüpfung am Prüfformular
     (mat_form.wiki_page_id). Rein additiv; ein zweiter Lauf findet alles vor und ändert nichts. Keine Trigger an
-    mat_form: Die Unveränderlichkeit benutzter Formulare setzt weiter der Dienst durch, und die Wiki-Route schreibt nur
-    diese eine Spalte (das SET NULL eines Wiki-Purge ist ebenfalls ein UPDATE an mat_form)."""
+    mat_form: Die Unveränderlichkeit benutzter Formulare setzt weiter der Dienst durch, und die Wiki-Route schrieb nur
+    diese eine Spalte (das SET NULL eines Wiki-Purge ist ebenfalls ein UPDATE an mat_form). Die Spalte ist seit dem
+    04.11.2026 nicht mehr genutzt (Prüfanleitung entfernt)."""
     for sql in SCHRITT_12_IMPORT:
         conn.execute(sql)
     for tabelle, spalte, art in SCHRITT_12_WIKI:
