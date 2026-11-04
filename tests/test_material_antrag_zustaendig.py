@@ -30,7 +30,7 @@ from test_material_antrag import (_ohne_trigger, _pdf_text, _schema, _schema_in,
                                   ablehnen, antraege, aufbau, beantragen, bestaetigen, item, journal, lesen, post,
                                   pruefen, sql, trigger_25, trigger_27, trigger_30, trigger_31, trigger_32, trigger_35,
                                   trigger_36, zeilen, zurueckziehen)
-from test_material_trennung import bis_schritt, endversion  # noqa: E402
+from test_material_trennung import bis_schritt, endversion, objekte_weg_37, spalten_vor_37  # noqa: E402
 
 FEST = ("Seit der ersten Prüfung stehen die Stammdaten fest – sie sind Teil des Prüfnachweises. Eine Änderung beantragst "
         "du mit Begründung; entscheiden die Materialwarte des Ordners.")
@@ -523,11 +523,12 @@ def test_migration_23():
         # Seit Schritt 25 dazu dessen Trigger (Seriennummern der Bestandteile), seit Schritt 26 die Wächter des Rückbaus
         # der Set-Funktion statt der entfallenen Set-Trigger, seit Schritt 30 dessen Trigger (Kennungen, Kontoverweise),
         # seit Schritt 31 die des Lebenslauf-Verzeichnisses, seit Schritt 32 die gegen REPLACE ohne recursive_triggers,
-        # seit Schritt 35 die der Prüfformular-Übernahme, seit Schritt 36 die ihrer Nachbesserung.
+        # seit Schritt 35 die der Prüfformular-Übernahme, seit Schritt 36 die ihrer Nachbesserung; Schritt 37 nimmt die
+        # beiden Wächter mat_item_kein_teil* wieder weg.
         neu_26 = {x.split("CREATE TRIGGER IF NOT EXISTS ", 1)[1].split()[0] for x in models.TRIGGER_26}
         erwartet = ((set(t22) | {"mat_item_change_gruppe"} | trigger_25() | neu_26 | trigger_27() | trigger_30()
                      | trigger_31() | trigger_32() | trigger_35() | trigger_36())
-                    - set(models.TRIGGER_WEG_26))
+                    - set(models.TRIGGER_WEG_26) - objekte_weg_37())
         assert v23 == endversion() and set(t23) == erwartet, set(t23) ^ erwartet
         for n in ("mat_item_stammdaten_fest", "mat_item_produkt_fest", "mat_item_antrag_angewendet",
                   "mat_item_change_inhalt"):
@@ -545,11 +546,14 @@ def test_migration_23():
         conn = sqlite3.connect(pfad)
         conn.execute("BEGIN")
         n = conn.total_changes
+        spalten_vor_37(conn)                       # Schritt 26 liest die Set-Spalten, die Schritt 37 entfernt hat
         models._schritt_23(conn)
         models._schritt_24(conn)                   # seit Schritt 24 die Artikeltrigger in seiner Fassung
         models._schritt_25(conn)                   # seit Schritt 25 die Antragstrigger in seiner Fassung
         models._schritt_26(conn)                   # seit Schritt 26 die Stücklisten-Trigger in seiner Fassung
-        assert conn.total_changes == n and _schema_in(conn) == t23
+        assert conn.total_changes == n
+        models._schritt_37(conn)                   # seit Schritt 37 ohne Set-Spalten und Wächter mat_item_kein_teil*
+        assert _schema_in(conn) == t23
         conn.rollback()
         conn.close()
         # Altanträge: zwei Einzelanträge am selben Artikel, beide sichtbar und entscheidbar (Materialwart, E5/E6).

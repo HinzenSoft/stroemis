@@ -7089,11 +7089,9 @@
   // notizTitel: Im Produktdialog („Produkt aus Meldung anlegen“) heißt die Bemerkung der Meldung „Bemerkung des
   // Melders“ – darunter steht das Feld „Bemerkung“ des Produkts (Wunsch vom 18.10.2026), zwei gleiche Wörter wären dort
   // nicht zu unterscheiden. In der Liste der Meldungen bleibt es „Bemerkung“ wie im Dialog „Fehlendes Produkt melden“.
-  // Eine alte Set-Meldung (vor Schritt 26) nennt dazu schreibgeschützt die Teile, wie der Melder sie kannte.
   function meldeDetails(m, notizTitel = "Bemerkung") {
     const zeile = (t, w) => `<dt>${esc(t)}</dt><dd>${w}</dd>`;
-    const daten = [m.set_teile ? zeile("Teile laut Meldung", `<span class="mat-text">${esc(m.set_teile)}</span>`) : "",
-      m.article_no ? zeile("Artikelnummer", `<span class="mat-ganz">${esc(m.article_no)}</span>`) : "", m.norm ? zeile("Norm", esc(m.norm)) : "",
+    const daten = [m.article_no ? zeile("Artikelnummer", `<span class="mat-ganz">${esc(m.article_no)}</span>`) : "", m.norm ? zeile("Norm", esc(m.norm)) : "",
       m.kategorie ? zeile("Kategorie (Vorschlag)", esc(m.kategorie.pfad)) : "",
       m.links.length ? zeile("Links", m.links.map((l) => `<a href="${esc(l)}" target="_blank" rel="noopener noreferrer">${esc(kurzLink(l))}</a>`).join("<br>")) : "",
       m.note ? zeile(notizTitel, `<span class="mat-text">${esc(m.note)}</span>`) : ""].join("");

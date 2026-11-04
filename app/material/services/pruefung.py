@@ -17,7 +17,8 @@ Anhängen, demselben Prüftag und Verweis auf das Original, das unverändert ble
   - Jeder Pflichtpunkt hat einen Wert oder ist „nicht zutreffend“; jeder Mangel hat ein Foto und eine Bemerkung.
   - Ein erreichtes Lebensende schließt „einsatzbereit“ aus (nur textil – bei Metall entscheidet allein der Befund).
     Bei einem Mangel wählt der Prüfer das Ergebnis selbst – die Marke „kritisch“ an Prüfpunkten mit ihrer Sperre ist
-    am 03.11.2026 entfallen (Entscheidung des Nutzers); die Spalte is_critical bleibt, gelesen wird sie nicht mehr.
+    am 03.11.2026 entfallen (Entscheidung des Nutzers); die Spalte is_critical am Prüfpunkt fiel mit Schritt 37, die
+    Befundzeilen festgeschriebener Prüfungen behalten ihre Kopie (gelesen wird sie nicht mehr).
   - „instandsetzen“ und „aussondern empfohlen“ ohne Mangel brauchen einen Grund.
   - Die nächste Fälligkeit (nur bei „einsatzbereit“) ist Prüftag + wirksames Intervall und lässt sich
     nur vorziehen.

@@ -23,8 +23,8 @@ eingabefehler_abfangen(bp)
 
 # Vorgabe für neue Konten: Mitglied in der Materialablage, sonst nichts (auth.VORGABE_NEU, gilt auch für Kontoanfragen).
 VORGABE = dict(VORGABE_NEU)
-# Was am Konto zum Modul Material gehört – Änderungen daran stehen im Journal des Moduls. mat_katalog wird seit
-# Schritt 10 weder gelesen noch geschrieben (Rückweg).
+# Was am Konto zum Modul Material gehört – Änderungen daran stehen im Journal des Moduls. Das Häkchen mat_katalog gibt
+# es seit Schritt 10 nicht mehr (die Spalte seit Schritt 37).
 MATERIAL_SPALTEN = ("recht_material", "mat_pruefer", "urkundennummer")
 OHNE_NAMEN = ("Erst einen Namen eintragen – in der Materialablage steht jeder mit Namen in Journal und Protokollen. Ohne "
               "Namen geht nur Materialablage „–“.")

@@ -122,7 +122,7 @@
     const p = { id, model, manufacturer: "Übung", description: "", article_no: null, norm: "", category_id: ID.kategorie,
                 category_name: "Übung", material_kind: "sonstiges", interval_months: null, lifetime_years: null,
                 lifetime_source: "", laenge_moeglich: false, bestandteile: [], bild, original: bild, vorschau: bild,
-                wiki_page_id: null, demo: false, created_at: "2026-01-01T00:00:00+00:00", updated_at: "2026-01-01T00:00:00+00:00",
+                demo: false, created_at: "2026-01-01T00:00:00+00:00", updated_at: "2026-01-01T00:00:00+00:00",
                 intervall: { monate: null, quelle: "" }, formular_id: ID.formular, dokumente: [] };
     const k = KATALOG.produkte[rolle];
     if (!k) return p;

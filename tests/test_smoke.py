@@ -636,7 +636,8 @@ def test_everything():
 
         # Beobachten
         assert c3.put(f"/api/wiki/pages/{priv['id']}/watch", json={"watch": True}).json["watch"] is True
-        assert [p["slug"] for p in c3.get("/api/wiki/watches").json["pages"]] == ["nur-intern"]
+        assert c3.get("/api/wiki/pages/nur-intern").json["page"]["watch"] is True
+        assert c3.get("/api/wiki/watches").status_code == 404          # Liste ohne Aufrufer, entfernt am 04.11.2026
         assert c2.put(f"/api/wiki/pages/{priv['id']}", json={"content": "# Nur intern\ngeaendert",
                                                              "format": "markdown"}).status_code == 200
         assert c3.put(f"/api/wiki/pages/{priv['id']}/watch", json={"watch": False}).json["watch"] is False

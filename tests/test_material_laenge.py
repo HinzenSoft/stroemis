@@ -145,7 +145,9 @@ def _auf_stand_19(pfad):
         conn.execute("ALTER TABLE mat_category DROP COLUMN items_have_length")
         alt = next(x for x in models.SCHRITT_1 if "mat_checklist_item (" in x)
         conn.execute(alt.replace("IF NOT EXISTS mat_checklist_item", "mat_checklist_item_alt"))
-        conn.execute("INSERT INTO mat_checklist_item_alt SELECT * FROM mat_checklist_item")
+        # Spalten mit Namen: Seit Schritt 37 fehlt is_critical (die Fassung aus Schritt 1 hat sie, mit Vorgabe 0).
+        spalten = ", ".join(r[1] for r in conn.execute("PRAGMA table_info(mat_checklist_item)"))
+        conn.execute(f"INSERT INTO mat_checklist_item_alt ({spalten}) SELECT {spalten} FROM mat_checklist_item")
         conn.execute("DROP TABLE mat_checklist_item")
         conn.execute("ALTER TABLE mat_checklist_item_alt RENAME TO mat_checklist_item")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_mat_checklist_form ON mat_checklist_item(form_id, position)")

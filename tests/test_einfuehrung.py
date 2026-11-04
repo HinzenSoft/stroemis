@@ -689,7 +689,8 @@ def test_statisch():
             assert zahl.startswith(bereich), (modul, zahl)
         for adresse in re.findall(r'"(/static/[^"]+)"', text):
             assert adresse.startswith("/static/uebung/") and os.path.isfile(os.path.join(WURZEL, "app", adresse[1:])), adresse
-    # Übungsdateien: gültiges PDF mit einer Seite, Bilder höchstens 60 KB, Erzeugerskript vorhanden.
+    # Übungsdateien: gültiges PDF mit einer Seite, Bilder höchstens 60 KB, Erzeugerskript vorhanden. Bilder liegen nur
+    # in den Ordnern der Teile (app/static/uebung/<modul>/) – die drei im Wurzelordner las niemand (entfernt 04.11.2026).
     with open(os.path.join(WURZEL, "app/static/uebung/uebungsdatei.pdf"), "rb") as fh:
         pdf = fh.read()
     assert pdf.startswith(b"%PDF-1.4") and pdf.rstrip().endswith(b"%%EOF") and b"/Count 1" in pdf
@@ -699,8 +700,11 @@ def test_statisch():
         assert len(leser.pages) == 1 and "Übungsdatei – kein echtes Dokument" in leser.pages[0].extract_text()
     except ImportError:
         pass
-    for n in (1, 2, 3):
-        pfad = os.path.join(WURZEL, f"app/static/uebung/uebungsbild-{n}.jpg")
+    bilder = sorted(os.path.join(ordner, d) for ordner, _, dateien in os.walk(os.path.join(WURZEL, "app/static/uebung"))
+                    for d in dateien if d.endswith(".jpg"))
+    assert bilder and all(os.path.dirname(os.path.dirname(b)) == os.path.join(WURZEL, "app/static/uebung")
+                          for b in bilder), bilder
+    for pfad in bilder:
         assert os.path.getsize(pfad) <= 60 * 1024, pfad
         from PIL import Image
         with Image.open(pfad) as b:

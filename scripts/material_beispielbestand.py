@@ -799,8 +799,7 @@ class Beispielbestand:
                 anders = [f"Stufe in der Materialablage {alt['recht_material']} statt {k['stufe']}"
                           if (alt["recht_material"] or 0) != k["stufe"] else ""]
                 anders += [f"{name} an" for spalte, name in (("recht_verwaltung", "Verwaltung"), ("recht_karte", "Karte"),
-                                                             ("recht_wiki", "Wiki"), ("recht_pruefungen", "Prüfungen"),
-                                                             ("mat_katalog", "Katalogpflege"))
+                                                             ("recht_wiki", "Wiki"), ("recht_pruefungen", "Prüfungen"))
                            if alt[spalte]]
                 if alt["mat_pruefer"] and not urkunde:
                     anders.append("Häkchen Prüfer")
@@ -815,12 +814,12 @@ class Beispielbestand:
                     passwort = secrets.token_urlsafe(12)
                 uid = db.execute(
                     "INSERT INTO users (email, password_hash, name, gliederung, recht_karte, recht_wiki, recht_pruefungen, "
-                    "recht_verwaltung, recht_material, mat_pruefer, mat_katalog, urkundennummer, created_at) "
-                    "VALUES (?,?,?,?,0,0,0,0,?,?,0,?,?)",
+                    "recht_verwaltung, recht_material, mat_pruefer, urkundennummer, created_at) "
+                    "VALUES (?,?,?,?,0,0,0,0,?,?,?,?)",
                     (k["mail"], generate_password_hash(passwort), k["name"], GLIEDERUNGEN[0][1], k["stufe"],
                      int(bool(urkunde)), urkunde, db.now()))
                 journal.eintragen("user", uid, "rollen", None, {"recht_material": k["stufe"],
-                                                                "mat_pruefer": int(bool(urkunde)), "mat_katalog": 0,
+                                                                "mat_pruefer": int(bool(urkunde)),
                                                                 "urkundennummer": urkunde})
                 self.passwoerter.append((k["mail"], k["name"], passwort, k.get("sicht")))
                 name = k["name"]

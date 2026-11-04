@@ -463,12 +463,12 @@ MIGRATIONS = [
     # Modul Material: Stufe in der Matrix – seit Schritt 10 der Modul-Migration 0 kein Zugriff, 1 Mitglied
     # (Modulzugang, Bestand über Freigaben je Ordner), 2 Verwaltung (Material-Verwaltung); in Phase 1 hieß sie
     # 1 = Führungskraft, 2 = Materialwart. Quer dazu das Häkchen Prüfer (Sachkundiger, nur mit Urkundennummer).
-    # mat_katalog (Produktkatalogpfleger, Phase 1 bis P2-L1) wird seit Schritt 10 nicht mehr gelesen – Rückweg.
+    # mat_katalog (Produktkatalogpfleger, Phase 1 bis P2-L1) steht hier nicht mehr: Seit Schritt 10 las sie niemand,
+    # Schritt 37 der Materialablage entfernt sie. Bringt eine alte Sicherung sie mit, liest Schritt 10 sie vorher noch.
     # Die Unterschrift legt der Prüfer einmal im Profil ab (PNG); beim Festschreiben einer Prüfung
     # wird sie kopiert, damit eine spätere neue Unterschrift kein altes Protokoll verändert.
     ("users", "recht_material", "INTEGER NOT NULL DEFAULT 0"),
     ("users", "mat_pruefer", "INTEGER NOT NULL DEFAULT 0"),
-    ("users", "mat_katalog", "INTEGER NOT NULL DEFAULT 0"),
     ("users", "urkundennummer", "TEXT NOT NULL DEFAULT ''"),
     ("users", "signature_png", "BLOB"),
     # Modul Material, Phase 2: pseudonymer Kontoverweis fürs Journal (Freigaben, Zuordnungen) – 128 Bit Zufall, nirgends

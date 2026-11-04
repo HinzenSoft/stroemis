@@ -171,10 +171,11 @@ def test_migration_12():
         assert spalten["mat_import_row"] == ["id", "import_id", "line_no", "values_json", "reason_code", "reason",
                                              "offer_key", "product_id", "request_id", "status", "item_id", "resolved_by",
                                              "resolved_by_name", "resolved_at"], spalten
-        assert "wiki_page_id" in [r[1] for r in conn.execute("PRAGMA table_info(mat_form)")]
+        # Die Spalte mat_form.wiki_page_id samt Index aus Schritt 12 entfernt Schritt 37 wieder (Prüfanleitung entfallen).
+        assert "wiki_page_id" not in [r[1] for r in conn.execute("PRAGMA table_info(mat_form)")]
         indizes = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type = 'index'")}
         assert {"idx_mat_import_folder", "idx_mat_import_datei", "idx_mat_import_row_status", "idx_mat_import_row_angabe",
-                "idx_mat_import_row_meldung", "idx_mat_form_wiki"} <= indizes
+                "idx_mat_import_row_meldung"} <= indizes and "idx_mat_form_wiki" not in indizes
         for t_ in ("mat_import", "mat_import_row"):
             assert "AUTOINCREMENT" in conn.execute("SELECT sql FROM sqlite_master WHERE name = ?", (t_,)).fetchone()[0]
         # CHECKs: Dateiart, Status (mit „ersetzt“), offen ⇔ ohne resolved_at, line_no ≥ 1, UNIQUE(import_id, line_no).
@@ -202,7 +203,7 @@ def test_migration_12():
             pass
         conn.rollback()
 
-        # 11 → 12: zuerst der Teilindex, dann die Spalte, dann die Tabellen.
+        # 11 → 12: die Tabellen (Spalte und Index am Formular fehlen seit Schritt 37 ohnehin).
         def stand():
             c = sqlite3.connect(pfad)
             out = {"form": c.execute("SELECT id, category_id, product_id, version, title, valid_from, active, created_at, "
@@ -212,8 +213,7 @@ def test_migration_12():
             c.close()
             return out
         vorher = stand()
-        for befehl in ("DROP INDEX idx_mat_form_wiki", "ALTER TABLE mat_form DROP COLUMN wiki_page_id",
-                       "DROP TABLE mat_import_row", "DROP TABLE mat_import",
+        for befehl in ("DROP TABLE mat_import_row", "DROP TABLE mat_import",
                        "UPDATE mat_meta SET wert = '11' WHERE schluessel = 'schema_version'"):
             conn.execute(befehl)
         conn.commit()
@@ -223,7 +223,7 @@ def test_migration_12():
         assert conn.execute("SELECT wert FROM mat_meta WHERE schluessel = 'schema_version'").fetchone()[0] == str(
             models.SCHEMA_VERSION)                   # 11 → Endversion (seit Phase 3 · L1: 13)
         assert {"mat_import", "mat_import_row"} <= {r[0] for r in conn.execute("SELECT name FROM sqlite_master")}
-        assert conn.execute("SELECT COUNT(*) FROM mat_form WHERE wiki_page_id IS NOT NULL").fetchone()[0] == 0
+        assert "wiki_page_id" not in [r[1] for r in conn.execute("PRAGMA table_info(mat_form)")]     # 12 an, 37 weg
         assert stand() == vorher
         # Zweiter Lauf: keine Änderung (auch Schritt 12 selbst nicht).
         assert models.migrieren(conn) == models.SCHEMA_VERSION

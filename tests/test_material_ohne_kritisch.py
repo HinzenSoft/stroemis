@@ -4,14 +4,14 @@ entfernen“):  python tests/test_material_ohne_kritisch.py  oder  pytest tests/
   - Formular-Editor: kein Häkchen und keine Marke „kritisch“, kein Satz „Ein kritischer Punkt mit Mangel …“; die
     Schnittstelle liefert Punkte ohne „kritisch“ und übergeht das Feld beim Speichern (auch an Text-Punkten und mit
     unbrauchbarem Wert – früher Fehler).
-  - Prüfung: Mangel an einem Punkt, der in der Datenbank noch is_critical = 1 trägt (Formularpunkt und Ergebniszeile wie
-    aus einem Entwurf vor dem Umbau) – „einsatzbereit“ ist nicht gesperrt und lässt sich über die Schnittstelle
+  - Prüfung: Mangel an einem Punkt, dessen Ergebniszeile noch is_critical = 1 trägt (wie aus einem Entwurf vor dem
+    Umbau; am Formularpunkt gibt es die Spalte seit Schritt 37 nicht mehr) – „einsatzbereit“ ist nicht gesperrt und lässt sich über die Schnittstelle
     festschreiben; Befunde ohne „kritisch“; Prüfprotokoll (HTML und PDF-Text) und Lebenslauf ohne „kritisch“; das
     gespeicherte Protokoll bleibt beim Lesen von Prüfung, Lebenslauf und Jahresbericht Byte für Byte, wie es war.
   - Jahresbericht (Schnittstelle, PDF) und CSV-Prüfungsliste ohne „mit kritischem Mangel“ bzw. „kritischer Mangel“.
-  - Katalog: Import einer Datei mit „kritisch“ geht ohne Fehler, der Wert wird nicht gespeichert (is_critical = 0); ein
-    erneuter Import derselben Datei legt auch bei alter Markierung (is_critical = 1) keine neue Version an; der Export
-    schreibt „kritisch“ nicht mehr.
+  - Katalog: Import einer Datei mit „kritisch“ geht ohne Fehler, der Wert wird nicht gespeichert (die Spalte
+    is_critical gibt es seit Schritt 37 nicht mehr); ein erneuter Import derselben Datei legt keine neue Version an; der
+    Export schreibt „kritisch“ nicht mehr.
   - Oberfläche statisch: Prüfung, Befunde, Jahresbericht und CSS ohne Marke, Spalte und „i“ „kritisch“; das
     Anleitungsthema „kritisch“ ist entfallen.
 Alle Namen, Nummern und Prüfpunkte hier sind Platzhalter."""
@@ -62,8 +62,8 @@ def test_formular_editor():
         f = r.json["formular"]
         assert [p["text"] for p in f["punkte"]] == ["Platzhalter Ja/Nein", "Platzhalter Text", "Platzhalter Zahl"]
         assert all("kritisch" not in p for p in f["punkte"]), f["punkte"]
-        assert {r["is_critical"] for r in sql(app, "SELECT is_critical FROM mat_checklist_item WHERE form_id = ?",
-                                              (f["id"],))} == {0}
+        assert sql(app, "SELECT COUNT(*) AS n FROM mat_checklist_item WHERE form_id = ?", (f["id"],))[0]["n"] == 3
+        assert "is_critical" not in {s["name"] for s in sql(app, "SELECT name FROM pragma_table_info('mat_checklist_item')")}
         # Speichern (unbenutztes Formular) übergeht das Feld ebenso; das Journal nennt es nicht.
         r = kp.put(f"{API}/formulare/{f['id']}", json={"punkte": [
             {"text": "Platzhalter Ja/Nein", "art": "yesno", "soll": "ja", "kritisch": True}]})
@@ -75,18 +75,16 @@ def test_formular_editor():
 
 
 def test_pruefung_einsatzbereit_trotz_alter_markierung():
-    """Mangel an einem Punkt mit is_critical = 1 (alter Bestand): „einsatzbereit“ ist wählbar und wird festgeschrieben;
+    """Mangel an einem Punkt, dessen Ergebniszeile is_critical = 1 trägt (alter Entwurf): „einsatzbereit“ ist wählbar
+    und wird festgeschrieben;
     weder Befunde noch Protokoll, Lebenslauf oder Jahresbericht nennen „kritisch“; das gespeicherte Protokoll bleibt."""
     from app.material.services import pdf
     with tempfile.TemporaryDirectory() as tmp:
         app, k = umgebung(tmp)
         ids = katalog_grund(k["adm"])
-        formulare = pruef_formulare(k["katalog"], ids)
+        pruef_formulare(k["katalog"], ids)
         w, p1 = k["wart"], k["pruefer"]
         gid, _ = gliederung(w)
-        # Alter Bestand: Der Formularpunkt trägt die Markierung noch (die Schnittstelle setzt sie nicht mehr).
-        sql(app, "UPDATE mat_checklist_item SET is_critical = 1 WHERE form_id = ? AND label = 'Testpunkt Schnitt'",
-            (formulare["spezifisch"],))
         a = neuer_artikel(w, ids["gurt"], gid, manufactured_on=f"{_heute().year - 2}-01")
         pr = starten(p1, a["id"]).json["pruefung"]
         pk = punkte_von(pr)
@@ -150,13 +148,12 @@ def test_jahresbericht_und_csv():
     with tempfile.TemporaryDirectory() as tmp:
         app, k = umgebung(tmp)
         ids = katalog_grund(k["adm"])
-        formulare = pruef_formulare(k["katalog"], ids)
+        pruef_formulare(k["katalog"], ids)
         w, p1 = k["wart"], k["pruefer"]
         gid, _ = gliederung(w)
         a = neuer_artikel(w, ids["gurt"], gid, manufactured_on=f"{_heute().year - 2}-01")
         pr = starten(p1, a["id"]).json["pruefung"]
         pk = punkte_von(pr)
-        sql(app, "UPDATE mat_checklist_item SET is_critical = 1 WHERE form_id = ?", (formulare["spezifisch"],))
         sql(app, "UPDATE mat_inspection_result SET is_critical = 1 WHERE inspection_id = ?", (pr["id"],))
         url = f"{API}/pruefungen/{pr['id']}/punkte"
         assert p1.put(f"{url}/{pk['Testpunkt Schnitt']}", json={"wert": "ja", "notiz": "Platzhalter"}).status_code == 200
@@ -197,8 +194,8 @@ DATEI = {
 
 
 def test_katalog_import_und_export():
-    """Import mit „kritisch“ geht (Wert übergangen, is_critical = 0), ein zweiter Lauf legt auch bei alter Markierung
-    keine neue Version an; der Export schreibt „kritisch“ nicht."""
+    """Import mit „kritisch“ geht (Wert übergangen – die Spalte gibt es seit Schritt 37 nicht mehr), ein zweiter Lauf
+    legt keine neue Version an; der Export schreibt „kritisch“ nicht."""
     with tempfile.TemporaryDirectory() as tmp:
         app = make_app(tmp)
         with app.app_context():
@@ -214,9 +211,8 @@ def test_katalog_import_und_export():
             fid = formulare[0]["id"]
             punkte = db.query("SELECT * FROM mat_checklist_item WHERE form_id = ? ORDER BY position", (fid,))
             assert [p["label"] for p in punkte] == ["Platzhalter Ja/Nein", "Platzhalter Text", "Platzhalter Zahl"]
-            assert {p["is_critical"] for p in punkte} == {0}, punkte
-            # Alter Bestand mit Markierung: derselbe Import ist unverändert – keine neue Version nur wegen der Spalte.
-            db.execute("UPDATE mat_checklist_item SET is_critical = 1 WHERE form_id = ?", (fid,))
+            assert all("is_critical" not in p for p in punkte), punkte
+            # Derselbe Import ist unverändert – keine neue Version nur wegen der Marke in der Datei.
             bericht = importer.importieren(DATEI, quelle="Test")
             assert not bericht["fehler"], bericht["fehler"]
             assert [f["id"] for f in db.query("SELECT id FROM mat_form")] == [fid]
@@ -225,7 +221,7 @@ def test_katalog_import_und_export():
                 {k: v for k, v in p.items() if k != "kritisch"} for p in DATEI["formulare"][0]["punkte"]]}]}
             assert not importer.importieren(ohne, quelle="Test")["fehler"]
             assert [f["id"] for f in db.query("SELECT id FROM mat_form")] == [fid]
-            # Export: Punkte ohne „kritisch“ – auch am Formular mit alter Markierung.
+            # Export: Punkte ohne „kritisch“.
             daten, _, _ = katalog_export.sammeln(mit_dateien=False)
             punkte = [p for f in daten["formulare"] for p in f["punkte"]]
             assert len(punkte) == 3 and all("kritisch" not in p for p in punkte), punkte

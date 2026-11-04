@@ -72,8 +72,9 @@ def _unterschied(a, b):
 def test_migration_frisch_und_ab_20():
     """Frisch: keine Kopie der Stückliste mehr (mat_item_set_slot), die eingefrorenen Nachweis-Tabellen bleiben, die
     Wächter aus Schritt 26 stehen, die entfallenen Trigger nicht. 20 → Ende an einer Datenbank mit Bestand (direkt in
-    SQLite): Spalten mit ihren Vorgaben, keine Zeile ändert sich, kein Fremdschlüssel bricht, das Schema gleicht dem
-    frischen; ein zweiter Lauf und Schritt 26 für sich ändern nichts."""
+    SQLite): keine Zeile ändert sich, kein Fremdschlüssel bricht, das Schema gleicht dem frischen; ein zweiter Lauf und
+    Schritt 37 für sich ändern nichts. Seit Schritt 37 (Aufräumen) fehlen die Set-Spalten am Artikel samt den Wächtern
+    mat_item_kein_teil*; Schritt 26 für sich prüft test_migration_25_26_altbestand auf Stand 36."""
     from app.material import models
     with tempfile.TemporaryDirectory() as frisch:
         make_app(frisch)
@@ -81,8 +82,9 @@ def test_migration_frisch_und_ab_20():
     assert ("table", "mat_item_set_slot") not in schema_frisch
     for name in ("mat_product_component", "mat_set_lauf", "mat_set_protokoll_zeile", "mat_item_component_serial"):
         assert ("table", name) in schema_frisch, name
-    for name in ("mat_product_kein_set", "mat_product_kein_set_aendern", "mat_item_kein_teil", "mat_item_kein_teil_aendern",
-                 "mat_component_neu", "mat_component_aendern", "mat_set_lauf_neu", "mat_inspection_in_set_lauf",
+    for name in ("mat_item_kein_teil", "mat_item_kein_teil_aendern"):             # Schritt 37: mit der Spalte weg
+        assert ("trigger", name) not in schema_frisch, name
+    for name in ("mat_product_kein_set", "mat_product_kein_set_aendern", "mat_component_neu", "mat_component_aendern", "mat_set_lauf_neu", "mat_inspection_in_set_lauf",
                  "mat_inspection_set_lauf_wechsel", "mat_set_lauf_beendet", "mat_set_zeile_aendern",
                  "mat_teilnummer_position"):
         assert ("trigger", name) in schema_frisch, name
@@ -112,7 +114,7 @@ def test_migration_frisch_und_ab_20():
                          "?, ?, '2026-10-01', '2027-10-01')", (JETZT, JETZT))
             conn.execute("INSERT INTO mat_inspection (item_id, inspected_on, kind, result, completed_at, created_at, "
                          "updated_at) VALUES (1, '2026-10-01', 'periodisch', 'einsatzbereit', ?, ?, ?)", (JETZT, JETZT, JETZT))
-        vorher = {t: conn.execute(f"SELECT * FROM {t} ORDER BY rowid").fetchall() for t in
+        vorher = {t: (_spalten(conn, t), conn.execute(f"SELECT * FROM {t} ORDER BY rowid").fetchall()) for t in
                   ("mat_item", "mat_product", "mat_inspection", "mat_folder")}
         conn.close()
 
@@ -120,12 +122,14 @@ def test_migration_frisch_und_ab_20():
         assert zeilen(app, "SELECT wert FROM mat_meta WHERE schluessel = 'schema_version'")[0]["wert"] == endversion()
         conn = roh(app)
         try:
-            for t, alt in vorher.items():
-                n = len(alt[0]) if alt else 0
-                assert [r[:n] for r in conn.execute(f"SELECT * FROM {t} ORDER BY rowid").fetchall()] == alt, t
+            # Jede Spalte, die es noch gibt, trägt ihren Wert (Schritt 37 hat die Set-Spalten und wiki_page_id entfernt).
+            for t, (spalten, alt) in vorher.items():
+                bleibt = [i for i, s in enumerate(spalten) if s in _spalten(conn, t)]
+                liste = ", ".join(spalten[i] for i in bleibt)
+                assert conn.execute(f"SELECT {liste} FROM {t} ORDER BY rowid").fetchall() == \
+                    [tuple(r[i] for i in bleibt) for r in alt], t
             assert conn.execute("SELECT is_set FROM mat_product").fetchall() == [(0,)]
-            assert conn.execute("SELECT parent_item_id, lock_cause, set_lock_origin, set_pruefen FROM mat_item").fetchall() \
-                == [(None, None, None, 0)]
+            assert not {"parent_item_id", "lock_cause", "set_lock_origin", "set_pruefen"} & set(_spalten(conn, "mat_item"))
             # Schritt 26 schreibt bei leerem Altbestand kein Journal.
             assert conn.execute("SELECT COUNT(*) FROM mat_audit WHERE user_name = 'Migration Schritt 26'").fetchone()[0] == 0
             assert conn.execute("PRAGMA foreign_key_check").fetchall() == []
@@ -135,8 +139,8 @@ def test_migration_frisch_und_ab_20():
             assert models.migrieren(conn) == models.SCHEMA_VERSION
             conn.execute("BEGIN")
             n = conn.total_changes
-            models._schritt_26(conn)
-            models._schritt_26(conn)
+            models._schritt_37(conn)
+            models._schritt_37(conn)
             assert conn.total_changes == n
             conn.rollback()
             assert _schema(pfad) == schema_frisch
@@ -208,15 +212,16 @@ def _altbestand_25(tmp):
 
 
 def test_migration_25_26_altbestand():
-    """25 → 26 an einer Datenbank mit Set-Altbestand: Teile ohne Set im selben Ordner, Sperren und Ordner unverändert,
+    """25 → 36 an einer Datenbank mit Set-Altbestand: Teile ohne Set im selben Ordner, Sperren und Ordner unverändert,
     Sperrursachen leer; das Set-Produkt ein Produkt nur mit der Text-Position (Austausch „nicht belegt“); die Kopie der
     Stückliste weg; der offene Lauf abgebrochen und vom Durchgang gelöst, sein Entwurf ein normaler Entwurf; der
     abgeschlossene Lauf, seine Teiletabelle und die Protokolldatei unverändert (Prüfseite „unverändert“); Journal je
-    geänderter Zeile; die Set-Meldung behält ihre Teile; das Schema gleicht dem frischen; ein zweiter Lauf ändert nichts;
-    die App arbeitet mit dem Altbestand (Artikel, Produkt, Prüfung zu Ende, Meldung)."""
+    geänderter Zeile; die Set-Meldung behält ihre Teile; das Schema gleicht dem frischen auf Stand 36; ein zweiter Lauf
+    ändert nichts. Danach 36 → Ende (Schritt 37 entfernt die geleerten Spalten und die Teile der Set-Meldung): die App
+    arbeitet mit dem Altbestand (Artikel, Produkt, Prüfung zu Ende, Meldung)."""
     from app.material import models
     with tempfile.TemporaryDirectory() as frisch:
-        make_app(frisch)
+        bis_schritt(36)(make_app, frisch)
         schema_frisch = _schema(os.path.join(frisch, "stroemis.db"))
     with ohne_post(), tempfile.TemporaryDirectory() as tmp:
         t = bis_schritt(25)(_altbestand_25, tmp)
@@ -233,8 +238,8 @@ def test_migration_25_26_altbestand():
             original = fh.read()
         assert hashlib.sha256(original).hexdigest() == p1[2]
 
-        app = make_app(tmp)
-        assert zeilen(app, "SELECT wert FROM mat_meta WHERE schluessel = 'schema_version'")[0]["wert"] == endversion()
+        app = bis_schritt(36)(make_app, tmp)
+        assert zeilen(app, "SELECT wert FROM mat_meta WHERE schluessel = 'schema_version'")[0]["wert"] == "36"
         conn = roh(app)
         try:
             # Teile: ohne Set, gleiche Lage, Sperre und Zuordnung; keine Sperrursache, kein set_pruefen.
@@ -275,7 +280,7 @@ def test_migration_25_26_altbestand():
             schema = _schema(pfad)
             assert schema == schema_frisch, _unterschied(schema, schema_frisch)
             # Zweiter Lauf: nichts ändert sich.
-            assert models.migrieren(conn) == models.SCHEMA_VERSION
+            assert bis_schritt(36)(models.migrieren, conn) == 36
             conn.execute("BEGIN")
             n = conn.total_changes
             models._schritt_26(conn)
@@ -290,6 +295,18 @@ def test_migration_25_26_altbestand():
         r = anon.post("/api/material/pruefen", data={"datei": (io.BytesIO(original), "protokoll.pdf")}, headers=H,
                       content_type="multipart/form-data")
         assert r.status_code == 200 and r.json["ergebnis"] == "unveraendert" and r.json["protokoll_id"] == p1[0], r.json
+        # 36 → Ende: Schritt 37 entfernt die geleerten Spalten samt den Teilen der Set-Meldung.
+        app = make_app(tmp)
+        assert zeilen(app, "SELECT wert FROM mat_meta WHERE schluessel = 'schema_version'")[0]["wert"] == endversion()
+        conn = roh(app)
+        try:
+            assert not {"parent_item_id", "lock_cause", "set_lock_origin", "set_pruefen"} & set(_spalten(conn, "mat_item"))
+            assert not {"is_set", "set_teile"} & set(_spalten(conn, "mat_product_request"))
+            assert conn.execute("SELECT COUNT(*) FROM mat_product_request WHERE model = 'Gemeldetes Set'").fetchone()[0] == 1
+            assert conn.execute("SELECT set_lauf_id FROM mat_inspection WHERE id = ?", (t.p1,)).fetchone()[0] == t.l1
+            assert conn.execute("SELECT * FROM mat_set_protokoll_zeile").fetchall() == teiletabelle
+        finally:
+            conn.close()
         # Die App mit dem Altbestand: Artikel und Produkt lesen, den Entwurf zu Ende prüfen, die Meldung lesen.
         wart, pruefer, mv = t.wart_a, t.k["pruefer"], t.k["katalog"]
         for iid in (t.s, t.k1, t.k2, t.k3):
@@ -303,7 +320,7 @@ def test_migration_25_26_altbestand():
         assert r.status_code == 200, r.get_json()
         m = mv.get("/api/material/meldungen?status=alle").json["meldungen"]
         alt = next(x for x in m if x["model"] == "Gemeldetes Set")
-        assert alt["set_teile"] == "Karabiner, 2 Stück\nTasche" and "is_set" not in alt, alt
+        assert "set_teile" not in alt and "is_set" not in alt, alt
         # Der Gesperrte bleibt gesperrt, bis ein Prüfer frei prüft (Entwurf 3.6 Nr. 2).
         r = starten(pruefer, t.k2)
         assert r.status_code == 201 and r.json["pruefung"]["freipruefung"] is True, r.get_json()
@@ -334,10 +351,8 @@ def test_trigger_26():
                        "created_at, updated_at) VALUES (?, 'Testwerk', 'S', 'testwerk|s|', 'metall_hardware', 1, 'x', 'x')",
                        (ids["karabiner"],), text)
             abgewiesen(conn, "UPDATE mat_product SET is_set = 1 WHERE id = ?", (ids["hms"],), text)
-            abgewiesen(conn, "UPDATE mat_item SET parent_item_id = ? WHERE id = ?", (b, a), text)
-            abgewiesen(conn, "INSERT INTO mat_item (product_id, folder_id, serial_no, inventory_no, qr_token, parent_item_id, "
-                       "created_at, updated_at) VALUES (?, ?, 'X-1', 'M-999991', 'tok-x-1', ?, 'x', 'x')",
-                       (ids["hms"], gid, a), text)
+            # Ein Teil eines Sets: Die Spalte parent_item_id gibt es seit Schritt 37 nicht mehr (samt ihren Wächtern).
+            assert "parent_item_id" not in _spalten(conn, "mat_item")
             abgewiesen(conn, "INSERT INTO mat_set_lauf (set_item_id, opened_at) VALUES (?, 'x')", (a,), "Set-Prüfungen")
             abgewiesen(conn, "INSERT INTO mat_inspection (item_id, inspected_on, kind, set_lauf_id, created_at, updated_at) "
                        "VALUES (?, '2026-10-01', 'periodisch', 1, 'x', 'x')", (b,), "Set-Prüfungen")
@@ -403,9 +418,8 @@ def test_schnittstelle():
         # Meldung: nur Produkt – „is_set“ und „set_teile“ werden übergangen.
         r = wart.post("/api/material/meldungen", json={"manufacturer": "Testwerk", "model": "Neu gemeldet",
                                                        "folder_id": gid, "is_set": True, "set_teile": "x"})
-        assert r.status_code == 201 and r.json["meldung"]["set_teile"] == "" and "is_set" not in r.json["meldung"], r.json
-        assert zeilen(app, "SELECT is_set, set_teile FROM mat_product_request WHERE model = 'Neu gemeldet'")[0] == \
-            {"is_set": 0, "set_teile": ""}
+        assert r.status_code == 201 and not {"set_teile", "is_set"} & set(r.json["meldung"]), r.json
+        assert not {"is_set", "set_teile"} & set(zeilen(app, "SELECT * FROM mat_product_request WHERE model = 'Neu gemeldet'")[0])
         # Katalogdatei.
         kopf = {"format": "stroemis-material-katalog", "version": 1,
                 "kategorien": [{"name": "Rückbau", "materialart": "metall_hardware", "intervall_monate": 12}]}

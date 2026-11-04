@@ -317,7 +317,7 @@ def test_beispielbestand():
         echt = neuer_artikel(k["wart"], ids["hms"], echt_gl, serial_no="ECHT-1")["id"]
         r = starten(k["pruefer"], echt)
         assert r.status_code == 201, r.get_json()
-        r = k["pruefer"].post(f"/api/material/pruefungen/{r.json['pruefung']['id']}/abschliessen",
+        r = k["pruefer"].post(f"/api/material/pruefungen/{r.json['pruefung']['id']}/festschreiben",
                               json={"ergebnis": "einsatzbereit"})
         assert r.status_code == 200, r.get_json()
         katalog_vorher = katalog_stand(app)
@@ -660,10 +660,11 @@ def test_formulare():
                     v = roh["Seilrollen"]
                     assert f["title"] == f"DEMO – Prüfformular nach Petzl-Prüfbericht ({v['bezugsprodukt']}) – Seilrollen"
                     punkte = katalog.punkte(f["id"])
-                    assert [(p["label"], p["group_name"], p["editor"], bool(p["mandatory"]), p["expected_value"],
-                             p["is_critical"]) for p in punkte] == [
-                        (p["text"], p["gruppe"], p["art_app"], p["pflicht"], p["soll"], 0)
-                        for p in v["punkte"]], punkte
+                    # „kritisch“ der Petzl-Vorlage geht nicht mit (die Spalte gibt es seit Schritt 37 nicht mehr).
+                    assert [(p["label"], p["group_name"], p["editor"], bool(p["mandatory"]), p["expected_value"])
+                            for p in punkte] == [
+                        (p["text"], p["gruppe"], p["art_app"], p["pflicht"], p["soll"]) for p in v["punkte"]], punkte
+                    assert all("is_critical" not in p for p in punkte), punkte
                     assert katalog.formular_fuer_produkt(
                         db.query("SELECT id FROM mat_product WHERE model = 'Rolle Delta'", one=True)["id"])["id"] == f["id"]
                 platz = katalog.punkte(neu[kid["Testbaum"]]["id"])

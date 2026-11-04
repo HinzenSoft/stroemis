@@ -82,8 +82,8 @@ Feldnamen folgen dem Konzept vom 16.10.2026 (englisch, wie dort festgelegt). Abw
     und mat_import_row – eine Zeile der Nacharbeit mit den zugeordneten Werten (nur solange sie offen ist), Gründen,
     Produktangabe, Produktwahl und Meldung; beide mit AUTOINCREMENT (das Journal nennt Importe). Dazu
     mat_form.wiki_page_id: die Wiki-Seite mit der Prüfanleitung zur Formularversion (ON DELETE SET NULL beim
-    endgültigen Löschen der Seite) – nicht mehr genutzt seit 04.11.2026 (Funktion entfernt; Spalte, Index und
-    vorhandene Werte bleiben, gelesen und geschrieben wird sie nirgends mehr). Rein additiv, wiederholbar. Wer mat_folder künftig neu aufbaut, muss den Verweis
+    endgültigen Löschen der Seite) – nicht mehr genutzt seit 04.11.2026 (Funktion entfernt; Spalte und Index
+    entfernt Schritt 37). Rein additiv, wiederholbar. Wer mat_folder künftig neu aufbaut, muss den Verweis
     mat_import.folder_id (ON DELETE CASCADE) bedenken – wie mat_reminder_log.grant_id bei mat_folder_grant.
   - Schritt 13 (Phase 3 · Lieferung 1, Mangelmeldung): mat_defect_report – ein Mangel, den die zugeordnete Person oder
     ein Konto mit Leserecht am Artikel meldet: Beschreibung, Fotos (nur Web- und Vorschaufassung, das Original wird
@@ -295,6 +295,26 @@ Feldnamen folgen dem Konzept vom 16.10.2026 (englisch, wie dort festgelegt). Abw
     Verweis) – je eine Zeile im Startprotokoll, kein Journal. Wiederholbar (Trigger entfernt und neu; der zweite Lauf
     findet nichts mehr). Rückweg: Ein älterer Stand behält die strengeren Trigger – sie sperren nur, was seine Dienste
     ohnehin abweisen (außer dem Umhängen einer Kategorie über die DEMO-Grenze: dort dann 409 statt Klartext).
+  - Schritt 37 (Aufräumen, Wunsch vom 04.11.2026): Spalten entfernter Funktionen fallen – mit ALTER TABLE … DROP COLUMN
+    (SQLite ≥ 3.35), ohne Neuaufbau einer Tabelle (SPALTEN_WEG_37): mat_form.wiki_page_id samt idx_mat_form_wiki
+    (Prüfanleitung in der Strömipedia), mat_product.wiki_page_id (nie geschrieben), mat_folder.owner_user_id (nie
+    benutzt), am Artikel parent_item_id samt den Wächtern mat_item_kein_teil und mat_item_kein_teil_aendern, lock_cause,
+    set_lock_origin und set_pruefen (Sets, seit Schritt 26 leer), an der Produktmeldung is_set und set_teile
+    (Set-Meldung), mat_checklist_item.is_critical (Marke „kritisch“, entfallen am 03.11.2026) und im Kernschema
+    users.mat_katalog (seit Schritt 10 nicht mehr gelesen; die Zeile in db.MIGRATIONS ist gestrichen, sonst legte jeder
+    Start sie neu an). Erst die Objekte, die eine Spalte nennen, dann die Spalte. Danach muss der Bestand bis auf die
+    Spalten gleich sein (Zeilen je Tabelle, sqlite_sequence, keine neue Fremdschlüssel-Verletzung, keine der Spalten mehr
+    da) – sonst Abbruch, die Transaktion von migrieren() nimmt alles zurück. Das Startprotokoll nennt je Spalte, wie
+    viele Zeilen einen Wert verloren. Bleiben (Nachweise und Schutz-Trigger – ein Entfernen hieße Tabellen neu aufbauen
+    und Unveränderlichkeits-Trigger neu schreiben): mat_product.is_set (Trigger mat_teilnummer_*), die Set-Spalten von
+    mat_product_component (Tabellen-CHECK), mat_inspection.set_lauf_id samt mat_set_lauf und mat_set_protokoll_zeile
+    (Nachweis, Spaltenliste von mat_inspection_festgeschrieben/abgeschlossen) und mat_inspection_result.is_critical
+    (Kopie in festgeschriebenen Befundzeilen). Schritt 1, 12, 21 und 22 legen die Spalten weiter an, Schritt 10 liest
+    mat_katalog einer alten Sicherung – erst hier fallen sie. Wiederholbar: DROP … IF EXISTS, eine Spalte nur, wenn sie
+    da ist; ein zweiter Lauf ändert nichts. Mit SQLite < 3.35 bleiben die Spalten stehen (wie db.OBSOLETE_COLUMNS) –
+    gelesen werden sie nirgends mehr. Kein Journal (nichts Sichtbares ändert sich, wie Schritt 33). Rückweg nur über die
+    Sicherung vor dem Deploy: Ein älterer Stand schriebe in die fehlenden Spalten (das Skript des Beispielbestands etwa
+    mat_katalog).
 """
 import json
 import logging
@@ -303,7 +323,7 @@ import sqlite3
 import unicodedata
 from datetime import datetime, timezone
 
-SCHEMA_VERSION = 36
+SCHEMA_VERSION = 37
 
 # --- Wertelisten -------------------------------------------------------------------------------
 # Was die Datenbank per CHECK erzwingt, steht hier ein zweites Mal – mit den Wörtern, die die
@@ -3075,6 +3095,47 @@ def _schritt_36(conn):
         conn.execute(sql)
 
 
+# --- Schritt 37: Aufräumen – Spalten entfernter Funktionen (Wunsch vom 04.11.2026) -------------------------------------
+# ALTER TABLE … DROP COLUMN (SQLite ≥ 3.35), kein Neuaufbau. Erst die Objekte, die eine Spalte nennen, dann die Spalte.
+OBJEKTE_WEG_37 = ("DROP INDEX IF EXISTS idx_mat_form_wiki", "DROP TRIGGER IF EXISTS mat_item_kein_teil",
+                  "DROP TRIGGER IF EXISTS mat_item_kein_teil_aendern")
+SPALTEN_WEG_37 = (("mat_form", "wiki_page_id"), ("mat_product", "wiki_page_id"), ("mat_folder", "owner_user_id"),
+                  ("mat_item", "parent_item_id"), ("mat_item", "lock_cause"), ("mat_item", "set_lock_origin"),
+                  ("mat_item", "set_pruefen"), ("mat_product_request", "is_set"), ("mat_product_request", "set_teile"),
+                  ("mat_checklist_item", "is_critical"), ("users", "mat_katalog"))
+
+
+def _schritt_37(conn):
+    """Spalten aus SPALTEN_WEG_37 entfernen (siehe Kopf). Was dabei an Werten verloren geht (weder NULL noch 0 noch
+    leer), nennt das Startprotokoll je Spalte."""
+    if sqlite3.sqlite_version_info < (3, 35):
+        _NACH_DEM_FESTSCHREIBEN.append(f"Schritt 37 (Materialablage): SQLite {sqlite3.sqlite_version} kennt kein DROP "
+                                       "COLUMN – die Spalten entfernter Funktionen bleiben stehen (gelesen werden sie "
+                                       "nicht).")
+        return
+    tabellen = sorted({t for t, _ in SPALTEN_WEG_37})
+    zahl = {t: conn.execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0] for t in tabellen}
+    seq = dict(conn.execute("SELECT name, seq FROM sqlite_sequence"))
+    vorher = _fk_verletzungen(conn, tabellen)
+    for sql in OBJEKTE_WEG_37:
+        conn.execute(sql)
+    for tabelle, spalte in SPALTEN_WEG_37:
+        if spalte not in _spalten(conn, tabelle):
+            continue
+        n = conn.execute(f"SELECT COUNT(*) FROM {tabelle} WHERE {spalte} IS NOT NULL AND {spalte} NOT IN (0, '')"
+                         ).fetchone()[0]
+        conn.execute(f"ALTER TABLE {tabelle} DROP COLUMN {spalte}")
+        if n:
+            _NACH_DEM_FESTSCHREIBEN.append(f"Schritt 37 (Materialablage): Spalte {tabelle}.{spalte} entfernt – {n} "
+                                           "Zeile(n) trugen einen Wert.")
+    # Prüfungen nachher – sonst Abbruch, die Transaktion von migrieren() nimmt alles zurück.
+    if (any(conn.execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0] != zahl[t] for t in tabellen)
+            or dict(conn.execute("SELECT name, seq FROM sqlite_sequence")) != seq
+            or _fk_verletzungen(conn, tabellen) - vorher
+            or any(s in _spalten(conn, t) for t, s in SPALTEN_WEG_37)):
+        raise sqlite3.IntegrityError("Schritt 37: Bestand nach dem Entfernen der Spalten verändert.")
+
+
 # Je Version die Schritte, die von der Vorversion dorthin führen: eine Liste von SQL-Befehlen (für sich
 # wiederholbar, IF NOT EXISTS) oder eine Funktion. Alle Schritte eines Starts laufen in EINER
 # Transaktion – bricht einer ab, bleibt die Datenbank, wie sie war, und der nächste Start versucht es neu.
@@ -3084,7 +3145,7 @@ SCHRITTE = {1: SCHRITT_1, 2: _schritt_2, 3: _schritt_3, 4: SCHRITT_4, 5: _schrit
             20: _schritt_20, 21: _schritt_21, 22: _schritt_22, 23: _schritt_23, 24: _schritt_24,
             25: _schritt_25, 26: _schritt_26, 27: _schritt_27, 28: _schritt_28, 29: SCHRITT_29, 30: SCHRITT_30,
             31: SCHRITT_31, 32: _schritt_32, 33: _schritt_33, 34: _schritt_34, 35: _schritt_35,
-            36: _schritt_36}
+            36: _schritt_36, 37: _schritt_37}
 
 
 def _meta(conn, schluessel, vorgabe=None):

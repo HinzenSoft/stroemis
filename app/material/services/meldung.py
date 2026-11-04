@@ -10,8 +10,7 @@ Plattform-Verwaltung) und arbeitet die Meldungen ab:
   - ablehnen: nur mit Begründung.
 
 Vom 24.10.2026 bis zum Rückbau der Set-Funktion (Schritt 26) ließ sich auch ein Set melden – mit den Teilen als Text
-(Spalten „is_set“ und „set_teile“). Solche Meldungen bleiben, wie sie sind; „set_teile“ steht schreibgeschützt in der Antwort
-(„Teile laut Meldung“), erledigt werden sie wie jede Produktmeldung.
+(Spalten „is_set“ und „set_teile“, entfernt mit Schritt 37). Solche Meldungen bleiben als Produktmeldung stehen.
 
 Der Melder bekommt in beiden Fällen eine Mail, nach dem Einpflegen mit einem Link, der „Artikel
 anlegen“ mit Produkt und Ordner öffnet – kam die Meldung aus der Nacharbeit eines Bestandsimports, mit dem Link dorthin. Löschen kann eine Meldung nur, wer sie gemacht hat – offen oder
@@ -215,8 +214,6 @@ def meldung_json(r):
     uid, _ = akteur()
     out = {f: r[f] for f in ("id", "manufacturer", "model", "article_no", "norm", "note", "status", "answer",
                              "created_by_name", "created_at", "resolved_by_name", "resolved_at")}
-    # Altbestand bis Schritt 26: die Teile einer früheren Set-Meldung (Text) – nur lesen.
-    out["set_teile"] = r.get("set_teile") or ""
     out["eigen"] = bool(uid and r["created_by"] == uid)
     k = db.query("SELECT id FROM mat_category WHERE id = ?", (r["category_id"],), one=True) if r["category_id"] else None
     out["kategorie"] = ({"id": k["id"], "pfad": " / ".join(x["name"] for x in katalog.kategorie_pfad(k["id"]))}

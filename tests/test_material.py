@@ -263,7 +263,8 @@ def test_migration():
         for tabelle in ("mat_category", "mat_product"):
             assert "uid" in {r[1] for r in conn.execute(f"PRAGMA table_info({tabelle})")}, tabelle
         spalten = {r[1] for r in conn.execute("PRAGMA table_info(users)")}
-        assert {"recht_material", "mat_pruefer", "mat_katalog", "urkundennummer", "signature_png"} <= spalten
+        assert {"recht_material", "mat_pruefer", "urkundennummer", "signature_png"} <= spalten
+        assert "mat_katalog" not in spalten                              # seit Schritt 37 (Aufräumen) weg
         # Eine Datenbank aus der Zeit vor dem Modul (ohne mat_*-Tabellen) wird beim Start ergänzt.
         for t in sorted(tabellen):
             if t.startswith("mat_") and not t.endswith(("_data", "_idx", "_config", "_docsize", "_content")):
@@ -1120,7 +1121,7 @@ def starten(c, iid, **d):
 
 
 def abschluss(c, pid, **d):
-    return c.post(f"/api/material/pruefungen/{pid}/abschliessen", json=d)
+    return c.post(f"/api/material/pruefungen/{pid}/festschreiben", json=d)
 
 
 def punkte_von(pr):

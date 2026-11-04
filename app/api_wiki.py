@@ -1528,15 +1528,6 @@ def set_watch(pid):
     return jsonify(watch=False)
 
 
-@bp.get("/watches")
-@wiki_required
-def watches():
-    rows = db.query(
-        "SELECT p.id, p.title, p.slug, p.icon FROM wiki_watches w JOIN wiki_pages p ON p.id = w.page_id "
-        "WHERE w.user_id = ? AND p.deleted_at IS NULL ORDER BY p.title COLLATE NOCASE", (current_user()["id"],))
-    return jsonify(pages=readable(rows))
-
-
 def notify_watchers(page, what):
     """Beobachter einer Seite per E-Mail informieren. Fehler beim Versand dürfen das
     Speichern nie verhindern – deshalb ist alles hier eingepackt."""

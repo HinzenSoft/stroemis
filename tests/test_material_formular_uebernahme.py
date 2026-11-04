@@ -427,9 +427,10 @@ def test_migration_34_35():
         conn.commit()
         vorher = conn.execute("SELECT * FROM mat_product ORDER BY id").fetchall()
         conn.close()
-        make_app(tmp)                                       # Start: Schritt 35 und 36 laufen
+        make_app(tmp)                                       # Start: Schritt 35 bis zum Ende laufen
         conn = sqlite3.connect(pfad)
-        assert conn.execute("SELECT wert FROM mat_meta WHERE schluessel = 'schema_version'").fetchone()[0] == "36"
+        assert conn.execute("SELECT wert FROM mat_meta WHERE schluessel = 'schema_version'").fetchone()[0] == str(
+            models.SCHEMA_VERSION)
         nachher = conn.execute("SELECT * FROM mat_product ORDER BY id").fetchall()
         assert [r[:-1] for r in nachher] == vorher and all(r[-1] is None for r in nachher)
         assert conn.execute("PRAGMA foreign_key_check(mat_product)").fetchall() == []
@@ -664,11 +665,13 @@ def test_migration_35_36():
         sammler = Sammler()
         logging.getLogger("app.material.models").addHandler(sammler)
         try:
-            make_app(tmp)                                   # Start: Schritt 36 läuft
+            make_app(tmp)                                   # Start: Schritt 36 bis zum Ende laufen
         finally:
             logging.getLogger("app.material.models").removeHandler(sammler)
         conn = sqlite3.connect(pfad)
-        assert conn.execute("SELECT wert FROM mat_meta WHERE schluessel = 'schema_version'").fetchone()[0] == "36"
+        from app.material import models as modelle
+        assert conn.execute("SELECT wert FROM mat_meta WHERE schluessel = 'schema_version'").fetchone()[0] == str(
+            modelle.SCHEMA_VERSION)
         spalte = [r[1] for r in conn.execute("PRAGMA table_info(mat_product)")].index("formular_von")
         erwartet = [tuple(None if (r[0] == d and i == spalte) else v for i, v in enumerate(r)) for r in produkte]
         assert conn.execute("SELECT * FROM mat_product ORDER BY id").fetchall() == erwartet

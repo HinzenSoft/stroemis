@@ -135,6 +135,9 @@ def test_migration_7_8():
                                                                          "pv", "extern")}
         # So hat Phase 1 die Konten hinterlassen (Prüfer und Katalogpfleger hob die Nutzerverwaltung auf Stufe 1) – mit den
         # Zahlen von damals (Verwaltung 2, Phase-1-Stufe 2 = Materialwart); Schritt 33 hebt die Verwaltung danach auf 3.
+        # Das Häkchen „Produktkatalogpfleger“ (users.mat_katalog) bringt eine solche Sicherung selbst mit – angelegt wird
+        # die Spalte seit Schritt 37 nicht mehr (db.MIGRATIONS).
+        sql(app, "ALTER TABLE users ADD COLUMN mat_katalog INTEGER NOT NULL DEFAULT 0")
         sql(app, "UPDATE users SET recht_material = 0, mat_pruefer = 0, mat_katalog = 0, urkundennummer = '' "
                  "WHERE id NOT IN (SELECT id FROM users WHERE recht_verwaltung >= 2)")
         sql(app, "UPDATE users SET mat_pruefer = 0 WHERE recht_verwaltung >= 2")
@@ -234,12 +237,14 @@ def test_migration_7_8():
         conn.rollback()
         conn.close()
 
-        # Schritt 10 (Modulstufe): Häkchen und mat_katalog bleiben; die Stufe folgt seiner Regel – aus den Stufen von
-        # Phase 1, den Freigaben aus Schritt 8 und den Häkchen. Genauer: test_material_stufen.test_migration_9_10.
+        # Schritt 10 (Modulstufe): Häkchen bleiben; die Stufe folgt seiner Regel – aus den Stufen von Phase 1, den
+        # Freigaben aus Schritt 8 und den Häkchen (mat_katalog). Genauer: test_material_stufen.test_migration_9_10.
+        # Schritt 37 entfernt danach im selben Start die Spalte mat_katalog.
         app = make_app(tmp)
         assert zeilen(app, "SELECT wert FROM mat_meta WHERE schluessel = 'schema_version'")[0]["wert"] == endversion()
-        assert zeilen(app, "SELECT id, mat_pruefer, mat_katalog FROM users ORDER BY id") == [
-            {k_: v for k_, v in z.items() if k_ != "recht_material"} for z in stufen_vorher]
+        assert zeilen(app, "SELECT id, mat_pruefer FROM users ORDER BY id") == [
+            {k_: v for k_, v in z.items() if k_ not in ("recht_material", "mat_katalog")} for z in stufen_vorher]
+        assert "mat_katalog" not in {s["name"] for s in zeilen(app, "PRAGMA table_info(users)")}
         stufen = {u["id"]: u["recht_material"] for u in zeilen(app, "SELECT id, recht_material FROM users")}
         assert {n_: stufen[uid] for n_, uid in konten.items()} == {"stufe1": 1, "stufe2": 1, "ohne_urkunde": 1,
                                                                    "katalogpflege": 3, "pv": 3, "extern": 1}, stufen
@@ -248,13 +253,14 @@ def test_migration_7_8():
         assert erinnerungslog_wie_schritt_11(app)
         assert not zeilen(app, "SELECT 1 FROM mat_reminder_log")
         assert not zeilen(app, "SELECT 1 FROM mat_folder WHERE reminders_off <> 0")
-        # Schritt 12 (Bestandsimport, Prüfanleitung) im selben Start: zwei leere Tabellen, eine leere Spalte am Formular.
+        # Schritt 12 (Bestandsimport, Prüfanleitung) im selben Start: zwei leere Tabellen; die Spalte am Formular samt
+        # Index entfernt Schritt 37 wieder.
         assert {"mat_import", "mat_import_row"} <= {r["name"] for r in zeilen(app, "SELECT name FROM sqlite_master "
                                                                              "WHERE type = 'table'")}
         assert not zeilen(app, "SELECT 1 FROM mat_import") and not zeilen(app, "SELECT 1 FROM mat_import_row")
-        assert zeilen(app, "SELECT COUNT(*) AS n FROM mat_form")[0]["n"] and not zeilen(
-            app, "SELECT 1 FROM mat_form WHERE wiki_page_id IS NOT NULL")
-        assert zeilen(app, "SELECT 1 FROM sqlite_master WHERE type = 'index' AND name = 'idx_mat_form_wiki'")
+        assert zeilen(app, "SELECT COUNT(*) AS n FROM mat_form")[0]["n"]
+        assert "wiki_page_id" not in {s["name"] for s in zeilen(app, "PRAGMA table_info(mat_form)")}
+        assert not zeilen(app, "SELECT 1 FROM sqlite_master WHERE type = 'index' AND name = 'idx_mat_form_wiki'")
     print("Migration 7 → 8 bestanden.")
 
 
@@ -303,6 +309,21 @@ def bis_schritt(version, nachruesten=True):
             if mit:
                 db.SCHEMA_MODULE.remove(schritt)
     return lauf
+
+
+def objekte_weg_37():
+    """Namen der Objekte, die Schritt 37 entfernt (idx_mat_form_wiki, mat_item_kein_teil*) – für Tests, die Trigger und
+    Indizes eines älteren Stands mit dem Endstand vergleichen."""
+    from app.material import models
+    return {befehl.split()[-1] for befehl in models.OBJEKTE_WEG_37}
+
+
+def spalten_vor_37(conn):
+    """Die Set-Spalten, die Schritt 37 entfernt, leer wieder anlegen (ohne Commit) – für Tests, die Schritt 26 auf dem
+    Endstand noch einmal laufen lassen (er liest sie); models._schritt_37 räumt sie danach wieder ab, wie in der Kette."""
+    from app.material import models
+    models.spalten_nachruesten(conn, models.SPALTEN_21)
+    models.spalten_nachruesten(conn, models.SPALTEN_22)
 
 
 # Schritt 23: die Kopfspalte der Sammelanträge – die Dienste lesen sie (Artikelansicht) und schreiben sie (Antrag).

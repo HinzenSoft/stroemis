@@ -1124,10 +1124,10 @@ def anhang_entfernen(pid, aid):
 
 
 @api.post("/pruefungen/<int:pid>/festschreiben")
-@api.post("/pruefungen/<int:pid>/abschliessen")
 @requires_folder("pruefen", "pid")
 def pruefung_abschliessen(pid):
-    """Abschließen heißt seit Lieferung 3 Festschreiben (der alte Pfad bleibt für offene Seiten gültig)."""
+    """Abschließen heißt seit Lieferung 3 Festschreiben (den alten Pfad …/abschliessen gibt es seit dem 04.11.2026 nicht
+    mehr)."""
     pruefung.abschliessen(pid, json_body(), _pruefer())
     return _pruefung_antwort(pid)
 
