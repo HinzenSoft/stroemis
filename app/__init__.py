@@ -17,8 +17,8 @@ from werkzeug.exceptions import Forbidden, HTTPException, InternalServerError
 from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.security import safe_join
 
-from . import (anleitung, api_admin, api_albums, api_pruefungen, api_wiki, auth, db, einstellungen, material, medienpflege,
-               module, pwa, start)
+from . import (anleitung, api_admin, api_albums, api_pruefungen, api_wiki, auth, db, einfuehrung, einstellungen, material,
+               medienpflege, module, pwa, start)
 from .images import AVATAR_MAX_BYTES, EMBED_EXT, MEDIEN_ACCEPT, VIDEO_EXT, slide_variante
 
 
@@ -163,6 +163,8 @@ def index():
 @auth.page_modul_required("karte")
 def karte():
     # accept der Dateiauswahl aus der Liste des Servers (images.MEDIEN_ACCEPT) – map.js prüft Abgelegtes daran.
+    # Einführung (app/einfuehrung.py): Die Seite zeichnet ohnehin keine Daten – nur Angebot bzw. Übungsmodus setzen.
+    einfuehrung.seite("karte")
     return render_template("index.html", user=auth.current_user(), anleitung=_anleitung("karte"), accept=MEDIEN_ACCEPT)
 
 
@@ -172,6 +174,8 @@ def _wiki(slug):
     Teils (public.js), der nur /api/public abfragt. Was „öffentlich“ ist, entscheidet so weiter eine Stelle
     (api_wiki.is_public), und keine interne Schnittstelle musste dafür aufgehen – die bleiben bei wiki_required."""
     if auth.nutzt("wiki"):
+        # Einführung: nur mit Stufe (im Lesemodus keine Übung); die Seite zeichnet ohnehin keine Daten.
+        einfuehrung.seite("wiki")
         return render_template("wiki.html", user=auth.current_user(), slug=slug, anleitung=_anleitung("wiki"))
     if auth.wiki_lesemodus():
         return render_template("wiki_lesemodus.html", user=auth.current_user(), slug=slug)
@@ -292,7 +296,9 @@ def profile():
                            psa_anzahl=mat_psa.anzahl(u["id"]) if mat_psa.konto(u) else 0,
                            psa_mails=bool(u["mat_psa_mails"]),
                            mat_abschnitt=bool((mat_zugang and (u["mat_pruefer"] or mat_unterschrift))
-                                              or u.get("signature_png")))
+                                              or u.get("signature_png")),
+                           # Abschnitt „Einführungen“ (app/einfuehrung.py): je Modul mit Übung die geltenden Teile.
+                           einfuehrungen=einfuehrung.profil(u))
 
 
 @pages.get("/leitstelle")
@@ -311,14 +317,21 @@ def admin():
 def _pruefungen_seite(ansicht, lehrgang_id=None, katalog_id=None):
     if not auth.is_pruefer():
         abort(403, description=auth.KEIN_ZUGANG["pruefungen"])
-    # Stufe Redakteur (01.11.2026): Kataloge ab Redakteur; einen fremden Lehrgang (ohne Verwaltung: einer, in dem das
-    # Konto nicht als Ausbilder steht) gibt es für das Konto nicht – dieselbe 404 wie die Schnittstelle.
-    if ansicht in ("kataloge", "katalog") and not auth.schreibt("pruefungen"):
+    # Einführung (app/einfuehrung.py): Im Übungsmodus zeichnet die Seite nur die Hülle – kein _sichtbar (eine Kennung der
+    # Übung gibt es nicht), kein „Zuletzt besucht“. Die Druckansicht kennt keine Übung.
+    teil = einfuehrung.uebung("pruefungen") if ansicht != "druck" else None
+    # Stufe Redakteur (01.11.2026): Kataloge ab Redakteur – in der Übung nur im Teil „Redakteur“; einen fremden Lehrgang
+    # (ohne Verwaltung: einer, in dem das Konto nicht als Ausbilder steht) gibt es für das Konto nicht – dieselbe 404
+    # wie die Schnittstelle.
+    redaktion = auth.schreibt("pruefungen") and (not teil or einfuehrung.stufe("pruefungen", teil) >= auth.REDAKTEUR)
+    if ansicht in ("kataloge", "katalog") and not redaktion:
         abort(403, description=api_pruefungen.NUR_REDAKTION_KATALOG)
-    if lehrgang_id is not None and not api_pruefungen._sichtbar(lehrgang_id):
+    if lehrgang_id is not None and not teil and not api_pruefungen._sichtbar(lehrgang_id):
         abort(404)
-    if ansicht == "lehrgang":
+    if ansicht == "lehrgang" and not teil:
         start.ziel_merken("pruefungen", lehrgang_id)          # „Zuletzt besucht“ der Startseite
+    if ansicht != "druck":
+        einfuehrung.seite("pruefungen")
     return render_template("pruefungen.html", user=auth.current_user(), ansicht=ansicht,
                            lehrgang_id=lehrgang_id, katalog_id=katalog_id,
                            anleitung=_anleitung("pruefungen") if ansicht != "druck" else "{}")
@@ -608,6 +621,7 @@ def create_app():
     app.register_blueprint(pages)
     app.register_blueprint(pwa.bp)
     app.register_blueprint(start.bp)
+    app.register_blueprint(einfuehrung.bp)
     app.add_template_filter(mailto, "mailto")
 
     # Bestandsvideos, die noch nicht jeder Browser abspielt, werden im Hintergrund gewandelt.
@@ -698,6 +712,11 @@ def create_app():
         """Schreibende API-Aufrufe nur aus eigenem JavaScript: JSON-Body oder X-Requested-With.
         Zusammen mit SameSite=Lax-Cookies schließt das Cross-Site-Request-Forgery aus."""
         g.csp_nonce = base64.b64encode(secrets.token_bytes(12)).decode()
+        # Einführung (app/einfuehrung.py): Eine Übungsanfrage kommt an Schnittstelle, Medien, Dateien und mit
+        # schreibender Methode nicht durch – zweite Absicherung neben der Schicht im Browser.
+        gesperrt = einfuehrung.sperre()
+        if gesperrt is not None:
+            return gesperrt
         if request.method in ("POST", "PUT", "PATCH", "DELETE") and request.path.startswith("/api/"):
             site = request.headers.get("Sec-Fetch-Site")
             if site and site not in ("same-origin", "none"):
@@ -732,7 +751,10 @@ def create_app():
         from .material.services.rechte import zugang as material_zugang
         return {"cfg": app.config, "is_admin": auth.is_admin(), "is_pruefer": auth.is_pruefer(),
                 "meine_psa": material_psa() if auth.current_user() else 0,
-                "rechte": auth.rechte_von(auth.current_user()) if auth.current_user() else {},
+                # Im Übungsmodus der Einführung trägt rechte[modul] die Stufe des geübten Teils (app/einfuehrung.py).
+                "rechte": einfuehrung.rechte_in_uebung(auth.rechte_von(auth.current_user())) if auth.current_user() else {},
+                # Angebot bzw. Übungsmodus der Einführung – nur auf Seiten der Module (einfuehrung.seite), sonst None.
+                "einfuehrung": getattr(g, "einfuehrung", None),
                 # Die Zahlen der Stufen für Vergleiche in Vorlagen (rechte.wiki >= stufe.redakteur) – wie S.STUFE.
                 "stufe": {"mitglied": auth.MITGLIED, "redakteur": auth.REDAKTEUR, "verwaltung": auth.VERWALTUNG},
                 "wiki_lesemodus": auth.wiki_lesemodus(),
@@ -828,6 +850,7 @@ def fehlerseite(code, meldung):
     Fehlers ist und die Kopfleiste sie fragt), kommt eine schlichte Seite ohne Kopfleiste – aber deutsch und mit Weg zur
     Startseite, nie Werkzeugs englische Standardseite."""
     titel = FEHLER_TITEL.get(code, "Fehler")
+    g.pop("einfuehrung", None)            # Fehlerseiten bieten keine Übung an (app/einfuehrung.py)
     try:
         return render_template("error.html", user=auth.current_user(), code=code, titel=titel, message=meldung), code
     except Exception:  # pragma: no cover - nur, wenn die Seite selbst nicht zu zeichnen ist

@@ -1,11 +1,13 @@
 {% set user = user if user is defined else none %}
+{# Einführung (app/einfuehrung.py): auf Seiten der Module Angebot bzw. Übungsmodus; in der Übung „Übung · “ vor dem Titel. #}
+{% set uebung_teil = einfuehrung.uebung if einfuehrung else none %}
 <!doctype html>
 <html lang="de">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
   <meta name="theme-color" content="#e30613">
-  <title>{% block title %}strömis.de{% endblock %}</title>
+  <title>{% if uebung_teil %}Übung · {% endif %}{% block title %}strömis.de{% endblock %}</title>
   <meta name="robots" content="noindex">
   <link rel="icon" href="{{ url_for('static', filename='img/favicon.svg') }}" type="image/svg+xml">
   {% include "_pwa_kopf.html" %}
@@ -66,8 +68,12 @@
 </div></dialog>
 {% endif %}
 <div id="toast" role="status" aria-live="polite"></div>
-<script nonce="{{ csp_nonce }}">window.STROEMIS = { user: {{ (user and {'id': user.id, 'name': user.name, 'email': user.email, 'rechte': rechte}) | tojson }}, mapCenter: {{ cfg.MAP_CENTER | tojson }}, mapZoom: {{ cfg.MAP_ZOOM }}, tileUrl: {{ cfg.TILE_URL | tojson }}, tileAttribution: {{ cfg.TILE_ATTRIBUTION | tojson }}, topoUrl: {{ cfg.TOPO_URL | tojson }}, topoAttribution: {{ cfg.TOPO_ATTRIBUTION | tojson }}, satUrl: {{ cfg.SAT_URL | tojson }}, satAttribution: {{ cfg.SAT_ATTRIBUTION | tojson }}, satLabelsUrl: {{ cfg.SAT_LABELS_URL | tojson }}, publicUrl: {{ cfg.PUBLIC_URL | tojson }}, maxUploadMb: {{ cfg.MAX_CONTENT_LENGTH // 1048576 }}, spracheingabe: {{ cfg.SPRACHEINGABE | tojson }}, module: {{ modul | tojson }}, kontakt: {{ cfg.KONTAKT_EMAIL | tojson }} };</script>
+<script nonce="{{ csp_nonce }}">window.STROEMIS = { user: {{ (user and {'id': user.id, 'name': user.name, 'email': user.email, 'rechte': rechte}) | tojson }}, mapCenter: {{ cfg.MAP_CENTER | tojson }}, mapZoom: {{ cfg.MAP_ZOOM }}, tileUrl: {{ cfg.TILE_URL | tojson }}, tileAttribution: {{ cfg.TILE_ATTRIBUTION | tojson }}, topoUrl: {{ cfg.TOPO_URL | tojson }}, topoAttribution: {{ cfg.TOPO_ATTRIBUTION | tojson }}, satUrl: {{ cfg.SAT_URL | tojson }}, satAttribution: {{ cfg.SAT_ATTRIBUTION | tojson }}, satLabelsUrl: {{ cfg.SAT_LABELS_URL | tojson }}, publicUrl: {{ cfg.PUBLIC_URL | tojson }}, maxUploadMb: {{ cfg.MAX_CONTENT_LENGTH // 1048576 }}, spracheingabe: {{ cfg.SPRACHEINGABE | tojson }}, module: {{ modul | tojson }}, einfuehrung: {{ einfuehrung | tojson }}, kontakt: {{ cfg.KONTAKT_EMAIL | tojson }} };</script>
 <script src="{{ url_for('static', filename='js/common.js') }}"></script>
+{# Einführung: auf jeder Seite mit Konto (räumt Übungsreste weg, zeigt auf Modulseiten das Angebot), im Übungsmodus dazu
+   die Übungsdatei des Moduls – beide vor den Skripten der Seite, damit die Schicht jede ihrer Anfragen beantwortet. #}
+{% if user %}<script src="{{ url_for('static', filename='js/einfuehrung.js') }}"></script>{% endif %}
+{% if uebung_teil %}<script src="{{ url_for('static', filename='js/uebung/' ~ einfuehrung.modul ~ '.js') }}"></script>{% endif %}
 {% block scripts %}{% endblock %}
 </body>
 </html>

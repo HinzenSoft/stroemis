@@ -76,6 +76,29 @@
     <label class="inline"><input type="checkbox" id="psa-mails"{% if psa_mails %} checked{% endif %}> Erinnerungen zu meiner PSA per Mail{% call info("psa-mails", "Erinnerungen zu meiner PSA") %}Eine Mail am Morgen, wenn deine PSA in 30 Tagen zur Prüfung muss, wenn die Prüfung überfällig ist und 90 Tage vor ihrem Lebensende – jede Erinnerung nur einmal, auch wenn der Materialwart für den Ordner die Erinnerungsmails abgeschaltet hat. Meldet jemand anderes einen Mangel an deiner PSA, bekommst du immer sofort eine Mail – sie betrifft deine Sicherheit.{% endcall %}</label>
   </section>
   {% endif %}
+  {# Einführungen (app/einfuehrung.py, Entscheidung 6 vom 03.11.2026): je Modul mit Übung die Teile, die für das Konto
+     gelten – mit Stand und dem Weg in die Übung. „Erneut ansehen“ ändert nichts am Stand; „Starten“ nach „Nicht jetzt“
+     setzt ihn beim Start auf „unterbrochen“. Am Telefon steht der Knopf unter dem Text (Container-Abfrage, app.css). #}
+  {% if einfuehrungen %}
+  <section class="section" id="einfuehrungen" aria-labelledby="einf-titel">
+    <h2 id="einf-titel">Einführungen</h2>
+    <p class="help">Kurze Übungen an Übungsdaten – dein echter Bestand bleibt unverändert.</p>
+    <div class="einf-liste">
+      {% for m in einfuehrungen %}
+      <h3 class="einf-modul">{{ m.name }}</h3>
+      <ul class="einf-zeilen">
+        {% for z in m.zeilen %}
+        <li class="einf-zeile" data-modul="{{ m.modul }}" data-teil="{{ z.teil }}">
+          <span class="einf-text"><span class="einf-name">{{ z.titel }} · etwa {{ z.minuten }} Min.</span>
+            <span class="einf-stand">{{ z.stand }}</span></span>
+          <a class="btn secondary small" href="{{ z.adresse }}" aria-label="{{ m.name }}, {{ z.titel }}: {{ z.knopf }}">{{ z.knopf }}</a>
+        </li>
+        {% endfor %}
+      </ul>
+      {% endfor %}
+    </div>
+  </section>
+  {% endif %}
   <section class="section">
     <h2>Passwort ändern</h2>
     <form id="f-password">

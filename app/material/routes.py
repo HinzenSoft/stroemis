@@ -22,7 +22,7 @@ import sqlite3
 from flask import (Blueprint, abort, current_app, g, jsonify, redirect, render_template, request, send_file,
                    send_from_directory, url_for)
 
-from .. import db
+from .. import db, einfuehrung
 from ..auth import attempts_exceeded, current_user, eingabefehler_abfangen, json_body, login_required, note_attempt
 from . import models
 from .services import (Abgelehnt, anhang, bestand, bestandsimport, durchgang, eingabe, globalprotokoll, globalsuche,
@@ -114,6 +114,7 @@ def _sortier_args():
 # --- Seiten ------------------------------------------------------------------------------------------
 
 def _fehlerseite(code, meldung):
+    g.pop("einfuehrung", None)            # Fehlerseiten bieten keine Übung an (app/einfuehrung.py)
     return render_template("error.html", user=current_user(), code=code, message=meldung), code
 
 
@@ -149,6 +150,8 @@ def _seite(ansicht, katalog_seite=False, warnung=None, bezug=None, willkommen=Fa
         return redirect(url_for("pages.login", next=request.full_path.rstrip("?")))
     if not zugang(u):
         return _fehlerseite(403, zugang_meldung(u))
+    if einfuehrung.uebung("material"):
+        return _uebung_seite(ansicht, **daten)
     if bezug:
         fehlt = _bezug_seite(*bezug)
         if fehlt:
@@ -156,11 +159,25 @@ def _seite(ansicht, katalog_seite=False, warnung=None, bezug=None, willkommen=Fa
     if besuch:
         from ..start import ziel_merken
         ziel_merken(*besuch)
+    einfuehrung.seite("material")         # Angebot der Einführung (app/einfuehrung.py)
     return render_template("material/seite.html", user=u, active="material", ansicht=ansicht,
                            daten=json.dumps(daten, ensure_ascii=False), darf=json.dumps(darf_alles()),
                            warnung=warnung() if warnung else None,
                            anleitung=json.dumps(anleitung.verweise(u), ensure_ascii=False),
                            willkommen=anleitung.willkommen_einmal(u) if willkommen else None)
+
+
+def _uebung_seite(ansicht, **daten):
+    """Eine Seite im Übungsmodus der Einführung (?uebung=<teil>, app/einfuehrung.py): nur die Hülle – kein Bezug, kein
+    Banner, kein Willkommen, kein „Zuletzt besucht“, keine Suche; data-darf mit den Rechten des Teils. Den Inhalt zeichnet
+    material.js aus dem Übungsbestand, den einfuehrung.js im Browser beantwortet. Die Verweise auf die Anleitung bleiben
+    (sie nennen nur, was das Konto in der Strömipedia lesen darf)."""
+    u = current_user()
+    teil = einfuehrung.seite("material")
+    return render_template("material/seite.html", user=u, active="material", ansicht=ansicht,
+                           daten=json.dumps(daten, ensure_ascii=False),
+                           darf=json.dumps(einfuehrung.darf_material(teil, u), ensure_ascii=False), warnung=None,
+                           anleitung=json.dumps(anleitung.verweise(u), ensure_ascii=False), willkommen=None)
 
 
 @seiten.get("/materialablage")
@@ -201,6 +218,9 @@ def artikel_neu():
     """Artikel anlegen nur, wer irgendwo verwaltet; den Ordner aus der Adresse übernimmt die Seite nur, wenn das Konto
     ihn verwaltet."""
     u = current_user()
+    if u and zugang(u) and einfuehrung.uebung("material"):
+        return _uebung_seite("artikel_neu", ordner=request.args.get("ordner", type=int),
+                             produkt=request.args.get("produkt", type=int))
     if u and zugang(u) and not sicht(u).irgendwo("verwalten"):
         return _fehlerseite(403, "Artikel legen nur Materialwarte an – in einem Ordner, den sie verwalten.")
     ordner = request.args.get("ordner", type=int)
@@ -216,6 +236,8 @@ def artikel_seite(iid):
 
     ?q=: Hierher führt die Suche bei einem eindeutigen eigenen Treffer (suche_seite). Taugt die Anfrage für die
     globale Suche (globalsuche.angebot), bietet die Seite sie an – „suche“ in den Daten; sonst bleibt q unbeachtet."""
+    if current_user() and zugang() and einfuehrung.uebung("material"):
+        return _uebung_seite("artikel", id=iid)
     q = (request.args.get("q") or "").strip()
     weiter = {"suche": q} if q and current_user() and zugang() and globalsuche.angebot(q) else {}
     return _seite("artikel", bezug=("artikel", iid), warnung=lambda: ueberblick.warnung(iid), besuch=("material", iid),
@@ -339,6 +361,8 @@ def suche_seite():
     auch nach der Weiterleitung: Taugt die Anfrage dafür, nimmt die Weiterleitung sie mit (?q=), und die Artikelseite
     bietet sie unter dem Kopf an (artikel_seite)."""
     q = (request.args.get("q") or "").strip()
+    if current_user() and zugang() and einfuehrung.uebung("material"):
+        return _uebung_seite("suche", q=q)            # ohne Datenbanksuche und ohne Weiterleitung
     if current_user() and zugang() and q:
         try:
             treffer, gesamt = search.artikel(q, 1, 2)
