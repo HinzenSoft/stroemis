@@ -317,12 +317,14 @@
     ["GET", `${API}/ordner`, (m, b, z) => ({ ordner: z.ordner.map((o) => ordnerJson(z, o)), ordnerarten: ORDNERARTEN })],
     ["GET", `${API}/start`, (m, b, z) => startJson(z)],
     ["GET", `${API}/durchgaenge`, (m, b, z, url) => ({ durchgaenge: url.searchParams.get("abgeschlossen") ? [] : z.durchgaenge.map((d) => durchgangKurz(z, d)) })],
+    // „Meine Freigaben“ auf der Übersicht: an der Übungs-Gliederung das Grundrecht des Teils, beim Prüfer dazu die
+    // Prüffreigabe (die Material-Verwaltung braucht keine).
     ["GET", `${API}/freigaben/meine`, (m, b, z) => {
       const d = darf();
-      const eigene = eigeneFreigabe(z);
-      return { alles: Boolean(d.alles), qualifiziert: Boolean(d.qualifiziert), zugang: true,
-               freigaben: d.verwalten && !d.alles ? [{ id: eigene.id, recht: "verwalten", bis: null, gueltig: true, wirkt: true, wirkt_nicht: null,
-                 grundrecht_dort: true, laeuft_ab_in_tagen: null, verwalter: [], ordner: eigene.ordner }] : [] };
+      const zeile = (recht, n) => ({ id: ID.freigabe + n, recht, bis: null, gueltig: true, wirkt: true, wirkt_nicht: null, grundrecht_dort: true,
+                                     laeuft_ab_in_tagen: null, verwalter: [], ordner: { id: ID.gliederung, pfad: pfadText(z, ID.gliederung) } });
+      const freigaben = d.alles ? [] : [zeile(d.verwalten ? "verwalten" : "lesen", 6)].concat(d.pruefen ? [zeile("pruefen", 7)] : []);
+      return { alles: Boolean(d.alles), qualifiziert: Boolean(d.qualifiziert), zugang: true, freigaben };
     }],
     ["GET", `${API}/antraege`, () => ({ zu_entscheiden: 0, antraege: [] })],
     ["GET", `${API}/entwuerfe`, (m, b, z) => ({ entwuerfe: z.pruefungen.filter((x) => x.entwurf).map((x) => Object.assign(pruefungKurz(x), {
@@ -376,7 +378,8 @@
       if (gesperrt) Object.assign(a, { lock_state: "gesperrt", lock_reason: `Mangel gemeldet am ${deTag(tag(0))}`, origin_folder_id: a.folder_id, folder_id: ID.gesperrt });
       a.maengel.push(mangel);
       a.mangel_eigen_offen = wann;
-      return { gesperrt, mail: false, mangel: kopie(mangel) };
+      // Wie mit Mailserver: Die Quittung sagt, die Mail sei unterwegs – die Führung sagt dazu, dass in der Übung nichts hinausging.
+      return { gesperrt, mail: true, mangel: kopie(mangel) };
     }],
     // Prüfung: beginnen, Punkte, Bemerkung, Unterschrift aus dem Profil, festschreiben
     ["POST", /^\/api\/material\/artikel\/(\d+)\/pruefungen$/, (m, body, z) => {
@@ -510,7 +513,7 @@
       { ziel: ".mat-artikeltitel", text: "Das ist der Übungsgurt. Wie du einen Artikel über seine Nummer findest, zeigt der nächste Ablauf." },
     ] },
     { titel: "Artikel finden", start: "/materialablage", schritte: [
-      { ziel: "#mat-lupe", wenn: () => sichtbar("#mat-lupe"), text: "Tippe auf die Lupe für die Nummernsuche.", warten: { klick: "#mat-lupe" } },
+      { ziel: "#mat-lupe", wenn: () => sichtbar("#mat-lupe") && !sichtbar(suchFeld), text: "Tippe auf die Lupe für die Nummernsuche.", warten: { klick: "#mat-lupe" } },
       { ziel: suchFeld, text: "Jeder Artikel hat eine Inventarnummer. Gib „Ü-0001“ ein.", warten: { wert: [suchFeld, /ü-?0*1$/i] },
         probe: { tippen: [suchFeld, "Ü-0001"] } },
       // Gesucht wird mit „Suchen“, der Eingabetaste oder über die Vorschläge unter dem Feld (suche.js) – am Telefon steht
@@ -539,9 +542,9 @@
   const pruefer = { ablaeufe: [
     { titel: "Prüfung durchführen", start: `/materialablage/artikel/${ID.seil}`, schritte: [
       { ziel: "[data-act=pruefen]", text: "Tippe auf „Prüfung starten“.", warten: { klick: "[data-act=pruefen]" } },
-      { ziel: "input[name=art]", text: "Wähle die Art der Prüfung und beginne.", warten: { anfrage: `POST ${API}/artikel/${ID.seil}/pruefungen` },
+      { ziel: "[data-act=beginnen]", text: "Wähle oben die Art der Prüfung und beginne.", warten: { anfrage: `POST ${API}/artikel/${ID.seil}/pruefungen` },
         probe: { klick: "[data-act=beginnen]" } },
-      { ziel: `#pp-${ID.punktJaNein}`, text: "Geh die Prüfpunkte durch: in Ordnung, Mangel oder nicht zutreffend – beim Zahlpunkt trag einen Wert ein. Die Punkte hier sind Platzhalter.",
+      { ziel: ".mat-punkte", text: "Geh die Prüfpunkte durch: in Ordnung, Mangel oder nicht zutreffend – beim Zahlpunkt trag einen Wert ein. Die Punkte hier sind Platzhalter.",
         warten: { bedingung: bewertet }, probe: { tippen: [`.mat-pwert[data-rid="${ID.punktZahl}"]`, "1"] } },
       { ziel: "#pr-bem", text: "Hast du beim Prüfen selbst etwas behoben, schreib es in die Bemerkung." },
       // Ziele in der Abschlussleiste sind Knöpfe: Bekommen sie den Fokus, steht die Leiste ganz da (sonst eingeklappt).
