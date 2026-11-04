@@ -487,7 +487,10 @@
   const suchFeld = "#mat-suche input[name=q]";
   const produktLink = `#kat-liste a[href^="/materialablage/katalog/produkt/${ID.pGurt}"]`;
   const formularLink = `#mat-inhalt a[href^="/materialablage/katalog/formular/${ID.formular}"]`;
-  const neuerPunkt = "#fp-tabelle tbody tr:last-child .fp-text";
+  // Der Prüfformular-Editor zeigt die Punkte seit dem 04.11.2026 je Gruppe (Zwischenzeile, am Ende „+ Prüfpunkt“): Der
+  // neue Punkt ist der letzte vor dem Fuß seiner Gruppe – das Übungsformular hat nur die Gruppe „Platzhalter“.
+  const neuerPunkt = "#fp-tabelle tr.fp-punkt:has(+ tr.fp-fuss) .fp-text";
+  const neuerPunktMenue = "#fp-tabelle tr.fp-punkt:has(+ tr.fp-fuss) .fp-menue summary";
   const rolle = "label.mf-vorlage:has(> input[value=pruefer])";
   // Die Prüfung ist bewertet, wenn kein Pflichtpunkt mehr ohne Befund ist (wie „Pflichtpunkte ohne Befund“ in der Leiste).
   const bewertet = (z) => {
@@ -595,9 +598,10 @@
       { ziel: "#kat-q", text: "Der Katalog gilt für alle Gliederungen. Such „Übung“.", warten: { wert: ["#kat-q", /übung/i] }, probe: { tippen: ["#kat-q", "Übung"] } },
       { ziel: produktLink, text: "Öffne das Produkt „Übungsgurt“.", warten: { klick: produktLink } },
       { ziel: formularLink, text: "Hier steht, nach welchem Prüfformular geprüft wird. Öffne es.", warten: { klick: formularLink }, probe: { klick: `${formularLink} strong` } },
-      { ziel: "#fp-tabelle", text: "Hier pflegst du die Prüfpunkte des Formulars." },
-      { ziel: "[data-act=punkt-neu]", text: "Leg einen Prüfpunkt an.", warten: { klick: "[data-act=punkt-neu]" } },
+      { ziel: "#fp-tabelle", text: "Hier pflegst du die Prüfpunkte des Formulars – jede Gruppe steht in einer eigenen Zeile über ihren Punkten." },
+      { ziel: "[data-act=punkt-neu]", text: "Leg in der Gruppe einen Prüfpunkt an.", warten: { klick: "[data-act=punkt-neu]" } },
       { ziel: neuerPunkt, text: "Gib ihm einen Text, hier „Platzhalter“.", warten: { wert: [neuerPunkt, /\S/] }, probe: { tippen: [neuerPunkt, "Platzhalter"] } },
+      { ziel: neuerPunktMenue, text: "Über „⋯“ schiebst du einen Punkt nach oben, nach unten oder in eine andere Gruppe. Am Griff ⠿ links ziehst du ihn an seinen Platz." },
       { ziel: "[data-act=speichern]", text: "Speichere das Formular.", warten: { anfrage: `PUT ${API}/formulare/${ID.formular}` }, probe: { klick: "[data-act=speichern]" } },
       { ziel: "#fp-tabelle", text: "Gespeichert. Ist eine Version schon für Prüfungen benutzt, änderst du sie nur über „Neue Version“ – alte Protokolle bleiben, wie sie waren." },
     ] },
