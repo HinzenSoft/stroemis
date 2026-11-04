@@ -235,8 +235,9 @@ def test_seiten_ohne_uebung():
         assert 'href="/materialablage/bestand?uebung=grund"' in r.get_data(as_text=True)
         r = adm.get("/materialablage/meine-psa", headers={"Referer": "http://localhost//fremd.example/?uebung=grund"})
         assert 'href="/fremd.example/?uebung=grund"' in r.get_data(as_text=True)
+        # Ohne Referer: die Übungsadresse des Teils (der Teil „Leitung“ beginnt im Übungslehrgang, Reiter „Teilnehmende“).
         r = adm.get("/riegenkarten/5/druck?uebung=leitung")
-        assert 'href="/riegenkarten?uebung=leitung"' in r.get_data(as_text=True)
+        assert 'href="/riegenkarten/930000001?uebung=leitung#teilnehmer"' in r.get_data(as_text=True)
         r = adm.get("/materialablage/pruefen?uebung=gibtsnicht")
         assert 'href="/materialablage"' in r.get_data(as_text=True)
         # Außerhalb der Module mit Übungs-Referer: Ausgang (Kopfleiste) – die echte Seite. Mit Kennung in der Adresse nicht.

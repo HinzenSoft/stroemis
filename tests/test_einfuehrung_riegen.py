@@ -8,7 +8,8 @@ python tests/test_einfuehrung_riegen.py  oder  pytest tests/test_einfuehrung_rie
    Redakteur) bei 1280×900 (Maus) und 360×740 (Telefon, Touch – Karten statt Tabelle) bis „Geschafft“ – ohne Anfrage
    an /api/ (außer Merker und /api/me) und /media/, ohne Seite ohne Übungskennung, ohne Konsolenfehler.
 3. Daneben: Ein echter Lehrgang mit Platzhalter-Teilnehmenden erscheint in der Übung nicht und bleibt unverändert
-   (Prüfsumme der Riegenkarten-Tabellen); eine Druckansicht meldet „In der Übung nicht verfügbar.“ statt sich zu öffnen;
+   (Prüfsumme der Riegenkarten-Tabellen); eine Druckansicht meldet „In der Übung nicht verfügbar.“ statt sich zu öffnen
+   (kein Seitenwechsel, keine Kennung an ihrer Adresse);
    eine Stoppuhr mit Übungskennung räumt „Übung unterbrechen“ weg, eine echte bleibt.
 Alle Inhalte sind Platzhalter."""
 import hashlib
@@ -127,8 +128,13 @@ def _nebenproben(u, breite, hoehe, touch):
         s.js("(() => { window.__offen = []; const o = window.open; window.open = (...a) => { const r = o.apply(window, a); "
              "window.__offen.push([a[0], r === null]); return r; }; document.querySelector('[data-act=bew-tn-druck]').click(); })()")
         assert s.warte("document.getElementById('toast').textContent === 'In der Übung nicht verfügbar.'", 5), wo
+        # Die Druckansicht hat keinen Übungszweig: S.ziel gibt sie ohne Kennung zurück, die Schicht öffnet nichts und
+        # bleibt auf der Seite (Nachbesserung nach der Sicherheitsprüfung, d3f803b).
         adr, nichts = s.js("window.__offen[0]")
-        assert "/druck?" in adr and "uebung=leitung" in adr and nichts, adr
+        assert "/druck?" in adr and "uebung=" not in adr and nichts, adr
+        s.b.warten(0.5)
+        assert s.js("location.pathname + location.search") == "/riegenkarten/930000001?uebung=leitung", wo
+        assert s.js("window.__offen.length") == 1, wo
         # Stoppuhr (gehört nicht in die Übung): Was eine Übungsseite unter „pruef:stoppuhr“ ablegt, ist nach „Übung
         # unterbrechen“ auf der echten Seite nicht mehr da …
         s.js("localStorage.setItem('pruef:stoppuhr', JSON.stringify({ tid: 930000011, lid: 930000031, lehrgang: 930000001, "
