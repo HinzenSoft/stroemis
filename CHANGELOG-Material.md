@@ -83,6 +83,7 @@ Geschichte stehen. Schemaversion nach der Nachbesserung vor dem Merge: 30; mit d
 | Prüfformular-Editor: Gruppen und Verschieben; Absätze im Prüfpunkt; „optional“ statt „Pflicht“ | Gruppe als Zwischenzeile (Name in voller Breite), Ziehgriff ⠿ und Menü „⋯“ statt ↑/↓/✕, „+ Prüfpunkt“ je Gruppe, „+ Gruppe“; Enter fügt im Prüfpunkt einen Absatz ein (Server, Prüfung, PDF, Katalog); Häkchen „optional“ statt „Pflicht“, Marke nur an optionalen Punkten | gebaut 04.11.2026 (kein Schemaschritt), Zweig formular-editor |
 | Prüfformular eines anderen Produkts übernehmen (Schritt 35) | Ein Produkt verweist auf ein anderes und wird nach dessen aktivem spezifischem Formular geprüft – mit jeder neuen Version dort; Anzeige an beiden Produkten und an der Formularseite, Lösen, Löschen der Quelle, Katalogdatei `formular_von` | gebaut 04.11.2026 (Schema 35), Zweig formular-uebernahme, wartet auf Freigabe |
 | Übung der Materialablage mit Produkten und Prüfformularen aus dem Katalog | Übungsseite trägt eine feste Auswahl echter Katalogprodukte (Gurt, Seil, Helm bzw. Karabiner) samt geltendem Prüfformular – nur Katalogfelder, keine Echtdaten der Artikel; Produktbilder der Auswahl als einzige Ausnahme der Übungssperre unter `/media/`; Platzhalter ohne passendes Produkt | gebaut 04.11.2026 (kein Schemaschritt), Zweig uebung-katalog |
+| Prüfanleitung in der Strömipedia entfernt | Keine Verknüpfung einer Strömipedia-Seite am Prüfformular mehr: Zeile und Dialog am Formular, Einblendung in offenen Prüfungen, beide Routen (jetzt 404), Dienst `wikiverweis`, `formular.wiki`/`wiki_aendern`, `pruefung.anleitung` und die Kopie in neue Versionen entfallen; `mat_form.wiki_page_id` bleibt ungenutzt stehen, alte Journal-Einträge bleiben lesbar | gebaut 04.11.2026 (kein Schemaschritt, Schema bleibt 35), Zweig ohne-pruefanleitung, wartet auf Freigabe |
 
 ## Abgleich mit dem Bestand (vor Lieferung 1)
 
@@ -9964,7 +9965,9 @@ benannte Einträge werden abgewiesen. Hochladen und Export: bis 2 GB. Eine Datei
 
 **Wiki-Verknüpfungen gehören nicht zum Katalogformat** (Phase 2 · 3): Der Export schreibt die Prüfanleitung eines
 Formulars nicht mit, der Import setzt nie eine – eine neue Formularversion aus dem Import erbt aber die Verknüpfung
-der letzten Version. Verknüpft wird in der Instanz, in der die Anleitungen im Wiki stehen.
+der letzten Version. Verknüpft wird in der Instanz, in der die Anleitungen im Wiki stehen. Seit dem 04.11.2026 gibt
+es die Verknüpfung nicht mehr; ein Feld `wiki` oder `wiki_page_id` in einer Katalogdatei übergeht der Import weiter
+ohne Fehler, und eine neue Version erbt nichts.
 
 ## Schnittstelle (Phase 1 mit den Nachbesserungen, Phase 2 · Lieferung 1 bis 3, Phase 3 · Lieferung 1 mit den Nachbesserungen vom 21.10.2026, Phase 4 · Lieferung 1 und 2)
 
@@ -10069,9 +10072,9 @@ oder Plattform-Verwaltung).
 | `POST /api/material/ordner/<id>/nacharbeit/pruefen` (`zeilen` [Nr.] \| `"alle"`, `uebernehmen`) | Materialwart am Ordner | erneut prüfen (Bericht, schreibt nichts) bzw. mit `uebernehmen` in einer Transaktion übernehmen → `zahlen`, `faelligkeit`, `zeilen` (mit `id`), `hinweise`; 429 wie oben (Phase 2 · 3) |
 | `POST /api/material/ordner/<id>/nacharbeit/verwerfen` (`zeilen` [Nr.] \| `"alle"`) | Materialwart am Ordner | offene Zeilen verwerfen (Werte gelöscht, Journal) → `verworfen` (Phase 2 · 3) |
 | `GET /materialablage/ordner/<id>/nacharbeit.csv` | Materialwart am Ordner (Fehler als Seite) | offene Zeilen als CSV mit „Nacharbeit-Nr.“ (`;`, UTF-8 mit BOM, Formelschutz) – korrigiert wieder hochgeladen, erledigt sie die alten Zeilen (Phase 2 · 3) |
-| `GET /api/material/wiki/seiten?q=` | Material-Verwaltung mit Stufe Mitglied im Wiki (sonst 403 mit Klartext) | Seitenwahl: lesbare Seiten ohne Papierkorb und Vorlagen, höchstens 30, je `{id, titel, icon, reichweite}`; `lesemodus` (Phase 2 · 3) |
-| `PUT /api/material/formulare/<id>/wiki` (`seite`: Kennung oder `null`) | wie die Seitenwahl; auch an benutzten Formularen | Prüfanleitung verknüpfen bzw. entfernen; nicht lesbare, unbekannte oder Papierkorb-Seite 404 „Wiki-Seite nicht gefunden.“; schreibt nur diese Spalte, Journal mit der Seitennummer → `formular` (Phase 2 · 3) |
-| (Übersicht, Ordner, Prüfung, Formular) | – | neu: `start.nacharbeit`, `ordner.nacharbeit` (nur mit verwalten), `pruefung.anleitung` (nur Entwürfe), `formular.wiki` und `formular.wiki_aendern` (nur Material-Verwaltung); `DELETE /ordner/<id>` 409 bei offener Nacharbeit (Phase 2 · 3) |
+| `GET /api/material/wiki/seiten?q=` – **entfernt am 04.11.2026** (404 wie unbekannte Wege) | Material-Verwaltung mit Stufe Mitglied im Wiki (sonst 403 mit Klartext) | Seitenwahl: lesbare Seiten ohne Papierkorb und Vorlagen, höchstens 30, je `{id, titel, icon, reichweite}`; `lesemodus` (Phase 2 · 3) |
+| `PUT /api/material/formulare/<id>/wiki` (`seite`: Kennung oder `null`) – **entfernt am 04.11.2026** (404) | wie die Seitenwahl; auch an benutzten Formularen | Prüfanleitung verknüpfen bzw. entfernen; nicht lesbare, unbekannte oder Papierkorb-Seite 404 „Wiki-Seite nicht gefunden.“; schreibt nur diese Spalte, Journal mit der Seitennummer → `formular` (Phase 2 · 3) |
+| (Übersicht, Ordner, Prüfung, Formular) | – | neu: `start.nacharbeit`, `ordner.nacharbeit` (nur mit verwalten), `pruefung.anleitung` (nur Entwürfe), `formular.wiki` und `formular.wiki_aendern` (nur Material-Verwaltung; alle drei seit dem 04.11.2026 entfernt); `DELETE /ordner/<id>` 409 bei offener Nacharbeit (Phase 2 · 3) |
 | `GET /materialablage/meine-psa`, `GET /materialablage/meine-psa/<id>` | angemeldet (sonst Anmeldung), aktives Konto mit Namen – auch ohne Modulstufe (sonst 403 „… braucht dein Konto einen Namen“); mit `<id>` nur ein eigener, nicht ausgesonderter Artikel (sonst 404 wie unbekannt) | Seite „Meine PSA“ (Ansicht `meine_psa`); ohne Modulzugang ohne Modulnavigation und Ordnerleiste (Phase 3 · 1) |
 | `GET /api/material/meine-psa` | wie oben (401 ohne Anmeldung) | `artikel` (Karten: `id`, `inventory_no`, `serial_no`, `serial_generated`, `produkt` {`manufacturer`, `model`, `description`, `article_no`, `material_kind`, `bild` (Webfassung), `vorschau`}, `status`, `status_text`, `next_due_on`, `retire_by`, `last_inspected_on`, `gesperrt`, `verloren`, `lock_reason`, `notes`, `gliederung`, `demo`, `mangel` {`seit`}, `eigene_maengel`, `artikel_link`, `dokumente`, `rueckruf`, seit Schritt 20 `length_m` und `laenge_text`), `gesamt`, `mails`, `schwelle_tage` (Phase 3 · 1) |
 | `PUT /api/material/meine-psa/mails` (`an`: ja/nein) | angemeldet (eigenes Konto) | Erinnerungen „Deine PSA“ an/aus → `{an}`; 400 ohne brauchbares `an` (Phase 3 · 1) |
@@ -12255,3 +12258,60 @@ Angepasst: `tests/test_material_formular_editor.py` (Selektor des neuen Punkts i
    Beschreibung gehört zum Produktnamen).
 6. **Klick aufs Produktbild** in der Übung zeigt wie bisher „In der Übung gibt es diese Datei nicht.“ (keine Großansicht).
 7. Kennungsbereich der Materialablage jetzt 900000001–900000999 (Prüfpunkte langer Formulare).
+
+## Prüfanleitung in der Strömipedia entfernt (Wunsch des Nutzers, 04.11.2026)
+
+Nutzer (Bildschirmfoto der Formularseite „I'D S, I'D L, I'D EVAC und RIG“, Zeile „Prüfanleitung in der Strömipedia:
+keine – Ändern“): „Entferne die Prüfanleitung im Wiki Funktion.“ Umgesetzt mit den Festlegungen aus
+`planung/ohne-pruefanleitung/auftrag.md` (einfachste Lösung). Gebaut 04.11.2026, kein Schemaschritt (Schema bleibt 35).
+
+**Oberfläche** (material.js, material.css, app.css): Am Prüfformular entfallen die Zeile „Prüfanleitung in der
+Strömipedia“ samt „i“, „Ändern“ und dem Hinweis „Verknüpfen kann, wer …“, der Dialog „Prüfanleitung aus der
+Strömipedia“ (Seitensuche, Reichweite, „Verknüpfen“, „Verknüpfung entfernen“). In offenen Prüfungen gibt es den
+aufklappbaren Kasten „Prüfanleitung aus der Strömipedia“ nicht mehr, auch nicht den Satz „… die du nicht lesen darfst“;
+damit entfallen das Nachladen von marked, DOMPurify und markdown.js, die zweite Reinigung, der Schatten-Behälter und
+die Riegel gegen eingeblendete Inhalte (Klick- und Änderungs-Delegation, `echt()` in der Prüfansicht – Abschlussleiste
+und Bemerkung werden wieder direkt gesucht). Abgeschlossene Prüfungen zeigten nie etwas. CSS: `.mat-wikizeile`,
+`.mat-wikiwahl*`, `.mat-anleitung*`, `.mat-warn-leise` entfernt; die Regeln für Hinweiskästen (`.notice` in app.css und
+material.css) nennen `.mat-wikizeile` nicht mehr. Die Strömipedia selbst zeigte nie an, dass eine Seite als
+Prüfanleitung genutzt wird – dort ändert sich nichts.
+
+**Schnittstelle**: `GET /api/material/wiki/seiten` und `PUT /api/material/formulare/<id>/wiki` sind entfernt und
+antworten 404 wie unbekannte Wege (`routes_wiki.py` gelöscht). `formular_json` liefert kein `wiki` und kein
+`wiki_aendern`, `pruefung_json` kein `anleitung`. Der Dienst `services/wikiverweis.py` ist gelöscht; seine Leseregel
+`darf_lesen` (für die Verweise auf die Anleitung) steht jetzt unverändert in `app/anleitung.py`. Thema `pruefanleitung`
+aus `app/material/services/anleitung.py` entfernt (sein einziger Link war das „i“ der Formularzeile).
+
+**Neue Versionen und Katalog**: `formular_anlegen` kopiert `wiki_page_id` nicht mehr von der Vorlage („Neue Version“ und
+Katalogimport). Der Katalogexport schrieb die Verknüpfung nie; ein Feld `wiki` oder `wiki_page_id` in einer Datei
+übergeht der Import ohne Fehler (Test).
+
+**Datenbank**: Spalte `mat_form.wiki_page_id` und Index `idx_mat_form_wiki` bleiben unverändert (in models.py als „nicht
+mehr genutzt seit 04.11.2026“ kommentiert); vorhandene Werte bleiben stehen und werden nirgends mehr gelesen. Das
+ON DELETE SET NULL beim endgültigen Löschen einer Wiki-Seite wirkt weiter. Festgeschriebene Protokolle (PDF) bleiben
+unverändert – die Anleitung stand nie darin.
+
+**Journal**: Alte Einträge mit der Aktion `wiki` heißen weiter „Prüfanleitung (Strömipedia) geändert“ (beschriftung.py
+und material.js, als Altbestand kommentiert); neue entstehen nicht.
+
+**Übung** (`static/js/uebung/material.js`): Übungsantworten ohne `formular.wiki`/`wiki_aendern` und ohne
+`pruefung.anleitung`; Schritte zur Prüfanleitung gab es nicht.
+
+**Tests**: `tests/test_material_wiki.py` umgedreht (beide Routen 404 für jedes Konto, nicht in der URL-Map; `formular`
+ohne `wiki`/`wiki_aendern` auch mit Altwert in der Spalte; neue Version mit und ohne Vorlage erbt nichts, der Altwert
+bleibt; offene und abgeschlossene Prüfung ohne `anleitung`, Protokoll-PDF ohne Anleitung; Katalogexport ohne Feld,
+Import mit `wiki`/`wiki_page_id` ohne Fehler und ohne Wert; Spalte, Index, Schema 35; Quelltext ohne Zeile, Dialog,
+Einblendung, Stile, Übungsfelder; Journal-Beschriftung). Angepasst: test_module_info_i (M19 und M21 entfallen, 50 statt
+52 Stellen; Satz „Verknüpfen kann …“), test_module_letzte_offene (Sätze und `NEUE_KONTEN` der Prüfanleitung),
+test_material_uiux_u2 (`ww-ok`; Satz „Den Zugang zur Strömipedia vergibt …“ jetzt verneint), test_module_uiux_u3
+(`wikiverweis.py` gibt es nicht mehr), test_material_geraetetest4 (`$(".mat-abschluss-ende", inhalt)` statt `echt(…)`),
+test_material_import (Fokus in der Seitenwahl), test_material_ueberblick (`/api/material/wiki/` nicht mehr in
+`NUR_KATALOGPFLEGE`), test_material_textbreite und test_material_l5 (Regeln ohne `.mat-wikizeile`).
+
+**Strömipedia-Artikel** (Nachzug braucht Freigabe, nicht Teil dieses Zweigs): noch nicht nachgezogen sind
+„Prüfformulare“ (Bild `formular-wiki.png`, „Neue Version … die Verknüpfung zur Prüfanleitung“, Abschnitt „Prüfanleitung
+aus der Strömipedia“ mit Bild `pruefanleitung.png`, Warnung „Prüfanleitung nicht für alle Angemeldeten freigegeben“),
+„Prüfung“ (Bildunterschrift „die zugeklappte Prüfanleitung“, Satz zur Einblendung im Kopf), „Katalogimport und
+-export“ („verknüpft nie eine Prüfanleitung“), die Übersicht „Materialablage“ (Inhaltszeile zu „Prüfformulare“) und in
+der Strömipedia „Seiten anlegen und bearbeiten“ (Warnung „Anleitung als Vorlage markiert“ nennt „Prüfanleitungen der
+Materialablage“).
