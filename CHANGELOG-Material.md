@@ -83,6 +83,7 @@ Geschichte stehen. Schemaversion nach der Nachbesserung vor dem Merge: 30; mit d
 | Prüfformular-Editor: Gruppen und Verschieben; Absätze im Prüfpunkt; „optional“ statt „Pflicht“ | Gruppe als Zwischenzeile (Name in voller Breite), Ziehgriff ⠿ und Menü „⋯“ statt ↑/↓/✕, „+ Prüfpunkt“ je Gruppe, „+ Gruppe“; Enter fügt im Prüfpunkt einen Absatz ein (Server, Prüfung, PDF, Katalog); Häkchen „optional“ statt „Pflicht“, Marke nur an optionalen Punkten | gebaut 04.11.2026 (kein Schemaschritt), Zweig formular-editor |
 | Prüfformular eines anderen Produkts übernehmen (Schritt 35) | Ein Produkt verweist auf ein anderes und wird nach dessen aktivem spezifischem Formular geprüft – mit jeder neuen Version dort; Anzeige an beiden Produkten und an der Formularseite, Lösen, Löschen der Quelle, Katalogdatei `formular_von` | gebaut 04.11.2026 (Schema 35), Zweig formular-uebernahme, wartet auf Freigabe |
 | Übung der Materialablage mit Produkten und Prüfformularen aus dem Katalog | Übungsseite trägt eine feste Auswahl echter Katalogprodukte (Gurt, Seil, Helm bzw. Karabiner) samt geltendem Prüfformular – nur Katalogfelder, keine Echtdaten der Artikel; Produktbilder der Auswahl als einzige Ausnahme der Übungssperre unter `/media/`; Platzhalter ohne passendes Produkt | gebaut 04.11.2026 (kein Schemaschritt), Zweig uebung-katalog |
+| Nachbesserung nach der Sicherheitsprüfung vom 04.11.2026 (Schritt 36) | Bildausnahme der Übungssperre erst nach Anmeldung und Modulzugang, Auswahl prozessweit zwischengespeichert; Quelle mit benutzter Formularversion nicht löschbar (Klartext); Aktivieren prüft den Verweis unter der Schreibsperre, Trigger „Verweis oder eigenes Formular“; DEMO-Regel des Exports (DEMO-Kategorie) für Übung und Übernehmen, Trigger | gebaut 04.11.2026 (Schema 36), Zweig fix-0411, wartet auf Freigabe |
 
 ## Abgleich mit dem Bestand (vor Lieferung 1)
 
@@ -12255,3 +12256,83 @@ Angepasst: `tests/test_material_formular_editor.py` (Selektor des neuen Punkts i
    Beschreibung gehört zum Produktnamen).
 6. **Klick aufs Produktbild** in der Übung zeigt wie bisher „In der Übung gibt es diese Datei nicht.“ (keine Großansicht).
 7. Kennungsbereich der Materialablage jetzt 900000001–900000999 (Prüfpunkte langer Formulare).
+
+## Nachbesserung nach der Sicherheitsprüfung (Übung mit Katalog, Formular übernehmen; Schritt 36, 04.11.2026)
+
+Prüfbericht `planung/uebung-katalog/pruefung_sicherheit.md` (Stand 6904d40, vier niedrige Befunde), Auftrag
+`planung/uebung-katalog/auftrag_fix.md`. Gebaut 04.11.2026 auf dem Zweig `fix-0411` von 341f7da (**Schema 36**).
+
+**Befund 1 – Bildausnahme der Übungssperre** (`app/einfuehrung.py`, `_katalogbild`, `katalog_material`): Die Ausnahme
+prüft jetzt zuerst, was nichts kostet – Methode GET, Pfad unter `/media/material/web/` oder `/thumb/`, harmloser
+Dateiname (`_BILDNAME`), angemeldet mit Modulzugang (`rechte.zugang`; nur dann trägt die Übungsseite die Auswahl) – und
+sieht erst dann in die Auswahl. Ohne Anmeldung rechnet keine Anfrage mit `X-Uebung` oder Übungs-Referer die Auswahl mehr
+(sie bekommt wie jede andere Übungsanfrage an `/media/` die Sperrseite 403 statt bisher 401 der Medienroute). Die Auswahl
+liegt **prozessweit** im Zwischenspeicher (je App in `app.extensions`, ein Tupel in einem Schritt geschrieben – Fäden
+sehen den alten oder den neuen Eintrag): Schlüssel ist der Katalog-Stand (`_KATALOG_STAND`: Zahl und letzte Änderung von
+Produkten, Formularen, Kategorien, Zahl offener/beendeter Rückrufe, Zahl und größte Kennung von Dokumenten und
+Prüfpunkten – eine Abfrage, etwa 1 ms bei 1500 Produkten) und der Tag (die Gültigkeit der Herstellerdokumente hängt
+daran); dazu höchstens `KATALOG_FRIST` = 60 Sekunden für das, was der Stand nicht sieht (SQL von Hand, zwei Änderungen
+in derselben Sekunde, Bilddateien, ein umbenanntes Dokument). Begründung: Eine Änderung über die Dienste zeigt die Übung
+sofort, ohne Zähler oder Trigger im Schema; ein veralteter Stand ist gefahrlos, denn die Auswahl trägt nur Katalogfelder,
+die jedes Konto mit Modulzugang ohnehin liest, und die Medienroute prüft jedes Bild weiter selbst. Je Anfrage bleibt es
+bei einem Lesen (`g`), aus dem Zwischenspeicher kommt eine Kopie. Messung mit der Lastprobe der Prüfung (`probe_last.py`,
+1500 Platzhalter-Produkte, ~1200 Bilder): ohne Anmeldung `GET /media/material/web/x.jpg` mit `X-Uebung` **1 ms** (vorher
+112 ms; ohne Kopfzeile 0,6 ms); Übungsseite im Mittel von fünf Aufrufen 44 bzw. 14 ms (vorher 118 bzw. 42 ms; nur der erste
+rechnet). Für Tests, die den Katalog mit SQL von Hand ändern: `einfuehrung.katalog_vergessen()`.
+
+**Befund 2 – Quelle mit benutzter Formularversion** (`katalog.produkt_loeschen`, `produkt_json` „loeschbar“): Steckt ein
+Formular des Produkts in einer Prüfung (Entwurf oder festgeschrieben – seit Schritt 35 auch an Artikeln eines anderen
+Produkts, das es übernimmt; ebenso nach umgehängten Artikeln), lehnt das Löschen vorher mit Klartext ab: „Das
+Prüfformular dieses Produkts wurde schon für Prüfungen benutzt – es bleibt im Katalog.“ (409, statt „Das wurde
+zwischenzeitlich anderswo geändert. Bitte neu laden.“ aus dem Fremdschlüssel). „loeschbar“ ist dann falsch – die
+Produktseite bietet „Löschen“ im Menü „Mehr“ nicht an (Oberfläche unverändert, sie folgt dem Feld).
+
+**Befund 3 – Rennlücke Aktivieren ↔ Übernehmen** (`katalog.formular_aktivieren`): Lesen des Formulars, Prüfpunkte, Blick
+auf den Verweis des Produkts und Aktivieren stehen jetzt in einer Transaktion unter der Schreibsperre (BEGIN IMMEDIATE),
+wie das Übernehmen. Dazu Trigger aus Schritt 36 (Verweis oder eigenes Formular): kein aktives spezifisches Formular an
+einem Produkt mit Verweis – beim Einfügen und Ändern von `active` bzw. `product_id` eines Formulars und beim Setzen von
+`formular_von` neben einem aktiven eigenen („Ein Produkt, das ein Prüfformular übernimmt, hat kein eigenes aktives
+Formular.“).
+
+**Befund 4 und Hinweis 1 – DEMO-Regel** (`models.DEMO_KATEGORIEN`, `models.produkt_demo_sql`; `katalog.demo_kategorien`,
+`produkt_ist_demo`, `formular_ist_demo`): die Regel des Katalog-Exports an einer Stelle – DEMO ist eine Kategorie mit
+Kennzeichen samt Teilbaum, ein Produkt mit Kennzeichen oder in einer solchen Kategorie, ein Formular mit Kennzeichen oder
+an einem solchen Ziel. Genutzt vom Export (statt seiner eigenen Fassung `_ausgeschlossen`; ebenso
+`scripts/material_beispielbestand.py`), von der Auswahl der Übung (Produkte in SQL, das geltende Formular) und beim
+Übernehmen: `_quelle_grund` (Dienst) und `formular_quellen` (Kandidaten im Dialog) vergleichen die DEMO-Art nach dieser
+Regel – echt nur mit echt, DEMO nur mit DEMO. Ein Produkt mit Verweis oder eine Quelle lässt sich nicht über die
+DEMO-Grenze in eine andere Kategorie verschieben („In dieser Kategorie wäre „…“ DEMO – das Prüfformular teilt es aber
+mit „…“ (DEMO nur mit DEMO). Erst die Verknüpfung lösen.“), eine Kategorie nicht so umhängen, dass DEMO und echt ein
+Formular teilten (Klartext aus dem Trigger). **Trigger** (Schritt 36): Die drei aus Schritt 35 vergleichen die DEMO-Art
+nach der Regel (rekursive Abfrage im Trigger, SQLite 3.46 auch im Produktionsabbild geprüft) und greifen auch beim
+Wechsel der Kategorie; neu `mat_category_formular_demo` beim Umhängen einer Kategorie oder ihrem Kennzeichen (nur
+Verweise mit einem Produkt im umgehängten Teilbaum zählen).
+
+**Schritt 36** (`models._schritt_36`, `TRIGGER_36`): richtet zuerst, was die neuen Regeln schon verletzt (nur über die
+Rennlücke bzw. vor der DEMO-Regel möglich; in Produktion gibt es Schritt 35 noch nicht): Verweise zwischen DEMO und
+echt werden gelöst, ein eigenes aktives Formular neben einem Verweis wird deaktiviert (es galt ohnehin der Verweis) – je
+eine Zeile im Startprotokoll, kein Journal; dann die Trigger (entfernt und neu). Wiederholbar; geprüft frisch, 34 → 36,
+35 → 36 mit Altbestand (Kopie in der Testumgebung) und zweitem Lauf. Rückweg: Ein älterer Stand behält die strengeren
+Trigger – seine Dienste weisen dasselbe ohnehin ab, außer beim Umhängen einer Kategorie über die DEMO-Grenze (dort dann
+409 „anderswo geändert“).
+
+**Nicht geändert** (Auftrag Punkt 5): Unicode-Zeilentrenner und C1-Steuerzeichen im Prüfpunkt (Hinweis 2, vorbestehend,
+nur optisch), Verweis ins Leere ohne Fremdschlüssel (Hinweis 3).
+
+**Tests**: `tests/test_material_formular_uebernahme.py` neu `test_quelle_mit_benutzter_version` (Entwurf und
+festgeschriebene Prüfung an B halten A: 409 mit Klartext, „loeschbar“ falsch, Verweis bleibt),
+`test_rennen_aktivieren_uebernehmen` (Fenster wie in der Probe mit 1,5 s nach dem Lesen von C geweitet: Aktivieren 200, Übernehmen 409, nie beides;
+Trigger gegen SQL von Hand), `test_demo_regel_ueber_kategorie` (Produkt ohne Kennzeichen in einer Kategorie unter einer
+DEMO-Kategorie: Dienst, Kandidaten, Verschieben von Produkt und Kategorie mit Klartext, erlaubte Fälle, Trigger),
+`test_migration_35_36` (Altbestand gelöst bzw. deaktiviert, sonst keine Zeile geändert, Startprotokoll, zweiter Lauf);
+angepasst `test_trigger_gegen_sql_von_hand` (an A greift auch der neue Trigger), `test_export_import` (der Fall „Quelle in
+einer DEMO-Kategorie“ ist ein Altbestand ohne Trigger), `test_migration_34_35` (34 → 36).
+`tests/test_einfuehrung_katalog.py` neu `test_zwischenspeicher_und_bildausnahme` (ohne Anmeldung, ohne Modulzugang, andere Methode oder anderer
+Pfad: keine Rechnung; angemeldet zwei Übungsseiten und alle Bilder – eine Rechnung; nach einer Änderung über die Dienste
+und nach Ablauf der Frist neu) und `test_demo_kategorie`; `test_auswahl` leert den Zwischenspeicher nach dem Ersetzen von
+`formular_fuer_produkt` und nach SQL von Hand.
+
+**Browserprobe** (Chromium, 1280 × 900 und 360 × 740, DEMO-Daten: Katalogteil 1 und Beispielbestand mit 60 Artikeln,
+eine Platzhalter-Quelle mit Prüfungsentwurf an einem Artikel des übernehmenden Produkts): Menü „Mehr“ der benutzten
+Quelle ohne „Löschen“, einer unbenutzten mit; `DELETE` → 409 mit dem Klartext; Übungsseite mit Katalogprodukt, beide
+Bilder geladen; ohne Anmeldung mit `X-Uebung` 403; keine Konsolenfehler.
