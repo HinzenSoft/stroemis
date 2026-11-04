@@ -497,9 +497,10 @@
 
   const grund = { ablaeufe: [
     { titel: "Zurechtfinden", start: "/materialablage", schritte: [
-      { ziel: ".mat-reiter", text: "Das ist die Materialablage. Oben wechselst du zwischen Übersicht, Prüfungen, Bestand und Katalog." },
+      // Ein Konto ohne Freigabe sieht auf der echten Seite nur Übersicht und Katalog (Verbesserung V6).
+      { ziel: ".mat-reiter", text: "Das ist die Materialablage, hier mit Freigabe im Bestand. Oben wechselst du zwischen Übersicht, Prüfungen, Bestand und Katalog." },
       { ziel: ".mat-kachel", text: "Die Übersicht zeigt, was ansteht: fällige Prüfungen, offene Mängel und deine eigene PSA." },
-      { ziel: "#mat-side-auf", wenn: () => sichtbar("#mat-side-auf"), text: "Tippe auf „☰ Ordner“, um die Ordner zu sehen.",
+      { ziel: "#mat-side-auf", wenn: () => sichtbar("#mat-side-auf"), text: "Tippe auf „☰“, um die Ordner zu sehen.",
         warten: { klick: "#mat-side-auf" } },
       { ziel: imBaum, text: "Links stehen die Ordner deines Bereichs: Lager, Fahrzeuge, Gruppen. Öffne „Übung – Fahrzeug 1“.",
         warten: { klick: imBaum } },
@@ -511,7 +512,12 @@
       // Liegt das Suchfeld hinter der Lupe (Doppelbildschirm), zeigt der Rahmen auf die Lupe. Ein eigener Schritt „Lupe“
       // (Bauvorlage) hing an einem Wettlauf: Bis die Webschriften geladen sind, steht die Lupe auch am Rechner kurz da.
       { ziel: () => (sichtbar(suchFeld) ? document.querySelector(suchFeld) : sichtbar("#mat-lupe") ? document.querySelector("#mat-lupe") : null),
-        text: "Jeder Artikel hat eine Inventarnummer. Gib „Ü-0001“ ins Suchfeld ein.", warten: { wert: [suchFeld, /ü-?0*1$/i] },
+        // Der Text folgt dem Ziel: erst die Lupe, dann das Feld (einfuehrung.js fragt Ziel und Text immer wieder neu).
+        get text() {
+          return sichtbar(suchFeld) ? "Jeder Artikel hat eine Inventarnummer. Gib „Ü-0001“ ins Suchfeld ein."
+            : "Jeder Artikel hat eine Inventarnummer. Tippe auf die Lupe und gib dann „Ü-0001“ ein.";
+        },
+        warten: { wert: [suchFeld, /ü-?0*1$/i] },
         probe: { tippen: [suchFeld, "Ü-0001"] } },
       // Gesucht wird mit „Suchen“, der Eingabetaste oder über die Vorschläge unter dem Feld (suche.js) – am Telefon steht
       // kein Knopf „Suchen“. Das Ziel bleibt das Feld, damit die Vorschläge offen bleiben (sie schließen, wenn es den

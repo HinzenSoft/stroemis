@@ -19,6 +19,12 @@ Je 1280×900 (Maus) und 360×740 (Telefon, Touch):
   9. Ohne Referer: Bild, Rahmen und Video an /api/ bzw. /media/ erreichen den Server nicht (CSP), rel="noreferrer" und
      referrerpolicy verschwinden.
   10. Abmelden aus der Übung: /login, Sitzung weg, Übungszustand und Übungsablage leer, echte Entwürfe weg.
+  Nachbesserung nach den Endprüfungen (04.11.2026):
+  11. Zurück nach „Übung unterbrechen“: die echte Seite, keine Übungsseite ohne Führung (je Größe).
+  12. Strg-Klick: keine Kennung, neuer Reiter mit der echten Seite, Merker bleibt; ein Reiter ohne Übungszustand beginnt
+      beim gemerkten Ablauf; „Klicke“ am Rechner; jeder Schritt in der Live-Region, Blasentext ohne Fokusring.
+  13. Telefon quer 844×390 (Touch): die Grundteile aller vier Module bis „Geschafft“ – die Blase deckt weder Ziel noch
+      Kopfleiste noch Dialogknöpfe.
 Alle Inhalte sind Platzhalter."""
 import json
 import os
@@ -130,6 +136,11 @@ def _esc_dialog_bewegung(u, breite, hoehe, touch):
         assert not s.js("Boolean(document.querySelector('#fuehrung-blase'))"), wo
         assert s.klick("#dev-hinweis-ok") is None
         assert s.warte(bereit, 10), wo
+        # Jeder Schritt in der Live-Region (Verbesserung V3); der Text der Blase trägt den Fokus ohne Ring (V8).
+        assert s.warte("document.querySelector('.fuehrung-ansage').textContent.startsWith('Übung · Schritt 1 von ')", 3), \
+            s.js("document.querySelector('.fuehrung-ansage').textContent")
+        assert s.js("(() => { const t = document.querySelector('.fuehrung-text'); const f = document.activeElement; t.focus();"
+                    " const o = getComputedStyle(t).outlineStyle; if (f && f.focus) f.focus(); return o; })()") == "none"
         # Blase im offenen Dialog: wandert hinein, ist bedienbar (ein Tipp auf „Weiter“ trifft), und wieder heraus.
         s.js("S.dialog('<h2>Platzhalter</h2><p>Übung</p><div class=\"dlg-actions\"><button class=\"btn\" type=\"button\" data-close>OK</button></div>')")
         assert s.warte("document.querySelector('#fuehrung-blase')?.parentElement?.id === 'dlg'", 5), wo
@@ -353,6 +364,86 @@ def _abmelden(u, breite, hoehe, touch):
         s.schliessen()
 
 
+def _neue_reiter(s):
+    """Die Adressen aller Reiter dieses Chromium (CDP /json/list)."""
+    import urllib.request
+    with urllib.request.urlopen(f"http://127.0.0.1:{s.port}/json/list", timeout=5) as r:
+        return [z["url"] for z in json.load(r) if z.get("type") == "page"]
+
+
+def _zusatztaste(u):
+    """Befund 1 der Endprüfung: Ein Reiter ohne Übungszustand beginnt beim gemerkten Ablauf (und setzt den Merker nicht
+    zurück); ein Strg-Klick in der Übung schreibt keine Kennung in den Link – der neue Reiter zeigt die echte Seite, dieser
+    Reiter bleibt in der Übung, der Merker bleibt."""
+    import time
+    u.merker_leeren("mitglied")
+    u.sql("INSERT INTO mat_meta (schluessel, wert) VALUES (?, ?)", (f"einfuehrung:{u.ids['mitglied']}", json.dumps(
+        {"material:grund": {"zustand": "unterbrochen", "ablauf": 2, "am": "2026-11-04T00:00:00+00:00"}})))
+    s = u.seite("mitglied", 1280, 900, False)
+    try:
+        s.oeffnen("/materialablage?uebung=grund", warten=0.3)
+        if s.warte("document.querySelector('#dev-hinweis')?.open", 1):
+            assert s.klick("#dev-hinweis-ok") is None
+        z = s.warte("(() => { const z = window.S && S.einfuehrung && S.einfuehrung.zustand();"
+                    " return z && z.bereit && z.ablauf === 2 ? z : null; })()", 15)
+        assert z, s.zustand()
+        assert u.merker("mitglied")["material:grund"]["ablauf"] == 2, u.merker("mitglied")
+        hier = s.js("location.pathname + location.search")
+        assert "uebung=grund" in hier, hier
+        # Am Rechner klickst du (Verbesserung V5): „Tippe“ der Übungsdatei heißt in der Blase „Klicke“.
+        assert s.js("document.querySelector('.fuehrung-text').textContent") == "Ist etwas beschädigt? Klicke auf „Mangel melden“."
+        s.js("document.querySelector('main').insertAdjacentHTML('afterbegin', "
+             "'<p><a id=\"probe-strg\" href=\"/materialablage/bestand\">Bestand</a></p>')")
+        p = s.punkt("#probe-strg")
+        assert p and p["trifft"], p
+        vorher = _neue_reiter(s)
+        for art in ("mouseMoved", "mousePressed", "mouseReleased"):
+            s.b.rufen("Input.dispatchMouseEvent", type=art, x=p["x"], y=p["y"], button="left", clickCount=1, modifiers=2)
+        ende, neu = time.time() + 10, []
+        while time.time() < ende and not neu:
+            neu = [x for x in _neue_reiter(s) if x not in vorher and "/materialablage/bestand" in x]
+            time.sleep(0.2)
+        assert neu and "uebung" not in neu[0], (neu, _neue_reiter(s))
+        s.b.warten(1.5)
+        assert s.js("location.pathname + location.search") == hier
+        assert s.js("document.getElementById('probe-strg').getAttribute('href')") == "/materialablage/bestand"
+        assert s.js("S.einfuehrung.zustand().ablauf") == 2
+        stand = u.merker("mitglied")["material:grund"]
+        assert stand["zustand"] == "unterbrochen" and stand["ablauf"] == 2, stand
+    finally:
+        s.schliessen()
+
+
+def _zurueck_nach_unterbrechen(u, breite, hoehe, touch):
+    """Befund B2 der Browserprüfung: Zurück nach „Übung unterbrechen“ zeigt keine Übungsseite ohne Führung (Titel „Übung · “,
+    Übungszahlen), sondern die echte Seite ohne Kennung."""
+    wo = f"{breite}×{hoehe}"
+    u.merker_leeren("mitglied")
+    s = u.seite("mitglied", breite, hoehe, touch)
+    try:
+        s.oeffnen("/ankerplaetze", warten=0.5)
+        if s.warte("document.querySelector('#dev-hinweis')?.open", 1):
+            assert s.klick("#dev-hinweis-ok") is None
+        s.js("location.href = '/ankerplaetze?uebung=grund'")
+        assert s.warte(BEREIT, 15), wo
+        assert s.klick(".fuehrung-blase .fuehrung-unterbrechen", blase=True) is None, wo
+        assert s.warte("location.pathname === '/ankerplaetze' && !location.search && document.readyState === 'complete'", 10), wo
+        s.b.warten(0.5)
+        s.js("history.back()")
+        geist = ("(() => document.readyState === 'complete' && new URLSearchParams(location.search).has('uebung')"
+                 " && document.title.startsWith('Übung · ') && !document.querySelector('.fuehrung-blase'))()")
+        echt = ("(() => document.readyState === 'complete' && location.pathname === '/ankerplaetze'"
+                " && !new URLSearchParams(location.search).has('uebung') && !document.title.startsWith('Übung · '))()")
+        assert s.warte(echt, 10), (wo, s.js("location.href"), s.js("document.title"))
+        s.b.warten(1.5)
+        assert s.js(echt) and not s.js(geist), (wo, s.js("location.href"), s.js("document.title"))
+        assert s.js("sessionStorage.getItem('stroemis-uebung')") is None
+        stand = u.merker("mitglied")["karte:grund"]
+        assert stand["zustand"] == "unterbrochen" and stand["ablauf"] == 0, stand
+    finally:
+        s.schliessen()
+
+
 def test_browser():
     if uebersprungen():
         print("übersprungen – kein Chromium")
@@ -366,12 +457,19 @@ def test_browser():
             _seiten_ohne_uebung(u, breite, hoehe, touch)
             _ohne_referer(u, breite, hoehe, touch)
             _abmelden(u, breite, hoehe, touch)
+            _zurueck_nach_unterbrechen(u, breite, hoehe, touch)
             for modul in ("material", "wiki", "karte", "pruefungen"):
                 befunde = u.durchlauf(modul, "grund", breite, hoehe, touch)
                 assert not befunde, (modul, breite, befunde)
             # Ein Zusatzteil mit Abschluss „Geschafft“ (Weiter mit … entfällt, alle anderen Teile sind erledigt).
             befunde = u.durchlauf("pruefungen", "leitung", breite, hoehe, touch)
             assert not befunde, ("pruefungen/leitung", breite, befunde)
+        _zusatztaste(u)
+        # Telefon quer (Befund B1 der Browserprüfung): die Führung als Leiste unten, die Blase deckt kein Ziel, keine
+        # Kopfleiste und keinen Dialogknopf.
+        for modul in ("material", "wiki", "karte", "pruefungen"):
+            befunde = u.durchlauf(modul, "grund", 844, 390, True)
+            assert not befunde, (modul, "844×390", befunde)
     print("Browser bestanden.")
 
 

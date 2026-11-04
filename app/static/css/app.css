@@ -72,6 +72,15 @@
   --fs-marke: .74rem;     /* Marken, Plaketten, Zähler */
   --fs-klein: .875rem;    /* Hilfstexte, Nebenangaben, Meta-Zeilen, Zwischentitel in Versalien – 14 px */
   --fs-mittel: .9rem;     /* Listen, Formularbeschriftungen, Tabellen */
+  --fs-karte: 1.05rem;    /* Titel kleiner schwebender Karten (Angebot der Einführung) */
+  /* Einführung (Abschnitt „Einführung“ unten): Breiten von Angebot und Sprechblase und ihre Ebenen – über Kopfleiste,
+     Menüs (1400) und Dialogen; unter einem offenen schwebenden Menü, wenn die Blase ihm nicht ausweichen kann. */
+  --einf-angebot-breite: 380px;
+  --einf-blase-breite: 360px;
+  --z-fuehrung: 2500;
+  --z-fuehrung-rahmen: 2400;
+  --z-fuehrung-unter-menue: 1390;
+  --z-fuehrung-rahmen-unter-menue: 1380;
   /* Hinweiskisten: Fläche und Kante einmal gepflegt. Leseansicht und Editor greifen beide
      hierauf zu – vorher standen die Werte doppelt im Blatt, und die Warnkiste hatte in den
      beiden Ansichten schon zwei verschiedene Kantenfarben. */
@@ -3069,28 +3078,41 @@ main.start { container: start / inline-size; }
 /* --- Einführung: Angebot, Führung, Profil „Einführungen“ (app/einfuehrung.py, einfuehrung.js; Bauvorlage
    planung/tutorial/entwurf.md, 03.11.2026) ----------------------------------------------------------------------------
    Angebot und Sprechblase sind schwebende Flächen (--radius-gross, --schatten-dialog) mit einer Kante in --wasser; unter
-   600 px Fensterbreite stehen sie als Leiste unten über die ganze Breite (--schatten-leiste, --sicher-*), und die Seite
+   600 px Fensterbreite oder 520 px Fensterhöhe (Telefon quer) – und wenn die Blase neben dem Ziel keinen Platz findet –
+   stehen sie als Leiste unten über die ganze Breite (--schatten-leiste, --sicher-*), und die Seite
    bekommt unten so viel Platz, wie die Leiste hoch ist (--fuehrung-hoehe, gesetzt von einfuehrung.js) – auch ein
    offener Dialog rückt darüber. Der Rahmen um das Ziel ist ein Rand in --wasser mit leichter Abdunkelung rundum; er
    nimmt keine Klicks an, die Seite bleibt ganz bedienbar. */
 .einfuehrung-angebot, .fuehrung-blase {
-  position: fixed; z-index: 2500; box-sizing: border-box;
+  position: fixed; z-index: var(--z-fuehrung); box-sizing: border-box;
   padding: 12px 16px 14px; background: var(--weiss); color: var(--anthrazit); border-top: 4px solid var(--wasser);
   border-radius: var(--radius-gross); box-shadow: var(--schatten-dialog); font-size: var(--fs-mittel); }
-.einfuehrung-angebot { right: calc(16px + var(--sicher-rechts)); bottom: calc(16px + var(--sicher-unten)); width: min(380px, calc(100vw - 32px)); }
-.fuehrung-blase { width: min(360px, calc(100vw - 16px)); }
-.einfuehrung-angebot h2 { font-size: 1.05rem; margin: 0 0 6px; }
+.einfuehrung-angebot { right: calc(16px + var(--sicher-rechts)); bottom: calc(16px + var(--sicher-unten));
+  width: min(var(--einf-angebot-breite), calc(100vw - 32px)); }
+.fuehrung-blase { width: min(var(--einf-blase-breite), calc(100vw - 16px)); }
+.einfuehrung-angebot h2 { font-size: var(--fs-karte); margin: 0 0 6px; }
 .einfuehrung-angebot p, .fuehrung-blase p { margin: 0; }
 .einf-angebot-knoepfe, .fuehrung-knoepfe { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px;
   margin-top: 12px; }
 .fuehrung-kopf { color: var(--grau); font-size: var(--fs-klein); }
 .fuehrung-titel { font-weight: 700; margin-top: 2px; }
 .fuehrung-blase .fuehrung-text { margin-top: 4px; }
+/* Ohne fokussierbares Ziel trägt der Text den Fokus (für Bildschirmleser) – er ist kein Bedienelement, also ohne Ring
+   (wie der Titel eines Dialogs). */
+.fuehrung-blase .fuehrung-text:focus { outline: none; box-shadow: none; }
 .fuehrung-knoepfe > .fuehrung-unterbrechen { margin-right: auto; }
 .einfuehrung-angebot.als-leiste, .fuehrung-blase.als-leiste {
   left: 0; right: 0; top: auto; bottom: 0; width: auto; max-height: 60vh; max-height: 60dvh; overflow: auto;
   border-radius: var(--radius-gross) var(--radius-gross) 0 0; box-shadow: var(--schatten-leiste);
   padding: 10px calc(12px + var(--sicher-rechts)) calc(12px + var(--sicher-unten)) calc(12px + var(--sicher-links)); }
+/* Eine breite Leiste (Telefon quer, Rechner) legt die Knöpfe rechts neben den Text – so bleibt über ihr mehr Seite. */
+@media (min-width: 600px) {
+  .einfuehrung-angebot.als-leiste, .fuehrung-blase.als-leiste {
+    display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 16px; align-items: end; }
+  .einfuehrung-angebot.als-leiste > *, .fuehrung-blase.als-leiste > * { grid-column: 1; }
+  .einfuehrung-angebot.als-leiste > .einf-angebot-knoepfe, .fuehrung-blase.als-leiste > .fuehrung-knoepfe {
+    grid-column: 2; grid-row: 1 / span 3; margin-top: 0; }
+}
 html.fuehrung-leiste body { padding-bottom: var(--fuehrung-hoehe, 0px); }
 /* Klebende Leisten unten und fensterhohe Flächen (allgemeine Regel, 04.11.2026): --fuehrung-hoehe steht nur, solange
    die Leiste der Führung bzw. des Angebots unten steht – sonst gilt 0. Eine Leiste mit position: sticky/fixed;
@@ -3115,17 +3137,21 @@ html.fuehrung-leiste .map-shell { height: calc(100vh - var(--kopf-hoehe) - var(-
   html.fuehrung-leiste .map-shell:has(.panel.open) .leaflet-bottom.leaflet-right .leaflet-control:not(.leaflet-control-attribution) {
     display: none; }
 }
-@media (max-width: 599px) {
-  html.fuehrung-leiste dialog[open]:modal { bottom: var(--fuehrung-hoehe, 0px); }
-  html.fuehrung-leiste dialog[open] .dlg-body { max-height: calc(80dvh - var(--fuehrung-hoehe, 0px)); }
+/* Ein offener Dialog rückt über die Leiste – am Telefon hochkant und quer und am Rechner, wenn die Blase neben dem Ziel
+   keinen Platz fand. */
+html.fuehrung-leiste dialog[open]:modal { bottom: var(--fuehrung-hoehe, 0px); }
+html.fuehrung-leiste dialog[open] .dlg-body { max-height: calc(80dvh - var(--fuehrung-hoehe, 0px)); }
+@media (max-height: 500px) {
+  html.fuehrung-leiste dialog[open]:modal { max-height: calc(100dvh - 8px - var(--fuehrung-hoehe, 0px)); }
+  html.fuehrung-leiste dialog[open] .dlg-body { max-height: calc(100dvh - 14px - var(--fuehrung-hoehe, 0px)); }
 }
-.fuehrung-rahmen { position: fixed; z-index: 2400; pointer-events: none; box-sizing: border-box; border: 3px solid var(--wasser);
+.fuehrung-rahmen { position: fixed; z-index: var(--z-fuehrung-rahmen); pointer-events: none; box-sizing: border-box; border: 3px solid var(--wasser);
   border-radius: var(--radius-gross); box-shadow: 0 0 0 200vmax var(--abdunkeln-leicht); }
 .fuehrung-rahmen[hidden], .fuehrung-blase[hidden] { display: none; }
 /* Ein vom Nutzer geöffnetes schwebendes Menü (.menue-schwebend, z-index 1400) bleibt frei: Der Rahmen dunkelt es nicht ab,
    und die Blase liegt darunter, wenn sie ihm nicht ausweichen kann (einfuehrung.js, lage). */
-.fuehrung-rahmen.unter-menue { z-index: 1380; }
-.fuehrung-blase.unter-menue { z-index: 1390; }
+.fuehrung-rahmen.unter-menue { z-index: var(--z-fuehrung-rahmen-unter-menue); }
+.fuehrung-blase.unter-menue { z-index: var(--z-fuehrung-unter-menue); }
 @media (prefers-reduced-motion: no-preference) {
   .fuehrung-rahmen { transition: left .15s ease-out, top .15s ease-out, width .15s ease-out, height .15s ease-out; }
 }

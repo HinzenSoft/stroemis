@@ -16,10 +16,12 @@ KONTO_JE_TEIL. Chromium über /home/harness/devtools/cdp/cdp.py mit freiem CDP-P
 Geste), sonst Maus (pointer: fine, hover). Alle Anfragen kommen aus Network.requestWillBeSent ins Netzprotokoll.
 
 durchlauf(modul, teil, breite, hoehe, touch) führt alle Schritte eines Teils aus – je Schritt die probe der Übungsdatei
-({klick: sel} auf die Mitte, {klick: sel, frei: true} auf die Mitte der größten freien Stelle, {tippen: …}, {datei: true}),
+({klick: sel} auf die Mitte, {klick: sel, frei: true} auf die Mitte der größten freien Stelle – gibt es keine, mit
+sonst: sel auf jenes –, {tippen: …}, {datei: true}),
 ohne probe einen Klick auf warten.klick bzw. auf „Weiter“ – und liefert Befunde als Sätze (leer = bestanden). Vor dem
 Messen und Tippen wartet sie, bis Bildlauf, Ziel und Blase ruhen (Seite.ruhe). Rot wird es, wenn ein Ziel fehlt oder
-nicht im Bild ist (auch verdeckt von einer Leiste oder der Blase), eine Anfrage unbeantwortet bleibt (auf jeder Seite
+nicht im Bild ist (auch verdeckt von einer Leiste oder der Blase), die Blase Ziel, Kopfleiste oder einen Knopf des
+obersten Dialogs deckt (deckt_befund), eine Anfrage unbeantwortet bleibt (auf jeder Seite
 gesammelt), eine Anfrage an /api/ (außer Merker und /api/me) oder /media/ das Netz erreicht, eine Seite ohne
 Übungskennung lädt, die Konsole einen Fehler zeigt, die Seite waagerecht rollt, ein Schritt nicht weiterzählt oder am
 Ende nicht „Geschafft“ mit dem Merker „erledigt“ steht."""
@@ -416,7 +418,48 @@ class Seite:
             return f"in der Mitte verdeckt {lage['verdeckt']} ({r})."
         return None
 
-    def durchlauf(self, modul, teil, max_schritte=200):
+    def deckt_befund(self):
+        """Was die Sprechblase deckt (Befunde B1 und B3 der Browserprüfung vom 04.11.2026): den sichtbaren Teil des Ziels
+        (oberhalb der Leiste der Führung), die Kopfleiste oder einen sichtbaren Knopf des obersten offenen Dialogs
+        (Abbrechen, Hauptaktion). Mehr als 4 px² zählen. Liefert einen Satz oder None."""
+        return self.js("""(() => {
+          const z = S.einfuehrung.zustand(), b = z.blaseRect, r = z.zielRect;
+          if (!b) return null;
+          const flaeche = (a, c) => Math.max(0, Math.min(a.right, c.right) - Math.max(a.left, c.left))
+            * Math.max(0, Math.min(a.bottom, c.bottom) - Math.max(a.top, c.top));
+          const blase = document.querySelector('.fuehrung-blase');
+          if (r) {
+            const unten = z.leiste ? b.top : innerHeight;
+            const sicht = { left: Math.max(r.left, 0), right: Math.min(r.right, innerWidth), top: Math.max(r.top, 0),
+                            bottom: Math.min(r.bottom, unten) };
+            if (sicht.right > sicht.left && sicht.bottom > sicht.top && flaeche(b, sicht) > 4) return 'das Ziel';
+          }
+          const kopf = document.querySelector('header.bauchbinde');
+          if (kopf && kopf.getClientRects().length && flaeche(b, kopf.getBoundingClientRect()) > 4) return 'die Kopfleiste';
+          // Nur der oberste modale Dialog – was darunter liegt, ist gerade nicht bedienbar.
+          const oben = [...document.querySelectorAll('dialog[open]')].filter((d) => d.matches(':modal')).pop();
+          // Der sichtbare Teil eines Knopfs: beschnitten von Rahmen, die in sich rollen (Dialog, Großansicht).
+          const sichtbarerTeil = (el) => {
+            const q = el.getBoundingClientRect();
+            let k = { left: q.left, top: q.top, right: q.right, bottom: q.bottom };
+            for (let n = el.parentElement; n && n !== document.body; n = n.parentElement) {
+              const cs = getComputedStyle(n);
+              if (cs.overflowX === 'visible' && cs.overflowY === 'visible') continue;
+              const p = n.getBoundingClientRect();
+              k = { left: Math.max(k.left, p.left), top: Math.max(k.top, p.top), right: Math.min(k.right, p.right), bottom: Math.min(k.bottom, p.bottom) };
+            }
+            return k;
+          };
+          for (const k of oben ? oben.querySelectorAll(':is(.dlg-actions, .c-actions, .lb-aktionen) :is(button, a[href])') : []) {
+            if (!k.getClientRects().length || blase.contains(k) || getComputedStyle(k).visibility === 'hidden') continue;
+            const q = sichtbarerTeil(k);
+            if (r && Math.abs(q.left - r.left) < 1 && Math.abs(q.top - r.top) < 1) continue;     // das Ziel selbst
+            if (flaeche(b, q) > 4) return 'den Dialogknopf „' + k.textContent.trim() + '“';
+          }
+          return null;
+        })()""")
+
+    def durchlauf(self, modul, teil, max_schritte=200, foto=None):
         befunde = []
         rolle = self.rolle
         self.oeffnen(self.u.adresse(modul, teil))
@@ -448,6 +491,11 @@ class Seite:
                 fehler = self.lage_befund()
                 if fehler:
                     befunde.append(f"{wo}: Ziel {z['ziel']!r} {fehler}")
+            deckt = self.deckt_befund()
+            if deckt:
+                befunde.append(f"{wo}: Die Sprechblase deckt {deckt}.")
+            if foto:
+                foto(self, z)
             probe = schritt.get("probe") or {}
             warten = schritt.get("warten") or {}
             vorher = (z["ablauf"], z["schritt"])
@@ -457,6 +505,9 @@ class Seite:
                 fehler = self.klick(".fuehrung-blase .fuehrung-bild", blase=True)
             elif "klick" in probe or "klick" in warten:
                 fehler = self.klick(probe.get("klick") or warten["klick"], frei=bool(probe.get("frei")))
+                # Keine freie Stelle (kleines Telefon): der andere Weg des Schritts, probe {…, sonst: sel}.
+                if fehler and probe.get("sonst") and fehler.startswith("Keine freie Stelle"):
+                    fehler = self.klick(probe["sonst"])
             elif not warten:
                 fehler = self.klick(".fuehrung-blase .fuehrung-weiter", blase=True)
             else:

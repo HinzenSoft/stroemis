@@ -26,9 +26,10 @@
        teile: { grund: { ablaeufe: [{ titel, start, schritte: [schritt, …] }, …] }, … } });
    Ein Schritt: ziel (Selektor, Funktion → Element, oder null = Blase mittig ohne Rahmen), text (reiner Text), warten
    (fehlt → „Weiter“; {klick: sel} | {wert: [sel, RegExp]} | {anfrage: "METHODE /pfad" oder RegExp} | {da: sel} |
-   {bedingung: (z) => bool}), wenn (() => bool: Schritt nur, wenn zutreffend), datei ({input: sel, bild:
-   "/static/uebung/…"} – Knopf „Übungsbild nehmen“), probe (nur für den Durchlauftest: {klick: sel} | {tippen: [sel,
-   text]} | {datei: true}).
+   {bedingung: (z) => bool}; mehrere Angaben: was zuerst eintritt), wenn (() => bool: Schritt nur, wenn zutreffend), datei ({input: sel, bild:
+   "/static/uebung/…"} – Knopf „Übungsbild nehmen“), probe (nur für den Durchlauftest: {klick: sel} | {klick: sel, frei:
+   true, sonst: sel} | {tippen: [sel, text]} | {datei: true}). Ein Text darf ein Getter sein (er folgt der Lage), ebenso
+   ein Ziel als Funktion. „Tippe“ in Texten sagt die Blase ohne Touch-Zeiger als „Klicke“ (wortlaut).
    Testschnittstelle (nur lesend): S.einfuehrung.zustand(), S.einfuehrung.teile(modul). */
 (function () {
   const S = window.S;
@@ -140,13 +141,18 @@
   let seiteGeht = 0;              // seit wann diese Seite verlassen wird (Link, Formular, location …) – bis die neue da ist
   let zurueckSeit = 0;            // ein Schritt zurück im Verlauf läuft (common.js schließt ein Overlay) – bis popstate
   let dialogZuSeit = 0;           // eben hat sich ein Dialog geschlossen – sein Schritt zurück kommt gleich
+  let ausDemVerlauf = false;      // die Seite kam per Zurück/Vor – fehlt das Ziel, sagt die Blase, wie es weitergeht
 
   /* --- Ohne Übung -------------------------------------------------------------------------------------------------- */
   if (!UEBUNG) {
     // Wer aus einer Übung herauskommt (Kopfleiste: Startseite, Profil, andere Module, Meine PSA; Zurück), landet auf
     // einer echten Seite: Zustand und Übungsablage dieses Reiters gehen still, der Merker steht schon auf „unterbrochen“.
     // Nicht auf der Fehlerseite „In der Übung nicht verfügbar“ (E.gesperrt) – „Zurück zur Übung“ macht dort weiter.
-    if (!(E && E.gesperrt)) ablageAufraeumen();
+    if (!(E && E.gesperrt)) {
+      ablageAufraeumen();
+      // Auch, wenn der Browser die Seite aus seinem Seitenspeicher zeigt (Zurück aus der Übung).
+      window.addEventListener("pageshow", (e) => { if (e.persisted) ablageAufraeumen(); });
+    }
     // Eine Adresse mit „uebung=“, die der Server nicht als Übung zeichnet (Teil gilt nicht für das Konto, Fehlerseite):
     // Die Kennung kommt aus der Adresse, bevor die Seite Anfragen stellt – der Server sperrte sie sonst.
     const hier = new URL(location.href);
@@ -360,11 +366,14 @@
     };
     // Links: Dateien öffnen die Übungsdatei (oder melden, dass es sie nicht gibt); Seiten desselben Moduls behalten die
     // Kennung. Die Kopfleiste führt aus der Übung hinaus – ohne Referer, sonst hielte der Server auch „Meine PSA“ der
-    // Kopfleiste für eine Seite aus der Übung; ein neuer Reiter (target) öffnet die echte Seite.
+    // Kopfleiste für eine Seite aus der Übung; ein neuer Reiter (target) öffnet die echte Seite. Ebenso ein Klick mit
+    // Zusatztaste (Strg, Cmd, Umschalt, Alt: neuer Reiter, neues Fenster, Download) wie der Mittelklick: keine Kennung, die
+    // Übung in diesem Reiter bleibt, wie sie ist (Befund 1 der Endprüfung).
     const kopfleiste = (el) => Boolean(el && el.closest && el.closest("header.bauchbinde"));
+    const zusatztaste = (e) => e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey;
     document.querySelectorAll("header.bauchbinde a[href]").forEach((a) => { a.referrerPolicy = "no-referrer"; });
     document.addEventListener("click", (e) => {
-      if (e.button !== 0) return;
+      if (zusatztaste(e)) return;
       const a = e.target.closest && e.target.closest("a[href]");
       if (a && kopfleiste(a)) { ausgang = a.href; a.referrerPolicy = "no-referrer"; return; }
       if (!a || a.closest(".fuehrung-blase, .einfuehrung-angebot")) return;
@@ -386,7 +395,7 @@
     // Links auf Seiten ohne Übungszweig: erst nach den Handlern der Seite (die einen Link selbst behandeln dürfen), auch mit
     // target – stattdessen der Toast, die Übung läuft weiter.
     window.addEventListener("click", (e) => {
-      if (e.button !== 0 || e.defaultPrevented) return;
+      if (zusatztaste(e) || e.defaultPrevented) return;
       const a = e.target.closest && e.target.closest("a[href]");
       if (!a || kopfleiste(a) || a.closest(".fuehrung-blase, .einfuehrung-angebot") || !ohneUebung(adresse(a.href))) return;
       e.preventDefault();
@@ -415,12 +424,14 @@
     // Navigation API hat (Chromium, Firefox, Safari 26): anhalten, Toast. Ohne sie antwortet der Server mit der Fehlerseite
     // „In der Übung nicht verfügbar“ und dem Weg zurück. Die Kopfleiste (ausgang) führt hinaus.
     // Ebenso Seitenwechsel auf Dateien (/api/, /media/, Endung – dieselbe Regel wie bei Links), etwa der Export der
-    // Strömipedia über location.href: die Übungsdatei aus der Dateitabelle oder der Hinweis, dass es sie nicht gibt.
+    // Strömipedia über location.href: die Übungsdatei aus der Dateitabelle oder der Hinweis, dass es sie nicht gibt. Auch
+    // Downloads (ein losgelöster Link mit download – Hinweis 1 der Endprüfung).
     if (window.navigation && typeof window.navigation.addEventListener === "function") {
       window.navigation.addEventListener("navigate", (e) => {
-        if (!e.cancelable || e.hashChange || e.downloadRequest || e.navigationType === "reload" || e.navigationType === "traverse") return;
+        if (!e.cancelable || e.hashChange || e.navigationType === "reload" || e.navigationType === "traverse") return;
         const u = adresse(e.destination && e.destination.url);
-        if (u && u.origin === location.origin && istDatei(u) && !(ausgang && u.href === ausgang)) {
+        const download = typeof e.downloadRequest === "string";
+        if (u && u.origin === location.origin && (istDatei(u) || download) && !(ausgang && u.href === ausgang)) {
           e.preventDefault();
           const datei = dateiFuer(u);
           if (datei) echtOpen(datei, "_blank", "noopener");
@@ -438,7 +449,18 @@
       });
     }
     window.addEventListener("pagehide", () => { seiteGeht = seiteGeht || Date.now(); });
-    window.addEventListener("pageshow", () => { seiteGeht = 0; });
+    window.addEventListener("pageshow", (e) => {
+      seiteGeht = 0;
+      if (!e.persisted || !DEF) return;
+      // Aus dem Seitenspeicher des Browsers zurück (Zurück/Vor): Läuft die Übung nicht mehr, zur echten Seite (Befund B2);
+      // sonst den Schritt aus dem Übungszustand neu zeigen – wie nach einem Seitenaufruf aus dem Verlauf.
+      const alt = sitzung.lesen(ZUSTAND);
+      if (!aktiv(alt)) { zurEchtenSeite(); return; }
+      zustand = alt;
+      umgeleitet = false;
+      ausDemVerlauf = true;
+      schrittZeigen();
+    });
     // Schließt ein Overlay, nimmt common.js seinen Schritt im Verlauf zurück (S.overlayVerlauf: history.go, dann popstate),
     // und der Browser stellt dabei die Bildlaufhöhe von vorher wieder her. Die Führung wartet das ab (overlaySchliesst).
     for (const art of ["back", "go"]) {
@@ -489,11 +511,21 @@
   const ablaufDef = () => { const t = teilDef(); return t && zustand ? t.ablaeufe[zustand.ablauf] || null : null; };
   function speichern() { if (zustand) sitzung.schreiben(ZUSTAND, zustand); }
   function frischerBestand() { return DEF && typeof DEF.bestand === "function" ? JSON.parse(JSON.stringify(DEF.bestand() || {})) : {}; }
+  // Wie diese Seite geladen wurde: "navigate", "reload" oder "back_forward" (Zurück/Vor im Browser).
+  function ladeart() {
+    try { const n = performance.getEntriesByType("navigation")[0]; return (n && n.type) || "navigate"; } catch (e) { return "navigate"; }
+  }
+  // Der Ablauf, bei dem der Merker dieses Teils „unterbrochen“ steht (vom Server mit der Seite) – sonst 0.
+  function gemerkt() {
+    const t = ((E && E.teile) || []).find((x) => x.teil === UEBUNG);
+    return t && t.zustand === "unterbrochen" && Number.isInteger(t.ablauf) ? t.ablauf : 0;
+  }
+  // Der Merker geht nie auf einen kleineren Ablauf zurück (ein zweiter Reiter, Befund 1 der Endprüfung).
   function neuerAblauf(n) {
     ablageAufraeumen();
     zustand = { modul: E.modul, teil: UEBUNG, ablauf: n, schritt: 0, z: frischerBestand() };
     speichern();
-    merken(E.modul, UEBUNG, "unterbrochen", n);
+    merken(E.modul, UEBUNG, "unterbrochen", Math.max(n, gemerkt()));
   }
   // Steht die Seite schon an der Startadresse des Ablaufs? (Pfad und Abfrage ohne Kennung; der Anker zählt nicht.)
   function ohneKennung(u) {
@@ -529,6 +561,15 @@
     setTimeout(los, 0);
   }
 
+  // Läuft in diesem Reiter eine Übung dieses Teils (Übungszustand in der Ablage)?
+  const aktiv = (alt) => Boolean(alt && typeof alt === "object" && alt.modul === E.modul && alt.teil === UEBUNG);
+  // Raus zur echten Startseite des Moduls, ohne Spur im Verlauf (Zurück nach dem Verlassen der Übung, Befund B2).
+  function zurEchtenSeite() {
+    umgeleitet = true;
+    fuehrungWeg();
+    location.replace(E.start);
+  }
+
   function starten() {
     const hier = new URL(location.href);
     const param = hier.searchParams.has("ablauf") ? parseInt(hier.searchParams.get("ablauf"), 10) : null;
@@ -538,17 +579,34 @@
       hier.searchParams.delete("ablauf");
       history.replaceState(history.state, "", hier.pathname + hier.search + hier.hash);
     }
+    // Aus dem Verlauf (Zurück/Vor) ohne laufende Übung dieses Teils – nach „Übung unterbrechen“, „Geschafft“ oder dem Weg
+    // über die Kopfleiste: keine Übungsseite ohne Führung, sondern die echte Seite (Befund B2).
+    if (ladeart() === "back_forward" && !aktiv(alt)) {
+      zustand = { modul: E.modul, teil: UEBUNG, ablauf: 0, schritt: 0, z: {} };
+      zurEchtenSeite();
+      return;
+    }
     if (!t || !Array.isArray(t.ablaeufe) || !t.ablaeufe.length) {
       zustand = { modul: E.modul, teil: UEBUNG, ablauf: 0, schritt: 0, z: frischerBestand() };
       return;
     }
-    if (param !== null || !alt || alt.modul !== E.modul || alt.teil !== UEBUNG || !t.ablaeufe[alt.ablauf]) {
-      const n = Math.max(0, Math.min(Number.isFinite(param) ? param : 0, t.ablaeufe.length - 1));
+    // Ein Reiter ohne Übungszustand (Profil, Angebot, Strg-Klick, Lesezeichen) beginnt beim gemerkten Ablauf.
+    if (param !== null || !aktiv(alt) || !t.ablaeufe[alt.ablauf]) {
+      const n = Math.max(0, Math.min(Number.isFinite(param) ? param : gemerkt(), t.ablaeufe.length - 1));
       neuerAblauf(n);
       zumStart(t.ablaeufe[n].start, true);
       return;
     }
+    // Neu geladen nach einer Eingabe in diesem Ablauf (Text, Suchbegriff): Die Eingabe ist weg – der Ablauf beginnt von vorn,
+    // statt einen Schritt zu zeigen, der sie voraussetzt (Verbesserung V9).
+    const schritte = t.ablaeufe[alt.ablauf].schritte || [];
+    if (ladeart() === "reload" && schritte.slice(0, alt.schritt).some((x) => x && x.warten && x.warten.wert)) {
+      neuerAblauf(alt.ablauf);
+      zumStart(t.ablaeufe[alt.ablauf].start, true);
+      return;
+    }
     zustand = alt;
+    ausDemVerlauf = ladeart() === "back_forward";
   }
 
   let blase = null;
@@ -639,10 +697,22 @@
     }
     return { oben, unten: Math.max(unten, oben + 1) };
   }
+  /* Das Rechteck des Ziels – bei einem Kombinationsfeld mit aufgeklappter Liste (aria-expanded="true", aria-controls:
+     Vorschläge der Suche) samt Liste: Sie gehört ins Bild, und die Blase deckt sie nicht (Telefon quer, Browserprüfung). */
+  function zielFlaeche(el) {
+    const r = el.getBoundingClientRect();
+    const id = el.getAttribute("aria-expanded") === "true" ? el.getAttribute("aria-controls") : "";
+    const liste = id ? document.getElementById(id) : null;
+    if (!liste || !liste.getClientRects().length || liste.hidden) return r;
+    const l = liste.getBoundingClientRect();
+    const k = { left: Math.min(r.left, l.left), top: Math.min(r.top, l.top), right: Math.max(r.right, l.right),
+                bottom: Math.max(r.bottom, l.bottom) };
+    return Object.assign(k, { width: k.right - k.left, height: k.bottom - k.top });
+  }
   // Steht das Ziel im freien Bereich? (Höhere Ziele: wenn sie seine Mitte bedecken.)
   function imFreien(el) {
     const f = freieFlaeche(el);
-    const r = el.getBoundingClientRect();
+    const r = zielFlaeche(el);
     if (r.height <= f.unten - f.oben + 1) return r.top >= f.oben - 1 && r.bottom <= f.unten + 1;
     const mitte = (f.oben + f.unten) / 2;
     return r.top <= mitte && r.bottom >= mitte;
@@ -665,7 +735,7 @@
     for (let i = 0; i < 3 && !imFreien(el); i++) {
       if (i === 0) el.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "instant" });   // in jedem Rahmen sichtbar
       const f = freieFlaeche(el);
-      const r = el.getBoundingClientRect();
+      const r = zielFlaeche(el);
       const frei = f.unten - f.oben;
       verschieben(el, (r.height <= frei ? f.oben + (frei - r.height) / 2 : f.oben) - r.top);
     }
@@ -682,9 +752,12 @@
       if (!sichtbar(el)) {
         el = zielSuchen(s.ziel);
         if (!el) continue;
-        zielBeschreiben(el, s);
+        zielBeschreiben(el);
       }
       if (overlaySchliesst() || (document.fonts && document.fonts.status !== "loaded") || animiert(el)) continue;
+      insBild(el);
+      lage();
+      // Findet die Blase neben dem Ziel keinen Platz, steht sie jetzt als Leiste unten – das Ziel darüber.
       insBild(el);
       lage();
       const vorher = lageText(el);
@@ -739,28 +812,57 @@
     const b = behaelter();
     for (const el of [rahmen, blase, ansage]) if (el && el.parentElement !== b) b.appendChild(el);
   }
-  const schmal = () => window.innerWidth < 600;
+  /* Leiste unten statt schwebender Blase: am Telefon hochkant (schmal) und bei geringer Höhe – Telefon quer (Befund B1
+     der Browserprüfung vom 04.11.2026) –, dazu in einem Schritt, in dem die Blase neben dem Ziel keinen Platz fand
+     (engLeiste, lage). Das Angebot folgt derselben Regel. */
+  const schmal = () => window.innerWidth < 600 || window.innerHeight < 520;
+  let engLeiste = false;
   // Offene Menüs: schwebende (am Ende der Seite, über allem außer Führung und Dialogen) und aufgeklappte.
   const MENUES = ".menue-schwebend, details[open] > :is(.menue-liste, .mat-menue-liste, .zeilenmenue-liste)";
   const menues = () => [...document.querySelectorAll(MENUES)].filter((m) => m.getClientRects().length && !m.closest("[hidden], [inert]"));
   const ueber = (a, b) => a.left < b.right - 1 && a.right > b.left + 1 && a.top < b.bottom - 1 && a.bottom > b.top + 1;
   const kasten = (left, top, w, h) => ({ left, top, right: left + w, bottom: top + h });
+  // Die Knöpfe eines Dialogs (Abbrechen, Hauptaktion): Die Blase weicht ihnen aus wie Menüs (Befund B3).
+  const DIALOGKNOEPFE = ":is(.dlg-actions, .c-actions, .lb-aktionen) :is(button, a[href])";
+  // Die Bildschirmsegmente eines faltbaren Geräts (Scharnier, Befund B4) – mit nur einem Segment leer.
+  function segmente() {
+    const quelle = (window.viewport && window.viewport.segments) || (window.visualViewport && window.visualViewport.segments) || [];
+    const liste = [...quelle].map((g) => kasten(g.x !== undefined ? g.x : g.left, g.y !== undefined ? g.y : g.top, g.width, g.height));
+    return liste.length > 1 ? liste : [];
+  }
+  // Einen Platz für die Blase (left, top) in das Segment schieben, in dem seine Mitte liegt.
+  function insSegment([x, y], w, h, segs) {
+    const mx = x + w / 2;
+    const my = y + h / 2;
+    const g = segs.find((k) => mx >= k.left && mx < k.right && my >= k.top && my < k.bottom)
+      || segs.reduce((a, k) => (Math.hypot(mx - (k.left + k.right) / 2, my - (k.top + k.bottom) / 2)
+        < Math.hypot(mx - (a.left + a.right) / 2, my - (a.top + a.bottom) / 2) ? k : a));
+    if (g.right - g.left < w + 16 || g.bottom - g.top < h + 16) return [x, y];
+    return [Math.min(Math.max(g.left + 8, x), g.right - w - 8), Math.min(Math.max(g.top + 8, y), g.bottom - h - 8)];
+  }
   function lage() {
     planung = 0;
     if (!blase) return;
     if (blase.hidden) { rahmen.hidden = true; return; }        // Rückfrage „Übung unterbrechen?“ offen
     einhaengen();
     const wurzel = document.documentElement;
-    const leiste = schmal();
+    const leiste = schmal() || engLeiste;
     blase.classList.toggle("als-leiste", leiste);
     wurzel.classList.toggle("fuehrung-leiste", leiste);
     if (leiste) wurzel.style.setProperty("--fuehrung-hoehe", `${Math.ceil(blase.offsetHeight)}px`);
     else wurzel.style.removeProperty("--fuehrung-hoehe");
-    // Zeichnet die Seite neu, ist das Ziel ein neues Element – dann wieder suchen.
+    // Zeichnet die Seite neu, ist das Ziel ein neues Element – dann wieder suchen. Ein Ziel als Funktion hängt an der
+    // Lage (Lupe, bis das Suchfeld offen ist) und wird jedes Mal neu bestimmt; ebenso ein Text als Getter.
     const s = aktuellerSchritt();
-    if (s && s.ziel !== null && s.ziel !== undefined && !sichtbar(zielEl)) {
+    if (s && s.ziel !== null && s.ziel !== undefined && (!sichtbar(zielEl) || typeof s.ziel === "function")) {
       const neu = zielSuchen(s.ziel);
-      if (neu) zielBeschreiben(neu, s);
+      if (neu && neu !== zielEl) zielBeschreiben(neu);
+    }
+    const textEl = blase.querySelector(".fuehrung-text");
+    if (s && textEl && zustand && blase.dataset.schritt === `${zustand.ablauf}:${zustand.schritt}`
+        && textEl.textContent !== wortlaut(s.text || "")) {
+      textEl.textContent = wortlaut(s.text || "");
+      ansagen(textEl.textContent);
     }
     // Steht die Blase in einem Dialog, das Ziel aber dahinter (inert), bleibt der Dialog ohne Abdunkelung.
     const imDialog = blase.parentElement !== document.body;
@@ -787,48 +889,62 @@
         width: `${Math.round(r.width + 8)}px`, height: `${Math.round(r.height + 8)}px` });
     }
     if (leiste) {
-      blase.style.left = "";
+      // Zwei Segmente nebeneinander (faltbares Gerät quer): die Leiste nur im Segment des Ziels, sonst im rechten – nicht
+      // über dem Scharnier.
+      const segs = segmente();
+      const g = segs.length && segs.every((k) => k.top === segs[0].top)
+        ? segs.find((k) => r && (r.left + r.right) / 2 >= k.left && (r.left + r.right) / 2 < k.right) || segs[segs.length - 1] : null;
+      blase.style.left = g ? `${Math.round(g.left)}px` : "";
+      blase.style.right = g ? `${Math.round(wurzel.clientWidth - g.right)}px` : "";
       blase.style.top = "";
       const b = blase.getBoundingClientRect();
       blase.classList.toggle("unter-menue", flaechen.some((m) => ueber(m, b)));
       return;
     }
+    /* Die schwebende Blase: unter, über, rechts oder links neben dem Ziel (ohne Ziel neben dem Dialog bzw. mitten im
+       Fenster), dann um den Dialog und um offene Menüs herum. Sie deckt nie das Ziel, die Kopfleiste oder die Leisten
+       über dem Ziel und bleibt in einem Bildschirmsegment; Menüs und Knöpfe eines Dialogs meidet sie. Geht das nirgends,
+       liegt sie unter einem schwebenden Menü – oder steht für den Rest des Schritts als Leiste unten. */
     const vw = wurzel.clientWidth;
     const vh = window.innerHeight;
     const w = blase.offsetWidth;
     const h = blase.offsetHeight;
-    let left = (vw - w) / 2;
-    let top = (vh - h) / 2;
-    // Ohne sichtbares Ziel in einem Dialog: neben den Dialog statt über seinen Inhalt.
-    const anker = r || (imDialog ? blase.parentElement.getBoundingClientRect() : null);
-    if (anker && !r) {
-      top = anker.bottom + 12;
-      if (top + h > vh - 8) top = anker.top - 12 - h;
-      if (top < 8) top = Math.max(8, vh - h - 8);
-    } else if (r) {
-      // Darüber nur unterhalb der Leisten oben (Kopfleiste, Seitenkopf) – die Blase verdeckt sie nicht.
-      const obenFrei = freieFlaeche(zielEl).oben;
-      top = r.bottom + 12;                                   // unter dem Ziel …
-      if (top + h > vh - 8) top = r.top - 12 - h;            // … sonst darüber …
-      if (top < obenFrei + 8) top = Math.max(8, vh - h - 8); // … sonst unten im Fenster
-      left = Math.min(Math.max(8, r.left), vw - w - 8);
+    const kopf = document.querySelector("header.bauchbinde");
+    const kopfR = kopf && kopf.getClientRects().length ? kopf.getBoundingClientRect() : null;
+    const obenFrei = Math.max(r ? freieFlaeche(zielEl).oben : 0, kopfR && kopfR.bottom > 0 ? kopfR.bottom : 0);
+    const dialog = imDialog ? blase.parentElement.getBoundingClientRect() : null;
+    const knoepfe = imDialog ? [...blase.parentElement.querySelectorAll(DIALOGKNOEPFE)]
+      .filter((k) => k.getClientRects().length && !k.closest(".fuehrung-blase") && !(zielEl && (k === zielEl || k.contains(zielEl))))
+      .map((k) => k.getBoundingClientRect()) : [];
+    const zf = r ? zielFlaeche(zielEl) : null;
+    const verboten = [zf && kasten(zf.left - 4, zf.top - 4, zf.width + 8, zf.height + 8), kopfR && kopfR.bottom > 0 && kopfR].filter(Boolean);
+    const segs = segmente();
+    const quer = (x) => Math.min(Math.max(8, x), vw - w - 8);
+    const hoch = (y) => Math.min(Math.max(obenFrei + 8, y), vh - h - 8);
+    const um = (k) => [[quer(k.left), k.bottom + 12], [quer(k.left), k.top - 12 - h], [k.right + 12, hoch(k.top)], [k.left - 12 - w, hoch(k.top)]];
+    const plaetze = [];
+    if (zf) plaetze.push(...um(zf));
+    if (dialog) plaetze.push(...um(dialog));
+    if (!r && !dialog) plaetze.push([(vw - w) / 2, hoch((vh - h) / 2)]);
+    if (!r) plaetze.push([quer((vw - w) / 2), vh - h - 8]);
+    for (const m of flaechen) plaetze.push(...um(m));
+    const geprueft = plaetze.map((p) => (segs.length ? insSegment(p, w, h, segs) : p)).map(([x, y]) => {
+      const k = kasten(x, y, w, h);
+      const drin = x >= 8 && y >= obenFrei + 8 - 0.5 && k.right <= vw - 8 && k.bottom <= vh - 8
+        && (!segs.length || segs.some((g) => k.left >= g.left && k.right <= g.right && k.top >= g.top && k.bottom <= g.bottom));
+      const frei = drin && !verboten.some((v) => ueber(v, k)) && !knoepfe.some((b) => ueber(b, k));
+      return { x, y, frei, ohneMenue: frei && !flaechen.some((f) => ueber(f, k)) };
+    });
+    const wahl = geprueft.find((p) => p.ohneMenue) || geprueft.find((p) => p.frei);
+    if (!wahl) {
+      engLeiste = true;
+      lage();
+      return;
     }
-    left = Math.max(8, left);
-    top = Math.max(8, top);
-    let unter = false;
-    const m = flaechen.find((x) => ueber(x, kasten(left, top, w, h)));
-    if (m) {
-      const quer = Math.min(left, vw - w - 8);
-      const hoch = Math.min(top, vh - h - 8);
-      const passt = [[quer, m.bottom + 12], [quer, m.top - 12 - h], [m.right + 12, hoch], [m.left - 12 - w, hoch]].find(([x, y]) => {
-        const k = kasten(x, y, w, h);
-        return x >= 8 && y >= 8 && k.right <= vw - 8 && k.bottom <= vh - 8 && !flaechen.some((f) => ueber(f, k)) && !(r && ueber(r, k));
-      });
-      if (passt) [left, top] = passt; else unter = true;
-    }
-    blase.classList.toggle("unter-menue", unter);
-    blase.style.left = `${Math.round(left)}px`;
-    blase.style.top = `${Math.round(top)}px`;
+    blase.classList.toggle("unter-menue", !wahl.ohneMenue);
+    blase.style.right = "";
+    blase.style.left = `${Math.round(wahl.x)}px`;
+    blase.style.top = `${Math.round(wahl.y)}px`;
   }
   const lagePlanen = () => { if (!planung) planung = requestAnimationFrame(lage); };
 
@@ -858,20 +974,13 @@
   }
 
   /* Das Ziel bekommt den Text des Schritts als Beschreibung (aria-describedby). Nicht in einem Editor (contenteditable):
-     ProseMirror zeichnet einen Knoten neu, sobald jemand ein Attribut daran setzt – dort sagt die Live-Region der Blase
-     den Text an. */
-  function zielBeschreiben(el, s) {
+     ProseMirror zeichnet einen Knoten neu, sobald jemand ein Attribut daran setzt – dort genügt die Live-Region der Blase,
+     die jeden Schritt ansagt (ansagen). */
+  function zielBeschreiben(el) {
     if (zielEl && zielEl !== el) zielLoesen();
-    const neu = el && el !== zielEl;
     zielEl = el;
     if (!el) return;
-    if (el.isContentEditable || el.closest("[contenteditable]:not([contenteditable=false])")) {
-      if (neu && ansage && s) {
-        ansage.textContent = "";
-        setTimeout(() => { if (ansage && zielEl === el) ansage.textContent = s.text || ""; }, 120);
-      }
-      return;
-    }
+    if (el.isContentEditable || el.closest("[contenteditable]:not([contenteditable=false])")) return;
     const alt = (el.getAttribute("aria-describedby") || "").split(/\s+/).filter(Boolean);
     if (!alt.includes("fuehrung-text")) {
       el.dataset.fuehrungBeschrieben = "1";
@@ -932,7 +1041,22 @@
         ${knoepfe.map((k, i) => `<button type="button" class="${k.klasse}" data-k="${i}">${esc(k.text)}</button>`).join("")}</div>`;
     blase.querySelector(".fuehrung-unterbrechen").addEventListener("click", () => unterbrechen());
     blase.querySelectorAll("[data-k]").forEach((b) => b.addEventListener("click", () => knoepfe[+b.dataset.k].aktion(b)));
+    delete blase.dataset.schritt;
+    ansagen(`${kopf}: ${text}`);
     lage();
+  }
+  // Jede Schrittänderung in die Live-Region (Verbesserung V3) – kurz geleert, damit auch ein gleicher Text neu ankommt.
+  function ansagen(text) {
+    if (!ansage) return;
+    ansage.textContent = "";
+    const el = ansage;
+    setTimeout(() => { if (ansage === el) el.textContent = text; }, 120);
+  }
+  /* Am Rechner klickst du, am Finger tippst du (Verbesserung V5): Die Übungsdateien schreiben „Tippe“ – ohne Touch-Zeiger
+     sagt die Blase „Klicke“. */
+  function wortlaut(text) {
+    if (window.matchMedia && window.matchMedia("(pointer: coarse)").matches) return text;
+    return String(text).replace(/\b([Tt])ipp(e|st)?\b/g, (_, t, endung) => `${t === "T" ? "K" : "k"}lick${endung || ""}`);
   }
 
   function schrittVerlassen() {
@@ -942,6 +1066,7 @@
     fuehrung.bereit = false;
     nachgeholt = 0;
     selbstGerollt = false;
+    engLeiste = false;
   }
   // Noch einmal, wenn die Seite doch bleibt (ein Seitenwechsel, der abbricht).
   const nochmal = (lauf) => { if (!umgeleitet) setTimeout(() => { if (lauf === laufNr) schrittZeigen(); }, 300); };
@@ -970,23 +1095,25 @@
       el = await warteAuf(() => (overlaySchliesst() || seiteGehtGerade() ? null : zielSuchen(s.ziel)), 5000);
       if (lauf !== laufNr) return;
       if (seiteGehtGerade()) { nochmal(lauf); return; }
-      if (!el) { sackgasse("Hier geht es in der Übung nicht weiter."); return; }
+      if (!el) { sackgasse(ausDemVerlauf ? ZURUECK_GEGANGEN : NICHT_WEITER); return; }
     }
-    zielBeschreiben(el, s);
+    zielBeschreiben(el);
     const { n, m } = zaehlung();
     const knoepfe = [];
     const vorige = liste.slice(0, zustand.schritt).filter((x) => !x.wenn || sicher(x.wenn));
     if (vorige.length && !vorige[vorige.length - 1].warten) knoepfe.push({ text: "Zurück", klasse: "btn secondary", aktion: zurueck });
     if (s.datei) knoepfe.push({ text: "Übungsbild nehmen", klasse: "btn secondary fuehrung-bild", aktion: () => bildNehmen(s.datei) });
-    if (!s.warten) knoepfe.push({ text: "Weiter", klasse: "btn fuehrung-weiter", aktion: () => weiter() });
-    blaseZeigen(`Übung · Schritt ${n} von ${m}`, a.titel || "", s.text || "", knoepfe);
+    // „Weiter“ grau umrandet: Der rote Hauptknopf im Bild gehört der Seite (Knopfsprache, Verbesserung V11).
+    if (!s.warten) knoepfe.push({ text: "Weiter", klasse: "btn secondary fuehrung-weiter", aktion: () => weiter() });
+    blaseZeigen(`Übung · Schritt ${n} von ${m}`, a.titel || "", wortlaut(s.text || ""), knoepfe);
+    blase.dataset.schritt = `${zustand.ablauf}:${zustand.schritt}`;
     wachen(s, lauf);
     // Ins Bild holen und abwarten, bis das Ziel ruht (beruhigen) – erst dann ist der Schritt bereit.
     if (el) {
       el = await beruhigen(s, el, lauf);
       if (lauf !== laufNr) return;
-      if (!el) { sackgasse("Hier geht es in der Übung nicht weiter."); return; }
-      zielBeschreiben(el, s);
+      if (!el) { sackgasse(ausDemVerlauf ? ZURUECK_GEGANGEN : NICHT_WEITER); return; }
+      zielBeschreiben(el);
     }
     lage();
     // Fokus: ohne Aktion auf „Weiter“, mit Aktion auf das Ziel (wenn fokussierbar), sonst auf den Text – nicht, wenn du
@@ -1052,11 +1179,14 @@
     schrittZeigen();
   }
 
+  const NICHT_WEITER = "Hier geht es in der Übung nicht weiter.";
+  // Zurück im Browser auf eine Seite eines früheren Schritts (Verbesserung V2): „Vor“ führt zum Schritt zurück.
+  const ZURUECK_GEGANGEN = "Du bist im Browser zurückgegangen. Mit „Vor“ geht es beim letzten Schritt weiter – oder beginne den Ablauf neu.";
   function sackgasse(text) {
     schrittVerlassen();
     fuehrung.sackgasse = true;
     const a = ablaufDef();
-    blaseZeigen("Übung", (a && a.titel) || "Übung", text, [{ text: "Ablauf neu beginnen", klasse: "btn", aktion: neuBeginnen }]);
+    blaseZeigen("Übung", (a && a.titel) || "Übung", text, [{ text: "Ablauf neu beginnen", klasse: "btn secondary", aktion: neuBeginnen }]);
     blase.querySelector(".btn").focus({ preventScroll: true });
   }
   function neuBeginnen() {
@@ -1139,7 +1269,7 @@
     const anleitung = E.anleitung ? `<p>Alles Weitere steht in der Anleitung in der Strömipedia.</p>
       <p><a href="${esc(E.anleitung)}" target="_blank" rel="noopener">Anleitung in der Strömipedia öffnen</a></p>` : "";
     const knoepfe = naechster
-      ? `<button type="button" class="btn secondary" id="fg-spaeter">Später</button>
+      ? `<button type="button" class="btn secondary" id="fg-spaeter">Nicht jetzt</button>
          <button type="button" class="btn" id="fg-weiter">Weiter mit „${esc(naechster.titel)}“</button>`
       : `<button type="button" class="btn" id="fg-ende">Übung beenden</button>`;
     let wohin = E.start;
@@ -1162,7 +1292,8 @@
     if (!blase) return;
     blase.hidden = true;
     rahmen.hidden = true;
-    S.confirm("Übung unterbrechen?", "Unterbrechen", "Weiter üben", { endgueltig: false }).then((ja) => {
+    S.confirm("Übung unterbrechen? Fortsetzen kannst du später im Profil unter „Einführungen“.", "Unterbrechen", "Weiter üben",
+      { endgueltig: false }).then((ja) => {
       if (ja) { unterbrechen(); return; }
       if (!blase) return;
       blase.hidden = false;
@@ -1216,7 +1347,9 @@
       const umfang = an.length > 1
         ? `${liste(an.map((t) => (t.teil === "grund" ? "Grundteil" : `Teil „${t.titel}“`)))}, etwa ${minuten} Minuten, jederzeit unterbrechbar.`
         : `Etwa ${minuten} Minuten, jederzeit unterbrechbar.`;
-      return { titel: `Kurze Übung ${E.zu}`, text: `Probier die wichtigsten Abläufe an Übungsdaten aus. ${E.bleibt} ${umfang}`,
+      // „Kurz“ nur, wenn sie es ist – mit den Teilen deiner Rollen kann sie länger dauern (Verbesserung V5).
+      return { titel: `${minuten <= 5 ? "Kurze Übung" : "Übung"} ${E.zu}`,
+               text: `Probier die wichtigsten Abläufe an Übungsdaten aus. ${E.bleibt} ${umfang}`,
                knopf: "Übung starten", start: an[0] };
     }
     return { titel: an.length > 1 ? `Neu für dich: Übungen ${liste(an.map((t) => `„${t.titel}“`))}` : `Neu für dich: Übung „${an[0].titel}“`,

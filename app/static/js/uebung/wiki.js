@@ -477,7 +477,7 @@ Platzhaltertext mit einem Verweis auf die [zweite Übungsseite](/stroemipedia/ue
   const $ = (sel) => document.querySelector(sel);
   const passt = (abfrage) => window.matchMedia(abfrage).matches;
   const schublade = () => passt("(max-width: 1023px)");             // Seitenbaum hinter „☰“, Suchzeile oben (app.css)
-  const leiste = () => passt("(max-width: 599px)");                // Sprechblase als Leiste unten (einfuehrung.js)
+  const leiste = () => passt("(max-width: 599px), (max-height: 519px)");   // Sprechblase als Leiste unten (einfuehrung.js, schmal)
   const gliederungImMenue = () => passt("(max-width: 1180px)");     // keine Gliederung, Kommentare unter dem Text (app.css)
   // Wie die Führung „sichtbar“ zählt (einfuehrung.js): mit Fläche, nicht unsichtbar, nicht in [hidden]/[inert].
   const sichtbar = (el) => Boolean(el && el.isConnected && el.getClientRects().length && getComputedStyle(el).visibility !== "hidden"
@@ -561,7 +561,7 @@ Platzhaltertext mit einem Verweis auf die [zweite Übungsseite](/stroemipedia/ue
         text: "Seiten, die für dich freigegeben sind, kannst du bearbeiten. Tippe auf „Bearbeiten“.", warten: { klick: "#pg-edit" } },
       { ziel: EDITOR, text: "Schreib einen Satz dazu.",
         warten: { wert: [EDITOR, /\S/] }, probe: { tippen: [EDITOR, "Übung: ein Satz. "] } },
-      { ziel: "#ed-status", text: "Gespeichert wird von selbst – hier steht der Stand.",
+      { ziel: "#ed-status", text: "Gespeichert wird von selbst – dieses Feld zeigt, ob alles gespeichert ist.",
         warten: { bedingung: () => /Gespeichert/.test(($("#ed-status") || {}).textContent || "") }, probe: { klick: "#ed-status" } },
       { ziel: "#ed-read", text: "Zurück zum Lesen.", warten: { klick: "#ed-read" } },
     ] },

@@ -223,6 +223,12 @@
   /* Ziele sind einfache Selektoren: Die Führung wartet, bis die Seitenleiste nicht mehr gleitet (am Telefon eine
      Schublade von unten), und holt das Ziel sofort über die Leiste der Führung (einfuehrung.js, beruhigen/insBild). */
   const BILD_PUT = /^PUT \/api\/photos\/\d+$/;
+  /* Am kleinen Telefon (iPhone SE) bleibt neben Positionsbanner und Leiste kaum Karte zum Tippen (Befund B5 der
+     Browserprüfung): „Album-Position übernehmen“ setzt die Position auch – dann entfällt „Position speichern“. */
+  let albumPosition = false;
+  document.addEventListener("click", (e) => {
+    if (e.target instanceof Element && e.target.closest("#loc-album")) albumPosition = true;
+  }, true);
 
   S.einfuehrung.modul("karte", {
     bestand,
@@ -280,10 +286,13 @@
           { ziel: "#loc-form button[type=submit]", text: "Tippe auf „Suchen“.", warten: { anfrage: "GET /api/geocode" },
             probe: { klick: "#loc-form button[type=submit]" } },
           { ziel: "#loc-treffer button", text: "Wähle den Treffer – die Karte fährt dorthin.", warten: { klick: "#loc-treffer button" } },
-          { ziel: "#map", text: "Tippe jetzt auf die Karte, an die Stelle, an der das Bild entstanden ist.",
-            // Die Probe tippt auf eine freie Stelle der Karte – in ihrer Mitte liegt am Telefon das Positionsbanner.
-            warten: { da: "#loc-ok" }, probe: { klick: "#map", frei: true } },
-          { ziel: "#loc-ok", text: "Speichere die Position.", warten: { anfrage: BILD_PUT }, probe: { klick: "#loc-ok" } },
+          { ziel: "#map",
+            text: "Tippe jetzt auf die Karte, an die Stelle, an der das Bild entstanden ist – oder übernimm die Album-Position.",
+            // Die Probe tippt auf eine freie Stelle der Karte – in ihrer Mitte liegt am Telefon das Positionsbanner; bleibt
+            // keine (iPhone SE), übernimmt sie die Album-Position.
+            warten: { da: "#loc-ok", anfrage: BILD_PUT }, probe: { klick: "#map", frei: true, sonst: "#loc-album" } },
+          { ziel: "#loc-ok", wenn: () => !albumPosition, text: "Speichere die Position.", warten: { anfrage: BILD_PUT },
+            probe: { klick: "#loc-ok" } },
           { ziel: "#panel.open .photo-grid", text: "Das Bild liegt jetzt mit Position im Album und auf der Karte." },
         ] },
         // Die Seite lädt zu Beginn jedes Ablaufs neu; map.js öffnet Übungsalbum A über den Anker.
