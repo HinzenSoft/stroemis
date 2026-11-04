@@ -75,9 +75,10 @@ def test_statisch():
                   ".mat-formtabelle .fp-menue :is(summary.btn, .btn) { min-width: 44px; min-height: 44px;"):
         i = css.index(regel)
         assert any(c < i for c in coarse) and css.rfind("@media (pointer: coarse)", 0, i) > css.rfind("\n}\n", 0, i), regel
-    # Die Einführung kennt den neuen Editor.
+    # Die Einführung kennt den neuen Editor (seit der Übung mit Katalog, 04.11.2026: der neue Punkt in der ersten Gruppe –
+    # ein Formular aus dem Katalog hat oft mehrere).
     uebung = lies("app/static/js/uebung/material.js")
-    assert 'const neuerPunkt = "#fp-tabelle tr.fp-punkt:has(+ tr.fp-fuss) .fp-text";' in uebung
+    assert """const neuerPunkt = '#fp-tabelle tr.fp-punkt[data-g="0"]:has(+ tr.fp-fuss) .fp-text';""" in uebung
     assert "tbody tr:last-child" not in uebung
     print("Statisch bestanden.")
 

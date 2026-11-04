@@ -12127,6 +12127,7 @@ diesen Bildern; Datenbank unverändert). `tests/test_einfuehrung_material.py`: s
 Platzhalter ohne Katalog; neu `test_durchlauf_katalog` – alle vier Teile mit dem Testkatalog bei 1280 × 900 (Maus) und
 360 × 740 (Touch), der Grundteil bei 844 × 390 (Touch): Produkte und Formular auf den Seiten, Bilder geladen (kein
 kaputtes), als einzige Medien im Netz (`Umgebung.medien_frei` in `tests/einfuehrung_browser.py`), Datenbank unverändert.
+Angepasst: `tests/test_material_formular_editor.py` (Selektor des neuen Punkts in der Übung jetzt mit `[data-g="0"]`).
 
 **Bitte bestätigen**:
 1. **Karabiner statt Helm**: Der Katalog hat keine Helme – die Rolle „Helm“ (neuer Artikel im Teil „Materialwart“) nimmt
