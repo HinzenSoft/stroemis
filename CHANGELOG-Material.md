@@ -12430,3 +12430,7 @@ aus der Strömipedia“ mit Bild `pruefanleitung.png`, Warnung „Prüfanleitung
 -export“ („verknüpft nie eine Prüfanleitung“), die Übersicht „Materialablage“ (Inhaltszeile zu „Prüfformulare“) und in
 der Strömipedia „Seiten anlegen und bearbeiten“ (Warnung „Anleitung als Vorlage markiert“ nennt „Prüfanleitungen der
 Materialablage“).
+
+**Neuer Ja/Nein-Prüfpunkt mit Soll „ja“** (Wunsch des Nutzers, 04.11.2026): Ein neu angelegter Prüfpunkt (Art Ja/Nein,
+„+ Prüfpunkt“ und „+ Gruppe“ im Editor) ist mit dem Soll „ja“ vorbelegt statt „nein“ (`neuerPunkt` in material.js);
+bestehende Punkte bleiben unverändert. Test: `test_material_formular_editor.py` (statisch).

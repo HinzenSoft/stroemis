@@ -5249,7 +5249,7 @@
       else gruppen.push({ name: p.gruppe || "", punkte: [kopie] });
     });
     const flach = () => gruppen.flatMap((g) => g.punkte.map((p) => Object.assign({}, p, { gruppe: g.name })));
-    const neuerPunkt = () => ({ text: "", art: "yesno", soll: "nein", pflicht: true });
+    const neuerPunkt = () => ({ text: "", art: "yesno", soll: "ja", pflicht: true });   // Soll „ja“ (Wunsch vom 04.11.2026)
     // Wie eine Gruppe in Menü, Rückfrage und Toast heißt: mit Namen, sonst mit ihrer Stelle.
     const gruppeText = (g) => (g.name.trim() ? `Gruppe „${g.name.trim()}“` : `Gruppe ${gruppen.indexOf(g) + 1} (ohne Namen)`);
     // Der getippte, noch nicht gespeicherte Titel: zeichnen() baut das Feld neu (Prüfpunkt anlegen, verschieben,

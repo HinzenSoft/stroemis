@@ -68,7 +68,7 @@ def test_statisch():
     assert '<input type="checkbox" class="fp-optional" ${p.pflicht ? "" : "checked"}> optional</label>' in editor
     assert 'p.pflicht = !$(".fp-optional", tr).checked;' in editor and "fp-pflicht\"" not in editor
     assert '${p.pflicht ? "" : \'<span class="badge grey">optional</span>\'}' in editor and '"Pflicht" : "optional"' not in editor
-    assert 'const neuerPunkt = () => ({ text: "", art: "yesno", soll: "nein", pflicht: true });' in editor
+    assert 'const neuerPunkt = () => ({ text: "", art: "yesno", soll: "ja", pflicht: true });' in editor
     # Schnittstelle unverändert: die flache Liste mit „gruppe“ je Punkt.
     assert editor.count("punkte: flach()") == 2 and 'Object.assign({}, p, { gruppe: g.name })' in editor
     css = lies("app/material/static/material.css")
