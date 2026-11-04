@@ -118,7 +118,8 @@ def test_b11_ueberschriften():
 def test_ft6_ft7_ft4():
     rk = lies(RK)
     # FT6
-    assert 'meldungMerken("Lehrgang angelegt"); location.href = `/riegenkarten/${lg.id}#teilnehmer`;' in rk
+    # Seit der Einführung (03.11.2026) über S.ziel – in der Übung behält die Adresse ihre Kennung.
+    assert 'meldungMerken("Lehrgang angelegt"); location.href = S.ziel(`/riegenkarten/${lg.id}#teilnehmer`);' in rk
     assert "#leistungen`; });" not in rk
     assert "<strong>Noch niemand eingetragen</strong>" in rk
     assert 'S.feldFehler($("#mf-tn"), "Bitte zuerst eine Person wählen.")' in rk

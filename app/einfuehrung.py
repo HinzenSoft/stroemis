@@ -86,9 +86,9 @@ TEILE = {
     ),
     "pruefungen": (
         {"teil": "grund", "titel": "Grundteil", "minuten": 5, "stufe": auth.MITGLIED, "start": "/riegenkarten",
-         "ablaeufe": ("Lehrgang öffnen",)},
-        {"teil": "leitung", "titel": "Leitung", "minuten": 3, "stufe": auth.MITGLIED, "start": "/riegenkarten",
-         "ablaeufe": ("Teilnehmende eintragen",)},
+         "ablaeufe": ("Lehrgang öffnen", "Voraussetzung abhaken", "Bewerten", "Mängel")},
+        {"teil": "leitung", "titel": "Leitung", "minuten": 3, "stufe": auth.MITGLIED,
+         "start": "/riegenkarten/930000001#teilnehmer", "ablaeufe": ("Teilnehmende eintragen", "Lehrgangsergebnis")},
         {"teil": "redakteur", "titel": "Redakteur", "minuten": 3, "stufe": auth.REDAKTEUR, "start": "/riegenkarten",
          "ablaeufe": ("Lehrgang anlegen",)},
     ),

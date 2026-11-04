@@ -16,6 +16,8 @@
   const LEHRGANG_ID = root.dataset.lehrgang ? +root.dataset.lehrgang : null;
   const KATALOG_ID = root.dataset.katalog ? +root.dataset.katalog : null;
   const API = "/api/pruefungen";
+  // Seitenwechsel und Druckansichten gehen über S.ziel (common.js): In der Übung (Einführung, 03.11.2026) behält die
+  // Adresse ihre Kennung „uebung=“ – sonst lüde die echte Seite; außerhalb der Übung kommt sie unverändert zurück.
   const SU_KEY = "pruef:stoppuhr";
   const $ = (sel, el) => (el || document).querySelector(sel);
   const $$ = (sel, el) => Array.from((el || document).querySelectorAll(sel));
@@ -608,7 +610,7 @@
             const nicht = r.ausbilder_nicht_uebernommen || [];
             meldungMerken(`Kopie „${r.lehrgang.titel}“ angelegt`
               + (nicht.length ? `. ${NICHT_UEBERNOMMEN}${nicht.map((a) => a.name).join(", ")}` : ""));
-            location.href = `/riegenkarten/${r.lehrgang.id}#leistungen`;
+            location.href = S.ziel(`/riegenkarten/${r.lehrgang.id}#leistungen`);
           } catch (e) { S.fehlschlag(knopf, e, body); }
         };
       });
@@ -620,7 +622,7 @@
     try {
       await api(`${API}/lehrgaenge/${lg.id}`, { method: "DELETE" });
       if (ANSICHT === "liste") { toast("Lehrgang gelöscht"); await listeLaden(); }
-      else { meldungMerken("Lehrgang gelöscht"); location.href = "/riegenkarten"; }
+      else { meldungMerken("Lehrgang gelöscht"); location.href = S.ziel("/riegenkarten"); }
     } catch (e) { toast(e.message, true); }
   }
 
@@ -753,7 +755,7 @@
                           : await api(`${API}/kataloge/${k.id}`, { method: "PUT", body: d });
             dlg.close();
             state.kataloge = null;   // Titel/Beschreibung geändert – Auswahlliste neu laden.
-            if (neu) { toast("Katalog angelegt"); location.href = `/riegenkarten/kataloge/${r.katalog.id}`; return; }
+            if (neu) { toast("Katalog angelegt"); location.href = S.ziel(`/riegenkarten/kataloge/${r.katalog.id}`); return; }
             toast("Gespeichert");
             if (ANSICHT === "kataloge") await renderKataloge();
             else { state.katalog = r.katalog; renderKatalogSeite(); }
@@ -770,7 +772,7 @@
       await api(`${API}/kataloge/${k.id}`, { method: "DELETE" });
       state.kataloge = null;
       toast("Katalog gelöscht");
-      if (ANSICHT === "katalog") location.href = "/riegenkarten/kataloge"; else await renderKataloge();
+      if (ANSICHT === "katalog") location.href = S.ziel("/riegenkarten/kataloge"); else await renderKataloge();
     } catch (e) { toast(e.message, true); }
   }
 
@@ -2678,7 +2680,7 @@
                   try { await api(`${API}/lehrgaenge/${lg.id}`, { method: "PUT", body: diff }); } catch (e) { toast(e.message, true); }
                 }
                 meldungMerken(meldung);
-                location.href = `/riegenkarten/${lg.id}#teilnehmer`;
+                location.href = S.ziel(`/riegenkarten/${lg.id}#teilnehmer`);
                 return;
               }
               dlg.close();
@@ -2720,7 +2722,7 @@
       switch (act) {
         // Ein neuer Lehrgang öffnet bei den Teilnehmenden – dort geht es weiter (Gerätetest FT6); die Meldung
         // „Lehrgang angelegt“ überlebt den Seitenwechsel.
-        case "lg-neu": return lehrgangDialog(null, (lg) => { meldungMerken("Lehrgang angelegt"); location.href = `/riegenkarten/${lg.id}#teilnehmer`; });
+        case "lg-neu": return lehrgangDialog(null, (lg) => { meldungMerken("Lehrgang angelegt"); location.href = S.ziel(`/riegenkarten/${lg.id}#teilnehmer`); });
         case "lg-import": return importDialog(null);
         case "lg-edit": {
           // In der Liste fehlen Referierende und Beschreibung – dafür das Detail holen.
@@ -2748,7 +2750,7 @@
           const su = suLesen();
           if (!su) return bannerZeichnen();
           if (ANSICHT === "lehrgang" && su.lehrgang === LEHRGANG_ID) return bewertungsDialog(su.tid, su.lid);
-          location.href = `/riegenkarten/${su.lehrgang}#bewertung`;
+          location.href = S.ziel(`/riegenkarten/${su.lehrgang}#bewertung`);
           return;
         }
         case "tn-neu": return teilnehmerDialog(null);
@@ -2764,12 +2766,12 @@
         // Name in der Matrix: direkt zu „je TN“ für genau diese Person wechseln, statt erst über
         // den Reiter und dann die Auswahl zu müssen.
         case "bew-zu-tn": state.bewTn = tid; bewAnsichtSetzen("tn"); return renderReiter();
-        case "bew-tn-druck": window.open(`/riegenkarten/${LEHRGANG_ID}/druck?ansicht=tn&teilnehmer=${state.bewTn}`, "_blank", "noopener"); return;
+        case "bew-tn-druck": window.open(S.ziel(`/riegenkarten/${LEHRGANG_ID}/druck?ansicht=tn&teilnehmer=${state.bewTn}`), "_blank", "noopener"); return;
         case "zelle": return bewertungsDialog(tid, lid);
         case "m-np": return bewertungsDialog(tid, lid, { nachpruefung: true });
         // Ohne gewählte Person steht der Hinweis an der Auswahl (Fehler am Feld statt Toast, Gerätetest FT6).
         case "m-alle": return state.mf.teilnehmer ? alleBewertungenDialog(+state.mf.teilnehmer) : S.feldFehler($("#mf-tn"), "Bitte zuerst eine Person wählen.");
-        case "m-druck": window.open(`/riegenkarten/${LEHRGANG_ID}/druck?${maengelQuery(state.mf)}`, "_blank", "noopener"); return;
+        case "m-druck": window.open(S.ziel(`/riegenkarten/${LEHRGANG_ID}/druck?${maengelQuery(state.mf)}`), "_blank", "noopener"); return;
         default: return;
       }
     } catch (err) { toast(err.message, true); }
