@@ -612,9 +612,9 @@ class Beispielbestand:
         Bestandteil-Liste und mit Prüfintervall – je mit Typ, Intervall, Lebensdauer (nur textil), Länge und aktivem Formular.
         Liefert (verwendbar, ausgelassen mit Grund)."""
         from app import db
-        from app.material.services import katalog, katalog_export
+        from app.material.services import katalog
         from app.material.services.interval import herstellerseite
-        raus = katalog_export._ausgeschlossen(db.query("SELECT id, parent_id, demo FROM mat_category"))
+        raus = katalog.demo_kategorien()
         gut, ausgelassen = [], []
         for p in db.query("SELECT * FROM mat_product WHERE demo = 0 ORDER BY manufacturer COLLATE NOCASE, "
                           "model COLLATE NOCASE, id"):

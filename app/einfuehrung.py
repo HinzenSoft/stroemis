@@ -24,9 +24,11 @@ Kein Eintrag heißt: noch nie angeboten. „unterbrochen“ trägt den nächsten
 jedem fertigen Ablauf), fortgesetzt wird an seinem Anfang. Aus „erledigt“ wird nichts anderes mehr. Der Merker geht mit
 dem Konto (konto_vergessen in api_admin.delete_user); ein Zurücksetzen der Materialablage auf dev leert mat_meta und
 damit auch ihn. Kein Journal, keine Mail, keine Anzeige in der Leitstelle (Entscheidung 1)."""
+import copy
 import json
 import os
 import re
+import time
 from urllib.parse import parse_qs, quote, urlencode, urlsplit, urlunsplit
 
 from flask import Blueprint, abort, current_app, g, has_request_context, jsonify, render_template, request
@@ -235,15 +237,18 @@ def _katalog_bild(p):
 def _katalog_auswahl():
     """Je Rolle (KATALOG_ROLLEN) ein Produkt mit seinem geltenden Formular: nicht DEMO, ohne laufenden Rückruf,
     Kategorie und Materialart passend, mit geltendem Formular (katalog.formular_fuer_produkt – die eine Stelle, die das
-    Formular eines Produkts bestimmt), das nicht DEMO ist und Prüfpunkte hat. Produkte mit Bild zuerst, dann die kleinste
-    Kennung – dieselbe Auswahl für alle. {rolle: (Produktzeile, Formularzeile, Kategoriepfad, Bild)}; fehlt eine Rolle,
-    bleibt in der Übung ihr Platzhalter."""
+    Formular eines Produkts bestimmt), das nicht DEMO ist und Prüfpunkte hat. DEMO nach der Regel des Katalogs wie im
+    Export (katalog.produkt_ist_demo, formular_ist_demo: auch über eine DEMO-Kategorie – Sicherheitsprüfung vom
+    04.11.2026, Befund 4). Produkte mit Bild zuerst, dann die kleinste Kennung – dieselbe Auswahl für alle.
+    {rolle: (Produktzeile, Formularzeile, Kategoriepfad, Bild)}; fehlt eine Rolle, bleibt in der Übung ihr Platzhalter."""
+    from .material.models import produkt_demo_sql
     from .material.services import katalog
     # Ohne ein aktives echtes Formular gilt für kein Produkt eins – dann muss niemand die Produkte durchgehen.
     if not db.query("SELECT 1 FROM mat_form WHERE active = 1 AND demo = 0 LIMIT 1", one=True):
         return {}
-    produkte = db.query("SELECT * FROM mat_product p WHERE p.demo = 0 AND NOT EXISTS (SELECT 1 FROM mat_recall r "
-                        "WHERE r.product_id = p.id AND r.closed_at IS NULL) ORDER BY p.id")
+    demo_kategorien = katalog.demo_kategorien()
+    produkte = db.query(f"SELECT * FROM mat_product p WHERE NOT {produkt_demo_sql('p')} AND NOT EXISTS (SELECT 1 FROM "
+                        "mat_recall r WHERE r.product_id = p.id AND r.closed_at IS NULL) ORDER BY p.id")
     pfade, bilder, out, vergeben = {}, {}, {}, set()
 
     def pfad(kid):
@@ -265,7 +270,7 @@ def _katalog_auswahl():
                                 key=lambda p: (bild(p) is None, p["id"]))
             for p in kandidaten:
                 f = katalog.formular_fuer_produkt(p["id"])
-                if f and not f["demo"] and f["punkte_anzahl"]:
+                if f and f["punkte_anzahl"] and not katalog.formular_ist_demo(f, demo_kategorien):
                     out[rolle] = (p, f, pfad(p["category_id"]), bild(p))
                     vergeben.add(p["id"])
                     break
@@ -274,13 +279,50 @@ def _katalog_auswahl():
     return out
 
 
+# Die Auswahl geht je Produkt Kategoriepfad, Bild und Formular durch – bei einem großen Katalog ein Vielfaches einer
+# normalen Seite, und das für jede Übungsseite und jedes ihrer Bilder. Darum prozessweit zwischengespeichert
+# (Sicherheitsprüfung vom 04.11.2026, Befund 1): je App, mit dem Katalog-Stand und dem Tag als Schlüssel (_KATALOG_STAND:
+# Zahl und letzte Änderung der Tabellen, aus denen die Auswahl stammt – eine Änderung über die Dienste rechnet sofort
+# neu) und höchstens KATALOG_FRIST Sekunden lang für das, was der Stand nicht sieht (SQL von Hand, zwei Änderungen in
+# derselben Sekunde, Bilddateien, ein umbenanntes Dokument). Gefahrlos: Die Auswahl trägt nur Katalogfelder, die jedes
+# Konto mit Modulzugang ohnehin liest, und die Medienroute prüft jedes Bild weiter selbst.
+KATALOG_FRIST = 60
+_KATALOG_STAND = ("SELECT (SELECT COUNT(*) || '|' || IFNULL(MAX(updated_at), '') FROM mat_product) || ';' || "
+                  "(SELECT COUNT(*) || '|' || IFNULL(MAX(updated_at), '') FROM mat_form) || ';' || "
+                  "(SELECT COUNT(*) || '|' || IFNULL(MAX(updated_at), '') FROM mat_category) || ';' || "
+                  "(SELECT COUNT(*) || '|' || COUNT(closed_at) FROM mat_recall) || ';' || "
+                  "(SELECT COUNT(*) || '|' || IFNULL(MAX(id), 0) FROM mat_product_document) || ';' || "
+                  "(SELECT COUNT(*) || '|' || IFNULL(MAX(id), 0) FROM mat_checklist_item) AS stand")
+
+
+def katalog_vergessen():
+    """Den Zwischenspeicher der Auswahl dieser App leeren (Tests, die den Katalog mit SQL von Hand ändern)."""
+    current_app.extensions.pop("einfuehrung_katalog", None)
+
+
 def katalog_material():
     """Die Auswahl für die Übungsseite (STROEMIS.einfuehrung.katalog): {"produkte": {rolle: {…} | None},
     "formulare": [{…}]} – je Produkt nur Katalogfelder (siehe oben); „formular“ ist die Stelle in „formulare“ (ein
     Formular, das für zwei Produkte gilt, steht dort einmal), „kategorie“ im Formular die Stelle seiner Kategorie im
-    Kategoriepfad des Produkts (None: ein spezifisches Formular). Je Anfrage einmal gerechnet."""
+    Kategoriepfad des Produkts (None: ein spezifisches Formular). Je Anfrage einmal gelesen, gerechnet nur, wenn der
+    Zwischenspeicher (siehe oben) nichts Gültiges hat."""
     if has_request_context() and "einfuehrung_katalog" in g:
         return g.einfuehrung_katalog
+    from .material.services import heute
+    schluessel = (db.query(_KATALOG_STAND, one=True)["stand"], heute().isoformat())
+    gemerkt = current_app.extensions.get("einfuehrung_katalog")
+    if gemerkt and gemerkt[0] == schluessel and time.monotonic() - gemerkt[1] < KATALOG_FRIST:
+        out = copy.deepcopy(gemerkt[2])
+    else:
+        out = _katalog_rechnen()
+        # Ein Tupel in einem Schritt – gleichzeitige Anfragen anderer Fäden sehen den alten oder den neuen Eintrag.
+        current_app.extensions["einfuehrung_katalog"] = (schluessel, time.monotonic(), copy.deepcopy(out))
+    if has_request_context():
+        g.einfuehrung_katalog = out
+    return out
+
+
+def _katalog_rechnen():
     from .material.services import katalog
     from .material.services.interval import herstellerseite
     auswahl = _katalog_auswahl()
@@ -307,10 +349,7 @@ def katalog_material():
                            "datei": bool(d["datei"]), "groesse": d["size"]}
                           for d in katalog.dokumente(p["id"]) if d["gilt"]],
             "formular": stelle[f["id"]]}
-    out = {"produkte": produkte, "formulare": formulare}
-    if has_request_context():
-        g.einfuehrung_katalog = out
-    return out
+    return {"produkte": produkte, "formulare": formulare}
 
 
 def katalog_bilder():
@@ -587,8 +626,16 @@ def _nicht_in_uebung():
 
 def _katalogbild(pfad):
     """Die eine Ausnahme unter /media/: ein Produktbild der Auswahl für die Übung (katalog_bilder) – nur mit GET, nur
-    genau diese Dateien. Die Medienroute prüft danach wie immer Anmeldung und Modulzugang."""
-    return request.method == "GET" and pfad.startswith("/media/material/") and pfad in katalog_bilder()
+    genau diese Dateien. Erst die billigen Bedingungen – Methode, Web- oder Vorschaubild mit harmlosem Namen, angemeldet
+    mit Modulzugang (nur dann zeigt die Übungsseite die Auswahl) –, dann die Auswahl (Sicherheitsprüfung vom 04.11.2026,
+    Befund 1: sonst rechnete jede Anfrage mit X-Uebung sie, auch ohne Anmeldung). Die Medienroute prüft danach wie immer
+    Anmeldung und Modulzugang."""
+    if request.method != "GET" or not pfad.startswith(("/media/material/web/", "/media/material/thumb/")):
+        return False
+    if not _BILDNAME.fullmatch(pfad.rsplit("/", 1)[1]):
+        return False
+    from .material.services.rechte import zugang
+    return zugang(auth.current_user()) and pfad in katalog_bilder()
 
 
 def sperre():

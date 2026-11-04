@@ -5,12 +5,16 @@ Produkt B verweist auf Produkt A (mat_product.formular_von): Für B gilt immer d
 jeder neuen Version dort; fällt es weg, gilt das generische der Kategorie. Geprüft: Auflösung, Ketten, Selbstverweis,
 DEMO-Mischung (Dienst und Trigger), Länge, Rechte, Journal, eigenes Formular von B, Löschen der Quelle, Prüfung und
 Protokoll an einem Artikel von B, Katalog-Export/-Import (mit und ohne Quelle, null löst), Migration 34 → 35 und die
-Oberfläche statisch. Alle Namen, Hersteller und Prüfpunkte hier sind erfundene Platzhalter."""
+Oberfläche statisch. Nachbesserung nach der Sicherheitsprüfung vom 04.11.2026 (Schritt 36): Quelle mit benutzter
+Formularversion (Befund 2), Rennen Aktivieren ↔ Übernehmen (Befund 3), DEMO-Regel über die Kategorie (Befund 4, Hinweis 1)
+und Migration 35 → 36. Alle Namen, Hersteller und Prüfpunkte hier sind erfundene Platzhalter."""
 import json
 import os
 import sqlite3
 import sys
 import tempfile
+import threading
+import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -21,6 +25,12 @@ from test_material_katalog import exportieren, importieren, katalogjson, umschre
 
 WURZEL = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 API = "/api/material"
+
+
+def trigger_36():
+    """Die Trigger aus Schritt 36 – die drei aus Schritt 35 unter demselben Namen und die neuen."""
+    from app.material import models
+    return [x.split("CREATE TRIGGER IF NOT EXISTS ", 1)[1].split()[0] for x in models.TRIGGER_36]
 
 
 def formular(kp, ziel, titel, punkte, aktiv=True):
@@ -244,7 +254,9 @@ def test_trigger_gegen_sql_von_hand():
                 conn.execute(sql)
                 raise AssertionError("angenommen: " + sql)
             except sqlite3.IntegrityError as exc:
-                assert "keine Ketten" in str(exc), (sql, exc)
+                # A hat ein eigenes aktives Formular – dort greift auch der Trigger aus Schritt 36 (Verweis oder eigenes).
+                assert "keine Ketten" in str(exc) or (f"WHERE id = {ids['a']}" in sql and "kein eigenes aktives"
+                                                      in str(exc)), (sql, exc)
         conn.execute(f"UPDATE mat_product SET formular_von = {ids['a']} WHERE id = {ids['c']}")  # erlaubt
         conn.execute(f"UPDATE mat_product SET formular_von = NULL WHERE id = {ids['c']}")
         conn.rollback()
@@ -382,7 +394,11 @@ def test_export_import():
             from app.material.services import katalog, katalog_export
             g.mat_akteur = "Test"
             neu_kat = katalog.kategorie_anlegen({"name": "DEMO-Kategorie (Test)"}, demo=True)
+            # Seit Schritt 36 lassen die Trigger diesen Stand nicht mehr zu (DEMO nur mit DEMO, auch über die Kategorie) –
+            # hier ein Altbestand ohne sie.
             with db.transaction():
+                for name in ("mat_product_formular_von", "mat_product_formular_quelle"):
+                    db.execute(f"DROP TRIGGER {name}")
                 db.execute("UPDATE mat_product SET category_id = ? WHERE id = ?", (neu_kat, ids["a"]))
             daten, _, bericht = katalog_export.sammeln(mit_dateien=False)
             assert bericht["verweis_ohne_quelle"] == ["Testwerk Platzhalter B"], bericht
@@ -402,8 +418,8 @@ def test_migration_34_35():
         assert "formular_von" in models._spalten(conn, "mat_product")
         trigger = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type = 'trigger'")}
         assert {"mat_product_formular_von_neu", "mat_product_formular_von", "mat_product_formular_quelle"} <= trigger
-        # Stand 34 nachstellen: Trigger, Index und Spalte weg, Versionsvermerk 34.
-        for name in ("mat_product_formular_von_neu", "mat_product_formular_von", "mat_product_formular_quelle"):
+        # Stand 34 nachstellen: Trigger (aus Schritt 35 und 36), Index und Spalte weg, Versionsvermerk 34.
+        for name in trigger_36():
             conn.execute(f"DROP TRIGGER {name}")
         conn.execute("DROP INDEX idx_mat_product_formular_von")
         conn.execute("ALTER TABLE mat_product DROP COLUMN formular_von")
@@ -411,14 +427,15 @@ def test_migration_34_35():
         conn.commit()
         vorher = conn.execute("SELECT * FROM mat_product ORDER BY id").fetchall()
         conn.close()
-        make_app(tmp)                                       # Start: Schritt 35 läuft
+        make_app(tmp)                                       # Start: Schritt 35 und 36 laufen
         conn = sqlite3.connect(pfad)
-        assert conn.execute("SELECT wert FROM mat_meta WHERE schluessel = 'schema_version'").fetchone()[0] == "35"
+        assert conn.execute("SELECT wert FROM mat_meta WHERE schluessel = 'schema_version'").fetchone()[0] == "36"
         nachher = conn.execute("SELECT * FROM mat_product ORDER BY id").fetchall()
         assert [r[:-1] for r in nachher] == vorher and all(r[-1] is None for r in nachher)
         assert conn.execute("PRAGMA foreign_key_check(mat_product)").fetchall() == []
         # Zweiter Lauf des Schritts (wiederholbar) und zweiter Start ändern nichts.
         models._schritt_35(conn)
+        models._schritt_36(conn)
         conn.commit()
         assert conn.execute("SELECT * FROM mat_product ORDER BY id").fetchall() == nachher
         conn.close()
@@ -427,6 +444,254 @@ def test_migration_34_35():
         c = anmelden(app2, "admin@example.org", "geheim123")
         assert verknuepfen(c, ids["b"], ids["a"]).status_code == 200
         print("Migration 34 → 35 bestanden.")
+
+
+# --- Nachbesserung nach der Sicherheitsprüfung vom 04.11.2026 (Schritt 36) -------------------------------------------------
+
+BENUTZT = "Das Prüfformular dieses Produkts wurde schon für Prüfungen benutzt – es bleibt im Katalog."
+
+
+def test_quelle_mit_benutzter_version():
+    """Befund 2: Steckt das Formular der Quelle A in einer Prüfung (an einem Artikel von B), lässt sich A nicht löschen –
+    Klartext statt „anderswo geändert“, und die Produktseite bietet es gar nicht erst an („loeschbar“ falsch). Schon ein
+    Entwurf hält das Formular; nichts wird gelöst."""
+    with tempfile.TemporaryDirectory() as tmp:
+        app, k, ids = aufbau(tmp)
+        kp, w, p1 = k["katalog"], k["wart"], k["pruefer"]
+        assert verknuepfen(kp, ids["b"], ids["a"]).status_code == 200
+        assert lesen(kp, ids["a"])["loeschbar"] is True                 # A selbst hat keine Artikel
+        gid, _ = gliederung(w)
+        art = neuer_artikel(w, ids["b"], gid)
+        r = starten(p1, art["id"])
+        assert r.status_code in (200, 201), r.get_json()
+        pr = r.json["pruefung"]
+        assert pr["formular"]["id"] == ids["form_a"]
+        for schritt in ("entwurf", "festgeschrieben"):
+            if schritt == "festgeschrieben":
+                assert abschluss(p1, pr["id"], ergebnis="einsatzbereit").status_code == 200
+            assert lesen(kp, ids["a"])["loeschbar"] is False, schritt
+            r = kp.delete(f"{API}/produkte/{ids['a']}", headers=H)
+            assert r.status_code == 409 and r.json["error"] == BENUTZT, (schritt, r.get_json())
+            assert lesen(kp, ids["b"])["formular_von"]["id"] == ids["a"], schritt      # nichts gelöst
+        # Gegenprobe: C (keine Artikel, Formular unbenutzt) bleibt löschbar; B hat Artikel – die bekannte Meldung.
+        assert lesen(kp, ids["c"])["loeschbar"] is True
+        r = kp.delete(f"{API}/produkte/{ids['b']}", headers=H)
+        assert r.status_code == 409 and "Artikel" in r.json["error"], r.get_json()
+        print("Quelle mit benutzter Formularversion bestanden.")
+
+
+def test_rennen_aktivieren_uebernehmen():
+    """Befund 3: Aktivieren eines eigenen Formulars von C gegen Übernehmen (C → A) – das Fenster wie in der Probe der
+    Prüfung mit einer Pause nach dem Lesen von C geweitet. Danach nie Verweis und eigenes aktives Formular zugleich; der
+    Trigger aus Schritt 36 fängt dasselbe gegen SQL von Hand."""
+    with tempfile.TemporaryDirectory() as tmp:
+        app, k, ids = aufbau(tmp)
+        kp = k["katalog"]
+        eigen = formular(kp, {"produkt_id": ids["c"]}, "Formular C", [{"text": "Platzhalter C1", "art": "yesno",
+                                                                       "soll": "ja"}], aktiv=False)
+        from app.material.services import katalog
+        original = katalog.produkt
+        lokal = threading.local()
+
+        def langsam(pid):
+            r = original(pid)
+            if getattr(lokal, "warten", False):
+                lokal.warten = False
+                time.sleep(1.5)
+            return r
+
+        ergebnis = {}
+
+        def aktivieren():
+            lokal.warten = True
+            c1 = anmelden(app, "katalog@example.org", "passwort1")
+            ergebnis["aktivieren"] = c1.post(f"{API}/formulare/{eigen}/aktivieren", json={}).status_code
+
+        katalog.produkt = langsam
+        try:
+            t = threading.Thread(target=aktivieren)
+            t.start()
+            time.sleep(0.5)
+            r = verknuepfen(kp, ids["c"], ids["a"])
+            ergebnis["uebernehmen"] = r.status_code
+            t.join(30)
+        finally:
+            katalog.produkt = original
+        assert ergebnis == {"aktivieren": 200, "uebernehmen": 409}, ergebnis
+        assert "deaktiviert werden" in r.json["error"], r.get_json()
+        pc = lesen(kp, ids["c"])
+        assert pc["formular_von"] is None and pc["formular"]["id"] == eigen, pc["formular"]
+
+        # SQL von Hand: aktivieren, einfügen bzw. verweisen, während das andere gilt.
+        assert verknuepfen(kp, ids["c"], ids["a"], eigenes_deaktivieren=True).status_code == 200
+        conn = sqlite3.connect(os.path.join(tmp, "stroemis.db"))
+        conn.execute("PRAGMA foreign_keys = ON")
+        for sql in (f"UPDATE mat_form SET active = 1 WHERE id = {eigen}",
+                    "INSERT INTO mat_form (product_id, version, title, active, created_at, updated_at) "
+                    f"VALUES ({ids['c']}, 9, 'Platzhalter', 1, 'x', 'x')",
+                    f"UPDATE mat_form SET product_id = {ids['c']}, active = 1 WHERE id = {ids['form_a']}"):
+            try:
+                conn.execute(sql)
+                raise AssertionError("angenommen: " + sql)
+            except sqlite3.IntegrityError as exc:
+                assert "kein eigenes aktives" in str(exc), (sql, exc)
+        conn.rollback()
+        conn.execute(f"UPDATE mat_product SET formular_von = NULL WHERE id = {ids['c']}")
+        conn.execute(f"UPDATE mat_form SET active = 1 WHERE id = {eigen}")
+        try:
+            conn.execute(f"UPDATE mat_product SET formular_von = {ids['a']} WHERE id = {ids['c']}")
+            raise AssertionError("Verweis neben eigenem aktivem Formular angenommen")
+        except sqlite3.IntegrityError as exc:
+            assert "kein eigenes aktives" in str(exc), exc
+        conn.rollback()
+        conn.close()
+        print("Rennen Aktivieren/Übernehmen bestanden.")
+
+
+def test_demo_regel_ueber_kategorie():
+    """Befund 4, Hinweis 1: DEMO nach der Regel des Katalog-Exports – ein Produkt ohne Kennzeichen in einer Kategorie
+    unter einer DEMO-Kategorie zählt als DEMO. Echt nur mit echt, DEMO nur mit DEMO: Dienst, Kandidaten im Dialog,
+    Produkt in eine andere Kategorie, Kategorie umhängen (Klartext) und die Trigger gegen SQL von Hand."""
+    with tempfile.TemporaryDirectory() as tmp:
+        app, k, ids = aufbau(tmp)
+        kp, adm = k["katalog"], k["adm"]
+        with app.test_request_context():
+            from app.material.services import katalog
+            demo_wurzel = katalog.kategorie_anlegen({"name": "DEMO-Beispiel (Platzhalter)"}, demo=True)
+        r = adm.post(f"{API}/kategorien", json={"name": "Karabiner (Platzhalter)", "parent_id": demo_wurzel,
+                                                "default_material_kind": "metall_hardware"})
+        assert r.status_code == 201, r.get_json()
+        demo_kat = r.json["kategorie"]["id"]
+        # So legt die Oberfläche Produkt und Formular in einer DEMO-Kategorie an: ohne eigenes Kennzeichen.
+        d1 = produkt_neu(kp, demo_kat, "Platzhalter D1", "PD-11")
+        d2 = produkt_neu(kp, demo_kat, "Platzhalter D2", "PD-12")
+        formular(kp, {"produkt_id": d1}, "Formular D1", [{"text": "Platzhalter D", "art": "yesno", "soll": "ja"}])
+        with app.app_context():
+            from app import db
+            from app.material.services import katalog
+            assert db.query("SELECT demo FROM mat_product WHERE id = ?", (d1,), one=True)["demo"] == 0
+            assert katalog.demo_kategorien() == {demo_wurzel, demo_kat}
+            assert katalog.produkt_ist_demo(katalog.produkt(d1)) and not katalog.produkt_ist_demo(katalog.produkt(ids["b"]))
+        for b_, q_ in ((ids["b"], d1), (d2, ids["a"])):
+            r = verknuepfen(kp, b_, q_)
+            assert r.status_code == 409 and "DEMO" in r.json["error"], r.get_json()
+        quellen = lambda pid: {p["id"] for p in kp.get(f"{API}/produkte/{pid}/formularquellen").json["produkte"]}  # noqa: E731
+        assert d1 not in quellen(ids["b"]) and ids["a"] in quellen(ids["b"])
+        assert quellen(d2) == {d1}
+        assert verknuepfen(kp, d2, d1).status_code == 200                  # DEMO mit DEMO (beide über die Kategorie)
+
+        # Ein Produkt mit Verweis bzw. eine Quelle über die DEMO-Grenze verschieben: Klartext mit dem Namen des anderen.
+        assert verknuepfen(kp, ids["b"], ids["a"]).status_code == 200
+        for pid, anderes in ((ids["b"], "Platzhalter A"), (ids["a"], "Platzhalter B")):
+            r = kp.put(f"{API}/produkte/{pid}", json={"category_id": demo_kat})
+            assert r.status_code == 409 and "DEMO nur mit DEMO" in r.json["error"] and anderes in r.json["error"], \
+                r.get_json()
+        r = kp.put(f"{API}/produkte/{d2}", json={"category_id": ids["karabiner"]})
+        assert r.status_code == 409 and "Platzhalter D1" in r.json["error"], r.get_json()
+        assert kp.put(f"{API}/produkte/{ids['c']}", json={"category_id": demo_kat}).status_code == 200   # ohne Verweis
+        assert kp.put(f"{API}/produkte/{ids['c']}", json={"category_id": ids["karabiner"]}).status_code == 200
+        # Eine Kategorie über die DEMO-Grenze umhängen: Gurt Alpha (Gurte) übernimmt von A (Karabiner) – Gurte oder Karabiner
+        # unter die DEMO-Kategorie: Klartext, nichts geändert. Wandern beide Seiten mit (B und A in Karabiner, D2 und D1)
+        # oder hängt kein Verweis daran, geht es.
+        assert verknuepfen(kp, ids["gurt"], ids["a"]).status_code == 200
+        for kid in (ids["gurte"], ids["karabiner"]):
+            r = kp.put(f"{API}/kategorien/{kid}", json={"parent_id": demo_wurzel})
+            assert r.status_code == 409 and "DEMO nur mit DEMO" in r.json["error"], r.get_json()
+        assert kp.delete(f"{API}/produkte/{ids['gurt']}/formular-von", headers=H).status_code == 200
+        assert kp.put(f"{API}/kategorien/{ids['karabiner']}", json={"parent_id": demo_wurzel}).status_code == 200
+        assert kp.put(f"{API}/kategorien/{ids['karabiner']}", json={"parent_id": ids["psa"]}).status_code == 200
+        assert kp.put(f"{API}/kategorien/{demo_kat}", json={"parent_id": ids["psa"]}).status_code == 200
+        assert kp.put(f"{API}/kategorien/{demo_kat}", json={"parent_id": demo_wurzel}).status_code == 200
+        assert lesen(kp, ids["b"])["formular_von"]["id"] == ids["a"]
+        assert verknuepfen(kp, ids["gurt"], ids["a"]).status_code == 200
+
+        # SQL von Hand (mit Fremdschlüsseln): dieselben Wechsel scheitern an den Triggern aus Schritt 36.
+        conn = sqlite3.connect(os.path.join(tmp, "stroemis.db"))
+        conn.execute("PRAGMA foreign_keys = ON")
+        for sql in (f"UPDATE mat_product SET category_id = {demo_kat} WHERE id = {ids['b']}",          # Ziel wird DEMO
+                    f"UPDATE mat_product SET category_id = {demo_kat} WHERE id = {ids['a']}",          # Quelle wird DEMO
+                    f"UPDATE mat_product SET formular_von = {d1} WHERE id = {ids['c']}",               # echt auf DEMO
+                    f"UPDATE mat_category SET parent_id = {demo_wurzel} WHERE id = {ids['karabiner']}",
+                    f"UPDATE mat_category SET parent_id = {demo_wurzel} WHERE id = {ids['gurte']}",
+                    f"UPDATE mat_category SET demo = 1 WHERE id = {ids['gurte']}"):
+            try:
+                conn.execute(sql)
+                raise AssertionError("angenommen: " + sql)
+            except sqlite3.IntegrityError as exc:
+                assert "DEMO nur von DEMO" in str(exc), (sql, exc)
+        conn.execute(f"UPDATE mat_category SET demo = 1 WHERE id = {ids['psa']}")      # erlaubt: alle Seiten werden DEMO
+        conn.rollback()
+        conn.close()
+        print("DEMO-Regel über die Kategorie bestanden.")
+
+
+def test_migration_35_36():
+    """Vorversion 35 mit Altbestand, den Schritt 36 ausschließt (Verweis zwischen DEMO-Kategorie und echt; Verweis neben
+    eigenem aktivem Formular – nur über die Rennlücke bzw. vor der DEMO-Regel möglich): Der Start löst bzw. deaktiviert
+    genau das, je eine Zeile im Startprotokoll, sonst ändert sich keine Zeile. Zweiter Lauf: nichts geschieht."""
+    import logging
+    with tempfile.TemporaryDirectory() as tmp:
+        app, k, ids = aufbau(tmp)
+        kp = k["katalog"]
+        from app.material import models
+        with app.test_request_context():
+            from app.material.services import katalog
+            demo_kat = katalog.kategorie_anlegen({"name": "DEMO-Beispiel (Platzhalter)"}, demo=True)
+        d = produkt_neu(kp, demo_kat, "Platzhalter D", "PD-21")
+        eigen_c = formular(kp, {"produkt_id": ids["c"]}, "Formular C", [{"text": "Platzhalter C1", "art": "yesno",
+                                                                         "soll": "ja"}], aktiv=False)
+        pfad = os.path.join(tmp, "stroemis.db")
+        conn = sqlite3.connect(pfad)
+        # Stand 35 nachstellen: die Trigger in der Fassung von Schritt 35, Versionsvermerk 35; dann der Altbestand.
+        for name in trigger_36():
+            conn.execute(f"DROP TRIGGER {name}")
+        models._schritt_35(conn)
+        conn.execute("UPDATE mat_meta SET wert = '35' WHERE schluessel = 'schema_version'")
+        conn.execute(f"UPDATE mat_product SET formular_von = {ids['a']} WHERE id = {d}")        # DEMO-Kategorie → echt
+        conn.execute(f"UPDATE mat_product SET formular_von = {ids['a']} WHERE id = {ids['c']}")
+        conn.execute(f"UPDATE mat_form SET active = 1 WHERE id = {eigen_c}")                    # Verweis und eigenes
+        conn.execute(f"UPDATE mat_product SET formular_von = {ids['a']} WHERE id = {ids['b']}")  # in Ordnung
+        conn.commit()
+        produkte = conn.execute("SELECT * FROM mat_product ORDER BY id").fetchall()
+        formulare = conn.execute("SELECT * FROM mat_form ORDER BY id").fetchall()
+        conn.close()
+        meldungen = []
+
+        class Sammler(logging.Handler):
+            def emit(self, record):
+                meldungen.append(record.getMessage())
+
+        sammler = Sammler()
+        logging.getLogger("app.material.models").addHandler(sammler)
+        try:
+            make_app(tmp)                                   # Start: Schritt 36 läuft
+        finally:
+            logging.getLogger("app.material.models").removeHandler(sammler)
+        conn = sqlite3.connect(pfad)
+        assert conn.execute("SELECT wert FROM mat_meta WHERE schluessel = 'schema_version'").fetchone()[0] == "36"
+        spalte = [r[1] for r in conn.execute("PRAGMA table_info(mat_product)")].index("formular_von")
+        erwartet = [tuple(None if (r[0] == d and i == spalte) else v for i, v in enumerate(r)) for r in produkte]
+        assert conn.execute("SELECT * FROM mat_product ORDER BY id").fetchall() == erwartet
+        aktiv = [r[1] for r in conn.execute("PRAGMA table_info(mat_form)")].index("active")
+        erwartet = [tuple(0 if (r[0] == eigen_c and i == aktiv) else v for i, v in enumerate(r)) for r in formulare]
+        assert conn.execute("SELECT * FROM mat_form ORDER BY id").fetchall() == erwartet
+        schritt_36 = [m for m in meldungen if m.startswith("Schritt 36")]
+        assert len(schritt_36) == 2 and "Platzhalter D" in schritt_36[0] and "Version 1" in schritt_36[1], meldungen
+        trigger = {r[0]: r[1] for r in conn.execute("SELECT name, sql FROM sqlite_master WHERE type = 'trigger'")}
+        assert set(trigger_36()) <= set(trigger) and "category_id" in trigger["mat_product_formular_von"]
+        assert conn.execute("PRAGMA foreign_key_check").fetchall() == []
+        # Zweiter Lauf des Schritts und zweiter Start ändern nichts.
+        vorher = (conn.execute("SELECT * FROM mat_product ORDER BY id").fetchall(),
+                  conn.execute("SELECT * FROM mat_form ORDER BY id").fetchall())
+        models._schritt_36(conn)
+        conn.commit()
+        assert (conn.execute("SELECT * FROM mat_product ORDER BY id").fetchall(),
+                conn.execute("SELECT * FROM mat_form ORDER BY id").fetchall()) == vorher
+        conn.close()
+        app2 = make_app(tmp)
+        c = anmelden(app2, "admin@example.org", "geheim123")
+        assert lesen(c, ids["c"])["formular"]["art"] == "uebernommen"
+        print("Migration 35 → 36 bestanden.")
 
 
 def test_oberflaeche_statisch():
@@ -456,5 +721,9 @@ if __name__ == "__main__":
     test_pruefung_und_protokoll()
     test_export_import()
     test_migration_34_35()
+    test_quelle_mit_benutzter_version()
+    test_rennen_aktivieren_uebernehmen()
+    test_demo_regel_ueber_kategorie()
+    test_migration_35_36()
     test_oberflaeche_statisch()
     print(json.dumps({"ok": True}))

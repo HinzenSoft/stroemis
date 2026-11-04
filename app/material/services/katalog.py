@@ -28,7 +28,7 @@ from flask import current_app, g, has_request_context
 
 from ... import db
 from ...images import ALLOWED_EXT, delete_photo_files, store_upload
-from ..models import DOKUMENTARTEN, EDITOREN, MATERIALARTEN
+from ..models import DEMO_KATEGORIEN, DOKUMENTARTEN, EDITOREN, MATERIALARTEN, produkt_demo_sql
 from . import Abgelehnt, akteur, auswahl, datum, ganzzahl, heute, kennung, text, wahr
 from . import faelligkeit, journal
 from .interval import herstellerseite, lebensende
@@ -230,11 +230,20 @@ def kategorie_aendern(kid, d, intervall_pruefen=True):
             ohne = _ohne_intervall(kid, w)
             if ohne:
                 raise ohne_intervall_meldung(ohne)
-        db.execute("UPDATE mat_category SET parent_id = ?, name = ?, norm = ?, default_material_kind = ?, "
-                   "default_interval_months = ?, default_lifetime_years = ?, position = ?, items_have_length = ?, "
-                   "updated_at = ? WHERE id = ?",
-                   (w["parent_id"], w["name"], w["norm"], w["default_material_kind"], w["default_interval_months"],
-                    w["default_lifetime_years"], w["position"], w["items_have_length"], db.now(), kid))
+        try:
+            db.execute("UPDATE mat_category SET parent_id = ?, name = ?, norm = ?, default_material_kind = ?, "
+                       "default_interval_months = ?, default_lifetime_years = ?, position = ?, items_have_length = ?, "
+                       "updated_at = ? WHERE id = ?",
+                       (w["parent_id"], w["name"], w["norm"], w["default_material_kind"], w["default_interval_months"],
+                        w["default_lifetime_years"], w["position"], w["items_have_length"], db.now(), kid))
+        except sqlite3.IntegrityError as exc:
+            # Der Trigger aus Schritt 36 (mat_category_formular_demo) hat die Änderung zurückgenommen: Danach teilten ein
+            # DEMO- und ein echtes Produkt ein Prüfformular. Klartext statt „anderswo geändert“.
+            if "DEMO nur von DEMO" not in str(exc):
+                raise
+            raise Abgelehnt("Nach dem Verschieben wäre ein Produkt in dieser Kategorie DEMO und das, dessen Prüfformular "
+                            "es teilt, nicht (oder umgekehrt) – DEMO nur mit DEMO. Erst die Verknüpfung lösen.",
+                            409) from None
         journal.aenderung("category", kid, alt, w)
         if (w["default_interval_months"], w["parent_id"]) != (alt["default_interval_months"], alt["parent_id"]):
             faelligkeit.kappen(*faelligkeit.in_kategorie(kid))
@@ -314,6 +323,32 @@ def kategorie_pfad(kid):
         pfad.insert(0, {"id": k["id"], "name": k["name"]})
         kid = k["parent_id"]
     return pfad
+
+
+# --- DEMO-Regel des Katalogs (Sicherheitsprüfung vom 04.11.2026, Befund 4) ---------------------------------------------
+# Wie im Katalog-Export: DEMO ist eine Kategorie mit Kennzeichen samt Teilbaum, ein Produkt mit Kennzeichen oder in einer
+# solchen Kategorie, ein Formular mit Kennzeichen oder an einem solchen Ziel (SQL: models.DEMO_KATEGORIEN). Genutzt von
+# Export, Übung der Einführung (einfuehrung._katalog_auswahl) und „Prüfformular übernehmen“ (Dienst, Kandidaten, Trigger
+# aus Schritt 36). kategorien: das Ergebnis von demo_kategorien(), wenn es schon da ist (mehrere Fragen nacheinander).
+
+def demo_kategorien():
+    """Die Kennungen aller Kategorien, die als DEMO zählen."""
+    return {r["id"] for r in db.query(DEMO_KATEGORIEN)}
+
+
+def produkt_ist_demo(p, kategorien=None):
+    kategorien = demo_kategorien() if kategorien is None else kategorien
+    return bool(p["demo"]) or p["category_id"] in kategorien
+
+
+def formular_ist_demo(f, kategorien=None):
+    if f["demo"]:
+        return True
+    kategorien = demo_kategorien() if kategorien is None else kategorien
+    if f["category_id"]:
+        return f["category_id"] in kategorien
+    p = db.query("SELECT demo, category_id FROM mat_product WHERE id = ?", (f["product_id"],), one=True)
+    return not p or produkt_ist_demo(p, kategorien)
 
 
 # --- Produkte ------------------------------------------------------------------------------------
@@ -572,6 +607,8 @@ def produkt_aendern(pid, d, importiert=False):
         if (_einheitlich(w["article_no"]), _einheitlich(w["manufacturer"])) != \
                 (_einheitlich(artikelnummer(alt["article_no"])), _einheitlich(alt["manufacturer"])):
             _artikelnummer_pruefen(w["article_no"], w["manufacturer"], ausser=pid)
+        if w["category_id"] != alt["category_id"]:
+            _demo_wechsel_pruefen(dict(alt, category_id=w["category_id"]))
         db.execute("UPDATE mat_product SET category_id = ?, manufacturer = ?, model = ?, article_no = ?, dedupe_key = ?, "
                    "norm = ?, material_kind = ?, interval_months = ?, lifetime_years = ?, lifetime_source = ?, "
                    "description = ?, updated_at = ? WHERE id = ?",
@@ -600,6 +637,29 @@ def lebensende_nachziehen(pid, alt_jahre, neu_jahre):
             journal.eintragen("item", i["id"], "lebensende", {"retire_by": i["retire_by"]}, {"retire_by": neu})
 
 
+PRODUKTFORMULAR_BENUTZT = "Das Prüfformular dieses Produkts wurde schon für Prüfungen benutzt – es bleibt im Katalog."
+
+
+def _formular_benutzt(pid):
+    return bool(db.query("SELECT 1 FROM mat_inspection WHERE form_id IN (SELECT id FROM mat_form WHERE product_id = ?) "
+                         "LIMIT 1", (pid,), one=True))
+
+
+def _demo_wechsel_pruefen(b):
+    """Vor dem Wechsel der Kategorie von Produkt b (mit der neuen category_id): Wird es dadurch DEMO oder echt, während
+    es ein Prüfformular übernimmt oder andere seins übernehmen, lehnt das mit Namen ab (DEMO nur mit DEMO)."""
+    partner = db.query("SELECT * FROM mat_product WHERE id = ? OR formular_von = ?", (b["formular_von"] or 0, b["id"]))
+    if not partner:
+        return
+    kategorien = demo_kategorien()
+    demo = produkt_ist_demo(b, kategorien)
+    anders = [produktname(x) for x in partner if produkt_ist_demo(x, kategorien) != demo]
+    if anders:
+        raise Abgelehnt(f"In dieser Kategorie wäre „{produktname(b)}“ {'DEMO' if demo else 'kein DEMO mehr'} – das "
+                        f"Prüfformular teilt es aber mit {', '.join('„' + n + '“' for n in anders)} (DEMO nur mit DEMO). "
+                        "Erst die Verknüpfung lösen.", 409)
+
+
 def produkt_loeschen(pid):
     """Nur ein Produkt ohne Artikel; seine Bestandteil-Liste geht mit (ON DELETE CASCADE, im Journal „geloescht“ als Zahl
     der Bestandteile)."""
@@ -607,6 +667,10 @@ def produkt_loeschen(pid):
         alt = produkt(pid)
         if db.query("SELECT 1 FROM mat_item WHERE product_id = ? LIMIT 1", (pid,), one=True):
             raise Abgelehnt("Von diesem Produkt gibt es Artikel – es bleibt im Katalog.", 409)
+        # Eine Prüfung nach einem Formular dieses Produkts – seit Schritt 35 auch an Artikeln eines anderen, das es
+        # übernimmt – hält das Formular und damit das Produkt (Sicherheitsprüfung vom 04.11.2026, Befund 2).
+        if _formular_benutzt(pid):
+            raise Abgelehnt(PRODUKTFORMULAR_BENUTZT, 409)
         bestandteile = db.query("SELECT COUNT(*) AS n FROM mat_product_component WHERE set_product_id = ?", (pid,),
                                 one=True)["n"]
         if bestandteile:
@@ -716,7 +780,8 @@ def produkt_json(p, voll=False):
                                   f"'ausgesondert' AND {artikel_filter('i')}", (p["id"],), one=True)["n"]
         out["artikel_gesamt"] = db.query(f"SELECT COUNT(*) AS n FROM mat_item i WHERE i.product_id = ? "
                                          f"AND {artikel_filter('i')}", (p["id"],), one=True)["n"]
-        out["loeschbar"] = not db.query("SELECT 1 FROM mat_item WHERE product_id = ? LIMIT 1", (p["id"],), one=True)
+        out["loeschbar"] = not (db.query("SELECT 1 FROM mat_item WHERE product_id = ? LIMIT 1", (p["id"],), one=True)
+                                or _formular_benutzt(p["id"]))
         out["dokumente"] = dokumente(p["id"])
         out["kategorie_dokumente"] = geerbte_dokumente(p["id"])
         f = formular_fuer_produkt(p["id"])
@@ -1146,18 +1211,20 @@ def formular_speichern(fid, d):
 
 
 def formular_aktivieren(fid):
-    f = formular(fid)
-    if not punkte(fid):
-        raise Abgelehnt("Ein Formular ohne Prüfpunkte lässt sich nicht aktivieren.")
-    # Entweder Verweis oder eigenes Formular (Schritt 35): Mit Verweis gälte ein eigenes aktives ohnehin nicht.
-    b = produkt(f["product_id"]) if f["product_id"] else None
-    if b and b["formular_von"]:
-        q = db.query("SELECT manufacturer, model, description FROM mat_product WHERE id = ?", (b["formular_von"],),
-                     one=True)
-        raise Abgelehnt(f"„{produktname(b)}“ übernimmt das Prüfformular von „{produktname(q) if q else '?'}“ – erst die "
-                        "Verknüpfung auf der Produktseite lösen.", 409)
-    spalte, ziel = ("category_id", f["category_id"]) if f["category_id"] else ("product_id", f["product_id"])
+    # Alles unter der Schreibsperre – auch der Blick auf den Verweis: Läse ihn das Aktivieren vorher, könnte ein
+    # gleichzeitiges Übernehmen dazwischenkommen (Sicherheitsprüfung vom 04.11.2026, Befund 3; Trigger aus Schritt 36).
     with db.transaction(sofort=True):
+        f = formular(fid)
+        if not punkte(fid):
+            raise Abgelehnt("Ein Formular ohne Prüfpunkte lässt sich nicht aktivieren.")
+        # Entweder Verweis oder eigenes Formular (Schritt 35): Mit Verweis gälte ein eigenes aktives ohnehin nicht.
+        b = produkt(f["product_id"]) if f["product_id"] else None
+        if b and b["formular_von"]:
+            q = db.query("SELECT manufacturer, model, description FROM mat_product WHERE id = ?", (b["formular_von"],),
+                         one=True)
+            raise Abgelehnt(f"„{produktname(b)}“ übernimmt das Prüfformular von „{produktname(q) if q else '?'}“ – erst "
+                            "die Verknüpfung auf der Produktseite lösen.", 409)
+        spalte, ziel = ("category_id", f["category_id"]) if f["category_id"] else ("product_id", f["product_id"])
         for anderes in db.query(f"SELECT id FROM mat_form WHERE {spalte} = ? AND active = 1 AND id <> ?", (ziel, fid)):
             db.execute("UPDATE mat_form SET active = 0, updated_at = ? WHERE id = ?", (db.now(), anderes["id"]))
             journal.eintragen("form", anderes["id"], "deaktiviert", {"active": 1}, {"active": 0, "ersetzt_durch": fid})
@@ -1253,11 +1320,13 @@ def _hat_laengenpunkt(fid):
                          one=True))
 
 
-def _quelle_grund(b, q):
-    """Warum q nicht Quelle für b sein kann – oder "" (b und q: Zeilen aus mat_product)."""
+def _quelle_grund(b, q, kategorien=None):
+    """Warum q nicht Quelle für b sein kann – oder "" (b und q: Zeilen aus mat_product). DEMO nach der Regel des
+    Katalogs (produkt_ist_demo: auch über die Kategorie); kategorien wie dort."""
     if q["id"] == b["id"]:
         return "Ein Produkt kann sein Formular nicht von sich selbst übernehmen."
-    if bool(q["demo"]) != bool(b["demo"]):
+    kategorien = demo_kategorien() if kategorien is None else kategorien
+    if produkt_ist_demo(q, kategorien) != produkt_ist_demo(b, kategorien):
         return "DEMO-Produkte übernehmen nur von DEMO-Produkten, echte nur von echten."
     if q.get("formular_von"):
         return f"„{produktname(q)}“ übernimmt selbst ein Formular – übernehmen lässt sich nur ein eigenes."
@@ -1272,19 +1341,21 @@ def _quelle_grund(b, q):
 def formular_quellen(pid, q="", seite=1, pro_seite=50):
     """Die Produkte, deren Formular B (pid) übernehmen kann, für die Suche im Dialog – wie die Produktsuche
     (search.produkte, nach Kategorie): nur Produkte mit eigenem aktivem spezifischem Formular, ohne eigenen Verweis,
-    gleicher DEMO-Art, nicht B selbst. Wer trotzdem nicht passt (Länge), kommt mit „waehlbar“: false und dem Grund; eine
+    gleicher DEMO-Art (produkt_ist_demo), nicht B selbst. Wer trotzdem nicht passt (Länge), kommt mit „waehlbar“: false und dem Grund; eine
     andere Kategorie als die von B ist erlaubt („andere_kategorie“, der Dialog weist darauf hin). Liefert (Liste, gesamt,
     seite, pro_seite)."""
     from . import search
     b = produkt(pid)
-    zusatz = ("p.id <> ? AND p.formular_von IS NULL AND p.demo = ? "
-              "AND EXISTS (SELECT 1 FROM mat_form f WHERE f.product_id = p.id AND f.active = 1)", (pid, b["demo"]))
+    kategorien = demo_kategorien()
+    zusatz = (f"p.id <> ? AND p.formular_von IS NULL AND {produkt_demo_sql('p')} = ? "
+              "AND EXISTS (SELECT 1 FROM mat_form f WHERE f.product_id = p.id AND f.active = 1)",
+              (pid, int(produkt_ist_demo(b, kategorien))))
     rows, gesamt = search.produkte(q, None, seite, pro_seite, "kategorie", zusatz=zusatz)
     seite, pro_seite = search.seiten(seite, pro_seite)
     out = []
     for r in rows:
         j = produkt_json(r)
-        j["grund"] = _quelle_grund(b, r)
+        j["grund"] = _quelle_grund(b, r, kategorien)
         j["waehlbar"] = not j["grund"]
         j["andere_kategorie"] = r["category_id"] != b["category_id"]
         out.append(j)
