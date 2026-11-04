@@ -12162,8 +12162,9 @@ und `test_rechte_ausbilder` (Schemaversion aus `models.SCHEMA_VERSION` statt fes
 Führungskraft).
 
 **Bitte bestätigen** (vorläufig so gebaut):
-1. Löschen der Quelle löst die Verweise gleich mit (Rückfrage nennt die Produkte, Journal dort), statt das Löschen
-   abzuweisen, solange andere übernehmen.
+1. **Bestätigt am 04.11.2026** („Ja, es sollen dann erstmal wieder die generischen Formulare gelten.“): Löschen der
+   Quelle löst die Verweise gleich mit (Rückfrage nennt die Produkte, Journal dort), statt das Löschen abzuweisen; danach
+   gilt für diese Produkte das generische Formular ihrer Kategorie (ein beim Übernehmen deaktiviertes eigenes bleibt aus).
 2. Ein eigenes aktives Formular von B wird beim Übernehmen deaktiviert (Dialog sagt es), statt den Dialog abzuweisen; mit
    Verweis lässt sich kein eigenes Formular aktivieren.
 3. Katalogimport: Ein Verweis aus der Datei deaktiviert ein eigenes aktives Formular des Produkts hier (sonst käme ein auf
