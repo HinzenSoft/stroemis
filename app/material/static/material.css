@@ -466,6 +466,13 @@ html:has(.mat-formtabelle.fp-ziehen) { overflow-anchor: none; }
 .mat-formtabelle.fp-ziehen, .mat-formtabelle.fp-ziehen * { cursor: grabbing; }
 table.list.mat-formtabelle tr.fp-zieht > td { background: var(--co-info-fl); }
 table.list.mat-formtabelle tr.fp-zieht { background: var(--co-info-fl); outline: 2px solid var(--wasser); outline-offset: -2px; }
+/* Eine ganze Gruppe ziehen (Griff am Gruppenkopf, seit 04.11.2026): Der Block bleibt stehen und ist blau hinterlegt; die
+   Einfügemarke (fest über der Seite, material.js) zeigt die Grenze zwischen zwei Gruppen, an die er kommt. Der Griff
+   steht vorn im Kopf, in der Flucht der Griffe darunter; das Namensfeld behält den Rest der Breite. */
+table.list.mat-formtabelle tbody.fp-zieht > tr > :is(td, th) { background: var(--co-info-fl); }
+.fp-einfuegemarke { position: fixed; z-index: 40; height: 4px; background: var(--wasser); border-radius: var(--radius-pille);
+  pointer-events: none; }
+.mat-formtabelle .fp-gruppenkopf .fp-griff { flex: 0 0 auto; }
 /* „In Gruppe verschieben“: je Gruppe eine Zeile, lange Namen brechen um. */
 .fp-gruppenwahl { margin: 10px 0 0; }
 .fp-gruppenwahl .fp-wahl { display: flex; align-items: baseline; gap: 8px; margin: 0 0 8px; font-weight: 400; overflow-wrap: anywhere; cursor: pointer; }
