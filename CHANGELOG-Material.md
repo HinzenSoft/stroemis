@@ -11959,7 +11959,7 @@ Absätze in den Prüfpunkt einzufügen.“ Gebaut 04.11.2026 (kein Schemaschritt
 
 **Gruppen als Zwischenzeile** (material.js `formular()`, material.css): Der Editor hält die Punkte in Blöcken –
 aufeinanderfolgende Punkte mit gleicher `gruppe`; Punkte ohne Gruppe sind ein Block ohne Namen (Feld mit Platzhalter
-„Gruppe (optional)“), zwei getrennte Blöcke gleichen Namens bleiben zwei. Jeder Block steht als eigene Zeile (grau) über
+„ohne Gruppe – Name eintragen“), zwei getrennte Blöcke gleichen Namens bleiben zwei. Jeder Block steht als eigene Zeile (grau) über
 seinen Punkten, der Name in einem Textfeld über die ganze Breite (`maxlength` 80, bricht um und wächst mit, Enter fügt
 dort nichts ein); Umbenennen gilt für alle Punkte darunter. Am Ende jeder Gruppe „+ Prüfpunkt“, unten „+ Gruppe“ (legt eine
 Gruppe mit einem leeren Punkt an, Fokus aufs Namensfeld; am Finger nur ins Bild) und das rote „Speichern“. Eine Gruppe

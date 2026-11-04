@@ -58,7 +58,7 @@ def test_statisch():
                  "Gruppe entfernen"):
         assert f'text: "{text}"' in editor, text
     assert not re.search(r'text: "[^"]*…"', editor)
-    assert '<textarea class="fp-gruppenname" rows="1" maxlength="80" aria-label="Gruppe" placeholder="Gruppe (optional)">' in editor
+    assert '<textarea class="fp-gruppenname" rows="1" maxlength="80" aria-label="Gruppe" placeholder="ohne Gruppe – Name eintragen">' in editor
     assert "fp-gruppe\"" not in editor and 'data-l="Gruppe"' not in editor
     # „optional“ statt „Pflicht“: Häkchen leer = Pflicht; ohne Bearbeiten nur die Marke „optional“.
     assert '<input type="checkbox" class="fp-optional" ${p.pflicht ? "" : "checked"}> optional</label>' in editor
@@ -247,7 +247,7 @@ def ablauf(u, kategorie, breite, hoehe, touch):
             False, False, False, True, False]
         assert s.js("[...document.querySelectorAll('#fp-tabelle .fp-z-pflicht label')].every((l) => l.textContent.trim() === 'optional')")
         assert "Pflicht" not in s.js("document.querySelector('#fp-tabelle').innerText")
-        assert s.js("document.querySelector(" + json.dumps(kopf(2) + " .fp-gruppenname") + ").placeholder") == "Gruppe (optional)"
+        assert s.js("document.querySelector(" + json.dumps(kopf(2) + " .fp-gruppenname") + ").placeholder") == "ohne Gruppe – Name eintragen"
 
         # Getipptes: Titel, Gruppenname und Prüfpunkt – überlebt die folgenden Neuzeichnungen.
         tippen(s, "#fp-titel", " getippt")

@@ -5198,7 +5198,7 @@
         gi < gruppen.length - 1 && { text: "Gruppe nach unten", attrs: `data-act="gruppe-runter" data-g="${gi}"` },
         { text: "Gruppe entfernen", attrs: `data-act="gruppe-weg" data-g="${gi}"` }], gruppeText(g));
       return `<tr class="fp-gruppenzeile" data-g="${gi}"><td colspan="6"><div class="fp-gruppenkopf">
-        <textarea class="fp-gruppenname" rows="1" maxlength="80" aria-label="Gruppe" placeholder="Gruppe (optional)">${esc(g.name)}</textarea>
+        <textarea class="fp-gruppenname" rows="1" maxlength="80" aria-label="Gruppe" placeholder="ohne Gruppe – Name eintragen">${esc(g.name)}</textarea>
         <span class="fp-menue">${menue}</span></div></td></tr>`;
     }
     const gruppenFuss = (g, gi) => `${g.punkte.length ? "" : '<tr class="fp-leer"><td colspan="6"><p class="help">Die Gruppe ist leer – leer wird sie nicht gespeichert.</p></td></tr>'}
@@ -5414,7 +5414,7 @@
         <p class="help">Der Punkt kommt ans Ende der gewählten Gruppe.</p>
         <div class="fp-gruppenwahl" role="radiogroup" aria-label="Gruppe">${wahl}
           <label class="fp-wahl"><input type="radio" name="fp-ziel" value="neu"> <span>Neue Gruppe</span></label>
-          <input type="text" id="fp-neue-gruppe" maxlength="80" placeholder="Name der neuen Gruppe (optional)" aria-label="Name der neuen Gruppe"></div>
+          <input type="text" id="fp-neue-gruppe" maxlength="80" placeholder="Name der neuen Gruppe (leer: ohne Gruppe)" aria-label="Name der neuen Gruppe"></div>
         <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button><button class="btn" id="fp-gruppe-ok" type="button">Verschieben</button></div>`,
       (dlg, body) => {
         const feld = $("#fp-neue-gruppe", body);
