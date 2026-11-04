@@ -8317,14 +8317,19 @@
   // sperre: Sperrgrund aus einem anderen Grund als dem Mangel (Text, auch leer) – dann steht er als Zeile darin; null: nichts.
   // verwaltet: Das Konto verwaltet den Artikel selbst – „beim Materialwart abgeben“ entfällt (B5).
   // zusatz: fertiges HTML unter der Sperrzeile (die Zeile „Empfohlen von …“, wenn die Empfehlung gesperrt hat).
+  /* Fotos der Meldung links neben dem Text, in einer Reihe (Nutzer, 04.11.2026: „Bild im Banner links vom Text in Reihe,
+     nicht beides untereinander“) – Artikel, Prüfung und Meine PSA; ohne Foto der Text allein wie bisher. */
+  function mangelReihe(m, inhalt) {
+    const fotos = mangelFotos(m, `Mangel vom ${S.fmtDate(m.created_at)}`);
+    return fotos ? `<div class="mat-mangel-reihe">${fotos}<div class="mat-mangel-inhalt">${inhalt}</div></div>` : inhalt;
+  }
   function mangelBanner(m, sperre, verwaltet, zusatz) {
-    return `<div class="mat-banner mat-mangel-banner" role="note">
+    return `<div class="mat-banner mat-mangel-banner" role="note">${mangelReihe(m, `
       <p class="mat-mangel-titel">MANGEL GEMELDET am ${esc(tagZeit(m.created_at))}${m.melder ? ` · von ${person(m.melder)}` : ""}</p>
       ${sperre === null || sperre === undefined ? "" : `<p class="mat-mangel-sperre"><strong>Außerdem gesperrt</strong>${sperre ? `: ${esc(sperre)}` : ""}.</p>`}${zusatz || ""}
       ${mangelTextKurz(m, "mat-text mat-mangel-text")}
-      ${mangelFotos(m, `Mangel vom ${S.fmtDate(m.created_at)}`)}
       ${wiederOffen(m)}
-      <p class="mat-mangel-zeile">Nicht verwenden – ${verwaltet ? "beiseitelegen" : "beiseitelegen und beim Materialwart abgeben"}. Freigeben kann ihn nur ein Prüfer mit einer Prüfung („einsatzbereit“).</p></div>`;
+      <p class="mat-mangel-zeile">Nicht verwenden – ${verwaltet ? "beiseitelegen" : "beiseitelegen und beim Materialwart abgeben"}. Freigeben kann ihn nur ein Prüfer mit einer Prüfung („einsatzbereit“).</p>`)}</div>`;
   }
 
   // Erledigte Meldungen am Artikel: eingeklappt unter „Prüfungen“ – wann, wer (wenn sichtbar), was, und wodurch erledigt.
@@ -8338,13 +8343,12 @@
 
   // Hinweis in der Prüfung (Start und Entwurf): je offener Meldung, mit Text und Fotos.
   function mangelHinweis(liste, berichtigung) {
-    return (liste || []).map((m) => `<div class="mat-banner mat-mangel-banner" role="note">
+    return (liste || []).map((m) => `<div class="mat-banner mat-mangel-banner" role="note">${mangelReihe(m, `
       <p class="mat-mangel-titel">GEMELDETER MANGEL vom ${esc(tagZeit(m.created_at))}${m.melder ? ` (von ${person(m.melder)})` : ""}</p>
       ${mangelText(m, "mat-text mat-mangel-text")}
-      ${mangelFotos(m, `Mangel vom ${S.fmtDate(m.created_at)}`)}
       ${wiederOffen(m)}
       <p class="mat-mangel-zeile">${berichtigung ? "Eine Berichtigung gibt den Artikel nicht frei – dafür braucht es eine neue Prüfung."
-        : "Mit „einsatzbereit“ hebst du die Sperre auf (Freiprüfung) und erledigst die Meldung."}</p></div>`).join("");
+        : "Mit „einsatzbereit“ hebst du die Sperre auf (Freiprüfung) und erledigst die Meldung."}</p>`)}</div>`).join("");
   }
 
   // Übersicht, oben: Meldungen, nach denen noch kein Prüfer geprüft hat (nach „instandsetzen“ fallen sie heraus). Wer

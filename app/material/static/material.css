@@ -1604,6 +1604,12 @@ table.list.mat-na-zeilen tr:has(.mat-na-wahl:checked) { background: var(--co-inf
 .mat-mangel-banner .mat-mangel-mehr { margin: 2px 0 10px; }
 .mat-mangel-fotos { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0; }
 .mat-mangel-fotos .mat-mini { width: 64px; height: 64px; margin: 0; background: var(--weiss); }
+/* Im Banner stehen die Fotos links neben dem Text (mangelReihe in material.js, Nutzer 04.11.2026), untereinander in
+   einer schmalen Spalte; der Text nimmt den Rest der Breite. */
+.mat-mangel-reihe { display: flex; align-items: flex-start; gap: 14px; }
+.mat-mangel-reihe > .mat-mangel-fotos { flex: none; flex-direction: column; margin: 0; }
+.mat-mangel-inhalt { flex: 1 1 auto; min-width: 0; }
+.mat-mangel-inhalt > p:last-child { margin-bottom: 0; }
 /* Überfällig in der Karte: das Rot der Statusmarke (eine eigene Bannerfarbe gibt es dafür sonst nicht). */
 .mat-banner.mat-psa-ueberfaellig { background: var(--rot); }
 /* Übersicht: Kasten „Gemeldete Mängel“ wie der Rückruf-Kasten; der Kurztext in eigener Zeile. */
