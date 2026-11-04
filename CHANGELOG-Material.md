@@ -12165,11 +12165,13 @@ Führungskraft).
 1. **Bestätigt am 04.11.2026** („Ja, es sollen dann erstmal wieder die generischen Formulare gelten.“): Löschen der
    Quelle löst die Verweise gleich mit (Rückfrage nennt die Produkte, Journal dort), statt das Löschen abzuweisen; danach
    gilt für diese Produkte das generische Formular ihrer Kategorie (ein beim Übernehmen deaktiviertes eigenes bleibt aus).
-2. Ein eigenes aktives Formular von B wird beim Übernehmen deaktiviert (Dialog sagt es), statt den Dialog abzuweisen; mit
-   Verweis lässt sich kein eigenes Formular aktivieren.
-3. Katalogimport: Ein Verweis aus der Datei deaktiviert ein eigenes aktives Formular des Produkts hier (sonst käme ein auf
+2. **Bestätigt am 04.11.2026**: Ein eigenes aktives Formular von B wird beim Übernehmen deaktiviert (Dialog sagt es),
+   statt den Dialog abzuweisen; mit Verweis lässt sich kein eigenes Formular aktivieren.
+3. **Bestätigt am 04.11.2026**: Katalogimport: Ein Verweis aus der Datei deaktiviert ein eigenes aktives Formular des Produkts hier (sonst käme ein auf
    dev gesetzter Verweis nie an) – eine Ausnahme von „der Import deaktiviert nie etwas“. Ein auf dev gelöster Verweis
    kommt über den Export nicht an (der Schlüssel fehlt dann; nur `null` von Hand löst).
 4. Zum Abschnittskopf: ein Menü „Bearbeiten“ statt des Knopfs „Spezifisches Formular bearbeiten“ (bleibt als Knopf, wo
    nur er möglich ist); „Als Variante kopieren“ übernimmt einen Verweis nicht.
 5. DEMO-Art heißt DEMO-Kennzeichen des Produkts; „zurückgezogen“ gibt es bei Produkten nicht.
+6. **Bestätigt am 04.11.2026**: Die Länge-Regel gilt nur beim Verknüpfen; kommt später ein Punkt „Länge (m)“ in das
+   Formular der Quelle, steht er in der Prüfung eines Produkts ohne Länge auf „nicht zutreffend“.
