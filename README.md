@@ -965,7 +965,9 @@ Entscheidungen vom 03.11.2026; Bauvorlage `planung/tutorial/entwurf.md`). Freiwi
 erscheint ein Angebot – unten rechts als schwebende Karte, am Telefon (unter 600 px Breite oder 520 px Höhe, also auch
 quer) als Leiste unten, nicht modal und erst, wenn der Hinweis „Entwicklungsserver“ und das Willkommen der Materialablage
 geschlossen sind. „Kurze Übung …“ heißt es nur, wenn die genannte Dauer höchstens 5 Minuten ist. „Nicht jetzt“ gilt für
-alle angebotenen Teile, danach nur noch das Profil (Abschnitt „Einführungen“: Starten, Fortsetzen, Erneut ansehen). Keine
+alle angebotenen Teile, danach nur noch das Profil (Abschnitt „Einführungen“ unter „Passwort ändern“: je Modul eine
+Zeile mit den geltenden Teilen als kleine Knöpfe – ✓ erledigt, „· fortsetzen“ mit der Stelle darunter; der Knopf startet,
+setzt fort oder zeigt erneut, Dauer und Stand stehen in title und aria-label). Keine
 Sperre, keine Weiterleitung; kein Angebot auf der Startseite, im Profil, in der Leitstelle, auf Druck- und Fehlerseiten,
 im Lesemodus der Strömipedia und in „Meine PSA“.
 

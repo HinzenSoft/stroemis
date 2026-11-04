@@ -11947,3 +11947,9 @@ Schachtelung → 200; CSP, `no-store`, Weiterleitungen mit Kennung, Rückstrich 
 - Nach dem Neuladen beginnt der Ablauf nur dann von vorn, wenn in ihm schon etwas eingegeben wurde; sonst wie bisher am
   gespeicherten Schritt.
 - Strömipedia-Editor am Telefon: Der Speicherstand bleibt gekürzt („Ungespeic…“), nur der Schritttext ist angepasst.
+
+**Profil „Einführungen“ kompakt** (Wunsch vom 04.11.2026): Der Abschnitt steht unter „Passwort ändern“ (vor „App“);
+je Modul eine Zeile – Name links, die geltenden Teile als kleine, grau umrandete Knöpfe rechts (am Telefon darunter,
+44 px am Finger). Am Knopf ✓ für erledigt, „· fortsetzen“ für unterbrochen, die Stelle („unterbrochen bei „…““) in
+einer Zeile darunter; Dauer, Stand und Aktion in title und aria-label, die Dauer aller Teile im Hilfesatz („je 3–5
+Min.“). Etwa halb so hoch wie vorher. Tests: `test_einfuehrung.py` (Profil, Statisch), `test_einfuehrung_browser.py`.
