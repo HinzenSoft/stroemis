@@ -117,19 +117,6 @@ class SammelSeite(Seite):
 
     def sammeln(self):
         super().sammeln()
-        # Die Führung rollt das Ziel weich ins Bild (ohne „Bewegung reduzieren“) – erst messen, wenn es ruht.
-        letzte, ruhig = None, 0
-        for _ in range(30):
-            try:
-                lage = self.b.js("(() => { const z = window.S && S.einfuehrung && S.einfuehrung.zustand();"
-                                 " return JSON.stringify([scrollY, z && z.zielRect, z && z.blaseRect]); })()")
-            except RuntimeError:
-                break
-            ruhig = ruhig + 1 if lage == letzte else 0
-            if ruhig >= 2:
-                break
-            letzte = lage
-            self.b.warten(0.08)
         try:
             z = self.b.js("window.S && S.einfuehrung ? S.einfuehrung.zustand() : null")
         except RuntimeError:

@@ -513,8 +513,10 @@
       { ziel: ".mat-artikeltitel", text: "Das ist der Übungsgurt. Wie du einen Artikel über seine Nummer findest, zeigt der nächste Ablauf." },
     ] },
     { titel: "Artikel finden", start: "/materialablage", schritte: [
-      { ziel: "#mat-lupe", wenn: () => sichtbar("#mat-lupe") && !sichtbar(suchFeld), text: "Tippe auf die Lupe für die Nummernsuche.", warten: { klick: "#mat-lupe" } },
-      { ziel: suchFeld, text: "Jeder Artikel hat eine Inventarnummer. Gib „Ü-0001“ ein.", warten: { wert: [suchFeld, /ü-?0*1$/i] },
+      // Liegt das Suchfeld hinter der Lupe (Doppelbildschirm), zeigt der Rahmen auf die Lupe. Ein eigener Schritt „Lupe“
+      // (Bauvorlage) hing an einem Wettlauf: Bis die Webschriften geladen sind, steht die Lupe auch am Rechner kurz da.
+      { ziel: () => (sichtbar(suchFeld) ? document.querySelector(suchFeld) : sichtbar("#mat-lupe") ? document.querySelector("#mat-lupe") : null),
+        text: "Jeder Artikel hat eine Inventarnummer. Gib „Ü-0001“ ins Suchfeld ein.", warten: { wert: [suchFeld, /ü-?0*1$/i] },
         probe: { tippen: [suchFeld, "Ü-0001"] } },
       // Gesucht wird mit „Suchen“, der Eingabetaste oder über die Vorschläge unter dem Feld (suche.js) – am Telefon steht
       // kein Knopf „Suchen“. Das Ziel bleibt das Feld, damit die Vorschläge offen bleiben (sie schließen, wenn es den
@@ -601,6 +603,21 @@
       { ziel: "#fp-tabelle", text: "Gespeichert. Ist eine Version schon für Prüfungen benutzt, änderst du sie nur über „Neue Version“ – alte Protokolle bleiben, wie sie waren." },
     ] },
   ] };
+
+  /* Ziele erst nach den Webschriften: Bis „DLRG Univers“ geladen ist, stehen Zeilen und Navigation anders – ein früh
+     gefundenes Ziel rutschte danach unter die Leiste der Führung, und die Führung holt es nicht noch einmal ins Bild.
+     Jedes Ziel als Selektor wird deshalb eine Funktion, die bis dahin nichts liefert (die Führung wartet bis 5 s). */
+  const geladen = () => !document.fonts || document.fonts.status === "loaded";
+  const zuSehen = (el) => el.getClientRects().length && getComputedStyle(el).visibility !== "hidden" && !el.closest("[hidden], [inert], .fuehrung-blase");
+  const nachSchrift = (z) => (typeof z === "string" ? () => (geladen() ? [...document.querySelectorAll(z)].find(zuSehen) || null : null)
+    : typeof z === "function" ? () => (geladen() ? z() : null) : z);
+  /* Der erste Schritt eines Ablaufs außerdem erst, wenn ein eben geschlossener Dialog (Hinweis „Entwicklungsserver“) seinen
+     Verlaufseintrag zurückgenommen hat: Das Zurück stellt die alte Bildlaufhöhe her und schöbe das Ziel wieder hinaus. */
+  const zurueckOffen = () => { const st = history.state; return Boolean(st && typeof st === "object" && typeof st.stroemisOverlay === "number" && !document.querySelector("dialog[open]")); };
+  [grund, pruefer, materialwart, verwaltung].forEach((teil) => teil.ablaeufe.forEach((a) => a.schritte.forEach((s, i) => {
+    const f = nachSchrift(s.ziel);
+    s.ziel = i || typeof f !== "function" ? f : () => (zurueckOffen() ? null : f());
+  })));
 
   S.einfuehrung.modul("material", {
     bestand,
