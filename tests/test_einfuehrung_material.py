@@ -10,6 +10,8 @@ python tests/test_einfuehrung_material.py  oder  pytest tests/test_einfuehrung_m
    ohne unbeantwortete Anfrage (die Hilfe sammelt sie auf jeder Seite der Übung), ohne Anfrage an /api/ (außer Merker, /api/me) oder
    /media/, ohne Seite ohne Übungskennung, ohne Konsolenfehler und ohne waagerechten Bildlauf. Danach ist der Bestand der
    Datenbank unverändert (Prüfsumme ohne die Merker der Einführung). Ohne Chromium „übersprungen“ mit rc 0.
+3. Dasselbe mit einem Testkatalog (Wunsch vom 04.11.2026, Platzhalter aus tests/test_einfuehrung_katalog.py): Produkte
+   und Formulare aus dem Katalog, ihre Bilder laden als einzige Medien, dazu der Grundteil bei 844×390 (Touch).
 Alle Inhalte sind Platzhalter."""
 import hashlib
 import json
@@ -58,7 +60,7 @@ def test_statisch():
     js = lies(UEBUNG)
     # Kennungen nur im Bereich der Materialablage; keine fremden Adressen, nur Übungsdateien und example.invalid.
     for zahl in re.findall(r"\b9\d{8}\b", js):
-        assert 900000001 <= int(zahl) <= 900000099, zahl
+        assert 900000001 <= int(zahl) <= 900000999, zahl
     assert not re.search(r"https?://", js), "keine Adressen außerhalb"
     assert "/media/" not in js, "keine echten Medien"
     for adresse in re.findall(r'"(/static/[^"]+)"', js):
@@ -66,7 +68,7 @@ def test_statisch():
     for mail in re.findall(r"[\w.+-]+@[\w.-]+", js):
         assert mail.endswith("@example.invalid"), mail
     # Namen von Ordnern, Produkten, Personen, Formular und Prüfpunkten: Platzhalter mit „Übung“ bzw. „Platzhalter“.
-    namen = re.findall(r'\b(?:ordner\(ID\.\w+|produkt\(ID\.\w+|name:)\s*,?\s*"([^"]+)"', js)
+    namen = re.findall(r'\b(?:ordner\(ID\.\w+|produkt\(ID\.\w+, "\w+"|name:)\s*,?\s*"([^"]+)"', js)
     for n in namen:
         if n in ("Gesperrt", "Ausgesondert"):            # die Systemordner jeder Gliederung heißen so
             continue
@@ -98,9 +100,11 @@ def test_statisch():
         b = teile["_bestand"]
         assert {a["inventory_no"] for a in b["artikel"]} == {"Ü-0001", "Ü-0002", "Ü-0003"}, b
         assert [p["model"] for p in b["produkte"]] == ["Übungsgurt", "Übungshelm", "Übungsseil"]
-        assert [p["art"] for p in b["formular"]["punkte"]] == ["yesno", "text", "number"]
-        assert all(p["text"].startswith("Platzhalter") for p in b["formular"]["punkte"])
-        assert "Übung" in b["formular"]["titel"] and all("Übung" in o["name"] or o["system_kind"] for o in b["ordner"])
+        # Ohne Katalog (STROEMIS.einfuehrung.katalog fehlt): nur das Übungsformular mit drei Platzhalter-Punkten.
+        assert [f["titel"] for f in b["formulare"]] == ["Übungsformular"]
+        assert [p["art"] for p in b["formulare"][0]["punkte"]] == ["yesno", "text", "number"]
+        assert all(p["text"].startswith("Platzhalter") for p in b["formulare"][0]["punkte"])
+        assert all("Übung" in o["name"] or o["system_kind"] for o in b["ordner"])
         assert teile["_antworten"] >= 20
     print("Statisch bestanden.")
 
@@ -115,7 +119,7 @@ def pruefsumme(u):
     return hashlib.sha256("\n".join(zeilen).encode()).hexdigest()
 
 
-def durchlauf(u, teil, breite, hoehe, touch):
+def durchlauf(u, teil, breite, hoehe, touch, probe=None):
     rolle = KONTO_JE_TEIL[("material", teil)]
     u.merker_leeren(rolle)
     s = Seite(u, rolle, breite, hoehe, touch)
@@ -123,7 +127,7 @@ def durchlauf(u, teil, breite, hoehe, touch):
     try:
         vorher = pruefsumme(u)
         los = time.time()
-        befunde = s.durchlauf("material", teil)
+        befunde = s.durchlauf("material", teil, foto=probe)
         dauer = time.time() - los
         if pruefsumme(u) != vorher:
             befunde.append("Die Datenbank hat sich in der Übung verändert.")
@@ -145,6 +149,53 @@ def test_durchlauf():
     print("Durchläufe bestanden.")
 
 
+# Was je Teil mit dem Testkatalog auf den Seiten der Übung stehen muss (Namen aus tests/test_einfuehrung_katalog.py).
+IM_TEXT = {"grund": ("Platzhalter Gurt mit Bild",), "pruefer": ("Platzhalter Seil mit Formular", "Platzhalter Datum"),
+           "materialwart": ("Platzhalter Karabiner",), "verwaltung": ("Platzhalter Gurt mit Bild", "Platzhalter Gurte")}
+BILDPROBE = """(() => {
+  const b = [...document.images].filter((i) => (i.getAttribute('src') || '').startsWith('/media/'));
+  return { kaputt: b.filter((i) => i.complete && !i.naturalWidth).map((i) => i.getAttribute('src')),
+           geladen: b.filter((i) => i.naturalWidth).map((i) => i.getAttribute('src')), text: document.body.innerText };
+})()"""
+
+
+def test_durchlauf_katalog():
+    """Mit einem Testkatalog (Platzhalter aus tests/test_einfuehrung_katalog.py): alle vier Teile bei 1280×900 (Maus) und
+    360×740 (Touch), der Grundteil dazu bei 844×390 (Touch). Die Seiten zeigen die Produkte und Formulare der Auswahl, ihre
+    Bilder laden (und nur sie, Umgebung.medien_frei), kein Bild bleibt kaputt, die Datenbank – Bestand und Katalog – bleibt
+    unverändert."""
+    if uebersprungen():
+        print("übersprungen – kein Chromium")
+        return
+    from test_einfuehrung_katalog import katalog_platzhalter
+    with Umgebung() as u:
+        katalog_platzhalter(u.app)
+        with u.app.test_request_context():
+            from app import einfuehrung
+            auswahl = einfuehrung.katalog_material()
+            u.medien_frei = einfuehrung.katalog_bilder()
+        assert {r: p and p["modell"] for r, p in auswahl["produkte"].items()} == {
+            "gurt": "Gurt mit Bild", "seil": "Seil mit Formular", "helm": "Karabiner"}, auswahl
+        geladen = set()
+        for breite, hoehe, touch, teile in ((1280, 900, False, TEILE), (360, 740, True, TEILE), (844, 390, True, ("grund",))):
+            for teil in teile:
+                gesehen, kaputt = [], set()
+
+                def probe(seite, _z, kaputt=kaputt, gesehen=gesehen):
+                    r = seite.js(BILDPROBE)
+                    kaputt.update(r["kaputt"])
+                    geladen.update(r["geladen"])
+                    gesehen.append(r["text"])
+                befunde, dauer = durchlauf(u, teil, breite, hoehe, touch, probe)
+                befunde += [f"Bild lädt nicht: {b}" for b in sorted(kaputt)]
+                befunde += [f"Nicht auf den Seiten: {w}" for w in IM_TEXT[teil] if not any(w in t for t in gesehen)]
+                assert not befunde, (teil, breite, befunde)
+                print(f"material/{teil} mit Katalog {breite}×{hoehe}{' Touch' if touch else ''}: bestanden ({dauer:.1f} s)")
+        assert geladen and geladen <= u.medien_frei, (geladen, u.medien_frei)
+    print("Durchläufe mit Katalog bestanden.")
+
+
 if __name__ == "__main__":
     test_statisch()
     test_durchlauf()
+    test_durchlauf_katalog()

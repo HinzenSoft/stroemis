@@ -82,6 +82,7 @@ Geschichte stehen. Schemaversion nach der Nachbesserung vor dem Merge: 30; mit d
 | Interaktive Einführung je Modul | Übungsmodus mit Übungsbestand, Sperre, Angebot, Führung, Profil „Einführungen“, Übungen für Materialablage, Strömipedia, Ankerplätze, Riegenkarten | Grundgerüst gebaut 03.11.2026 (kein Schemaschritt), Übungen je Modul und robuste Führung gebaut 04.11.2026, nach den Endprüfungen nachgebessert 04.11.2026, Zweig tutorial |
 | Prüfformular-Editor: Gruppen und Verschieben; Absätze im Prüfpunkt; „optional“ statt „Pflicht“ | Gruppe als Zwischenzeile (Name in voller Breite), Ziehgriff ⠿ und Menü „⋯“ statt ↑/↓/✕, „+ Prüfpunkt“ je Gruppe, „+ Gruppe“; Enter fügt im Prüfpunkt einen Absatz ein (Server, Prüfung, PDF, Katalog); Häkchen „optional“ statt „Pflicht“, Marke nur an optionalen Punkten | gebaut 04.11.2026 (kein Schemaschritt), Zweig formular-editor |
 | Prüfformular eines anderen Produkts übernehmen (Schritt 35) | Ein Produkt verweist auf ein anderes und wird nach dessen aktivem spezifischem Formular geprüft – mit jeder neuen Version dort; Anzeige an beiden Produkten und an der Formularseite, Lösen, Löschen der Quelle, Katalogdatei `formular_von` | gebaut 04.11.2026 (Schema 35), Zweig formular-uebernahme, wartet auf Freigabe |
+| Übung der Materialablage mit Produkten und Prüfformularen aus dem Katalog | Übungsseite trägt eine feste Auswahl echter Katalogprodukte (Gurt, Seil, Helm bzw. Karabiner) samt geltendem Prüfformular – nur Katalogfelder, keine Echtdaten der Artikel; Produktbilder der Auswahl als einzige Ausnahme der Übungssperre unter `/media/`; Platzhalter ohne passendes Produkt | gebaut 04.11.2026 (kein Schemaschritt), Zweig uebung-katalog |
 
 ## Abgleich mit dem Bestand (vor Lieferung 1)
 
@@ -12175,3 +12176,81 @@ Führungskraft).
 5. DEMO-Art heißt DEMO-Kennzeichen des Produkts; „zurückgezogen“ gibt es bei Produkten nicht.
 6. **Bestätigt am 04.11.2026**: Die Länge-Regel gilt nur beim Verknüpfen; kommt später ein Punkt „Länge (m)“ in das
    Formular der Quelle, steht er in der Prüfung eines Produkts ohne Länge auf „nicht zutreffend“.
+
+
+## Übung der Materialablage mit Produkten und Prüfformularen aus dem Katalog (Wunsch des Nutzers, 04.11.2026)
+
+Nutzer: „Falls möglich nutze für die Materialablage-Übungen Produkte und Prüfbögen, die im Katalog sind. Natürlich ohne,
+dass sie mit den Echtdaten der Artikel interagieren.“ Gebaut 04.11.2026 (kein Schemaschritt, keine neue Schnittstelle),
+Zweig `uebung-katalog` von 315291f; Auftrag `planung/uebung-katalog/auftrag.md`.
+
+**Auswahl auf dem Server** (`app/einfuehrung.py`, `katalog_material`, `KATALOG_ROLLEN`): Rendert der Server eine
+Übungsseite der Materialablage, legt `seite()` eine feste Auswahl in `STROEMIS.einfuehrung.katalog` – kein Weg unter
+`/api/`, die Übungssperre bleibt ganz. Je Rolle der Übung ein Produkt: Gurt (eine Kategorie im Pfad endet auf „Gurt“ bzw.
+„Gurte“, textil), Seil („Seil(e)“, textil), Helm („Helm(e)“; der Katalog hat keine Helme – dann ein „Karabiner“). Nur
+Produkte, die nicht DEMO sind, keinen laufenden Rückruf haben und ein geltendes Formular mit Prüfpunkten haben, das nicht
+DEMO ist; Produkte mit Bild (Web- und Vorschaufassung auf der Platte) zuerst, dann die kleinste Kennung – dieselbe
+Auswahl für alle. Das geltende Formular bestimmt allein `katalog.formular_fuer_produkt` (Nachtrag: so gilt auch der
+Verweis „Formular eines anderen Produkts übernehmen“ nach dem Zusammenführen). Ohne aktives echtes Formular im Katalog
+geht die Auswahl keine Produkte durch. Je Anfrage einmal gerechnet (`g`).
+
+**Nur Katalogfelder**: je Produkt Hersteller, Modell, Beschreibung, Artikelnummer, Norm, Materialart, Kategoriepfad
+(Namen), Prüfintervall mit Quelle (`interval.herstellerseite`), Lebensdauer mit Fundstelle, Bild (Web- und
+Vorschauadresse) und die geltenden Herstellerdokumente (Titel, Art, Version, Gültig ab, Größe, Datei oder Link); je
+Formular Titel, Version, Quelle, Stelle seiner Kategorie im Pfad und die Prüfpunkte (Gruppe, Text mit Absätzen, Art, Soll,
+Pflicht). Keine Kennungen, nichts über Artikel, Ordner, Bestand, Personen, Journal, Prüfungen oder Meldungen.
+
+**Bilder** (`einfuehrung.sperre`, `_katalogbild`, `katalog_bilder`, `csp_quellen` „bilder“): Die Produktbilder der
+Auswahl sind die einzige Ausnahme der Sperre unter `/media/` – nur GET, nur genau diese Dateien (Original, andere Bilder,
+Dokumente, HEAD und schreibende Methoden bleiben gesperrt); `img-src` der Übungsseite nennt genau dieselben Adressen
+(`media-src` und `frame-src` bleiben bei `/static/`). Die Medienroute prüft danach wie immer Anmeldung und Modulzugang.
+Herstellerdokumente öffnen in der Übung nicht: Ihre Adresse ist eine Übungsdatei, die es nicht gibt – „In der Übung gibt
+es diese Datei nicht.“.
+
+**Übungsdatei** (`app/static/js/uebung/material.js`): Die Produkte (900000021–23) bekommen Hersteller, Modell, Norm,
+Kategorie (Übungskategorien 900000101 … nach dem Pfad), Intervall, Lebensdauer, Bild und Dokumentnamen aus dem Katalog;
+je Produkt gilt sein Formular (Übungskopien 900000042 …, Prüfpunkte 900000201 …). Die Artikel (Ü-0001 Gurt, Ü-0002
+Seil, Ü-0003 Helm, „Übung – kein echter Artikel.“), Ordner, Personen und früheren Prüfungen bleiben Übung; Links führen
+nur auf Übungsseiten. Mit Intervall zeigen Artikel- und Prüfseite „12 Monate (Produkt)“, „Nächste Prüfung“ im Dialog
+„Prüfung festschreiben“ schlägt Prüftag plus Intervall vor, „Artikel anlegen“ den Vorschlag wie `bestand.vorschlag`.
+- **Prüfer**: die Punkte des echten Formulars des Seils, vorbelegt wie `pruefung._vorbelegung` (Ja/Nein mit Soll, Zahl
+  mit Zahl-Soll, „Länge“ nicht zutreffend – Übungsartikel haben keine Länge). Was in Pflichtpunkten danach noch leer ist,
+  trägt die Übung vorab ein (Text „Übung“, Zahl „1“, Datum heute, Foto und Unterschrift der Übung) – bis auf den ersten
+  Zahl- oder Textpunkt: „Die Prüfpunkte kommen aus dem Formular „…“ und sind vorbelegt wie bei einer echten Prüfung … Trag
+  bei „<Punkt>“ einen Wert ein – die übrigen leeren Felder hat die Übung schon gefüllt.“ (Ziel: die Karte des Punkts;
+  ohne solchen Punkt nur ansehen und „Weiter“).
+- **Material-Verwaltung**: „Such „<Modell>““, „Öffne das Produkt „<Hersteller Modell>““, das Formular des Gurts; der neue
+  Punkt kommt in die erste Gruppe (`[data-g="0"]`), gespeichert wird nur die Übungskopie; der letzte Schritt zeigt auf
+  „Neue Version“ (statt auf die ganze Tabelle – bei langen Formularen stand sie nicht im Bild).
+- **Grundteil und Materialwart**: „Öffne „<Hersteller Modell>“ (Ü-0001)“, „Das ist Ü-0001, ein Artikel des Produkts „…“
+  aus dem Katalog – der Artikel selbst ist eine Übung.“, „Such das Produkt im Katalog – gib „<Modell>“ ein.“, „Wähle
+  „<Hersteller Modell>““. Kurze Modellnamen (unter drei Zeichen) mit Hersteller.
+- Ohne Katalog bzw. ohne passendes Produkt bleibt je Rolle der Platzhalter wie bisher („Übungsgurt“, „Übungsseil“,
+  „Übungshelm“, Hersteller und Kategorie „Übung“, „Übungsformular“ mit drei Platzhalter-Punkten, ohne Intervall und
+  Lebensdauer); die Texte nennen dann diese Namen.
+
+**Tests**: neu `tests/test_einfuehrung_katalog.py` (Katalog mit Platzhaltern: Auswahl je Rolle mit Bild vor ohne, DEMO,
+Rückruf, falsche Materialart, ohne Formular und nur DEMO-Formular ausgeschlossen, Helm vor Karabiner, dieselbe Auswahl bei
+jedem Aufruf, ohne Katalog bzw. ohne aktives Formular nur Platzhalter, Formular über `formular_fuer_produkt`; Übungsseite
+aller vier Teile nur mit Katalogfeldern – keine Kennung, Seriennummer, Inventarnummer, Ordner, Person, Rückruf –, Absatz
+und „optional“ im Formular, ohne Übung kein Katalog; Sperre: die vier Bilder der Auswahl mit Übungs-Referer und
+`X-Uebung` 200, HEAD/POST/PUT/DELETE 403, fremdes Bild, DEMO-Bild, Original, Dokument, andere Medienroute 403; CSP mit genau
+diesen Bildern; Datenbank unverändert). `tests/test_einfuehrung_material.py`: statisch Kennungen 900000001–900000999,
+Platzhalter ohne Katalog; neu `test_durchlauf_katalog` – alle vier Teile mit dem Testkatalog bei 1280 × 900 (Maus) und
+360 × 740 (Touch), der Grundteil bei 844 × 390 (Touch): Produkte und Formular auf den Seiten, Bilder geladen (kein
+kaputtes), als einzige Medien im Netz (`Umgebung.medien_frei` in `tests/einfuehrung_browser.py`), Datenbank unverändert.
+Angepasst: `tests/test_material_formular_editor.py` (Selektor des neuen Punkts in der Übung jetzt mit `[data-g="0"]`).
+
+**Bitte bestätigen**:
+1. **Karabiner statt Helm**: Der Katalog hat keine Helme – die Rolle „Helm“ (neuer Artikel im Teil „Materialwart“) nimmt
+   dann einen Karabiner; ohne beides der Platzhalter „Übungshelm“. Die Übungsartikel heißen weiter Ü-0003 usw.
+2. **„Nicht zurückgezogen“** als „ohne laufenden Rückruf“ umgesetzt (Produkte haben keinen Stand „zurückgezogen“;
+   zurückgezogene Herstellerdokumente zeigt die Übung ohnehin nicht).
+3. **Rollen über den Kategorienamen** (Endung „Gurt(e)“, „Seil(e)“, „Helm(e)“, „Karabiner“ irgendwo im Pfad) und die
+   Materialart textil für Gurt und Seil.
+4. **Vorab gefüllte Pflichtpunkte** in der Übungsprüfung (Text „Übung“, Zahl „1“, Datum heute, Foto und Unterschrift der
+   Übung) – sonst wäre ein langes Formular ein langer Schritt; einen Zahl- oder Textpunkt trägt man selbst ein.
+5. **Beschreibung und Dokumentgröße** gehen zusätzlich zu den Feldern des Auftrags mit (beide Katalogfelder; die
+   Beschreibung gehört zum Produktnamen).
+6. **Klick aufs Produktbild** in der Übung zeigt wie bisher „In der Übung gibt es diese Datei nicht.“ (keine Großansicht).
+7. Kennungsbereich der Materialablage jetzt 900000001–900000999 (Prüfpunkte langer Formulare).

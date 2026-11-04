@@ -3,10 +3,19 @@
    TEILE – tests/test_einfuehrung.py vergleicht beide; Durchläufe in tests/test_einfuehrung_material.py).
 
    Übungsbestand: die Gliederung „Übung – Gliederung“ mit den Ordnern „Übung – Lager“ und „Übung – Fahrzeug 1“ (dazu
-   ihre Systemordner „Gesperrt“ und „Ausgesondert“), drei Produkte der Kategorie „Übung“ vom Hersteller „Übung“, drei
-   Artikel (Ü-0001 einsatzbereit, Ü-0002 Prüfung fällig, Ü-0003 neu), ein Prüfformular mit drei Platzhalter-Punkten,
-   Übungsperson A und B für Freigaben. Nur Platzhalter: keine echten Produkte, Hersteller, Prüfpunkte, Intervalle oder
-   Lebensdauern – das Prüfintervall bleibt leer, die Fälligkeiten stehen als Tage um heute. Kennungen 900000001–900000099.
+   ihre Systemordner „Gesperrt“ und „Ausgesondert“), drei Produkte – ein Gurt, ein Seil und ein Helm –, drei Artikel
+   (Ü-0001 einsatzbereit, Ü-0002 Prüfung fällig, Ü-0003 neu), Übungsperson A und B für Freigaben. Die Fälligkeiten stehen
+   als Tage um heute.
+
+   Die Produkte kommen, wo es geht, aus dem echten Katalog (Wunsch vom 04.11.2026): Die Übungsseite trägt eine feste
+   Auswahl samt geltendem Prüfformular (STROEMIS.einfuehrung.katalog, app/einfuehrung.py katalog_material) – nur
+   Katalogfelder, gelesen beim Laden der Seite, nie über die Schnittstelle. Hersteller, Modell, Norm, Kategoriepfad,
+   Intervall, Lebensdauer, Bild, Herstellerdokumente (nur ihre Namen – geöffnet wird in der Übung keins) und das Formular
+   mit seinen Prüfpunkten stammen dann von dort; Kennungen, Artikel, Ordner, Personen und Prüfungen bleiben Übung, und
+   was die Übung am Formular ändert, ändert nur die Übungskopie. Fehlt eine Rolle (ohne Katalog, oder kein passendes
+   Produkt mit Formular), bleibt ihr Platzhalter: „Übungsgurt“, „Übungsseil“, „Übungshelm“ vom Hersteller „Übung“ in der
+   Kategorie „Übung“ mit dem „Übungsformular“ aus drei Platzhalter-Punkten, ohne Intervall und Lebensdauer (keine
+   erfundenen Fachdaten). Kennungen 900000001–900000999.
 
    Die Antworten bilden die Form der Schnittstellen (app/material/routes*.py, services/) nach, so weit material.js,
    suche.js, freigaben.js und global.js sie auf den Seiten der Abläufe lesen; was die Abläufe schreiben (Mangel,
@@ -21,6 +30,9 @@
     punktJaNein: 900000051, punktText: 900000052, punktZahl: 900000053, punktNeu: 900000054,
     pruefung: 900000061, altGurt: 900000062, altSeil: 900000063, durchgang: 900000071, mangel: 900000081,
     personA: 900000091, personB: 900000092, freigabe: 900000093,
+    // Für den Katalog: Kategorien seines Pfads, seine Formulare (900000042 …), deren Prüfpunkte (je Formular 200
+    // Kennungen) und Herstellerdokumente.
+    katalogKategorie: 900000101, katalogPunkt: 900000201, dokument: 900000901,
   };
   const BILD = { gurt: "/static/uebung/material/uebungsbild-4.jpg", seil: "/static/uebung/material/uebungsbild-5.jpg",
                  helm: "/static/uebung/material/uebungsbild-6.jpg", mangel: "/static/uebung/material/uebungsbild-7.jpg" };
@@ -51,17 +63,84 @@
   const sichtbar = (sel) => { const el = document.querySelector(sel); return Boolean(el && el.getClientRects().length && !el.closest("[hidden]")); };
   const ansicht = () => { const m = document.getElementById("mat"); return m ? m.dataset.ansicht : ""; };
 
+  /* --- Katalog --------------------------------------------------------------------------------------------------- */
+  // Die Auswahl aus dem echten Katalog (app/einfuehrung.py, katalog_material): je Rolle ein Produkt oder null.
+  const KATALOG = (() => {
+    const e = window.STROEMIS && window.STROEMIS.einfuehrung;
+    const k = e && e.katalog;
+    return { produkte: (k && k.produkte) || {}, formulare: (k && Array.isArray(k.formulare)) ? k.formulare : [] };
+  })();
+  const ausKatalog = (rolle) => Boolean(KATALOG.produkte[rolle]);
+  // Die Kategorien der Übung: „Übung“ für die Platzhalter, dazu die des Katalogpfads der gewählten Produkte (Kennungen ab
+  // ID.katalogKategorie, je Pfadstück eine).
+  const KATEGORIEN = (() => {
+    const liste = [];
+    const schluessel = new Map();
+    if (["gurt", "seil", "helm"].some((r) => !ausKatalog(r))) liste.push({ id: ID.kategorie, name: "Übung", parent_id: null, pfad: ["Übung"] });
+    ["gurt", "seil", "helm"].forEach((r) => {
+      const pfad = ausKatalog(r) ? KATALOG.produkte[r].kategorie || [] : [];
+      pfad.forEach((name, i) => {
+        const k = pfad.slice(0, i + 1).join("\u0000");
+        if (schluessel.has(k)) return;
+        const id = ID.katalogKategorie + schluessel.size;
+        schluessel.set(k, id);
+        liste.push({ id, name, parent_id: i ? schluessel.get(pfad.slice(0, i).join("\u0000")) : null, pfad: pfad.slice(0, i + 1) });
+      });
+    });
+    return { liste, von: (pfad, stufe) => (pfad && pfad.length ? schluessel.get(pfad.slice(0, (stufe === undefined ? pfad.length - 1 : stufe) + 1).join("\u0000")) : ID.kategorie) };
+  })();
+  const kategorieVon = (id) => KATEGORIEN.liste.find((k) => k.id === id) || null;
+  function kategoriePfad(id) {
+    const weg = [];
+    for (let k = kategorieVon(id); k; k = k.parent_id ? kategorieVon(k.parent_id) : null) weg.unshift({ id: k.id, name: k.name });
+    return weg;
+  }
+
+  // Der Name eines Produkts, wie die Schritte ihn nennen: „Hersteller Modell“ (vom Modell der Teil vor „|“) – beim
+  // Platzhalter nur das Modell („Übungsgurt“).
+  const modellname = (p) => String(p.model || "").split("|")[0].trim();
+  const nennung = (p) => (p.manufacturer === "Übung" ? modellname(p) : `${p.manufacturer} ${modellname(p)}`.trim());
+  // Was man im Katalog eingibt, um das Produkt zu finden: das Modell (kurze Modellnamen mit Hersteller) – beim Platzhalter
+  // „Übung“ (findet alle drei).
+  const suchwort = (p) => (p.manufacturer === "Übung" ? "Übung" : modellname(p).length >= 3 ? modellname(p) : nennung(p));
+  const plusMonate = (iso, n) => {
+    const [j, m, t] = iso.split("-").map(Number);
+    const ziel = new Date(Date.UTC(j, m - 1 + n, 1));
+    const letzter = new Date(Date.UTC(ziel.getUTCFullYear(), ziel.getUTCMonth() + 1, 0)).getUTCDate();
+    ziel.setUTCDate(Math.min(t, letzter));
+    return ziel.toISOString().slice(0, 10);
+  };
+
   /* --- Übungsbestand ------------------------------------------------------------------------------------------------ */
   function ordner(id, name, kind, parent, position, system) {
     return { id, name, kind, parent_id: parent, position: position || 0, system_kind: system || null, description: "",
              interval_months: null, reminders_off: false, foto: null, original: null, vorschau: null, demo: false,
              created_at: "2026-01-01T00:00:00+00:00", updated_at: "2026-01-01T00:00:00+00:00" };
   }
-  function produkt(id, model, bild) {
-    return { id, model, manufacturer: "Übung", description: "", article_no: null, norm: "", category_id: ID.kategorie,
-             category_name: "Übung", material_kind: "sonstiges", interval_months: null, lifetime_years: null,
-             lifetime_source: "", laenge_moeglich: false, bestandteile: [], bild, original: bild, vorschau: bild,
-             wiki_page_id: null, demo: false, created_at: "2026-01-01T00:00:00+00:00", updated_at: "2026-01-01T00:00:00+00:00" };
+  // Ein Übungsprodukt: aus dem Katalog (Rolle), sonst der Platzhalter mit Modell und Bild.
+  function produkt(id, rolle, model, bild) {
+    const p = { id, model, manufacturer: "Übung", description: "", article_no: null, norm: "", category_id: ID.kategorie,
+                category_name: "Übung", material_kind: "sonstiges", interval_months: null, lifetime_years: null,
+                lifetime_source: "", laenge_moeglich: false, bestandteile: [], bild, original: bild, vorschau: bild,
+                wiki_page_id: null, demo: false, created_at: "2026-01-01T00:00:00+00:00", updated_at: "2026-01-01T00:00:00+00:00",
+                intervall: { monate: null, quelle: "" }, formular_id: ID.formular, dokumente: [] };
+    const k = KATALOG.produkte[rolle];
+    if (!k) return p;
+    const kat = KATEGORIEN.von(k.kategorie);
+    const iv = k.intervall || {};
+    const ld = k.lebensdauer || {};
+    return Object.assign(p, {
+      model: String(k.modell || ""), manufacturer: String(k.hersteller || ""), description: String(k.beschreibung || ""),
+      article_no: k.artikelnummer || null, norm: String(k.norm || ""), category_id: kat, category_name: (kategorieVon(kat) || { name: "" }).name,
+      material_kind: String(k.materialart || "sonstiges"), interval_months: iv.quelle === "Produkt" ? iv.monate || null : null,
+      intervall: { monate: iv.monate || null, quelle: String(iv.quelle || "") }, lifetime_years: ld.jahre || null,
+      lifetime_source: String(ld.quelle || ""), bild: k.bild ? k.bild.web : null, original: k.bild ? k.bild.web : null,
+      vorschau: k.bild ? k.bild.vorschau : null, formular_id: ID.formular + 1 + Number(k.formular || 0),
+      // Nur die Namen: Ein Klick öffnet in der Übung keine Datei (einfuehrung.js, „In der Übung gibt es diese Datei nicht.“).
+      dokumente: (k.dokumente || []).map((d) => ({ title: String(d.titel || ""), kind: String(d.art || "sonstiges"),
+        version: String(d.version || ""), valid_from: String(d.gueltig_ab || "2026-01-01"), size: Number(d.groesse) || 0,
+        datei: d.datei ? "datei" : null })),
+    });
   }
   function artikel(id, nummer, produktId, folder, sn, zuletzt, faellig) {
     return { id, inventory_no: nummer, product_id: produktId, folder_id: folder, origin_folder_id: null, serial_no: sn,
@@ -75,41 +154,95 @@
     { id: ID.punktText, position: 2, gruppe: "Platzhalter", text: "Platzhalter: Textpunkt", art: "text", soll: "", pflicht: false },
     { id: ID.punktZahl, position: 3, gruppe: "Platzhalter", text: "Platzhalter: Zahlpunkt", art: "number", soll: "", pflicht: true },
   ];
-  // Ein Prüfpunkt einer Prüfung, vorbelegt wie auf dem Server: Befund „in Ordnung“, Ja/Nein mit dem Sollwert.
+  // Die Formulare: das Übungsformular der Platzhalter und die Formulare aus dem Katalog (Titel, Version, Quelle, Punkte
+  // mit Gruppe, Text – auch mit Absätzen –, Art, Soll und „optional“).
+  function formulare() {
+    const liste = [{ id: ID.formular, titel: "Übungsformular", version: 1, aktiv: true, benutzt: false, quelle: "Kategorie „Übung“",
+                     ziel: { art: "kategorie", id: ID.kategorie }, punkte: kopie(PUNKTE) }];
+    KATALOG.formulare.forEach((f, fi) => {
+      const id = ID.formular + 1 + fi;
+      const rolle = ["gurt", "seil", "helm"].find((r) => ausKatalog(r) && Number(KATALOG.produkte[r].formular || 0) === fi);
+      const pfad = rolle ? KATALOG.produkte[rolle].kategorie || [] : [];
+      const ziel = f.kategorie === null || f.kategorie === undefined
+        ? { art: "produkt", id: { gurt: ID.pGurt, seil: ID.pSeil, helm: ID.pHelm }[rolle] }
+        : { art: "kategorie", id: KATEGORIEN.von(pfad, Number(f.kategorie)) };
+      liste.push({ id, titel: String(f.titel || ""), version: Number(f.version) || 1, aktiv: true, benutzt: false,
+                   quelle: String(f.quelle || ""), ziel,
+                   punkte: (f.punkte || []).map((x, i) => ({ id: ID.katalogPunkt + fi * 200 + i, position: i + 1, gruppe: String(x.gruppe || ""),
+                     text: String(x.text || ""), art: String(x.art || "yesno"), soll: String(x.soll || ""), pflicht: x.pflicht !== false })) });
+    });
+    return liste;
+  }
+  // Ein Prüfpunkt einer Prüfung, vorbelegt wie auf dem Server (pruefung._vorbelegung): Befund „in Ordnung“, Ja/Nein mit
+  // dem Sollwert, ein Zahlpunkt mit einem Soll, das selbst eine Zahl ist, mit diesem; ein Längenpunkt ist „nicht
+  // zutreffend“ (Übungsartikel haben keine Länge).
+  const istZahl = (s) => /^[-+]?(\d+([.,]\d*)?|[.,]\d+)$/.test(String(s || "").replace(/ /g, ""));
   function punktStand(p) {
-    return { id: p.id, position: p.position, gruppe: p.gruppe, text: p.text, art: p.art, soll: p.soll, pflicht: p.pflicht,
-             befund: "ok", wert: p.art === "yesno" ? p.soll : "", notiz: "", foto: null, unterschrift: null, nummern: [], bestandteil: false };
+    const laenge = p.art === "laenge";
+    const wert = p.art === "yesno" ? p.soll : p.art === "number" && istZahl(p.soll) ? p.soll.trim() : "";
+    return { id: p.id, position: p.position, gruppe: p.gruppe, text: p.text, art: p.art, soll: laenge ? "" : p.soll, pflicht: p.pflicht,
+             befund: laenge ? "nicht_zutreffend" : "ok", wert, notiz: "", foto: null, unterschrift: null, nummern: [], bestandteil: false };
+  }
+  const offen = (x) => x.pflicht && x.befund !== "nicht_zutreffend"
+    && (x.art === "photo" ? !x.foto : x.art === "signature" ? !x.unterschrift : !String(x.wert || "").trim());
+  // Was in einer früheren Übungsprüfung bzw. vorab in der Prüfung der Übung steht, wo die Vorbelegung nichts einträgt:
+  // Datum heute, Foto und Unterschrift der Übung, Zahl „1“, Text „Übung“.
+  function uebungswert(x) {
+    if (x.art === "photo") x.foto = { web: BILD.mangel, original: BILD.mangel, vorschau: BILD.mangel };
+    else if (x.art === "signature") x.unterschrift = UNTERSCHRIFT;
+    else x.wert = x.art === "date" ? tag(0) : x.art === "number" ? "1" : "Übung";
+    return x;
+  }
+  // Die Punkte einer neuen Prüfung: vorbelegt wie echt; was danach in Pflichtpunkten noch leer ist, trägt die Übung ein –
+  // bis auf den ersten Zahl- oder Textpunkt (deinPunkt), den trägst du ein. So bleibt auch ein langes Formular ein kurzer
+  // Schritt.
+  const deinPunkt = (liste) => liste.find((x) => offen(x) && (x.art === "number" || x.art === "text")) || null;
+  function vorbelegt(f) {
+    const liste = f.punkte.map(punktStand);
+    const dein = deinPunkt(liste);
+    return liste.map((x) => (offen(x) && x !== dein ? uebungswert(x) : x));
   }
   function protokoll(id, wann, anmeldung) {
     return { id: `P-ÜBUNG-${String(id).slice(-2)}`, url: `/materialablage/pruefung/${id}/pdf`, festgeschrieben: wann,
              anmeldung, bytes: 1109, sha256: "0".repeat(64), datei_sha256: "0".repeat(64) };
   }
   // Je Artikel mit Vergangenheit eine frühere, festgeschriebene Prüfung (Übung) – „Prüfungen“ am Artikel steht nicht leer.
-  function altePruefung(id, artikelId, datum) {
+  function altePruefung(z, id, artikelId, datum) {
+    const f = formularVon(z, produktVon(z, artikelVon(z, artikelId).product_id).formular_id);
     return { id, item_id: artikelId, art: "periodisch", entwurf: false, ergebnis: "einsatzbereit", datum, naechste: null,
              bemerkung: "", grund: "", pruefer: "Übungsperson B", pruefer_id: ID.personB, urkunde: "ÜBUNG",
              begonnen_am: `${datum}T08:00:00+00:00`, abgeschlossen_am: `${datum}T08:30:00+00:00`, round_id: null,
-             punkte: PUNKTE.map(punktStand), protokoll: protokoll(id, `${datum}T08:30:00+00:00`, "uebung-b@example.invalid") };
+             form_id: f.id, punkte: f.punkte.map(punktStand).map((x) => (offen(x) ? uebungswert(x) : x)),
+             protokoll: protokoll(id, `${datum}T08:30:00+00:00`, "uebung-b@example.invalid") };
   }
   function bestand() {
-    return {
+    const z = {
       ordner: [ordner(ID.gliederung, "Übung – Gliederung", "gliederung", null),
                ordner(ID.lager, "Übung – Lager", "standort", ID.gliederung, 0),
                ordner(ID.fahrzeug, "Übung – Fahrzeug 1", "fahrzeug", ID.gliederung, 1),
                ordner(ID.gesperrt, "Gesperrt", "sonstiges", ID.gliederung, 100000, "gesperrt"),
                ordner(ID.ausgesondert, "Ausgesondert", "sonstiges", ID.gliederung, 100001, "ausgesondert")],
-      produkte: [produkt(ID.pGurt, "Übungsgurt", BILD.gurt), produkt(ID.pHelm, "Übungshelm", BILD.helm),
-                 produkt(ID.pSeil, "Übungsseil", BILD.seil)],
+      produkte: [produkt(ID.pGurt, "gurt", "Übungsgurt", BILD.gurt), produkt(ID.pHelm, "helm", "Übungshelm", BILD.helm),
+                 produkt(ID.pSeil, "seil", "Übungsseil", BILD.seil)],
       artikel: [artikel(ID.gurt, "Ü-0001", ID.pGurt, ID.fahrzeug, "Ü-SN-0001", tag(-60), tag(300)),
                 artikel(ID.seil, "Ü-0002", ID.pSeil, ID.fahrzeug, "Ü-SN-0002", tag(-370), tag(-5)),
                 artikel(ID.helm, "Ü-0003", ID.pHelm, ID.lager, "Ü-SN-0003", null, null)],
-      formular: { id: ID.formular, titel: "Übungsformular", version: 1, aktiv: true, benutzt: false,
-                  punkte: kopie(PUNKTE) },
-      pruefungen: [altePruefung(ID.altGurt, ID.gurt, tag(-60)), altePruefung(ID.altSeil, ID.seil, tag(-370))],
+      formulare: formulare(),
+      pruefungen: [],
       freigaben: [],
       durchgaenge: [],
       naechsteNummer: 4,
     };
+    // Herstellerdokumente: je eines eine Übungskennung und eine Adresse, die einfuehrung.js als Datei erkennt, aber nicht
+    // in der Dateitabelle findet – ein Klick sagt „In der Übung gibt es diese Datei nicht.“.
+    let dok = ID.dokument;
+    z.produkte.forEach((p) => p.dokumente.forEach((d) => {
+      d.id = dok++;
+      const adresse = `/materialablage/katalog/dokument-${d.id}.dok`;
+      Object.assign(d, { datei: d.datei ? adresse : null, url: d.datei ? null : adresse });
+    }));
+    z.pruefungen = [altePruefung(z, ID.altGurt, ID.gurt, tag(-60)), altePruefung(z, ID.altSeil, ID.seil, tag(-370))];
+    return z;
   }
 
   /* --- Sichten auf den Bestand (Form wie bestand.py, katalog.py, pruefung.py, freigaben.py) --------------------------- */
@@ -117,6 +250,7 @@
   const produktVon = (z, id) => z.produkte.find((p) => p.id === id) || null;
   const artikelVon = (z, id) => z.artikel.find((a) => a.id === id) || null;
   const pruefungVon = (z, id) => z.pruefungen.find((p) => p.id === id) || null;
+  const formularVon = (z, id) => z.formulare.find((f) => f.id === id) || null;
   function pfad(z, id) {
     const weg = [];
     for (let o = ordnerVon(z, id); o; o = ordnerVon(z, o.parent_id)) weg.unshift({ id: o.id, kind: o.kind, name: o.name, system_kind: o.system_kind });
@@ -159,7 +293,7 @@
     const st = status(a);
     const k = { id: a.id, inventory_no: a.inventory_no, serial_no: a.serial_no, serial_generated: false, folder_id: a.folder_id,
                 product_id: a.product_id, manufacturer: p.manufacturer, model: p.model, description: p.description,
-                article_no: p.article_no, material_kind: p.material_kind, kategorie: { id: ID.kategorie, name: "Übung" },
+                article_no: p.article_no, material_kind: p.material_kind, kategorie: { id: p.category_id, name: p.category_name },
                 vorschau: p.vorschau, lock_state: a.lock_state, last_inspected_on: a.last_inspected_on, next_due_on: a.next_due_on,
                 retire_by: null, length_m: null, laenge_text: "", status: st, status_text: STATUS[st],
                 mangel: a.maengel.some((m) => m.offen), aussonderung_empfohlen: false, rueckruf: null, zugeordnet_name: null,
@@ -174,9 +308,17 @@
              begonnen_am: x.begonnen_am, abgeschlossen_am: x.abgeschlossen_am, round_id: x.round_id, basis_id: null,
              berichtigt: null, berichtigt_durch: null, protokoll: x.protokoll };
   }
-  const formularKurz = (z) => ({ id: z.formular.id, title: z.formular.titel, version: z.formular.version, punkte: z.formular.punkte.length,
-                                 quelle: "Kategorie „Übung“" });
-  const OHNE_INTERVALL = { monate: null, quelle: "", hersteller: [null, null], organisation: [null, null] };
+  const formularKurz = (z, p) => {
+    const f = formularVon(z, p.formular_id);
+    return { id: f.id, title: f.titel, version: f.version, punkte: f.punkte.length, quelle: f.quelle };
+  };
+  // Das wirksame Intervall eines Übungsartikels: die Herstellerseite aus dem Produkt (Katalog) – Übungsordner tragen keins.
+  const intervall = (p) => ({ monate: p.intervall.monate, quelle: p.intervall.monate ? p.intervall.quelle : "",
+                              hersteller: [p.intervall.monate, p.intervall.monate ? p.intervall.quelle : null], organisation: [null, null] });
+  const lebensdauer = (p) => (p.lifetime_years ? { festgeschrieben: false, jahre: p.lifetime_years, quelle: p.lifetime_source } : null);
+  // Herstellerdokumente wie katalog.dokumente (gelten alle).
+  const dokumente = (p) => p.dokumente.map((d) => Object.assign({}, d, { product_id: p.id, category_id: null, mime: "", sha256: "",
+    replaces_id: null, withdrawn_on: null, abgeloest_durch: null, uploaded_by_name: "", uploaded_at: `${d.valid_from}T00:00:00+00:00`, gilt: true }));
   function artikelVoll(z, a) {
     const p = produktVon(z, a.product_id);
     const st = status(a);
@@ -185,9 +327,9 @@
     return Object.assign(artikelKurz(z, a), {
       origin_folder_id: a.origin_folder_id, manufactured_on: null, purchased_on: null, first_use_on: null, notes: a.notes,
       lock_reason: a.lock_reason, pfad: pfad(z, a.folder_id), gliederung: { id: gl.id, kind: gl.kind, name: gl.name, system_kind: null },
-      produkt: Object.assign({}, p, { intervall: { monate: null, quelle: "" } }), produkt_aenderbar: false, produkt_beantragbar: false,
-      intervall: OHNE_INTERVALL, interval_months: null, lebensdauer: null, laenge_moeglich: false, formular: formularKurz(z),
-      dokumente: [], rueckrufe: [], antraege: [], antrag_offen: false, darf_antrag: false, darf_entscheiden: false, darf_loeschen: false,
+      produkt: Object.assign({}, p), produkt_aenderbar: false, produkt_beantragbar: false,
+      intervall: intervall(p), interval_months: null, lebensdauer: lebensdauer(p), laenge_moeglich: false, formular: formularKurz(z, p),
+      dokumente: dokumente(p), rueckrufe: [], antraege: [], antrag_offen: false, darf_antrag: false, darf_entscheiden: false, darf_loeschen: false,
       stammdaten_fest: true, bestandteile: [], bestandteile_direkt: false,
       aussondern: { ok: false, grund: "In der Übung wird nichts ausgesondert." }, aussonderung_empfohlen: null, zugeordnet: null,
       durchgang: null, entwurf: e ? { id: e.id, pruefer: e.pruefer, pruefer_id: e.pruefer_id, seit: e.begonnen_am } : null,
@@ -205,11 +347,12 @@
       artikel: Object.assign(artikelKurz(z, a), { pfad: pfad(z, a.folder_id), origin_folder_id: a.origin_folder_id }),
       produkt: { id: p.id, manufacturer: p.manufacturer, model: p.model, description: p.description, article_no: p.article_no,
                  material_kind: p.material_kind, norm: p.norm, name: `${p.manufacturer} ${p.model}`, demo: false },
-      formular: { id: z.formular.id, titel: z.formular.titel, version: z.formular.version }, punkte: kopie(x.punkte),
+      formular: (({ id, titel, version }) => ({ id, titel, version }))(formularVon(z, x.form_id)), punkte: kopie(x.punkte),
       arten: x.entwurf ? artikelVoll(z, a).pruefarten.arten : [x.art], anhaenge: [], dokumente: [], anleitung: null, darf: ordnerDarf(),
       eigen: x.pruefer_id === ich().id, durchgang: null, einsatzbereit_gesperrt: [], freipruefung: x.entwurf && a.lock_state !== "frei",
-      grund_berichtigung: "", intervall: OHNE_INTERVALL, laenge: { moeglich: false, text: "", wert: null }, lebensdauer: null,
-      maengel: kopie(a.maengel.filter((m) => m.offen)), prueftag: x.datum, vorschlag_naechste: null,
+      grund_berichtigung: "", intervall: intervall(p), laenge: { moeglich: false, text: "", wert: null }, lebensdauer: null,
+      maengel: kopie(a.maengel.filter((m) => m.offen)), prueftag: x.datum,
+      vorschlag_naechste: p.intervall.monate ? plusMonate(x.datum, p.intervall.monate) : null,
       unterschrift: x.entwurf ? null : UNTERSCHRIFT, berichtigbar: { ok: false, grund: "In der Übung wird nichts berichtigt." },
     });
   }
@@ -243,35 +386,44 @@
       pfad: pfad(z, id), gliederung: { id: gl.id, kind: gl.kind, name: gl.name, system_kind: null },
       unterordner: z.ordner.filter((x) => x.parent_id === id).map((x) => ordnerJson(z, x)),
       artikel: liste.map((a) => artikelKurz(z, a)), artikel_gesamt: liste.length, seite: 1, pro_seite: 200,
-      kategorien: liste.length ? [{ id: ID.kategorie, n: liste.length, name: "Übung", pfad: "Übung" }] : [],
+      kategorien: [...new Set(liste.map((a) => produktVon(z, a.product_id).category_id))].map((k) => ({ id: k,
+        n: liste.filter((a) => produktVon(z, a.product_id).category_id === k).length, name: kategorieVon(k).name,
+        pfad: kategoriePfad(k).map((x) => x.name).join(" / ") })),
       empfohlen: 0, erinnerungen: { aus: false, eigen: false, geerbt_von: null }, intervall: { monate: null }, nacharbeit: 0,
       journal: [], sammelprotokolle: [] }) };
   }
   function produktListe(z, url) {
     const q = (url.searchParams.get("q") || "").trim().toLowerCase();
     const liste = z.produkte.filter((p) => !q || `${p.manufacturer} ${p.model} ${p.description}`.toLowerCase().includes(q))
-      .map((p) => Object.assign({}, p, { intervall: { monate: null, quelle: "" }, bestand: z.artikel.filter((a) => a.product_id === p.id).length }));
+      .map((p) => Object.assign({}, p, { bestand: z.artikel.filter((a) => a.product_id === p.id).length }));
     return { produkte: liste, gesamt: liste.length, seite: 1, pro_seite: 50 };
   }
   function produktVoll(z, id) {
     const p = produktVon(z, id);
     if (!p) return { status: 404, error: "Dieses Produkt gibt es in der Übung nicht." };
     const n = z.artikel.filter((a) => a.product_id === id).length;
-    return { produkt: Object.assign({}, p, { intervall: { monate: null, quelle: "" }, artikel_gesamt: n, bestand: n, dokumente: [],
-      kategorie_dokumente: [], kategorie_pfad: [{ id: ID.kategorie, name: "Übung" }], formular: formularKurz(z), formulare: [],
+    const f = formularVon(z, p.formular_id);
+    // Spezifische Versionen (am Produkt): die eine aktive, wenn das Formular dieses Produkts eigenes ist.
+    const spezifisch = f.ziel.art === "produkt" && f.ziel.id === p.id
+      ? [{ id: f.id, version: f.version, titel: f.titel, aktiv: true, benutzt: false, punkte_anzahl: f.punkte.length, produkt_id: p.id, kategorie_id: null }] : [];
+    return { produkt: Object.assign({}, p, { artikel_gesamt: n, bestand: n, dokumente: dokumente(p),
+      kategorie_dokumente: [], kategorie_pfad: kategoriePfad(p.category_id), formular: formularKurz(z, p), formulare: spezifisch,
       journal: [], loeschbar: false, rueckrufe: [], stueckliste_grenzen: { anzahl: 20, bezeichnung: 120, positionen: 30 } }) };
   }
   function kategorien(z) {
-    return { kategorien: [{ id: ID.kategorie, name: "Übung", norm: "", parent_id: null, position: 0, demo: false,
-                            aktives_formular: z.formular.id, formulare: 1, produkte: z.produkte.length, items_have_length: false,
-                            laenge_wirksam: false, default_interval_months: null, default_lifetime_years: null, default_material_kind: null }],
-             materialarten: { metall_hardware: "Metall", sonstiges: "sonstiges", textil: "textil" } };
+    return { kategorien: KATEGORIEN.liste.map((k, i) => {
+      const aktiv = z.formulare.find((f) => f.ziel.art === "kategorie" && f.ziel.id === k.id);
+      return { id: k.id, name: k.name, norm: "", parent_id: k.parent_id, position: i, demo: false, aktives_formular: aktiv ? aktiv.id : null,
+               formulare: aktiv ? 1 : 0, produkte: z.produkte.filter((p) => p.category_id === k.id).length, items_have_length: false,
+               laenge_wirksam: false, default_interval_months: null, default_lifetime_years: null, default_material_kind: null };
+    }), materialarten: { metall_hardware: "Metall", sonstiges: "sonstiges", textil: "textil" } };
   }
-  function formularVoll(z) {
-    const f = z.formular;
-    const ziel = { art: "kategorie", id: ID.kategorie, pfad: [{ id: ID.kategorie, name: "Übung" }] };
+  function formularVoll(z, f) {
+    const p = f.ziel.art === "produkt" ? produktVon(z, f.ziel.id) : null;
+    const ziel = p ? { art: "produkt", id: p.id, kategorie_id: p.category_id, name: nennung(p) }
+      : { art: "kategorie", id: f.ziel.id, pfad: kategoriePfad(f.ziel.id) };
     const kopf = { id: f.id, version: f.version, titel: f.titel, aktiv: f.aktiv, benutzt: f.benutzt, aenderbar: !f.benutzt, demo: false,
-                   kategorie_id: ID.kategorie, produkt_id: null, gueltig_ab: "2026-01-01", wiki: null, wiki_aendern: false, ziel,
+                   kategorie_id: p ? null : f.ziel.id, produkt_id: p ? p.id : null, gueltig_ab: "2026-01-01", wiki: null, wiki_aendern: false, ziel,
                    created_at: "2026-01-01T00:00:00+00:00", updated_at: "2026-01-01T00:00:00+00:00" };
     return { editoren: { date: "Datum", laenge: "Länge (m)", number: "Zahl", photo: "Foto", signature: "Unterschrift", text: "Text", yesno: "Ja/Nein" },
              formular: Object.assign({}, kopf, { punkte: kopie(f.punkte), journal: [],
@@ -385,10 +537,11 @@
     ["POST", /^\/api\/material\/artikel\/(\d+)\/pruefungen$/, (m, body, z) => {
       const a = artikelVon(z, nr(m));
       if (!a) return fehlt("Diesen Artikel");
+      const f = formularVon(z, produktVon(z, a.product_id).formular_id);
       const x = { id: ID.pruefung, item_id: a.id, art: (body && body.art) || "periodisch", entwurf: true, ergebnis: null, datum: tag(0),
                   naechste: null, bemerkung: "", grund: "", pruefer: ich().name || "Du", pruefer_id: ich().id,
                   urkunde: darf().urkundennummer || "ÜBUNG", begonnen_am: jetzt(), abgeschlossen_am: null, round_id: null, protokoll: null,
-                  punkte: z.formular.punkte.map(punktStand) };
+                  form_id: f.id, punkte: vorbelegt(f) };
       z.pruefungen = z.pruefungen.filter((p) => p.id !== x.id).concat(x);
       return { pruefung: pruefungVoll(z, x) };
     }],
@@ -437,8 +590,13 @@
       filter: url.searchParams.get("status") || "alle", offen: darf().katalog ? 0 : null })],
     ["GET", `${API}/produkte`, (m, b, z, url) => produktListe(z, url)],
     ["GET", /^\/api\/material\/produkte\/(\d+)$/, (m, b, z) => produktVoll(z, nr(m))],
-    ["GET", `${API}/artikel/vorschlag`, () => ({ vorschlag: { bestandteile: [], intervall: OHNE_INTERVALL, lifetime_source: "",
-      lifetime_years: null, material_kind: "sonstiges", next_due_on: null, retire_by: null, spaetestens: null } })],
+    // Wie bestand.vorschlag: Intervall, Lebensdauer und Materialart aus dem Produkt, Fälligkeit heute plus Intervall.
+    ["GET", `${API}/artikel/vorschlag`, (m, b, z, url) => {
+      const p = produktVon(z, Number(url.searchParams.get("product_id"))) || z.produkte[0];
+      const bis = p.intervall.monate ? plusMonate(tag(0), p.intervall.monate) : null;
+      return { vorschlag: { bestandteile: [], intervall: intervall(p), lifetime_source: p.lifetime_source, lifetime_years: p.lifetime_years,
+                            material_kind: p.material_kind, next_due_on: bis, retire_by: null, spaetestens: bis } };
+    }],
     ["POST", `${API}/artikel`, (m, body, z) => {
       const d = body || {};
       const p = produktVon(z, Number(d.product_id)) || z.produkte[0];
@@ -466,17 +624,21 @@
     ["GET", `${API}/kategorien`, (m, b, z) => kategorien(z)],
     ["GET", /^\/api\/material\/kategorien\/(\d+)\/dokumente$/, () => ({ dokumente: [] })],
     ["GET", `${API}/katalog/import/aktuell`, () => ({ auftrag: null })],
-    ["GET", /^\/api\/material\/formulare\/(\d+)$/, (m, b, z) => (nr(m) === z.formular.id ? formularVoll(z) : fehlt("Dieses Formular"))],
+    ["GET", /^\/api\/material\/formulare\/(\d+)$/, (m, b, z) => {
+      const f = formularVon(z, nr(m));
+      return f ? formularVoll(z, f) : fehlt("Dieses Formular");
+    }],
+    // Gespeichert wird nur die Übungskopie des Formulars – der echte Katalog bleibt, wie er ist.
     ["PUT", /^\/api\/material\/formulare\/(\d+)$/, (m, body, z) => {
-      if (nr(m) !== z.formular.id) return fehlt("Dieses Formular");
-      const f = z.formular;
+      const f = formularVon(z, nr(m));
+      if (!f) return fehlt("Dieses Formular");
       if (body && typeof body.titel === "string" && body.titel.trim()) f.titel = body.titel.trim();
       if (body && Array.isArray(body.punkte)) {
-        let neu = ID.punktNeu;
+        let neu = Math.max(ID.punktNeu - 1, ...f.punkte.map((p) => p.id)) + 1;
         f.punkte = body.punkte.map((p, i) => ({ id: p.id || neu++, position: i + 1, gruppe: String(p.gruppe || ""), text: String(p.text || ""),
                                                art: p.art || "yesno", soll: String(p.soll || ""), pflicht: Boolean(p.pflicht) }));
       }
-      return formularVoll(z);
+      return formularVoll(z, f);
     }],
   ];
 
@@ -485,18 +647,41 @@
   const artikelLink = (id) => `#mat-inhalt a[href^="/materialablage/artikel/${id}"]`;
   const imBaum = `#mat-baumnav a[href^="/materialablage/ordner/${ID.fahrzeug}"]`;
   const suchFeld = "#mat-suche input[name=q]";
+  // Namen, Suchwörter und Formulare der Übungsprodukte für die Texte – aus dem Bestand, wie jeder Ablauf ihn bekommt.
+  const VORLAGE = bestand();
+  const P = { gurt: produktVon(VORLAGE, ID.pGurt), seil: produktVon(VORLAGE, ID.pSeil), helm: produktVon(VORLAGE, ID.pHelm) };
+  const N = { gurt: nennung(P.gurt), seil: nennung(P.seil), helm: nennung(P.helm) };
+  const formGurt = formularVon(VORLAGE, P.gurt.formular_id);
+  const formSeil = formularVon(VORLAGE, P.seil.formular_id);
+  // Ein Prüfpunkt im Text: seine erste Zeile, gekürzt.
+  const kurz = (t) => { const z = String(t || "").split("\n")[0].trim(); return z.length > 60 ? `${z.slice(0, 59).trimEnd()}…` : z; };
+  // „Artikel anlegen“: Die Treffer der Produktsuche stehen in der Reihenfolge des Bestands (produktListe) – data-i des Helms.
+  const helmTreffer = produktListe(VORLAGE, { searchParams: new URLSearchParams({ q: suchwort(P.helm) }) }).produkte.findIndex((p) => p.id === ID.pHelm);
+  const wortMuster = (w) => new RegExp(w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
   const produktLink = `#kat-liste a[href^="/materialablage/katalog/produkt/${ID.pGurt}"]`;
-  const formularLink = `#mat-inhalt a[href^="/materialablage/katalog/formular/${ID.formular}"]`;
+  const formularLink = `#mat-inhalt a[href^="/materialablage/katalog/formular/${formGurt.id}"]`;
   // Der Prüfformular-Editor zeigt die Punkte seit dem 04.11.2026 je Gruppe (Zwischenzeile, am Ende „+ Prüfpunkt“): Der
-  // neue Punkt ist der letzte vor dem Fuß seiner Gruppe – das Übungsformular hat nur die Gruppe „Platzhalter“.
-  const neuerPunkt = "#fp-tabelle tr.fp-punkt:has(+ tr.fp-fuss) .fp-text";
-  const neuerPunktMenue = "#fp-tabelle tr.fp-punkt:has(+ tr.fp-fuss) .fp-menue summary";
+  // neue Punkt ist der letzte vor dem Fuß seiner Gruppe. Geübt wird in der ersten Gruppe (data-g="0").
+  const punktNeu = '#fp-tabelle [data-act=punkt-neu][data-g="0"]';
+  const neuerPunkt = '#fp-tabelle tr.fp-punkt[data-g="0"]:has(+ tr.fp-fuss) .fp-text';
+  const neuerPunktMenue = '#fp-tabelle tr.fp-punkt[data-g="0"]:has(+ tr.fp-fuss) .fp-menue summary';
+  const mehrereGruppen = formGurt.punkte.some((p, i, a) => i && p.gruppe !== a[i - 1].gruppe);
   const rolle = "label.mf-vorlage:has(> input[value=pruefer])";
   // Die Prüfung ist bewertet, wenn kein Pflichtpunkt mehr ohne Befund ist (wie „Pflichtpunkte ohne Befund“ in der Leiste).
   const bewertet = (z) => {
     const x = (z.pruefungen || []).find((p) => p.id === ID.pruefung);
-    return Boolean(x && x.punkte.every((p) => !p.pflicht || p.befund === "nicht_zutreffend" || String(p.wert || "").trim()));
+    return Boolean(x && x.punkte.every((p) => !offen(p)));
   };
+  // Der Schritt „Prüfpunkte“: Den ersten leeren Zahl- oder Textpunkt trägst du ein, sonst siehst du die Punkte nur an.
+  const punkteSchritt = (() => {
+    const liste = formSeil.punkte.map(punktStand);
+    const dein = deinPunkt(liste);
+    const vorab = liste.filter((x) => offen(x) && x !== dein).length;
+    const herkunft = `Die Prüfpunkte kommen aus dem Formular „${formSeil.titel || "Prüfformular"}“ und sind vorbelegt wie bei einer echten Prüfung: „in Ordnung“ und der Sollwert.`;
+    if (!dein) return { ziel: `#pp-${liste[0].id}`, text: `${herkunft} Weicht etwas ab, wählst du „Mangel“ oder „n. z.“.` };
+    return { ziel: `#pp-${dein.id}`, text: `${herkunft} Trag bei „${kurz(dein.text)}“ einen Wert ein${vorab ? " – die übrigen leeren Felder hat die Übung schon gefüllt" : ""}.`,
+             warten: { bedingung: bewertet }, probe: { tippen: [`.mat-pwert[data-rid="${dein.id}"]`, dein.art === "number" ? "1" : "Übung"] } };
+  })();
 
   const grund = { ablaeufe: [
     { titel: "Zurechtfinden", start: "/materialablage", schritte: [
@@ -507,9 +692,9 @@
         warten: { klick: "#mat-side-auf" } },
       { ziel: imBaum, text: "Links stehen die Ordner deines Bereichs: Lager, Fahrzeuge, Gruppen. Öffne „Übung – Fahrzeug 1“.",
         warten: { klick: imBaum } },
-      { ziel: artikelLink(ID.gurt), text: "Hier stehen alle Artikel des Ordners mit Status und nächster Prüfung. Öffne den Übungsgurt.",
+      { ziel: artikelLink(ID.gurt), text: `Hier stehen alle Artikel des Ordners mit Status und nächster Prüfung. Öffne „${N.gurt}“ (Ü-0001).`,
         warten: { klick: artikelLink(ID.gurt) } },
-      { ziel: ".mat-artikeltitel", text: "Das ist der Übungsgurt. Wie du einen Artikel über seine Nummer findest, zeigt der nächste Ablauf." },
+      { ziel: ".mat-artikeltitel", text: `Das ist Ü-0001, ein Artikel des Produkts „${N.gurt}“${ausKatalog("gurt") ? " aus dem Katalog – der Artikel selbst ist eine Übung" : ""}. Wie du einen Artikel über seine Nummer findest, zeigt der nächste Ablauf.` },
     ] },
     { titel: "Artikel finden", start: "/materialablage", schritte: [
       // Liegt das Suchfeld hinter der Lupe (Doppelbildschirm), zeigt der Rahmen auf die Lupe. Ein eigener Schritt „Lupe“
@@ -547,11 +732,10 @@
 
   const pruefer = { ablaeufe: [
     { titel: "Prüfung durchführen", start: `/materialablage/artikel/${ID.seil}`, schritte: [
-      { ziel: "[data-act=pruefen]", text: "Tippe auf „Prüfung starten“.", warten: { klick: "[data-act=pruefen]" } },
+      { ziel: "[data-act=pruefen]", text: `Ü-0002 – „${N.seil}“ – ist zur Prüfung fällig. Tippe auf „Prüfung starten“.`, warten: { klick: "[data-act=pruefen]" } },
       { ziel: "[data-act=beginnen]", text: "Wähle oben die Art der Prüfung und beginne.", warten: { anfrage: `POST ${API}/artikel/${ID.seil}/pruefungen` },
         probe: { klick: "[data-act=beginnen]" } },
-      { ziel: ".mat-punkte", text: "Geh die Prüfpunkte durch: in Ordnung, Mangel oder nicht zutreffend – beim Zahlpunkt trag einen Wert ein. Die Punkte hier sind Platzhalter.",
-        warten: { bedingung: bewertet }, probe: { tippen: [`.mat-pwert[data-rid="${ID.punktZahl}"]`, "1"] } },
+      punkteSchritt,
       { ziel: "#pr-bem", text: "Hast du beim Prüfen selbst etwas behoben, schreib es in die Bemerkung." },
       // Ziele in der Abschlussleiste sind Knöpfe: Bekommen sie den Fokus, steht die Leiste ganz da (sonst eingeklappt).
       { ziel: "[data-act=ergebnis][data-e=einsatzbereit]", text: "Wähle das Ergebnis – hier „einsatzbereit“.", warten: { klick: "[data-act=ergebnis]" },
@@ -565,9 +749,10 @@
 
   const materialwart = { ablaeufe: [
     { titel: "Artikel anlegen", start: `/materialablage/artikel/neu?ordner=${ID.fahrzeug}`, schritte: [
-      { ziel: "#an-q", text: "Such das Produkt im Katalog – gib „Übung“ ein.", warten: { wert: ["#an-q", /übung/i] }, probe: { tippen: ["#an-q", "Übung"] } },
-      { ziel: "#an-treffer", text: "Wähle den Übungshelm.", warten: { klick: "#an-treffer .mat-treffer-wahl" },
-        probe: { klick: "#an-treffer .mat-treffer-wahl[data-i=\"1\"]" } },
+      { ziel: "#an-q", text: `Such das Produkt im Katalog – gib „${suchwort(P.helm)}“ ein.`, warten: { wert: ["#an-q", wortMuster(suchwort(P.helm))] },
+        probe: { tippen: ["#an-q", suchwort(P.helm)] } },
+      { ziel: "#an-treffer", text: `Wähle „${N.helm}“.`, warten: { klick: "#an-treffer .mat-treffer-wahl" },
+        probe: { klick: `#an-treffer .mat-treffer-wahl[data-i="${Math.max(0, helmTreffer)}"]` } },
       { ziel: "#an-sn", text: "Trag die Seriennummer ein, hier „Ü-SN-1“.", warten: { wert: ["#an-sn", /\S/] }, probe: { tippen: ["#an-sn", "Ü-SN-1"] } },
       { ziel: "[data-act=anlegen]", text: "Leg den Artikel an. Neue Artikel stehen auf „neu“, bis die Eingangsprüfung gemacht ist.",
         warten: { anfrage: `POST ${API}/artikel` }, probe: { klick: "[data-act=anlegen]" } },
@@ -595,15 +780,18 @@
 
   const verwaltung = { ablaeufe: [
     { titel: "Katalog und Prüfformular", start: "/materialablage/katalog", schritte: [
-      { ziel: "#kat-q", text: "Der Katalog gilt für alle Gliederungen. Such „Übung“.", warten: { wert: ["#kat-q", /übung/i] }, probe: { tippen: ["#kat-q", "Übung"] } },
-      { ziel: produktLink, text: "Öffne das Produkt „Übungsgurt“.", warten: { klick: produktLink } },
+      { ziel: "#kat-q", text: `Der Katalog gilt für alle Gliederungen. Such „${suchwort(P.gurt)}“.`, warten: { wert: ["#kat-q", wortMuster(suchwort(P.gurt))] },
+        probe: { tippen: ["#kat-q", suchwort(P.gurt)] } },
+      { ziel: produktLink, text: `Öffne das Produkt „${N.gurt}“.`, warten: { klick: produktLink } },
       { ziel: formularLink, text: "Hier steht, nach welchem Prüfformular geprüft wird. Öffne es.", warten: { klick: formularLink }, probe: { klick: `${formularLink} strong` } },
       { ziel: "#fp-tabelle", text: "Hier pflegst du die Prüfpunkte des Formulars – jede Gruppe steht in einer eigenen Zeile über ihren Punkten." },
-      { ziel: "[data-act=punkt-neu]", text: "Leg in der Gruppe einen Prüfpunkt an.", warten: { klick: "[data-act=punkt-neu]" } },
+      { ziel: punktNeu, text: `Leg ${mehrereGruppen ? "in der ersten Gruppe" : "in der Gruppe"} einen Prüfpunkt an${ausKatalog("gurt") ? " – geändert wird nur eine Übungskopie des Formulars" : ""}.`,
+        warten: { klick: punktNeu } },
       { ziel: neuerPunkt, text: "Gib ihm einen Text, hier „Platzhalter“.", warten: { wert: [neuerPunkt, /\S/] }, probe: { tippen: [neuerPunkt, "Platzhalter"] } },
       { ziel: neuerPunktMenue, text: "Über „⋯“ schiebst du einen Punkt nach oben, nach unten oder in eine andere Gruppe. Am Griff ⠿ links ziehst du ihn an seinen Platz." },
-      { ziel: "[data-act=speichern]", text: "Speichere das Formular.", warten: { anfrage: `PUT ${API}/formulare/${ID.formular}` }, probe: { klick: "[data-act=speichern]" } },
-      { ziel: "#fp-tabelle", text: "Gespeichert. Ist eine Version schon für Prüfungen benutzt, änderst du sie nur über „Neue Version“ – alte Protokolle bleiben, wie sie waren." },
+      { ziel: "[data-act=speichern]", text: "Speichere das Formular.", warten: { anfrage: `PUT ${API}/formulare/${formGurt.id}` }, probe: { klick: "[data-act=speichern]" } },
+      // Ziel ist „Neue Version“ oben – bei einem langen Formular stünde die ganze Tabelle nicht im Bild.
+      { ziel: "[data-act=neue-version]", text: `Gespeichert${ausKatalog("gurt") ? " – in der Übung nur die Kopie" : ""}. Ist eine Version schon für Prüfungen benutzt, änderst du sie nur über „Neue Version“ – alte Protokolle bleiben, wie sie waren.` },
     ] },
   ] };
 

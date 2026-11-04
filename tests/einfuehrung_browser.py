@@ -87,6 +87,7 @@ class Umgebung:
     def __init__(self, dev=False):
         self.dev = dev
         self.seiten = []
+        self.medien_frei = set()     # Pfade unter /media/, die eine Übung laden darf (Katalogbilder der Materialablage)
 
     def __enter__(self):
         self._tmp = tempfile.TemporaryDirectory()
@@ -357,8 +358,9 @@ class Seite:
 
     # --- Prüfungen ---------------------------------------------------------------------------------------------------
     def netz_befunde(self, bis=None, von=0):
-        """Im Übungsmodus darf nur der Merker, /api/me und /static/ ans Netz; jede Seite trägt die Kennung. von/bis: der
-        Abschnitt des Netzprotokolls, in dem geübt wurde."""
+        """Im Übungsmodus darf nur der Merker, /api/me und /static/ ans Netz – dazu die Medien in Umgebung.medien_frei (die
+        Produktbilder der Katalogauswahl der Materialablage); jede Seite trägt die Kennung. von/bis: der Abschnitt des
+        Netzprotokolls, in dem geübt wurde."""
         out = []
         for url, typ, _dok in self.anfragen[von:bis]:
             teile = urlsplit(url)
@@ -367,7 +369,7 @@ class Seite:
             pfad = teile.path
             if pfad.startswith("/api/") and not (pfad.startswith("/api/einfuehrung/") or pfad == "/api/me"):
                 out.append(f"Anfrage ans Netz in der Übung: {url}")
-            elif pfad.startswith("/media/"):
+            elif pfad.startswith("/media/") and pfad not in self.u.medien_frei:
                 out.append(f"Medium ans Netz in der Übung: {url}")
             elif typ == "Document" and "uebung" not in parse_qs(teile.query):
                 out.append(f"Seite ohne Übungskennung geladen: {url}")
