@@ -8,10 +8,11 @@ app/static/fonts, höchstens 60 KB) und ein einseitiges PDF „Übungsdatei – 
 eingebettete Schrift, von Hand gesetzt – klein und gültig).
 
 Aufruf im Wurzelordner des Repositories (Pillow wie in requirements.txt):
-    python3 scripts/uebungsdateien.py                       # uebungsbild-1…3.jpg und uebungsdatei.pdf in app/static/uebung/
+    python3 scripts/uebungsdateien.py                       # uebungsdatei.pdf in app/static/uebung/
     python3 scripts/uebungsdateien.py --ziel app/static/uebung/karte --von 4 --bis 6 --ohne-pdf
-                                                            # weitere Bilder gleicher Art für einen Modul-Teil
-Die Dateien werden überschrieben und eingecheckt."""
+                                                            # Bilder für einen Modul-Teil (Vorgabe 1 bis 3)
+Bilder gibt es nur mit --ziel: Die Teile lesen sie aus ihrem Ordner app/static/uebung/<modul>/ – Bilder im Wurzelordner
+(bis 04.11.2026 die Vorgabe) las niemand. Die Dateien werden überschrieben und eingecheckt."""
 import argparse
 import math
 import os
@@ -99,16 +100,20 @@ def pdf():
 
 def main(argv=None):
     a = argparse.ArgumentParser(description="Übungsbilder und Übungsdatei der Einführung erzeugen.")
-    a.add_argument("--ziel", default=ZIEL, help="Ordner (Vorgabe app/static/uebung)")
-    a.add_argument("--von", type=int, default=1)
-    a.add_argument("--bis", type=int, default=3)
+    a.add_argument("--ziel", help="Ordner eines Modul-Teils für Bilder (ohne: nur die Übungsdatei in app/static/uebung)")
+    a.add_argument("--von", type=int)
+    a.add_argument("--bis", type=int)
     a.add_argument("--ohne-pdf", action="store_true", help="nur Bilder")
     args = a.parse_args(argv)
-    os.makedirs(args.ziel, exist_ok=True)
-    for n in range(args.von, args.bis + 1):
-        print(bild_speichern(n, args.ziel))
+    if not args.ziel and (args.von is not None or args.bis is not None or args.ohne_pdf):
+        a.error("Bilder nur mit --ziel (z. B. app/static/uebung/karte).")
+    ziel = args.ziel or ZIEL
+    os.makedirs(ziel, exist_ok=True)
+    if args.ziel:
+        for n in range(args.von or 1, (args.bis or 3) + 1):
+            print(bild_speichern(n, ziel))
     if not args.ohne_pdf:
-        pfad = os.path.join(args.ziel, "uebungsdatei.pdf")
+        pfad = os.path.join(ziel, "uebungsdatei.pdf")
         with open(pfad, "wb") as fh:
             fh.write(pdf())
         print(pfad)

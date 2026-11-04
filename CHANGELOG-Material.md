@@ -5,7 +5,7 @@ Gliederungen, Prüfnachweise je Ausrüstungsteil, unveränderliche PDF-Prüfprot
 umgesetzt, Phase 2 (mehrere Gliederungen und externe Prüfer in einer Instanz) in drei, Phase 3 und 4 in Lieferungen
 und Wünschen des Nutzers; jede war für sich deploybar. Seit dem 26.10.2026 heißt das Modul „Materialablage“ (im Code,
 in Tabellen und unter `/api/material` weiter `material`). Ältere Abschnitte sagen noch „Modul Material“ – sie bleiben als
-Geschichte stehen. Schemaversion nach der Nachbesserung vor dem Merge: 30; mit der Prüfsumme für den Lebenslauf: 31; mit der Liste nach dem Merge (Teil A): 32; mit der Stufe Redakteur: 33; mit den Riegenkarten-Ausbildern nur mit Konto: 34; mit „Prüfformular eines anderen Produkts übernehmen“: 35.
+Geschichte stehen. Schemaversion nach der Nachbesserung vor dem Merge: 30; mit der Prüfsumme für den Lebenslauf: 31; mit der Liste nach dem Merge (Teil A): 32; mit der Stufe Redakteur: 33; mit den Riegenkarten-Ausbildern nur mit Konto: 34; mit „Prüfformular eines anderen Produkts übernehmen“: 35; mit der Nachbesserung danach: 36; mit dem Aufräumen: 37.
 
 | Lieferung | Inhalt | Stand |
 | --- | --- | --- |
@@ -86,6 +86,7 @@ Geschichte stehen. Schemaversion nach der Nachbesserung vor dem Merge: 30; mit d
 | Prüfformular-Editor: Gruppen ziehen | Griff ⠿ auch an jeder Gruppenzeile: der ganze Block zwischen andere Gruppen, Einfügemarke, Esc, Randbildlauf; Menü „⋯“ bleibt; kein Griff bei nur einer Gruppe | gebaut 04.11.2026 (kein Schemaschritt), Zweig gruppe-ziehen |
 | Nachbesserung nach der Sicherheitsprüfung vom 04.11.2026 (Schritt 36) | Bildausnahme der Übungssperre erst nach Anmeldung und Modulzugang, Auswahl prozessweit zwischengespeichert; Quelle mit benutzter Formularversion nicht löschbar (Klartext); Aktivieren prüft den Verweis unter der Schreibsperre, Trigger „Verweis oder eigenes Formular“; DEMO-Regel des Exports (DEMO-Kategorie) für Übung und Übernehmen, Trigger | gebaut 04.11.2026 (Schema 36), Zweig fix-0411, wartet auf Freigabe |
 | Prüfanleitung in der Strömipedia entfernt | Keine Verknüpfung einer Strömipedia-Seite am Prüfformular mehr: Zeile und Dialog am Formular, Einblendung in offenen Prüfungen, beide Routen (jetzt 404), Dienst `wikiverweis`, `formular.wiki`/`wiki_aendern`, `pruefung.anleitung` und die Kopie in neue Versionen entfallen; `mat_form.wiki_page_id` bleibt ungenutzt stehen, alte Journal-Einträge bleiben lesbar | gebaut 04.11.2026 (kein Schemaschritt, Schema bleibt 35), Zweig ohne-pruefanleitung, wartet auf Freigabe |
+| Aufräumen: Schema 37 und Reste entfernter Funktionen | Elf Spalten entfernter Funktionen per `DROP COLUMN` (Prüfanleitung, Sets, „kritisch“ am Prüfpunkt, Katalogpfleger, nie benutzte), Index und zwei Wächter mit ihnen; toter Code: `rechte.urkunde_fehlt`, alter Pfad `…/pruefungen/<id>/abschliessen`, `GET /api/wiki/watches`, Übungsbilder im Wurzelordner, CSS-Regel ohne Erzeuger, „Teile laut Meldung“ | gebaut 04.11.2026 (Schema 37), Zweig aufraeumen, wartet auf Freigabe |
 
 ## Abgleich mit dem Bestand (vor Lieferung 1)
 
@@ -10015,7 +10016,7 @@ oder Plattform-Verwaltung).
 | `GET/PUT/DELETE /api/material/pruefungen/<id>` | lesen / Prüfer / Prüfer oder Materialwart | Prüfung lesen; Art und Bemerkung am Entwurf; Entwurf verwerfen bzw. Reservierung aufheben |
 | `PUT /api/material/pruefungen/<id>/punkte/<pid>`, `POST/DELETE …/foto` | Prüfer (eigener Entwurf) | Befund, Wert, Bemerkung, Foto je Prüfpunkt |
 | `POST /api/material/pruefungen/<id>/anhaenge` (`file` mehrfach, `art`, `titel`, `im_protokoll`), `DELETE …/<aid>` | Prüfer (eigener Entwurf) | Anhänge |
-| `POST /api/material/pruefungen/<id>/festschreiben` (`ergebnis`, `next_due_on`, `grund`, `bemerkung`; alter Pfad `…/abschliessen` gilt weiter) | Prüfer (eigener Entwurf, mit Unterschrift) | Abschluss und Festschreiben mit Protokoll |
+| `POST /api/material/pruefungen/<id>/festschreiben` (`ergebnis`, `next_due_on`, `grund`, `bemerkung`; den alten Pfad `…/abschliessen` gibt es seit dem 04.11.2026 nicht mehr – 404) | Prüfer (eigener Entwurf, mit Unterschrift) | Abschluss und Festschreiben mit Protokoll |
 | `POST /api/material/pruefungen/<id>/berichtigen` (`grund`) | Prüfer (der die Prüfung gemacht hat) | Berichtigung beginnen; liefert den neuen Entwurf |
 | `PUT /api/material/pruefungen/<id>/punkte/<pid>` mit `unterschrift` (data:-URL oder `null`) | Prüfer (eigener Entwurf) | Unterschriftsfeld eines Formulars |
 | `GET/PUT/DELETE /api/material/unterschrift` (`bild`: data:-URL vom Signatur-Pad) | GET und DELETE angemeldet (eigene Daten, auch ohne Modulzugang); PUT mit Modulzugang nur Prüfer (seit Lieferung 5 schon mit dem Häkchen, ohne Urkundennummer) und wer irgendwo verwaltet (eigenes Konto) | eigene Unterschrift im Profil |
@@ -12430,3 +12431,93 @@ aus der Strömipedia“ mit Bild `pruefanleitung.png`, Warnung „Prüfanleitung
 -export“ („verknüpft nie eine Prüfanleitung“), die Übersicht „Materialablage“ (Inhaltszeile zu „Prüfformulare“) und in
 der Strömipedia „Seiten anlegen und bearbeiten“ (Warnung „Anleitung als Vorlage markiert“ nennt „Prüfanleitungen der
 Materialablage“).
+
+## Aufräumen: Schema 37 und Reste entfernter Funktionen (Wunsch des Nutzers, 04.11.2026)
+
+Nutzer: „Räume das Schema und die Anwendung von nicht mehr gebrauchten Funktionen auf.“ Grundlage
+`planung/aufraeumen/bestand.md` (Bestandsaufnahme mit Bauentwurf, dort noch „Schritt 36“ – den hat `fix-0411` belegt,
+dieser Bau ist **Schritt 37**) und `planung/aufraeumen/auftrag_bau.md`: alles mit Vorschlag „entfernen“ ist entfernt,
+alles mit „lassen“ bleibt; die beiden Fragen hat der Nutzer entschieden (`mat_checklist_item.is_critical` und
+`mat_form.wiki_page_id` samt Index entfernen). Gebaut 04.11.2026 auf dem Zweig `aufraeumen` von 0e98cee (**Schema 37**).
+`mat_product.formular_von` bleibt hier unberührt (Umbau zum Formular-Pool folgt).
+
+**Schritt 37** (`models._schritt_37`, `SPALTEN_WEG_37`, `OBJEKTE_WEG_37`): `ALTER TABLE … DROP COLUMN` (SQLite ≥ 3.35),
+kein Neuaufbau einer Tabelle. Erst `idx_mat_form_wiki` und die Wächter `mat_item_kein_teil`/`mat_item_kein_teil_aendern`
+(nennen `parent_item_id`), dann die Spalten:
+
+| Spalte | Herkunft | warum weg |
+| --- | --- | --- |
+| `mat_form.wiki_page_id` (+ Index) | Schritt 12, Prüfanleitung | Funktion entfernt (`ohne-pruefanleitung`); Werte = Verknüpfungen Formular → Wiki-Seite gehen verloren |
+| `mat_product.wiki_page_id` | Schritt 1 („ab Phase 2“) | nie geschrieben, immer NULL; nur im Produkt-JSON ausgegeben |
+| `mat_folder.owner_user_id` | Schritt 1 | nie benutzt |
+| `mat_item.parent_item_id`, `lock_cause`, `set_lock_origin`, `set_pruefen` | Schritt 21 (Sets) | seit Schritt 26 leer, der Wächter ließ keine Werte zu |
+| `mat_product_request.is_set`, `set_teile` | Schritt 22 (Set-Meldung) | seit Schritt 26 nie geschrieben; die Anzeige „Teile laut Meldung“ entfällt |
+| `mat_checklist_item.is_critical` | Schritt 1 | Marke „kritisch“ seit 03.11.2026 entfallen; Markierungen an Formularen gehen verloren, die Befundzeilen behalten ihre Kopie |
+| `users.mat_katalog` (Kernschema) | `db.MIGRATIONS` | seit Schritt 10 ungelesen; die Zeile in `db.MIGRATIONS` ist gestrichen (sonst legte jeder Start sie neu an), nicht über `OBSOLETE_COLUMNS` (liefe vor Schritt 10 einer alten Sicherung) |
+
+Vorher werden Zeilenzahlen je Tabelle, `sqlite_sequence` und Fremdschlüssel-Verletzungen festgehalten; danach muss alles
+gleich sein und keine der Spalten mehr da – sonst `IntegrityError`, die Transaktion von `migrieren()` nimmt alles zurück.
+Je Spalte mit Werten (weder NULL noch 0 noch leer) eine Zeile im Startprotokoll: „Schritt 37 (Materialablage): Spalte
+<Tabelle>.<Spalte> entfernt – n Zeile(n) trugen einen Wert.“ Kein Journal (nichts Sichtbares, wie Schritt 33).
+Wiederholbar: `DROP … IF EXISTS`, eine Spalte nur, wenn sie da ist. Mit SQLite < 3.35 läuft der Schritt durch und lässt
+die Spalten stehen (Meldung im Startprotokoll) – im Abbild `python:3.12-slim` steckt 3.46.1 (geprüft im Container).
+Die Migrationskette bleibt: Schritt 1, 12, 21 und 22 legen die Spalten weiter an, Schritt 10 liest `mat_katalog` einer
+alten Sicherung (Katalogpfleger → Verwaltung), erst Schritt 37 räumt ab.
+
+**Bleibt** (Bestandsaufnahme B1–B5): `mat_product.is_set` (Schutz-Trigger `mat_teilnummer_*`, `mat_product_kein_set*`),
+`mat_product_component.einzeln`/`component_product_id`/`austausch` (Tabellen-CHECK, Trigger), `mat_inspection.set_lauf_id`
+samt Index, `mat_set_lauf`, `mat_set_protokoll_zeile` (Nachweis, Spaltenliste der Unveränderlichkeits-Trigger) und
+`mat_inspection_result.is_critical` (Kopie in festgeschriebenen Befundzeilen, `mat_result_aendern`). Journal-
+Beschriftungen alter Einträge („Katalogpfleger“, „Sperrursache“, „Teile des Sets“, „Prüfanleitung … geändert“) bleiben
+in beschriftung.py und material.js; der Katalogimport übergeht „kritisch“ weiter, die Nutzerverwaltung antwortet auf
+`mat_katalog` weiter 400.
+
+**Code**: `produkt_json` ohne `wiki_page_id` (auch das Übungsprodukt in `static/js/uebung/material.js`), `meldung_json`
+ohne `set_teile`, Produktmeldung ohne „Teile laut Meldung“ (material.js `meldeDetails`), Kommentare in katalog.py,
+pruefung.py, importer.py, rechte.py, api_admin.py, db.py und im Kopf von models.py nachgezogen,
+`scripts/material_beispielbestand.py` schreibt `mat_katalog` nicht mehr (INSERT, Journal, Abweichungsliste). Toter Code
+entfernt (je vorher per grep über app/, tests/, scripts/, docs/ bestätigt): `rechte.urkunde_fehlt` (letzter Aufrufer
+entfiel in Phase 2 · L1), der Alias `POST /api/material/pruefungen/<id>/abschliessen` (die Oberfläche ruft seit
+Lieferung 3 `…/festschreiben`; antwortet jetzt 404 wie unbekannte Wege), `GET /api/wiki/watches` (kein Aufrufer seit
+16.09.; Beobachten selbst mit `PUT …/watch` und den Mails bleibt), `app/static/uebung/uebungsbild-1…3.jpg` (byte-gleich
+mit `uebung/karte/`, nie verwiesen – `uebungsdatei.pdf` daneben bleibt) und die Regel
+`.bew-matrix th.komm-kopf, .bew-matrix th.erg-kopf` in pruefungen.css (kein Erzeuger). `scripts/uebungsdateien.py`
+legt ohne `--ziel` nur noch die Übungsdatei ab; Bilder nur mit `--ziel` (Vorgabe 1 bis 3), `--von`/`--bis`/`--ohne-pdf`
+ohne `--ziel` sind ein Aufruffehler.
+
+**Rückweg** nur über die Sicherung vor dem Deploy (README „Daten und Sicherung“): Ein Stand ≤ 36 liefe auf der
+migrierten Datenbank nicht überall.
+
+**Proben an Kopien** (Datenordner `/home/harness/aufraeumen-daten`, nur DEMO/Testkonten, danach gelöscht):
+- alte Testdatenbank `devtools/stroemis.db` (Schema 13): 13 → 36 mit dem Ausgangsstand, Kopie → 37 mit diesem Stand:
+  73 Tabellen, alle übrigen Spalten jeder Zeile gleich (Prüfsumme über rowid und Werte), `sqlite_sequence` und `mat_meta`
+  (außer Version) gleich, nur die drei Objekte fehlen, kein Trigger/Index geändert, `integrity_check` ok,
+  `foreign_key_check` leer, FTS5 `integrity-check` ok; Startprotokoll „mat_checklist_item.is_critical – 11 Zeile(n)“;
+  zweiter Start ändert nichts; 13 → 37 direkt ergibt dasselbe Schema.
+- Beispielbestand (Katalogteile 01–02 der Gesamtserie, `--beispielbestand --artikel 60`, Stand 36: 62 Artikel,
+  147 Prüfungen, 4372 Zeilen): Kopie → 37 lokal und im Container (`st-docker-build`, Abbild mit SQLite 3.46.1) – je alle
+  übrigen Spalten gleich, Integrität, FK, Volltext; 173 Protokolle mit unveränderter Prüfsumme, `pdf/` byte-gleich;
+  Schutz greift (abgeschlossene Prüfung samt Befundzeile, Stammdaten geprüfter Artikel, Journal).
+- Browser (Chromium, 1280 und 360 px, ohne Konsolenfehler): Produktmeldungen (Liste, Dialog „Produkt aus Meldung
+  anlegen“), Produktseite, offene Prüfung über die Oberfläche festgeschrieben (`…/festschreiben`, Protokoll), Übung
+  Materialablage mit Übungsprodukt; Startseiten Materialablage und Strömipedia direkt und über die alten Adressen,
+  Zurück/Vor. `st-geraete` (Telefon, Tablet, Desktop; Chromium, Firefox, WebKit) auf Produktmeldungen, Produktseite,
+  Übungsprodukt und offener Prüfung: ohne Befund bis auf WebKit auf der Übungsseite („Load request cancelled“ für
+  `/api/einfuehrung/material/verwaltung` – die Führung springt beim Start auf den ersten Schritt im Katalog, die
+  Anfrage der verlassenen Seite bricht ab; keine Tippfläche unter 44 px).
+
+**Tests**: neu `tests/test_material_aufraeumen.py` (frisch ohne die elf Spalten und drei Objekte, übriges Schema wie
+Stand 36, Nachweis-Spalten da; 36 → 37 mit Werten in allen elf Spalten, festgeschriebener Prüfung, Journal, Antrag,
+Mangelmeldung, Produktmeldung: Prüfsummen je Tabelle, `sqlite_sequence`, Integrität, FK, Volltext, Startprotokoll je
+Spalte, zweiter Lauf und Start ohne Änderung und ohne `mat_katalog`, Protokoll byte-gleich und „unverändert“ auf der
+Prüfseite, Schutz von Prüfung, Befundzeile, Stammdaten, Journal und Mangelmeldung, App arbeitet weiter; SQLite < 3.35;
+Schnittstelle je Rolle; alte Wege wie unbekannte; statisch; `uebungsdateien.py`). Angepasst: test_material
+(`mat_katalog` fehlt; Helfer `abschluss` auf `/festschreiben`), test_material_beispielbestand (`/festschreiben`;
+Prüfpunkte ohne `is_critical`), test_material_set_rueckbau (Endstand ohne Set-Spalten und Wächter; Schritt 26 für sich
+auf Stand 36 geprüft, danach 36 → Ende; Meldung ohne `set_teile`; Vergleich je Spaltenname), test_material_trennung
+(alte Sicherung bringt `mat_katalog` selbst mit; Endstand ohne `mat_katalog`, `wiki_page_id`, Index),
+test_material_stufen (ebenso; Wiederholbarkeit von Schritt 10 mit den alten Werten in der Reihe 10, 33, 37),
+test_material_import (Schritt 12 legt an, 37 entfernt), test_material_wiki (kein Altwert mehr, „Spalte entfernt“),
+test_material_ohne_kritisch (Markierung nur noch an der Befundzeile), test_material_ueberblick (`_stand` ohne
+`mat_katalog`), test_smoke (`/api/wiki/watches` 404, Beobachten über die Seite), test_einfuehrung (Übungsbilder nur in
+den Ordnern der Teile).

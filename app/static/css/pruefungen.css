@@ -145,7 +145,6 @@ p.dlg-tn { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 @media (hover: hover) and (pointer: fine) { .komm-zelle:hover { border-color: var(--anthrazit); } }
 .komm-zelle:not(.leer) { border-style: solid; }
 .komm-zelle.leer { color: var(--grau); }
-.bew-matrix th.komm-kopf, .bew-matrix th.erg-kopf { text-align: left; }
 /* Eingefroren: Zellen, Kästen und Kommentar gedämpft – ansehen ja, ändern nein. */
 .zelle.gesperrt, .komm-zelle.gesperrt { opacity: .7; cursor: default; }
 @media (hover: hover) and (pointer: fine) { .zelle.gesperrt:hover, .komm-zelle.gesperrt:hover { border-color: var(--linie); } }
