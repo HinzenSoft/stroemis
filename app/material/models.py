@@ -2954,7 +2954,9 @@ _NACH_DEM_FESTSCHREIBEN = []
 
 
 # --- Schritt 35: Prüfformular eines anderen Produkts übernehmen (Wunsch vom 04.11.2026) ---------------------------------
-FORMULAR_VON_35 = "formular_von INTEGER REFERENCES mat_product(id) ON DELETE SET NULL"
+# Die Spalte aus Schritt 35 – auch für Tests, die einen älteren Stand nachstellen und dabei Produkte lesen
+# (test_material_trennung.bis_schritt; produkt_json fragt, wer das Formular übernimmt).
+SPALTEN_35 = (("mat_product", "formular_von", "INTEGER REFERENCES mat_product(id) ON DELETE SET NULL"),)
 FORMULAR_KETTE = ("'Ein Produkt übernimmt das Prüfformular nur von einem Produkt mit eigenem Formular – keine Ketten, "
                   "nicht von sich selbst, DEMO nur von DEMO.'")
 # Verweist NEW auf eine Quelle, die selbst verweist, auf sich selbst, auf ein Produkt anderer DEMO-Art – oder verweisen
@@ -2980,8 +2982,7 @@ SCHRITT_35_INDEX = ("CREATE INDEX IF NOT EXISTS idx_mat_product_formular_von ON 
 def _schritt_35(conn):
     """Spalte mat_product.formular_von (nur, wenn sie fehlt), ihr Index und TRIGGER_35 (entfernt und neu). Rein additiv,
     wiederholbar; siehe Kopf."""
-    if "formular_von" not in _spalten(conn, "mat_product"):
-        conn.execute(f"ALTER TABLE mat_product ADD COLUMN {FORMULAR_VON_35}")
+    spalten_nachruesten(conn, SPALTEN_35)
     conn.execute(SCHRITT_35_INDEX)
     for sql in TRIGGER_35:
         conn.execute("DROP TRIGGER IF EXISTS " + sql.split("CREATE TRIGGER IF NOT EXISTS ", 1)[1].split()[0])

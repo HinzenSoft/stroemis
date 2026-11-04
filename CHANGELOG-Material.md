@@ -12052,7 +12052,12 @@ Prüfung behält Version 1, Protokoll-PDF nennt A; Export/Import rund, Wiederhol
 `null` löst, fehlende Quelle als Hinweis, eigenes Formular am Ziel deaktiviert, Formular der Datei für B nicht aktiviert,
 Katalog ohne Feld, Bericht bei Quelle außerhalb des Exports; Migration 34 → 35 mit Altbestand und Wiederholung;
 Oberfläche statisch. Angepasst: `test_module_letzte_offene` (Abschnittsaktion ist jetzt das Menü), `test_rechte_redakteur`
-und `test_rechte_ausbilder` (Schemaversion aus `models.SCHEMA_VERSION` statt fest 34).
+und `test_rechte_ausbilder` (Schemaversion aus `models.SCHEMA_VERSION` statt fest 34), `test_material_trennung`
+(`bis_schritt` rüstet für ältere Stände bis 34 auch `models.SPALTEN_35` nach – jede Produktansicht fragt, wer übernimmt),
+`test_material_antrag` und `test_material_antrag_zustaendig` (erwartete Trigger mit `trigger_35()`),
+`test_material_aussondern` (Schritt 28: Trigger und Index aus 35 kommen nur dazu), `test_material_beschreibung` (26 statt
+24 Stellen mit Name und Zusatz), `test_material_ueberblick` (Kandidatenliste ist Katalogpflege: 403 für die
+Führungskraft).
 
 **Bitte bestätigen** (vorläufig so gebaut):
 1. Löschen der Quelle löst die Verweise gleich mit (Rückfrage nennt die Produkte, Journal dort), statt das Löschen

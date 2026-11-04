@@ -238,6 +238,7 @@ AUSNAHMEN_LESEN = {
     "material.nacharbeit_csv": 403,                # ebenso die Nacharbeit als CSV
     "material.meine_psa_artikel": 404,             # „Meine PSA“: der Führungskraft ist nichts zugeordnet (Phase 3 · L1)
     "material.setprotokoll": 404,                  # Set-Protokoll (Schritt 27): die Kennung 999999 gibt es nicht
+    "material_api.produkt_formularquellen": 403,   # Kandidaten für „Prüfformular übernehmen“ (Schritt 35): Katalogpflege
 }
 # Werkzeuge der Katalogpflege (Katalogaustausch, Lieferung 4) sind nur für die Material-Verwaltung; den Katalog selbst
 # liest die Führungskraft über /kategorien und /produkte. Ebenso der Probelauf der Erinnerungsmails (Phase 2 · L2) und
