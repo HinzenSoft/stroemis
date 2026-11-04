@@ -1129,6 +1129,7 @@
     bereitSeit = Date.now();
   }
 
+  const RUHE_TIPPEN = 1500;       // ms ohne Tastendruck, nach denen ein Eingabeschritt als fertig gilt
   function wachen(s, lauf) {
     const w = s.warten;
     if (!w) return;
@@ -1140,15 +1141,22 @@
     }
     if (w.wert) {
       const [sel, muster] = w.wert;
+      const re = muster instanceof RegExp ? muster : new RegExp(muster);
+      // Weiter erst, wenn du mit Tippen fertig bist (Nutzer, 04.11.2026: der Schritt sprang schon nach dem ersten Zeichen
+      // der Seriennummer): beim Tippen nach einer Pause von RUHE_TIPPEN ms, beim Verlassen des Felds, mit Enter oder bei
+      // einer Auswahl (change) sofort – jeweils nur, wenn das Muster passt.
+      let pause = null;
+      const passt = (el) => re.test((typeof el.value === "string" ? el.value : el.textContent) || "");
       const beiEingabe = (e) => {
         const el = e.target instanceof Element ? (e.target.matches(sel) ? e.target : e.target.closest(sel)) : null;
         if (!el) return;
-        const wert = typeof el.value === "string" ? el.value : el.textContent;
-        if ((muster instanceof RegExp ? muster : new RegExp(muster)).test(wert || "")) fertig();
+        clearTimeout(pause);
+        if (e.type === "change") { if (passt(el)) fertig(); return; }
+        pause = setTimeout(() => { if (el.isConnected && passt(el)) fertig(); }, RUHE_TIPPEN);
       };
       document.addEventListener("input", beiEingabe, true);
       document.addEventListener("change", beiEingabe, true);
-      aufraeumen.push(() => { document.removeEventListener("input", beiEingabe, true); document.removeEventListener("change", beiEingabe, true); });
+      aufraeumen.push(() => { clearTimeout(pause); document.removeEventListener("input", beiEingabe, true); document.removeEventListener("change", beiEingabe, true); });
     }
     if (w.anfrage) {
       const passt = (k) => (w.anfrage instanceof RegExp ? w.anfrage.test(k) : k === w.anfrage);
