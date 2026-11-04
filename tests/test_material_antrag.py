@@ -29,7 +29,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from test_material import (H, abschluss, gliederung, katalog_grund, make_app, neuer_artikel,  # noqa: E402
                            pruef_formulare, punkte_von, starten, umgebung, mails_abfangen, mails_zurueck)
 from test_material_erinnerung import umwelt  # noqa: E402
-from test_material_trennung import bis_schritt, endversion  # noqa: E402
+from test_material_trennung import bis_schritt, endversion, objekte_weg_37, spalten_vor_37  # noqa: E402
 
 # Eine KOPIE einer Datenbank auf Stand 7 für den Pfad 7 → 15 – nur, wenn angegeben; die Quelle bleibt unberührt.
 KOPIE_STAND_7 = os.environ.get("MATERIAL_KOPIE_STAND_7") or ""
@@ -832,6 +832,7 @@ def test_migration_15():
         assert models.migrieren(conn) == models.SCHEMA_VERSION >= 15
         conn.execute("BEGIN")
         n = conn.total_changes
+        spalten_vor_37(conn)                       # Schritt 26 liest die Set-Spalten, die Schritt 37 entfernt hat
         models._schritt_15(conn)
         models._schritt_16(conn)
         models._schritt_17(conn)
@@ -839,7 +840,9 @@ def test_migration_15():
         models._schritt_24(conn)                   # und die zwei des Lebensendes durch die aus 24
         models._schritt_25(conn)                   # und die Antragstrigger durch die aus 25 (Seriennummern der Bestandteile)
         models._schritt_26(conn)                   # und die Stücklisten-Trigger durch die aus 26 (nur Text)
-        assert conn.total_changes == n and _schema_in(conn) == trigger
+        assert conn.total_changes == n
+        models._schritt_37(conn)                   # und räumt Spalten und die Wächter aus 26 wieder ab
+        assert _schema_in(conn) == trigger
         conn.rollback()
         conn.close()
     if KOPIE_STAND_7 and os.path.exists(KOPIE_STAND_7):
@@ -1492,10 +1495,11 @@ def test_migration_17():
         # Schritt 18: keine Trigger; 19: die zwei des Mailfehler-Protokolls; 21: die der Sets; 23: die Gruppe; 25: die der
         # Seriennummern der Bestandteile.
         # 26: die Wächter des Rückbaus statt der entfallenen Set-Trigger; 30: Kennungen und Kontoverweise; 31: Lebensläufe;
-        # 35: Prüfformular übernehmen; 36: dessen Nachbesserung (DEMO über die Kategorie, Verweis oder eigenes Formular).
+        # 35: Prüfformular übernehmen; 36: dessen Nachbesserung (DEMO über die Kategorie, Verweis oder eigenes Formular);
+        # 37: ohne die Wächter mat_item_kein_teil* (mit der Spalte parent_item_id entfernt).
         neu_26, weg_26 = trigger_26()
         erwartet = (set(t16) | TRIGGER_17 | TRIGGER_19 | trigger_21() | TRIGGER_23 | trigger_25() | neu_26 | trigger_27()
-                    | trigger_30() | trigger_31() | trigger_32() | trigger_35() | trigger_36()) - weg_26
+                    | trigger_30() | trigger_31() | trigger_32() | trigger_35() | trigger_36()) - weg_26 - objekte_weg_37()
         assert v17 == endversion() and set(t17) == erwartet, set(t17) ^ erwartet
         assert t17["mat_item_stammdaten_fest"] != t16["mat_item_stammdaten_fest"]
         assert t17["mat_item_antrag_angewendet"] != t16["mat_item_antrag_angewendet"]          # seit Schritt 23 alle Felder
@@ -1515,12 +1519,15 @@ def test_migration_17():
         assert models.migrieren(conn) == models.SCHEMA_VERSION
         conn.execute("BEGIN")
         n = conn.total_changes
+        spalten_vor_37(conn)                       # Schritt 26 liest die Set-Spalten, die Schritt 37 entfernt hat
         models._schritt_17(conn)
         models._schritt_23(conn)
         models._schritt_24(conn)
         models._schritt_25(conn)
         models._schritt_26(conn)
-        assert conn.total_changes == n and _schema_in(conn) == t17
+        assert conn.total_changes == n
+        models._schritt_37(conn)
+        assert _schema_in(conn) == t17
         conn.rollback()
         # Der alte offene Antrag aufs Entfernen: auch an der Schnittstelle vorbei nicht zu bestätigen.
         try:

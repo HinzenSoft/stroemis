@@ -12520,4 +12520,11 @@ test_material_stufen (ebenso; Wiederholbarkeit von Schritt 10 mit den alten Wert
 test_material_import (Schritt 12 legt an, 37 entfernt), test_material_wiki (kein Altwert mehr, „Spalte entfernt“),
 test_material_ohne_kritisch (Markierung nur noch an der Befundzeile), test_material_ueberblick (`_stand` ohne
 `mat_katalog`), test_smoke (`/api/wiki/watches` 404, Beobachten über die Seite), test_einfuehrung (Übungsbilder nur in
-den Ordnern der Teile).
+den Ordnern der Teile). Ältere Migrationstests, die einen früheren Stand mit dem Endstand vergleichen oder Schritte auf
+ihm wiederholen: neue Helfer in test_material_trennung – `objekte_weg_37()` (Index und Wächter, die Schritt 37 nimmt) und
+`spalten_vor_37(conn)` (Set-Spalten leer zurück, damit Schritt 26 auf dem Endstand noch einmal laufen kann; danach
+`_schritt_37`); `test_material_vor_merge._zeilen_je_tabelle` ohne die entfernten Spalten (damit auch
+test_material_lebenslauf_summe und test_material_nach_merge); test_material_antrag und _antrag_zustaendig (erwartete
+Trigger, Wiederholung bis 26 und 37), test_material_aussondern (Trigger/Indizes von Stand 27 ohne die drei Objekte),
+test_material_bestandteile (Zeilenvergleich je Spaltenname), test_material_laenge (Stand 19 mit Spaltenliste),
+test_material_formular_uebernahme (Endversion statt „36“).

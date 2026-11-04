@@ -114,19 +114,22 @@ def test_migration_25():
         tabellen = [r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE 'mat_%' "
                                                "AND name NOT LIKE '%fts%' AND name <> 'mat_meta' ORDER BY name")]
         # Die Kopie der Stückliste je Set entfällt mit Schritt 26 (hier leer).
-        vorher = {n: conn.execute(f"SELECT * FROM {n} ORDER BY rowid").fetchall() for n in tabellen
-                  if n != "mat_item_set_slot"}
+        vorher = {n: (models._spalten(conn, n), conn.execute(f"SELECT * FROM {n} ORDER BY rowid").fetchall())
+                  for n in tabellen if n != "mat_item_set_slot"}
         seq = conn.execute("SELECT seq FROM sqlite_sequence WHERE name = 'mat_item_change'").fetchone()[0]
         conn.close()
         app = make_app(tmp)
         assert zeilen(app, "SELECT wert FROM mat_meta WHERE schluessel = 'schema_version'")[0]["wert"] == endversion()
         conn = roh(app)
         try:
-            for n, alt in vorher.items():
-                breite = len(alt[0]) if alt else 0
-                assert [r[:breite] for r in conn.execute(f"SELECT * FROM {n} ORDER BY rowid").fetchall()] == alt, n
+            # Je Spalte, die es noch gibt (Schritt 37 entfernt u. a. mat_checklist_item.is_critical).
+            for n, (spalten, alt) in vorher.items():
+                bleibt = [i for i, s in enumerate(spalten) if s in models._spalten(conn, n)]
+                liste = ", ".join(spalten[i] for i in bleibt)
+                assert conn.execute(f"SELECT {liste} FROM {n} ORDER BY rowid").fetchall() == \
+                    [tuple(r[i] for i in bleibt) for r in alt], n
             assert conn.execute("SELECT component_id, stueck, component_label FROM mat_item_change").fetchall() == \
-                [(None, None, "")] * len(vorher["mat_item_change"])
+                [(None, None, "")] * len(vorher["mat_item_change"][1])
             assert conn.execute("SELECT seq FROM sqlite_sequence WHERE name = 'mat_item_change'").fetchone()[0] == seq
             assert conn.execute("PRAGMA foreign_key_check").fetchall() == []
             assert _schema(pfad) == schema_frisch, {k: (_schema(pfad).get(k), schema_frisch.get(k))

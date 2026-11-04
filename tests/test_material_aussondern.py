@@ -21,7 +21,7 @@ from test_material_antrag import _pdf_text  # noqa: E402
 from test_material_mangel import geprueft, item, melden, neue_sekunde, post_mangel, pruefung  # noqa: E402
 from test_material_meine_psa import aufbau  # noqa: E402
 from test_material_set_rueckbau import _schema, _unterschied, roh  # noqa: E402
-from test_material_trennung import bis_schritt, endversion, zeilen  # noqa: E402
+from test_material_trennung import bis_schritt, endversion, objekte_weg_37, zeilen  # noqa: E402
 from test_material_ueberblick import sperren  # noqa: E402
 
 API = "/api/material"
@@ -245,7 +245,8 @@ def test_schritt_28():
         neu_30.add("idx_mat_product_formular_von")
         nachher = sorted(r for r in conn.execute("SELECT name, sql FROM sqlite_master WHERE type IN ('trigger', 'index')")
                          if r[0] not in neu_30 and "mat_lebenslauf" not in r[0])
-        assert nachher == trigger_27
+        # Schritt 37 entfernt idx_mat_form_wiki und die Wächter mat_item_kein_teil*.
+        assert nachher == [r for r in trigger_27 if r[0] not in objekte_weg_37()]
         conn.close()
         # Eine festgeschriebene Prüfung (nach dem Umbau entstanden) bleibt geschützt; der Zähler wächst weiter.
         p = t.k["pruefer"]

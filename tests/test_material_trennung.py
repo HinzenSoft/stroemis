@@ -311,6 +311,21 @@ def bis_schritt(version, nachruesten=True):
     return lauf
 
 
+def objekte_weg_37():
+    """Namen der Objekte, die Schritt 37 entfernt (idx_mat_form_wiki, mat_item_kein_teil*) – für Tests, die Trigger und
+    Indizes eines älteren Stands mit dem Endstand vergleichen."""
+    from app.material import models
+    return {befehl.split()[-1] for befehl in models.OBJEKTE_WEG_37}
+
+
+def spalten_vor_37(conn):
+    """Die Set-Spalten, die Schritt 37 entfernt, leer wieder anlegen (ohne Commit) – für Tests, die Schritt 26 auf dem
+    Endstand noch einmal laufen lassen (er liest sie); models._schritt_37 räumt sie danach wieder ab, wie in der Kette."""
+    from app.material import models
+    models.spalten_nachruesten(conn, models.SPALTEN_21)
+    models.spalten_nachruesten(conn, models.SPALTEN_22)
+
+
 # Schritt 23: die Kopfspalte der Sammelanträge – die Dienste lesen sie (Artikelansicht) und schreiben sie (Antrag).
 SPALTEN_23 = (("mat_item_change", "group_id", "INTEGER REFERENCES mat_item_change(id)"),)
 
