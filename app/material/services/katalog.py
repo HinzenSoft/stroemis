@@ -1013,6 +1013,19 @@ def punkt_json(p):
             "art": p["editor"], "pflicht": bool(p["mandatory"]), "soll": p["expected_value"]}
 
 
+def punkt_text(roh, n):
+    """Der Text eines Prüfpunkts. Seit dem 04.11.2026 darf er Absätze haben (Wunsch des Nutzers: „Möglichkeit, Absätze
+    in den Prüfpunkt einzufügen“): Zeilenumbrüche bleiben als „\n“ (\r\n und \r werden zu \n), je Zeile wie bisher
+    Steuerzeichen und mehrfache Leerzeichen zu einem Leerzeichen und kein Rand; mehr als eine Leerzeile wird zu einer,
+    Leerzeilen am Anfang und Ende fallen weg. Ein einzeiliger Text kommt genau so heraus wie vorher (einzeilig=True)."""
+    if isinstance(roh, str):
+        roh = roh.replace("\r\n", "\n").replace("\r", "\n")
+        roh = re.sub(r"[\x00-\x09\x0b-\x1f\x7f]", " ", roh)
+        zeilen = [re.sub(r"[^\S\n]{2,}", " ", z).strip() for z in roh.split("\n")]
+        roh = re.sub(r"\n{3,}", "\n\n", "\n".join(zeilen)).strip()
+    return text({"text": roh}, "text", f"Text von Prüfpunkt {n}", PUNKT_TEXT_MAX, pflicht=True, einzeilig=False)
+
+
 def punkte_pruefen(roh):
     """Prüfpunkte eines Formulars aus der Anfrage. Ja/Nein-Punkte brauchen einen Sollwert („ja“ oder
     „nein“ – bei Schadensfragen „nein“). Ein Feld „kritisch“ (Formular-Editor und Katalogdateien bis 03.11.2026) wird
@@ -1037,7 +1050,7 @@ def punkte_pruefen(roh):
         elif art in ("photo", "signature", "date", "laenge"):
             soll = ""                   # bei „Länge“ ist das Soll die Artikellänge zum Prüfzeitpunkt (pruefung.starten)
         out.append({"group_name": text(p, "gruppe", f"Gruppe von Prüfpunkt {n}", 80),
-                    "label": text(p, "text", f"Text von Prüfpunkt {n}", PUNKT_TEXT_MAX, pflicht=True),
+                    "label": punkt_text(p.get("text"), n),
                     "editor": art, "mandatory": int(wahr(p, "pflicht", f"Pflicht (Prüfpunkt {n})") if "pflicht" in p else 1),
                     "expected_value": soll, "position": n})
     return out

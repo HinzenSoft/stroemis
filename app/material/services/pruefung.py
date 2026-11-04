@@ -163,6 +163,12 @@ def _serien(r):
     return json.loads(roh) if r.get("component_id") and roh else []
 
 
+def punktname(r):
+    """Der Prüfpunkt in Meldungen („Noch ohne Befund: …“, „„…“ ist kein Datum“): in einer Zeile – seit dem 04.11.2026
+    darf sein Text Absätze haben (katalog.punkt_text)."""
+    return " ".join((r["checklist_text"] or "").split())
+
+
 def befund_json(r):
     from .stueckliste import BESTANDTEIL_GRUPPE, SET_GRUPPE
     foto = None
@@ -466,7 +472,7 @@ def punkt_setzen(pid, rid, d, pruefer):
             if d.get("befund") == "nicht_zutreffend":
                 befund, bild = "nicht_zutreffend", None
             elif "unterschrift" in d:
-                bild = us.lesen(d["unterschrift"], r["checklist_text"]) if d["unterschrift"] else None
+                bild = us.lesen(d["unterschrift"], punktname(r)) if d["unterschrift"] else None
                 befund = "ok"
             elif d.get("befund") == "ok":
                 befund = "ok"
@@ -495,12 +501,12 @@ def punkt_setzen(pid, rid, d, pruefer):
                 raise Abgelehnt(KEINE_LAENGE_PUNKT, 409)
         if art != "yesno" and "wert" in d:
             if art == "date":
-                wert = datum(d.get("wert"), r["checklist_text"]) or ""
+                wert = datum(d.get("wert"), punktname(r)) or ""
             elif art == "number":
                 roh = d.get("wert")
-                wert = _zahl(roh if isinstance(roh, str) else "" if roh is None else str(roh), r["checklist_text"])
+                wert = _zahl(roh if isinstance(roh, str) else "" if roh is None else str(roh), punktname(r))
             elif art == "text":
-                wert = text(d, "wert", r["checklist_text"], 1000, einzeilig=False)
+                wert = text(d, "wert", punktname(r), 1000, einzeilig=False)
             elif art == "laenge":
                 # Die gemessene Länge in Metern („55“, „55,0“, „55.0“) – gespeichert als „55,0“; beim Festschreiben
                 # wird ein anderer Wert als die Artikellänge in den Artikel übernommen (abschliessen). Sieht die
@@ -509,7 +515,7 @@ def punkt_setzen(pid, rid, d, pruefer):
                     raise Abgelehnt(katalog.KEINE_LAENGE, 409)
                 roh = d.get("wert")
                 roh = "" if roh is None else roh if isinstance(roh, (str, bool)) else str(roh)   # 0 ist 0, nicht leer
-                wert = laenge_text(laenge(roh, r["checklist_text"]), einheit=False)
+                wert = laenge_text(laenge(roh, punktname(r)), einheit=False)
             else:
                 raise Abgelehnt("Dieser Prüfpunkt nimmt ein Foto auf, keinen Wert.")
         db.execute("UPDATE mat_inspection_result SET finding = ?, value = ?, note = ? WHERE id = ?",
@@ -769,7 +775,7 @@ def _laenge_uebernehmen(p, item, punkte):
                        (laenge_text(aktuell, einheit=False), r["id"]))
         if r["finding"] == "nicht_zutreffend" or not (r["value"] or "").strip():
             continue
-        neu = laenge(r["value"], r["checklist_text"])
+        neu = laenge(r["value"], punktname(r))
         vorher = original.get((r["checklist_item_id"], r["position"]))
         if p["corrects_inspection_id"] and vorher is not None and _laenge_zahl(vorher) == neu:
             continue                           # die Berichtigung lässt den Messwert des Originals stehen
@@ -950,14 +956,14 @@ def abschliessen(pid, d, pruefer, pruefdatum=None):
         heimat = bestand.heimat(item)
         _laenge_ohne_vorgabe(item, befunde(pid))      # vor den Prüfungen unten: Längenpunkte „nicht zutreffend“ (B4)
         punkte = befunde(pid)
-        offen = [r["checklist_text"] for r in punkte if r["mandatory"] and not _beantwortet(r)]
+        offen = [punktname(r) for r in punkte if r["mandatory"] and not _beantwortet(r)]
         if offen:
             raise Abgelehnt("Noch ohne Befund: " + "; ".join(offen[:5]) + (" …" if len(offen) > 5 else ""))
-        ohne_foto = [r["checklist_text"] for r in punkte if r["finding"] == "mangel" and not r["photo"]]
+        ohne_foto = [punktname(r) for r in punkte if r["finding"] == "mangel" and not r["photo"]]
         if ohne_foto:
             raise Abgelehnt("Jeder Mangel braucht ein Foto – es fehlt bei: " + "; ".join(ohne_foto[:5]))
         # Was wo zu sehen ist, sagt das Foto allein nicht – jeder Mangel braucht dazu eine Bemerkung (Wunsch aus dem Pilot).
-        ohne_notiz = [r["checklist_text"] for r in punkte if r["finding"] == "mangel" and not (r["note"] or "").strip()]
+        ohne_notiz = [punktname(r) for r in punkte if r["finding"] == "mangel" and not (r["note"] or "").strip()]
         if ohne_notiz:
             raise Abgelehnt("Jeder Mangel braucht eine Bemerkung – sie fehlt bei: " + "; ".join(ohne_notiz[:5]))
         maengel = [r for r in punkte if r["finding"] == "mangel"]
