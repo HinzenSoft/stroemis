@@ -12306,7 +12306,8 @@ Einblendung, Stile, Übungsfelder; Journal-Beschriftung). Angepasst: test_module
 test_material_uiux_u2 (`ww-ok`; Satz „Den Zugang zur Strömipedia vergibt …“ jetzt verneint), test_module_uiux_u3
 (`wikiverweis.py` gibt es nicht mehr), test_material_geraetetest4 (`$(".mat-abschluss-ende", inhalt)` statt `echt(…)`),
 test_material_import (Fokus in der Seitenwahl), test_material_ueberblick (`/api/material/wiki/` nicht mehr in
-`NUR_KATALOGPFLEGE`), test_material_textbreite und test_material_l5 (Regeln ohne `.mat-wikizeile`).
+`NUR_KATALOGPFLEGE`), test_material_textbreite und test_material_l5 (Regeln ohne `.mat-wikizeile`), test_module_uiux_verhalten (dritte Aktion links
+außen nur noch „Zuordnung entfernen“ statt zweimal `dlg-neben`).
 
 **Strömipedia-Artikel** (Nachzug braucht Freigabe, nicht Teil dieses Zweigs): noch nicht nachgezogen sind
 „Prüfformulare“ (Bild `formular-wiki.png`, „Neue Version … die Verknüpfung zur Prüfanleitung“, Abschnitt „Prüfanleitung

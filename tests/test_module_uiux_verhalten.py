@@ -168,7 +168,8 @@ def test_a16_beschriftungen_d2_d3():
     assert 'aria-label="Nutzer suchen"' in w and '<label for="be-body">' in w and '<label for="be-col-${i}">' in w
     # D2: dritte Aktion links außen, Infodialog mit grauem „Schließen“, „Teilen“ mit „Abbrechen“.
     mat = lies(MAT)
-    assert mat.count("dlg-neben") >= 2 and ">OK</button>" not in mat
+    # Seit dem 04.11.2026 nur noch „Zuordnung entfernen“ – „Verknüpfung entfernen“ (Prüfanleitung) entfiel mit der Funktion.
+    assert 'class="btn secondary dlg-neben" id="nz-weg"' in mat and ">OK</button>" not in mat
     assert '<button class="btn secondary dlg-neben" id="ic-clear" type="button">Entfernen</button>' in w
     assert 'data-close type="button">Abbrechen</button><button class="btn" id="sh-save"' in w
     assert "dialog .dlg-actions > .dlg-neben { margin-right: auto; }" in lies("app/static/css/app.css")
