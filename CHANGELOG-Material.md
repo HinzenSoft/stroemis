@@ -5,7 +5,7 @@ Gliederungen, Prüfnachweise je Ausrüstungsteil, unveränderliche PDF-Prüfprot
 umgesetzt, Phase 2 (mehrere Gliederungen und externe Prüfer in einer Instanz) in drei, Phase 3 und 4 in Lieferungen
 und Wünschen des Nutzers; jede war für sich deploybar. Seit dem 26.10.2026 heißt das Modul „Materialablage“ (im Code,
 in Tabellen und unter `/api/material` weiter `material`). Ältere Abschnitte sagen noch „Modul Material“ – sie bleiben als
-Geschichte stehen. Schemaversion nach der Nachbesserung vor dem Merge: 30; mit der Prüfsumme für den Lebenslauf: 31; mit der Liste nach dem Merge (Teil A): 32; mit der Stufe Redakteur: 33; mit den Riegenkarten-Ausbildern nur mit Konto: 34; mit „Prüfformular eines anderen Produkts übernehmen“: 35; mit der Nachbesserung danach: 36; mit dem Aufräumen: 37; mit dem Formular-Pool je Kategorie: 38.
+Geschichte stehen. Schemaversion nach der Nachbesserung vor dem Merge: 30; mit der Prüfsumme für den Lebenslauf: 31; mit der Liste nach dem Merge (Teil A): 32; mit der Stufe Redakteur: 33; mit den Riegenkarten-Ausbildern nur mit Konto: 34; mit „Prüfformular eines anderen Produkts übernehmen“: 35; mit der Nachbesserung danach: 36; mit dem Aufräumen: 37; mit dem Formular-Pool je Kategorie: 38; mit den Untergruppen in Prüfformularen: 39.
 
 | Lieferung | Inhalt | Stand |
 | --- | --- | --- |
@@ -88,6 +88,7 @@ Geschichte stehen. Schemaversion nach der Nachbesserung vor dem Merge: 30; mit d
 | Prüfanleitung in der Strömipedia entfernt | Keine Verknüpfung einer Strömipedia-Seite am Prüfformular mehr: Zeile und Dialog am Formular, Einblendung in offenen Prüfungen, beide Routen (jetzt 404), Dienst `wikiverweis`, `formular.wiki`/`wiki_aendern`, `pruefung.anleitung` und die Kopie in neue Versionen entfallen; `mat_form.wiki_page_id` bleibt ungenutzt stehen, alte Journal-Einträge bleiben lesbar | gebaut 04.11.2026 (kein Schemaschritt, Schema bleibt 35), Zweig ohne-pruefanleitung, wartet auf Freigabe |
 | Aufräumen: Schema 37 und Reste entfernter Funktionen | Elf Spalten entfernter Funktionen per `DROP COLUMN` (Prüfanleitung, Sets, „kritisch“ am Prüfpunkt, Katalogpfleger, nie benutzte), Index und zwei Wächter mit ihnen; toter Code: `rechte.urkunde_fehlt`, alter Pfad `…/pruefungen/<id>/abschliessen`, `GET /api/wiki/watches`, Übungsbilder im Wurzelordner, CSS-Regel ohne Erzeuger, „Teile laut Meldung“ | gebaut 04.11.2026 (Schema 37), Zweig aufraeumen, wartet auf Freigabe |
 | Formular-Pool je Kategorie (Schritt 38) | Statt generischer Formulare je Kategorie, spezifischer je Produkt und „Prüfformular übernehmen“: jedes Formular im Pool seiner Kategorie, Standard je Kategorie (erbt in Unterkategorien) oder Zuweisung an Produkte; Seite „Prüfformulare“ (nur Material-Verwaltung) mit Anlegen und Dialog „Zuweisen“, Formularseite „Gilt für“ und „Kopie anlegen“, Produkt- und Kategorieseite nur Anzeige; Migration mit Vorher/Nachher-Vergleich je Produkt; Katalogdatei Format 3 (aktive Formulare samt Zuweisungen, Import ohne DEMO, Datei maßgeblich); Zähler `katalog_stand` für die Übung | gebaut 04.11.2026 (Schema 38), Zweig formular-pool, wartet auf Freigabe |
+| Untergruppen in Prüfformularen (Schritt 39) | Eine Ebene unter der Gruppe: Feld `untergruppe` je Prüfpunkt und als Kopie in den Befundzeilen; Reihenfolge-Regel (erst ohne Untergruppe, dann Blöcke) im Dienst; Editor mit „+ Untergruppe“, Zwischenzeile, Griff, „Untergruppe entfernen“; Prüfung, Nur-Lese-Ansicht und PDF mit Zwischenüberschrift und Einzug; Katalogdatei Format 3 mit `untergruppe`; Übung | gebaut 04.11.2026 (Schema 39), Zweig untergruppen, wartet auf Freigabe |
 
 ## Abgleich mit dem Bestand (vor Lieferung 1)
 
@@ -12704,3 +12705,93 @@ rückt) und `test_material_formular_titel` (8 statt 10 Stellen, die neu zeichnen
 5. Startprotokoll und Journal nennen bei der Migration Produkte mit Kennung und Namen.
 6. Editor: Gruppen lassen sich per Tastatur nicht mehr verschieben (der Griff ⠿ ist kein Tastaturziel) – siehe
    „Zusatz“ unten.
+
+## Untergruppen in Prüfformularen (Schema 39, Wunsch des Nutzers, 04.11.2026)
+
+Nutzer (Bildschirmfoto des Editors, Gruppe „Verbindungselement Brustgurt/Sitzgurt“ mit vielen Punkten zu Körper, Nase,
+Schnapper, Verriegelungshülse, Reinigung): „Möglichkeit, Untergruppen in den Formularen zu erstellen.“ Bauauftrag
+`planung/untergruppen/auftrag.md`; entschieden (Rückfragen 04.11.2026, je die Empfehlung): **eine Ebene** (Gruppe ›
+Untergruppe › Prüfpunkte); **gemischt erlaubt** – Punkte ohne Untergruppe stehen am Anfang der Gruppe, danach die
+Untergruppen, bestehende Formulare bleiben unverändert gültig; **Prüfung und Prüfprotokoll** zeigen die Untergruppe als
+kleinere Zwischenüberschrift unter der Gruppe, die Punkte darunter eingezogen; **Editor** wie Gruppen eine Stufe tiefer.
+Gebaut 04.11.2026 auf dem Zweig `untergruppen` von 262019e (**Schema 39**).
+
+**Speicherung** (Festlegung im Bau): eigenes Feld `untergruppe` an `mat_checklist_item` (leer = keine) und als Kopie an
+`mat_inspection_result` – wie `group_name`, damit ein späteres Umbenennen im Formular kein Protokoll ändert. Eine
+Untergruppe ohne Gruppe (im Block „ohne Gruppe“) ist erlaubt. **Normalisierung** wie die Gruppe (`katalog.punkte_pruefen`:
+Text, eine Zeile, Steuerzeichen und doppelte Leerzeichen weg, höchstens 80 Zeichen, fehlt = leer; Fehler „Untergruppe
+von Prüfpunkt n …“). **Reihenfolge-Regel** serverseitig (`katalog.punkte_ordnen`): In jedem Gruppenblock
+(aufeinanderfolgende Punkte gleicher Gruppe – zwei getrennte Blöcke gleichen Namens bleiben zwei, wie im Editor) stehen
+erst die Punkte ohne Untergruppe, dann jede Untergruppe als zusammenhängender Block in der Reihenfolge ihres ersten
+Punkts; innerhalb bleibt die Reihenfolge der Anfrage (stabil), die Positionen werden neu gezählt. Eine Anfrage in anderer
+Ordnung wird so **geordnet, nicht abgelehnt**; ein Formular ohne Untergruppen kommt unverändert heraus. Journal der
+Prüfpunkte „Gruppe › Untergruppe: Text [Art …]“ (ohne Untergruppe wie bisher).
+
+**Schnittstelle**: `PUT /api/material/formulare/<id>`, `POST /formulare` und `POST /formular-pool` nehmen `untergruppe` je
+Punkt; `GET /formulare/<id>` und die Prüfung (`punkte[]`) liefern sie. Neue Version und „Kopie anlegen“ übernehmen sie;
+eine Berichtigung kopiert sie mit den Befundzeilen. **Katalogdatei**: Format 3 bleibt, je Prüfpunkt das Feld
+`untergruppe` (der Export schreibt es immer, auch leer); der Import liest es in jedem Format, eine ältere Datei ohne das
+Feld ergibt leere Untergruppen; beim Vergleich mit der aktiven Version zählt es mit (`importer._PUNKTFELDER`) – eine
+andere Untergruppe gibt eine neue Version, sonst ändert ein zweiter Import nichts.
+
+**Oberfläche** (Designsprache: Knopfsprache, Einzug statt neuer Farben, 44 px am Finger): **Editor** – „+ Untergruppe
+anlegen“ (Telefon „+ Untergruppe“, grau umrandet) am Ende jeder Gruppe: ohne Untergruppen neben ihrem „+ Prüfpunkt“,
+sonst in eigener Zeile nach der letzten Untergruppe; er legt eine **leere** Untergruppe an (Fokus ins Namensfeld; Punkte
+zieht man hinein oder legt sie mit ihrem „+ Prüfpunkt“ an). Die Untergruppe steht als eingezogene Zwischenzeile (ohne
+Fläche, feine Linie, Name fett) mit Griff ⠿ (nur, wenn es eine andere Stelle gibt: mehr als eine Gruppe oder Untergruppe),
+Namensfeld (volle Breite, bricht um, `maxlength` 80, Enter ohne Absatz) und Knopf „Untergruppe entfernen“ (mit Punkten
+Rückfrage „Untergruppe „X“ mit n Prüfpunkten entfernen?“, leer ohne); darunter ihre Punkte (Text eingezogen bis unter den
+Namen, am Finger die ganze Karte), Hinweis „Die Untergruppe ist leer – leer wird sie nicht gespeichert.“ und ihr „+
+Prüfpunkt“. **Ziehen**: Punkte wie bisher, dazu über die untere Hälfte eines Untergruppenkopfs an ihren Anfang, über die
+obere ans Ende des Abschnitts davor (Punkte ohne Untergruppe bzw. die Untergruppe davor), über ihr „+ Prüfpunkt“ an ihr
+Ende – so hinein und wieder heraus; die Untergruppe am Griff als Block (bleibt stehen, blau hinterlegt, Einfügemarke) an
+eine Grenze zwischen Untergruppen derselben oder einer anderen Gruppe, Esc bricht ab. **Menü „⋯“** am Punkt: „Nach
+oben/unten“ wechselt über Gruppen- und Untergruppengrenzen; „In Gruppe verschieben“ nennt je Gruppe ihre Untergruppen
+eingerückt (die eigene Stelle ausgegraut), der Punkt kommt ans Ende der gewählten Stelle (in der Gruppe vor ihre
+Untergruppen). „Gruppe entfernen“ zählt die Punkte der Untergruppen mit. **Speichern** (und „Aktivieren“ mit
+Speichern): eine Untergruppe mit Punkten braucht einen Namen, zwei gleiche in einer Gruppe gehen nicht – Fehler am
+Namensfeld (`S.feldFehler`), nichts wird geschickt. Getipptes (Titel, Namen, Punkte) bleibt bei jedem Neuzeichnen.
+**Nur-Lese-Ansicht**: Zwischenzeile je Untergruppe, Punkte eingezogen. **Prüfung**: unter der Gruppe (Versalien) die
+Untergruppe als kleinere Zwischenüberschrift (`h4.mat-untergruppe`, normale Schreibung), ihre Karten 16 px eingezogen;
+festgeschriebene Prüfung: „Gruppe › Untergruppe“ grau über dem Punkt. **Prüfprotokoll (PDF)**: Zwischenzeile in der
+Spalte „Prüfpunkt“ (8 pt, fett), ihre Punkte 4 mm eingezogen, Zeile bleibt mit den ersten Punkten zusammen; ohne
+Untergruppen wie bisher. Bereits festgeschriebene Protokolle sind Dateien und bleiben (Prüfsumme unverändert).
+**Übung**: keine neuen Schritte; hat das Katalogformular Untergruppen, zeigen Editor und Prüfung der Übung sie (die
+Übungsdatei reicht `untergruppe` durch, auch beim Speichern der Übungskopie).
+
+**Schritt 39** (`models._schritt_39`, `SPALTEN_39`, `TRIGGER_39`): `ALTER TABLE … ADD COLUMN untergruppe TEXT NOT NULL
+DEFAULT ''` an `mat_checklist_item` und `mat_inspection_result` (nur, wenn sie fehlen) und der Trigger
+`mat_result_untergruppe` (entfernt und neu): Die Kopie in einer abgeschlossenen Prüfung ist unveränderlich wie die
+übrigen Spalten (`mat_result_aendern` bleibt, wie er ausgeliefert wurde – wie `mat_result_bestandteil` aus Schritt 25).
+Rein additiv, kein Journal, kein Startprotokoll, wiederholbar. **Migration geprüft** (nur an Kopien): frisch (Spalten,
+Trigger, zweiter Lauf ändert das Schema nicht); Beispielbestand mit der Vorversion 262019e angelegt (Schema 38, 4123
+Zeilen in 43 Tabellen, 166 PDF) → Kopie mit dem neuen Stand gestartet: alle Zeilen in allen bisherigen Spalten gleich,
+die neuen Spalten überall leer (151 Prüfpunkte, 2055 Befundzeilen), ein Trigger mehr, alle PDF-Dateien gleich,
+`integrity_check` ok, keine FK-Verletzung, zweiter Start ändert nichts; alte Testdatenbank (Schema 19, 9 festgeschriebene
+Prüfungen) über die Vorversion auf 38 und dann auf 39 (derselbe Befund) sowie direkt 19 → 39 (ok).
+**Rückweg**: Ein älterer Stand liest die Spalten nicht und schreibt sie nicht (Vorgabe ''); Untergruppen fielen dort in
+der Anzeige weg, die Punkte stünden in ihrer gespeicherten Reihenfolge in der Gruppe.
+
+**Tests**: neu `tests/test_material_untergruppen.py` (Dienst, Schnittstelle, Versionen, Kopie, Journal, Export/Import
+rund und alte Datei, Prüfung, Berichtigung, PDF, festgeschriebenes Protokoll unverändert, Trigger, Migration frisch und
+38 → 39 mit Altbestand, statisch, Browser 1280 Maus / 360 Touch samt gemessenen Tippflächen, Übung mit Untergruppen).
+Angepasst: `test_material_formular_pool` (Migration 37 → 38 vergleicht die Spalten von Stand 37; Schemaversion nach dem
+Start nicht mehr fest 38), `test_material_trennung` (`bis_schritt` rüstet für Stände vor 39 die Spalten `untergruppe`
+nach), `test_material_formular_editor` (statisch: `flach()` mit `untergruppe`), `test_einfuehrung_katalog` (Auswahl mit
+`untergruppe`).
+
+**Strömipedia** (nur genannt, Nachzug durch wiki-autor): Artikel „Prüfformulare“ (Editor: Untergruppen anlegen,
+ziehen, entfernen; Reihenfolge-Regel), „Prüfung“ und „Prüfprotokoll“ (Zwischenüberschrift), „Katalogimport und -export“
+(Feld `untergruppe`).
+
+**Bitte bestätigen**:
+1. „+ Untergruppe“ legt eine **leere** Untergruppe an (anders als „+ Gruppe“, das einen leeren Punkt mitbringt) – der
+   häufige Fall ist, vorhandene Punkte hineinzuziehen; der Hinweis „leer wird sie nicht gespeichert“ steht darunter.
+2. Eine Anfrage, deren Punkte die Reihenfolge-Regel verletzen, ordnet der Server stabil um (statt sie abzulehnen) – der
+   Editor schickt ohnehin geordnet; Katalogdateien und Schnittstelle bleiben so nachsichtig.
+3. Speichern verlangt einen Namen für jede Untergruppe mit Punkten und lehnt zwei gleiche Namen in einer Gruppe ab
+   (Fehler am Feld) – sonst rutschten Punkte still nach vorn bzw. zwei Untergruppen würden eine.
+4. „Untergruppe entfernen“ entfernt ihre Punkte mit (nach Rückfrage samt Anzahl, wie „Gruppe entfernen“); wer die Punkte
+   behalten will, zieht sie vorher heraus.
+5. Untergruppen lassen sich wie Gruppen nur am Griff verschieben, nicht per Tastatur; Punkte per Tastatur über „⋯“.
+6. Im PDF steht die Zwischenzeile in der Spalte „Prüfpunkt“ (nicht unter „Nr.“), die Punkte darunter 4 mm eingezogen.

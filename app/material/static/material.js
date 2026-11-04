@@ -795,7 +795,7 @@
     ta.style.height = `${ta.scrollHeight + ta.offsetHeight - ta.clientHeight}px`;
   }
   let hoeheLos = null;
-  window.addEventListener("resize", () => { clearTimeout(hoeheLos); hoeheLos = setTimeout(() => $$("textarea.fp-text, textarea.fp-gruppenname").forEach(textHoehe), 150); });
+  window.addEventListener("resize", () => { clearTimeout(hoeheLos); hoeheLos = setTimeout(() => $$("textarea.fp-text, textarea.fp-gruppenname, textarea.fp-ug-name").forEach(textHoehe), 150); });
 
   /* --- Leiste links --------------------------------------------------------------------------------
      Wo Ansicht und Bildschirm Platz haben, steht links ein Baum: im Bestand der Ordnerbaum, im Katalog
@@ -5186,18 +5186,33 @@
        Gruppe sind ein Block, Punkte ohne Gruppe einer ohne Namen; zwei getrennte Blöcke mit gleichem Namen bleiben zwei.
        Jeder Block steht als eigene Zeile über seinen Punkten, der Name in voller Breite (er bricht um); Umbenennen gilt
        für alle Punkte darunter. Gespeichert wird weiter die flache Liste mit „gruppe“ je Punkt (PUT …/formulare/<id>
-       unverändert) – ein Block ohne Punkte fällt dabei weg, bis dahin steht er mit einem Hinweis da. */
+       unverändert) – ein Block ohne Punkte fällt dabei weg, bis dahin steht er mit einem Hinweis da.
+       Untergruppen (Schritt 39, Wunsch vom 04.11.2026: „Möglichkeit, Untergruppen in den Formularen zu erstellen“): eine
+       Ebene unter der Gruppe. Eine Gruppe hält vorn ihre Punkte ohne Untergruppe (punkte), danach die Untergruppen (unter,
+       je { name, punkte }) – dieselbe Ordnung, die der Server sichert (katalog.punkte_ordnen). Gespeichert wird je Punkt
+       „untergruppe“ (leer = keine); eine Untergruppe ohne Punkte fällt weg wie eine leere Gruppe. */
     const gruppen = [];
     f.punkte.forEach((p) => {
-      const g = gruppen[gruppen.length - 1];
+      let g = gruppen[gruppen.length - 1];
       const kopie = Object.assign({}, p);
-      if (g && g.name === (p.gruppe || "")) g.punkte.push(kopie);
-      else gruppen.push({ name: p.gruppe || "", punkte: [kopie] });
+      if (!g || g.name !== (p.gruppe || "")) gruppen.push((g = { name: p.gruppe || "", punkte: [], unter: [] }));
+      const u = g.unter[g.unter.length - 1];
+      if (!p.untergruppe && !g.unter.length) g.punkte.push(kopie);
+      else if (u && u.name === (p.untergruppe || "")) u.punkte.push(kopie);
+      else g.unter.push({ name: p.untergruppe || "", punkte: [kopie] });
     });
-    const flach = () => gruppen.flatMap((g) => g.punkte.map((p) => Object.assign({}, p, { gruppe: g.name })));
+    const flach = () => gruppen.flatMap((g) => g.punkte.map((p) => Object.assign({}, p, { gruppe: g.name, untergruppe: "" }))
+      .concat(g.unter.flatMap((u) => u.punkte.map((p) => Object.assign({}, p, { gruppe: g.name, untergruppe: u.name })))));
     const neuerPunkt = () => ({ text: "", art: "yesno", soll: "ja", pflicht: true });   // Soll „ja“ (Wunsch vom 04.11.2026)
-    // Wie eine Gruppe in Menü, Rückfrage und Toast heißt: mit Namen, sonst mit ihrer Stelle.
+    // Wie eine Gruppe bzw. Untergruppe in Menü, Rückfrage und Toast heißt: mit Namen, sonst mit ihrer Stelle.
     const gruppeText = (g) => (g.name.trim() ? `Gruppe „${g.name.trim()}“` : `Gruppe ${gruppen.indexOf(g) + 1} (ohne Namen)`);
+    const ugText = (g, u) => (u.name.trim() ? `Untergruppe „${u.name.trim()}“` : `Untergruppe ${g.unter.indexOf(u) + 1} (ohne Namen)`);
+    // Die Liste, in der ein Punkt steht: die Punkte der Gruppe gi ohne Untergruppe (ui < 0) oder die ihrer Untergruppe ui.
+    const liste = (gi, ui) => (ui < 0 ? gruppen[gi].punkte : gruppen[gi].unter[ui].punkte);
+    const uVon = (el) => (el.dataset.u === undefined ? -1 : +el.dataset.u);
+    // Alle Abschnitte in der Reihenfolge des Formulars – für „Nach oben/unten“ über Gruppen- und Untergruppengrenzen.
+    const abschnitte = () => gruppen.flatMap((g, gi) => [{ gi, ui: -1 }].concat(g.unter.map((u, ui) => ({ gi, ui }))));
+    const punktZahl = (g) => g.punkte.length + g.unter.reduce((n, u) => n + u.punkte.length, 0);
     // Der getippte, noch nicht gespeicherte Titel: zeichnen() baut das Feld neu (Prüfpunkt anlegen, verschieben,
     // entfernen, Art ändern) – vorher stand dort wieder der gespeicherte Titel und das Getippte war weg. Gruppennamen
     // und Prüfpunkte sammelt einsammeln() ebenso vor jedem Neuzeichnen ein.
@@ -5212,18 +5227,20 @@
     /* „optional“ statt „Pflicht“ (Wunsch vom 04.11.2026: „das meiste in Prüfungen ist Pflicht, es soll stattdessen
        ausgewählt werden, wenn etwas optional ist“): Das Häkchen ist normal leer, gesetzt heißt pflicht = false. Datenmodell
        und Schnittstelle bleiben (pflicht je Punkt); ohne Bearbeiten trägt nur ein optionaler Punkt eine Marke. */
-    function punktZeile(p, gi, pi, nr) {
+    function punktZeile(p, gi, pi, nr, ui = -1) {
       if (!bearbeitbar) {
-        return `<tr><td data-l="Prüfpunkt"><span class="mat-mehrzeilig">${esc(p.text)}</span></td><td data-l="Art">${esc(EDITOR[p.art])}</td>
+        return `<tr${ui < 0 ? "" : ' class="fp-in-ug"'}><td data-l="Prüfpunkt"><span class="mat-mehrzeilig">${esc(p.text)}</span></td><td data-l="Art">${esc(EDITOR[p.art])}</td>
           <td data-l="Soll">${esc(p.soll || "–")}</td><td>${p.pflicht ? "" : '<span class="badge grey">optional</span>'}</td></tr>`;
       }
-      const ort = `data-g="${gi}" data-i="${pi}"`;
+      const ort = `data-g="${gi}" data-i="${pi}"${ui < 0 ? "" : ` data-u="${ui}"`}`;
+      const alle = abschnitte();
+      const s = alle.findIndex((a) => a.gi === gi && a.ui === ui);
       const menue = zeilenMenue([
-        (pi > 0 || gi > 0) && { text: "Nach oben", attrs: `data-act="punkt-hoch" ${ort}` },
-        (pi < gruppen[gi].punkte.length - 1 || gi < gruppen.length - 1) && { text: "Nach unten", attrs: `data-act="punkt-runter" ${ort}` },
+        (pi > 0 || s > 0) && { text: "Nach oben", attrs: `data-act="punkt-hoch" ${ort}` },
+        (pi < liste(gi, ui).length - 1 || s < alle.length - 1) && { text: "Nach unten", attrs: `data-act="punkt-runter" ${ort}` },
         { text: "In Gruppe verschieben", attrs: `data-act="punkt-gruppe" ${ort}` },
         { text: "Entfernen", attrs: `data-act="punkt-weg" ${ort}` }], `Prüfpunkt ${nr}`);
-      return `<tr class="fp-punkt" ${ort}><td class="fp-griff-zelle"><span class="fp-griff" aria-hidden="true" title="Zum Verschieben ziehen">⠿</span></td>
+      return `<tr class="fp-punkt${ui < 0 ? "" : " fp-in-ug"}" ${ort}><td class="fp-griff-zelle"><span class="fp-griff" aria-hidden="true" title="Zum Verschieben ziehen">⠿</span></td>
         <td data-l="Prüfpunkt" class="fp-z-text"><textarea class="fp-text" rows="1" maxlength="1000" aria-label="Prüfpunkt ${nr}">${esc(p.text || "")}</textarea></td>
         <td data-l="Art" class="fp-z-art"><select class="fp-art">${Object.entries(EDITOR).map(([w, t]) => `<option value="${w}" ${p.art === w ? "selected" : ""}>${esc(t)}</option>`).join("")}</select></td>
         <td data-l="Soll" class="fp-z-soll">${p.art === "yesno" ? `<select class="fp-soll"><option value="">–</option><option value="ja" ${p.soll === "ja" ? "selected" : ""}>ja</option><option value="nein" ${p.soll === "nein" ? "selected" : ""}>nein</option></select>`
@@ -5243,31 +5260,53 @@
         <textarea class="fp-gruppenname" rows="1" maxlength="80" aria-label="Gruppe" placeholder="ohne Gruppe – Name eintragen">${esc(g.name)}</textarea>
         <span class="fp-menue">${menue}</span></div></td></tr>`;
     }
-    const gruppenFuss = (g, gi) => `${g.punkte.length ? "" : '<tr class="fp-leer"><td colspan="6"><p class="help">Die Gruppe ist leer – leer wird sie nicht gespeichert.</p></td></tr>'}
-      <tr class="fp-fuss"><td class="fp-griff-zelle"></td><td colspan="5"><button type="button" class="btn secondary small" data-act="punkt-neu" data-g="${gi}" aria-label="${esc(`Prüfpunkt anlegen in ${gruppeText(g)}`)}"><span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Prüfpunkt<span class="k-anlegen"> anlegen</span></span></button></td></tr>`;
+    // „+ Prüfpunkt“ der Gruppe (für Punkte ohne Untergruppe); hat sie noch keine Untergruppe, steht „+ Untergruppe“ gleich
+    // daneben – sonst am Ende der Gruppe in eigener Zeile (ugNeu), nach ihrer letzten Untergruppe.
+    const ugNeuKnopf = (g, gi) => `<button type="button" class="btn secondary small" data-act="ug-neu" data-g="${gi}" aria-label="${esc(`Untergruppe anlegen in ${gruppeText(g)}`)}"><span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Untergruppe<span class="k-anlegen"> anlegen</span></span></button>`;
+    const punktNeuKnopf = (name, gi, ui = -1) => `<button type="button" class="btn secondary small" data-act="punkt-neu" data-g="${gi}"${ui < 0 ? "" : ` data-u="${ui}"`} aria-label="${esc(`Prüfpunkt anlegen in ${name}`)}"><span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Prüfpunkt<span class="k-anlegen"> anlegen</span></span></button>`;
+    const gruppenFuss = (g, gi) => `${g.punkte.length || g.unter.length ? "" : '<tr class="fp-leer"><td colspan="6"><p class="help">Die Gruppe ist leer – leer wird sie nicht gespeichert.</p></td></tr>'}
+      <tr class="fp-fuss" data-g="${gi}"><td class="fp-griff-zelle"></td><td colspan="5"><div class="fp-fuss-knoepfe">${punktNeuKnopf(gruppeText(g), gi)}${g.unter.length ? "" : ugNeuKnopf(g, gi)}</div></td></tr>`;
+    /* Die Zwischenzeile einer Untergruppe (Schritt 39): eine Stufe tiefer als der Gruppenkopf – eingezogen, ohne Fläche,
+       mit Griff ⠿ (zieht den Block innerhalb der Gruppe und in andere Gruppen; nur, wenn es dorthin eine andere Stelle
+       gibt), Namensfeld in voller Breite (80 Zeichen, bricht um) und dem Knopf „Untergruppe entfernen“. Darunter ihre
+       Punkte (eingezogen) und ihr „+ Prüfpunkt“. */
+    function ugKopf(g, gi, u, ui) {
+      const griff = gruppen.length > 1 || g.unter.length > 1;
+      return `<tr class="fp-ug-zeile" data-g="${gi}" data-u="${ui}"><td class="fp-griff-zelle"></td><td colspan="5"><div class="fp-ug-kopf">
+        ${griff ? '<span class="fp-griff" aria-hidden="true" title="Untergruppe zum Verschieben ziehen">⠿</span>' : ""}
+        <textarea class="fp-ug-name" rows="1" maxlength="80" aria-label="${esc(`Untergruppe in ${gruppeText(g)}`)}" placeholder="Name der Untergruppe">${esc(u.name)}</textarea>
+        <span class="fp-menue">${zeilenMenue([{ text: "Untergruppe entfernen", attrs: `data-act="ug-weg" data-g="${gi}" data-u="${ui}"` }], ugText(g, u))}</span></div></td></tr>`;
+    }
+    const ugFuss = (g, gi, u, ui) => `${u.punkte.length ? "" : `<tr class="fp-leer fp-in-ug" data-g="${gi}" data-u="${ui}"><td class="fp-griff-zelle"></td><td colspan="5"><p class="help">Die Untergruppe ist leer – leer wird sie nicht gespeichert.</p></td></tr>`}
+      <tr class="fp-fuss fp-in-ug" data-g="${gi}" data-u="${ui}"><td class="fp-griff-zelle"></td><td colspan="5">${punktNeuKnopf(ugText(g, u), gi, ui)}</td></tr>`;
+    const ugNeu = (g, gi) => `<tr class="fp-ug-neu" data-g="${gi}"><td class="fp-griff-zelle"></td><td colspan="5">${ugNeuKnopf(g, gi)}</td></tr>`;
     function punkteTabelle() {
       if (!gruppen.length) return leer("Noch keine Prüfpunkte.");
       if (!bearbeitbar) {
         // Nur lesen: dieselben Zwischenzeilen, ohne Griff und Menü; ein Block ohne Namen hat eine nur, wenn es weitere gibt.
+        // Untergruppen als kleinere, eingezogene Zwischenzeile, ihre Punkte darunter eingezogen.
         return `<table class="list mat-tabelle mat-formtabelle fp-lesen" id="fp-tabelle">
           <colgroup><col class="fp-sp-text"><col class="fp-sp-art"><col class="fp-sp-soll"><col class="fp-sp-pflicht"></colgroup>
           <thead><tr><th>Prüfpunkt</th><th>Art</th><th>Soll</th><th></th></tr></thead>
           ${gruppen.map((g) => `<tbody>${g.name || gruppen.length > 1 ? `<tr class="fp-gruppenzeile"><th colspan="4" scope="rowgroup">${g.name ? esc(g.name) : '<span class="muted">Ohne Gruppe</span>'}</th></tr>` : ""}
-            ${g.punkte.map((p) => punktZeile(p)).join("")}</tbody>`).join("")}</table>`;
+            ${g.punkte.map((p) => punktZeile(p)).join("")}${g.unter.map((u) => `<tr class="fp-ug-zeile"><th colspan="4" scope="rowgroup">${esc(u.name)}</th></tr>
+            ${u.punkte.map((p) => punktZeile(p, 0, 0, 0, 0)).join("")}`).join("")}</tbody>`).join("")}</table>`;
       }
       let nr = 0;
       return `<table class="list mat-tabelle mat-formtabelle fp-editor" id="fp-tabelle">
         <colgroup><col class="fp-sp-griff"><col class="fp-sp-text"><col class="fp-sp-art"><col class="fp-sp-soll"><col class="fp-sp-pflicht"><col class="fp-sp-menue"></colgroup>
         <thead><tr><th></th><th>Prüfpunkt</th><th>Art</th><th>Soll</th><th></th><th></th></tr></thead>
-        ${gruppen.map((g, gi) => `<tbody>${gruppenKopf(g, gi)}${g.punkte.map((p, pi) => punktZeile(p, gi, pi, ++nr)).join("")}${gruppenFuss(g, gi)}</tbody>`).join("")}</table>`;
+        ${gruppen.map((g, gi) => `<tbody>${gruppenKopf(g, gi)}${g.punkte.map((p, pi) => punktZeile(p, gi, pi, ++nr)).join("")}${gruppenFuss(g, gi)}${g.unter.map((u, ui) => ugKopf(g, gi, u, ui)
+          + u.punkte.map((p, pi) => punktZeile(p, gi, pi, ++nr, ui)).join("") + ugFuss(g, gi, u, ui)).join("")}${g.unter.length ? ugNeu(g, gi) : ""}</tbody>`).join("")}</table>`;
     }
     function einsammeln() {
       if (!bearbeitbar) return;
       const titelFeld = $("#fp-titel", inhalt);
       if (titelFeld) titelEingabe = titelFeld.value;
       $$("#fp-tabelle tr.fp-gruppenzeile", inhalt).forEach((tr) => { gruppen[+tr.dataset.g].name = $(".fp-gruppenname", tr).value; });
+      $$("#fp-tabelle tr.fp-ug-zeile", inhalt).forEach((tr) => { gruppen[+tr.dataset.g].unter[+tr.dataset.u].name = $(".fp-ug-name", tr).value; });
       $$("#fp-tabelle tr.fp-punkt", inhalt).forEach((tr) => {
-        const p = gruppen[+tr.dataset.g].punkte[+tr.dataset.i];
+        const p = liste(+tr.dataset.g, uVon(tr))[+tr.dataset.i];
         p.text = $(".fp-text", tr).value; p.art = $(".fp-art", tr).value;
         const soll = $(".fp-soll", tr); p.soll = soll ? soll.value : "";
         p.pflicht = !$(".fp-optional", tr).checked;
@@ -5321,15 +5360,16 @@
         <details class="section mat-auf"><summary>Journal</summary>${journalHtml(f.journal)}</details>`;
       $$(".fp-art", inhalt).forEach((s) => s.addEventListener("change", () => {
         const tr = s.closest("tr");
-        const p = gruppen[+tr.dataset.g].punkte[+tr.dataset.i];
+        const p = liste(+tr.dataset.g, uVon(tr))[+tr.dataset.i];
         einsammeln(); zeichnen({ p, teil: "art" });
       }));
-      $$(".fp-text, .fp-gruppenname", inhalt).forEach((ta) => {
+      $$(".fp-text, .fp-gruppenname, .fp-ug-name", inhalt).forEach((ta) => {
         textHoehe(ta);
         ta.addEventListener("input", () => textHoehe(ta));
-        // Ein Gruppenname ist eine Zeile Text, die nur umbricht – Enter fügt dort keinen Absatz ein. Im Prüfpunkt schon
-        // (Wunsch vom 04.11.2026: Absätze im Prüfpunkt; der Server fasst Leerzeilen zusammen, katalog.punkt_text).
-        if (ta.matches(".fp-gruppenname")) ta.addEventListener("keydown", (e) => { if (e.key === "Enter") e.preventDefault(); });
+        // Ein Gruppen- oder Untergruppenname ist eine Zeile Text, die nur umbricht – Enter fügt dort keinen Absatz ein. Im
+        // Prüfpunkt schon (Wunsch vom 04.11.2026: Absätze im Prüfpunkt; der Server fasst Leerzeilen zusammen,
+        // katalog.punkt_text).
+        if (ta.matches(".fp-gruppenname, .fp-ug-name")) ta.addEventListener("keydown", (e) => { if (e.key === "Enter") e.preventDefault(); });
       });
       const tabelle = $("#fp-tabelle.fp-editor", inhalt);
       if (tabelle) tabelle.addEventListener("pointerdown", ziehen);
@@ -5341,9 +5381,13 @@
     function zielFokus(ziel) {
       let el = null;
       if (ziel.p) {
-        const gi = gruppen.findIndex((g) => g.punkte.includes(ziel.p));
-        const tr = gi < 0 ? null : $(`#fp-tabelle tr.fp-punkt[data-g="${gi}"][data-i="${gruppen[gi].punkte.indexOf(ziel.p)}"]`, inhalt);
+        const a = abschnitte().find((x) => liste(x.gi, x.ui).includes(ziel.p));
+        const tr = a && $(`#fp-tabelle tr.fp-punkt[data-g="${a.gi}"][data-i="${liste(a.gi, a.ui).indexOf(ziel.p)}"]${a.ui < 0 ? ":not([data-u])" : `[data-u="${a.ui}"]`}`, inhalt);
         el = tr && $({ text: ".fp-text", art: ".fp-art", menue: ".fp-menue summary" }[ziel.teil], tr);
+      } else if (ziel.u) {
+        const gi = gruppen.findIndex((g) => g.unter.includes(ziel.u));
+        const tr = gi < 0 ? null : $(`#fp-tabelle tr.fp-ug-zeile[data-g="${gi}"][data-u="${gruppen[gi].unter.indexOf(ziel.u)}"]`, inhalt);
+        el = tr && $(ziel.teil === "name" ? ".fp-ug-name" : ".fp-menue :is(summary, button)", tr);
       } else if (ziel.g) {
         const tr = $(`#fp-tabelle tr.fp-gruppenzeile[data-g="${gruppen.indexOf(ziel.g)}"]`, inhalt);
         el = tr && $(ziel.teil === "name" ? ".fp-gruppenname" : ".fp-menue :is(summary, button)", tr);
@@ -5355,14 +5399,18 @@
     /* Ziehen am Griff ⠿ (Maus, Finger, Stift – Pointer Events; der Seitenbaum der Strömipedia zieht mit HTML-Drag-and-drop,
        das am Finger nicht geht): Die Zeile wandert beim Ziehen mit – über die untere Hälfte eines Gruppenkopfs an den
        Anfang dieser Gruppe, über seine obere Hälfte und über „+ Prüfpunkt“ ans Ende der Gruppe davor bzw. dieser, also
-       auch in eine andere oder leere Gruppe. Am oberen und unteren Rand rollt die Seite. Beim Loslassen entsteht die neue
-       Ordnung aus der Reihenfolge der Zeilen; Esc oder ein vom Browser abgebrochenes Ziehen lässt die alte stehen. Nur
-       der Griff hat touch-action: none (material.css) – daneben rollt die Seite am Finger wie immer. Mit der Tastatur
-       geht dasselbe über das Menü „⋯“.
-       Am Griff eines Gruppenkopfs zieht der ganze Block (Kopf, Punkte, „+ Prüfpunkt“ – ein tbody) und kommt nur zwischen
-       zwei Gruppen, nie mitten in eine. Der Block bleibt beim Ziehen stehen (blau hinterlegt) – ein langer Block, der
-       mitwanderte, schöbe die Seite unter dem Finger hin und her; eine blaue Einfügemarke zeigt die Grenze zwischen zwei
-       Gruppen, die dem Zeiger am nächsten liegt. An seiner eigenen Stelle steht keine Marke. */
+       auch in eine andere oder leere Gruppe. Untergruppen (Schritt 39) ebenso eine Stufe tiefer: über die untere Hälfte
+       ihres Kopfs an ihren Anfang, über die obere ans Ende des Abschnitts davor (der Punkte ohne Untergruppe bzw. der
+       Untergruppe davor) – so kommt ein Punkt hinein und wieder heraus. Am oberen und unteren Rand rollt die Seite. Beim
+       Loslassen entsteht die neue Ordnung aus der Reihenfolge der Zeilen (der letzte Kopf darüber sagt, wohin ein Punkt
+       gehört); Esc oder ein vom Browser abgebrochenes Ziehen lässt die alte stehen. Nur der Griff hat touch-action: none
+       (material.css) – daneben rollt die Seite am Finger wie immer. Mit der Tastatur geht dasselbe über das Menü „⋯“.
+       Am Griff eines Gruppenkopfs zieht der ganze Block (Kopf, Punkte, Untergruppen, „+ Prüfpunkt“ – ein tbody) und kommt
+       nur zwischen zwei Gruppen, nie mitten in eine. Der Block bleibt beim Ziehen stehen (blau hinterlegt) – ein langer
+       Block, der mitwanderte, schöbe die Seite unter dem Finger hin und her; eine blaue Einfügemarke zeigt die Grenze
+       zwischen zwei Gruppen, die dem Zeiger am nächsten liegt. An seiner eigenen Stelle steht keine Marke. Am Griff eines
+       Untergruppenkopfs ebenso die Untergruppe (Kopf, Punkte, „+ Prüfpunkt“): Sie kommt an eine Grenze zwischen
+       Untergruppen derselben oder einer anderen Gruppe – nach deren Punkten ohne Untergruppe, vor „+ Untergruppe“. */
     function ziehen(e) {
       const griff = e.target.closest(".fp-griff");
       if (!griff || (e.pointerType === "mouse" && e.button !== 0)) return;
@@ -5371,14 +5419,19 @@
       const zeile = griff.closest("tr");
       const tabelle = zeile.closest("table");
       const block = zeile.classList.contains("fp-gruppenzeile") ? zeile.parentElement : null;
-      const alt = gruppen.map((g) => g.punkte);
+      // Untergruppe: ihre Zeilen (Kopf, Punkte, Hinweis, „+ Prüfpunkt“) – alle mit data-u ihrer Stelle in derselben Gruppe.
+      const ugZeilen = zeile.classList.contains("fp-ug-zeile")
+        ? $$(`:scope > tr[data-g="${zeile.dataset.g}"][data-u="${zeile.dataset.u}"]`, zeile.parentElement) : null;
+      const alt = gruppen.map((g) => ({ punkte: g.punkte, unter: g.unter.map((u) => u.punkte) }));
       const id = e.pointerId;
       let y = e.clientY;
       let lauf = 0;
       let grenze = -1;   // beim Block: vor welchen Block er kommt (Anzahl Blöcke = ans Ende), -1 = bleibt stehen
-      const marke = block ? document.createElement("div") : null;
+      let ugGrenze = null;   // bei der Untergruppe: { gi, k } – vor die k-te Untergruppe der Gruppe gi; null = bleibt
+      const marke = block || ugZeilen ? document.createElement("div") : null;
       if (marke) { marke.className = "fp-einfuegemarke"; marke.hidden = true; document.body.append(marke); }
-      (block || zeile).classList.add("fp-zieht");
+      if (ugZeilen) ugZeilen.forEach((tr) => tr.classList.add("fp-zieht-block"));
+      else (block || zeile).classList.add("fp-zieht");
       tabelle.classList.add("fp-ziehen");
       try { griff.setPointerCapture(id); } catch (x) { /* dann ohne Fang – die Ereignisse kommen trotzdem am Fenster an */ }
       // Die Zeile vor bzw. hinter ref – nur, wenn sie dort nicht schon steht (sonst rechnete der Browser bei jeder Bewegung neu).
@@ -5386,7 +5439,23 @@
         if (vor && ref.previousElementSibling !== zeile) ref.before(zeile);
         else if (!vor && ref.nextElementSibling !== zeile) ref.after(zeile);
       };
-      const ansEnde = (tbody) => setzen(true, $(":scope > tr.fp-leer, :scope > tr.fp-fuss", tbody));
+      // Ans Ende des Abschnitts, dessen „+ Prüfpunkt“ fuss ist (vor seinen Hinweis „leer“, wenn er einen hat).
+      const ansEnde = (fuss) => {
+        const vor = fuss.previousElementSibling;
+        setzen(true, vor && vor !== zeile && vor.classList.contains("fp-leer") ? vor : fuss);
+      };
+      const letzterFuss = (tbody) => $$(":scope > tr.fp-fuss", tbody).pop();
+      // Der Fuß des Abschnitts vor der Zeile tr (ein Untergruppenkopf): die nächste „+ Prüfpunkt“-Zeile darüber.
+      const fussDavor = (tr) => {
+        let x = tr.previousElementSibling;
+        while (x && !x.classList.contains("fp-fuss")) x = x.previousElementSibling;
+        return x;
+      };
+      // Eine Marke über die ganze Tabelle an der Höhe lage.
+      const markeSetzen = (lage) => {
+        const t = tabelle.getBoundingClientRect();
+        Object.assign(marke.style, { top: `${Math.round(lage - 2)}px`, left: `${Math.round(t.left)}px`, width: `${Math.round(t.width)}px` });
+      };
       // Block: die Grenzen zwischen den Blöcken (Mitte des Abstands), dazu Anfang und Ende – die nächste gilt.
       function grenzeWaehlen() {
         const bloecke = [...tabelle.tBodies];
@@ -5397,22 +5466,43 @@
         const eigen = bloecke.indexOf(block);
         grenze = k === eigen || k === eigen + 1 ? -1 : k;
         marke.hidden = grenze < 0;
-        if (grenze < 0) return;
-        const t = tabelle.getBoundingClientRect();
-        Object.assign(marke.style, { top: `${Math.round(lagen[k] - 2)}px`, left: `${Math.round(t.left)}px`, width: `${Math.round(t.width)}px` });
+        if (grenze >= 0) markeSetzen(lagen[k]);
+      }
+      // Untergruppe: je Gruppe die Grenzen vor jeder Untergruppe und vor „+ Untergruppe“ (ohne Untergruppen: unter ihrem
+      // „+ Prüfpunkt“) – die nächste gilt; ihre eigene Stelle (davor und dahinter in ihrer Gruppe) lässt sie stehen.
+      function ugGrenzeWaehlen() {
+        const lagen = [];
+        [...tabelle.tBodies].forEach((tb, gi) => {
+          const koepfe = $$(":scope > tr.fp-ug-zeile", tb);
+          koepfe.forEach((tr, k) => lagen.push({ gi, k, y: tr.getBoundingClientRect().top }));
+          const neu = $(":scope > tr.fp-ug-neu", tb);
+          lagen.push({ gi, k: koepfe.length, y: neu ? neu.getBoundingClientRect().top : letzterFuss(tb).getBoundingClientRect().bottom });
+        });
+        const best = lagen.reduce((a, b) => (Math.abs(b.y - y) < Math.abs(a.y - y) ? b : a));
+        const gq = +zeile.dataset.g;
+        const uq = +zeile.dataset.u;
+        ugGrenze = best.gi === gq && (best.k === uq || best.k === uq + 1) ? null : best;
+        marke.hidden = !ugGrenze;
+        if (ugGrenze) markeSetzen(best.y);
       }
       function platzieren() {
         if (block) { grenzeWaehlen(); return; }
+        if (ugZeilen) { ugGrenzeWaehlen(); return; }
         const tr = $$(":scope > tbody > tr", tabelle).find((x) => x !== zeile && x.getBoundingClientRect().bottom >= y);
-        if (!tr) { ansEnde(tabelle.tBodies[tabelle.tBodies.length - 1]); return; }
+        if (!tr) { ansEnde(letzterFuss(tabelle.tBodies[tabelle.tBodies.length - 1])); return; }
         const r = tr.getBoundingClientRect();
         const oben = y < r.top + r.height / 2;
         if (tr.classList.contains("fp-punkt")) setzen(oben, tr);
         else if (tr.classList.contains("fp-gruppenzeile")) {
           const davor = tr.parentElement.previousElementSibling;
-          if (oben && davor && davor.tagName === "TBODY") ansEnde(davor);
+          if (oben && davor && davor.tagName === "TBODY") ansEnde(letzterFuss(davor));
           else setzen(false, tr);
-        } else ansEnde(tr.parentElement);
+        } else if (tr.classList.contains("fp-ug-zeile")) {
+          if (oben) ansEnde(fussDavor(tr));
+          else setzen(false, tr);
+        } else if (tr.classList.contains("fp-leer")) ansEnde(tr.nextElementSibling);
+        else if (tr.classList.contains("fp-fuss")) ansEnde(tr);
+        else ansEnde(letzterFuss(tr.parentElement));          // „+ Untergruppe“: ans Ende der letzten Untergruppe
       }
       function rollen() {
         const kopf = document.querySelector("header.bauchbinde");
@@ -5426,6 +5516,7 @@
           window.scrollBy(0, schritt);
           if (window.scrollY !== vorher) platzieren();
         } else if (block) grenzeWaehlen();   // die feste Marke folgt auch einem Bildlauf mit dem Mausrad
+        else if (ugZeilen) ugGrenzeWaehlen();
         lauf = requestAnimationFrame(rollen);
       }
       const bewegen = (ev) => { if (ev.pointerId === id) { y = ev.clientY; platzieren(); } };
@@ -5437,19 +5528,42 @@
         document.removeEventListener("keydown", taste, true);
         if (marke) marke.remove();
         let bewegt = null;
+        let ugBewegt = null;
         if (abbrechen) { /* alles bleibt */ } else if (block) {
           if (grenze >= 0) {
             const gi = +zeile.dataset.g;
             [bewegt] = gruppen.splice(gi, 1);
             gruppen.splice(grenze > gi ? grenze - 1 : grenze, 0, bewegt);
           }
+        } else if (ugZeilen) {
+          if (ugGrenze) {
+            const gq = +zeile.dataset.g;
+            const uq = +zeile.dataset.u;
+            [ugBewegt] = gruppen[gq].unter.splice(uq, 1);
+            gruppen[ugGrenze.gi].unter.splice(ugGrenze.gi === gq && ugGrenze.k > uq ? ugGrenze.k - 1 : ugGrenze.k, 0, ugBewegt);
+          }
         } else {
-          const neu = [...tabelle.tBodies].map((tb) => $$(":scope > tr.fp-punkt", tb).map((tr) => alt[+tr.dataset.g][+tr.dataset.i]));
-          neu.forEach((liste, gi) => { gruppen[gi].punkte = liste; });
+          // Der letzte Kopf über einem Punkt sagt, wohin er gehört: Gruppenkopf → ohne Untergruppe, Untergruppenkopf → in sie.
+          const vorher = (tr) => (tr.dataset.u === undefined ? alt[+tr.dataset.g].punkte : alt[+tr.dataset.g].unter[+tr.dataset.u])[+tr.dataset.i];
+          [...tabelle.tBodies].forEach((tb, gi) => {
+            const g = gruppen[gi];
+            const neu = { punkte: [], unter: g.unter.map(() => []) };
+            let ziel = neu.punkte;
+            $$(":scope > tr", tb).forEach((tr) => {
+              if (tr.classList.contains("fp-ug-zeile")) ziel = neu.unter[+tr.dataset.u];
+              else if (tr.classList.contains("fp-punkt")) ziel.push(vorher(tr));
+            });
+            g.punkte = neu.punkte;
+            g.unter.forEach((u, ui) => { u.punkte = neu.unter[ui]; });
+          });
         }
         zeichnen();
-        // Die verschobene Gruppe ins Bild holen – ihr Kopf kann nach dem Umstellen außerhalb liegen.
-        const kopfZeile = bewegt && $(`#fp-tabelle tr.fp-gruppenzeile[data-g="${gruppen.indexOf(bewegt)}"]`, inhalt);
+        // Die verschobene Gruppe bzw. Untergruppe ins Bild holen – ihr Kopf kann nach dem Umstellen außerhalb liegen.
+        const kopfZeile = bewegt ? $(`#fp-tabelle tr.fp-gruppenzeile[data-g="${gruppen.indexOf(bewegt)}"]`, inhalt)
+          : ugBewegt ? (() => {
+            const gi = gruppen.findIndex((g) => g.unter.includes(ugBewegt));
+            return $(`#fp-tabelle tr.fp-ug-zeile[data-g="${gi}"][data-u="${gruppen[gi].unter.indexOf(ugBewegt)}"]`, inhalt);
+          })() : null;
         if (kopfZeile) kopfZeile.scrollIntoView({ block: "nearest" });
       }
       const los = (ev) => { if (ev.pointerId === id) fertig(false); };
@@ -5461,29 +5575,62 @@
       document.addEventListener("keydown", taste, true);
       lauf = requestAnimationFrame(rollen);
     }
+    /* Vor dem Speichern: Eine Untergruppe mit Punkten braucht einen Namen (leer hieße „keine Untergruppe“, die Punkte
+       rutschten nach vorn zu denen der Gruppe), und in einer Gruppe heißt keine zwei gleich (der Server legte sie zu einer
+       zusammen). Fehler am Namensfeld; liefert false, wenn etwas nicht stimmt. */
+    function ugPruefen() {
+      for (const [gi, g] of gruppen.entries()) {
+        const namen = new Set();
+        for (const [ui, u] of g.unter.entries()) {
+          if (!u.punkte.length) continue;
+          const name = u.name.trim().replace(/\s+/g, " ");
+          const fehler = !name ? "Eine Untergruppe mit Prüfpunkten braucht einen Namen."
+            : namen.has(name) ? `In ${gruppeText(g)} gibt es schon eine Untergruppe „${name}“.` : "";
+          namen.add(name);
+          if (fehler) {
+            const feld = $(`#fp-tabelle tr.fp-ug-zeile[data-g="${gi}"][data-u="${ui}"] .fp-ug-name`, inhalt);
+            if (feld) { feld.scrollIntoView({ block: "nearest" }); S.feldFehler(feld, fehler); feld.focus(); } else toast(fehler, true);
+            return false;
+          }
+        }
+      }
+      return true;
+    }
     async function speichern() {
       einsammeln();
+      if (!ugPruefen()) return;
       try {
         await api(`${API}/formulare/${f.id}`, { method: "PUT", body: { titel: $("#fp-titel").value, punkte: flach() } });
         toast("Formular gespeichert"); zeigen(formular);
       } catch (e) { toast(e.message, true); }
     }
-    // Ein Eintrag im Menü „⋯“ einer Punktzeile: Gruppe und Punkt, um die es geht (Stand des letzten Zeichnens).
+    // Ein Eintrag im Menü „⋯“ einer Punktzeile: Gruppe, Untergruppe (ui, -1 = keine), Liste und Punkt, um die es geht
+    // (Stand des letzten Zeichnens).
     const ort = (b) => {
       const gi = +b.dataset.g;
+      const ui = uVon(b);
       const pi = +b.dataset.i;
-      return { gi, pi, g: gruppen[gi], p: gruppen[gi].punkte[pi] };
+      return { gi, ui, pi, g: gruppen[gi], l: liste(gi, ui), p: liste(gi, ui)[pi] };
     };
-    /* „In Gruppe verschieben“: kleiner Dialog mit den Gruppen (die eigene ausgegraut) und „Neue Gruppe“ mit Namensfeld;
-       der Punkt kommt ans Ende der gewählten, eine neue Gruppe ans Ende des Formulars. */
+    // Die laufende Nummer eines Punkts im Formular (wie in der Tabelle).
+    const nummer = (gi, ui, pi) => {
+      const alle = abschnitte();
+      const s = alle.findIndex((a) => a.gi === gi && a.ui === ui);
+      return alle.slice(0, s).reduce((n, a) => n + liste(a.gi, a.ui).length, 0) + pi + 1;
+    };
+    /* „In Gruppe verschieben“: kleiner Dialog mit den Gruppen und darunter eingerückt ihren Untergruppen (die eigene
+       Stelle ausgegraut) und „Neue Gruppe“ mit Namensfeld; der Punkt kommt ans Ende der gewählten Gruppe (zu ihren Punkten
+       ohne Untergruppe, vor die Untergruppen) bzw. Untergruppe, eine neue Gruppe ans Ende des Formulars. */
     function inGruppe(b) {
       einsammeln();
-      const { gi, pi, g, p } = ort(b);
-      const nr = gruppen.slice(0, gi).reduce((n, x) => n + x.punkte.length, 0) + pi + 1;
-      const wahl = gruppen.map((x, i) => `<label class="fp-wahl${i === gi ? " fp-wahl-weg" : ""}"><input type="radio" name="fp-ziel" value="${i}"${i === gi ? " disabled" : ""}>
-        <span>${x.name.trim() ? esc(x.name) : `<span class="muted">${esc(gruppeText(x))}</span>`}${i === gi ? ' <span class="muted">(steht jetzt hier)</span>' : ""}</span></label>`).join("");
+      const { gi, ui, pi, l, p } = ort(b);
+      const nr = nummer(gi, ui, pi);
+      const eintrag = (wert, hier, inhaltHtml, klasse = "") => `<label class="fp-wahl${klasse}${hier ? " fp-wahl-weg" : ""}"><input type="radio" name="fp-ziel" value="${wert}"${hier ? " disabled" : ""}>
+        <span>${inhaltHtml}${hier ? ' <span class="muted">(steht jetzt hier)</span>' : ""}</span></label>`;
+      const wahl = gruppen.map((x, i) => eintrag(i, i === gi && ui < 0, x.name.trim() ? esc(x.name) : `<span class="muted">${esc(gruppeText(x))}</span>`)
+        + x.unter.map((u, k) => eintrag(`${i}:${k}`, i === gi && k === ui, u.name.trim() ? esc(u.name) : `<span class="muted">${esc(ugText(x, u))}</span>`, " fp-wahl-ug")).join("")).join("");
       dialog(`<h2>Prüfpunkt ${nr} in Gruppe verschieben</h2>
-        <p class="help">Der Punkt kommt ans Ende der gewählten Gruppe.</p>
+        <p class="help">Der Punkt kommt ans Ende der gewählten Gruppe oder Untergruppe – in der Gruppe vor ihre Untergruppen.</p>
         <div class="fp-gruppenwahl" role="radiogroup" aria-label="Gruppe">${wahl}
           <label class="fp-wahl"><input type="radio" name="fp-ziel" value="neu"> <span>Neue Gruppe</span></label>
           <input type="text" id="fp-neue-gruppe" maxlength="80" placeholder="Name der neuen Gruppe (leer: ohne Gruppe)" aria-label="Name der neuen Gruppe"></div>
@@ -5495,74 +5642,103 @@
         const ok = () => {
           const r = $('input[name="fp-ziel"]:checked', body);
           if (!r) { S.feldFehler($('input[name="fp-ziel"]:not(:disabled)', body), "Bitte eine Gruppe wählen."); return; }
-          const ziel = r === neu ? { name: feld.value.trim(), punkte: [] } : gruppen[+r.value];
-          g.punkte.splice(pi, 1);
-          if (r === neu) gruppen.push(ziel);
-          ziel.punkte.push(p);
+          const [zg, zu] = r === neu ? [null, -1] : r.value.split(":").map(Number).concat(-1);
+          const zielGruppe = r === neu ? { name: feld.value.trim(), punkte: [], unter: [] } : gruppen[zg];
+          l.splice(pi, 1);
+          if (r === neu) gruppen.push(zielGruppe);
+          const zielUnter = zu >= 0 ? zielGruppe.unter[zu] : null;
+          (zielUnter ? zielUnter.punkte : zielGruppe.punkte).push(p);
           dlg.close();
           zeichnen({ p, teil: "menue" });
-          toast(`Prüfpunkt ${nr} in ${gruppeText(ziel)} verschoben`);
+          toast(`Prüfpunkt ${nr} in ${zielUnter ? ugText(zielGruppe, zielUnter) : gruppeText(zielGruppe)} verschoben`);
         };
         $("#fp-gruppe-ok", body).onclick = ok;
         feld.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); ok(); } });
       });
     }
     aktionen = {
-      // Ohne data-g (leeres Formular): ein Block ohne Namen.
+      // Ohne data-g (leeres Formular): ein Block ohne Namen. Mit data-u: in diese Untergruppe.
       "punkt-neu": (b) => {
         einsammeln();
         let g = b.dataset.g === undefined ? null : gruppen[+b.dataset.g];
-        if (!g) { g = { name: "", punkte: [] }; gruppen.push(g); }
+        if (!g) { g = { name: "", punkte: [], unter: [] }; gruppen.push(g); }
         const p = neuerPunkt();
-        g.punkte.push(p);
+        (b.dataset.u === undefined ? g.punkte : g.unter[+b.dataset.u].punkte).push(p);
         zeichnen({ p, teil: "text" });
       },
-      // Über die Gruppengrenze: als letzter in die Gruppe davor bzw. als erster in die danach (seine Gruppe wechselt).
+      // Über Abschnittsgrenzen (Gruppe, Untergruppe): als letzter in den Abschnitt davor bzw. als erster in den danach.
       "punkt-hoch": (b) => {
         einsammeln();
-        const { gi, pi, g, p } = ort(b);
-        if (!pi && !gi) return;
-        g.punkte.splice(pi, 1);
-        if (pi) g.punkte.splice(pi - 1, 0, p); else gruppen[gi - 1].punkte.push(p);
+        const { gi, ui, pi, l, p } = ort(b);
+        const alle = abschnitte();
+        const s = alle.findIndex((a) => a.gi === gi && a.ui === ui);
+        if (!pi && !s) return;
+        l.splice(pi, 1);
+        if (pi) l.splice(pi - 1, 0, p); else liste(alle[s - 1].gi, alle[s - 1].ui).push(p);
         zeichnen({ p, teil: "menue" });
       },
       "punkt-runter": (b) => {
         einsammeln();
-        const { gi, pi, g, p } = ort(b);
-        if (pi === g.punkte.length - 1 && gi === gruppen.length - 1) return;
-        g.punkte.splice(pi, 1);
-        if (pi < g.punkte.length) g.punkte.splice(pi + 1, 0, p); else gruppen[gi + 1].punkte.unshift(p);
+        const { gi, ui, pi, l, p } = ort(b);
+        const alle = abschnitte();
+        const s = alle.findIndex((a) => a.gi === gi && a.ui === ui);
+        if (pi === l.length - 1 && s === alle.length - 1) return;
+        l.splice(pi, 1);
+        if (pi < l.length) l.splice(pi + 1, 0, p); else liste(alle[s + 1].gi, alle[s + 1].ui).unshift(p);
         zeichnen({ p, teil: "menue" });
       },
       "punkt-gruppe": inGruppe,
       "punkt-weg": (b) => {
         einsammeln();
-        const { gi, pi, g } = ort(b);
-        g.punkte.splice(pi, 1);
-        const naechster = g.punkte[pi] || g.punkte[pi - 1];
-        zeichnen(naechster ? { p: naechster, teil: "menue" } : { sel: `tr.fp-fuss [data-g="${gi}"]` });
+        const { gi, ui, pi, l } = ort(b);
+        l.splice(pi, 1);
+        const naechster = l[pi] || l[pi - 1];
+        zeichnen(naechster ? { p: naechster, teil: "menue" }
+          : { sel: `tr.fp-fuss [data-act="punkt-neu"][data-g="${gi}"]${ui < 0 ? ":not([data-u])" : `[data-u="${ui}"]`}` });
       },
       "gruppe-neu": () => {
         einsammeln();
-        const g = { name: "", punkte: [neuerPunkt()] };
+        const g = { name: "", punkte: [neuerPunkt()], unter: [] };
         gruppen.push(g);
         zeichnen({ g, teil: "name" });
       },
-      // Mit Punkten fragt es nach (mit Anzahl), eine leere Gruppe geht ohne Rückfrage.
+      // Mit Punkten fragt es nach (mit Anzahl, samt denen der Untergruppen), eine leere Gruppe geht ohne Rückfrage.
       "gruppe-weg": async (b) => {
         einsammeln();
         const gi = +b.dataset.g;
         const g = gruppen[gi];
         const name = gruppeText(g);
-        const n = g.punkte.length;
+        const n = punktZahl(g);
         if (n && !(await confirm(`${name} mit ${plural(n, "Prüfpunkt", "Prüfpunkten")} entfernen?`, "Entfernen"))) return;
         gruppen.splice(gi, 1);
         const nachbar = gruppen[gi] || gruppen[gi - 1];
         zeichnen(nachbar ? { g: nachbar, teil: "menue" } : { sel: '[data-act="gruppe-neu"]' });
         toast(`${name} entfernt`);
       },
+      // „+ Untergruppe“ am Ende der Gruppe: eine leere Untergruppe (Punkte zieht man hinein oder legt sie mit ihrem
+      // „+ Prüfpunkt“ an), der Fokus ins Namensfeld.
+      "ug-neu": (b) => {
+        einsammeln();
+        const u = { name: "", punkte: [] };
+        gruppen[+b.dataset.g].unter.push(u);
+        zeichnen({ u, teil: "name" });
+      },
+      // Wie „Gruppe entfernen“: mit Punkten nach Rückfrage samt Anzahl, leer ohne.
+      "ug-weg": async (b) => {
+        einsammeln();
+        const g = gruppen[+b.dataset.g];
+        const ui = +b.dataset.u;
+        const u = g.unter[ui];
+        const name = ugText(g, u);
+        const n = u.punkte.length;
+        if (n && !(await confirm(`${name} mit ${plural(n, "Prüfpunkt", "Prüfpunkten")} entfernen?`, "Entfernen"))) return;
+        g.unter.splice(ui, 1);
+        const nachbar = g.unter[ui] || g.unter[ui - 1];
+        zeichnen(nachbar ? { u: nachbar, teil: "menue" } : { sel: `[data-act="ug-neu"][data-g="${gruppen.indexOf(g)}"]` });
+        toast(`${name} entfernt`);
+      },
       speichern,
-      aktivieren: async () => { try { if (bearbeitbar) { einsammeln(); await api(`${API}/formulare/${f.id}`, { method: "PUT", body: { titel: $("#fp-titel").value, punkte: flach() } }); } await api(`${API}/formulare/${f.id}/aktivieren`, { method: "POST", body: {} }); toast("Aktiviert"); zeigen(formular); } catch (e) { toast(e.message, true); } },
+      aktivieren: async () => { try { if (bearbeitbar) { einsammeln(); if (!ugPruefen()) return; await api(`${API}/formulare/${f.id}`, { method: "PUT", body: { titel: $("#fp-titel").value, punkte: flach() } }); } await api(`${API}/formulare/${f.id}/aktivieren`, { method: "POST", body: {} }); toast("Aktiviert"); zeigen(formular); } catch (e) { toast(e.message, true); } },
       deaktivieren: async () => { try { await api(`${API}/formulare/${f.id}/deaktivieren`, { method: "POST", body: {} }); toast("Deaktiviert"); zeigen(formular); } catch (e) { toast(e.message, true); } },
       // Neue Version desselben Formulars; trägt diese Version keinen Titel (ältere, benutzte), fragt ein Dialog nach
       // einem – Titel sind seit dem Formular-Pool Pflicht.
@@ -5833,7 +6009,8 @@
   const PRUEFPUNKTE_INFO = "Jeder Prüfpunkt ist Pflicht: Ohne Befund lässt sich die Prüfung nicht festschreiben. Wo ein Punkt entfallen darf (etwa Wartung oder Pflege), setzt du das Häkchen „optional“. "
     + "Bei der Prüfung ist jeder Befund mit „in Ordnung“ vorbelegt, Ja/Nein-Punkte mit ihrem Sollwert; bei Text und Zahl ist das Soll ein Hinweis für den Prüfer. "
     + "Ein Punkt der Art „Länge (m)“ ist mit der Länge des Artikels vorbelegt; trägt der Prüfer eine andere ein, "
-    + "übernimmt das Festschreiben sie in den Artikel (nur bei Kategorien mit „Artikel haben eine Länge“).";
+    + "übernimmt das Festschreiben sie in den Artikel (nur bei Kategorien mit „Artikel haben eine Länge“). "
+    + "Eine Gruppe kann Untergruppen haben: Zuerst stehen ihre Punkte ohne Untergruppe, danach die Untergruppen.";
 
   /* --- Suche -------------------------------------------------------------------------------------------- */
   async function suche() {
@@ -6397,10 +6574,13 @@
     function punkteHtml() {
       if (!pr.punkte.length) return "";
       let gruppe = null;
+      let unter = "";
       let html = "";
+      // Untergruppen (Schritt 39): kleinere Zwischenüberschrift unter der Gruppe, ihre Punkte darunter eingezogen.
       pr.punkte.forEach((x) => {
-        if (x.gruppe !== gruppe) { gruppe = x.gruppe; html += gruppe ? `<h3 class="mat-gruppe">${esc(gruppe)}</h3>` : ""; }
-        html += punktHtml(x);
+        if (x.gruppe !== gruppe) { gruppe = x.gruppe; unter = ""; html += gruppe ? `<h3 class="mat-gruppe">${esc(gruppe)}</h3>` : ""; }
+        if ((x.untergruppe || "") !== unter) { unter = x.untergruppe || ""; html += unter ? `<h4 class="mat-untergruppe">${esc(unter)}</h4>` : ""; }
+        html += unter ? `<div class="mat-in-ug">${punktHtml(x)}</div>` : punktHtml(x);
       });
       return `<section class="section mat-punkte"><h2>Prüfpunkte</h2>
         <p class="help">Vorbelegt mit dem Sollwert – ändere nur, was abweicht. Ein Mangel braucht ein Foto und eine Bemerkung.</p>${html}</section>`;
@@ -6495,7 +6675,7 @@
 
     function leseHtml() {
       const zeilen = pr.punkte.map((x) => `<tr class="${x.befund === "mangel" ? "mat-mangelzeile" : ""}">
-          <td data-l="Prüfpunkt" class="mat-k-ohne">${x.gruppe ? `<span class="muted small">${esc(x.gruppe)}</span><br>` : ""}<span class="mat-mehrzeilig">${esc(x.text)}</span></td>
+          <td data-l="Prüfpunkt" class="mat-k-ohne">${x.gruppe || x.untergruppe ? `<span class="muted small">${esc([x.gruppe, x.untergruppe].filter(Boolean).join(" › "))}</span><br>` : ""}<span class="mat-mehrzeilig">${esc(x.text)}</span></td>
           <td data-l="Befund" class="mat-k-kurz mat-k-ohne">${x.art === "signature" && !x.unterschrift && x.befund !== "nicht_zutreffend" ? '<span class="muted">nicht unterschrieben</span>' : befundMarke(x.befund)}</td><td data-l="Wert" class="mat-k-kurz">${x.art === "signature" && x.unterschrift ? `<img class="mat-us-mini" src="${esc(x.unterschrift)}" alt="Unterschrift">`
             : x.art === "laenge" && x.wert ? `${esc(x.wert)} m${x.soll && x.soll !== x.wert ? ` <span class="muted small mat-soll">(vorher ${esc(x.soll)} m)</span>` : x.soll ? ' <span class="muted small mat-soll">(unverändert)</span>' : ""}`
             : istBestandteil(x) && x.art === "yesno" && x.wert ? esc(x.wert === "ja" ? "vorhanden" : "fehlt")

@@ -157,9 +157,9 @@
     { id: ID.punktZahl, position: 3, gruppe: "Platzhalter", text: "Platzhalter: Zahlpunkt", art: "number", soll: "", pflicht: true },
   ];
   /* Die Formulare (Formular-Pool, Schritt 38): das Übungsformular der Platzhalter (Standard der Kategorie „Übung“) und
-     die Formulare aus dem Katalog (Titel, Version, Prüfpunkte mit Gruppe, Text – auch mit Absätzen –, Art, Soll und
-     „optional“) – je mit Heimat (pool, heimat) und Zuweisungen: Standard der Kategorie, die der Katalog nennt, bzw. dem
-     Produkt zugewiesen. Welches für ein Produkt gilt, sagt geltend() – wie katalog.formular_fuer_produkt. */
+     die Formulare aus dem Katalog (Titel, Version, Prüfpunkte mit Gruppe, Untergruppe, Text – auch mit Absätzen –, Art,
+     Soll und „optional“) – je mit Heimat (pool, heimat) und Zuweisungen: Standard der Kategorie, die der Katalog nennt,
+     bzw. dem Produkt zugewiesen. Welches für ein Produkt gilt, sagt geltend() – wie katalog.formular_fuer_produkt. */
   const ROLLEN = { gurt: ID.pGurt, seil: ID.pSeil, helm: ID.pHelm };
   function formulare() {
     const liste = [{ id: ID.formular, pool: ID.pool, titel: "Übungsformular", version: 1, aktiv: true, benutzt: false, heimat: ID.kategorie,
@@ -173,7 +173,7 @@
                    aktiv: true, benutzt: false, heimat,
                    zuweisung: { kategorien: standard ? [standard] : [], produkte: standard ? [] : rollen.map((r) => ROLLEN[r]) },
                    punkte: (f.punkte || []).map((x, i) => ({ id: ID.katalogPunkt + fi * 200 + i, position: i + 1, gruppe: String(x.gruppe || ""),
-                     text: String(x.text || ""), art: String(x.art || "yesno"), soll: String(x.soll || ""), pflicht: x.pflicht !== false })) });
+                     untergruppe: String(x.untergruppe || ""), text: String(x.text || ""), art: String(x.art || "yesno"), soll: String(x.soll || ""), pflicht: x.pflicht !== false })) });
     });
     return liste;
   }
@@ -184,7 +184,7 @@
   function punktStand(p) {
     const laenge = p.art === "laenge";
     const wert = p.art === "yesno" ? p.soll : p.art === "number" && istZahl(p.soll) ? p.soll.trim() : "";
-    return { id: p.id, position: p.position, gruppe: p.gruppe, text: p.text, art: p.art, soll: laenge ? "" : p.soll, pflicht: p.pflicht,
+    return { id: p.id, position: p.position, gruppe: p.gruppe, untergruppe: p.untergruppe || "", text: p.text, art: p.art, soll: laenge ? "" : p.soll, pflicht: p.pflicht,
              befund: laenge ? "nicht_zutreffend" : "ok", wert, notiz: "", foto: null, unterschrift: null, nummern: [], bestandteil: false };
   }
   const offen = (x) => x.pflicht && x.befund !== "nicht_zutreffend"
@@ -724,7 +724,7 @@
       if (body && typeof body.titel === "string" && body.titel.trim()) f.titel = body.titel.trim();
       if (body && Array.isArray(body.punkte)) {
         let neu = Math.max(ID.punktNeu - 1, ...f.punkte.map((p) => p.id)) + 1;
-        f.punkte = body.punkte.map((p, i) => ({ id: p.id || neu++, position: i + 1, gruppe: String(p.gruppe || ""), text: String(p.text || ""),
+        f.punkte = body.punkte.map((p, i) => ({ id: p.id || neu++, position: i + 1, gruppe: String(p.gruppe || ""), untergruppe: String(p.untergruppe || ""), text: String(p.text || ""),
                                                art: p.art || "yesno", soll: String(p.soll || ""), pflicht: Boolean(p.pflicht) }));
       }
       return formularVoll(z, f);
