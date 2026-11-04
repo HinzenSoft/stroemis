@@ -50,7 +50,8 @@ STELLEN = [
     ("M14", MAT, '${infoKnopf("Lebensdauer", "Nur ein Vorschlag beim Anlegen', "Nur ein Vorschlag beim Anlegen"),
     ("M15", MAT, 'Artikel haben eine Länge${infoKnopf("Artikel haben eine Länge", "Seile und Meterware', "Seile und Meterware"),
     ("M16", MAT, '<h2>Bestandteile${infoKnopf("Bestandteile", BESTANDTEILE_INFO + mehrDazu("bestandteile"))}</h2>', "Jede Prüfung fragt je Position ab"),
-    ("M17", MAT, '<h2>Prüfformular${infoKnopf("Prüfformular", "Ein aktives spezifisches Formular', "Ein aktives spezifisches Formular"),
+    # M17 seit dem Formular-Pool (Schritt 38): nur noch Anzeige – das „i“ sagt, wo es festgelegt wird.
+    ("M17", MAT, '<h2>Prüfformular${pruefformularInfo(p.category_id)}</h2>', "Welches Formular gilt, legt die Material-Verwaltung unter"),
     ("M18", MAT, '<h2>Herstellerdokumente${infoKnopf("Herstellerdokumente", `Gelten für alle Artikel', "Gelten für alle Artikel dieses Produkts"),
     # M19 (Zeile „Prüfanleitung in der Strömipedia“) und M21 (Dialog „Prüfanleitung aus der Strömipedia“) entfielen am
     # 04.11.2026 mit der Funktion (tests/test_material_wiki.py).
@@ -62,7 +63,7 @@ STELLEN = [
     ("M26", MAT, 'Mail an Materialwarte und Prüfer${infoKnopf("Mail an Materialwarte und Prüfer", "An die Verwalter', "An die Verwalter der betroffenen"),
     ("M27", MAT, '<h1>Bestandsliste importieren${infoKnopf("Bestandsliste importieren", "Importierte Artikel', "Importierte Artikel stehen auf"),
     ("M28", MAT, 'zugeordnet${infoKnopf("Spalten", `Mehrere Spalten in der Bemerkung', "Mehrere Spalten in der Bemerkung"),
-    ("M29", MAT, '<th>geändert${b.version === 2 ? infoKnopf("neu und geändert", "Eine geänderte Prüfliste', "Eine geänderte Prüfliste wird"),
+    ("M29", MAT, '<th>geändert${b.version >= 2 ? infoKnopf("neu und geändert", "Eine geänderte Prüfliste', "Eine geänderte Prüfliste wird"),
     ("M30", FRG, '<label for="mf-anker">Gilt für${info("Gilt für", `Freigaben für', "!gelten dort und in allen Unterordnern, bis\n"),
     ("M31", FRG, '<summary>Geerbt von oben <span class="mf-zahl">${geerbt.length}</span>${info("Geerbt von oben", "Freigaben an Oberordnern',
      "Freigaben an Oberordnern gelten"),

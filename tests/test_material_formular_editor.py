@@ -528,6 +528,10 @@ def pruefung_und_xss(u, ids, fid):
                                               "art": "yesno", "soll": "nein"}]
     assert u.adm.put(f"/api/material/formulare/{fid}", json={"punkte": punkte}).status_code == 200
     assert u.adm.post(f"/api/material/formulare/{fid}/aktivieren", json={}).status_code == 200
+    # Seit dem Formular-Pool (Schritt 38) macht Aktivieren ein Formular nicht zum Standard – das tut die Zuweisung.
+    pf = r.json["formular"]["formular_id"]
+    r = u.adm.put(f"/api/material/formular-pool/{pf}/zuweisung", json={"kategorien": [ids["gurte"]], "produkte": []})
+    assert r.status_code == 200, r.get_json()
     gid = u.sql("SELECT id FROM mat_folder WHERE name = 'Übung Gliederung'")[0]["id"]
     freigeben(u.adm, gid, u.ids["pruefer"], "lesen")
     freigeben(u.adm, gid, u.ids["pruefer"], "pruefen")

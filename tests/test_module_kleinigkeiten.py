@@ -328,7 +328,8 @@ def test_11_anleitung_als_i_an_der_ueberschrift():
     for pfad in ("app/material/static/material.js", "app/static/js/pruefungen.js", "app/static/js/wiki.js"):
         js = lesen(pfad)
         assert not re.search(r"</h1>\$\{(?:anleitungKopf|S\.anleitung\.kopf)\(", js), pfad
-    assert mat.count("${anleitungKopf(") == 16 and "anleitungHinweis" not in mat
+    # 17 seit dem Formular-Pool (Schritt 38): Seite „Prüfformulare“
+    assert mat.count("${anleitungKopf(") == 17 and "anleitungHinweis" not in mat
     assert '<h1>Materialablage${anleitungKopf("uebersicht", ' in mat
     assert '<h1>Riegenkarten${anleitungKopf("uebersicht", ' in lesen("app/static/js/pruefungen.js")
     assert '<h1>Strömipedia${S.anleitung.kopf("uebersicht", { neuerTab: false,' in lesen("app/static/js/wiki.js")

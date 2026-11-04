@@ -12676,7 +12676,11 @@ _einfuehrung_katalog (+ zwei Änderungen in einer Sekunde), _einfuehrung_materia
 Stände vor 38 die Pool-Tabellen nach und baut ein leeres `mat_form` um – `formular_pool_nachruesten`; Helfer
 `trigger_38`), _antrag, _antrag_zustaendig, _aufraeumen (Vergleich 36 ↔ 37 statt 36 ↔ Ende), _aussondern,
 _vor_merge (`_zeilen_je_tabelle` ohne `formular_von`), _beschreibung, _dokumente, _formular_editor, _import, _laenge,
-_ohne_kritisch, _pruefpunkt_absatz, _stufen, _ueberblick, _wiki.
+_ohne_kritisch, _pruefpunkt_absatz, _stufen, _ueberblick, _wiki; nach dem ersten Suitelauf die statischen Stellen der
+Oberfläche in _anleitung (Anker), _beschreibung (28 Stellen Name + Zusatz), _feinschliff (K9 „geerbt von“),
+_formular_editor (Prüfung braucht die Zuweisung als Standard), _formular_titel (`required`), _l5 und _suchzeile
+(Suchzeile auch auf „Prüfformulare“), _uiux_u2 und _vor_merge_3 (Seitentitel), test_module_info_i (M17, M29),
+test_module_kleinigkeiten (17 Anleitungs-„i“), test_module_letzte_offene (Abschnittsaktion „Zuweisen“).
 
 **Bitte bestätigen**:
 1. E2 „Datei maßgeblich“ so gelesen: Gelöst wird eine Zuweisung, an der ein Formular **oder** ein Ziel der Datei

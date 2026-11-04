@@ -94,7 +94,9 @@ def test_skript_haengt_um():
     """material.js: derselbe Knopf und dasselbe Formular wandern (umhaengen), nur als Schublade; die Zeile ist nur dann
     sichtbar; Platzhalter, Name und Titel als Artikelsuche und zurück; die Lupe bleibt aus, solange das Feld in der Zeile
     steht; Esc klappt dort nichts ein; Übersicht und Prüfungen rufen das gleich beim Start, alle beim Umschalten."""
-    assert 'const zeile = !schmal ? null : ANSICHT === "katalog" ? $(".mat-suchzeile", inhalt) : sucheZeileOben;' in JS
+    # (seit dem Formular-Pool, Schritt 38, auch auf der Seite „Prüfformulare“ mit Kategorienleiste)
+    assert ('const zeile = !schmal ? null : ANSICHT === "katalog" || ANSICHT === "formulare" ? $(".mat-suchzeile", inhalt)'
+            ' : sucheZeileOben;') in JS
     assert 'const sucheZeileOben = $("#mat-suchzeile");' in JS
     assert "if (leiste) umhaengen(leisteAuf, zeile || matNav, true);" in JS
     assert "umhaengen(sucheForm, zeile || matNav, false);" in JS and "sucheZeileOben.hidden = !zeile;" in JS
@@ -142,7 +144,8 @@ def test_katalog_unveraendert():
     seite = _lesen("app/material/templates/material/seite.html")
     # Nur mit Modulzugang (innerhalb von „if not nur_psa“, wie die Navigation).
     assert '{% if ansicht not in katalog_gruppe and ansicht != "pruefung" %}' + ZEILE + "{% endif %}{% endif %}" in seite
-    assert '{% set katalog_gruppe = ("katalog", "produkt", "formular", "meldungen") %}' in seite
+    # (seit dem Formular-Pool, Schritt 38, mit der Seite „Prüfformulare“)
+    assert '{% set katalog_gruppe = ("katalog", "produkt", "formular", "formulare", "meldungen") %}' in seite
     assert '{% if ansicht not in katalog_gruppe %}<button class="btn secondary small mat-lupe"' in seite
     # Die Prüfung bleibt, wie sie ist: am Telefon ohne Suche und ohne Lupe.
     assert '#mat[data-ansicht="pruefung"] .mat-suche { display: none; }' in CSS

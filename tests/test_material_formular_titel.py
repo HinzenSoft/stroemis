@@ -29,7 +29,8 @@ def test_titel_bleibt_beim_neuzeichnen():
     # einsammeln() merkt sich den getippten Titel …
     assert 'const titelFeld = $("#fp-titel", inhalt);' in sammeln and "titelEingabe = titelFeld.value" in sammeln
     # … und das Feld wird damit gezeichnet, nicht mit dem gespeicherten Titel.
-    assert '<input type="text" id="fp-titel" value="${esc(titelEingabe)}" maxlength="160">' in editor
+    # (seit dem Formular-Pool, Schritt 38, ist der Titel Pflicht: required)
+    assert '<input type="text" id="fp-titel" value="${esc(titelEingabe)}" maxlength="160" required>' in editor
     assert 'id="fp-titel" value="${esc(f.titel' not in editor
     assert 'let titelEingabe = f.titel || "";' in editor
     # Jedes Neuzeichnen nach einer Eingabe sammelt vorher ein (sonst ginge Getipptes verloren) – ausgenommen der erste

@@ -188,7 +188,8 @@ def test_texte_statisch():
         "freigaben.js": (fjs, ["Offene Prüfungen freigeben"]),
         "admin.js": (ajs, ["Offene Prüfungen freigeben", "Qualifikation 1012"]),
         "material.js": (mjs, ["ausgesonderte bei ihrer Gliederung", "Sperren und Freigaben im Jahr",
-                              "Das geht nur, solange er leer ist.", "ohne Unterordner, Artikel und Prüfdurchgänge;"]),
+                              "Das geht nur, solange er leer ist.", "ohne Unterordner, Artikel und Prüfdurchgänge;",
+                              "generisches Prüfformular von ${DARF.katalog"]),
         "basis.html": (basis, ["Lebenslauf online"]),
         "bericht.html": (bericht, ["Sperren und Freigaben im Jahr"]),
         "profil.html": (profil, ["Qualifikation 1012"]),
@@ -207,10 +208,11 @@ def test_texte_statisch():
             "endgültig löschen? Danach ist er weg. Das geht nur bei einem leeren Ordner – ohne Unterordner und Artikel, "
             "ohne Prüfdurchgänge und Set-Protokolle,",
             "„Deine PSA“ an die Personen, denen hier etwas zugeordnet ist",
-            # K9: geerbtes generisches Formular in der Angabenzeile der Kategorie.
-            "pfad.slice(0, -1).reverse().find((x) => x.aktives_formular)", "generisches Prüfformular von ${DARF.katalog",
-            'data-act="kategorie" data-id="${geerbt.id}">„${esc(geerbt.name)}“</a>',
-            '<a href="/materialablage/katalog/formular/${geerbt.aktives_formular}">„${esc(geerbt.name)}“</a>']),
+            # K9: geerbtes generisches Formular in der Angabenzeile der Kategorie – seit dem Formular-Pool (Schritt 38)
+            # das Standard-Prüfformular der nächsten Oberkategorie mit einem („geerbt von“).
+            "pfad.slice(0, -1).reverse().find((x) => x.standard_formular)",
+            'Standard-Prüfformular <a href="/materialablage/katalog/formular/${std.version_id}">',
+            'data-act="kategorie" data-id="${geerbt.id}">„${esc(geerbt.name)}“</a>']),
         "basis.html": (basis, ['<div class="qr-titel">Artikel online</div>']),
         "bericht.html": (bericht, ["Sperren und Freiprüfungen im Jahr"]),
         "profil.html": (profil, ["Urkundennummer (Prüfernummer)</label>", "zusammen mit deiner Anmeldung (E-Mail-Adresse)",

@@ -167,7 +167,9 @@ def test_katalog_ohne_nummernsuche_knopf_in_suchzeile():
     # Derselbe Knopf wandert (kein zweiter), nur in der Ansicht „katalog“ und nur als Schublade; zurück beim Umschalten.
     # (seit dem 28.10.2026 mit Übersicht und Prüfungen: test_material_suchzeile.py)
     assert js.count('id="mat-side-auf"') == 0
-    assert 'const zeile = !schmal ? null : ANSICHT === "katalog" ? $(".mat-suchzeile", inhalt) : sucheZeileOben;' in js
+    # (seit dem Formular-Pool, Schritt 38, auch auf der Seite „Prüfformulare“ mit Kategorienleiste)
+    assert ('const zeile = !schmal ? null : ANSICHT === "katalog" || ANSICHT === "formulare" ? $(".mat-suchzeile", inhalt)'
+            ' : sucheZeileOben;') in js
     assert "const umschalten = () => { leisteZu(); leisteInert(); leisteKnopfSetzen(); };" in js
     assert js.index('<div id="kat-liste"></div>`;') < js.index("leisteKnopfSetzen();             //")
     assert "leisteZu(knopfInSuchzeile())" in js

@@ -111,7 +111,8 @@ def test_materialablage_statisch():
     # V2: Titel je Ansicht.
     assert 'const seitenTitel = (...teile) => S.titel(teile, OHNE_MODUL ? "" : "material");' in js
     for aufruf in ('seitenTitel("Übersicht");', 'seitenTitel("Prüfungen");', 'seitenTitel("Bestand");', "seitenTitel(d.name);",
-                   "seitenTitel(a.inventory_no);", "seitenTitel(produktName(p));", 'seitenTitel(`Prüfformular ${f.ziel.art === "kategorie"',
+                   "seitenTitel(a.inventory_no);", "seitenTitel(produktName(p));", 'seitenTitel(`${f.titel || "Prüfformular"} v${f.version}`',
+                   'seitenTitel("Prüfformulare", "Katalog");',
                    'seitenTitel(k ? k.name : "", "Katalog");', "seitenTitel(d.titel);", 'seitenTitel("Änderungsanträge");',
                    "seitenTitel(`Prüfung ${a.inventory_no}`);", "seitenTitel(`Jahresbericht ${k.ordner} ${k.jahr}`)"):
         assert aufruf in js, aufruf

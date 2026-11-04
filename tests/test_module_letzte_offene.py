@@ -91,11 +91,12 @@ def test_abschnittsaktion_in_der_kopfzeile():
             'Protokoll (PDF)</a>`}</div>') in mat
     assert "Sammelprotokoll (PDF)</a>" not in mat
     # Produkt: Prüfformular und Herstellerdokumente – je eine Aktion neben der Überschrift.
-    # Seit Schritt 35 (Prüfformular übernehmen, 04.11.2026) ist die eine Aktion ein Menü „Bearbeiten“ (formularMenue) –
-    # mit nur einem Eintrag zeichnet S.menue den Knopf „Spezifisches Formular bearbeiten“ wie vorher.
-    assert ('auch nach jeder neuen Version." + mehrDazu("pruefformular"))}</h2>\n          ${k ? formularMenue : ""}</div>') in mat
-    assert mat.count('text: "Spezifisches Formular bearbeiten", satz: "Eigenes Formular nur für dieses Produkt.", '
-                     'attrs: \'data-act="formular"\'') == 1
+    # Seit dem Formular-Pool (Schritt 38) ist „Prüfformular“ am Produkt nur Anzeige (ohne Aktion); die eine Aktion
+    # „Zuweisen“ steht neben „Gilt für“ auf der Formularseite.
+    assert '<section class="section"><h2>Prüfformular${pruefformularInfo(p.category_id)}</h2>' in mat
+    assert "formularMenue" not in mat and "Spezifisches Formular bearbeiten" not in mat
+    assert ('<div class="abschnittskopf"><h2>Gilt für${infoKnopf("Gilt für", GILT_FUER_INFO)}</h2>\n          ${DARF.katalog ? '
+            '\'<button class="btn secondary small" type="button" data-act="zuweisen">Zuweisen</button>\' : ""}</div>') in mat
     doks = mat[mat.index('<div class="abschnittskopf"><h2>Herstellerdokumente'):]
     doks = doks[:doks.index("</section>")]
     assert doks.index('data-act="dok-neu"') < doks.index("</div>") < doks.index("dokTabelle(p.dokumente, k)")

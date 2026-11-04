@@ -195,7 +195,8 @@ def test_b12_fehlerzustand():
 def test_b13_kleinigkeiten():
     js = lies(MAT)
     assert ">Anlegen und nächsten Artikel</button>" in js
-    assert 'seitenTitel(`Prüfformular ${f.ziel.art === "kategorie"' in js
+    # seit dem Formular-Pool (Schritt 38) kein Ziel mehr an der Version: Titel und Version
+    assert 'seitenTitel(`${f.titel || "Prüfformular"} v${f.version}`' in js
     assert '<span class="mat-ganz">(Urkundennummer ${esc(pr.urkunde)})</span>' in js
     assert "Ihre Befunde" not in js and "Die Seiten der Anhänge zählen nicht" in lies("app/material/templates/material/pdf/pruefprotokoll.html")
     assert 'pr.art === "aussonderung" ? "" : ergebnisMarke(pr.ergebnis)' in js
