@@ -548,7 +548,10 @@ tr.mat-entwurf a:not(.btn) { color: var(--rot-auf-flaeche); }
 .mat-punkt.nz .mat-punkt-text { color: var(--grau); }
 .mat-punkt.laedt { opacity: .6; }
 .mat-punkt-kopf { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; margin-bottom: 8px; }
-.mat-punkt-text { font-weight: 700; flex: 1 1 260px; }
+.mat-punkt-text { font-weight: 700; flex: 1 1 260px; white-space: pre-line; }
+/* Prüfpunkte dürfen seit dem 04.11.2026 Absätze haben: In Formular (nur lesen), Prüfung und festgeschriebener Prüfung
+   stehen die Zeilenumbrüche da (Text immer mit esc, nie als HTML; im PDF .text mit pre-wrap). */
+.mat-mehrzeilig { white-space: pre-line; }
 .mat-wahl3 { display: flex; gap: 0; margin: 6px 0; }
 .mat-wahl3 button { flex: 1 1 0; min-height: 46px; font: inherit; font-weight: 400; background: var(--weiss); color: var(--anthrazit);
   border: 1px solid var(--linie); cursor: pointer; padding: 6px 8px; }

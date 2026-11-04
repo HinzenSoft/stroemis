@@ -12,6 +12,9 @@ planung/formular-editor/auftrag.md): python tests/test_material_formular_editor.
    Nur-Lese-Ansicht zeigt dieselben Zwischenzeilen ohne Griff und Menü. Am Finger sind Griff, „⋯“, „+ Prüfpunkt“, die
    Menüeinträge und die Gruppenwahl im Dialog mindestens 44 × 44 px (gemessen, nicht nur die Regel), ein Tipp auf ihre
    Mitte trifft sie; keine Konsolenfehler, kein waagerechter Bildlauf. Ohne Chromium „übersprungen“ mit rc 0.
+3. Absätze im Prüfpunkt (Zusatz vom 04.11.2026): Enter fügt im Prüfpunkt einen Umbruch ein (im Gruppennamen nicht), das
+   Feld wächst, gespeichert wird „\n“; Nur-Lese-Ansicht und offene Prüfung zeigen ihn (pre-line), HTML im Punkttext
+   bleibt Text (Formular und Prüfung). Server, Import/Export und PDF: tests/test_material_pruefpunkt_absatz.py.
 Alle Inhalte sind Platzhalter."""
 import json
 import os
@@ -103,6 +106,11 @@ def tippen(s, sel, text):
       el.setSelectionRange(el.value.length, el.value.length); return true; }})()""")
     assert ok, f"Feld „{sel}“ nicht gefunden"
     s.b.rufen("Input.insertText", text=text)
+
+
+def enter(s):
+    s.b.rufen("Input.dispatchKeyEvent", type="keyDown", key="Enter", code="Enter", windowsVirtualKeyCode=13, text="\r")
+    s.b.rufen("Input.dispatchKeyEvent", type="keyUp", key="Enter", code="Enter", windowsVirtualKeyCode=13)
 
 
 def menue(s, zeilen_sel, act):
@@ -318,6 +326,17 @@ def ablauf(u, kategorie, breite, hoehe, touch):
         klick(s, '#fp-tabelle tr.fp-fuss [data-act="punkt-neu"][data-g="0"]')
         assert struktur(s)[0][1] == ["Platzhalter 4", ""]
         tippen(s, f"{zeile(0, 1)} .fp-text", "Platzhalter neu")
+        # Absatz im Prüfpunkt (Zusatz vom 04.11.2026): Enter fügt einen Zeilenumbruch ein, das Feld wächst mit.
+        hoehe_vorher = s.js("document.querySelector(" + json.dumps(f"{zeile(0, 1)} .fp-text") + ").offsetHeight")
+        enter(s)
+        s.b.rufen("Input.insertText", text="Absatz zwei")
+        feld = s.js("(() => { const t = document.querySelector(" + json.dumps(f"{zeile(0, 1)} .fp-text") + ");"
+                    " return [t.value, t.offsetHeight]; })()")
+        assert feld[0] == "Platzhalter neu\nAbsatz zwei" and feld[1] > hoehe_vorher, (feld, hoehe_vorher)
+        # Im Gruppennamen bleibt Enter ohne Absatz.
+        tippen(s, f"{kopf(0)} .fp-gruppenname", "")
+        enter(s)
+        assert "\n" not in s.js("document.querySelector(" + json.dumps(f"{kopf(0)} .fp-gruppenname") + ").value")
         klick(s, '[data-act="gruppe-neu"]')
         st = struktur(s)
         assert st[3] == ["", [""], False], st
@@ -348,7 +367,7 @@ def ablauf(u, kategorie, breite, hoehe, touch):
         s.b.warten(0.8)
         zeilen = u.sql("SELECT group_name, label, editor FROM mat_checklist_item WHERE form_id = ? ORDER BY position", (fid,))
         assert [(z["group_name"], z["label"]) for z in zeilen] == [
-            ("Gruppe C", "Platzhalter 4"), ("Gruppe C", "Platzhalter neu"),
+            ("Gruppe C", "Platzhalter 4"), ("Gruppe C", "Platzhalter neu\nAbsatz zwei"),
             ("Gruppe A neu", "Platzhalter 2"), ("Gruppe A neu", "Platzhalter 5"),
             ("Gruppe B", "Platzhalter 3 getippt"), (LANG, "Platzhalter lang")], zeilen
         assert zeilen[-1]["editor"] == "text"
@@ -370,11 +389,55 @@ def ablauf(u, kategorie, breite, hoehe, touch):
         hoch = m.js("(() => { const t = [...document.querySelectorAll('#fp-tabelle tr.fp-gruppenzeile th')].pop();"
                     " return t.scrollWidth <= t.clientWidth; })()")
         assert hoch, "langer Gruppenname abgeschnitten"
+        # Der Absatz steht als Umbruch da (pre-line), nicht als eine Zeile.
+        absatz = m.js("""(() => { const t = [...document.querySelectorAll('#fp-tabelle .mat-mehrzeilig')].find((x) => x.textContent.includes('Absatz zwei'));
+          return t && [t.innerText, getComputedStyle(t).whiteSpace, t.getClientRects().length]; })()""")
+        assert absatz and absatz[0] == "Platzhalter neu\nAbsatz zwei" and absatz[1] == "pre-line", absatz
         assert m.js("document.documentElement.scrollWidth <= document.documentElement.clientWidth")
         m.sammeln()
         assert not m.fehler, m.fehler
     finally:
         m.schliessen()
+    return fid
+
+
+def pruefung_und_xss(u, ids, fid):
+    """Prüfungsansicht (offener Entwurf) zeigt den Absatz; HTML im Punkttext bleibt Text – im Formular wie in der Prüfung."""
+    from einfuehrung_browser import PASSWORT, mail
+    from test_material import freigeben
+    # Das zuletzt gespeicherte Formular bekommt einen Punkt mit HTML und Umbruch und gilt für die Kategorie.
+    r = u.adm.get(f"/api/material/formulare/{fid}")
+    punkte = r.json["formular"]["punkte"] + [{"gruppe": "", "text": "<img src=x onerror=\"window.__xss=1\">\n<b>fett</b>",
+                                              "art": "yesno", "soll": "nein"}]
+    assert u.adm.put(f"/api/material/formulare/{fid}", json={"punkte": punkte}).status_code == 200
+    assert u.adm.post(f"/api/material/formulare/{fid}/aktivieren", json={}).status_code == 200
+    gid = u.sql("SELECT id FROM mat_folder WHERE name = 'Übung Gliederung'")[0]["id"]
+    freigeben(u.adm, gid, u.ids["pruefer"], "lesen")
+    freigeben(u.adm, gid, u.ids["pruefer"], "pruefen")
+    r = u.adm.post("/api/material/artikel", json={"product_id": ids["gurt"], "folder_id": gid, "manufactured_on": "2025-01"})
+    assert r.status_code == 201, r.get_json()
+    p = u._anmelden(mail("pruefer"), PASSWORT)
+    r = p.post(f"/api/material/artikel/{r.json['artikel']['id']}/pruefungen", json={})
+    assert r.status_code == 201, r.get_json()
+    pid = r.json["pruefung"]["id"]
+    assert "Platzhalter neu\nAbsatz zwei" in [x["text"] for x in r.json["pruefung"]["punkte"]]
+    for breite, hoehe, touch in GROESSEN:
+        s = u.seite("pruefer", breite, hoehe, touch)
+        try:
+            s.oeffnen(f"/materialablage/pruefung/{pid}", warten=0.6)
+            assert s.warte("!!document.querySelector('.mat-punkt-text')")
+            texte = s.js("[...document.querySelectorAll('.mat-punkt-text')].map((t) => [t.innerText, getComputedStyle(t).whiteSpace])")
+            assert ["Platzhalter neu\nAbsatz zwei", "pre-line"] in texte, texte
+            assert ['<img src=x onerror="window.__xss=1">\n<b>fett</b>', "pre-line"] in texte, texte
+            assert not s.js("window.__xss || document.querySelector('.mat-punkt-text img, .mat-punkt-text b')")
+            s.oeffnen(f"/materialablage/katalog/formular/{fid}", warten=0.6)
+            assert s.warte("!!document.querySelector('#fp-tabelle')")
+            assert not s.js("window.__xss || document.querySelector('#fp-tabelle img, #fp-tabelle b')")
+            assert s.js("document.documentElement.scrollWidth <= document.documentElement.clientWidth")
+            s.sammeln()
+            assert not s.fehler, s.fehler
+        finally:
+            s.schliessen()
 
 
 def test_browser():
@@ -383,11 +446,13 @@ def test_browser():
         return
     from test_material import katalog_grund
     with Umgebung() as u:
-        kategorie = katalog_grund(u.adm)["gurte"]
+        ids = katalog_grund(u.adm)
         for breite, hoehe, touch in GROESSEN:
             los = time.time()
-            ablauf(u, kategorie, breite, hoehe, touch)
+            fid = ablauf(u, ids["gurte"], breite, hoehe, touch)
             print(f"Editor {breite}×{hoehe}{' Touch' if touch else ''}: bestanden ({time.time() - los:.1f} s)")
+        pruefung_und_xss(u, ids, fid)
+        print("Absatz in der Prüfung, HTML bleibt Text: bestanden.")
 
 
 if __name__ == "__main__":

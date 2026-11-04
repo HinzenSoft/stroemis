@@ -5169,7 +5169,7 @@
       .replace('<summary class="btn secondary small" aria-haspopup="menu">', () => `<summary class="btn secondary small" aria-haspopup="menu" aria-label="${esc(`Mehr zu ${name}`)}">`);
     function punktZeile(p, gi, pi, nr) {
       if (!bearbeitbar) {
-        return `<tr><td data-l="Prüfpunkt">${esc(p.text)}</td><td data-l="Art">${esc(EDITOR[p.art])}</td>
+        return `<tr><td data-l="Prüfpunkt"><span class="mat-mehrzeilig">${esc(p.text)}</span></td><td data-l="Art">${esc(EDITOR[p.art])}</td>
           <td data-l="Soll">${esc(p.soll || "–")}</td><td>${p.pflicht ? "Pflicht" : "optional"}</td></tr>`;
       }
       const ort = `data-g="${gi}" data-i="${pi}"`;
@@ -5287,8 +5287,9 @@
       $$(".fp-text, .fp-gruppenname", inhalt).forEach((ta) => {
         textHoehe(ta);
         ta.addEventListener("input", () => textHoehe(ta));
-        // Ein Prüfpunkt (wie ein Gruppenname) ist eine Zeile Text, die nur umbricht – Enter fügt keinen Absatz ein.
-        ta.addEventListener("keydown", (e) => { if (e.key === "Enter") e.preventDefault(); });
+        // Ein Gruppenname ist eine Zeile Text, die nur umbricht – Enter fügt dort keinen Absatz ein. Im Prüfpunkt schon
+        // (Wunsch vom 04.11.2026: Absätze im Prüfpunkt; der Server fasst Leerzeilen zusammen, katalog.punkt_text).
+        if (ta.matches(".fp-gruppenname")) ta.addEventListener("keydown", (e) => { if (e.key === "Enter") e.preventDefault(); });
       });
       const tabelle = $("#fp-tabelle.fp-editor", inhalt);
       if (tabelle) tabelle.addEventListener("pointerdown", ziehen);
@@ -6412,7 +6413,7 @@
 
     function leseHtml() {
       const zeilen = pr.punkte.map((x) => `<tr class="${x.befund === "mangel" ? "mat-mangelzeile" : ""}">
-          <td data-l="Prüfpunkt" class="mat-k-ohne">${x.gruppe ? `<span class="muted small">${esc(x.gruppe)}</span><br>` : ""}${esc(x.text)}</td>
+          <td data-l="Prüfpunkt" class="mat-k-ohne">${x.gruppe ? `<span class="muted small">${esc(x.gruppe)}</span><br>` : ""}<span class="mat-mehrzeilig">${esc(x.text)}</span></td>
           <td data-l="Befund" class="mat-k-kurz mat-k-ohne">${x.art === "signature" && !x.unterschrift && x.befund !== "nicht_zutreffend" ? '<span class="muted">nicht unterschrieben</span>' : befundMarke(x.befund)}</td><td data-l="Wert" class="mat-k-kurz">${x.art === "signature" && x.unterschrift ? `<img class="mat-us-mini" src="${esc(x.unterschrift)}" alt="Unterschrift">`
             : x.art === "laenge" && x.wert ? `${esc(x.wert)} m${x.soll && x.soll !== x.wert ? ` <span class="muted small mat-soll">(vorher ${esc(x.soll)} m)</span>` : x.soll ? ' <span class="muted small mat-soll">(unverändert)</span>' : ""}`
             : istBestandteil(x) && x.art === "yesno" && x.wert ? esc(x.wert === "ja" ? "vorhanden" : "fehlt")
