@@ -411,10 +411,11 @@ def test_geraete_nachbesserung():
     leg = js[js.index("const ZAEHLER_LEGENDE"):js.index("function zahlen(z)")]
     folge = [leg.index(f'class="mat-zahl s-{s}"') for s in ("ueberfaellig", "neu", "lebensdauer", "gesperrt", "bald_faellig")]
     assert folge == sorted(folge) and "${ZAEHLER_LEGENDE}" in js
-    # Ordner: Filter nur mit Artikeln (oder gesetztem Filter), leerer Ordner nennt die Unterordner.
-    # Seit dem 25.10.2026 steht der Filter in der Seitenleiste (Filtermenü) – mit Kategorie.
-    assert "const zeigeFilter = Boolean(direktAlle || filter || person || kategorie);" in js
-    assert "Hier liegen keine Artikel direkt – ${unten} liegen in Unterordnern." in js
+    # Ordner: Filter nur mit Artikeln (oder gesetztem Filter). Seit dem 25.10.2026 steht der Filter in der Seitenleiste
+    # (Filtermenü) – mit Kategorie; seit dem 05.11.2026 zeigt die Liste den ganzen Zweig (test_material_bestand_zweig),
+    # der Satz „Hier liegen keine Artikel direkt – … in Unterordnern“ entfällt.
+    assert "const zeigeFilter = Boolean(zweigAlle || filter || person || kategorie);" in js
+    assert "liegen in Unterordnern." not in js
     # Die Bereichswahl der Meldungen gibt es seit dem 24.10.2026 nicht mehr (Änderungsanträge im Bestand).
     assert ".mat-filter button { flex: 0 0 auto; white-space: nowrap; }" in css
     # Produktname, Schloss, Katalogsuche.

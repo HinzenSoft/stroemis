@@ -2280,3 +2280,30 @@ dialog:where(.mat-zuweisen) .dlg-actions > :is(.mat-zw-folge, .mat-knopfgrund) {
   .mat-wirksam > summary { min-height: 44px; padding: 10px 0; box-sizing: border-box; }
   .mat-pool-kopf h2 a, .mat-pool-titel a { display: inline-block; min-height: 44px; padding: 10px 0; box-sizing: border-box; }
 }
+
+/* Ordnerseite: der ganze Zweig mit Überschriften (Wunsch vom 05.11.2026). Je Unterordner eine Zwischenzeile über die
+   ganze Breite – Pfad relativ zum Ordner als Link, daneben die Zahl, bei Mehrfachauswahl links das Häkchen der Gruppe;
+   darunter je Gruppe „Weitere n anzeigen“. Als Karte (bis 600 px Inhalt) eine Zeile mit kräftiger Linie darunter. */
+table.list.mat-artikel tr.mat-zweig-kopf > :is(th, td) { padding-top: 20px; border-bottom: 2px solid var(--anthrazit); }
+table.list.mat-artikel tr.mat-zweig-kopf > th { font-size: var(--fs-mittel); color: var(--anthrazit); overflow-wrap: anywhere; }
+.mat-zweig-zahl { font-weight: 400; margin-left: 6px; white-space: nowrap; }
+table.list.mat-artikel tr.mat-zweig-mehr > td { padding: 10px 8px 14px; }
+@media (hover: hover) and (pointer: fine) {
+  table.list.mat-tabelle tr:is(.mat-zweig-kopf, .mat-zweig-mehr):hover td { background: none; }
+}
+@container mat-seite (max-width: 600px) {
+  table.list.mat-karten tr.mat-zweig-kopf { flex-wrap: nowrap; align-items: center; gap: 0 8px; padding: 20px 0 6px;
+    border-bottom: 2px solid var(--anthrazit); }
+  table.list.mat-karten tr.mat-zweig-kopf::before { content: none; }
+  table.list.mat-karten tr.mat-zweig-kopf > :is(th, td) { display: block; padding: 0; border: 0; }
+  table.list.mat-karten tr.mat-zweig-kopf > td.mat-k-wahl { order: 0; flex: none; align-self: center; }
+  table.list.mat-karten tr.mat-zweig-kopf > td:empty { display: none; }
+  table.list.mat-karten tr.mat-zweig-kopf > th { flex: 1 1 auto; min-width: 0; }
+  table.list.mat-karten tr.mat-zweig-kopf .mat-wahl-feld { padding-right: 0; }
+  table.list.mat-karten tr.mat-zweig-kopf .mat-zweig-zahl { display: block; margin: 0; }
+  table.list.mat-karten tr.mat-zweig-mehr { display: block; padding: 10px 0 14px; }
+  table.list.mat-karten tr.mat-zweig-mehr > td { padding: 0; }
+}
+@media (pointer: coarse) {
+  #mat-inhalt table.list.mat-artikel tr.mat-zweig-kopf th a { display: inline-flex; align-items: center; min-height: 44px; }
+}

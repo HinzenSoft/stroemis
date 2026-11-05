@@ -407,17 +407,42 @@
              naechste: faellig.map((a) => artikelKurz(z, a, true)), ordner_uebersicht: zeilen, rueckrufe: [],
              schwelle_tage: SCHWELLE, status_text: STATUS, zaehlung: n };
   }
+  /* Die Ordnerseite zeigt den ganzen Zweig (Wunsch vom 05.11.2026, bestand.ordner_inhalt): je Gruppe – der Ordner selbst,
+     dann seine Unterordner in Baumreihenfolge mit Pfad relativ zum Ordner – die Artikel; ausgesonderte nur mit dem
+     Filter „ausgesondert“. Die Übung hat wenige Artikel: Jede Gruppe kommt ganz (kein „weitere anzeigen“). */
+  function zweigReihe(z, id, weg) {
+    const kinder = z.ordner.filter((x) => x.parent_id === id)
+      .sort((a, b) => (a.system_kind ? 1 : 0) - (b.system_kind ? 1 : 0) || (a.position || 0) - (b.position || 0) || a.name.localeCompare(b.name));
+    return [{ o: ordnerVon(z, id), weg }].concat(...kinder.map((k) => zweigReihe(z, k.id, weg.concat(k.name))));
+  }
+  function zweigListe(z, id, q, gruppe) {
+    const st = q.get("status");
+    const kat = q.get("kategorie");
+    const ohneAusgesondert = !st && ordnerVon(z, id).system_kind !== "ausgesondert";
+    return z.artikel.filter((a) => a.folder_id === gruppe && (!st || st.split(",").includes(status(a)))
+      && (!kat || String(produktVon(z, a.product_id).category_id) === kat) && !(ohneAusgesondert && status(a) === "ausgesondert"));
+  }
   function ordnerSeite(z, id, url) {
     const o = ordnerVon(z, id);
     if (!o) return { status: 404, error: "Diesen Ordner gibt es in der Übung nicht." };
     const q = url.searchParams;
-    let liste = z.artikel.filter((a) => a.folder_id === id);
-    if (q.get("status")) liste = liste.filter((a) => q.get("status").split(",").includes(status(a)));
+    const gruppen = [];
+    let liste = [];
+    zweigReihe(z, id, []).forEach(({ o: g, weg }) => {
+      const teil = zweigListe(z, id, q, g.id);
+      if (!teil.length) return;
+      gruppen.push({ id: g.id, name: g.name, kind: g.kind, system_kind: g.system_kind || null, pfad: weg, gesamt: teil.length });
+      liste = liste.concat(teil);
+    });
+    const ids = new Set(zweigReihe(z, id, []).map((x) => x.o.id));
+    const imZweig = z.artikel.filter((a) => ids.has(a.folder_id));
+    const zahlen = nullen();
+    imZweig.forEach((a) => { zahlen[status(a)] += 1; });
     const gl = ordnerVon(z, ID.gliederung);
     return { ordner: Object.assign(ordnerJson(z, o), {
       pfad: pfad(z, id), gliederung: { id: gl.id, kind: gl.kind, name: gl.name, system_kind: null },
       unterordner: z.ordner.filter((x) => x.parent_id === id).map((x) => ordnerJson(z, x)),
-      artikel: liste.map((a) => artikelKurz(z, a)), artikel_gesamt: liste.length, seite: 1, pro_seite: 200,
+      gruppen, artikel: liste.map((a) => artikelKurz(z, a)), artikel_gesamt: liste.length, pro_gruppe: 50, zahlen,
       kategorien: [...new Set(liste.map((a) => produktVon(z, a.product_id).category_id))].map((k) => ({ id: k,
         n: liste.filter((a) => produktVon(z, a.product_id).category_id === k).length, name: kategorieVon(k).name,
         pfad: kategoriePfad(k).map((x) => x.name).join(" / ") })),
@@ -549,6 +574,13 @@
     // Ordner und Freigaben
     ["GET", /^\/api\/material\/ordner\/(\d+)$/, (m, b, z, url) => ordnerSeite(z, nr(m), url)],
     ["GET", /^\/api\/material\/ordner\/(\d+)\/zugeordnete$/, () => ({ zugeordnete: [] })],
+    ["GET", /^\/api\/material\/ordner\/(\d+)\/gruppe\/(\d+)$/, (m, b, z, url) => {
+      const gruppe = nr(m, 2);
+      if (!ordnerVon(z, nr(m)) || !zweigReihe(z, nr(m), []).some((x) => x.o.id === gruppe)) return fehlt("Diesen Ordner");
+      const teil = zweigListe(z, nr(m), url.searchParams, gruppe);
+      const ab = Number(url.searchParams.get("ab")) || 0;
+      return { artikel: teil.slice(ab, ab + 50).map((a) => artikelKurz(z, a)), gesamt: teil.length, ab };
+    }],
     ["GET", /^\/api\/material\/ordner\/(\d+)\/freigaben$/, (m, b, z) => freigabenListe(z, nr(m))],
     ["POST", /^\/api\/material\/ordner\/(\d+)\/freigaben$/, (m, body, z) => {
       const p = PERSONEN.find((x) => x.id === Number(body && body.user_id)) || PERSONEN[0];

@@ -1278,7 +1278,9 @@
      Systemordner und (beim Verschieben eines Ordners) dessen eigener Zweig sind nie wählbar. Was nicht wählbar ist,
      aber zu wählbaren Ordnern führt, steht grau als Weg da; Zweige ohne wählbaren Ordner entfallen. opts.hinweis:
      HTML über dem Baum; opts.wechselHinweis: HTML, das erscheint, sobald ein Ziel in einer anderen Gliederung gewählt
-     ist. Liefert die Kennung (0 = oberste Ebene) oder null. */
+     ist. opts.quelle darf eine Liste sein (Artikel aus mehreren Unterordnern): wählbar ist dann nur, was für jede Quelle
+     ginge, und der Hinweis erscheint, wenn eine davon die Gliederung wechselte. Liefert die Kennung (0 = oberste Ebene)
+     oder null. */
   async function ordnerWaehlen(titel, opts) {
     opts = opts || {};
     const liste = await ordnerBaum(true);
@@ -1290,10 +1292,11 @@
       while (weg.length) { const x = weg.pop(); gesperrt.add(x); (kinder[x] || []).forEach((k) => weg.push(k.id)); }
     }
     const mitQuelle = "quelle" in opts;
+    const quellen = [].concat(opts.quelle);
     let grenze = false;                  // ein verwalteter Ordner fiel nur wegen der Gliederungsgrenze weg
     const wahl = new Set(ohneSystem.filter((o) => {
       if (o.nur_pfad || gesperrt.has(o.id) || !(opts.waehlbar || verwaltet)(o)) return false;
-      if (mitQuelle && !wechselErlaubt(opts.quelle, o.id)) { grenze = true; return false; }
+      if (mitQuelle && !quellen.every((q) => wechselErlaubt(q, o.id))) { grenze = true; return false; }
       return true;
     }).map((o) => o.id));
     const oben = opts.obersteEbene && DARF.alles;
@@ -1317,7 +1320,7 @@
         // Liegt das gewählte Ziel in einer anderen Gliederung, sagt der Dialog vorher, was dann mitwandert.
         body.addEventListener("change", (e) => {
           if (e.target.name !== "ziel" || !opts.wechselHinweis || !mitQuelle) return;
-          $("#ow-wechsel", body).hidden = !wechsel(opts.quelle, +e.target.value || null);
+          $("#ow-wechsel", body).hidden = !quellen.some((q) => wechsel(q, +e.target.value || null));
         });
         $("#ow-ok", body).onclick = () => {
           const r = $('input[name="ziel"]:checked', body);
@@ -1801,16 +1804,22 @@
   function artikelTabelle(liste, opts) {
     opts = opts || {};
     const s = opts.sort || null;
-    // Weiche Trennstellen in den längsten Wörtern der Liste: Zwischen 821 und 900 px Inhaltsbreite (Fold aufgeklappt,
-    // Tablet neben der Leiste) ragte die volle Tabelle sonst um wenige Pixel über den Rand (zweite Nachbesserung).
-    const naechste = (a) => (a.status === "neu" ? "Eingangs\u00adprüfung" : a.lock_state !== "frei" || !a.next_due_on ? "" : fmtTag(a.next_due_on));
     const gesperrte = opts.auswahl && liste.some((a) => a.lock_state !== "frei");
     const kat = Boolean(opts.kategorie);
     return `${kartenKopf(kat ? ARTIKEL_SORT_KAT : ARTIKEL_SORT, s, opts.auswahl)}<table class="list mat-tabelle mat-karten mat-artikel${kat ? " mat-mit-kategorie" : ""}">
       <thead><tr>${opts.auswahl ? '<th class="mat-wahlspalte"><label class="mat-wahl-feld"><input type="checkbox" id="mat-alle" class="mat-alle" aria-label="alle auswählen"></label></th>' : ""}
         ${kat ? sortKopf("Kategorie", "kategorie", s, { klasse: "mat-schmal-weg mat-kategorie" }) : ""}${sortKopf("Inventar-Nr.", "inventar", s, { nach: kopfZusatz("Seriennummer", "serie", s, "schmal") })}${sortKopf("Hersteller", "hersteller", s, { klasse: "mat-schmal-weg", vor: kat ? kopfZusatz("Kategorie", "kategorie", s, "kat") : "" })}${sortKopf("Produkt", "produkt", s, { vor: `${kat ? kopfZusatz("Kategorie", "kategorie", s, "schmal") : ""}${kopfZusatz("Hersteller", "hersteller", s, "schmal")}`, nach: opts.person ? kopfZusatz("Person", "", null, "eng") : "" })}${sortKopf("Serien\u00adnummer", "serie", s, { klasse: "mat-schmal-weg" })}
         ${opts.person ? '<th class="mat-eng-weg">Person</th>' : ""}${opts.pfad ? "<th>Ablage</th>" : ""}${sortKopf("Nächste Prüfung", "faellig", s, { klasse: "mat-schmal-weg" })}${sortKopf("Status", "status", s, { nach: kopfZusatz("Nächste Prüfung", "faellig", s, "schmal") })}${opts.pruefen ? "<th></th>" : ""}</tr></thead>
-      <tbody>${liste.map((a) => `<tr data-id="${a.id}">
+      ${opts.gruppen ? gruppenKoerper(liste, opts) : `<tbody>${artikelZeilen(liste, opts)}</tbody>`}</table>
+      ${gesperrte ? '<p class="help mat-wahl-hinweis">Graue Kästchen: Gesperrte und ausgesonderte Artikel bleiben in ihrem Systemordner und lassen sich nicht verschieben.</p>' : ""}`;
+  }
+  // Die Zeilen der Artikelliste – auch für Zeilen, die „weitere anzeigen“ später anhängt (Ordnerseite).
+  function artikelZeilen(liste, opts) {
+    // Weiche Trennstellen in den längsten Wörtern der Liste: Zwischen 821 und 900 px Inhaltsbreite (Fold aufgeklappt,
+    // Tablet neben der Leiste) ragte die volle Tabelle sonst um wenige Pixel über den Rand (zweite Nachbesserung).
+    const naechste = (a) => (a.status === "neu" ? "Eingangs\u00adprüfung" : a.lock_state !== "frei" || !a.next_due_on ? "" : fmtTag(a.next_due_on));
+    const kat = Boolean(opts.kategorie);
+    return liste.map((a) => `<tr data-id="${a.id}">
         ${opts.auswahl ? `<td class="mat-wahlspalte mat-k-wahl">${wahlFeld(a)}</td>` : ""}
         ${kat ? `<td data-l="Kategorie" class="mat-schmal-weg mat-kategorie">${a.kategorie ? esc(a.kategorie.name) : ""}</td>` : ""}
         <td data-l="Inventar-Nr." class="mat-k-titel"><a class="mat-inv" href="/materialablage/artikel/${a.id}"><strong>${esc(a.inventory_no)}</strong></a>
@@ -1822,8 +1831,35 @@
         ${opts.pfad ? `<td data-l="Ablage">${esc(a.pfad || "")}</td>` : ""}
         <td data-l="Nächste Prüfung" class="mat-schmal-weg">${naechste(a) && a.status !== "neu" ? esc(naechste(a)) : `<span class="muted">${esc(naechste(a) || "–")}</span>`}</td>
         <td data-l="Status" class="mat-k-marke">${statusMarke(a.status)}${empfohlenMarke(a.aussonderung_empfohlen)}${a.rueckruf ? ` <span class="mat-rr-marke" title="Rückruf: ${esc(a.rueckruf)}">Rückruf</span>` : ""}${mangelMarke(a.mangel)}${a.entwurf ? `<div class="small muted">in Prüfung bei ${esc(a.entwurf.pruefer || "?")}</div>` : ""}${naechste(a) ? `<div class="mat-schmal-zusatz small${a.status === "neu" ? " muted" : ""}">${a.status === "neu" ? "" : "fällig "}${esc(naechste(a))}</div>` : ""}</td>
-        ${opts.pruefen ? `<td class="tabelle-aktionen">${pruefKnopf(a)}</td>` : ""}</tr>`).join("")}</tbody></table>
-      ${gesperrte ? '<p class="help mat-wahl-hinweis">Graue Kästchen: Gesperrte und ausgesonderte Artikel bleiben in ihrem Systemordner und lassen sich nicht verschieben.</p>' : ""}`;
+        ${opts.pruefen ? `<td class="tabelle-aktionen">${pruefKnopf(a)}</td>` : ""}</tr>`).join("");
+  }
+  // So viele Spalten hat die Artikelliste mit diesen opts (Überschriften und „weitere anzeigen“ über die ganze Breite).
+  const artikelSpalten = (opts) => 6 + [opts.auswahl, opts.kategorie, opts.person, opts.pfad, opts.pruefen].filter(Boolean).length;
+  /* Ordnerseite (Wunsch vom 05.11.2026): je Gruppe ein eigener <tbody> – zuerst die Artikel direkt im Ordner (ohne
+     Überschrift), dann je Unterordner eine Überschriftzeile mit dem Pfad relativ zum Ordner („Lager › Regal 3“) als Link,
+     der Zahl und – bei Mehrfachauswahl – einem Häkchen für die geladenen Artikel der Gruppe. Hat eine Gruppe mehr
+     Treffer, als geladen sind, steht darunter „Weitere n anzeigen“. opts.gruppen: [{id, pfad, gesamt, system_kind}]
+     vom Server; die Zeilen kommen gruppenweise hintereinander (folder_id). */
+  function gruppenKoerper(liste, opts) {
+    const n = artikelSpalten(opts);
+    return opts.gruppen.map((g) => {
+      const zeilen = liste.filter((a) => a.folder_id === g.id);
+      const titel = esc(g.pfad.join(" › "));
+      const zahl = `<span class="small muted mat-zweig-zahl">${plural(g.gesamt, "Artikel", "Artikel")}</span>`;
+      // Gesperrte und ausgesonderte Artikel lassen sich nicht verschieben – „Gesperrt“ bekommt kein Häkchen, die leere
+      // Zelle hält die Überschrift über der Spalte „Inventar-Nr.“.
+      const wahl = opts.auswahl && !g.system_kind;
+      const wahlZelle = !opts.auswahl ? "" : `<td class="mat-wahlspalte mat-k-wahl">${wahl ? `<label class="mat-wahl-feld"><input type="checkbox" class="mat-zweig-alle" data-gruppe="${g.id}" aria-label="alle in ${titel} auswählen"></label>` : ""}</td>`;
+      const kopf = !g.pfad.length ? "" : `<tr class="mat-zweig-kopf">${wahlZelle}
+        <th scope="rowgroup" colspan="${opts.auswahl ? n - 1 : n}"><a href="/materialablage/ordner/${g.id}">${titel}</a> ${zahl}</th></tr>`;
+      return `<tbody class="mat-zweig-gruppe" data-gruppe="${g.id}">${kopf}${artikelZeilen(zeilen, opts)}${gruppeMehr(g, zeilen.length, opts)}</tbody>`;
+    }).join("");
+  }
+  // „Weitere n anzeigen“ unter einer Gruppe, solange nicht alle Treffer geladen sind (je Abruf höchstens opts.proGruppe).
+  function gruppeMehr(g, geladen, opts) {
+    if (geladen >= g.gesamt) return "";
+    return `<tr class="mat-zweig-mehr"><td colspan="${artikelSpalten(opts)}"><button type="button" class="btn secondary small" data-act="gruppe-mehr" data-gruppe="${g.id}" data-geladen="${geladen}">Weitere ${Math.min(opts.proGruppe || 50, g.gesamt - geladen)} anzeigen</button>
+      <span class="small muted">${geladen} von ${g.gesamt} angezeigt</span></td></tr>`;
   }
   /* Häkchen der Mehrfachauswahl mit Beschriftung: In der Tabelle füllt das Label die Zelle (am Finger ein großes
      Ziel), in der Karte steht „auswählen“ daneben – bei gesperrten Artikeln stattdessen, warum es nicht geht (ein title
@@ -2487,7 +2523,6 @@
   async function ordner() {
     const id = DATEN.id;
     let filter = "";
-    let seite = 1;
     let sort = { feld: null, richtung: "auf" };
     let person = "";                 // Filter „Zugeordnet an“: Kennung des Kontos
     let personen = null;             // Konten mit Zuordnungen im Zweig – nur mit Grundrecht geholt
@@ -2497,6 +2532,15 @@
     let nachFilter = null;           // nach einer Wahl im Filtermenü: wohin der Fokus geht (Selektor) bzw. "liste"
     let grund = false;               // Grundrecht am Ordner – bekannt nach dem ersten Zeichnen
     let kopfEl = null;               // Ablaufhinweis der Freigaben: einmal geholt, bei jedem Zeichnen wieder eingesetzt
+    let tabelle = null;              // opts der Artikelliste – „weitere anzeigen“ zeichnet neue Zeilen genauso
+    // Die Anfrage der Liste: Filter und Sortierung; für „weitere anzeigen“ dazu die Stelle (ab).
+    const anfrage = (mehr) => {
+      const q = sortParameter(new URLSearchParams(mehr || {}), sort);
+      if (filter) q.set("status", filter);
+      if (person) q.set("zugeordnet", person);
+      if (kategorie) q.set("kategorie", kategorie);
+      return q;
+    };
     // Die Personen für den Filter (nur mit Grundrecht). Hat die gewählte inzwischen keine Zuordnung mehr, gilt er nicht.
     async function personenHolen() {
       try { personen = (await api(`${API}/ordner/${id}/zugeordnete`)).zugeordnete; } catch (e) { personen = []; }
@@ -2522,11 +2566,7 @@
     const freigabenOeffnen = (v) => bearbeiten({ reiter: "freigaben", vorlage: v || undefined });
     async function zeichnen() {
       if (grund && personen === null) await personenHolen();
-      const q = sortParameter(new URLSearchParams({ seite, pro_seite: 200 }), sort);
-      if (filter) q.set("status", filter);
-      if (person) q.set("zugeordnet", person);
-      if (kategorie) q.set("kategorie", kategorie);
-      const [antwort] = await Promise.all([api(`${API}/ordner/${id}?${q}`), ordnerBaum().catch(() => null)]);
+      const [antwort] = await Promise.all([api(`${API}/ordner/${id}?${anfrage()}`), ordnerBaum().catch(() => null)]);
       const d = antwort.ordner;
       const darf = d.darf || {};
       jetzt = d;
@@ -2539,30 +2579,30 @@
       const darfOben = darfPflegen && verwaltet(d.parent_id ? baumIndex[d.parent_id] : null);
       const z = d.zaehlung || {};
       const bc = d.pfad.map((p, i) => (i === d.pfad.length - 1 ? `<span>${esc(p.name)}</span>` : pfadGlied(p)));
-      const pruefbar = d.system_kind !== "ausgesondert" && d.artikel.some((a) => a.darf && a.darf.pruefen);
+      // Die Spalte „Prüfen“ auch für Zeilen, die „weitere anzeigen“ erst nachlädt: mit Prüffreigabe am Ordner.
+      const pruefbar = d.system_kind !== "ausgesondert" && (Boolean(darf.pruefen) || d.artikel.some((a) => a.darf && a.darf.pruefen));
       // Filter „Zugeordnet an …“ (Bauentwurf 6.4) – nur mit Grundrecht und nur, wenn im Zweig jemandem etwas zugeordnet ist.
       // Seit dem 25.10.2026 im Filtermenü der Seitenleiste.
       const personWahl = grund && personen && personen.length ? `<label for="mat-personwahl">Zugeordnet an</label><select class="mat-personwahl" id="mat-personwahl" data-personwahl><option value="">alle</option>${personen.map((p) => `<option value="${p.id}" ${String(p.id) === person ? "selected" : ""}>${esc(p.name)}${p.aktiv ? "" : " (deaktiviert)"}</option>`).join("")}</select>` : "";
       // „Erinnerungsmails aus“ (selbst oder von einem Oberordner geerbt) sieht, wer den Ordner pflegt – dort schaltet man es.
       const erinnerungAus = darfPflegen && d.erinnerungen && d.erinnerungen.aus;
       const geerbtVon = erinnerungAus && !d.erinnerungen.eigen ? d.erinnerungen.geerbt_von : null;
-      // Liegt hier selbst nichts (die Zahlen zählen nur, was das Konto sieht), entfallen die Filter, und der leere Ordner
-      // sagt, wie viele Artikel in den Unterordnern liegen – mit dem Weg zum Fälligen im Zweig (Geräte-Prüfung vom
-      // 21.10.2026). Ist ein Filter gesetzt, bleibt die Zeile – sonst ließe er sich nicht zurücknehmen.
+      /* Die Liste zeigt den ganzen Zweig (Wunsch vom 05.11.2026): die Artikel direkt hier, darunter je Unterordner eine
+         Überschrift. Ausgesonderte stehen nur mit dem Filter „ausgesondert“ darin – außer im Ordner „Ausgesondert“
+         selbst. Liegt im Zweig gar nichts (die Zahlen zählen nur, was das Konto sieht), entfallen die Filter; ist ein
+         Filter gesetzt, bleibt die Zeile – sonst ließe er sich nicht zurücknehmen. */
       const summe = (x) => Object.values(x || {}).reduce((a, b) => a + b, 0);
-      const direktAlle = summe(d.direkt);
-      const unten = Math.max(0, summe(z) - direktAlle);
-      const faelligZweig = (z.ueberfaellig || 0) + (z.neu || 0) + (z.bald_faellig || 0) + (z.lebensdauer || 0);
+      const zweigAlle = summe(d.zahlen);
+      const ausgesondertHier = d.system_kind === "ausgesondert";
+      const alleZahl = zweigAlle - (ausgesondertHier ? 0 : (d.zahlen && d.zahlen.ausgesondert) || 0);
       const leerHtml = filter || kategorie || person ? leer("Keine Artikel mit diesen Filtern.")
-          : !unten ? leer("Hier liegen keine Artikel.")
-            : `<p class="leerzustand">${unten === 1 ? "Hier liegen keine Artikel direkt – 1 liegt in einem Unterordner."
-              : `Hier liegen keine Artikel direkt – ${unten} liegen in Unterordnern.`}${faelligZweig
-              ? ` <a href="/materialablage/pruefungen?ordner=${d.id}#zu-pruefen">Fällige Artikel im ganzen Zweig →</a>` : ""}</p>`;
+        : alleZahl || !zweigAlle ? leer("Hier liegen keine Artikel.")
+          : `<p class="leerzustand">Hier liegen nur ausgesonderte Artikel – <button type="button" class="lnk" data-act="filter" data-f="ausgesondert">ausgesonderte zeigen</button></p>`;
       /* Filtermenü in der Seitenleiste unter dem Baum (Wunsch vom 25.10.2026): Status, Kategorie und „Zugeordnet an“,
          untereinander verknüpft (alle zugleich). Die Zahlen je Gruppe zählen mit den übrigen Filtern (Server). Über
          der Liste steht nur ein Satz, was gefiltert ist, mit „Filter zurücksetzen“; unter 1024 px davor „Filter (n)“,
          der die Schublade bei den Filtern öffnet (F4). Liegt hier gar nichts und ist nichts gefiltert, entfällt es. */
-      const zeigeFilter = Boolean(direktAlle || filter || person || kategorie);
+      const zeigeFilter = Boolean(zweigAlle || filter || person || kategorie);
       const kats = (d.kategorien || []).slice();
       if (kategorie && !kats.some((k) => String(k.id) === kategorie)) {
         // Ohne Treffer (etwa mit einem Status dazu) fehlt die gewählte Kategorie in der Antwort – sie bleibt mit Namen und
@@ -2577,9 +2617,12 @@
       const doppelt = new Set(kats.filter((k, i) => kats.findIndex((x) => x.name.toLowerCase() === k.name.toLowerCase()) !== i).map((k) => k.name.toLowerCase()));
       const katText = (k) => (doppelt.has(k.name.toLowerCase()) ? k.pfad : k.name);
       const wahlKnopf = (act, attr, wert, an, text, n, title) => `<li><button type="button" class="mat-filterwahl${an ? " active" : ""}" data-act="${act}" ${attr}="${esc(wert)}" aria-pressed="${an}"${title ? ` title="${esc(title)}"` : ""}><span>${text}</span><span class="mat-side-anzahl">${n}</span></button></li>`;
-      const statusZahl = (st) => (st === EMPFOHLEN ? d.empfohlen || 0 : st ? (d.direkt && d.direkt[st]) || 0 : summe(d.direkt));
-      // „Aussonderung empfohlen“ (A4) nur, wo es so einen Artikel gibt (oder der Filter gesetzt ist) – meist in „Gesperrt“.
+      // Die Zahlen zählen im ganzen Zweig, „alle“ wie die Liste ohne Statusfilter (ohne die ausgesonderten).
+      const statusZahl = (st) => (st === EMPFOHLEN ? d.empfohlen || 0 : st ? (d.zahlen && d.zahlen[st]) || 0 : alleZahl);
+      // „Aussonderung empfohlen“ (A4) nur, wo es so einen Artikel gibt (oder der Filter gesetzt ist) – meist in „Gesperrt“;
+      // „ausgesondert“ ebenso (holt den Ordner „Ausgesondert“ in die Liste), im Ordner „Ausgesondert“ selbst nicht.
       const statusListe = ["", "ueberfaellig", "neu", "bald_faellig", "gesperrt", "lebensdauer", "einsatzbereit"]
+        .concat(!ausgesondertHier && (d.zahlen.ausgesondert || filter === "ausgesondert") ? ["ausgesondert"] : [])
         .concat(d.empfohlen || filter === EMPFOHLEN ? [EMPFOHLEN] : []);
       const filterMenue = `<div class="mat-filtergruppe" role="group" aria-labelledby="mat-fg-status"><h3 id="mat-fg-status">Status</h3>
           <ul class="mat-filterliste">${statusListe.map((st) => wahlKnopf("filter", "data-f", st, st === filter, st ? esc(statusName(st)) : "alle", statusZahl(st))).join("")}</ul></div>
@@ -2598,6 +2641,8 @@
         filterBox.hidden = !zeigeFilter;
         $("#mat-filter-inhalt", filterBox).innerHTML = zeigeFilter ? filterMenue : "";
       }
+      tabelle = { auswahl: darfPflegen, pruefen: pruefbar, person: darf.grund, sort, kategorie: true, gruppen: d.gruppen,
+                  proGruppe: d.pro_gruppe };
       const systemText = d.system_kind === "gesperrt"
         ? "Hierher verschiebt eine Sperre die Artikel der Gliederung. Zurück in ihren Herkunftsordner bringt sie nur eine Freiprüfung."
         : "Ausgesonderte Artikel bleiben hier mit ihrem vollen Lebenslauf sichtbar, zählen aber nirgends mehr als Bestand und lassen sich nicht zurückholen.";
@@ -2617,11 +2662,9 @@
           ${d.interval_months ? `<p class="small">Prüfintervall hier: höchstens ${d.interval_months} Monate.</p>` : ""}
           ${erinnerungAus ? `<p class="small">Erinnerungsmails aus${geerbtVon ? ` – geerbt von ${geerbtVon.sichtbar ? `<a href="/materialablage/ordner/${geerbtVon.id}">${esc(geerbtVon.pfad)}</a>` : esc(geerbtVon.pfad)}` : ""}</p>` : ""}</div></div>` : ""}
         ${d.unterordner.length ? `<section class="section"><h2>Unterordner</h2>${unterordnerHtml(d.unterordner)}</section>` : ""}
-        <section class="section"><h2 id="mat-artikel-titel" tabindex="-1">Artikel in diesem Ordner</h2>
+        <section class="section" id="mat-artikelbereich"><h2 id="mat-artikel-titel" tabindex="-1">${d.unterordner.length ? "Artikel samt Unterordnern" : "Artikel in diesem Ordner"}</h2>
           ${zeigeFilter ? filterKopf : ""}
-          ${d.artikel.length ? artikelTabelle(d.artikel, { auswahl: darfPflegen, pruefen: pruefbar, person: darf.grund, sort, kategorie: true }) : leerHtml}
-          ${person ? `<p class="small"><a href="/materialablage/pruefungen?ordner=${d.id}&zugeordnet=${encodeURIComponent(person)}#zu-pruefen">Fällige Artikel dieser Person im ganzen Zweig →</a></p>` : ""}
-          ${seitenleiste(d.artikel_gesamt, seite, d.pro_seite)}
+          ${d.artikel.length ? artikelTabelle(d.artikel, tabelle) : leerHtml}
           ${darfPflegen ? `<div class="mat-sammel" id="mat-sammel" hidden><span id="mat-sammel-n"></span><div class="btn-row">
             <button class="btn secondary small" data-act="sammel-verschieben">Verschieben</button>
             <button class="btn secondary small" data-act="sammel-zuordnen">Zuordnen</button>
@@ -2645,14 +2688,23 @@
           baustein("MatFreigaben").then((f) => { if (f) freigabenOeffnen(v); });
         }
       }
-      // „alle auswählen“ gibt es zweimal – im Tabellenkopf und über den Karten (schmale Bildschirme); beide zeigen
-      // denselben Stand, halb gesetzt, solange nur ein Teil angehakt ist.
-      const waehlbar = $$(".mat-wahl-art:not(:disabled)", inhalt);
-      const alleK = $$(".mat-alle", inhalt);
+      /* Mehrfachauswahl über alle Gruppen (Entscheidung 6): „alle auswählen“ gibt es zweimal – im Tabellenkopf und über
+         den Karten (schmale Bildschirme) –, dazu je Unterordner ein Häkchen in seiner Überschrift. Jedes nimmt die
+         angezeigten Artikel (auch nachgeladene); was „weitere anzeigen“ danach holt, ist nicht angehakt. Alle zeigen
+         ihren Stand, halb gesetzt, solange nur ein Teil angehakt ist. Die Ereignisse hängen am Abschnitt – so gelten sie
+         auch für nachgeladene Zeilen. */
+      const bereich = $("#mat-artikelbereich", inhalt);
+      const kaestchen = (wurzel) => $$(".mat-wahl-art:not(:disabled)", wurzel);
+      const stand = (k, liste) => {
+        const n = liste.filter((c) => c.checked).length;
+        k.checked = !!liste.length && n === liste.length;
+        k.indeterminate = n > 0 && n < liste.length;
+      };
       const sammel = () => {
-        const gewaehlt = $$(".mat-wahl-art:checked", inhalt);
+        const gewaehlt = $$(".mat-wahl-art:checked", bereich);
         const n = gewaehlt.length;
-        alleK.forEach((x) => { x.checked = !!waehlbar.length && n === waehlbar.length; x.indeterminate = n > 0 && n < waehlbar.length; });
+        $$(".mat-alle", bereich).forEach((x) => stand(x, kaestchen(bereich)));
+        $$(".mat-zweig-alle", bereich).forEach((x) => stand(x, kaestchen(x.closest("tbody"))));
         const leiste = $("#mat-sammel");
         if (!leiste) return;
         leiste.hidden = !n;
@@ -2666,13 +2718,19 @@
         nachFilter = null;
         if (ziel) ziel.focus();
       }
-      $$(".mat-wahl-art", inhalt).forEach((c) => c.addEventListener("change", sammel));
-      alleK.forEach((alle) => alle.addEventListener("change", () => { waehlbar.forEach((c) => { c.checked = alle.checked; }); sammel(); }));
-      const gewaehlteIds = () => $$(".mat-wahl-art:checked", inhalt).map((c) => +c.value);
+      bereich.addEventListener("change", (e) => {
+        const k = e.target;
+        if (k.classList.contains("mat-alle")) kaestchen(bereich).forEach((c) => { c.checked = k.checked; });
+        else if (k.classList.contains("mat-zweig-alle")) kaestchen(k.closest("tbody")).forEach((c) => { c.checked = k.checked; });
+        else if (!k.classList.contains("mat-wahl-art")) return;
+        sammel();
+      });
+      const gewaehlteIds = () => $$(".mat-wahl-art:checked", bereich).map((c) => +c.value);
+      // Die Ordner der gewählten Artikel (Gruppe der Zeile) – für die Gliederungsgrenze beim Verschieben.
+      const gewaehlteOrdner = () => [...new Set($$(".mat-wahl-art:checked", bereich).map((c) => +c.closest("tbody").dataset.gruppe || d.id))];
 
-      // Eine Wahl im Filtermenü: erste Seite, Schublade zu (der Fokus geht danach auf den Satz über der Liste).
+      // Eine Wahl im Filtermenü: Schublade zu (der Fokus geht danach auf den Satz über der Liste).
       const gewaehlt = (sel) => {
-        seite = 1;
         if (alsSchublade() && leiste && leiste.classList.contains("open")) { leisteZu(); nachFilter = "liste"; } else nachFilter = sel;
         zeigen(zeichnen);
       };
@@ -2683,10 +2741,33 @@
           kategorieName = kategorie ? b.title || $("span", b).textContent : "";
           gewaehlt(`[data-act="kategorie"][data-k="${kategorie}"]`);
         },
-        "filter-weg": () => { filter = ""; kategorie = ""; person = ""; seite = 1; nachFilter = "#mat-artikel-titel"; zeigen(zeichnen); },
+        "filter-weg": () => { filter = ""; kategorie = ""; person = ""; nachFilter = "#mat-artikel-titel"; zeigen(zeichnen); },
         "filter-auf": (b) => { if (leiste && filterBox) leisteOeffnen(b, $("#mat-filter-titel", filterBox)); },
-        seite: (b) => { seite = +b.dataset.seite; zeigen(zeichnen); },
-        sortieren: (b) => { sort = sortWeiter(sort, b.dataset.feld); seite = 1; zeigen(zeichnen); },
+        sortieren: (b) => { sort = sortWeiter(sort, b.dataset.feld); zeigen(zeichnen); },
+        // „Weitere n anzeigen“: die nächsten Artikel der Gruppe mit denselben Filtern und derselben Sortierung, angehängt
+        // unter die geladenen – die Auswahl bleibt; der Fokus geht auf die erste neue Zeile.
+        "gruppe-mehr": async (b) => {
+          const g = d.gruppen.find((x) => String(x.id) === b.dataset.gruppe);
+          if (!g || b.getAttribute("aria-disabled") === "true") return;
+          b.setAttribute("aria-disabled", "true");
+          const ab = +b.dataset.geladen;
+          let r;
+          try { r = await api(`${API}/ordner/${id}/gruppe/${g.id}?${anfrage({ ab })}`); }
+          catch (e) { b.removeAttribute("aria-disabled"); S.fehlschlag(b, e); return; }
+          const zeile = b.closest("tr");
+          const tb = zeile.closest("tbody");
+          const neu = r.artikel.filter((a) => !$(`tr[data-id="${a.id}"]`, tb));
+          zeile.insertAdjacentHTML("beforebegin", artikelZeilen(neu, tabelle));
+          g.gesamt = r.gesamt;
+          const geladen = $$("tr[data-id]", tb).length;
+          zeile.insertAdjacentHTML("afterend", gruppeMehr(g, r.artikel.length ? geladen : g.gesamt, tabelle));
+          zeile.remove();
+          const zahl = $(".mat-zweig-zahl", tb);
+          if (zahl) zahl.textContent = plural(g.gesamt, "Artikel", "Artikel");
+          sammel();
+          const erste = neu.length && $(`tr[data-id="${neu[0].id}"] .mat-inv`, tb);
+          if (erste) erste.focus();
+        },
         person: (s) => { person = s.value; gewaehlt("#mat-personwahl"); },
         unterordner: () => ordnerDialog({ kind: "standort" }, d.id),
         runde: () => rundeDialog(d.id),
@@ -2708,7 +2789,7 @@
           const ids = gewaehlteIds();
           if (!ids.length) return;
           const ziel = await ordnerWaehlen(`${plural(ids.length, "Artikel", "Artikel")} verschieben nach …`,
-                                           { quelle: d.id, hinweis: ARTIKEL_VERSCHIEBEN, wechselHinweis: ARTIKEL_WECHSEL });
+                                           { quelle: gewaehlteOrdner(), hinweis: ARTIKEL_VERSCHIEBEN, wechselHinweis: ARTIKEL_WECHSEL });
           if (!ziel) return;
           try { const r = await api(`${API}/artikel/verschieben`, { method: "POST", body: { ids, folder_id: ziel } }); toast(`${plural(r.verschoben, "Artikel", "Artikel")} verschoben`); leisteNeu(); zeigen(zeichnen); }
           catch (e) { toast(e.message, true); }
@@ -8100,7 +8181,7 @@
 
   async function bestandsimport() {
     const fid = DATEN.id;
-    const [antwort] = await Promise.all([api(`${API}/ordner/${fid}?pro_seite=1`), ordnerBaum().catch(() => null)]);
+    const [antwort] = await Promise.all([api(`${API}/ordner/${fid}?pro_gruppe=1`), ordnerBaum().catch(() => null)]);
     const o = antwort.ordner;
     leisteMarkieren(o.id);
     // „Neue Liste“

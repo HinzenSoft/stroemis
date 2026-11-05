@@ -169,7 +169,8 @@ def test_bestand_kategorie():
         d = ok(_ordner(w, t.lager_a, kategorie=t.ids["karabiner"]))["ordner"]
         assert {a["id"] for a in d["artikel"]} == {t.f["id"], t.art_a["id"]}
         # Zahlen je Gruppe mit den übrigen Filtern: Status mit Kategorie, Kategorien mit Status.
-        assert sum(d["direkt"].values()) == 2, d["direkt"]
+        # Seit dem 05.11.2026 zählen sie im ganzen Zweig („zahlen“; „direkt“ zählt wie im Baum nur, was hier liegt).
+        assert sum(d["zahlen"].values()) == 2, d["zahlen"]
         assert {k["id"]: k["n"] for k in d["kategorien"]}[t.ids["gurte"]] == 1      # Kategorien ohne Kategoriefilter
         status = ok(_ordner(w, t.lager_a))["ordner"]["artikel"]
         s_set = next(a["status"] for a in status if a["id"] == t.s["id"])
@@ -211,7 +212,7 @@ def test_bestand_oberflaeche():
     assert 'data-act="filter-auf" data-leiste-auf' in ordner and "`Filter (${gefiltert.length})`" in ordner
     assert 'Gefiltert: ${gefiltert.join(" · ")} – <button type="button" class="lnk" data-act="filter-weg">Filter zurücksetzen</button>' in ordner
     assert 'leer("Keine Artikel mit diesen Filtern.")' in ordner
-    assert "kategorie: true })" in ordner and 'q.set("kategorie", kategorie)' in ordner
+    assert "kategorie: true, gruppen: d.gruppen" in ordner and 'q.set("kategorie", kategorie)' in ordner
     # Spalte vorn, eng und als Karte über Hersteller/Produkt; Sortierwahl der Karten mit Kategorie.
     tab = js[js.index("  function artikelTabelle(liste, opts) {"):js.index("  function wahlFeld(a) {")]
     # Nachbesserung nach der Browserprüfung (B1): Die Spalte trägt dazu mat-kategorie; zwischen 900 und 979 px steht die

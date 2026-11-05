@@ -12867,3 +12867,87 @@ ziehen, entfernen; Reihenfolge-Regel), „Prüfung“ und „Prüfprotokoll“ (
    behalten will, zieht sie vorher heraus.
 5. Untergruppen lassen sich wie Gruppen nur am Griff verschieben, nicht per Tastatur; Punkte per Tastatur über „⋯“.
 6. Im PDF steht die Zwischenzeile in der Spalte „Prüfpunkt“ (nicht unter „Nr.“), die Punkte darunter 4 mm eingezogen.
+
+## Bestand: Inhalt aller Unterordner mit Überschriften (Wunsch des Nutzers, 05.11.2026)
+
+Nutzer (Bildschirmfoto Ordner „DEMO-Kreisverband Flussland“, 766 Artikel im Zweig, die Liste zeigte nur 1): „Im Bestand
+soll man den Inhalt aller Unterordner sehen, sortiert mit Überschriften, wenn man in einem Oberordner ist, mit
+funktionierenden Filterfunktionen links.“ Bauauftrag `planung/bestand-zweig/auftrag.md`; entschieden (Rückfragen
+05.11.2026, je die Empfehlung): **immer der ganze Zweig** (kein Umschalter; ein Ordner ohne Unterordner sieht aus wie
+bisher), **Überschrift je Unterordner mit Pfad** relativ zum Ordner in Baumreihenfolge, leere Unterordner erscheinen nicht,
+**je Gruppe die ersten 50** mit „Weitere n anzeigen“, **„Gesperrt“ mit eigener Überschrift dabei, „Ausgesondert“ nur mit
+dem Filter „ausgesondert“**, **Sortieren** über die Spaltenköpfe innerhalb jeder Gruppe, **Mehrfachauswahl über alle
+Gruppen** mit Häkchen je Überschrift, Abschnitt **„Unterordner“ bleibt**. Gebaut 05.11.2026 auf dem Zweig `bestand-zweig`
+von 1380ddf (kein Schemaschritt).
+
+**Dienst** (`bestand.ordner_inhalt`, neu `zweig_gruppe`, `_zweig_ordner`, `_zweig_bedingung`, `GRUPPE_MAX = 50`): Der
+sichtbare Zweig kommt aus dem Baum, wie ihn das Konto sieht (`bestand.baum`) – in Baumreihenfolge wie die Seitenleiste
+(Systemordner zuletzt, sonst Position und Name); Pfad-Knoten und Fremdes fehlen samt Zweig. Gezeigt wird, was physisch in
+einem dieser Ordner liegt (`folder_id`) und das Konto sieht (`rechte.artikel_filter`) – gesperrte Artikel eines
+Unterordners stehen also in der Gruppe „Gesperrt“ ihrer Gliederung, wenn der Ordner die Gliederung (oder darüber) ist;
+im Zweig eines Lagers erscheinen sie nicht (sie liegen dort nicht). Ohne Statusfilter fehlen ausgesonderte Artikel – außer
+auf der Seite von „Ausgesondert“ selbst. **Eine Abfrage** über den ganzen Zweig liefert je Gruppe Rangnummer und
+Trefferzahl (`ROW_NUMBER()`/`COUNT(*) OVER (PARTITION BY folder_id)`), eine zweite die Listenzeilen der ersten 50 je Gruppe
+über ihre Kennungen – kein Abruf je Gruppe (Test: gleich viele Abfragen auf `mat_item` bei einer wie bei sechs Gruppen).
+Gemessen (Testlauf, 1000 Artikel in 20 Unterordnern zu je 50, alle Zeilen geladen): **0,08 s** je Ordnerseite, Nachladen
+von 25 Zeilen 0,01 s; auf dem Beispielbestand (`material_beispielbestand.py --artikel 400`, Kreisverband: 380 Artikel in 35 Gruppen, lokal) **0,04 s**.
+
+**Schnittstelle**: `GET /api/material/ordner/<id>` liefert jetzt `gruppen` ([{id, name, kind, system_kind, pfad: [Namen
+relativ zum Ordner], gesamt}], zuerst der Ordner selbst mit leerem Pfad, Gruppen ohne Treffer fehlen), `artikel` (je Gruppe
+die ersten `pro_gruppe`, gruppenweise hintereinander – `folder_id` sagt die Gruppe), `artikel_gesamt` (alle Treffer im
+Zweig), `pro_gruppe` (Vorgabe 50, `?pro_gruppe=` 1 … 500) und **`zahlen`** (je Status im ganzen Zweig mit dem
+Kategoriefilter, auch „ausgesondert“); `empfohlen` und `kategorien` zählen ebenfalls im Zweig (Kategorien mit dem
+Statusfilter, ohne ihn ohne die ausgesonderten). `direkt` zählt wieder wie im Baum nur, was direkt im Ordner liegt (vorher
+mit dem Kategoriefilter). `seite`/`pro_seite` entfallen (die Importseite fragt mit `?pro_gruppe=1`). Neu **`GET
+/api/material/ordner/<id>/gruppe/<gid>?ab=&pro_gruppe=`** mit denselben Filtern und derselben Sortierung: die nächsten
+Artikel einer Gruppe ({artikel, gesamt, ab}); eine Gruppe außerhalb des sichtbaren Zweigs antwortet 404. Rechte wie
+bisher: Lesen am Ordner (`requires_folder("lesen")`), fremde Ordner und Gliederungen 404, keine Zahlen oder Überschriften
+fremder Ordner.
+
+**Oberfläche** (`material.js` `ordner()`, `artikelTabelle` mit `opts.gruppen`, neu `artikelZeilen`, `gruppenKoerper`,
+`gruppeMehr`): eine Tabelle mit einem `<tbody>` je Gruppe – zuerst die Artikel direkt im Ordner ohne Überschrift, dann je
+Unterordner eine Überschriftzeile (`th scope="rowgroup"`) mit dem Pfad („Zentrallager › Regal 3“) als Link auf den
+Unterordner und der Zahl („12 Artikel“), bei Mehrfachauswahl links ein Häkchen „alle in … auswählen“ (nicht bei
+„Gesperrt“); darunter „Weitere n anzeigen“ (grau umrandet, „50 von 120 angezeigt“) – hängt die nächsten an, die Auswahl
+bleibt, der Fokus geht auf die erste neue Zeile. Als Karte (bis 600 px Inhalt) ist die Überschrift eine Zeile mit kräftiger
+Linie, Link und Häkchen 44 px am Finger. Abschnittstitel „Artikel samt Unterordnern“ (ohne Unterordner wie bisher
+„Artikel in diesem Ordner“). Spaltenköpfe sortieren innerhalb jeder Gruppe (die Liste beginnt dann je Gruppe wieder mit
+den ersten 50). **Filter links** zählen im ganzen Zweig; „alle“ zählt wie die Liste ohne Statusfilter (ohne die
+ausgesonderten); neu der Eintrag **„ausgesondert“** (nur, wenn es im Zweig solche gibt oder der Filter gesetzt ist; nicht
+auf der Seite von „Ausgesondert“). Liegen im Zweig nur ausgesonderte Artikel, sagt der Leerzustand es mit dem Textknopf
+„ausgesonderte zeigen“. **Mehrfachauswahl**: „alle auswählen“ (Tabellenkopf und über den Karten) und das Häkchen einer
+Überschrift nehmen die **angezeigten** Artikel – auch die nachgeladenen; was „weitere anzeigen“ danach holt, ist nicht
+angehakt (die Kästchen stehen dann halb). „Verschieben“ prüft die Gliederungsgrenze für die Ordner aller gewählten
+Artikel (`ordnerWaehlen` nimmt für `quelle` jetzt auch eine Liste). Entfallen: die Seitenleiste „Seite n von m“ der
+Ordnerliste, der Satz „Hier liegen keine Artikel direkt – n liegen in Unterordnern“ samt „Fällige Artikel im ganzen
+Zweig →“ und der Link „Fällige Artikel dieser Person im ganzen Zweig →“ unter dem Filter „Zugeordnet an“ – die Liste zeigt
+die Artikel der Person ohnehin im ganzen Zweig (die Seite „Prüfungen“ mit `?ordner=&zugeordnet=` bleibt erreichbar).
+**Übung** (`uebung/material.js`): Die Übungsantwort der Ordnerseite liefert Gruppen und `zahlen` wie der Server (Gliederung
+mit Lager, Fahrzeug, Gesperrt, Ausgesondert), dazu die Antwort für `…/gruppe/<gid>`.
+
+**Unverändert**: Export/Import, Prüfdurchgänge, Lebenslauf, Jahresbericht, Seitenleiste, Gliederungstrennung und
+DEMO-Regeln; kein Schemaschritt.
+
+**Tests**: neu `tests/test_material_bestand_zweig.py` (Gruppen und Baumreihenfolge, Gesperrt dabei, Ausgesondert nur per
+Filter und auf seiner Seite, Ordner ohne Unterordner, Filter und Zahlen im Zweig, Nachladen mit Filtern und Sortierung,
+Grenzen, 404 außerhalb des Zweigs, Rechte mit Freigabe nur am Unterordner und fremder Gliederung, Abfragen unabhängig von
+der Zahl der Gruppen, Leistung mit 1000 Artikeln, statisch, Browser 1280 Maus / 360 Touch: Überschriften, „Weitere 5
+anzeigen“, Mehrfachauswahl über Gruppen samt Gruppen-Häkchen und Verschieben, Filter in der Schublade, Leerzustand,
+gemessene Tippflächen). Angepasst: `test_material` (`test_artikel`: „Mehrfachauswahl“ nimmt die Artikel direkt in der Gliederung, danach steht nur noch die Gruppe des Fahrzeugs da), `test_material_wuensche_2510` (Statuszahlen mit Kategorie jetzt in `zahlen`; statisch `kategorie: true, gruppen: d.gruppen`), `test_material_l5` (statisch: `zweigAlle` statt `direktAlle`, der Satz „… liegen in Unterordnern“ entfällt).
+
+**Strömipedia** (nur genannt, Nachzug durch wiki-autor): Artikel „Bestand“, Abschnitt „Artikelliste des Ordners“
+(Gruppen je Unterordner, „Weitere anzeigen“, Filter im Zweig samt „ausgesondert“, Mehrfachauswahl über Gruppen; der Link
+„Fällige Artikel dieser Person im ganzen Zweig“ entfällt) und „Systemordner Gesperrt und Ausgesondert“ (Gesperrt erscheint
+in der Gliederung als eigene Gruppe, Ausgesondert über den Filter).
+
+**Bitte bestätigen**:
+1. „alle auswählen“ und das Häkchen einer Überschrift nehmen die **angezeigten** Artikel, auch nachgeladene; was nicht
+   geladen ist, wird nicht mitgewählt (sonst verschöbe man Ungesehenes). Erst „Weitere anzeigen“, dann auswählen.
+2. Gezeigt wird, was **physisch** im Zweig liegt: Gesperrte Artikel eines Lagers stehen in der Gliederung unter „Gesperrt“,
+   in der Ansicht des Lagers selbst nicht (dort zählen sie wie bisher in „Bestand im ganzen Zweig“ nicht mit).
+3. Der Link „Fällige Artikel dieser Person im ganzen Zweig →“ ist **entfernt** (die Liste zeigt den Zweig, mit Statusfilter
+   lässt sich auf Fälliges einschränken).
+4. Neuer Statusfilter „ausgesondert“ in der Leiste (sonst käme man an die Gruppe „Ausgesondert“ nicht heran); der
+   Abschnittstitel heißt mit Unterordnern „Artikel samt Unterordnern“.
+5. Die Sortierung über einen Spaltenkopf lädt neu – je Gruppe wieder die ersten 50, eine Auswahl geht dabei verloren (wie
+   bisher bei Sortieren und Filtern).
