@@ -1028,6 +1028,14 @@ button.mat-ue-klapp:focus-visible { outline: 3px solid var(--gelb); outline-offs
 .mat-nav.enger .mat-lupe { order: 2; margin-left: auto; }
 .mat-nav.enger .mat-reiter { order: 3; flex: 1 1 100%; }
 .mat-nav.enger .mat-suche { order: 4; }
+/* Fünf Reiter (mit „Prüfformulare“, nur die Material-Verwaltung; Wunsch vom 05.11.2026) passen am Telefon auch in der
+   eigenen Zeile nicht: Dann brechen sie um, statt zu rollen (material.js, navAnordnen: .umbruch) – als Glieder der
+   Navigation selbst, sodass „☰“ (Produkt, Formular, Meldungen, Prüfung) vorn in der ersten Zeile steht statt in einer
+   eigenen darüber; die Lupe folgt rechts auf die Reiter, die geöffnete Nummernsuche darunter. */
+.mat-nav.umbruch .mat-reiter { display: contents; }
+.mat-nav.umbruch .mat-reiter > a { order: 3; }
+.mat-nav.umbruch .mat-lupe { order: 4; }
+.mat-nav.umbruch .mat-suche { order: 5; }
 .mat-reiter.rollt-rechts { -webkit-mask-image: linear-gradient(to left, transparent, #000 28px); mask-image: linear-gradient(to left, transparent, #000 28px); }
 .mat-reiter.rollt-links { -webkit-mask-image: linear-gradient(to right, transparent, #000 28px); mask-image: linear-gradient(to right, transparent, #000 28px); }
 .mat-reiter.rollt-links.rollt-rechts {

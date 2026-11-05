@@ -46,9 +46,10 @@ def _psa_seite(iid=None):
             psa.eigener(iid, u)
         except Abgelehnt as exc:
             return _fehlerseite(exc.code, str(exc))
+    d = darf_alles(u)
     return render_template("material/seite.html", user=u, active="meine_psa" if psa.kopfleiste(u) else "material",
                            ansicht="meine_psa", nur_psa=not zugang(u), daten=json.dumps({"id": iid}),
-                           darf=json.dumps(darf_alles(u)), warnung=None,
+                           darf=json.dumps(d), formulare_reiter=d["katalog"], warnung=None,
                            anleitung=json.dumps(anleitung.verweise(u), ensure_ascii=False))
 
 

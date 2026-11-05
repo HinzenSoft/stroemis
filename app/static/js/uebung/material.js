@@ -748,7 +748,9 @@
   const helmTreffer = produktListe(VORLAGE, { searchParams: new URLSearchParams({ q: suchwort(P.helm) }) }).produkte.findIndex((p) => p.id === ID.pHelm);
   const wortMuster = (w) => new RegExp(w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
   const produktLink = `#kat-liste a[href^="/materialablage/katalog/produkt/${ID.pGurt}"]`;
-  // Seite „Prüfformulare“: die Gruppe mit dem Formular des Gurts, sein „Zuweisen“ und der Haken am Gurt im Dialog.
+  // Seite „Prüfformulare“: seit dem 05.11.2026 ein eigener Reiter neben „Katalog“ (vorher ein Knopf im Katalogkopf); die
+  // Gruppe mit dem Formular des Gurts, sein „Zuweisen“ und der Haken am Gurt im Dialog.
+  const reiterFormulare = '.mat-nav a[data-nav="formulare"]';
   const zuweisenGurt = `[data-act=zuweisen][data-id="${geltend(VORLAGE, P.gurt).f.pool}"]`;
   const zuweisenKnopf = `#pool-liste ${zuweisenGurt}`;
   const poolGruppe = `#pool-liste .mat-pool-gruppe:has(${zuweisenGurt})`;
@@ -888,7 +890,8 @@
       { ziel: "[data-act=neue-version]", text: `Gespeichert${ausKatalog("gurt") ? " – in der Übung nur die Kopie" : ""}. Ist eine Version schon für Prüfungen benutzt, änderst du sie nur über „Neue Version“ – alte Protokolle bleiben, wie sie waren.` },
     ] },
     // Formular-Pool (Entscheidung U1 B): die Seite „Prüfformulare“ und der Dialog „Zuweisen“.
-    { titel: "Prüfformulare zuweisen", start: "/materialablage/katalog/formulare", schritte: [
+    { titel: "Prüfformulare zuweisen", start: "/materialablage/katalog", schritte: [
+      { ziel: reiterFormulare, text: "Die Prüfformulare haben einen eigenen Reiter neben „Katalog“. Öffne ihn.", warten: { klick: reiterFormulare } },
       { ziel: poolGruppe, text: "Hier stehen alle Prüfformulare, nach Kategorien geordnet. Je Kategorie steht ihr Standard – er gilt auch in den Unterkategorien ohne eigenen." },
       { ziel: zuweisenKnopf, text: `Wofür ein Formular gilt, legst du mit „Zuweisen“ fest. Öffne es bei „${formGurt.titel || "Prüfformular"}“.`,
         warten: { klick: zuweisenKnopf } },
