@@ -146,7 +146,8 @@ def _seite(ansicht, katalog_seite=False, warnung=None, bezug=None, willkommen=Fa
     Konto lesen darf (anleitung.verweise); willkommen (nur die Übersicht): beim allerersten Besuch der Dialog
     „Willkommen in der Materialablage“. besuch (nur die Artikelseite): erst wenn das Konto den Gegenstand sehen darf, für
     „Zuletzt besucht“ der Startseite gemerkt (app/start.py). nur_verwaltung: eine Seite allein für die Material-Verwaltung
-    (sonst die Fehlerseite 403; in der Übung entscheiden die Rechte des Teils)."""
+    (sonst die Fehlerseite 403; in der Übung entscheiden die Rechte des Teils). Den Reiter „Prüfformulare“ der
+    Modulnavigation bekommt nur, wer die Seite sehen darf (formulare_reiter, Wunsch vom 05.11.2026)."""
     u = current_user()
     if not u:
         return redirect(url_for("pages.login", next=request.full_path.rstrip("?")))
@@ -164,8 +165,9 @@ def _seite(ansicht, katalog_seite=False, warnung=None, bezug=None, willkommen=Fa
         from ..start import ziel_merken
         ziel_merken(*besuch)
     einfuehrung.seite("material")         # Angebot der Einführung (app/einfuehrung.py)
+    d = darf_alles()
     return render_template("material/seite.html", user=u, active="material", ansicht=ansicht,
-                           daten=json.dumps(daten, ensure_ascii=False), darf=json.dumps(darf_alles()),
+                           daten=json.dumps(daten, ensure_ascii=False), darf=json.dumps(d), formulare_reiter=d["katalog"],
                            warnung=warnung() if warnung else None,
                            anleitung=json.dumps(anleitung.verweise(u), ensure_ascii=False),
                            willkommen=anleitung.willkommen_einmal(u) if willkommen else None)
@@ -178,9 +180,10 @@ def _uebung_seite(ansicht, **daten):
     (sie nennen nur, was das Konto in der Strömipedia lesen darf)."""
     u = current_user()
     teil = einfuehrung.seite("material")
+    d = einfuehrung.darf_material(teil, u)
     return render_template("material/seite.html", user=u, active="material", ansicht=ansicht,
-                           daten=json.dumps(daten, ensure_ascii=False),
-                           darf=json.dumps(einfuehrung.darf_material(teil, u), ensure_ascii=False), warnung=None,
+                           daten=json.dumps(daten, ensure_ascii=False), formulare_reiter=d["katalog"],
+                           darf=json.dumps(d, ensure_ascii=False), warnung=None,
                            anleitung=json.dumps(anleitung.verweise(u), ensure_ascii=False), willkommen=None)
 
 

@@ -44,6 +44,9 @@
       <a href="/materialablage/pruefungen" data-nav="pruefungen">Prüfungen</a>
       <a href="/materialablage/bestand" data-nav="bestand">Bestand</a>
       <a href="/materialablage/katalog" data-nav="katalog">Katalog</a>
+      {# Eigener Reiter statt des Knopfs im Katalogkopf (Wunsch vom 05.11.2026) – nur für die Material-Verwaltung, die
+         die Seite allein sieht (Entscheidung O6; formulare_reiter aus routes._seite). #}
+      {% if formulare_reiter %}<a href="/materialablage/katalog/formulare" data-nav="formulare">Prüfformulare</a>{% endif %}
     </div>
     {# Im Katalog keine Nummernsuche (Wunsch vom 26.10.2026): Sie sucht Artikel im Bestand, nicht Produkte – neben der
        Katalogsuche führte sie nur zu Verwechslungen. Die Lupe öffnet sie am Telefon, also entfällt sie mit. #}

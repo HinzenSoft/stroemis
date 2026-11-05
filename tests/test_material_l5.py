@@ -159,8 +159,10 @@ def test_katalog_ohne_nummernsuche_knopf_in_suchzeile():
                 mnav = mnav.group(1)
                 assert ('name="q"' in mnav) is mit and ('id="mat-lupe"' in mnav) is mit, (konto, seite)
                 assert ('<form class="mat-suche"' in html) is mit, (konto, seite)
-                # „☰“ und die Reiter bleiben überall.
-                assert 'id="mat-side-auf"' in mnav and mnav.count('data-nav="') == 4, (konto, seite)
+                # „☰“ und die Reiter bleiben überall – der Reiter „Prüfformulare“ (seit dem 05.11.2026) nur für die
+                # Material-Verwaltung.
+                assert 'id="mat-side-auf"' in mnav and mnav.count('data-nav="') == (5 if konto == "adm" else 4), (konto, seite)
+                assert ('data-nav="formulare"' in mnav) is (konto == "adm"), (konto, seite)
     wurzel = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     js = open(os.path.join(wurzel, "app/material/static/material.js"), encoding="utf-8").read()
     css = open(os.path.join(wurzel, "app/material/static/material.css"), encoding="utf-8").read()

@@ -679,8 +679,12 @@
     || (verwaltet(gliederungVon(quelle)) && verwaltet(gliederungVon(ziel)));
 
   /* --- Gerüst -------------------------------------------------------------------------------- */
+  /* Die Prüfformulare haben seit dem 05.11.2026 einen eigenen Reiter (nur die Material-Verwaltung, seite.html): Er ist
+     auf der Seite „Prüfformulare“ und auf den Formularseiten markiert; ohne ihn (wer die Seite nicht sieht, liest
+     Formulare nur über Produkt und Kategorie) markiert die Formularseite „Katalog“. */
   const NAV = { dashboard: "dashboard", pruefungen: "pruefungen", bestand: "bestand", ordner: "bestand", artikel: "bestand",
-                artikel_neu: "bestand", katalog: "katalog", produkt: "katalog", formular: "katalog", formulare: "katalog", meldungen: "katalog", suche: "",
+                artikel_neu: "bestand", katalog: "katalog", produkt: "katalog", formular: DARF.katalog ? "formulare" : "katalog",
+                formulare: "formulare", meldungen: "katalog", suche: "",
                 pruefung: "pruefungen", pruefung_neu: "pruefungen", durchgang: "pruefungen", durchgaenge: "pruefungen",
                 bestandsimport: "bestand", bericht: "bestand", antraege: "bestand" };
   $$(".mat-nav a").forEach((a) => a.classList.toggle("aktiv", a.dataset.nav === NAV[ANSICHT]));
@@ -722,12 +726,16 @@
   function navAnordnen() {
     if (!matNav || !reiter) return;
     navBreite = matNav.clientWidth;
-    matNav.classList.remove("eng", "enger");
+    matNav.classList.remove("eng", "enger", "umbruch");
     if (lupe) lupe.hidden = true;
     if (!einzeilig()) {
       matNav.classList.add("eng");
       if (lupe && !sucheInZeile()) lupe.hidden = false;      // in der Suchzeile steht das Feld offen da
       if (reiter.scrollWidth > reiter.clientWidth + 1) matNav.classList.add("enger");
+      // Mit dem Reiter „Prüfformulare“ (fünf Reiter, nur die Material-Verwaltung) reicht auch die eigene Zeile am Telefon
+      // nicht: Dann brechen die Reiter in eine zweite Zeile um, statt seitlich zu rollen – alle bleiben sichtbar
+      // (Wunsch vom 05.11.2026).
+      if (matNav.classList.contains("enger") && reiter.scrollWidth > reiter.clientWidth + 1) matNav.classList.add("umbruch");
     }
     if (lupe) lupe.setAttribute("aria-expanded", String(matNav.classList.contains("suche-offen")));
     const aktiv = $("a.aktiv", reiter);
@@ -4167,7 +4175,8 @@
       /* Formular-Pool (Schritt 38): Die Angabenzeile nennt das Standard-Prüfformular der Kategorie mit Link zur Version –
          ohne eigenen das der nächsten Oberkategorie mit einem („geerbt von“, Entscheidung S1). Welches Formular gilt, legt
          die Material-Verwaltung auf der Seite „Prüfformulare“ fest; für sie steht dahinter der Link dorthin, an diese
-         Kategorie, mit der Zahl der Formulare in ihrem Pool. Knöpfe dafür gibt es an der Kategorie nicht mehr. */
+         Kategorie, mit der Zahl der Formulare in ihrem Pool. Knöpfe dafür gibt es an der Kategorie nicht mehr – und seit
+         dem 05.11.2026 auch keinen im Katalogkopf: Dorthin führt der Reiter „Prüfformulare“ der Modulnavigation. */
       const geerbt = k && !k.standard_formular ? pfad.slice(0, -1).reverse().find((x) => x.standard_formular) : null;
       const std = k && (k.standard_formular || (geerbt && geerbt.standard_formular));
       const formularZeile = !k ? "" : `${std ? ` · Standard-Prüfformular <a href="/materialablage/katalog/formular/${std.version_id}">„${esc(std.titel || "ohne Titel")}“</a>${geerbt
@@ -4181,7 +4190,7 @@
         <div class="page-head"><h1>Katalog${anleitungKopf("katalog")}</h1>
           <div class="btn-row">${DARF.katalog ? '<button class="btn secondary" data-act="kat-neu"><span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Kategorie<span class="k-anlegen"> anlegen</span></span></button><button class="btn secondary" data-act="produkt-neu"><span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Produkt<span class="k-anlegen"> anlegen</span></span></button>' : ""}
             ${DARF.lesen || DARF.katalog ? `<a class="btn secondary mat-mit-zahl" href="/materialablage/katalog/meldungen">Produktmeldungen<span class="mat-meldezahl" id="kat-meldungen" hidden></span></a>` : ""}
-            ${DARF.katalog ? `<a class="btn secondary" href="/materialablage/katalog/formulare${k ? `?kategorie=${k.id}` : ""}">Prüfformulare</a>${katalogMenue}` : ""}</div></div>
+            ${DARF.katalog ? katalogMenue : ""}</div></div>
         ${k ? `<div class="mat-katkopf">
             <div class="mat-pfad">${pfadHtml(['<a href="/materialablage/katalog" data-act="kategorie" data-id="">alle Kategorien</a>',
               ...pfad.slice(0, -1).map((x) => `<a href="/materialablage/katalog?kategorie=${x.id}" data-act="kategorie" data-id="${x.id}">${esc(x.name)}</a>`)])}</div>

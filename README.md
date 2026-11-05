@@ -112,7 +112,9 @@ Einstellungen, Gruppe „Seite“).
   Heimat (Produkte und Kategorien dort; Trigger als Netz), nur mit aktiver Version; deaktivieren und löschen geht erst,
   wenn es nirgends mehr zugewiesen ist. Ein Formular mit Prüfpunkt „Länge (m)“ nur an Produkte mit Artikellänge. Ohne
   Zuweisung und ohne Standard (auch oben) ist ein Artikel nicht prüfbar – Produkt- und Kategorieseite warnen.
-  **Seite „Prüfformulare“** (`/materialablage/katalog/formulare`, Knopf im Katalogkopf; **nur die Material-Verwaltung**):
+  **Seite „Prüfformulare“** (`/materialablage/katalog/formulare`, eigener Reiter rechts neben „Katalog“ – seit dem
+  05.11.2026 statt des Knopfs im Katalogkopf, markiert auch auf den Formularseiten; **nur die Material-Verwaltung**
+  sieht Seite und Reiter; am Telefon brechen die fünf Reiter in eine zweite Zeile um, statt zu rollen):
   der ganze Kategorienbaum, je Kategorie ihr Standard (eigener oder „geerbt von …“) und die Formulare ihres Pools mit
   Version, Status, „Standard für …“, „zugewiesen: …“ und „gilt für n Produkte“ (aufklappbar), Suche nach Formular,
   Kategorie oder Produkt (blendet nur aus), „+ Prüfformular anlegen“ (Kategorie, Titel – Pflicht –, optional „Prüfpunkte
@@ -933,7 +935,7 @@ Konten versehen). Es geht keine Mail von selbst hinaus (Erinnerungsmails sind au
    aktiv, übernimmt kein DEMO-Kennzeichen und nimmt „DEMO“ vorn aus den Titeln (auch aktive Platzhalter der Skripte
    kommen so mit – vorher auf dev durch echte Formulare ersetzen oder deaktivieren, was nicht in die Produktion
    soll). Für die Zuweisungen ist die Datei maßgeblich. Danach legt die Material-Verwaltung unter Materialablage →
-   Katalog → „Prüfformulare“ an und weist zu, was noch fehlt. Ohne Zuweisung und Standard lässt sich ein Artikel nicht
+   „Prüfformulare“ an und weist zu, was noch fehlt. Ohne Zuweisung und Standard lässt sich ein Artikel nicht
    prüfen (die App sagt es beim Start der Prüfung).
 7. **Redakteure vergeben, Riegenkarten-Ausbilder verknüpfen** (Stufe Redakteur, 01.11.2026): Bestehende Mitglieder
    bleiben Mitglied und legen in Strömipedia und Ankerplätzen nichts mehr an und bearbeiten nichts mehr – auch nicht,
@@ -1090,8 +1092,9 @@ Abschnitt „Einführung“; `scroll-padding-bottom` ebenso).
 `app/static/uebung/<modul>/` aus `scripts/uebungsdateien.py`; nur Platzhalter „Übung“, keine erfundenen Fachdaten wie
 Intervalle oder Lebensdauern – die Materialablage nimmt Produkte und Prüfformulare, wo es geht, aus dem echten Katalog):
 - **Materialablage**: Grundteil (Zurechtfinden, Artikel finden, Mangel melden), „Prüfer“ (Prüfung durchführen),
-  „Materialwart“ (Artikel anlegen, Freigabe erteilen, Prüfdurchgang), „Material-Verwaltung“ (Katalog und Prüfformular).
-  Übungsbestand: „Übung – Gliederung“ mit Lager und Fahrzeug 1 (und den Systemordnern), drei Übungsartikel (Ü-0001 Gurt,
+  „Materialwart“ (Artikel anlegen, Freigabe erteilen, Prüfdurchgang), „Material-Verwaltung“ (Katalog und Prüfformular,
+  Prüfformulare zuweisen – beginnt im Katalog mit dem Reiter „Prüfformulare“). Übungsbestand: „Übung – Gliederung“ mit
+  Lager und Fahrzeug 1 (und den Systemordnern), drei Übungsartikel (Ü-0001 Gurt,
   Ü-0002 Seil, Ü-0003 Helm), Übungsperson A/B; Kennungen 900000001–900000999. Jeder Seitenwechsel in `material.js`,
   `suche.js`, `global.js`, `freigaben.js` geht über `S.ziel`. Tests `tests/test_einfuehrung_material.py`,
   `tests/test_einfuehrung_katalog.py`.

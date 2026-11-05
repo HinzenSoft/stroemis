@@ -79,7 +79,8 @@ def test_markup_je_ansicht():
                 assert mnav, (konto, pfad)
                 mnav = mnav.group(1)
                 assert ('id="mat-lupe"' in mnav) is mit_suche and ('name="q"' in mnav) is mit_suche, (konto, pfad)
-                assert 'id="mat-side-auf"' in mnav and mnav.count('data-nav="') == 4, (konto, pfad)
+                # Der Reiter „Prüfformulare“ (seit dem 05.11.2026) nur für die Material-Verwaltung.
+                assert 'id="mat-side-auf"' in mnav and mnav.count('data-nav="') == (5 if konto == "adm" else 4), (konto, pfad)
                 if oben:
                     # Zwischen Navigation und Inhalt – oben im Inhalt, unter den Reitern.
                     assert html.index("</nav>") < html.index(ZEILE) < html.index('<div id="mat-inhalt">'), (konto, pfad)
