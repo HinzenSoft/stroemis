@@ -11973,7 +11973,7 @@ Min.“). Etwa halb so hoch wie vorher. Tests: `test_einfuehrung.py` (Profil, St
 
 **Kleinigkeiten vom 04.11.2026** (Wünsche des Nutzers):
 - **Mangel-Banner**: Die Fotos der Meldung stehen links neben dem Text in einer Reihe (schmale Spalte, 64 px je Foto,
-  untereinander), nicht mehr darunter – am Artikel, in der Prüfung und in Meine PSA (`mangelReihe` in material.js,
+  untereinander), nicht mehr darunter – am Artikel und in der Prüfung (die Karte in Meine PSA zeigt nur Text; `mangelReihe` in material.js,
   `.mat-mangel-reihe` in material.css). Ohne Foto bleibt der Banner wie bisher.
 - **Einführung, Eingabeschritte**: Ein Schritt mit `warten: { wert }` geht erst weiter, wenn du fertig bist – nach 1,5 s
   ohne Tastendruck (`RUHE_TIPPEN`), beim Verlassen des Felds, mit Enter oder bei einer Auswahl (`change`), jeweils nur,
@@ -13003,7 +13003,7 @@ gekürzter Beschriftung; der Reiter öffnet immer alle Kategorien (die gewählte
 mit).
 
 **Kategorienbaum auf der Seite „Prüfformulare“** (Wunsch des Nutzers, 05.11.2026): Ein Klick auf eine Kategorie im Baum
-links zeigt die Formulare dieser Ebene (`/materialablage/katalog/formulare?kategorie=<id>`), „alle Kategorien“ alle –
+links zeigt die Formulare dieser Kategorie samt ihren Unterkategorien (`/materialablage/katalog/formulare?kategorie=<id>`), „alle Kategorien“ alle –
 vorher sprang der Baum zurück in den Katalog. Ebenso auf Formularseiten für die Material-Verwaltung (die den Reiter hat);
 für alle anderen führt der Baum dort weiter in den Katalog (`LEISTE_POOL`, `leisteZiel` in material.js). Test:
 `test_material_reiter_formulare.py` (statisch und Browser bei 1280).
@@ -13013,3 +13013,9 @@ für alle anderen führt der Baum dort weiter in den Katalog (`LEISTE_POOL`, `le
 statt „Katalog / Prüfformulare“; ohne Auswahl keine Brotkrumen. Formularseiten zeigen für die Material-Verwaltung
 denselben Pfad bis zur Heimat, für alle anderen weiter „Katalog / Heimat“. `katalog.pool` liefert dafür `auswahl`
 (Pfad mit Kennungen). Test: `test_material_reiter_formulare.py`.
+
+**Anleitung und Doku nach dem Artikel-Nachzug (05.11.2026)**: Die Themen „pruefformular“ und „formulare“ der App
+(`anleitung.THEMEN`) springen jetzt in die neuen Abschnitte des Artikels „Prüfformulare“
+(`#formular-pool-standard-und-zuweisung`, `#seite-pruefformulare`). README berichtigt (Spalte `is_critical` seit
+Schritt 37 weg, Journaltexte der Zuweisung, `untergruppe` im Katalogformat, DEMO-Formulare des Beispielbestands kommen
+jetzt mit in den Export, Untergruppen-Überschrift, Mangel-Fotos nicht in Meine PSA).

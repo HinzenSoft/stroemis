@@ -8938,7 +8938,7 @@
   // verwaltet: Das Konto verwaltet den Artikel selbst – „beim Materialwart abgeben“ entfällt (B5).
   // zusatz: fertiges HTML unter der Sperrzeile (die Zeile „Empfohlen von …“, wenn die Empfehlung gesperrt hat).
   /* Fotos der Meldung links neben dem Text, in einer Reihe (Nutzer, 04.11.2026: „Bild im Banner links vom Text in Reihe,
-     nicht beides untereinander“) – Artikel, Prüfung und Meine PSA; ohne Foto der Text allein wie bisher. */
+     nicht beides untereinander“) – Artikel und Prüfung; ohne Foto der Text allein wie bisher. */
   function mangelReihe(m, inhalt) {
     const fotos = mangelFotos(m, `Mangel vom ${S.fmtDate(m.created_at)}`);
     return fotos ? `<div class="mat-mangel-reihe">${fotos}<div class="mat-mangel-inhalt">${inhalt}</div></div>` : inhalt;

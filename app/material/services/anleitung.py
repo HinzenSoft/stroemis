@@ -59,7 +59,7 @@ THEMEN = {
     "formular": ("Prüfformulare", ""),
     # Formular-Pool (Schritt 38): bis der Artikel nachgezogen ist, an den Anfang – danach „seite-pruefformulare“ bzw.
     # „formular-pool-standard-und-zuweisung“ (test_material_anleitung prüft die Anker gegen den Artikel)
-    "formulare": ("Prüfformulare", ""),
+    "formulare": ("Prüfformulare", "seite-pruefformulare"),
     "meldungen": ("Produktmeldungen", ""),
     "suche": ("Suche, QR-Code und globale Suche", "nummernsuche"),
     "bestandsimport": ("Bestandsimport", ""),
@@ -80,7 +80,7 @@ THEMEN = {
     "kategorie_dokumente": ("Katalog", "dokumente-an-kategorien"),
     "katalogimport": ("Katalogimport und -export", "was-der-import-tut"),
     "bestandteile": ("Katalog", "bestandteil-liste"),
-    "pruefformular": ("Prüfformulare", ""),
+    "pruefformular": ("Prüfformulare", "formular-pool-standard-und-zuweisung"),
     "herstellerdokumente": ("Katalog", "herstellerdokumente"),
     "pruefpunkte": ("Prüfformulare", "pruefpunkte"),
     "eingangspruefung": ("Prüfung", "pruefarten"),
