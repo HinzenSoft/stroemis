@@ -337,7 +337,8 @@ def test_zwischenspeicher_und_bildausnahme():
             assert len(aufrufe) == 1, aufrufe
             # Eine Änderung über die Dienste (Standard der Gurte gelöst) rechnet sofort neu.
             pf = k["katalog"].get(f"/api/material/formulare/{ids['form_gurte']}").json["formular"]["formular_id"]
-            assert k["katalog"].put(f"/api/material/formular-pool/{pf}/zuweisung", json={}).status_code == 200
+            assert k["katalog"].put(f"/api/material/formular-pool/{pf}/zuweisung",
+                                    json={"kategorien": [], "produkte": []}).status_code == 200
             e, r, _html = einf(mitglied, "/materialablage?uebung=grund")
             assert len(aufrufe) == 2 and modelle(e["katalog"])["gurt"] is None, (aufrufe, modelle(e["katalog"]))
             assert mitglied.get(bilder[0], headers={"X-Uebung": "1"}).status_code in (200, 403)

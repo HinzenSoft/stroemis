@@ -900,8 +900,9 @@ def _produkt_text(p):
 # Katalogdatei, die sie noch trägt, gilt beim erneuten Import als unverändert (keine neue Version nur wegen der Marke).
 _PUNKTFELDER = ("group_name", "label", "editor", "mandatory", "expected_value")
 # Ein führendes „DEMO“ im Formulartitel („DEMO – “, „DEMO-“, „DEMO “) nimmt der Import heraus – auf dev heißen die
-# Platzhalter so, in der Produktion gibt es kein DEMO (Entscheidung vom 04.11.2026, katalog-transfer).
-_DEMO_VORN = re.compile(r"^DEMO(?:\s*[–—-]\s*|\s+)")
+# Platzhalter so, in der Produktion gibt es kein DEMO (Entscheidung vom 04.11.2026, katalog-transfer). Groß oder klein
+# („demo - …“, „Demo – …“; Sicherheitsprüfung Formular-Pool, Hinweis 4); „Demonstration …“ bleibt.
+_DEMO_VORN = re.compile(r"^DEMO(?:\s*[–—-]\s*|\s+)", re.IGNORECASE)
 
 
 def ohne_demo(titel):
@@ -915,12 +916,37 @@ def _formular_titel(e, ersatz):
     return ohne_demo(titel) or f"Prüfformular {ersatz}"[:160]
 
 
-def _formular_mit_titel(heimat, titel):
-    """Ein Formular im Pool von heimat, dessen aktive (sonst neueste) Version so heißt – oder None."""
+def _formular_mit_titel(heimat, titel, passt=None):
+    """Ein Formular im Pool von heimat, dessen aktive (sonst neueste) Version so heißt – das erste, für das passt(Kennung)
+    gilt – oder None."""
     for r in db.query("SELECT id FROM mat_formular WHERE category_id = ? ORDER BY id", (heimat,)):
-        if katalog._anzeige_titel(r["id"]) == titel:
+        if katalog._anzeige_titel(r["id"]) == titel and (passt is None or passt(r["id"])):
             return katalog.pool_formular(r["id"])
     return None
+
+
+def _nur_fuer(pf, erlaubt):
+    """Gilt das Formular höchstens für diese Ziele (erlaubt: {(„category_id“ | „product_id“, Kennung)}) – ist es nirgends
+    sonst Standard und keinem anderen Produkt zugewiesen? Nur ein solches darf ein Eintrag aus Format 1/2 umschreiben
+    (Sicherheitsprüfung Formular-Pool, Befund 1)."""
+    return all((("category_id", z["category_id"]) if z["category_id"] else ("product_id", z["product_id"])) in erlaubt
+               for z in db.query("SELECT category_id, product_id FROM mat_formular_zuweisung WHERE formular_id = ?",
+                                 (pf,)))
+
+
+def _uebernehmer(ziel, lauf):
+    """Die Produkte, die laut derselben Datei das Formular von Produkt ziel übernehmen („formular_von“, Format 1/2) – an
+    ihnen hängt es nach dem Import ohnehin (_zuweisungen); ein Formular, das nur ihnen und ziel gilt, bleibt das eigene."""
+    out = set()
+    for _ort, _name, angabe, pid in lauf.formularverweise:
+        if angabe is None:
+            continue
+        try:
+            if _produkt_ziel(angabe, lauf)["id"] == ziel:
+                out.add(pid)
+        except Abgelehnt:
+            continue                               # meldet _zuweisungen
+    return out
 
 
 def _versionen(pf, titel, punkte_roh, aktivieren, zielname, lauf, frisch=False):
@@ -956,8 +982,12 @@ def _versionen(pf, titel, punkte_roh, aktivieren, zielname, lauf, frisch=False):
         katalog.formular_aktivieren(fid)
     if angelegt or aktiviert:
         version = katalog.formular(fid)["version"]
+        # Wofür das geänderte Formular schon gilt (vor den Zuweisungen der Datei) – ein geteiltes ändert mehr als das
+        # Ziel des Eintrags (Sicherheitsprüfung Formular-Pool, Befund 1).
+        ziele = "" if frisch else katalog._ziele_text(pf)
         lauf.notiz(f"Formular „{titel}“ ({zielname}): " + (f"neue Version {version}{', aktiv' if aktiviert else ''}"
-                                                          if angelegt else f"Version {version} aktiviert"))
+                                                          if angelegt else f"Version {version} aktiviert")
+                   + (" – neu im Pool" if frisch else f" – gilt bisher: {ziele}" if ziele else " – bisher nirgends zugewiesen"))
     return fid
 
 
@@ -1006,6 +1036,14 @@ def _formular_3(e, ort, lauf, gesehen):
                         f"Datei in „{_kategorie_pfadname(heimat)}“ – Formulare lassen sich nicht verschieben.")
     if not pf_row:
         pf_row = _formular_mit_titel(heimat, titel)
+        if pf_row:
+            # Über den Titel gefunden (E3): Das Formular hier übernimmt Punkte und Kennung der Datei – der Bericht sagt,
+            # wofür es bisher galt (Sicherheitsprüfung Formular-Pool, Hinweis 1).
+            ziele = katalog._ziele_text(pf_row["id"])
+            lauf.bericht["hinweise"].append(
+                f"{ort} ({titel}): über den Titel dem Prüfformular hier im Pool von „{_kategorie_pfadname(heimat)}“ "
+                f"zugeordnet{' – es übernimmt die Katalogkennung der Datei' if uid and pf_row['uid'] != uid else ''}; "
+                + (f"bisher {ziele}." if ziele else "bisher nirgends zugewiesen."))
         if pf_row and uid and pf_row["uid"] != uid:
             lauf.uid_uebernehmen("mat_formular", "formular", pf_row, uid)
     pf = pf_row["id"] if pf_row else _neues_formular(heimat, titel, e.get("punkte"), lauf, uid)
@@ -1017,7 +1055,10 @@ def _formular_alt(e, ort, lauf):
     """Format 1 und 2: ein Formular gehört zu einer „kategorie“ (generisch) oder einem „produkt“ (spezifisch). Es kommt in
     den Pool der Kategorie bzw. der Kategorie des Produkts (wie in der Migration, Schritt 38) und wird – mit „aktivieren“
     (Vorgabe) – Standard der Kategorie bzw. dem Produkt zugewiesen. Abgeglichen über den Titel in der Heimat, sonst das
-    Formular, das dort schon Standard bzw. dem Produkt zugewiesen ist."""
+    Formular, das dort schon Standard bzw. dem Produkt zugewiesen ist – beides nur, wenn es für nichts anderes gilt
+    (_nur_fuer; beim Produkt zählen die mit, die es laut derselben Datei übernehmen): Format 1/2 kannte nur Formulare je
+    Ziel, ein geteiltes Formular des Pools (Standard, weitere Produkte) darf ein solcher Eintrag nicht umschreiben – er
+    bekommt ein neues im Pool (Sicherheitsprüfung Formular-Pool, Befund 1)."""
     if ("kategorie" in e) == ("produkt" in e):
         raise Abgelehnt("Ein Formular gehört entweder zu einer „kategorie“ oder zu einem „produkt“.")
     if "kategorie" in e:
@@ -1034,11 +1075,19 @@ def _formular_alt(e, ort, lauf):
     if not katalog.punkte_pruefen(e.get("punkte")):
         raise Abgelehnt("Ein Formular braucht mindestens einen Prüfpunkt.")
     aktivieren = e.get("aktivieren", True) is not False
-    pf_row = _formular_mit_titel(heimat, titel)
+    erlaubt = {(spalte, ziel)} | ({("product_id", q) for q in _uebernehmer(ziel, lauf)} if spalte == "product_id"
+                                  else set())
+    pf_row = _formular_mit_titel(heimat, titel, lambda pf: _nur_fuer(pf, erlaubt))
     if not pf_row:
         z = db.query(f"SELECT f.* FROM mat_formular_zuweisung z JOIN mat_formular f ON f.id = z.formular_id "
                      f"WHERE z.{spalte} = ? AND f.category_id = ?", (ziel, heimat), one=True)
-        pf_row = z
+        pf_row = z if z and _nur_fuer(z["id"], erlaubt) else None
+        geteilt = None if pf_row else (_formular_mit_titel(heimat, titel) or z)
+        if geteilt:
+            lauf.bericht["hinweise"].append(
+                f"{ort} ({titel}): Das Prüfformular „{katalog._anzeige_titel(geteilt['id'])}“ hier ist "
+                f"{katalog._ziele_text(geteilt['id'])} – {zielname} bekommt ein neues im Pool, das bestehende bleibt "
+                "unverändert.")
     pf = pf_row["id"] if pf_row else _neues_formular(heimat, titel, e.get("punkte"), lauf)
     _versionen(pf, titel, e.get("punkte"), aktivieren, zielname, lauf, frisch=not pf_row)
     if aktivieren:
@@ -1098,6 +1147,7 @@ def _zuweisungen(lauf):
         wunsch.setdefault(("product_id", pid), (pf, katalog._anzeige_titel(pf), ort))
     if lauf.version >= 3:
         formulare = {pf for _o, _t, pf, _k, _p in lauf.formulare}
+        geloest = []
         for z in db.query("SELECT * FROM mat_formular_zuweisung ORDER BY id"):
             spalte, ziel = ("category_id", z["category_id"]) if z["category_id"] else ("product_id", z["product_id"])
             beteiligt = (z["formular_id"] in formulare or ziel in (lauf.kategorien if spalte == "category_id"
@@ -1105,10 +1155,19 @@ def _zuweisungen(lauf):
             if beteiligt and wunsch.get((spalte, ziel), (None,))[0] != z["formular_id"]:
                 if (spalte, ziel) in wunsch:
                     continue                       # wechselt gleich zum Formular der Datei (Journal dort)
+                titel_z = katalog._anzeige_titel(z["formular_id"])
                 katalog._zuweisung_loesen(z, "steht nicht in der Katalogdatei")
                 zahl["geloest"] += 1
-                lauf.notiz(f"Prüfformular „{katalog._anzeige_titel(z['formular_id'])}“: {_ziel_text(spalte, ziel)} "
-                           "nicht mehr zugewiesen")
+                geloest.append(f"„{titel_z}“ an {_ziel_text(spalte, ziel)}")
+                lauf.notiz(f"Prüfformular „{titel_z}“: {_ziel_text(spalte, ziel)} nicht mehr zugewiesen")
+        if geloest and not lauf.formulare:
+            # Eine Datei ohne Formulare (etwa der Export einer Instanz ohne aktive) ist trotzdem maßgeblich (E2) – das
+            # soll niemand übersehen (Sicherheitsprüfung Formular-Pool, Hinweis 2).
+            bericht["warnungen"].append(
+                f"Die Datei enthält keine Prüfformulare. Weil sie maßgeblich ist, löst der Import {len(geloest)} "
+                f"Zuweisung{'en' if len(geloest) != 1 else ''} an ihre Kategorien und Produkte: "
+                + "; ".join(geloest[:10]) + (f" und {len(geloest) - 10} weitere" if len(geloest) > 10 else "")
+                + ". Diese Produkte fallen auf den Standard darüber zurück oder sind danach nicht prüfbar.")
     for (spalte, ziel), (pf, titel, ort) in wunsch.items():
         da = db.query(f"SELECT formular_id FROM mat_formular_zuweisung WHERE {spalte} = ?", (ziel,), one=True)
         if da and da["formular_id"] == pf:
@@ -1445,12 +1504,16 @@ def _abschluss(lauf, bericht_basis):
     """Kennzahlen, die nicht aus dem Durchgang selbst kommen, in seinen Bericht übernehmen."""
     b = lauf.bericht
     b.update(bericht_basis)
-    k, p = lauf.zugeordnet["category"], lauf.zugeordnet["product"]
-    if k or p:
-        teile = [f"{k} Kategorie{'n' if k != 1 else ''}" if k else "", f"{p} Produkt{'e' if p != 1 else ''}" if p else ""]
-        b["hinweise"].append(f"{' und '.join(t for t in teile if t)} gab es hier schon unter gleichem Namen bzw. gleicher "
-                             "Dublette – sie übernehmen die Katalogkennung der Datei und werden künftig auch nach "
-                             "Umbenennen oder Verschieben wiedergefunden.")
+    k, p, f = lauf.zugeordnet["category"], lauf.zugeordnet["product"], lauf.zugeordnet["formular"]
+    if k or p or f:
+        # Prüfformulare zählen mit: gefunden über den Titel in derselben Heimat (E3; Sicherheitsprüfung Formular-Pool,
+        # Hinweis 1 – je Formular steht dazu eine Zeile mit seinen bisherigen Zuweisungen).
+        teile = [f"{k} Kategorie{'n' if k != 1 else ''}" if k else "", f"{p} Produkt{'e' if p != 1 else ''}" if p else "",
+                 f"{f} Prüfformular{'e' if f != 1 else ''}" if f else ""]
+        teile = [t for t in teile if t]
+        b["hinweise"].append(f"{', '.join(teile[:-1]) + ' und ' if len(teile) > 1 else ''}{teile[-1]} gab es hier schon "
+                             "unter gleichem Namen bzw. gleicher Dublette – sie übernehmen die Katalogkennung der Datei "
+                             "und werden künftig auch nach Umbenennen oder Verschieben wiedergefunden.")
     return b
 
 
