@@ -1165,27 +1165,40 @@ def empfohlen_uebersicht():
     return sorted(out, key=lambda x: (x["gliederung"].casefold(), x["ordner_id"]))
 
 
-def ordner_inhalt(fid, status_filter=None, seite=1, pro_seite=100, sort=None, richtung="auf", zugeordnet=None,
-                  kategorie=None):
-    """Ein Ordner mit Pfad, Unterordnern (mit Zählung) und den Artikeln direkt darin, die das Konto sieht – in einem
-    teilweise sichtbaren Systemordner also nur die eigenen. Das Journal nur mit Grundrecht, die Einträge zu Freigaben
-    darin nur für Verwalter des Ordners. zugeordnet: nur Artikel dieser Person (und nur, wo das Grundrecht gilt).
-    „nacharbeit“: offene Zeilen aus Bestandsimporten in diesen Ordner – nur für Verwalter, sonst null.
-    kategorie (Wunsch vom 25.10.2026): nur Zeilen, deren Produkt in dieser Kategorie steht; eine unbekannte Kennung
-    ergibt eine leere Liste. „kategorien“: die Kategorien der Zeilen direkt hier
-    mit Zahl, nach Name. Die Zahlen zählen wie Filter in einer Leiste: „direkt“ (je Status) mit dem Kategoriefilter,
-    „kategorien“ mit dem Statusfilter – je Gruppe alle übrigen Filter außer dem eigenen; der Personenfilter zählt bei
-    beiden nicht mit (wie bisher bei „direkt“)."""
-    from .search import sortierung
-    ordnung = sortierung(artikel_sortierung(), sort, richtung, "i.inventory_no")
-    o = ordner(fid)
-    alle = {x["id"]: x for x in baum()}
-    if fid not in alle or alle[fid].get("nur_pfad"):
-        raise Abgelehnt(rechte.ORDNER_FEHLT, 404)
-    kinder = [x for x in alle.values() if x["parent_id"] == fid]
-    kinder.sort(key=lambda x: (x["system_kind"] is not None, x["position"], x["name"].casefold()))
-    params = dict(st.parameter(), fid=fid)
-    bedingung = f"WHERE i.folder_id = :fid AND {rechte.artikel_filter('i')}"
+# Ordnerseite (Wunsch vom 05.11.2026): je Gruppe – direkt im Ordner und je Unterordner – zuerst so viele Artikel, „weitere
+# anzeigen“ holt den Rest gruppenweise nach (zweig_gruppe).
+GRUPPE_MAX = 50
+
+
+def _zweig_ordner(alle, fid):
+    """Der sichtbare Zweig unter fid in Baumreihenfolge (wie die Seitenleiste: Systemordner zuletzt, sonst Position und
+    Name) als [(Ordner, Pfad relativ zu fid)] – fid selbst zuerst mit leerem Pfad. Was das Konto nicht sieht (fehlt im
+    Baum, Pfad-Knoten), fehlt samt seinem Zweig."""
+    kinder = {}
+    for x in alle.values():
+        if not x.get("nur_pfad"):
+            kinder.setdefault(x["parent_id"], []).append(x)
+    for liste in kinder.values():
+        liste.sort(key=lambda x: (x["system_kind"] is not None, x["position"], x["name"].casefold()))
+    out, gesehen = [], set()
+
+    def besuch(o, weg):
+        if o["id"] in gesehen:
+            return
+        gesehen.add(o["id"])
+        out.append((o, weg))
+        for k in kinder.get(o["id"], []):
+            besuch(k, weg + [k["name"]])
+    besuch(alle[fid], [])
+    return out
+
+
+def _zweig_bedingung(ids, status_filter, zugeordnet, kategorie, ausgesondert_mit):
+    """(WHERE …, Parameter) für die Artikel im Zweig (ids: die sichtbaren Ordner), die das Konto sieht, mit den Filtern.
+    Ohne Statusfilter fehlen ausgesonderte Artikel – außer ausgesondert_mit (die Seite des Systemordners „Ausgesondert“
+    selbst): Den Ordner „Ausgesondert“ zeigt ein Oberordner nur mit dem Filter „ausgesondert“ (Entscheidung 4)."""
+    params = st.parameter()
+    bedingung = f"WHERE i.folder_id IN {rechte._liste(ids)} AND {rechte.artikel_filter('i')}"
     if zugeordnet is not None:
         bedingung += f" AND i.assigned_user_id = :zugeordnet AND {rechte.artikel_filter('i', 'grund')}"
         params["zugeordnet"] = zugeordnet
@@ -1199,36 +1212,97 @@ def ordner_inhalt(fid, status_filter=None, seite=1, pro_seite=100, sort=None, ri
             raise Abgelehnt("Unbekannter Status.")
         bedingung += f" AND {st.status_sql('i')} = :sf"
         params["sf"] = status_filter
-    gesamt = db.query(f"SELECT COUNT(*) AS n FROM mat_item i {bedingung}", params, one=True)["n"]
-    seite = max(1, int(seite or 1))
-    rows = db.query(ARTIKEL_LISTE_SQL + bedingung + f" ORDER BY {ordnung} LIMIT :lim OFFSET :off",
-                    dict(params, lim=pro_seite, off=(seite - 1) * pro_seite))
-    out = alle[fid]
+    elif not ausgesondert_mit:
+        bedingung += " AND i.lock_state <> 'ausgesondert'"
+    return bedingung, params
+
+
+def _artikel_zeilen(ids):
+    """Die Listenzeilen (ARTIKEL_LISTE_SQL) dieser Artikel, nach Kennung."""
+    if not ids:
+        return {}
+    return {r["id"]: r for r in db.query(ARTIKEL_LISTE_SQL + f"WHERE i.id IN {rechte._liste(ids)}")}
+
+
+def _zweig_sicht(fid):
+    """(Ordner fid aus dem Baum, alle sichtbaren Ordner, Zweig in Baumreihenfolge) – 404, wenn das Konto fid nicht öffnen darf."""
+    alle = {x["id"]: x for x in baum()}
+    if fid not in alle or alle[fid].get("nur_pfad"):
+        raise Abgelehnt(rechte.ORDNER_FEHLT, 404)
+    return alle[fid], alle, _zweig_ordner(alle, fid)
+
+
+def ordner_inhalt(fid, status_filter=None, gruppe_max=GRUPPE_MAX, sort=None, richtung="auf", zugeordnet=None,
+                  kategorie=None):
+    """Ein Ordner mit Pfad, Unterordnern (mit Zählung) und den Artikeln seines ganzen Zweigs, die das Konto sieht
+    (Wunsch vom 05.11.2026, Entscheidungen 1–7) – in einem teilweise sichtbaren Systemordner also nur die eigenen. Das
+    Journal nur mit Grundrecht, die Einträge zu Freigaben darin nur für Verwalter des Ordners.
+
+    „gruppen“: in Baumreihenfolge zuerst der Ordner selbst (Pfad leer), dann jeder sichtbare Unterordner mit Treffern
+    ({id, name, kind, system_kind, pfad: Namen relativ zum Ordner, gesamt}); Gruppen ohne Treffer fehlen. „artikel“: je
+    Gruppe die ersten gruppe_max Artikel in der gewählten Sortierung, gruppenweise hintereinander (folder_id sagt die
+    Gruppe); den Rest holt zweig_gruppe. „artikel_gesamt“: alle Treffer im Zweig. Liste und Gruppenzahlen kommen aus
+    EINER Abfrage (Fensterfunktionen), die Zeilen dann über ihre Kennungen – kein Abruf je Gruppe.
+    Filter: zugeordnet – nur Artikel dieser Person (und nur, wo das Grundrecht gilt); kategorie – nur Zeilen, deren
+    Produkt in dieser Kategorie steht (eine unbekannte Kennung ergibt eine leere Liste); status_filter – ein Status oder
+    „aussonderung_empfohlen“. Ohne Statusfilter fehlen ausgesonderte Artikel (außer auf der Seite von „Ausgesondert“).
+    Die Zahlen zählen im ganzen Zweig wie Filter in einer Leiste: „zahlen“ (je Status, mit allen ausgesonderten) und
+    „empfohlen“ mit dem Kategoriefilter, „kategorien“ (nach Name) mit dem Statusfilter – je Gruppe alle übrigen Filter
+    außer dem eigenen; der Personenfilter zählt bei keiner mit. „direkt“ zählt wie im Baum nur, was direkt hier liegt.
+    „nacharbeit“: offene Zeilen aus Bestandsimporten in diesen Ordner – nur für Verwalter, sonst null."""
+    from .search import sortierung
+    ordnung = sortierung(artikel_sortierung(), sort, richtung, "i.inventory_no")
+    o = ordner(fid)
+    out, alle, zweig = _zweig_sicht(fid)
+    ids = [x["id"] for x, _ in zweig]
+    ausgesondert_mit = o["system_kind"] == "ausgesondert"
+    bedingung, params = _zweig_bedingung(ids, status_filter, zugeordnet, kategorie, ausgesondert_mit)
+    # Je Gruppe die Nummer in der Sortierung und die Zahl der Treffer – eine Abfrage über den ganzen Zweig.
+    treffer = db.query(
+        "SELECT id, folder_id, nr, n FROM (SELECT i.id, i.folder_id, "
+        f"ROW_NUMBER() OVER (PARTITION BY i.folder_id ORDER BY {ordnung}) AS nr, "
+        "COUNT(*) OVER (PARTITION BY i.folder_id) AS n "
+        f"FROM mat_item i JOIN mat_product p ON p.id = i.product_id {bedingung}) WHERE nr <= :lim",
+        dict(params, lim=gruppe_max))
+    je_gruppe = {}
+    for t in treffer:
+        je_gruppe.setdefault(t["folder_id"], []).append(t)
+    zeilen = _artikel_zeilen([t["id"] for t in treffer])
+    gruppen, artikel = [], []
+    for x, weg in zweig:
+        liste = sorted(je_gruppe.get(x["id"], []), key=lambda t: t["nr"])
+        if not liste:
+            continue
+        gruppen.append({"id": x["id"], "name": x["name"], "kind": x["kind"], "system_kind": x["system_kind"],
+                        "pfad": weg, "gesamt": liste[0]["n"]})
+        artikel += [artikel_kurz(zeilen[t["id"]]) for t in liste if t["id"] in zeilen]
+    kinder = [x for x, weg in zweig if len(weg) == 1]
     out["pfad"] = pfad(fid)
-    gl = gliederung_von(fid)
-    out["gliederung"] = gl
+    out["gliederung"] = gliederung_von(fid)
     out["unterordner"] = kinder
-    out["artikel"] = [artikel_kurz(r) for r in rows]
-    out["artikel_gesamt"] = gesamt
-    # Die Zahlen an den Statusfiltern zählen wie die Liste (Oberfläche O2).
-    zaehlung = st.leere_zaehlung()
-    sicht = f"i.folder_id = :fid AND {rechte.artikel_filter('i')}"
+    out["gruppen"] = gruppen
+    out["artikel"] = artikel
+    out["artikel_gesamt"] = sum(g["gesamt"] for g in gruppen)
+    out["pro_gruppe"] = gruppe_max
+    # Die Zahlen an den Filtern zählen im Zweig wie die Liste (Oberfläche O2) – je Status alle, auch die ausgesonderten.
+    sicht = f"i.folder_id IN {rechte._liste(ids)} AND {rechte.artikel_filter('i')}"
     nach_kat = " AND i.product_id IN (SELECT id FROM mat_product WHERE category_id = :kat)" if kategorie is not None else ""
+    zahlen = st.leere_zaehlung()
     for r in db.query(f"SELECT {st.status_sql('i')} AS s, COUNT(*) AS n FROM mat_item i WHERE {sicht}{nach_kat} "
-                      f"GROUP BY s", dict(st.parameter(), fid=fid, kat=kategorie)):
-        zaehlung[r["s"]] = r["n"]
-    out["direkt"] = zaehlung
+                      f"GROUP BY s", dict(st.parameter(), kat=kategorie)):
+        zahlen[r["s"]] = r["n"]
+    out["zahlen"] = zahlen
     out["empfohlen"] = db.query(f"SELECT COUNT(*) AS n FROM mat_item i WHERE {sicht}{nach_kat} AND {empfohlen_sql('i')}",
-                                dict(fid=fid, kat=kategorie), one=True)["n"]
+                                dict(kat=kategorie), one=True)["n"]
     nach_status = (f" AND {empfohlen_sql('i')}" if status_filter == EMPFOHLEN
-                   else f" AND {st.status_sql('i')} = :sf" if status_filter else "")
+                   else f" AND {st.status_sql('i')} = :sf" if status_filter
+                   else "" if ausgesondert_mit else " AND i.lock_state <> 'ausgesondert'")
     kats = db.query(f"SELECT p.category_id AS id, COUNT(*) AS n FROM mat_item i JOIN mat_product p ON p.id = i.product_id "
-                    f"WHERE {sicht}{nach_status} GROUP BY p.category_id", dict(st.parameter(), fid=fid, sf=status_filter))
+                    f"WHERE {sicht}{nach_status} GROUP BY p.category_id", dict(st.parameter(), sf=status_filter))
     out["kategorien"] = sorted(({"id": k["id"], "n": k["n"], "name": pf[-1]["name"] if pf else "",
                                  "pfad": " / ".join(x["name"] for x in pf)}
                                 for k in kats for pf in (katalog.kategorie_pfad(k["id"]),)),
                                key=lambda x: (x["name"].casefold(), x["pfad"].casefold()))
-    out["seite"], out["pro_seite"] = seite, pro_seite
     darf = out["darf"]
     out["journal"] = (journal.lesen([("folder", fid)], grenze=50,
                                     ohne=() if darf["verwalten"] else rechte.FREIGABE_AKTIONEN)
@@ -1242,6 +1316,26 @@ def ordner_inhalt(fid, status_filter=None, seite=1, pro_seite=100, sort=None, ri
     if o["kind"] == "set" and not o["system_kind"]:
         out["sammelprotokolle"] = sammelprotokolle_set(fid)
     return out
+
+
+def zweig_gruppe(fid, gruppe, ab=0, anzahl=GRUPPE_MAX, status_filter=None, sort=None, richtung="auf", zugeordnet=None,
+                 kategorie=None):
+    """„weitere anzeigen“ auf der Ordnerseite: die nächsten Artikel einer Gruppe (gruppe = fid selbst oder ein sichtbarer
+    Unterordner) ab dieser Stelle – mit denselben Filtern und derselben Sortierung wie ordner_inhalt. Eine Gruppe
+    außerhalb des sichtbaren Zweigs antwortet 404 wie Unbekanntes. {artikel, gesamt, ab}."""
+    from .search import sortierung
+    ordnung = sortierung(artikel_sortierung(), sort, richtung, "i.inventory_no")
+    o = ordner(fid)
+    _, _, zweig = _zweig_sicht(fid)
+    if gruppe not in {x["id"] for x, _ in zweig}:
+        raise Abgelehnt(rechte.ORDNER_FEHLT, 404)
+    bedingung, params = _zweig_bedingung([gruppe], status_filter, zugeordnet, kategorie,
+                                         o["system_kind"] == "ausgesondert")
+    ab = max(0, int(ab or 0))
+    gesamt = db.query(f"SELECT COUNT(*) AS n FROM mat_item i {bedingung}", params, one=True)["n"]
+    rows = db.query(ARTIKEL_LISTE_SQL + bedingung + f" ORDER BY {ordnung} LIMIT :lim OFFSET :off",
+                    dict(params, lim=anzahl, off=ab))
+    return {"artikel": [artikel_kurz(r) for r in rows], "gesamt": gesamt, "ab": ab}
 
 
 SAMMELPROTOKOLLE_MAX = 20

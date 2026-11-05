@@ -586,11 +586,12 @@ def test_artikel():
         assert iv["monate"] == 12 and iv["organisation"][0] == 24, iv
 
         # Mehrfachauswahl: mehrere Artikel auf einmal verschieben; nie in einen Systemordner.
-        alle = [x["id"] for x in w.get(f"/api/material/ordner/{gid}").json["ordner"]["artikel"]]
+        # Die Ordnerseite zeigt seit dem 05.11.2026 den ganzen Zweig – hier die Artikel direkt in der Gliederung.
+        alle = [x["id"] for x in w.get(f"/api/material/ordner/{gid}").json["ordner"]["artikel"] if x["folder_id"] == gid]
         assert w.post("/api/material/artikel/verschieben", json={"ids": alle, "folder_id": system["gesperrt"]}).status_code == 409
         r = w.post("/api/material/artikel/verschieben", json={"ids": alle, "folder_id": fz})
         assert r.status_code == 200 and r.json["verschoben"] == len(alle)
-        assert w.get(f"/api/material/ordner/{gid}").json["ordner"]["artikel_gesamt"] == 0
+        assert [g["id"] for g in w.get(f"/api/material/ordner/{gid}").json["ordner"]["gruppen"]] == [fz]
         # Ein gesperrter Artikel bleibt, wo er ist (hier von Hand gesetzt; die Sperre selbst prüft test_pruefung).
         with app.app_context():
             from app import db

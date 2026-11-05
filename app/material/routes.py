@@ -923,14 +923,30 @@ def ordner_anlegen():
 @api.get("/ordner/<int:fid>")
 @requires_folder("lesen", "fid")
 def ordner_lesen(fid):
-    """Auch ein teilweise sichtbarer Systemordner (nur die eigenen Artikel); Journal nur mit Grundrecht."""
-    # Ein Ordner zeigt bis zu 500 Artikel je Seite (Vorgabe 200) – mehr als die Suche, weil hier ganze
-    # Lager durchgesehen werden.
-    seite = search.seiten(request.args.get("seite", 1), 1)[0]
-    pro_seite = max(1, min(500, request.args.get("pro_seite", 200, type=int) or 200))
-    kategorie = kennung(request.args.get("kategorie"), "Kategorie", leer_erlaubt=True)
-    return jsonify(ordner=bestand.ordner_inhalt(fid, request.args.get("status") or None, seite, pro_seite,
-                                                *_sortier_args(), zugeordnet=_zugeordnet_arg(), kategorie=kategorie))
+    """Auch ein teilweise sichtbarer Systemordner (nur die eigenen Artikel); Journal nur mit Grundrecht. Die Artikel des
+    ganzen Zweigs je Gruppe (direkt hier, je Unterordner) – ?pro_gruppe= so viele je Gruppe (Vorgabe 50, höchstens 500;
+    die Importseite holt mit 1 nur den Kopf), den Rest GET …/gruppe/<gid> (Wunsch vom 05.11.2026)."""
+    return jsonify(ordner=bestand.ordner_inhalt(fid, request.args.get("status") or None, _pro_gruppe(),
+                                                *_sortier_args(), **_zweig_filter()))
+
+
+@api.get("/ordner/<int:fid>/gruppe/<int:gid>")
+@requires_folder("lesen", "fid")
+def ordner_gruppe(fid, gid):
+    """„weitere anzeigen“: die Artikel einer Gruppe des Zweigs ab ?ab= mit denselben Filtern und derselben Sortierung wie
+    GET /ordner/<fid>; eine Gruppe außerhalb des sichtbaren Zweigs antwortet 404."""
+    ab = max(0, request.args.get("ab", 0, type=int) or 0)
+    return jsonify(bestand.zweig_gruppe(fid, gid, ab, _pro_gruppe(), request.args.get("status") or None,
+                                        *_sortier_args(), **_zweig_filter()))
+
+
+def _pro_gruppe():
+    return max(1, min(500, request.args.get("pro_gruppe", bestand.GRUPPE_MAX, type=int) or bestand.GRUPPE_MAX))
+
+
+def _zweig_filter():
+    return {"zugeordnet": _zugeordnet_arg(),
+            "kategorie": kennung(request.args.get("kategorie"), "Kategorie", leer_erlaubt=True)}
 
 
 ZWISCHEN_GLIEDERUNGEN = ("Zwischen Gliederungen verschiebt nur, wer beide Gliederungen verwaltet – oder die "
