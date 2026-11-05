@@ -12,7 +12,9 @@ python tests/test_material_gruppe_nz.py  oder  pytest tests/test_material_gruppe
 2. Browser (1280 Maus, 360 Touch): optionale Punkte ohne Befundknöpfe, Bemerkung und Foto (auch nach Hin und Her);
    „alle n. z.“ an Gruppe und Untergruppe (Name für Bildschirmleser, 44 px am Finger, Tipp auf die Mitte trifft), ohne
    Rückfrage mit Toast, mit Rückfrage bei einem Mangel (Zahl genannt; Abbrechen ändert nichts), optionale Punkte bleiben,
-   Werte in der Datenbank, zurück je Punkt, Festschreiben danach über die Oberfläche; 30 Punkte unter 1 s; kein
+   Werte in der Datenbank, zurück je Punkt; zugeklappt, wenn alles „n. z.“ ist (Marke, „n Punkte zeigen“ mit
+   aria-expanded, „n. z. aufheben“, Untergruppen mit der Gruppe, nach dem Neuladen ebenso); Festschreiben danach über
+   die Oberfläche; 30 Punkte unter 1 s; kein
    waagerechter Bildlauf, keine Konsolenfehler. Ohne Chromium „übersprungen“ mit rc 0.
 3. Statisch: Knopfsprache und Touch-Regel.
 Alle Inhalte sind Platzhalter."""
@@ -215,6 +217,21 @@ def _mitte_trifft(s, sel):
     assert p and p["trifft"], (sel, p)
 
 
+KOPF = """(() => {{ const k = document.querySelector('.mat-gruppenkopf[data-g="{g}"][data-u="{u}"]');
+  const z = k.querySelector('.mat-nz-zeigen');
+  return [k.dataset.zustand, k.hidden, k.querySelector('.mat-befund') ? k.querySelector('.mat-befund').textContent : '',
+          z ? z.textContent.trim() : '', z ? z.getAttribute('aria-expanded') : '',
+          (k.querySelector('.mat-nz-auf') || {{}}).textContent || '', !!k.querySelector('.mat-alle-nz')]; }})()"""
+
+
+def kopf(s, g, u=-1):
+    return s.js(KOPF.format(g=g, u=u))
+
+
+def sichtbar(s, rid):
+    return s.js(f"(() => {{ const k = document.querySelector('#pp-{rid}'); return !!k && k.getClientRects().length > 0; }})()")
+
+
 def ablauf(u, ids, gid, breite, hoehe, touch):
     from einfuehrung_browser import PASSWORT, mail
     r = u.adm.post(f"{API}/artikel", json={"product_id": ids["gurt"], "folder_id": gid, "manufactured_on": "2025-01"})
@@ -272,7 +289,27 @@ def ablauf(u, ids, gid, breite, hoehe, touch):
         d = _db(u, pid)
         assert [d[t]["finding"] for t in ("Platzhalter K1", "Platzhalter K2", "Platzhalter K3")] == ["nicht_zutreffend"] * 3, d
         assert d["Platzhalter A1"]["finding"] == "ok" and d["Platzhalter S1"]["finding"] == "ok"
+        # Zugeklappt (dritter Wunsch): „nicht zutreffend“, „3 Punkte zeigen“, „n. z. aufheben“; die Punkte weg.
+        assert s.warte("document.querySelector('.mat-gruppenkopf[data-g=\"0\"][data-u=\"0\"]').dataset.zustand === 'zu'")
+        assert kopf(s, 0, 0) == ["zu", False, "nicht zutreffend", "3 Punkte zeigen", "false", "n. z. aufheben", False], kopf(s, 0, 0)
+        assert not any(sichtbar(s, n[t]) for t in ("Platzhalter K1", "Platzhalter K2", "Platzhalter K3"))
+        assert sichtbar(s, n["Platzhalter A1"]) and sichtbar(s, n["Platzhalter S1"])
+        if not touch:   # Fokus nach dem Zuklappen am Kopf (nicht verloren)
+            assert s.js("!!document.activeElement.closest('.mat-gruppenkopf[data-g=\"0\"][data-u=\"0\"]')")
+        assert s.js("document.querySelector('.mat-gruppenkopf[data-g=\"0\"][data-u=\"0\"] .mat-nz-auf').getAttribute('aria-label')") == (
+            f"{UK}: nicht zutreffend aufheben")
+        if touch:
+            for sel in ('.mat-gruppenkopf[data-g="0"][data-u="0"] .mat-nz-zeigen', '.mat-gruppenkopf[data-g="0"][data-u="0"] .mat-nz-auf'):
+                _mitte_trifft(s, sel)
+                assert s.js(f"document.querySelector({json.dumps(sel)}).getBoundingClientRect().height") >= 44, sel
+        # Aufklappen und wieder zu (aria-expanded).
+        assert klick(s, '.mat-gruppenkopf[data-g="0"][data-u="0"] .mat-nz-zeigen') is None
+        assert s.warte("document.querySelector('.mat-gruppenkopf[data-g=\"0\"][data-u=\"0\"] .mat-nz-zeigen').getAttribute('aria-expanded') === 'true'")
+        assert kopf(s, 0, 0)[3] == "Punkte ausblenden" and sichtbar(s, n["Platzhalter K1"])
         assert s.js(f"document.querySelector('{karte('Platzhalter K1')}').classList.contains('nz')")
+        assert klick(s, '.mat-gruppenkopf[data-g="0"][data-u="0"] .mat-nz-zeigen') is None
+        assert s.warte("document.querySelector('.mat-gruppenkopf[data-g=\"0\"][data-u=\"0\"] .mat-nz-zeigen').getAttribute('aria-expanded') === 'false'")
+        assert not sichtbar(s, n["Platzhalter K1"])
         # Mangel an A1 (Pflicht, „Nein“) mit Bemerkung → Gruppe A fragt nach, mit Zahl.
         assert klick(s, f'{karte("Platzhalter A1")} [data-wert="nein"]') is None
         assert s.warte(f"document.querySelector('{karte('Platzhalter A1')}').classList.contains('mangel')")
@@ -297,11 +334,30 @@ def ablauf(u, ids, gid, breite, hoehe, touch):
         # Optionale Punkte bleiben, wie sie sind; Gruppe B unberührt.
         assert (d["Platzhalter A2 optional"]["finding"], d["Platzhalter A2 optional"]["value"]) == ("ok", "nein")
         assert d["Platzhalter S2 optional"]["finding"] == "ok" and d["Platzhalter B1"]["finding"] == "ok"
+        # Gruppe A zugeklappt – samt Untergruppen und optionalen Punkten.
+        assert s.warte("document.querySelector('.mat-gruppenkopf[data-g=\"0\"][data-u=\"-1\"]').dataset.zustand === 'zu'")
+        assert kopf(s, 0) == ["zu", False, "nicht zutreffend", "8 Punkte zeigen", "false", "n. z. aufheben", False], kopf(s, 0)
+        assert kopf(s, 0, 0)[:2] == ["schlicht", True] and kopf(s, 0, 1)[:2] == ["schlicht", True]
+        assert not any(sichtbar(s, n[t]) for t in ("Platzhalter A1", "Platzhalter A2 optional", "Platzhalter K1", "Platzhalter S2 optional"))
+        # Aufklappen: alles da, Untergruppen schlicht (sie klappen mit der Gruppe).
+        assert klick(s, '.mat-gruppenkopf[data-g="0"][data-u="-1"] .mat-nz-zeigen') is None
+        assert s.warte(f"!!document.querySelector('{karte('Platzhalter A1')}').getClientRects().length")
+        assert kopf(s, 0, 0)[:2] == ["schlicht", False] and sichtbar(s, n["Platzhalter K1"])
         assert not s.js(f"document.querySelector('{karte('Platzhalter A1')}').classList.contains('mangel')")
-        # Zurück je Punkt: n. z. an A1 noch einmal → wieder der Sollwert.
+        # Zurück je Punkt: n. z. an A1 noch einmal → wieder der Sollwert; die Gruppe ist wieder offen, „Körper“ und
+        # „Schnapper“ (alle Punkte n. z.) klappen jetzt je für sich zu.
         assert klick(s, f'{karte("Platzhalter A1")} [data-befund="nicht_zutreffend"]') is None
         assert s.warte(f"document.querySelector('{karte('Platzhalter A1')} [data-wert=\"ja\"]').getAttribute('aria-checked') === 'true'")
         assert (_db(u, pid)["Platzhalter A1"]["finding"], _db(u, pid)["Platzhalter A1"]["value"]) == ("ok", "ja")
+        assert s.warte("document.querySelector('.mat-gruppenkopf[data-g=\"0\"][data-u=\"-1\"]').dataset.zustand === 'normal'")
+        assert kopf(s, 0)[6] and kopf(s, 0, 0)[0] == "zu" and kopf(s, 0, 1)[0] == "zu", (kopf(s, 0), kopf(s, 0, 0), kopf(s, 0, 1))
+        assert not sichtbar(s, n["Platzhalter K1"]) and not sichtbar(s, n["Platzhalter S1"])
+        # „n. z. aufheben“ an „Schnapper“: S1 wieder auf seinem Soll („nein“), Toast; der optionale S2 bleibt.
+        assert klick(s, '.mat-gruppenkopf[data-g="0"][data-u="1"] .mat-nz-auf') is None
+        assert _toast(s, f"„{US}“: 1 Punkt wieder offen"), "Toast fehlt"
+        assert s.warte("document.querySelector('.mat-gruppenkopf[data-g=\"0\"][data-u=\"1\"]').dataset.zustand === 'normal'")
+        assert (_db(u, pid)["Platzhalter S1"]["finding"], _db(u, pid)["Platzhalter S1"]["value"]) == ("ok", "nein")
+        assert sichtbar(s, n["Platzhalter S1"]) and sichtbar(s, n["Platzhalter S2 optional"])
         # 30 Punkte auf einmal (Festlegung 5: unter 1 s je Punkt-Anfrage).
         los = time.time()
         assert klick(s, '.mat-alle-nz[data-g="2"]') is None
@@ -310,6 +366,11 @@ def ablauf(u, ids, gid, breite, hoehe, touch):
         print(f"  {breite}×{hoehe}: 30 Punkte n. z. in {dauer:.2f} s")
         assert dauer < 2.5, dauer
         assert {d["finding"] for t, d in _db(u, pid).items() if t.startswith("Platzhalter V")} == {"nicht_zutreffend"}
+        # Nach dem Neuladen derselbe Zustand (aus den Befunden): „Viele“ und „Körper“ zu, „Schnapper“ offen.
+        s.oeffnen(f"/materialablage/pruefung/{pid}", warten=0.6)
+        assert s.warte("!!document.querySelector('.mat-gruppenkopf')")
+        assert [kopf(s, 2)[0], kopf(s, 0, 0)[0], kopf(s, 0, 1)[0], kopf(s, 0)[0]] == ["zu", "zu", "normal", "normal"]
+        assert kopf(s, 2)[3] == "30 Punkte zeigen" and not sichtbar(s, n["Platzhalter V1"]) and not sichtbar(s, n["Platzhalter K2"])
         assert s.js("document.documentElement.scrollWidth <= document.documentElement.clientWidth")
         # Festschreiben danach über die Oberfläche (Unterschrift im Profil hinterlegt).
         s.js("document.querySelector('.mat-abschluss-ende').scrollIntoView({ block: 'end' })")
@@ -356,12 +417,14 @@ def test_statisch():
         js = fh.read()
     with open(os.path.join(WURZEL, "app/material/static/material.css"), encoding="utf-8") as fh:
         css = fh.read()
-    knopf = js[js.index("const alleNzKnopf"):]
-    knopf = knopf[:knopf.index("\n")]
-    assert 'class="btn secondary small mat-alle-nz"' in knopf and ': alle Punkte nicht zutreffend">alle n. z.</button>' in knopf
+    kopf = js[js.index("    function kopfInnen("):js.index("    const kopfHtml")]
+    assert 'class="btn secondary small mat-alle-nz"' in kopf and ': alle Punkte nicht zutreffend">alle n. z.</button>' in kopf
+    assert 'class="lnk mat-nz-zeigen"' in kopf and 'aria-expanded="${auf}"' in kopf
+    assert 'class="btn secondary small mat-nz-auf"' in kopf and ': nicht zutreffend aufheben">n. z. aufheben</button>' in kopf
     aktion = js[js.index('"alle-nz": async'):js.index('"pnotiz-auf":')]
-    assert "endgueltig: false" in aktion and "btn ghost" not in aktion and "!nurAntwort(x)" in aktion
-    regel = ".mat-gruppenkopf > .mat-alle-nz { min-height: 44px; }"
+    assert "endgueltig: false" in aktion and "btn ghost" not in aktion and "nzFaehig(x)" in aktion
+    assert "const nzFaehig = (x) => !nurAntwort(x)" in js
+    regel = ".mat-gruppenkopf > :is(.mat-alle-nz, .mat-nz-auf) { min-height: 44px; }"
     i = css.index(regel)
     assert css.rfind("@media (pointer: coarse) {", 0, i) > css.rfind("\n}\n", 0, i), regel
     with open(os.path.join(WURZEL, "app/static/js/uebung/material.js"), encoding="utf-8") as fh:

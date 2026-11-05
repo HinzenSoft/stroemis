@@ -6703,19 +6703,88 @@
     }
 
     /* „alle n. z.“ an jeder Gruppen- und Untergruppenüberschrift (Wunsch vom 05.11.2026): setzt alle Punkte darunter – bei
-       einer Gruppe samt ihren Untergruppen – auf „nicht zutreffend“, über denselben Weg wie ein Tipp je Punkt. */
-    const alleNzKnopf = (name, g, u) => `<button type="button" class="btn secondary small mat-alle-nz" data-act="alle-nz" data-g="${g}" data-u="${u}" aria-label="${esc(name)}: alle Punkte nicht zutreffend">alle n. z.</button>`;
+       einer Gruppe samt ihren Untergruppen – auf „nicht zutreffend“, über denselben Weg wie ein Tipp je Punkt. Optionale
+       Antwortpunkte und ein Längenpunkt ohne vorgesehene Länge zählen nicht (sie kennen kein „n. z.“ bzw. nichts anderes).
+       Stehen alle übrigen Punkte eines Blocks auf „n. z.“, ist er zugeklappt (dritter Wunsch vom 05.11.2026, aus den
+       Befunden abgeleitet – nach dem Neuladen ebenso): an der Überschrift „nicht zutreffend“, „n Punkte zeigen“
+       (aria-expanded; aufgeklappt bleibt er nur in diesem Fenster) und „n. z. aufheben“ (die Punkte wieder auf ihre
+       Vorbelegung, wie ein zweiter Tipp auf „n. z.“). Untergruppen einer zugeklappten Gruppe klappen mit ihr. */
+    const nzFaehig = (x) => !nurAntwort(x) && !(x.art === "laenge" && !(pr.laenge && pr.laenge.moeglich));
+    const aufgeklappt = new Set();   // „g:u“ der zugeklappten Blöcke, die jemand aufgeklappt hat
+    function blockDaten(bloecke, g, u) {
+      const teil = bloecke.filter((y) => y.g === g && (u < 0 || y.u === u));
+      const faehig = teil.filter((y) => nzFaehig(y.x));
+      return { teil, faehig, alleNz: faehig.length > 0 && faehig.every((y) => y.x.befund === "nicht_zutreffend") };
+    }
+    // Zustand eines Kopfs: „normal“ (mit „alle n. z.“, falls es etwas zu setzen gibt), „zu“ (zugeklappt) oder „schlicht“
+    // (Untergruppe in einer zugeklappten Gruppe – sie klappt mit der Gruppe).
+    function kopfZustand(bloecke, g, u) {
+      const d = blockDaten(bloecke, g, u);
+      const gruppeZu = u >= 0 && Boolean((bloecke.find((y) => y.g === g) || { x: {} }).x.gruppe) && blockDaten(bloecke, g, -1).alleNz;
+      return Object.assign(d, { zustand: gruppeZu ? "schlicht" : d.alleNz ? "zu" : "normal" });
+    }
+    function kopfInnen(bloecke, g, u) {
+      const erster = bloecke.find((y) => y.g === g && (u < 0 || y.u === u)).x;
+      const name = u < 0 ? erster.gruppe : erster.untergruppe;
+      const titel = u < 0 ? `<h3 class="mat-gruppe">${esc(name)}</h3>` : `<h4 class="mat-untergruppe">${esc(name)}</h4>`;
+      const z = kopfZustand(bloecke, g, u);
+      if (z.zustand === "schlicht") return { html: titel, zustand: "schlicht" };
+      if (z.zustand === "normal") {
+        return { html: titel + (z.faehig.length ? `<button type="button" class="btn secondary small mat-alle-nz" data-act="alle-nz" data-g="${g}" data-u="${u}" aria-label="${esc(name)}: alle Punkte nicht zutreffend">alle n. z.</button>` : ""), zustand: "normal" };
+      }
+      const auf = aufgeklappt.has(`${g}:${u}`);
+      return { zustand: auf ? "auf" : "zu",
+        html: `${titel}<span class="mat-befund b-nicht_zutreffend">nicht zutreffend</span>
+          <button type="button" class="lnk mat-nz-zeigen" data-act="nz-zeigen" data-g="${g}" data-u="${u}" aria-expanded="${auf}" aria-controls="${z.teil.map((y) => `pp-${y.x.id}`).join(" ")}">${auf ? "Punkte ausblenden" : plural(z.teil.length, "Punkt zeigen", "Punkte zeigen")}</button>
+          <button type="button" class="btn secondary small mat-nz-auf" data-act="nz-aufheben" data-g="${g}" data-u="${u}" aria-label="${esc(name)}: nicht zutreffend aufheben">n. z. aufheben</button>` };
+    }
+    const kopfHtml = (bloecke, g, u) => {
+      const k = kopfInnen(bloecke, g, u);
+      return `<div class="mat-gruppenkopf${u >= 0 ? " mat-ug-kopf" : ""}" data-g="${g}" data-u="${u}" data-zustand="${k.zustand}">${k.html}</div>`;
+    };
+
+    // Köpfe und Sichtbarkeit nach jeder Änderung (abschlussAktualisieren): nur Köpfe, deren Zustand wechselt, werden neu
+    // gezeichnet; lag der Fokus darin oder in einem Punkt, der jetzt zuklappt, geht er auf den ersten Knopf des Kopfs.
+    function bloeckeZeichnen() {
+      const box = $(".mat-punkte", inhalt);
+      if (!box) return;
+      const bloecke = punktBloecke();
+      const ae = document.activeElement;
+      const fokusKopf = [];
+      $$(".mat-gruppenkopf", box).forEach((kopf) => {
+        const g = +kopf.dataset.g;
+        const u = +kopf.dataset.u;
+        const k = kopfInnen(bloecke, g, u);
+        if (k.zustand !== "zu" && k.zustand !== "auf") aufgeklappt.delete(`${g}:${u}`);
+        if (kopf.dataset.zustand === k.zustand) return;
+        const drin = kopf.contains(ae);
+        kopf.dataset.zustand = k.zustand;
+        kopf.innerHTML = k.html;
+        if (drin) fokusKopf.push(kopf);
+      });
+      const zu = (g, u) => { const k = $(`.mat-gruppenkopf[data-g="${g}"][data-u="${u}"]`, box); return Boolean(k) && k.dataset.zustand === "zu"; };
+      bloecke.forEach(({ x, g, u }) => {
+        const weg = zu(g, -1) || (u >= 0 && zu(g, u));
+        const karte = $(`#pp-${x.id}`, box);
+        const el = karte && (karte.parentElement.classList.contains("mat-in-ug") ? karte.parentElement : karte);
+        if (!el || el.hidden === weg) return;
+        if (weg && el.contains(ae)) fokusKopf.push($(`.mat-gruppenkopf[data-g="${g}"][data-u="${zu(g, -1) ? -1 : u}"]`, box));
+        el.hidden = weg;
+      });
+      $$(".mat-ug-kopf", box).forEach((k) => { k.hidden = zu(+k.dataset.g, -1); });
+      const ziel = fokusKopf.find(Boolean);
+      const knopf = ziel && $("button", ziel);
+      if (knopf) knopf.focus({ preventScroll: true });
+    }
 
     function punkteHtml() {
       if (!pr.punkte.length) return "";
       let html = "";
       // Untergruppen (Schritt 39): kleinere Zwischenüberschrift unter der Gruppe, ihre Punkte darunter eingezogen.
       const bloecke = punktBloecke();
-      // Nur, wo es Punkte mit „n. z.“ gibt – optionale Antwortpunkte haben keins.
-      const mitNz = (g, u) => bloecke.some((y) => y.g === g && (u < 0 || y.u === u) && !nurAntwort(y.x));
       bloecke.forEach(({ x, g, u, neuG, neuU }) => {
-        if (neuG && x.gruppe) html += `<div class="mat-gruppenkopf"><h3 class="mat-gruppe">${esc(x.gruppe)}</h3>${mitNz(g, -1) ? alleNzKnopf(x.gruppe, g, -1) : ""}</div>`;
-        if (neuU) html += `<div class="mat-gruppenkopf mat-ug-kopf"><h4 class="mat-untergruppe">${esc(x.untergruppe)}</h4>${mitNz(g, u) ? alleNzKnopf(x.untergruppe, g, u) : ""}</div>`;
+        if (neuG && x.gruppe) html += kopfHtml(bloecke, g, -1);
+        if (neuU) html += kopfHtml(bloecke, g, u);
         html += u >= 0 ? `<div class="mat-in-ug">${punktHtml(x)}</div>` : punktHtml(x);
       });
       return `<section class="section mat-punkte"><h2>Prüfpunkte</h2>
@@ -6781,6 +6850,7 @@
         <div class="mat-abschluss-ende"></div>`;
     }
     function abschlussAktualisieren() {
+      bloeckeZeichnen();
       const h = offeneHinweise();
       if (ergebnis === "einsatzbereit" && h.einsatzSperre) { ergebnis = null; abschlussMerken(); }
       const box = abschlussBox();
@@ -7167,6 +7237,27 @@
       });
     }
 
+    // Einen Befund an vielen Punkten: je Punkt dieselbe Anfrage wie ein Tipp – gleichzeitig, je Punkt in seiner Kette
+    // (punktAnfrage); was der Server ablehnt, nennt der Toast mit Grund.
+    async function befundFuerAlle(b, name, liste, befund, wort) {
+      b.setAttribute("aria-busy", "true");
+      liste.forEach((x) => { const k = $(`#pp-${x.id}`); if (k) k.classList.add("laedt"); });
+      const antworten = await Promise.allSettled(liste.map((x) => merken(punktAnfrage(x.id,
+        () => api(`${API}/pruefungen/${pr.id}/punkte/${x.id}`, { method: "PUT", body: { befund } })))));
+      const fehler = [];
+      antworten.forEach((a, i) => {
+        const k = $(`#pp-${liste[i].id}`);
+        if (k) k.classList.remove("laedt");
+        if (a.status === "fulfilled") punktErsetzen(a.value.punkt);
+        else fehler.push({ x: liste[i], e: a.reason });
+      });
+      if (b.isConnected) b.removeAttribute("aria-busy");
+      const gesetzt = liste.length - fehler.length;
+      if (!fehler.length) { toast(`„${name}“: ${plural(gesetzt, "Punkt", "Punkte")} ${wort}`); return; }
+      toast(`„${name}“: ${plural(gesetzt, "Punkt", "Punkte")} ${wort} – nicht gesetzt: ${fehler.slice(0, 5)
+        .map((f) => `${f.x.text} (${f.e.message})`).join("; ")}${fehler.length > 5 ? " …" : ""}`, true);
+    }
+
     aktionen = {
       pwert: (b) => punktSetzen(+b.dataset.rid, { wert: b.dataset.wert }),
       punterschrift: async (b) => {
@@ -7200,7 +7291,7 @@
         if (!kopfPunkt) return;
         const name = u < 0 ? kopfPunkt.x.gruppe : kopfPunkt.x.untergruppe;
         const liste = bloecke.filter((y) => y.g === g && (u < 0 || y.u === u)).map((y) => y.x)
-          .filter((x) => x.befund !== "nicht_zutreffend" && !nurAntwort(x));
+          .filter((x) => x.befund !== "nicht_zutreffend" && nzFaehig(x));
         if (!liste.length) { toast(`„${name}“: Alle Punkte sind schon nicht zutreffend.`); return; }
         // Optionale Antwortpunkte bleiben, wie sie sind (sie haben kein „n. z.“). Nachfragen nur, wenn dabei schon
         // Eingetragenes betroffen ist: ein Mangel (auch „Nein“ gegen das Soll), ein Foto, eine Bemerkung oder eine
@@ -7219,23 +7310,25 @@
             "Alle n. z.", "", { endgueltig: false, titel: `„${name}“: alle Punkte nicht zutreffend?` });
           if (!ja) return;
         }
-        b.setAttribute("aria-busy", "true");
-        liste.forEach((x) => { const k = $(`#pp-${x.id}`); if (k) k.classList.add("laedt"); });
-        // Je Punkt dieselbe Anfrage wie ein Tipp auf „n. z.“ – gleichzeitig, je Punkt in seiner Kette (punktAnfrage).
-        const antworten = await Promise.allSettled(liste.map((x) => merken(punktAnfrage(x.id,
-          () => api(`${API}/pruefungen/${pr.id}/punkte/${x.id}`, { method: "PUT", body: { befund: "nicht_zutreffend" } })))));
-        const fehler = [];
-        antworten.forEach((a, i) => {
-          const k = $(`#pp-${liste[i].id}`);
-          if (k) k.classList.remove("laedt");
-          if (a.status === "fulfilled") punktErsetzen(a.value.punkt);
-          else fehler.push({ x: liste[i], e: a.reason });
-        });
-        b.removeAttribute("aria-busy");
-        const gesetzt = liste.length - fehler.length;
-        if (!fehler.length) { toast(`„${name}“: ${plural(gesetzt, "Punkt", "Punkte")} nicht zutreffend`); return; }
-        toast(`„${name}“: ${plural(gesetzt, "Punkt", "Punkte")} nicht zutreffend – nicht gesetzt: ${fehler.slice(0, 5)
-          .map((f) => `${f.x.text} (${f.e.message})`).join("; ")}${fehler.length > 5 ? " …" : ""}`, true);
+        await befundFuerAlle(b, name, liste, "nicht_zutreffend", "nicht zutreffend");
+      },
+      "nz-zeigen": (b) => {
+        const schluessel = `${b.dataset.g}:${b.dataset.u}`;
+        if (aufgeklappt.has(schluessel)) aufgeklappt.delete(schluessel); else aufgeklappt.add(schluessel);
+        const kopf = b.closest(".mat-gruppenkopf");
+        kopf.dataset.zustand = "";              // neu zeichnen
+        bloeckeZeichnen();
+        const neu = $('[data-act="nz-zeigen"]', kopf);
+        if (neu) neu.focus({ preventScroll: true });
+      },
+      "nz-aufheben": async (b) => {
+        if (b.getAttribute("aria-busy") === "true") return;
+        const g = +b.dataset.g;
+        const u = +b.dataset.u;
+        const d = blockDaten(punktBloecke(), g, u);
+        const name = u < 0 ? d.teil[0].x.gruppe : d.teil[0].x.untergruppe;
+        // Wie ein zweiter Tipp auf „n. z.“: wieder die Vorbelegung (Ja/Nein der Sollwert, sonst „in Ordnung“ ohne Wert).
+        await befundFuerAlle(b, name, d.faehig.map((y) => y.x).filter((x) => x.befund === "nicht_zutreffend"), "ok", "wieder offen");
       },
       "pnotiz-auf": (b) => { const k = $(`#pp-${b.dataset.rid}`); const ta = $(".mat-pnotiz", k); ta.hidden = false; b.remove(); ta.focus(); },
       "pfoto-weg": async (b) => {

@@ -13034,6 +13034,19 @@ Unterschrift geht (wie beim einzelnen „n. z.“). Sonst ohne Rückfrage, Toast
 Zurück geht es je Punkt wie bisher. Optionale Antwortpunkte (unten) überspringt er; hat ein Block nur solche, fehlt der
 Knopf.
 
+**Zugeklappt, wenn alles „n. z.“ ist** (dritter Wunsch vom 05.11.2026: „Wenn eine Gruppe oder Untergruppe auf n. z.
+gesetzt wird, klappt es alle Prüfpunkte weg, bis man es ggf. aufhebt.“; `bloeckeZeichnen`, `kopfInnen`): Stehen alle
+Punkte einer Gruppe bzw. Untergruppe, die „n. z.“ kennen, darauf (gleich ob über „alle n. z.“ oder einzeln), sind ihre
+Punkte samt optionalen weggeklappt – abgeleitet aus den Befunden, kein neues Feld, nach dem Neuladen derselbe Zustand.
+An der Überschrift dann statt „alle n. z.“: Marke „nicht zutreffend“, Textknopf „n Punkte zeigen“ / „Punkte
+ausblenden“ (`aria-expanded`, `aria-controls`; aufgeklappt bleibt ein Block nur in diesem Fenster) und der graue Knopf
+„n. z. aufheben“ („<Name>: nicht zutreffend aufheben“; 44 px am Finger): Er setzt die Punkte wie ein zweiter Tipp auf
+„n. z.“ zurück auf ihre Vorbelegung – Ja/Nein auf den Sollwert, die übrigen auf „in Ordnung“ mit ihrem bisherigen Wert
+(leere Pflichtpunkte sind dann wieder offen) –, Toast „„Name“: n Punkte wieder offen“. Untergruppen einer zugeklappten
+Gruppe klappen mit ihr (ihre Köpfe ohne eigene Knöpfe); wird die Gruppe wieder offen, klappen Untergruppen, deren Punkte
+alle „n. z.“ sind, je für sich zu. Klappt ein Block unter dem Fokus zu, geht der Fokus auf seinen Kopf. Festschreiben
+und Prüfprotokoll unverändert (die Punkte stehen als „nicht zutreffend“ darin).
+
 **Optionale Punkte nur mit Antwort** (`pruefung.nur_antwort`, `NUR_ANTWORT`): Ein optionaler Punkt (Häkchen „optional“
 im Formular, `pflicht = false`) der Arten Ja/Nein, Text, Zahl oder Datum nimmt nur seine Antwort auf. Oberfläche:
 Ja/Nein nur „Ja | Nein“ (neutral markiert, kein Rot), Text/Zahl/Datum nur das Feld; kein „n. z.“, keine Befundknöpfe,
@@ -13052,7 +13065,8 @@ Unterschrifts- und Längenpunkte bleiben wie bisher (dort ist das Feld der Punkt
 **Tests**: neu `tests/test_material_gruppe_nz.py` (Dienst mit PDF-Text, Journal, Lebenslauf, Jahresbericht, CSV;
 Browser 1280 Maus und 360 Touch: Knöpfe und Namen, optionale Punkte ohne Befund/Bemerkung/Foto auch nach Hin und Her,
 Untergruppe ohne Rückfrage, Gruppe mit Rückfrage bei einem Mangel, Abbrechen ändert nichts, Werte in der Datenbank,
-zurück je Punkt, 30 Punkte, Festschreiben über die Oberfläche, 44 px gemessen, Tipp auf die Mitte trifft; statisch).
+zurück je Punkt, Zuklappen samt Untergruppen, Aufklappen, „n. z. aufheben“, Neuladen, 30 Punkte, Festschreiben über die
+Oberfläche, 44 px gemessen, Tipp auf die Mitte trifft; statisch).
 
 **Strömipedia** (nur genannt, Nachzug durch wiki-autor): Artikel zur Prüfung („alle n. z.“, optionale Punkte nur mit
 Antwort) und zu Prüfformularen (Häkchen „optional“).
