@@ -12857,7 +12857,7 @@ die Spalten aus Schritt 39), `_formular_titel` (zwei Neuzeichnungen mehr: Unterg
 ziehen, entfernen; Reihenfolge-Regel), „Prüfung“ und „Prüfprotokoll“ (Zwischenüberschrift), „Katalogimport und -export“
 (Feld `untergruppe`).
 
-**Bitte bestätigen**:
+**Bitte bestätigen** – **vom Nutzer bestätigt am 05.11.2026** („ja“):
 1. „+ Untergruppe“ legt eine **leere** Untergruppe an (anders als „+ Gruppe“, das einen leeren Punkt mitbringt) – der
    häufige Fall ist, vorhandene Punkte hineinzuziehen; der Hinweis „leer wird sie nicht gespeichert“ steht darunter.
 2. Eine Anfrage, deren Punkte die Reihenfolge-Regel verletzen, ordnet der Server stabil um (statt sie abzulehnen) – der
@@ -12941,7 +12941,7 @@ gemessene Tippflächen). Angepasst: `test_material` (`test_artikel`: „Mehrfach
 „Fällige Artikel dieser Person im ganzen Zweig“ entfällt) und „Systemordner Gesperrt und Ausgesondert“ (Gesperrt erscheint
 in der Gliederung als eigene Gruppe, Ausgesondert über den Filter).
 
-**Bitte bestätigen**:
+**Bitte bestätigen** – **vom Nutzer bestätigt am 05.11.2026** („ja“):
 1. „alle auswählen“ und das Häkchen einer Überschrift nehmen die **angezeigten** Artikel, auch nachgeladene; was nicht
    geladen ist, wird nicht mitgewählt (sonst verschöbe man Ungesehenes). Erst „Weitere anzeigen“, dann auswählen.
 2. Gezeigt wird, was **physisch** im Zweig liegt: Gesperrte Artikel eines Lagers stehen in der Gliederung unter „Gesperrt“,
@@ -12997,3 +12997,7 @@ kein Rollen, Umbruch nur mit fünf Reitern, Reiter → Seite, Zurück/Vor). Ange
 **Strömipedia** (nur genannt, Nachzug durch wiki-autor): Artikel „Katalog“ (Kopf ohne Knopf „Prüfformulare“) und
 „Prüfformulare“ (Weg dorthin: Reiter neben „Katalog“).
 
+**Reiter „Prüfformulare“ – vom Nutzer bestätigt am 05.11.2026** („ja“): Formularseiten markieren für die
+Material-Verwaltung „Prüfformulare“, für alle anderen „Katalog“; am Telefon zwei Reiterzeilen statt Rollen oder
+gekürzter Beschriftung; der Reiter öffnet immer alle Kategorien (die gewählte nimmt nur der Link „Prüfformulare (n)“
+mit).
