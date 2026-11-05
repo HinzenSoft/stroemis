@@ -90,9 +90,10 @@ const ordner = [
   { id: 3, parent_id: 2, name: "Platzhalter Regal <b>", position: 0, zaehlung: {} },
   { id: 4, parent_id: 1, name: "Platzhalter Fahrzeug", position: 1, zaehlung: {} }];
 const lauf = (katalog, daten, klapp) => new Function("leisteDaten", "leisteAktiv", "LEISTE_KATALOG", "ANSICHT", "$", "leer",
-  "baumKinder", "klappLesen", "esc", "schloss", "OHNE_FREIGABE",
+  "baumKinder", "klappLesen", "esc", "schloss", "OHNE_FREIGABE", "leisteZiel",
   teil("  const KLAPPZEICHEN", "  async function leisteLaden()") + "; leisteZeichnen();")(
-  daten, null, katalog, katalog ? "katalog" : "ordner", () => ziel, (t) => t, baumKinder, () => klapp, esc, () => "", "");
+  daten, null, katalog, katalog ? "katalog" : "ordner", () => ziel, (t) => t, baumKinder, () => klapp, esc, () => "", "",
+  (id) => "/materialablage/katalog" + (id ? "?kategorie=" + id : ""));
 lauf(false, ordner, { 2: false });
 const ordnerHtml = ziel.innerHTML;
 lauf(true, ordner.map((o) => ({ ...o, produkte: 1 })), {});
