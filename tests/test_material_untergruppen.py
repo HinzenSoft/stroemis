@@ -148,7 +148,7 @@ def test_schnittstelle_und_transfer():
         assert r.status_code == 201 and ordnung(r.json["formular"]["punkte"]) == GEORDNET, r.get_json()
         r = kp.post(f"{API}/formular-pool", json={"kategorie_id": ids["gurte"], "titel": "Platzhalter Kopie", "vorlage_id": fid})
         assert r.status_code == 201 and ordnung(r.json["formular"]["punkte"]) == GEORDNET, r.get_json()
-        assert kp.put(f"{API}/formular-pool/{pf}/zuweisung", json={"produkte": [ids["gurt"]]}).status_code == 200
+        assert kp.put(f"{API}/formular-pool/{pf}/zuweisung", json={"kategorien": [], "produkte": [ids["gurt"]]}).status_code == 200
 
         # Export (Format 3): „untergruppe“ je Punkt.
         roh = exportieren(kp)
@@ -213,7 +213,7 @@ def test_pruefung_und_protokoll():
         ids = katalog_grund(k["adm"])
         kp, w, p1 = k["katalog"], k["wart"], k["pruefer"]
         pf, fid = pool_neu(kp, ids["gurte"], "Platzhalter Prüfung", UNGEORDNET)
-        assert kp.put(f"{API}/formular-pool/{pf}/zuweisung", json={"kategorien": [ids["gurte"]]}).status_code == 200
+        assert kp.put(f"{API}/formular-pool/{pf}/zuweisung", json={"kategorien": [ids["gurte"]], "produkte": []}).status_code == 200
         gid, _ = gliederung(w)
         a = neuer_artikel(w, ids["gurt"], gid, manufactured_on=f"{_heute().year - 1}-01")
         r = starten(p1, a["id"])
@@ -331,7 +331,7 @@ def test_migration_38_39():
         kp, w, p1 = k["katalog"], k["wart"], k["pruefer"]
         alt = [dict(p, untergruppe="") for p in UNGEORDNET]
         pf, fid = pool_neu(kp, ids["gurte"], "Platzhalter Altbestand", alt)
-        assert kp.put(f"{API}/formular-pool/{pf}/zuweisung", json={"kategorien": [ids["gurte"]]}).status_code == 200
+        assert kp.put(f"{API}/formular-pool/{pf}/zuweisung", json={"kategorien": [ids["gurte"]], "produkte": []}).status_code == 200
         gid, _ = gliederung(w)
         a = neuer_artikel(w, ids["gurt"], gid, manufactured_on=f"{_heute().year - 1}-01")
         pr = starten(p1, a["id"]).json["pruefung"]
