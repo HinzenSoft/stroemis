@@ -89,6 +89,7 @@ Geschichte stehen. Schemaversion nach der Nachbesserung vor dem Merge: 30; mit d
 | Aufräumen: Schema 37 und Reste entfernter Funktionen | Elf Spalten entfernter Funktionen per `DROP COLUMN` (Prüfanleitung, Sets, „kritisch“ am Prüfpunkt, Katalogpfleger, nie benutzte), Index und zwei Wächter mit ihnen; toter Code: `rechte.urkunde_fehlt`, alter Pfad `…/pruefungen/<id>/abschliessen`, `GET /api/wiki/watches`, Übungsbilder im Wurzelordner, CSS-Regel ohne Erzeuger, „Teile laut Meldung“ | gebaut 04.11.2026 (Schema 37), Zweig aufraeumen, wartet auf Freigabe |
 | Formular-Pool je Kategorie (Schritt 38) | Statt generischer Formulare je Kategorie, spezifischer je Produkt und „Prüfformular übernehmen“: jedes Formular im Pool seiner Kategorie, Standard je Kategorie (erbt in Unterkategorien) oder Zuweisung an Produkte; Seite „Prüfformulare“ (nur Material-Verwaltung) mit Anlegen und Dialog „Zuweisen“, Formularseite „Gilt für“ und „Kopie anlegen“, Produkt- und Kategorieseite nur Anzeige; Migration mit Vorher/Nachher-Vergleich je Produkt; Katalogdatei Format 3 (aktive Formulare samt Zuweisungen, Import ohne DEMO, Datei maßgeblich); Zähler `katalog_stand` für die Übung | gebaut 04.11.2026 (Schema 38), Zweig formular-pool, wartet auf Freigabe |
 | Untergruppen in Prüfformularen (Schritt 39) | Eine Ebene unter der Gruppe: Feld `untergruppe` je Prüfpunkt und als Kopie in den Befundzeilen; Reihenfolge-Regel (erst ohne Untergruppe, dann Blöcke) im Dienst; Editor mit „+ Untergruppe“, Zwischenzeile, Griff, „Untergruppe entfernen“; Prüfung, Nur-Lese-Ansicht und PDF mit Zwischenüberschrift und Einzug; Katalogdatei Format 3 mit `untergruppe`; Übung | gebaut 04.11.2026 (Schema 39), Zweig untergruppen, wartet auf Freigabe |
+| Reiter „Prüfformulare“ | Eigener Reiter rechts neben „Katalog“ statt des Knopfs im Katalogkopf, nur für die Material-Verwaltung; markiert auf der Seite „Prüfformulare“ und den Formularseiten; am Telefon brechen fünf Reiter um statt zu rollen; Übung „Prüfformulare zuweisen“ beginnt mit dem Reiter | gebaut 05.11.2026 (kein Schemaschritt), Zweig tab-pruefformulare, wartet auf Freigabe |
 
 ## Abgleich mit dem Bestand (vor Lieferung 1)
 
@@ -12867,3 +12868,48 @@ ziehen, entfernen; Reihenfolge-Regel), „Prüfung“ und „Prüfprotokoll“ (
    behalten will, zieht sie vorher heraus.
 5. Untergruppen lassen sich wie Gruppen nur am Griff verschieben, nicht per Tastatur; Punkte per Tastatur über „⋯“.
 6. Im PDF steht die Zwischenzeile in der Spalte „Prüfpunkt“ (nicht unter „Nr.“), die Punkte darunter 4 mm eingezogen.
+
+## Reiter „Prüfformulare“ neben „Katalog“ (Wunsch des Nutzers, 05.11.2026)
+
+Wunsch (Bildschirmfoto des Katalogs mit den Knöpfen „Kategorie anlegen, Produkt anlegen, Produktmeldungen,
+Prüfformulare, Export / Import“): „Statt einem Button, mach einen neuen Tab neben Katalog für die Prüfformulare.“
+Bauauftrag `planung/tab-pruefformulare/auftrag.md`, kein Schemaschritt.
+
+**Modulnavigation** (`seite.html`): neuer Reiter **„Prüfformulare“** rechts neben „Katalog“, Adresse unverändert
+`/materialablage/katalog/formulare` (keine Weiterleitung nötig). Nur die **Material-Verwaltung** (auch die
+Plattform-Verwaltung) bekommt ihn – wie die Seite selbst (Entscheidung O6); der Server liefert ihn gar nicht erst aus
+(`formulare_reiter` aus `darf_alles()["katalog"]` in `routes._seite`, `_uebung_seite` und Meine PSA mit Modulzugang; in
+der Übung nach den Rechten des Teils – nur „Material-Verwaltung“). **Markierung** (`material.js`, `NAV`): auf der Seite
+„Prüfformulare“ und auf den **Formularseiten** (`/materialablage/katalog/formular/<id>`) der neue Reiter; wer ihn nicht
+hat, liest Formulare nur über Produkt und Kategorie – dort markiert die Formularseite weiter „Katalog“. Produkt,
+Katalog und Produktmeldungen markieren „Katalog“. Seitentitel („Prüfformulare – Katalog – …“), Brotkrumen
+„Katalog › Prüfformulare“, Anleitung-„i“, Kategorienleiste und die Suchzeile mit „☰ Kategorien“ (Katalog-Gruppe)
+bleiben, wie sie waren.
+
+**Katalogkopf**: Der graue Knopf „Prüfformulare“ (mit `?kategorie=` der gewählten Kategorie) ist weg; „Prüfformulare
+(n)“ in der Angabenzeile der Kategorie (an diese Kategorie) und „Standard-Prüfformular …“ bleiben.
+
+**Telefon** (`navAnordnen`, neue Klasse `.umbruch`): Die vier Reiter passten bis 344 px gerade in eine Zeile (Fold
+zugeklappt mit 4 px Polster), ein fünfter nicht – auch nicht als „Formulare“ statt „Prüfformulare“ (gemessen: bei 412 px
+fehlen 28 px, bei 360 px 80 px); die Beschriftung bleibt deshalb überall „Prüfformulare“. Statt seitlich zu rollen, brechen die Reiter dann um: Sie werden Glieder der Navigation selbst
+(`.mat-reiter { display: contents }`), sodass „☰“ (Produkt, Formular, Meldungen, Prüfung) vorn in der ersten Zeile
+steht statt in einer eigenen darüber – die Navigation bleibt zwei Zeilen hoch (101 px). Gemessen (Chromium, Touch,
+DEMO-Bestand): 344, 360, 375, 412 px – Katalog, Übersicht, Prüfungen: „Übersicht · Prüfungen · Bestand · Katalog“ /
+„Prüfformulare“; Formular- und Produktseite bei 344/360: „☰ · Übersicht · Prüfungen · Bestand“ / „Katalog ·
+Prüfformulare“; jeder Reiter 44 px hoch, Mitte trifft ihn, kein Rollen der Reiter und der Seite. 820 px (Tablet hochkant),
+1024 und 1280 px: eine Zeile wie bisher. Ohne den Reiter (alle anderen Rollen) ändert sich nichts (vier Reiter, eine
+Zeile).
+
+**Übung** (`app/static/js/uebung/material.js`, Teil „Material-Verwaltung“): Der Ablauf „Prüfformulare zuweisen“ beginnt
+jetzt im Katalog; erster Schritt „Die Prüfformulare haben einen eigenen Reiter neben „Katalog“. Öffne ihn.“ auf den
+Reiter (warten auf den Klick), danach wie bisher.
+
+**Tests**: neu `tests/test_material_reiter_formulare.py` (Markup je Rolle und Seite samt Reihenfolge, 403 für die
+übrigen, Übung je Teil; Skript und Stil: `NAV`, kein Knopf, Link „Prüfformulare (n)“, `.umbruch`, Übungsschritt; Browser
+1280 Maus, 820/375/360/344 Touch für Material-Verwaltung und Materialwart: Anzahl, Markierung, Treffbarkeit, 44 px,
+kein Rollen, Umbruch nur mit fünf Reitern, Reiter → Seite, Zurück/Vor). Angepasst: `test_material_l5` und
+`test_material_suchzeile` (fünf Reiter für `adm`, die Plattform-Verwaltung).
+
+**Strömipedia** (nur genannt, Nachzug durch wiki-autor): Artikel „Katalog“ (Kopf ohne Knopf „Prüfformulare“) und
+„Prüfformulare“ (Weg dorthin: Reiter neben „Katalog“).
+
