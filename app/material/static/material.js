@@ -6110,7 +6110,7 @@
     };
   }
 
-  const PRUEFPUNKTE_INFO = "Jeder Prüfpunkt ist Pflicht: Ohne Befund lässt sich die Prüfung nicht festschreiben. Wo ein Punkt entfallen darf (etwa Wartung oder Pflege), setzt du das Häkchen „optional“. "
+  const PRUEFPUNKTE_INFO = "Jeder Prüfpunkt ist Pflicht: Ohne Befund lässt sich die Prüfung nicht festschreiben. Wo ein Punkt entfallen darf (etwa Wartung oder Pflege), setzt du das Häkchen „optional“ – ein optionaler Ja/Nein-, Text-, Zahl- oder Datumspunkt nimmt bei der Prüfung nur seine Antwort auf (ohne Mangel, n. z., Foto und Bemerkung). "
     + "Bei der Prüfung ist jeder Befund mit „in Ordnung“ vorbelegt, Ja/Nein-Punkte mit ihrem Sollwert; bei Text und Zahl ist das Soll ein Hinweis für den Prüfer. "
     + "Ein Punkt der Art „Länge (m)“ ist mit der Länge des Artikels vorbelegt; trägt der Prüfer eine andere ein, "
     + "übernimmt das Festschreiben sie in den Artikel (nur bei Kategorien mit „Artikel haben eine Länge“). "
@@ -6207,6 +6207,13 @@
      Server – der Entwurf ist immer gespeichert. Prüfen und Anzeigen übernimmt der Server; hier wird nur
      vorab gezeigt, was er sagen würde (fehlendes Foto, erreichtes Lebensende). */
   const befundMarke = (b) => (b ? `<span class="mat-befund b-${esc(b)}">${esc(BEFUND[b] || b)}</span>` : '<span class="muted">–</span>');
+  /* Optionale Ja/Nein-, Text-, Zahl- und Datumspunkte (Wünsche vom 05.11.2026) nehmen nur ihre Antwort auf: kein
+     „in Ordnung/Mangel/n. z.“, keine Bemerkung, kein Foto – „Nein“ gegen das Soll ist kein Mangel. Der Server speichert
+     „in Ordnung“ (pruefung.nur_antwort); Protokoll und Ansicht nennen als Befund „optional“. istMangel: Was ein Entwurf
+     von vorher dort noch „Mangel“ nennt, zählt hier schon nicht mehr (das Festschreiben gleicht es auf dem Server an).
+     Foto, Unterschrift und Länge sind ihr Feld selbst und bleiben wie Pflichtpunkte. */
+  const nurAntwort = (x) => ["yesno", "text", "number", "date"].includes(x.art) && !x.pflicht;
+  const istMangel = (x) => x.befund === "mangel" && !nurAntwort(x);
   const isoHeute = (plusTage) => {
     const d = new Date(); d.setDate(d.getDate() + (plusTage || 0));
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -6370,7 +6377,7 @@
         pr.punkte = pr.punkte.map((x) => (x.id === neu.id ? neu : x));
         const karte = $(`#pp-${neu.id}`);
         const hinweis = karte && $(".mat-pflicht-notiz", karte);
-        const fehlt = neu.befund === "mangel" && !(neu.notiz || "").trim();
+        const fehlt = istMangel(neu) && !(neu.notiz || "").trim();
         if (karte && fehlt && !hinweis) $(".mat-pnotiz", karte).insertAdjacentHTML("afterend", '<span class="mat-pflicht mat-pflicht-notiz">Bemerkung ist Pflicht</span>');
         else if (hinweis && !fehlt) hinweis.remove();
         abschlussAktualisieren();
@@ -6610,8 +6617,9 @@
     }
 
     function punktHtml(x) {
-      const mangel = x.befund === "mangel";
-      const nz = x.befund === "nicht_zutreffend";
+      const mangel = istMangel(x);
+      const antwort = nurAntwort(x);
+      const nz = x.befund === "nicht_zutreffend" && !antwort;
       const laengeMoeglich = !!(pr.laenge && pr.laenge.moeglich);
       let steuer;
       if (x.art === "yesno") {
@@ -6620,9 +6628,9 @@
         const wort = istBestandteil(x) ? { ja: "vorhanden", nein: "fehlt" } : { ja: "Ja", nein: "Nein" };
         const gewaehlt = (w) => (w === "nz" ? nz : !nz && x.wert === w);
         const keiner = !["ja", "nein", "nz"].some(gewaehlt);
-        steuer = `<div class="mat-wahl3" role="radiogroup" aria-label="Befund zu ${esc(x.text)}">
-          ${["ja", "nein"].map((w, i) => `<button type="button" data-act="pwert" data-rid="${x.id}" data-wert="${w}" class="${w === x.soll ? "soll" : "abw"}"${radioAttrs(gewaehlt(w), keiner && !i)}>${wort[w]}</button>`).join("")}
-          <button type="button" data-act="pbefund" data-rid="${x.id}" data-befund="nicht_zutreffend"${radioAttrs(nz, false)} title="nicht zutreffend">n. z.</button></div>`;
+        steuer = `<div class="mat-wahl3" role="radiogroup" aria-label="${antwort ? "Antwort" : "Befund"} zu ${esc(x.text)}">
+          ${["ja", "nein"].map((w, i) => `<button type="button" data-act="pwert" data-rid="${x.id}" data-wert="${w}" class="${antwort ? "" : w === x.soll ? "soll" : "abw"}"${radioAttrs(gewaehlt(w), keiner && !i)}>${wort[w]}</button>`).join("")}
+          ${antwort ? "" : `<button type="button" data-act="pbefund" data-rid="${x.id}" data-befund="nicht_zutreffend"${radioAttrs(nz, false)} title="nicht zutreffend">n. z.</button>`}</div>`;
       } else if (x.art === "signature") {
         // Unterschriftsfeld: gezeichnet im Pad (unterschrift.js); „n. z.“ nimmt es heraus. Kein Foto.
         steuer = `<div class="mat-us-feld">
@@ -6642,14 +6650,17 @@
         const wahl = [["ok", "in Ordnung", "soll"], ["mangel", "Mangel", "abw"], ["nicht_zutreffend", "n. z.", ""]]
           .filter(([b]) => x.art !== "laenge" || laengeMoeglich || b === "nicht_zutreffend");
         const keiner = !wahl.some(([b]) => x.befund === b);
-        steuer = `${feld}<div class="mat-wahl3" role="radiogroup" aria-label="Befund zu ${esc(x.text)}">
+        steuer = antwort ? feld : `${feld}<div class="mat-wahl3" role="radiogroup" aria-label="Befund zu ${esc(x.text)}">
           ${wahl.map(([b, t, k], i) => `<button type="button" data-act="pbefund" data-rid="${x.id}" data-befund="${b}" class="${k}"${radioAttrs(x.befund === b, keiner && !i)}${b === "nicht_zutreffend" ? ' title="nicht zutreffend"' : ""}>${t}</button>`).join("")}</div>`;
       }
       const fotoPflicht = mangel || (x.art === "photo" && x.pflicht && !nz);
       // Zwei Wege zum Foto: „Foto“ öffnet am Telefon gleich die Kamera (capture), „Galerie“ nimmt ein schon
       // gemachtes Foto (Kamera-App, ohne Netz aufgenommen, vom Kollegen). Am Rechner öffnen beide nur die
       // Dateiauswahl – dort steht allein der erste (material.css). „Foto entfernen“ fragt nach und steht abgesetzt.
-      const foto = x.art === "signature" ? "" : `<div class="mat-punkt-foto">
+      // Ein optionaler Antwortpunkt nimmt kein Foto auf – nur ein altes (Entwurf von vorher) bleibt zu sehen und zu entfernen.
+      const foto = x.art === "signature" || (antwort && !x.foto) ? "" : antwort ? `<div class="mat-punkt-foto">
+          ${bildLink(x.foto.web, x.foto.original, x.text, "punkte", `<img src="${esc(x.foto.vorschau)}" alt="Foto zu ${esc(x.text)}">`)}
+          <button type="button" class="btn secondary small mat-foto-weg" data-act="pfoto-weg" data-rid="${x.id}">Foto entfernen</button></div>` : `<div class="mat-punkt-foto">
           ${x.foto ? bildLink(x.foto.web, x.foto.original, x.text, "punkte", `<img src="${esc(x.foto.vorschau)}" alt="Foto zu ${esc(x.text)}">`) : ""}
           <label class="btn secondary small mat-kamera">${x.foto ? "neues Foto" : "Foto"}<input type="file" accept="image/*" capture="environment" data-foto="${x.id}" class="mat-datei" aria-label="Foto zu ${esc(x.text)}"></label>
           <label class="btn secondary small mat-galerie">Galerie<input type="file" accept="image/*" data-foto="${x.id}" class="mat-datei" aria-label="Foto zu ${esc(x.text)} aus der Galerie wählen"></label>
@@ -6668,26 +6679,47 @@
         <div class="mat-punkt-kopf"><span class="mat-punkt-text">${esc(x.text)}</span>
           ${x.art === "yesno" && x.soll && !istBestandteil(x) ? `<span class="muted small">Soll ${esc(x.soll)}</span>` : ""}${x.art === "laenge" && laengeMoeglich ? `<span class="muted small">${x.soll ? `am Artikel ${esc(x.soll)} m` : "am Artikel keine Länge"}</span>` : ""}${x.pflicht ? "" : '<span class="muted small">optional</span>'}</div>
         <div class="mat-punkt-zeile">${steuer}${foto}
-          ${notiz ? "" : `<button type="button" class="lnk small" data-act="pnotiz-auf" data-rid="${x.id}"><span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Bemerkung<span class="k-anlegen"> anlegen</span></span></button>`}</div>
+          ${notiz || antwort ? "" : `<button type="button" class="lnk small" data-act="pnotiz-auf" data-rid="${x.id}"><span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Bemerkung<span class="k-anlegen"> anlegen</span></span></button>`}</div>
         <label for="pnotiz-${x.id}" class="mat-pnotiz-label">${mangel ? "Bemerkung zum Mangel" : "Bemerkung"}</label>
         <textarea class="mat-pnotiz" id="pnotiz-${x.id}" data-rid="${x.id}" rows="2" maxlength="1000" placeholder="${mangel ? "Pflicht: Was ist wo zu sehen?" : ""}" ${notiz ? "" : "hidden"}${mangel ? ' aria-required="true"' : ""}>${esc(x.notiz || "")}</textarea>
         ${mangel && !(x.notiz || "").trim() ? '<span class="mat-pflicht mat-pflicht-notiz">Bemerkung ist Pflicht</span>' : ""}
         ${nummern}</div>`;
     }
 
-    function punkteHtml() {
-      if (!pr.punkte.length) return "";
+    /* Die Prüfpunkte in ihren Blöcken: g zählt die Gruppenblöcke (ein Name kann in getrennten Blöcken wiederkehren), u
+       die Untergruppen darin (-1: ohne). Daraus zeichnet punkteHtml die Überschriften, und „alle n. z.“ findet seine Punkte. */
+    function punktBloecke() {
       let gruppe = null;
       let unter = "";
+      let g = -1;
+      let u = -1;
+      return pr.punkte.map((x) => {
+        const neuG = x.gruppe !== gruppe || g < 0;
+        if (neuG) { gruppe = x.gruppe; unter = ""; g += 1; u = -1; }
+        const neuU = (x.untergruppe || "") !== unter;
+        if (neuU) { unter = x.untergruppe || ""; if (unter) u += 1; }
+        return { x, g, u: unter ? u : -1, neuG, neuU: neuU && Boolean(unter) };
+      });
+    }
+
+    /* „alle n. z.“ an jeder Gruppen- und Untergruppenüberschrift (Wunsch vom 05.11.2026): setzt alle Punkte darunter – bei
+       einer Gruppe samt ihren Untergruppen – auf „nicht zutreffend“, über denselben Weg wie ein Tipp je Punkt. */
+    const alleNzKnopf = (name, g, u) => `<button type="button" class="btn secondary small mat-alle-nz" data-act="alle-nz" data-g="${g}" data-u="${u}" aria-label="${esc(name)}: alle Punkte nicht zutreffend">alle n. z.</button>`;
+
+    function punkteHtml() {
+      if (!pr.punkte.length) return "";
       let html = "";
       // Untergruppen (Schritt 39): kleinere Zwischenüberschrift unter der Gruppe, ihre Punkte darunter eingezogen.
-      pr.punkte.forEach((x) => {
-        if (x.gruppe !== gruppe) { gruppe = x.gruppe; unter = ""; html += gruppe ? `<h3 class="mat-gruppe">${esc(gruppe)}</h3>` : ""; }
-        if ((x.untergruppe || "") !== unter) { unter = x.untergruppe || ""; html += unter ? `<h4 class="mat-untergruppe">${esc(unter)}</h4>` : ""; }
-        html += unter ? `<div class="mat-in-ug">${punktHtml(x)}</div>` : punktHtml(x);
+      const bloecke = punktBloecke();
+      // Nur, wo es Punkte mit „n. z.“ gibt – optionale Antwortpunkte haben keins.
+      const mitNz = (g, u) => bloecke.some((y) => y.g === g && (u < 0 || y.u === u) && !nurAntwort(y.x));
+      bloecke.forEach(({ x, g, u, neuG, neuU }) => {
+        if (neuG && x.gruppe) html += `<div class="mat-gruppenkopf"><h3 class="mat-gruppe">${esc(x.gruppe)}</h3>${mitNz(g, -1) ? alleNzKnopf(x.gruppe, g, -1) : ""}</div>`;
+        if (neuU) html += `<div class="mat-gruppenkopf mat-ug-kopf"><h4 class="mat-untergruppe">${esc(x.untergruppe)}</h4>${mitNz(g, u) ? alleNzKnopf(x.untergruppe, g, u) : ""}</div>`;
+        html += u >= 0 ? `<div class="mat-in-ug">${punktHtml(x)}</div>` : punktHtml(x);
       });
       return `<section class="section mat-punkte"><h2>Prüfpunkte</h2>
-        <p class="help">Vorbelegt mit dem Sollwert – ändere nur, was abweicht. Ein Mangel braucht ein Foto und eine Bemerkung.</p>${html}</section>`;
+        <p class="help">Vorbelegt mit dem Sollwert – ändere nur, was abweicht. Ein Mangel braucht ein Foto und eine Bemerkung.${pr.punkte.some(nurAntwort) ? " Optionale Punkte nehmen nur ihre Antwort auf." : ""}</p>${html}</section>`;
     }
 
     function anhaengeListe() {
@@ -6722,12 +6754,12 @@
     function offeneHinweise() {
       const offen = pr.punkte.filter((x) => x.pflicht && x.befund !== "nicht_zutreffend"
         && (x.art === "photo" ? !x.foto : x.art === "signature" ? !x.unterschrift : x.art === "yesno" ? !x.wert : !(x.wert || "").trim()));
-      const ohneFoto = pr.punkte.filter((x) => x.befund === "mangel" && !x.foto);
-      const ohneNotiz = pr.punkte.filter((x) => x.befund === "mangel" && !(x.notiz || "").trim());
+      const ohneFoto = pr.punkte.filter((x) => istMangel(x) && !x.foto);
+      const ohneNotiz = pr.punkte.filter((x) => istMangel(x) && !(x.notiz || "").trim());
       // Bei einem Mangel wählt der Prüfer das Ergebnis selbst – die Sperre durch „kritische“ Punkte ist am 03.11.2026
       // entfallen; „einsatzbereit“ schließt hier nur noch ein erreichtes Lebensende aus (wie auf dem Server).
       const ldErreicht = pr.lebensdauer && pr.lebensdauer.erreicht;
-      return { offen, ohneFoto, ohneNotiz, einsatzSperre: !!ldErreicht, maengel: pr.punkte.filter((x) => x.befund === "mangel") };
+      return { offen, ohneFoto, ohneNotiz, einsatzSperre: !!ldErreicht, maengel: pr.punkte.filter(istMangel) };
     }
 
     // Mit weichem Trennstrich: Am schmalen Telefon (bis 360 px) brechen „einsatzbereit“ und „instandsetzen“ in zwei
@@ -6780,7 +6812,8 @@
     function leseHtml() {
       const zeilen = pr.punkte.map((x) => `<tr class="${x.befund === "mangel" ? "mat-mangelzeile" : ""}">
           <td data-l="Prüfpunkt" class="mat-k-ohne">${x.gruppe || x.untergruppe ? `<span class="muted small">${esc([x.gruppe, x.untergruppe].filter(Boolean).join(" › "))}</span><br>` : ""}<span class="mat-mehrzeilig">${esc(x.text)}</span></td>
-          <td data-l="Befund" class="mat-k-kurz mat-k-ohne">${x.art === "signature" && !x.unterschrift && x.befund !== "nicht_zutreffend" ? '<span class="muted">nicht unterschrieben</span>' : befundMarke(x.befund)}</td><td data-l="Wert" class="mat-k-kurz">${x.art === "signature" && x.unterschrift ? `<img class="mat-us-mini" src="${esc(x.unterschrift)}" alt="Unterschrift">`
+          <td data-l="Befund" class="mat-k-kurz mat-k-ohne">${x.art === "signature" && !x.unterschrift && x.befund !== "nicht_zutreffend" ? '<span class="muted">nicht unterschrieben</span>'
+            : nurAntwort(x) && x.befund === "ok" ? '<span class="muted">optional</span>' : befundMarke(x.befund)}</td><td data-l="Wert" class="mat-k-kurz">${x.art === "signature" && x.unterschrift ? `<img class="mat-us-mini" src="${esc(x.unterschrift)}" alt="Unterschrift">`
             : x.art === "laenge" && x.wert ? `${esc(x.wert)} m${x.soll && x.soll !== x.wert ? ` <span class="muted small mat-soll">(vorher ${esc(x.soll)} m)</span>` : x.soll ? ' <span class="muted small mat-soll">(unverändert)</span>' : ""}`
             : istBestandteil(x) && x.art === "yesno" && x.wert ? esc(x.wert === "ja" ? "vorhanden" : "fehlt")
             : x.wert ? esc(x.wert) : '<span class="muted">–</span>'}${x.art === "yesno" && x.soll && !istBestandteil(x) ? ` <span class="muted small mat-soll">(Soll ${esc(x.soll)})</span>` : ""}${nummernLesen(x)}</td>
@@ -7158,11 +7191,57 @@
           && !(await confirm(`„${x.text}“ als nicht zutreffend markieren? Die Unterschrift darin wird dabei entfernt.`, "Unterschrift entfernen"))) return;
         punktSetzen(x.id, { befund });
       },
+      "alle-nz": async (b) => {
+        if (b.getAttribute("aria-busy") === "true") return;
+        const g = +b.dataset.g;
+        const u = +b.dataset.u;
+        const bloecke = punktBloecke();
+        const kopfPunkt = bloecke.find((y) => y.g === g && (u < 0 || y.u === u));
+        if (!kopfPunkt) return;
+        const name = u < 0 ? kopfPunkt.x.gruppe : kopfPunkt.x.untergruppe;
+        const liste = bloecke.filter((y) => y.g === g && (u < 0 || y.u === u)).map((y) => y.x)
+          .filter((x) => x.befund !== "nicht_zutreffend" && !nurAntwort(x));
+        if (!liste.length) { toast(`„${name}“: Alle Punkte sind schon nicht zutreffend.`); return; }
+        // Optionale Antwortpunkte bleiben, wie sie sind (sie haben kein „n. z.“). Nachfragen nur, wenn dabei schon
+        // Eingetragenes betroffen ist: ein Mangel (auch „Nein“ gegen das Soll), ein Foto, eine Bemerkung oder eine
+        // Unterschrift. Fotos und Bemerkungen bleiben am Punkt, eine Unterschrift geht.
+        const mitMangel = liste.filter(istMangel).length;
+        const mitFoto = liste.filter((x) => x.foto).length;
+        const mitNotiz = liste.filter((x) => (x.notiz || "").trim()).length;
+        const mitUs = liste.filter((x) => x.unterschrift).length;
+        const betroffen = liste.filter((x) => istMangel(x) || x.foto || (x.notiz || "").trim() || x.unterschrift).length;
+        if (betroffen) {
+          const teile = [mitMangel && plural(mitMangel, "Mangel", "Mängel"),
+            mitFoto && plural(mitFoto, "Foto", "Fotos"), mitNotiz && plural(mitNotiz, "Bemerkung", "Bemerkungen"),
+            mitUs && plural(mitUs, "Unterschrift", "Unterschriften")].filter(Boolean);
+          const folge = `Ihr Befund wird „nicht zutreffend“${mitFoto || mitNotiz ? "; Fotos und Bemerkungen bleiben am Punkt" : ""}${mitUs ? "; Unterschriften werden entfernt" : ""}. Zurücknehmen kannst du es je Punkt.`;
+          const ja = await confirm(`Bei ${betroffen} von ${plural(liste.length, "Punkt", "Punkten")} ist schon etwas eingetragen: ${teile.join(", ")}. ${folge}`,
+            "Alle n. z.", "", { endgueltig: false, titel: `„${name}“: alle Punkte nicht zutreffend?` });
+          if (!ja) return;
+        }
+        b.setAttribute("aria-busy", "true");
+        liste.forEach((x) => { const k = $(`#pp-${x.id}`); if (k) k.classList.add("laedt"); });
+        // Je Punkt dieselbe Anfrage wie ein Tipp auf „n. z.“ – gleichzeitig, je Punkt in seiner Kette (punktAnfrage).
+        const antworten = await Promise.allSettled(liste.map((x) => merken(punktAnfrage(x.id,
+          () => api(`${API}/pruefungen/${pr.id}/punkte/${x.id}`, { method: "PUT", body: { befund: "nicht_zutreffend" } })))));
+        const fehler = [];
+        antworten.forEach((a, i) => {
+          const k = $(`#pp-${liste[i].id}`);
+          if (k) k.classList.remove("laedt");
+          if (a.status === "fulfilled") punktErsetzen(a.value.punkt);
+          else fehler.push({ x: liste[i], e: a.reason });
+        });
+        b.removeAttribute("aria-busy");
+        const gesetzt = liste.length - fehler.length;
+        if (!fehler.length) { toast(`„${name}“: ${plural(gesetzt, "Punkt", "Punkte")} nicht zutreffend`); return; }
+        toast(`„${name}“: ${plural(gesetzt, "Punkt", "Punkte")} nicht zutreffend – nicht gesetzt: ${fehler.slice(0, 5)
+          .map((f) => `${f.x.text} (${f.e.message})`).join("; ")}${fehler.length > 5 ? " …" : ""}`, true);
+      },
       "pnotiz-auf": (b) => { const k = $(`#pp-${b.dataset.rid}`); const ta = $(".mat-pnotiz", k); ta.hidden = false; b.remove(); ta.focus(); },
       "pfoto-weg": async (b) => {
         // Wie beim Anhang und bei der Unterschrift erst nachfragen – beim Mangel ist das Foto der Beleg.
         const x = punkt(+b.dataset.rid);
-        const frage = x && x.befund === "mangel" ? "Das Foto zu diesem Mangel entfernen? Ohne Foto lässt sich die Prüfung nicht festschreiben."
+        const frage = x && istMangel(x) ? "Das Foto zu diesem Mangel entfernen? Ohne Foto lässt sich die Prüfung nicht festschreiben."
           : "Dieses Foto entfernen?";
         if (!(await confirm(frage, "Entfernen"))) return;
         try { punktErsetzen((await punktAnfrage(b.dataset.rid, () => api(`${API}/pruefungen/${pr.id}/punkte/${b.dataset.rid}/foto`, { method: "DELETE" }))).punkt); }

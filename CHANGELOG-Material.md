@@ -13013,3 +13013,46 @@ für alle anderen führt der Baum dort weiter in den Katalog (`LEISTE_POOL`, `le
 statt „Katalog / Prüfformulare“; ohne Auswahl keine Brotkrumen. Formularseiten zeigen für die Material-Verwaltung
 denselben Pfad bis zur Heimat, für alle anderen weiter „Katalog / Heimat“. `katalog.pool` liefert dafür `auswahl`
 (Pfad mit Kennungen). Test: `test_material_reiter_formulare.py`.
+
+## Prüfung: „alle n. z.“ je Gruppe; optionale Punkte nur mit Antwort (Wünsche des Nutzers, 05.11.2026)
+
+Wünsche (Bildschirmfotos einer offenen Prüfung): „Möglichkeit beim Prüfen für eine Gruppe oder Untergruppe direkt n. z.
+auszuwählen.“ – „Bei optional sollte Nein kein Mangel in der Prüfung sein.“ – optionale Ja/Nein-Punkte nur „Ja“/„Nein“,
+optionale Text-Punkte nur das Feld (keine Befundknöpfe, keine Bemerkung, kein Foto). Bauauftrag
+`planung/gruppe-nz/auftrag.md` mit zwei Zusätzen, kein Schemaschritt.
+
+**„alle n. z.“** (`material.js`, `punktBloecke`, Aktion `alle-nz`): An jeder Gruppen- und Untergruppenüberschrift des
+Entwurfs (auch der Berichtigung) ein kleiner grau umrandeter Knopf „alle n. z.“ rechts (`.mat-gruppenkopf`; Name für
+Bildschirmleser „<Gruppe>: alle Punkte nicht zutreffend“; am Finger 44 px). Er setzt alle Punkte darunter – bei einer
+Gruppe samt Untergruppen – auf „nicht zutreffend“: je Punkt dieselbe Anfrage wie ein Tipp auf „n. z.“
+(`PUT …/punkte/<id>` mit `befund`), gleichzeitig und je Punkt in seiner Kette; die Server-Regeln bleiben, was er
+ablehnt, nennt der Toast mit Grund. Gemessen: 30 Punkte am Server 0,18 s (Test-Client), im Browser vom Tipp bis zum
+Toast 0,7 s – kein eigener Sammelweg nötig (Festlegung 5). Rückfrage („„Gruppe“: alle Punkte nicht zutreffend?“, kein
+Löschen – roter Knopf „Alle n. z.“) nur, wenn schon Mängel, Fotos, Bemerkungen oder Unterschriften betroffen sind, mit
+Zahlen („Bei 1 von 2 Punkten ist schon etwas eingetragen: 1 Mangel. …“); Fotos und Bemerkungen bleiben am Punkt, eine
+Unterschrift geht (wie beim einzelnen „n. z.“). Sonst ohne Rückfrage, Toast „„Gruppe“: n Punkte nicht zutreffend“.
+Zurück geht es je Punkt wie bisher. Optionale Antwortpunkte (unten) überspringt er; hat ein Block nur solche, fehlt der
+Knopf.
+
+**Optionale Punkte nur mit Antwort** (`pruefung.nur_antwort`, `NUR_ANTWORT`): Ein optionaler Punkt (Häkchen „optional“
+im Formular, `pflicht = false`) der Arten Ja/Nein, Text, Zahl oder Datum nimmt nur seine Antwort auf. Oberfläche:
+Ja/Nein nur „Ja | Nein“ (neutral markiert, kein Rot), Text/Zahl/Datum nur das Feld; kein „n. z.“, keine Befundknöpfe,
+kein „+ Bemerkung“, kein Foto – auch nicht nach Hin- und Herklicken; über den Prüfpunkten der Satz „Optionale Punkte
+nehmen nur ihre Antwort auf.“ Server: Befund immer „in Ordnung“ (auch „Nein“ gegen das Soll); `befund` „mangel“ und
+„nicht_zutreffend“, eine neue Bemerkung und ein Foto lehnt er ab (400), eine alte Bemerkung leeren geht. Damit kein Mangel
+in Ergebnis, Festschreiben (keine Foto-/Bemerkungspflicht; „instandsetzen“ ohne Mangel braucht einen Grund), Journal,
+Lebenslauf, Jahresbericht/CSV, Sperre. Prüfprotokoll: Befund „optional“ (grau), die Antwort unter „Wert“ (z. B. „Ja ·
+optional · Nein“ für Soll · Befund · Wert); die festgeschriebene Ansicht zeigt „optional“. Ältere Entwürfe und
+Berichtigungen älterer Prüfungen mit Mangel oder „n. z.“ an solchen Punkten zeigen keinen Mangel mehr und werden beim
+Festschreiben „in Ordnung“ (`_nur_antwort_angleichen`; Antwort, alte Bemerkung und altes Foto bleiben – ein altes Foto
+lässt sich entfernen); festgeschriebene Prüfungen und ihre Protokolle bleiben unverändert. Optionale Foto-,
+Unterschrifts- und Längenpunkte bleiben wie bisher (dort ist das Feld der Punkt selbst). Info im Formular-Editor
+(„Prüfpunkte“) ergänzt. Übung: Ja/Nein an optionalen Punkten ohne Mangel (`uebung/material.js`); kein neuer Schritt.
+
+**Tests**: neu `tests/test_material_gruppe_nz.py` (Dienst mit PDF-Text, Journal, Lebenslauf, Jahresbericht, CSV;
+Browser 1280 Maus und 360 Touch: Knöpfe und Namen, optionale Punkte ohne Befund/Bemerkung/Foto auch nach Hin und Her,
+Untergruppe ohne Rückfrage, Gruppe mit Rückfrage bei einem Mangel, Abbrechen ändert nichts, Werte in der Datenbank,
+zurück je Punkt, 30 Punkte, Festschreiben über die Oberfläche, 44 px gemessen, Tipp auf die Mitte trifft; statisch).
+
+**Strömipedia** (nur genannt, Nachzug durch wiki-autor): Artikel zur Prüfung („alle n. z.“, optionale Punkte nur mit
+Antwort) und zu Prüfformularen (Häkchen „optional“).
