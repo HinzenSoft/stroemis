@@ -12767,7 +12767,8 @@ als leer.
   `test_material` (zwei Stellen und Helfer `formular_neu`), `test_material_dokumente`,
   `test_material_pruefpunkt_absatz`, `test_einfuehrung_katalog`.
 
-**Bitte bestätigen**:
+**Bitte bestätigen** – **vom Nutzer bestätigt am 04.11.2026** („ja“ zu 1 und zu „zwei gleichnamige Formulare im selben
+Pool statt still überschriebenem geteilten Formular“):
 1. Ein nirgends zugewiesenes Formular gleichen Titels nimmt ein Eintrag aus Format 1/2 weiter. Das schreibt der
    Auftrag für `kategorie` nicht ausdrücklich vor, ist aber nötig, damit `"aktivieren": false` wiederholbar bleibt.
 2. Für `produkt` zählen die Übernehmer derselben Datei mit (siehe oben).
