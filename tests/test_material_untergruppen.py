@@ -601,7 +601,7 @@ def pruefung_ansicht(u, ids, fid):
               .map((e) => [e.tagName, e.textContent.trim()])""")
             assert folge[:4] == [["H3", GA], ["SPAN", "Platzhalter K1"], ["H4", UK + " neu"], ["SPAN", "Platzhalter K2 getippt"]], folge
             lagen = s.js("""(() => { const l = (sel) => document.querySelector(sel).getBoundingClientRect();
-              const a = l('.mat-punkte > .mat-punkt'), b = l('.mat-in-ug > .mat-punkt'), g = l('h3.mat-gruppe'), h = l('h4.mat-untergruppe');
+              const a = l('.mat-pliste > .mat-punkt'), b = l('.mat-in-ug > .mat-punkt'), g = l('h3.mat-gruppe'), h = l('h4.mat-untergruppe');
               const fs = (sel) => parseFloat(getComputedStyle(document.querySelector(sel)).fontSize);
               return [a.left, b.left, b.right <= document.documentElement.clientWidth, g.left, h.left, fs('h3.mat-gruppe'), fs('h4.mat-untergruppe')]; })()""")
             assert lagen[1] >= lagen[0] + 12 and lagen[2] and lagen[4] > lagen[3] and lagen[6] <= lagen[5], lagen

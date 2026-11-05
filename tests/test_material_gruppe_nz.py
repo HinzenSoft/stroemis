@@ -16,6 +16,10 @@ python tests/test_material_gruppe_nz.py  oder  pytest tests/test_material_gruppe
    aria-expanded, „n. z. aufheben“, Untergruppen mit der Gruppe, nach dem Neuladen ebenso); Festschreiben danach über
    die Oberfläche; 30 Punkte unter 1 s; kein
    waagerechter Bildlauf, keine Konsolenfehler. Ohne Chromium „übersprungen“ mit rc 0.
+   Gruppenkopf (Bauauftrag planung/pruefung-gruppenkopf, 05.11.2026): Knopf „n. z.“ statt „alle n. z.“ (Name für
+   Bildschirmleser unverändert); die Knöpfe aller Köpfe – auch zugeklappt „nicht zutreffend“ – in einer senkrechten
+   Flucht (±1 px) direkt hinter dem längsten Namen statt rechtsbündig, kein Name ragt hinein; vor jeder Gruppe außer der
+   ersten ein neutraler Trenner (1 px, Farbe --linie), vor Untergruppen keiner.
 3. Statisch: Knopfsprache und Touch-Regel.
 Alle Inhalte sind Platzhalter."""
 import io
@@ -232,6 +236,47 @@ def sichtbar(s, rid):
     return s.js(f"(() => {{ const k = document.querySelector('#pp-{rid}'); return !!k && k.getClientRects().length > 0; }})()")
 
 
+FLUCHT = """(() => {
+  const koepfe = [...document.querySelectorAll('.mat-gruppenkopf')].filter((k) => k.getClientRects().length);
+  const text = (t) => { const r = document.createRange(); r.selectNodeContents(t); return Math.max(...[...r.getClientRects()].map((x) => x.right)); };
+  const liste = document.querySelector('.mat-pliste').getBoundingClientRect();
+  return { liste: [liste.left, liste.right], em: parseFloat(getComputedStyle(document.querySelector('.mat-pliste')).fontSize), koepfe: koepfe.map((k) => { const t = k.querySelector('h3, h4');
+    const b = k.querySelector('.mat-kopf-knoepfe > :first-child');
+    return [t.textContent.trim(), text(t), b ? b.getBoundingClientRect().left : null, b ? b.getBoundingClientRect().right : null]; }) }; })()"""
+
+
+def flucht(s, breite):
+    """Die Knöpfe aller sichtbaren Köpfe in einer senkrechten Flucht (±1 px), direkt hinter dem längsten Namen (12 px
+    Abstand, höchstens 60 % der Breite bzw. alles bis auf 10em für die Namen) – nicht rechtsbündig; kein Name ragt in die
+    Flucht, kein Knopf aus seiner Spalte."""
+    m = s.js(FLUCHT)
+    links = [k[2] for k in m["koepfe"] if k[2] is not None]
+    assert links and max(links) - min(links) <= 1, m
+    kante = min(links)
+    l, r = m["liste"]
+    assert all(k[1] <= kante - 12 + 1 for k in m["koepfe"]), m
+    laengster = max(k[1] for k in m["koepfe"])
+    # Spalte der Namen = längster Name, oder er bricht an der Grenze um: 60 % der Breite, schmal 10em Platz für die Knöpfe.
+    grenze = l + min(0.6 * (r - l), r - l - 10 * m["em"])
+    assert kante - 12 <= laengster + 1 or abs(kante - 12 - grenze) <= 1, m
+    assert kante - 12 <= grenze + 1, m
+    if breite >= 1000:   # am Rechner weit weg vom rechten Rand
+        assert max(k[3] for k in m["koepfe"] if k[3] is not None) < r - 200, m
+    assert all(k[3] is None or k[3] <= r + 1 for k in m["koepfe"]), m
+    assert s.js("[...document.querySelectorAll('.mat-kopf-knoepfe')].every((k) => k.scrollWidth <= k.clientWidth)"), m
+    return len(links)
+
+
+def trenner(s):
+    """Je sichtbarem Kopf [Ebene, Trenner]: Trenner = 1 px oben in der Farbe von --linie."""
+    return s.js("""(() => { const p = document.createElement('div'); p.style.color = 'var(--linie)'; document.body.append(p);
+      const linie = getComputedStyle(p).color; p.remove();
+      return [...document.querySelectorAll('.mat-gruppenkopf')].filter((k) => k.getClientRects().length).map((k) => {
+        const c = getComputedStyle(k); const t = c.borderTopWidth !== '0px';
+        if (t && (c.borderTopWidth !== '1px' || c.borderTopColor !== linie || c.borderTopStyle !== 'solid')) return ['falsch', c.borderTopWidth, c.borderTopColor, linie];
+        return [k.querySelector('h3, h4').tagName, t]; }); })()""")
+
+
 def ablauf(u, ids, gid, breite, hoehe, touch):
     from einfuehrung_browser import PASSWORT, mail
     r = u.adm.post(f"{API}/artikel", json={"product_id": ids["gurt"], "folder_id": gid, "manufactured_on": "2025-01"})
@@ -256,7 +301,9 @@ def ablauf(u, ids, gid, breite, hoehe, touch):
           k.querySelector('.mat-alle-nz').textContent.trim(), k.querySelector('.mat-alle-nz').tabIndex] : null])""")
         assert [x[:2] for x in knoepfe] == [["H3", GA], ["H4", UK], ["H4", US], ["H3", GB], ["H3", GV]], knoepfe
         for _, name, klasse, knopf in knoepfe:
-            assert klasse == "btn secondary small mat-alle-nz" and knopf == [f"{name}: alle Punkte nicht zutreffend", "alle n. z.", 0], knoepfe
+            assert klasse == "btn secondary small mat-alle-nz" and knopf == [f"{name}: alle Punkte nicht zutreffend", "n. z.", 0], knoepfe
+        flucht(s, breite)
+        assert trenner(s) == [["H3", False], ["H4", False], ["H4", False], ["H3", True], ["H3", True]], trenner(s)
         # Optionale Antwortpunkte: nur das Feld bzw. Ja/Nein – kein Befund, keine Bemerkung, kein Foto.
         def nur_antwort(t, art):
             return s.js(f"""(() => {{ const k = document.querySelector({json.dumps(karte(t))});
@@ -294,6 +341,7 @@ def ablauf(u, ids, gid, breite, hoehe, touch):
         assert kopf(s, 0, 0) == ["zu", False, "nicht zutreffend", "3 Punkte zeigen", "false", "n. z. aufheben", False], kopf(s, 0, 0)
         assert not any(sichtbar(s, n[t]) for t in ("Platzhalter K1", "Platzhalter K2", "Platzhalter K3"))
         assert sichtbar(s, n["Platzhalter A1"]) and sichtbar(s, n["Platzhalter S1"])
+        assert flucht(s, breite) == 5   # zugeklappt: „nicht zutreffend“ in derselben Flucht
         if not touch:   # Fokus nach dem Zuklappen am Kopf (nicht verloren)
             assert s.js("!!document.activeElement.closest('.mat-gruppenkopf[data-g=\"0\"][data-u=\"0\"]')")
         assert s.js("document.querySelector('.mat-gruppenkopf[data-g=\"0\"][data-u=\"0\"] .mat-nz-auf').getAttribute('aria-label')") == (
@@ -371,6 +419,8 @@ def ablauf(u, ids, gid, breite, hoehe, touch):
         assert s.warte("!!document.querySelector('.mat-gruppenkopf')")
         assert [kopf(s, 2)[0], kopf(s, 0, 0)[0], kopf(s, 0, 1)[0], kopf(s, 0)[0]] == ["zu", "zu", "normal", "normal"]
         assert kopf(s, 2)[3] == "30 Punkte zeigen" and not sichtbar(s, n["Platzhalter V1"]) and not sichtbar(s, n["Platzhalter K2"])
+        assert flucht(s, breite) == 5
+        assert trenner(s) == [["H3", False], ["H4", False], ["H4", False], ["H3", True], ["H3", True]], trenner(s)
         assert s.js("document.documentElement.scrollWidth <= document.documentElement.clientWidth")
         # Festschreiben danach über die Oberfläche (Unterschrift im Profil hinterlegt).
         s.js("document.querySelector('.mat-abschluss-ende').scrollIntoView({ block: 'end' })")
@@ -418,15 +468,21 @@ def test_statisch():
     with open(os.path.join(WURZEL, "app/material/static/material.css"), encoding="utf-8") as fh:
         css = fh.read()
     kopf = js[js.index("    function kopfInnen("):js.index("    const kopfHtml")]
-    assert 'class="btn secondary small mat-alle-nz"' in kopf and ': alle Punkte nicht zutreffend">alle n. z.</button>' in kopf
+    assert 'class="btn secondary small mat-alle-nz"' in kopf and ': alle Punkte nicht zutreffend">n. z.</button>' in kopf
+    assert "alle n. z.</button>" not in js and kopf.count('<div class="mat-kopf-knoepfe">') == 2
+    assert '<div class="mat-pliste">${html}</div>' in js
     assert 'class="lnk mat-nz-zeigen"' in kopf and 'aria-expanded="${auf}"' in kopf
     assert 'class="btn secondary small mat-nz-auf"' in kopf and ': nicht zutreffend aufheben">n. z. aufheben</button>' in kopf
     aktion = js[js.index('"alle-nz": async'):js.index('"pnotiz-auf":')]
     assert "endgueltig: false" in aktion and "btn ghost" not in aktion and "nzFaehig(x)" in aktion
     assert "const nzFaehig = (x) => !nurAntwort(x)" in js
-    regel = ".mat-gruppenkopf > :is(.mat-alle-nz, .mat-nz-auf) { min-height: 44px; }"
+    regel = ".mat-kopf-knoepfe > :is(.mat-alle-nz, .mat-nz-auf) { min-height: 44px; }"
     i = css.index(regel)
     assert css.rfind("@media (pointer: coarse) {", 0, i) > css.rfind("\n}\n", 0, i), regel
+    # Flucht über ein Teilraster, Trenner neutral (--linie, kein Rot), nur vor Gruppen.
+    assert ".mat-gruppenkopf { display: grid; grid-template-columns: subgrid;" in css
+    trenner = next(z for z in css.splitlines() if z.startswith(".mat-gruppenkopf:not(.mat-ug-kopf, :first-child)"))
+    assert "border-top: 1px solid var(--linie)" in trenner and "rot" not in trenner, trenner
     with open(os.path.join(WURZEL, "app/static/js/uebung/material.js"), encoding="utf-8") as fh:
         assert "|| !p.pflicht ?" in fh.read()
     print("Statisch bestanden.")

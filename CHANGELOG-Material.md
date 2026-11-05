@@ -13076,3 +13076,31 @@ Oberfläche, 44 px gemessen, Tipp auf die Mitte trifft; statisch).
 
 **Strömipedia** (nur genannt, Nachzug durch wiki-autor): Artikel zur Prüfung („alle n. z.“, optionale Punkte nur mit
 Antwort) und zu Prüfformularen (Häkchen „optional“).
+
+## Prüfung: Trenner zwischen Gruppen, „n. z.“-Knöpfe in einer Flucht (Wunsch des Nutzers, 05.11.2026)
+
+Wunsch (Bildschirmfoto einer offenen Prüfung): „Horizontale neutrale Trenner zwischen den einzelnen Gruppen, damit
+Untergruppen besser erkennbar sind. Die n. z.-Knöpfe ohne das ‚alle‘ in eine Flucht eingerückt rechts neben den
+Gruppennamen statt komplett rechtsbündig.“ Bauauftrag `planung/pruefung-gruppenkopf/auftrag.md`, nur Oberfläche, kein
+Schemaschritt; gilt für den Entwurf der Prüfung und die Berichtigung, Nur-Lese-Ansicht und Prüfprotokoll unverändert.
+
+- Der Knopf an Gruppen- und Untergruppenüberschriften heißt **„n. z.“** statt „alle n. z.“; der Name für
+  Bildschirmleser bleibt „<Gruppe>: alle Punkte nicht zutreffend“, „n. z. aufheben“ und die Rückfrage („Alle n. z.“)
+  bleiben.
+- **Eine Flucht**: Die Prüfpunkte stehen in einem Raster (`.mat-pliste`), jeder Kopf ist ein Teilraster (`subgrid`)
+  daraus – links der Name, rechts die Knöpfe (`.mat-kopf-knoepfe`: „n. z.“ bzw. zugeklappt „nicht zutreffend“, „n Punkte
+  zeigen“, „n. z. aufheben“). Die Spalte der Namen ist so breit wie der längste Name des Formulars (Untergruppen mit
+  ihrem Einzug), höchstens 60 % der Breite und schmal so viel, dass rechts 10em für „n. z. aufheben“ bleiben
+  (`fit-content(min(60%, 100% - 10em))`) – längere Namen brechen um, die Knöpfe aller Köpfe beginnen an derselben
+  Kante 12 px dahinter. Kein Messen in JavaScript, also auch nach dem Laden der Schrift richtig. Am Telefon (360 px)
+  dieselbe Flucht neben dem Namen (zugeklappt untereinander), kein waagerechter Bildlauf, 44 px am Finger. Die Karten
+  laufen über beide Spalten; weil Außenabstände im Raster nicht zusammenfallen, sind die Abstände über den Köpfen
+  kleiner gesetzt (Abstände wie bisher).
+- **Trenner**: Vor jeder Gruppe außer der ersten eine waagerechte Linie in `--linie` (1 px, kein Rot) über die ganze
+  Breite; vor Untergruppen keine, damit die Ebenen unterscheidbar bleiben.
+
+**Tests**: `tests/test_material_gruppe_nz.py` erweitert (1280 Maus und 360 Touch: Beschriftung „n. z.“, Flucht aller
+sichtbaren Köpfe ±1 px – auch zugeklappt und nach dem Neuladen –, direkt hinter dem längsten Namen bzw. der
+Grenze, kein Knopf ragt aus seiner Spalte, kein Name ragt hinein, am Rechner nicht am rechten Rand; Trenner nur vor der 2. und 3. Gruppe in der Farbe
+von `--linie`; statisch: Knopftext, Raster, Touch-Regel, Trenner ohne Rot). `tests/test_material_untergruppen.py`:
+Karten ohne Untergruppe stehen jetzt in `.mat-pliste` (Selektor angepasst).

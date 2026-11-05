@@ -6687,7 +6687,7 @@
     }
 
     /* Die Prüfpunkte in ihren Blöcken: g zählt die Gruppenblöcke (ein Name kann in getrennten Blöcken wiederkehren), u
-       die Untergruppen darin (-1: ohne). Daraus zeichnet punkteHtml die Überschriften, und „alle n. z.“ findet seine Punkte. */
+       die Untergruppen darin (-1: ohne). Daraus zeichnet punkteHtml die Überschriften, und „n. z.“ findet seine Punkte. */
     function punktBloecke() {
       let gruppe = null;
       let unter = "";
@@ -6702,13 +6702,14 @@
       });
     }
 
-    /* „alle n. z.“ an jeder Gruppen- und Untergruppenüberschrift (Wunsch vom 05.11.2026): setzt alle Punkte darunter – bei
+    /* „n. z.“ (bis 05.11.2026 „alle n. z.“) an jeder Gruppen- und Untergruppenüberschrift (Wunsch vom 05.11.2026): setzt alle Punkte darunter – bei
        einer Gruppe samt ihren Untergruppen – auf „nicht zutreffend“, über denselben Weg wie ein Tipp je Punkt. Optionale
        Antwortpunkte und ein Längenpunkt ohne vorgesehene Länge zählen nicht (sie kennen kein „n. z.“ bzw. nichts anderes).
        Stehen alle übrigen Punkte eines Blocks auf „n. z.“, ist er zugeklappt (dritter Wunsch vom 05.11.2026, aus den
        Befunden abgeleitet – nach dem Neuladen ebenso): an der Überschrift „nicht zutreffend“, „n Punkte zeigen“
        (aria-expanded; aufgeklappt bleibt er nur in diesem Fenster) und „n. z. aufheben“ (die Punkte wieder auf ihre
-       Vorbelegung, wie ein zweiter Tipp auf „n. z.“). Untergruppen einer zugeklappten Gruppe klappen mit ihr. */
+       Vorbelegung, wie ein zweiter Tipp auf „n. z.“). Untergruppen einer zugeklappten Gruppe klappen mit ihr. Die Knöpfe
+       stehen im zweiten Feld des Kopfs (.mat-kopf-knoepfe), in einer Flucht hinter dem längsten Namen (material.css). */
     const nzFaehig = (x) => !nurAntwort(x) && !(x.art === "laenge" && !(pr.laenge && pr.laenge.moeglich));
     const aufgeklappt = new Set();   // „g:u“ der zugeklappten Blöcke, die jemand aufgeklappt hat
     function blockDaten(bloecke, g, u) {
@@ -6716,7 +6717,7 @@
       const faehig = teil.filter((y) => nzFaehig(y.x));
       return { teil, faehig, alleNz: faehig.length > 0 && faehig.every((y) => y.x.befund === "nicht_zutreffend") };
     }
-    // Zustand eines Kopfs: „normal“ (mit „alle n. z.“, falls es etwas zu setzen gibt), „zu“ (zugeklappt) oder „schlicht“
+    // Zustand eines Kopfs: „normal“ (mit „n. z.“, falls es etwas zu setzen gibt), „zu“ (zugeklappt) oder „schlicht“
     // (Untergruppe in einer zugeklappten Gruppe – sie klappt mit der Gruppe).
     function kopfZustand(bloecke, g, u) {
       const d = blockDaten(bloecke, g, u);
@@ -6730,13 +6731,13 @@
       const z = kopfZustand(bloecke, g, u);
       if (z.zustand === "schlicht") return { html: titel, zustand: "schlicht" };
       if (z.zustand === "normal") {
-        return { html: titel + (z.faehig.length ? `<button type="button" class="btn secondary small mat-alle-nz" data-act="alle-nz" data-g="${g}" data-u="${u}" aria-label="${esc(name)}: alle Punkte nicht zutreffend">alle n. z.</button>` : ""), zustand: "normal" };
+        return { html: titel + (z.faehig.length ? `<div class="mat-kopf-knoepfe"><button type="button" class="btn secondary small mat-alle-nz" data-act="alle-nz" data-g="${g}" data-u="${u}" aria-label="${esc(name)}: alle Punkte nicht zutreffend">n. z.</button></div>` : ""), zustand: "normal" };
       }
       const auf = aufgeklappt.has(`${g}:${u}`);
       return { zustand: auf ? "auf" : "zu",
-        html: `${titel}<span class="mat-befund b-nicht_zutreffend">nicht zutreffend</span>
+        html: `${titel}<div class="mat-kopf-knoepfe"><span class="mat-befund b-nicht_zutreffend">nicht zutreffend</span>
           <button type="button" class="lnk mat-nz-zeigen" data-act="nz-zeigen" data-g="${g}" data-u="${u}" aria-expanded="${auf}" aria-controls="${z.teil.map((y) => `pp-${y.x.id}`).join(" ")}">${auf ? "Punkte ausblenden" : plural(z.teil.length, "Punkt zeigen", "Punkte zeigen")}</button>
-          <button type="button" class="btn secondary small mat-nz-auf" data-act="nz-aufheben" data-g="${g}" data-u="${u}" aria-label="${esc(name)}: nicht zutreffend aufheben">n. z. aufheben</button>` };
+          <button type="button" class="btn secondary small mat-nz-auf" data-act="nz-aufheben" data-g="${g}" data-u="${u}" aria-label="${esc(name)}: nicht zutreffend aufheben">n. z. aufheben</button></div>` };
     }
     const kopfHtml = (bloecke, g, u) => {
       const k = kopfInnen(bloecke, g, u);
@@ -6788,7 +6789,7 @@
         html += u >= 0 ? `<div class="mat-in-ug">${punktHtml(x)}</div>` : punktHtml(x);
       });
       return `<section class="section mat-punkte"><h2>Prüfpunkte</h2>
-        <p class="help">Vorbelegt mit dem Sollwert – ändere nur, was abweicht. Ein Mangel braucht ein Foto und eine Bemerkung.${pr.punkte.some(nurAntwort) ? " Optionale Punkte nehmen nur ihre Antwort auf." : ""}</p>${html}</section>`;
+        <p class="help">Vorbelegt mit dem Sollwert – ändere nur, was abweicht. Ein Mangel braucht ein Foto und eine Bemerkung.${pr.punkte.some(nurAntwort) ? " Optionale Punkte nehmen nur ihre Antwort auf." : ""}</p><div class="mat-pliste">${html}</div></section>`;
     }
 
     function anhaengeListe() {
