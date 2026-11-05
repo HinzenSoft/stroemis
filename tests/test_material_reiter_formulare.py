@@ -88,6 +88,11 @@ def test_skript_und_stil():
     assert '<a class="btn secondary" href="/materialablage/katalog/formulare' not in js
     assert '${DARF.katalog ? katalogMenue : ""}</div></div>' in js
     assert 'href="/materialablage/katalog/formulare?kategorie=${k.id}">Prüfformulare (${k.formulare || 0})</a>' in js
+    # Kategorienbaum auf der Seite „Prüfformulare“ (und für die Verwaltung auf Formularseiten): Formulare der Ebene statt
+    # zurück in den Katalog (Wunsch vom 05.11.2026).
+    assert 'const LEISTE_POOL = ANSICHT === "formulare" || (ANSICHT === "formular" && DARF.katalog);' in js
+    assert '<a href="${leisteZiel(o.id)}" data-kat="${o.id}"' in js and '<a href="${leisteZiel(null)}" data-kat=""' in js
+    assert "if (kat && katalogWahl && !LEISTE_POOL &&" in js
     assert " · Standard-Prüfformular <a href=" in js
     # Suchzeile mit „☰ Kategorien“ auf Katalog und „Prüfformulare“ wie bisher.
     assert 'ANSICHT === "katalog" || ANSICHT === "formulare" ? $(".mat-suchzeile", inhalt)' in js
@@ -168,6 +173,12 @@ def test_browser():
                         assert s.warte("location.pathname === '/materialablage/katalog' && document.querySelector('.mat-nav a.aktiv')?.dataset.nav === 'katalog'", 10), breite
                         s.js("history.forward()")
                         assert s.warte("location.pathname === '/materialablage/katalog/formulare' && document.querySelector('.mat-nav a.aktiv')?.dataset.nav === 'formulare'", 10), breite
+                        if breite >= 1024:
+                            # Baum links: die Kategorie zeigt die Formulare ihrer Ebene, „alle Kategorien“ alle.
+                            assert s.klick(f'a[data-kat="{kat}"]') is None
+                            assert s.warte(f"location.pathname === '/materialablage/katalog/formulare' && location.search === '?kategorie={kat}' && Boolean(document.querySelector('.mat-pool-nur'))", 10), breite
+                            assert s.klick('a[data-kat=""]') is None
+                            assert s.warte("location.pathname === '/materialablage/katalog/formulare' && location.search === '' && !document.querySelector('.mat-pool-nur')", 10), breite
                     s.sammeln()
                     assert not s.fehler, (rolle, breite, s.fehler)
                 finally:

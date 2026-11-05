@@ -816,6 +816,10 @@
                               "pruefung_neu", "durchgang", "durchgaenge", "katalog", "produkt", "formular", "formulare", "meldungen", "bestandsimport", "bericht",
                               "antraege"]);
   const LEISTE_KATALOG = KATALOG_ANSICHTEN.has(ANSICHT);
+  // Auf der Seite „Prüfformulare“ (und für die Material-Verwaltung, die den Reiter hat, auf einer Formularseite) führt
+  // der Kategorienbaum zu den Formularen dieser Ebene statt zurück in den Katalog (Wunsch vom 05.11.2026).
+  const LEISTE_POOL = ANSICHT === "formulare" || (ANSICHT === "formular" && DARF.katalog);
+  const leisteZiel = (id) => (LEISTE_POOL ? `/materialablage/katalog/formulare${id ? `?kategorie=${id}` : ""}` : `/materialablage/katalog${id ? `?kategorie=${id}` : ""}`);
   const leiste = document.getElementById("mat-side");
   const leisteAuf = document.getElementById("mat-side-auf");
   const KLAPP = LEISTE_KATALOG ? "mat-kategorie-klapp" : "mat-ordner-klapp";
@@ -849,7 +853,7 @@
         : `<button class="tg" type="button" data-klapp="${o.id}" tabindex="-1" aria-hidden="true"></button>`;
       const markiert = `class="${aktiv ? "active" : ""}" ${aktiv ? 'aria-current="page"' : ""}`;
       if (LEISTE_KATALOG) {
-        return `${knopf}<a href="/materialablage/katalog?kategorie=${o.id}" data-kat="${o.id}" ${markiert} title="${esc(o.name)}${o.norm ? ` · ${esc(o.norm)}` : ""}">${esc(o.name)}</a>
+        return `${knopf}<a href="${leisteZiel(o.id)}" data-kat="${o.id}" ${markiert} title="${esc(o.name)}${o.norm ? ` · ${esc(o.norm)}` : ""}">${esc(o.name)}</a>
           <span class="mat-side-anzahl" title="Produkte (mit Unterkategorien)">${summe(o.id)}</span>`;
       }
       // Pfad-Knoten: nur der Name, grau, ohne Zahl und ohne Link.
@@ -867,7 +871,7 @@
         <div class="row">${zeile(o, hat, auf)}</div>${hat ? `<ul>${zweig(o.id, tiefe + 1)}</ul>` : ""}</li>`;
     }).join("");
     const alle = LEISTE_KATALOG ? `<li class="leaf"><div class="row"><button class="tg" type="button" tabindex="-1" aria-hidden="true"></button>
-      <a href="/materialablage/katalog" data-kat="" class="${ANSICHT === "katalog" && !leisteAktiv ? "active" : ""}">alle Kategorien</a></div></li>` : "";
+      <a href="${leisteZiel(null)}" data-kat="" class="${(ANSICHT === "katalog" || ANSICHT === "formulare") && !leisteAktiv ? "active" : ""}">alle Kategorien</a></div></li>` : "";
     ziel.innerHTML = `<ul class="tree mat-tree">${alle}${zweig(0, 0)}</ul>`;
   }
 
@@ -1004,7 +1008,7 @@
       }
       // Im Katalog wechselt eine Kategorie ohne Neuladen – Suche und Sortierung bleiben stehen.
       const kat = e.target.closest("a[data-kat]");
-      if (kat && katalogWahl && !e.ctrlKey && !e.metaKey && !e.shiftKey && e.button === 0) {
+      if (kat && katalogWahl && !LEISTE_POOL && !e.ctrlKey && !e.metaKey && !e.shiftKey && e.button === 0) {
         e.preventDefault();
         katalogWahl(kat.dataset.kat ? +kat.dataset.kat : null, alsSchublade());
         leisteZu(knopfInSuchzeile());

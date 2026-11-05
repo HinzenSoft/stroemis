@@ -13001,3 +13001,9 @@ kein Rollen, Umbruch nur mit fünf Reitern, Reiter → Seite, Zurück/Vor). Ange
 Material-Verwaltung „Prüfformulare“, für alle anderen „Katalog“; am Telefon zwei Reiterzeilen statt Rollen oder
 gekürzter Beschriftung; der Reiter öffnet immer alle Kategorien (die gewählte nimmt nur der Link „Prüfformulare (n)“
 mit).
+
+**Kategorienbaum auf der Seite „Prüfformulare“** (Wunsch des Nutzers, 05.11.2026): Ein Klick auf eine Kategorie im Baum
+links zeigt die Formulare dieser Ebene (`/materialablage/katalog/formulare?kategorie=<id>`), „alle Kategorien“ alle –
+vorher sprang der Baum zurück in den Katalog. Ebenso auf Formularseiten für die Material-Verwaltung (die den Reiter hat);
+für alle anderen führt der Baum dort weiter in den Katalog (`LEISTE_POOL`, `leisteZiel` in material.js). Test:
+`test_material_reiter_formulare.py` (statisch und Browser bei 1280).
