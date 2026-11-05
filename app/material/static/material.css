@@ -620,14 +620,18 @@ tr.mat-entwurf a:not(.btn) { color: var(--rot-auf-flaeche); }
   align-items: center; gap: 4px 12px; }
 /* Zugeklappt (alle Punkte „n. z.“): der Name grau. Die Marke „nicht zutreffend“ ist zugleich der Knopf, der es aufhebt
    (Wunsch vom 05.11.2026, statt eines eigenen Knopfs „n. z. aufheben“) – Aussehen der Marke, Hand als Zeiger; am Finger
-   44 px Tippfläche über ::before, ohne dass die Marke größer aussieht (die Zeile hält dafür 44 px frei). */
+   44 px hoch über einen durchsichtigen Rand oben und unten (aufgerundet auf ganze px – Randbreiten rundet der Browser
+   ab; die Fläche färbt nur das Innere), so dass die Marke nicht
+   größer aussieht; der Fokusrahmen liegt dann innen an der Marke (ein Umriss läge am durchsichtigen Rand). */
 .mat-gruppenkopf[hidden] { display: none; }
 .mat-gruppenkopf[data-zustand="zu"] > :is(h3, h4), .mat-gruppenkopf[data-zustand="auf"] > :is(h3, h4) { color: var(--grau); }
-button.mat-nz-pille { position: relative; border: 0; font-family: inherit; line-height: inherit; cursor: pointer; }
+button.mat-nz-pille { border: 0; font-family: inherit; line-height: inherit; cursor: pointer; }
 @media (hover: hover) and (pointer: fine) { button.mat-nz-pille:hover { box-shadow: inset 0 0 0 1px var(--grau); } }
 @media (pointer: coarse) {
   .mat-kopf-knoepfe, .mat-kopf-knoepfe > .mat-alle-nz { min-height: 44px; }
-  button.mat-nz-pille::before { content: ""; position: absolute; left: 0; right: 0; top: calc(50% - 22px); bottom: calc(50% - 22px); }
+  .mat-kopf-knoepfe > button.mat-nz-pille { --nz-rand: max(0px, round(up, (44px - 1lh - 2px) / 2, 1px)); border: var(--nz-rand) solid transparent; border-left: 0;
+    border-right: 0; background-clip: padding-box; }
+  .mat-kopf-knoepfe > button.mat-nz-pille:focus-visible { outline: none; box-shadow: inset 0 0 0 2px var(--anthrazit); }
   button.mat-nz-pille:active { box-shadow: inset 0 0 0 1px var(--grau); }
 }
 .mat-punkt { border: 1px solid var(--linie); border-left: 4px solid var(--linie); background: var(--weiss); padding: 10px 12px; margin: 0 0 10px; }

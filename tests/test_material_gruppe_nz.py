@@ -23,7 +23,7 @@ python tests/test_material_gruppe_nz.py  oder  pytest tests/test_material_gruppe
    rechtsbündig (±1 px am rechten Rand der Liste), der Name breit bis 12 px davor, kein Name ragt hinein; kein Knopf
    „n. z. aufheben“ mehr – die graue Marke „nicht zutreffend“ ist ein Knopf (data-act nz-aufheben, Name „<Name>: nicht
    zutreffend – aufheben“, title, Hand als Zeiger, sichtbarer Fokus, Tastatur mit Umschalt+Tab und Enter, am Finger
-   44 px Tippfläche gemessen über elementFromPoint, die Marke selbst nicht höher).
+   44 px Tippfläche – Rechteck des Knopfs und Treffer über elementFromPoint –, sichtbar nicht höher).
 3. Statisch: Knopfsprache und Touch-Regel.
 Alle Inhalte sind Platzhalter."""
 import io
@@ -347,23 +347,23 @@ def ablauf(u, ids, gid, breite, hoehe, touch):
             assert s.js("!!document.activeElement.closest('.mat-gruppenkopf[data-g=\"0\"][data-u=\"0\"]')")
         pille = '.mat-gruppenkopf[data-g="0"][data-u="0"] .mat-nz-pille'
         assert s.js(f"""(() => {{ const b = document.querySelector({json.dumps(pille)}); const c = getComputedStyle(b);
-          return [b.className, b.type, b.getAttribute('aria-label'), b.title, b.tabIndex, c.cursor, c.borderTopWidth,
+          return [b.className, b.type, b.getAttribute('aria-label'), b.title, b.tabIndex, c.cursor, c.borderTopWidth === '0px' || c.borderTopColor === 'rgba(0, 0, 0, 0)',
                   (() => {{ const p = document.createElement('div'); p.style.color = 'var(--grau-hell)'; document.body.append(p);
                             const f = getComputedStyle(p).color; p.remove(); return c.backgroundColor === f; }})()]; }})()""") == [
             "mat-befund b-nicht_zutreffend mat-nz-pille", "button", f"{UK}: nicht zutreffend – aufheben", "n. z. aufheben", 0,
-            "pointer", "0px", True]
+            "pointer", True, True]
         assert not s.js("!!document.querySelector('.mat-nz-auf')")
         if touch:
             _mitte_trifft(s, '.mat-gruppenkopf[data-g="0"][data-u="0"] .mat-nz-zeigen')
             assert s.js("document.querySelector('.mat-gruppenkopf[data-g=\"0\"][data-u=\"0\"] .mat-nz-zeigen').getBoundingClientRect().height") >= 44
-            # Die Marke bleibt so klein, wie sie aussieht; getroffen wird sie aber 44 px hoch (::before) – oben und
-            # unten 21 px von der Mitte, an beiden Enden.
+            # Die Marke ist 44 px hoch (Rechteck des Knopfs) und trifft oben und unten 21 px von der Mitte – in der Mitte
+            # und an beiden Enden (dort ab dem runden Ende: der Browser trifft nur innerhalb der Rundung); sichtbar bleibt sie so klein wie vorher (gefärbt nur innen: clientHeight unter 30 px, Rand durchsichtig).
             _mitte_trifft(s, pille)
-            flaeche = s.js(f"""(() => {{ const b = document.querySelector({json.dumps(pille)}); const r = b.getBoundingClientRect();
+            flaeche = s.js(f"""(() => {{ const b = document.querySelector({json.dumps(pille)}); const r = b.getBoundingClientRect(); const c = getComputedStyle(b);
               const y = r.top + r.height / 2; const trifft = (x, yy) => {{ const t = document.elementFromPoint(x, yy); return !!t && (t === b || b.contains(t)); }};
-              return [r.height, ...[r.left + 2, r.left + r.width / 2, r.right - 2].flatMap((x) => [trifft(x, y - 21.5), trifft(x, y + 21.5)]),
-                      trifft(r.left + r.width / 2, y - 24), trifft(r.left + r.width / 2, y + 24)]; }})()""")
-            assert flaeche[0] < 30 and flaeche[1:7] == [True] * 6 and flaeche[7:] == [False, False], flaeche
+              return [r.height, b.clientHeight, c.borderTopColor, c.backgroundClip,
+                      ...[r.left + r.height / 2, r.left + r.width / 2, r.right - r.height / 2].flatMap((x) => [trifft(x, y - 21.5), trifft(x, y + 21.5)])]; }})()""")
+            assert flaeche[0] >= 44 and flaeche[1] < 30 and flaeche[2:4] == ["rgba(0, 0, 0, 0)", "padding-box"] and flaeche[4:] == [True] * 6, flaeche
         # Aufklappen und wieder zu (aria-expanded).
         assert klick(s, '.mat-gruppenkopf[data-g="0"][data-u="0"] .mat-nz-zeigen') is None
         assert s.warte("document.querySelector('.mat-gruppenkopf[data-g=\"0\"][data-u=\"0\"] .mat-nz-zeigen').getAttribute('aria-expanded') === 'true'")
@@ -507,7 +507,9 @@ def test_statisch():
     assert "endgueltig: false" in aktion and "btn ghost" not in aktion and "nzFaehig(x)" in aktion
     assert "const nzFaehig = (x) => !nurAntwort(x)" in js
     for regel in (".mat-kopf-knoepfe, .mat-kopf-knoepfe > .mat-alle-nz { min-height: 44px; }",
-                  "button.mat-nz-pille::before { content: \"\"; position: absolute;", "button.mat-nz-pille:active {"):
+                  ".mat-kopf-knoepfe > button.mat-nz-pille { --nz-rand:", "background-clip: padding-box;",
+                  ".mat-kopf-knoepfe > button.mat-nz-pille:focus-visible {",
+                  "button.mat-nz-pille:active {"):
         i = css.index(regel)
         assert css.rfind("@media (pointer: coarse) {", 0, i) > css.rfind("\n}\n", 0, i), regel
     assert css.index("button.mat-nz-pille:hover") > css.index("@media (hover: hover) and (pointer: fine) { button.mat-nz-pille:hover")

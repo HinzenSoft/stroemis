@@ -13119,12 +13119,13 @@ zutreffend‘ erfolgen.“ Bauauftrag `planung/pruefung-nz-pille/auftrag.md`, nu
 - **Kein Knopf „n. z. aufheben“** mehr: Die graue Marke „nicht zutreffend“ ist selbst der Knopf (`data-act="nz-aufheben"`,
   gleiche Wirkung, Toast „„Name“: n Punkte wieder offen“) – Aussehen der Marke, Name für Bildschirmleser „<Name>: nicht
   zutreffend – aufheben“, title „n. z. aufheben“, Hand als Zeiger, mit der Maus beim Überfahren eine graue Kontur,
-  sichtbarer Tastaturfokus, Enter/Leertaste. Am Finger 44 px Tippfläche über `::before`, die Marke selbst bleibt so
-  klein, wie sie aussieht (die Kopfzeile hält dafür 44 px frei). Klappt ein Block unter dem Fokus zu, geht der Fokus auf
+  sichtbarer Tastaturfokus, Enter/Leertaste. Am Finger ist der Knopf 44 px hoch – ein durchsichtiger Rand oben und
+  unten, gefärbt nur das Innere (`background-clip: padding-box`) –, die Marke sieht also nicht größer aus; der
+  Fokusrahmen liegt dann innen an der Marke (2 px `--anthrazit`) (die Kopfzeile ist am Finger ohnehin 44 px hoch). Klappt ein Block unter dem Fokus zu, geht der Fokus auf
   „n Punkte zeigen“ (nicht auf die Marke, damit ein zweites Enter nicht gleich wieder aufhebt).
 
 **Tests**: `tests/test_material_gruppe_nz.py` – Flucht-Prüfung durch Rechtsbündigkeit ersetzt (rechter Rand ±1 px, Name
 bis 12 px davor, am Rechner neben dem Namen); Marke als Knopf (Klasse, Name, title, Zeiger, Grau, kein `.mat-nz-auf`),
 Aufheben mit der Maus über die Tastatur (Umschalt+Tab mit sichtbarem Fokus, Enter) und am Finger per Tipp, Tippfläche
-44 px über `elementFromPoint` gemessen (Marke unter 30 px hoch); statisch: kein `mat-nz-auf`, kein `subgrid`,
+44 px gemessen (Rechteck des Knopfs, Treffer oben und unten über `elementFromPoint`; gefärbt unter 30 px hoch); statisch: kein `mat-nz-auf`, kein `subgrid`,
 Touch-Regeln nur unter `(pointer: coarse)`, Überfahren nur unter `(hover: hover) and (pointer: fine)`.
