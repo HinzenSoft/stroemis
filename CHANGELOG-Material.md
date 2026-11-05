@@ -13007,3 +13007,9 @@ links zeigt die Formulare dieser Ebene (`/materialablage/katalog/formulare?kateg
 vorher sprang der Baum zurück in den Katalog. Ebenso auf Formularseiten für die Material-Verwaltung (die den Reiter hat);
 für alle anderen führt der Baum dort weiter in den Katalog (`LEISTE_POOL`, `leisteZiel` in material.js). Test:
 `test_material_reiter_formulare.py` (statisch und Browser bei 1280).
+
+**Brotkrumen der Prüfformulare** (Wunsch des Nutzers, 05.11.2026): Auf der Seite „Prüfformulare“ mit gewählter Kategorie
+„Prüfformulare / Kategorie / Unterkategorie“ (jedes Glied zeigt die Formulare dieser Ebene, das letzte ist die gewählte)
+statt „Katalog / Prüfformulare“; ohne Auswahl keine Brotkrumen. Formularseiten zeigen für die Material-Verwaltung
+denselben Pfad bis zur Heimat, für alle anderen weiter „Katalog / Heimat“. `katalog.pool` liefert dafür `auswahl`
+(Pfad mit Kennungen). Test: `test_material_reiter_formulare.py`.

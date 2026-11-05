@@ -657,6 +657,14 @@
     if (html.length > 3) html.splice(1, 0, '<span class="mat-pfad-glied mat-pfad-luecke">/ <button type="button" class="mat-pfad-mehr" aria-label="Ganzen Pfad zeigen">…</button></span>');
     return html.join(" ");
   }
+  /* Brotkrumen der Prüfformulare (Wunsch vom 05.11.2026): „Prüfformulare / Kategorie / Unterkategorie“, jedes Glied führt
+     zu den Formularen dieser Ebene – statt „Katalog / Prüfformulare“. Auf der Seite selbst ist das letzte Glied die
+     gewählte Ebene (ohne Link); auf einer Formularseite (alleVerlinkt) ist auch die Heimat ein Link. */
+  function poolPfad(pfad, alleVerlinkt) {
+    const link = (x) => `<a href="/materialablage/katalog/formulare?kategorie=${x.id}">${esc(x.name)}</a>`;
+    return pfadHtml(['<a href="/materialablage/katalog/formulare">Prüfformulare</a>',
+      ...pfad.map((x, i) => (alleVerlinkt || i < pfad.length - 1 ? link(x) : `<span>${esc(x.name)}</span>`))]);
+  }
   // Die nächste Gliederung über einem Ordner (oder er selbst) – wie bestand.gliederung_von auf dem Server.
   function gliederungVon(id) {
     const gesehen = new Set();
@@ -5440,8 +5448,8 @@
       // Im Reiter auch, wozu das Formular gehört (B13) – „Prüfformular“ allein stand vorher in jedem Tab.
       seitenTitel(`${f.titel || "Prüfformular"} v${f.version}`.replace(/\s+/g, " "));
       inhalt.innerHTML = `${f.demo ? '<p class="mat-demo-banner">DEMO – nicht für echte Prüfungen.</p>' : ""}
-        <div class="mat-pfad">${pfadHtml(['<a href="/materialablage/katalog">Katalog</a>', DARF.katalog ? '<a href="/materialablage/katalog/formulare">Prüfformulare</a>' : "",
-          `<a href="${heimatLink}">${esc(pool.heimat.name)}</a>`])}</div>
+        <div class="mat-pfad">${DARF.katalog ? poolPfad(pool.heimat.pfad, true)
+          : pfadHtml(['<a href="/materialablage/katalog">Katalog</a>', `<a href="${heimatLink}">${esc(pool.heimat.name)}</a>`])}</div>
         <div class="page-head"><h1>${f.titel ? esc(f.titel) : formularTitel({ titel: "", herkunft: pool.herkunft })} <span class="badge grey">Version ${f.version}</span> ${f.aktiv ? '<span class="mat-status s-einsatzbereit">aktiv</span>' : '<span class="badge grey">inaktiv</span>'} ${demoMarke(f.demo)}${anleitungKopf("formular")}</h1>
           ${DARF.katalog ? `<div class="btn-row">${formularKnoepfe()}</div>` : ""}</div>
         <p class="help">Im Pool von „${esc(heimatText)}“. ${f.gueltig_ab ? `Gültig ab ${esc(fmtTag(f.gueltig_ab))}.` : "Noch nie aktiviert."}
@@ -6063,7 +6071,7 @@
         ${k.formulare.length ? `<ul class="mat-pool-liste">${k.formulare.map((x) => zeile(x, k)).join("")}</ul>` : ""}</section>`;
     const pfadNur = kategorie && d.kategorien.length ? d.kategorien[0].pfad.join(" › ") : "";
     inhalt.innerHTML = `<div class="mat-suchzeile mat-suchzeile-kopf mat-pool-suche"><input type="search" id="pool-q" placeholder="Formular, Kategorie oder Produkt suchen" aria-label="Prüfformulare durchsuchen: Titel, Kategorie oder Produkt" autocomplete="off" ${TASTATUR_SUCHE}></div>
-      <div class="mat-pfad">${pfadHtml(['<a href="/materialablage/katalog">Katalog</a>', kategorie ? '<a href="/materialablage/katalog/formulare">Prüfformulare</a>' : ""])}</div>
+      ${kategorie && (d.auswahl || []).length ? `<div class="mat-pfad">${poolPfad(d.auswahl)}</div>` : ""}
       <div class="page-head"><h1>Prüfformulare${anleitungKopf("formulare")}</h1>
         <div class="btn-row"><button class="btn secondary" type="button" data-act="anlegen"><span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Prüfformular<span class="k-anlegen"> anlegen</span></span></button></div></div>
       ${kategorie ? `<p class="help mat-pool-nur">Nur „${esc(pfadNur)}“ und darunter · <a href="/materialablage/katalog/formulare">alle Kategorien</a></p>` : ""}

@@ -1710,7 +1710,9 @@ def pool(kategorie_id=None):
         kategorie(kategorie_id)
         teil = _unterkategorien(kategorie_id)
         out = [k for k in out if k["id"] in teil]
-    return {"kategorien": out, "formulare": sum(len(k["formulare"]) for k in out)}
+    # „auswahl“: der Pfad der gewählten Kategorie mit Kennungen – für die Brotkrumen „Prüfformulare / … “ der Seite.
+    return {"kategorien": out, "formulare": sum(len(k["formulare"]) for k in out),
+            "auswahl": kategorie_pfad(kategorie_id) if kategorie_id else []}
 
 
 def kandidaten(pf):

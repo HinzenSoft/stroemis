@@ -93,6 +93,13 @@ def test_skript_und_stil():
     assert 'const LEISTE_POOL = ANSICHT === "formulare" || (ANSICHT === "formular" && DARF.katalog);' in js
     assert '<a href="${leisteZiel(o.id)}" data-kat="${o.id}"' in js and '<a href="${leisteZiel(null)}" data-kat=""' in js
     assert "if (kat && katalogWahl && !LEISTE_POOL &&" in js
+    # Brotkrumen „Prüfformulare / … “ statt „Katalog / Prüfformulare“ (Wunsch vom 05.11.2026): Seite und Formularseite.
+    assert "function poolPfad(pfad, alleVerlinkt)" in js and "'<a href=\"/materialablage/katalog/formulare\">Prüfformulare</a>'," in js
+    assert '${kategorie && (d.auswahl || []).length ? `<div class="mat-pfad">${poolPfad(d.auswahl)}</div>` : ""}' in js
+    assert "DARF.katalog ? poolPfad(pool.heimat.pfad, true)" in js
+    assert "'<a href=\"/materialablage/katalog\">Katalog</a>', kategorie ?" not in js
+    kat = lies("app/material/services/katalog.py")
+    assert '"auswahl": kategorie_pfad(kategorie_id) if kategorie_id else []' in kat
     assert " · Standard-Prüfformular <a href=" in js
     # Suchzeile mit „☰ Kategorien“ auf Katalog und „Prüfformulare“ wie bisher.
     assert 'ANSICHT === "katalog" || ANSICHT === "formulare" ? $(".mat-suchzeile", inhalt)' in js
@@ -177,6 +184,8 @@ def test_browser():
                             # Baum links: die Kategorie zeigt die Formulare ihrer Ebene, „alle Kategorien“ alle.
                             assert s.klick(f'a[data-kat="{kat}"]') is None
                             assert s.warte(f"location.pathname === '/materialablage/katalog/formulare' && location.search === '?kategorie={kat}' && Boolean(document.querySelector('.mat-pool-nur'))", 10), breite
+                            pfad = s.js("[...document.querySelectorAll('#mat-inhalt .mat-pfad .mat-pfad-glied')].map((g) => g.textContent.replace(/^\\/\\s*/, '').trim())")
+                            assert pfad == ["Prüfformulare", "Platzhalter Kategorie"], (breite, pfad)
                             assert s.klick('a[data-kat=""]') is None
                             assert s.warte("location.pathname === '/materialablage/katalog/formulare' && location.search === '' && !document.querySelector('.mat-pool-nur')", 10), breite
                     s.sammeln()
