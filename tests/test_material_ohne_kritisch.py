@@ -225,7 +225,7 @@ def test_katalog_import_und_export():
             daten, _, _ = katalog_export.sammeln(mit_dateien=False)
             punkte = [p for f in daten["formulare"] for p in f["punkte"]]
             assert len(punkte) == 3 and all("kritisch" not in p for p in punkte), punkte
-            assert set(punkte[0]) == {"gruppe", "text", "art", "pflicht", "soll"}, punkte[0]
+            assert set(punkte[0]) == {"gruppe", "untergruppe", "text", "art", "pflicht", "soll"}, punkte[0]   # untergruppe: Schritt 39
             # Und zurück: der Export lässt sich wieder importieren, ohne neue Version.
             assert not importer.importieren(daten, quelle="Test")["fehler"]
             assert [f["id"] for f in db.query("SELECT id FROM mat_form")] == [fid]

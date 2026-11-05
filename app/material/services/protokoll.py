@@ -446,6 +446,11 @@ def _befunde(pid):
                  "foto_nr": foto_nr, "unterschrift": _png(r["signature_png"]), "nummern": _nummern_text(r)}
         if not gruppen or gruppen[-1]["name"] != (r["group_name"] or ""):
             gruppen.append({"name": r["group_name"] or "", "punkte": []})
+        # Untergruppe (Schritt 39): als Zwischenzeile vor ihrem ersten Punkt (untergruppe_neu), die Punkte darunter
+        # eingezogen – ohne Untergruppe bleibt die Zeile, wie sie war.
+        punkt["untergruppe"] = r["untergruppe"] or ""
+        vorige = gruppen[-1]["punkte"][-1]["untergruppe"] if gruppen[-1]["punkte"] else ""
+        punkt["untergruppe_neu"] = bool(punkt["untergruppe"]) and punkt["untergruppe"] != vorige
         gruppen[-1]["punkte"].append(punkt)
     return gruppen, fotos, maengel
 

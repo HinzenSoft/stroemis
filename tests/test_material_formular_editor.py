@@ -72,8 +72,8 @@ def test_statisch():
     assert 'p.pflicht = !$(".fp-optional", tr).checked;' in editor and "fp-pflicht\"" not in editor
     assert '${p.pflicht ? "" : \'<span class="badge grey">optional</span>\'}' in editor and '"Pflicht" : "optional"' not in editor
     assert 'const neuerPunkt = () => ({ text: "", art: "yesno", soll: "ja", pflicht: true });' in editor
-    # Schnittstelle unverändert: die flache Liste mit „gruppe“ je Punkt.
-    assert editor.count("punkte: flach()") == 2 and 'Object.assign({}, p, { gruppe: g.name })' in editor
+    # Schnittstelle unverändert: die flache Liste mit „gruppe“ je Punkt (seit Schritt 39 dazu „untergruppe“).
+    assert editor.count("punkte: flach()") == 2 and 'Object.assign({}, p, { gruppe: g.name, untergruppe: "" })' in editor
     css = lies("app/material/static/material.css")
     assert "touch-action: none" in abschnitt(css, ".mat-formtabelle .fp-griff {", "}")
     assert ".mat-formtabelle .btn-row .btn.small" not in css

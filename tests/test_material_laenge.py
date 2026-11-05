@@ -142,8 +142,10 @@ def _auf_stand_19(pfad):
         conn.execute("ALTER TABLE mat_category DROP COLUMN items_have_length")
         alt = next(x for x in models.SCHRITT_1 if "mat_checklist_item (" in x)
         conn.execute(alt.replace("IF NOT EXISTS mat_checklist_item", "mat_checklist_item_alt"))
-        # Spalten mit Namen: Seit Schritt 37 fehlt is_critical (die Fassung aus Schritt 1 hat sie, mit Vorgabe 0).
-        spalten = ", ".join(r[1] for r in conn.execute("PRAGMA table_info(mat_checklist_item)"))
+        # Spalten mit Namen: Seit Schritt 37 fehlt is_critical (die Fassung aus Schritt 1 hat sie, mit Vorgabe 0); die
+        # Spalte untergruppe aus Schritt 39 kennt Stand 19 nicht (sie ist hier leer und kommt mit der Migration wieder).
+        alt_spalten = {r[1] for r in conn.execute("PRAGMA table_info(mat_checklist_item_alt)")}
+        spalten = ", ".join(r[1] for r in conn.execute("PRAGMA table_info(mat_checklist_item)") if r[1] in alt_spalten)
         conn.execute(f"INSERT INTO mat_checklist_item_alt ({spalten}) SELECT {spalten} FROM mat_checklist_item")
         conn.execute("DROP TABLE mat_checklist_item")
         conn.execute("ALTER TABLE mat_checklist_item_alt RENAME TO mat_checklist_item")

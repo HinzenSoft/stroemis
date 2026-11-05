@@ -109,6 +109,9 @@ def test_migration_25():
         conn.execute("DROP TABLE mat_item_component_serial")
         for spalte in ("component_serials", "component_id"):
             conn.execute(f"ALTER TABLE mat_inspection_result DROP COLUMN {spalte}")
+        # Ebenso die Spalten aus Schritt 39 (Untergruppe) – sonst stünden sie vor denen aus Schritt 25.
+        for tabelle, spalte, _art in models.SPALTEN_39:
+            conn.execute(f"ALTER TABLE {tabelle} DROP COLUMN {spalte}")
         conn.commit()
         assert not conn.execute("SELECT 1 FROM sqlite_master WHERE name = 'mat_item_component_serial'").fetchone()
         tabellen = [r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE 'mat_%' "

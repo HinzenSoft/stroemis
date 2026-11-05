@@ -48,7 +48,8 @@ def test_titel_bleibt_beim_neuzeichnen():
         assert "einsammeln();" in "\n".join(zeilen[start:nr + 1]), (nr, z.strip())
     # Art ändern; Punkt: neu, hoch, runter, in Gruppe, weg; Gruppe: neu, weg (das Ende des Ziehens zeichnet mit
     # „zeichnen();“ – eingesammelt ist beim Aufsetzen). „Gruppe nach oben/unten“ entfiel am 04.11.2026 (nur noch Griff).
-    assert aufrufe == 8, aufrufe
+    # Seit Schritt 39 dazu Untergruppe: neu, weg.
+    assert aufrufe == 10, aufrufe
     ziehen = abschnitt(editor, "    function ziehen(e) {", "\n    }\n")
     assert ziehen.index("einsammeln();") < ziehen.index("zeichnen();")
     # Speichern und Aktivieren nehmen den Titel aus dem Feld.

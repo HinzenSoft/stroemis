@@ -286,7 +286,8 @@ def bis_schritt(version, nachruesten=True):
     kennt die neuen Felder erst dann); seit Schritt 25 die Tabelle der Seriennummern der Bestandteile (models.TABELLEN_25,
     ohne Trigger) und die beiden Spalten an mat_inspection_result (models.SPALTEN_25) – Artikelansicht und Prüfung lesen
     sie; seit Schritt 35 die Spalte mat_product.formular_von (models.SPALTEN_35); seit Schritt 38 die (leeren) Tabellen
-    des Formular-Pools (models.FORMULAR_38) – jede Produkt- und Artikelansicht fragt nach Zuweisungen. nachruesten=False lässt den Stand ganz, wie er war (für Tests, die genau das prüfen); nachruesten="schritt_25" rüstet
+    des Formular-Pools (models.FORMULAR_38) – jede Produkt- und Artikelansicht fragt nach Zuweisungen; seit Schritt 39 die
+    Spalten untergruppe (models.SPALTEN_39) – die Dienste schreiben sie mit jedem Prüfpunkt und jeder Befundzeile. nachruesten=False lässt den Stand ganz, wie er war (für Tests, die genau das prüfen); nachruesten="schritt_25" rüstet
     nur Tabelle und Spalten aus Schritt 25 nach (für Tests, die einen älteren Stand ohne die übrigen Nachrüstungen prüfen,
     aber Artikel anlegen)."""
     def lauf(f, *a):
@@ -296,7 +297,7 @@ def bis_schritt(version, nachruesten=True):
         models.SCHEMA_VERSION = version
         # Die Startschritte der Module stehen in db.SCHEMA_MODULE (init_db ruft sie der Reihe nach mit der Verbindung):
         # hinten angehängt, läuft das Nachrüsten nach der Modulmigration jedes Starts in f.
-        mit = nachruesten and version < 38
+        mit = nachruesten and version < 39
         schritt = schritt_25_nachruesten if nachruesten == "schritt_25" else spalten_20_nachruesten
         if mit:
             from app.material import schema_anmelden
@@ -327,6 +328,13 @@ def trigger_38():
     return neu, set(models.TRIGGER_WEG_38)
 
 
+def trigger_39():
+    """Die Trigger, die Schritt 39 anlegt (mat_result_untergruppe) – für Tests, die Trigger eines älteren Stands mit dem
+    Endstand vergleichen."""
+    from app.material import models
+    return {models._trigger_name(x) for x in models.TRIGGER_39}
+
+
 def spalten_vor_37(conn):
     """Die Set-Spalten, die Schritt 37 entfernt, leer wieder anlegen (ohne Commit) – für Tests, die Schritt 26 auf dem
     Endstand noch einmal laufen lassen (er liest sie); models._schritt_37 räumt sie danach wieder ab, wie in der Kette."""
@@ -347,6 +355,7 @@ def schritt_25_nachruesten(conn):
     models.spalten_nachruesten(conn, models.SPALTEN_25)
     models.spalten_nachruesten(conn, models.SPALTEN_35)
     formular_pool_nachruesten(conn)
+    models.spalten_nachruesten(conn, models.SPALTEN_39)
     conn.commit()
 
 
@@ -375,6 +384,8 @@ def spalten_20_nachruesten(conn):
         models.spalten_nachruesten(conn, models.SPALTEN_35)
     if version < 38:
         formular_pool_nachruesten(conn)
+    if version < 39:
+        models.spalten_nachruesten(conn, models.SPALTEN_39)
     conn.commit()
 
 

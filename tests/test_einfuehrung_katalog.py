@@ -167,8 +167,8 @@ def test_auswahl():
         assert [g["formular"], s["formular"], h["formular"]] == [0, 1, 2]
         assert f[0]["kategorie"] == 1 and f[1]["kategorie"] is None and f[0]["quelle"] == "Standard der Kategorie „Gurte“"
         assert f[0]["heimat"] == 1 and f[1]["heimat"] == 1 and f[1]["quelle"] == "dem Produkt zugewiesen"
-        assert f[0]["punkte"][0] == {"gruppe": "Platzhalter A", "text": "Platzhalter Ja/Nein\nmit Absatz", "art": "yesno",
-                                     "pflicht": True, "soll": "nein"}
+        assert f[0]["punkte"][0] == {"gruppe": "Platzhalter A", "untergruppe": "", "text": "Platzhalter Ja/Nein\nmit Absatz",
+                                     "art": "yesno", "pflicht": True, "soll": "nein"}   # Untergruppe seit Schritt 39
         assert f[0]["punkte"][1]["pflicht"] is False
         # Ein Produkt mit Helm-Kategorie geht dem Karabiner vor.
         with app.test_request_context():

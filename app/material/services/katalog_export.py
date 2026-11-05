@@ -24,6 +24,7 @@ Prüfformulare (Format 3, Formular-Pool): je Formular des Pools mit aktiver Vers
 („kategorie“, „kategorie_uid“), Titel, Prüfpunkten und den Zuweisungen („standard_fuer“: Kategorien, „zugewiesen“:
 Produkte, beide nur, soweit sie mitkommen). Ohne aktive Version kommt ein Formular nicht mit (E1), ältere Versionen nie –
 ihre Nummern sind je Instanz eigene. Kein Journal und nichts Journalähnliches: keine Konten, Namen, Bearbeitungszeiten.
+Je Prüfpunkt seit Schritt 39 auch „untergruppe“ (leer = keine); eine ältere Datei ohne das Feld liest der Import als leer.
 
 Eine Datei, die der Import nicht annähme (größer als seine Grenze, importer.BILD_MAX_IMPORT bzw. DOK_MAX_BYTES), bleibt
 draußen und steht im Bericht unter „zu_gross“ – sonst stünde der ganze Import.
@@ -60,8 +61,8 @@ def _summe(pfad):
 
 
 def _punkt(p):
-    return {"gruppe": p["group_name"], "text": p["label"], "art": p["editor"], "pflicht": bool(p["mandatory"]),
-            "soll": p["expected_value"]}
+    return {"gruppe": p["group_name"], "untergruppe": p["untergruppe"], "text": p["label"], "art": p["editor"],
+            "pflicht": bool(p["mandatory"]), "soll": p["expected_value"]}
 
 
 def sammeln(mit_dateien=True):
