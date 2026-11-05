@@ -12705,3 +12705,10 @@ Nachzug des Artikels „Prüfformulare“):
 5. Startprotokoll und Journal nennen bei der Migration Produkte mit Kennung und Namen.
 6. Editor: Gruppen lassen sich per Tastatur nicht mehr verschieben (der Griff ⠿ ist kein Tastaturziel) – siehe
    „Zusatz“ unten.
+
+**Suchzeile im Katalog über der Überschrift** (Wunsch des Nutzers, 04.11.2026, Bildschirmfoto Telefon): Die Suchzeile des
+Katalogs (`#kat-q`, am Telefon mit „☰“) steht jetzt ganz oben im Inhalt über „Katalog“ – wie `#mat-suchzeile` auf den
+übrigen Seiten des Moduls; vorher unter Kopf, Knöpfen und Kategorie über der Liste. Ebenso die Suchzeile der Seite
+„Prüfformulare“ (`#pool-q`); deren Trefferzahl steht seitdem unter der Überschrift über der Liste. Klasse
+`.mat-suchzeile-kopf` (Abstand wie `.mat-suchzeile-oben`). Tests: `test_material_suchzeile.py`, Fotos
+`planung/kleinigkeiten-0411/bilder/suchzeile-*`.

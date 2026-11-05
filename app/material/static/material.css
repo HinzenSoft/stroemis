@@ -353,6 +353,9 @@ table.list.mat-artikel th.mat-wahlspalte, table.list.mat-artikel td.mat-wahlspal
    Bildschirmtastatur – der Knopf „Suchen“ bleibt nur in der Navigation sichtbar. */
 .mat-suchzeile-oben { display: flex; align-items: stretch; margin: -8px 0 10px; }
 .mat-suchzeile-oben[hidden] { display: none; }
+/* Katalog und Prüfformulare: ihre eigene Suchzeile steht wie #mat-suchzeile ganz oben über der Überschrift (Wunsch vom
+   04.11.2026). */
+.mat-suchzeile-kopf { margin: -8px 0 10px; }
 .mat-suchzeile > .mat-suche { flex: 1 1 auto; align-self: flex-start; max-width: none; min-width: 0; margin: 0 0 10px; }
 .mat-suchzeile > .mat-suche > button[type="submit"] { display: none; }
 .mat-endlos { text-align: center; padding: 10px 0 4px; }
@@ -2180,8 +2183,8 @@ dialog .mat-knopfgrund { margin: 10px 0 0; }
 .mat-pool-suche { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; }
 .mat-pool-suche input { flex: 1 1 10em; width: auto; min-width: 0; }
 .mat-pool-suche > .mat-side-auf { margin-bottom: 0; align-self: stretch; }
-.mat-pool-zahl { flex: none; white-space: nowrap; }
-@container mat-seite (max-width: 600px) { .mat-pool-zahl { flex-basis: 100%; } }
+/* Zahl der Treffer über der Liste (seit die Suchzeile über der Überschrift steht, 04.11.2026). */
+.mat-pool-zahl { margin: 0 0 6px; }
 .mat-pool-nur { margin: 0 0 6px; }
 .mat-pool-gruppe { margin: 0; padding: 12px 0 4px; border-top: 1px solid var(--linie); }
 .mat-pool-gruppe[hidden], .mat-pool-zeile[hidden], .mat-zw-zeile[hidden], .mat-zw-gruppe[hidden] { display: none; }

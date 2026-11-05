@@ -138,8 +138,12 @@ def test_stil():
 
 
 def test_katalog_unveraendert():
-    """Die Katalogzeile entsteht weiter im Inhalt (kat-q), ohne Nummernsuche."""
-    assert '<div class="mat-suchzeile"><input type="search" id="kat-q" placeholder="${katPlatzhalter()}"' in JS
+    """Die Katalogzeile entsteht weiter im Inhalt (kat-q), ohne Nummernsuche – seit dem 04.11.2026 ganz oben über der
+    Überschrift wie #mat-suchzeile auf den übrigen Seiten (ebenso die Suchzeile der Seite „Prüfformulare“)."""
+    assert 'inhalt.innerHTML = `<div class="mat-suchzeile mat-suchzeile-kopf"><input type="search" id="kat-q" placeholder="${katPlatzhalter()}"' in JS
+    assert JS.index('mat-suchzeile-kopf"><input type="search" id="kat-q"') < JS.index('<div class="page-head"><h1>Katalog${anleitungKopf("katalog")}</h1>')
+    assert 'inhalt.innerHTML = `<div class="mat-suchzeile mat-suchzeile-kopf mat-pool-suche"><input type="search" id="pool-q"' in JS
+    assert ".mat-suchzeile-kopf { margin: -8px 0 10px; }" in CSS
     assert JS.index('<div id="kat-liste"></div>`;') < JS.index("leisteKnopfSetzen();             //")
     seite = _lesen("app/material/templates/material/seite.html")
     # Nur mit Modulzugang (innerhalb von „if not nur_psa“, wie die Navigation).

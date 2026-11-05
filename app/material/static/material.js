@@ -4093,7 +4093,11 @@
         ? ` geerbt von <a href="/materialablage/katalog?kategorie=${geerbt.id}" data-act="kategorie" data-id="${geerbt.id}">„${esc(geerbt.name)}“</a>` : ""}`
         : ' · <span class="muted">kein Standard-Prüfformular</span>'}${DARF.katalog
         ? ` · <a href="/materialablage/katalog/formulare?kategorie=${k.id}">Prüfformulare (${k.formulare || 0})</a>` : ""}`;
-      inhalt.innerHTML = `<div class="page-head"><h1>Katalog${anleitungKopf("katalog")}</h1>
+      // Suchzeile ganz oben über der Überschrift wie auf den übrigen Seiten des Moduls (Wunsch vom 04.11.2026; vorher unter
+      // Kopf und Kategorie über der Liste).
+      inhalt.innerHTML = `<div class="mat-suchzeile mat-suchzeile-kopf"><input type="search" id="kat-q" placeholder="${katPlatzhalter()}"
+          aria-label="${KAT_SUCHE}" title="${KAT_SUCHE}" value="${esc(q)}" autocomplete="off" ${TASTATUR_SUCHE}></div>
+        <div class="page-head"><h1>Katalog${anleitungKopf("katalog")}</h1>
           <div class="btn-row">${DARF.katalog ? '<button class="btn secondary" data-act="kat-neu"><span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Kategorie<span class="k-anlegen"> anlegen</span></span></button><button class="btn secondary" data-act="produkt-neu"><span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Produkt<span class="k-anlegen"> anlegen</span></span></button>' : ""}
             ${DARF.lesen || DARF.katalog ? `<a class="btn secondary mat-mit-zahl" href="/materialablage/katalog/meldungen">Produktmeldungen<span class="mat-meldezahl" id="kat-meldungen" hidden></span></a>` : ""}
             ${DARF.katalog ? `<a class="btn secondary" href="/materialablage/katalog/formulare${k ? `?kategorie=${k.id}` : ""}">Prüfformulare</a>${katalogMenue}` : ""}</div></div>
@@ -4108,8 +4112,6 @@
               ${DARF.katalog ? '<button class="btn secondary small" data-act="dok-neu"><span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Dokument<span class="k-anlegen"> anlegen</span></span></button>' : ""}</details></div>`
           : (kats.length ? "" : leer(DARF.katalog ? "Noch keine Kategorien – mit „Kategorie anlegen“." : "Noch keine Kategorien."))}
         ${DARF.katalog ? '<div id="kat-import-hinweis"></div>' : ""}
-        <div class="mat-suchzeile"><input type="search" id="kat-q" placeholder="${katPlatzhalter()}"
-          aria-label="${KAT_SUCHE}" title="${KAT_SUCHE}" value="${esc(q)}" autocomplete="off" ${TASTATUR_SUCHE}></div>
         <div id="kat-liste"></div>`;
       leisteKnopfSetzen();             // „☰ Kategorien“ in die neue Suchzeile (Telefon, Tablet hochkant)
       let los = null;
@@ -5790,12 +5792,12 @@
           <p class="small mat-pool-standard">${standardHtml(k)}</p></div>
         ${k.formulare.length ? `<ul class="mat-pool-liste">${k.formulare.map((x) => zeile(x, k)).join("")}</ul>` : ""}</section>`;
     const pfadNur = kategorie && d.kategorien.length ? d.kategorien[0].pfad.join(" › ") : "";
-    inhalt.innerHTML = `<div class="mat-pfad">${pfadHtml(['<a href="/materialablage/katalog">Katalog</a>', kategorie ? '<a href="/materialablage/katalog/formulare">Prüfformulare</a>' : ""])}</div>
+    inhalt.innerHTML = `<div class="mat-suchzeile mat-suchzeile-kopf mat-pool-suche"><input type="search" id="pool-q" placeholder="Formular, Kategorie oder Produkt suchen" aria-label="Prüfformulare durchsuchen: Titel, Kategorie oder Produkt" autocomplete="off" ${TASTATUR_SUCHE}></div>
+      <div class="mat-pfad">${pfadHtml(['<a href="/materialablage/katalog">Katalog</a>', kategorie ? '<a href="/materialablage/katalog/formulare">Prüfformulare</a>' : ""])}</div>
       <div class="page-head"><h1>Prüfformulare${anleitungKopf("formulare")}</h1>
         <div class="btn-row"><button class="btn secondary" type="button" data-act="anlegen"><span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Prüfformular<span class="k-anlegen"> anlegen</span></span></button></div></div>
       ${kategorie ? `<p class="help mat-pool-nur">Nur „${esc(pfadNur)}“ und darunter · <a href="/materialablage/katalog/formulare">alle Kategorien</a></p>` : ""}
-      <div class="mat-suchzeile mat-pool-suche"><input type="search" id="pool-q" placeholder="Formular, Kategorie oder Produkt suchen" aria-label="Prüfformulare durchsuchen: Titel, Kategorie oder Produkt" autocomplete="off" ${TASTATUR_SUCHE}>
-        <span class="small muted mat-pool-zahl" id="pool-zahl" aria-live="polite"></span></div>
+      <p class="small muted mat-pool-zahl" id="pool-zahl" aria-live="polite"></p>
       <div id="pool-liste">${d.kategorien.length ? d.kategorien.map(gruppe).join("") : leer("Noch keine Kategorien – erst im Katalog anlegen.")}
         <p class="leerzustand" id="pool-leer" hidden>Kein Prüfformular passt. <button type="button" class="lnk" data-act="pool-leeren">Suche leeren</button></p></div>`;
     leisteKnopfSetzen();
