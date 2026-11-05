@@ -91,7 +91,10 @@ def test_materialablage_statisch():
     assert 'const html = glieder.filter(Boolean).map((g, i) => `<span class="mat-pfad-glied">${i ? "/ " : ""}${g}</span>`);' in js
     for m in re.finditer(r'<div class="mat-pfad">(.*)', js):
         zeile = m.group(1)
-        assert zeile.startswith("${pfadHtml(") or zeile.startswith("${bc}"), zeile[:80]
+        # Formularseite (Brotkrumen der Prüfformulare, 05.11.2026): poolPfad baut sie ebenso über pfadHtml.
+        assert zeile.startswith("${pfadHtml(") or zeile.startswith("${bc}") or zeile.startswith(("${DARF.katalog ? poolPfad(", "${poolPfad(")), zeile[:80]
+    pool_pfad = js[js.index("  function poolPfad("):]
+    assert pool_pfad[:pool_pfad.index("\n  }\n")].count("return pfadHtml([") == 1
     assert '.map(pfadGlied).join(" / ")' not in js and "</a> / " not in js
     assert "const bc = pfadHtml(a.pfad.map(pfadGlied));" in js
     assert ("  .mat-pfad a { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; "
