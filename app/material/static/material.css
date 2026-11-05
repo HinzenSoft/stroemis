@@ -601,26 +601,35 @@ tr.mat-entwurf a:not(.btn) { color: var(--rot-auf-flaeche); }
 /* Untergruppe (Schritt 39): kleinere Zwischenüberschrift unter der Gruppe, ihre Karten darunter eingezogen. */
 .mat-untergruppe { margin: 14px 0 6px 16px; font-size: var(--fs-mittel); color: var(--anthrazit); }
 .mat-in-ug { margin-left: 16px; }
-/* Gruppen- und Untergruppenköpfe der Prüfung in einem Raster (Wunsch vom 05.11.2026, Bauauftrag pruefung-gruppenkopf):
-   die Namen links, die Knöpfe („n. z.“ bzw. zugeklappt „nicht zutreffend“, „n Punkte zeigen“, „n. z. aufheben“) in einer
-   senkrechten Flucht direkt hinter dem längsten Namen. Die Köpfe sind Teilraster (subgrid) der Punktliste, die erste
-   Spalte richtet sich also nach allen Namen zugleich – ohne Messen, auch nach dem Laden der Schrift; zu lange Namen
-   brechen bei 60 % der Breite um, schmal früher (die Knopfspalte behält Platz für „n. z. aufheben“). Die Karten laufen über beide Spalten. Im Raster fallen Außenabstände nicht zusammen,
-   daher die kleineren Abstände oben (unter einer Karte stehen ihre 10 px schon). Vor jeder Gruppe außer der ersten ein
-   neutraler Trenner; Untergruppen ohne, damit die Ebenen unterscheidbar bleiben. */
-.mat-pliste { display: grid; grid-template-columns: fit-content(min(60%, 100% - 10em)) minmax(0, 1fr); column-gap: 12px; }
-.mat-pliste > * { grid-column: 1 / -1; min-width: 0; }
-.mat-gruppenkopf { display: grid; grid-template-columns: subgrid; align-items: center; row-gap: 4px; margin: 8px 0 6px; }
+/* Gruppen- und Untergruppenköpfe der Prüfung (Wünsche vom 05.11.2026): links der Name, rechtsbündig die Knöpfe
+   (.mat-kopf-knoepfe: „n. z.“ bzw. zugeklappt die Marke „nicht zutreffend“ und „n Punkte zeigen“). Ein langer Name
+   bricht um; reicht der Platz neben ihm nicht, rutschen die Knöpfe in eine eigene Zeile, auch dort rechts. Die
+   Punktliste ist ein Raster mit einer Spalte (bis zum 05.11.2026 mit einer Flucht der Knöpfe hinter dem längsten Namen):
+   darin fallen Außenabstände nicht zusammen, daher die kleineren Abstände oben (unter einer Karte stehen ihre 10 px
+   schon). Vor jeder Gruppe außer der ersten ein neutraler Trenner; Untergruppen ohne, damit die Ebenen unterscheidbar
+   bleiben. */
+.mat-pliste { display: grid; grid-template-columns: minmax(0, 1fr); }
+.mat-pliste > * { min-width: 0; }
+.mat-gruppenkopf { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 12px; margin: 8px 0 6px; }
 .mat-pliste > .mat-gruppenkopf:first-child { margin-top: 6px; }
 .mat-gruppenkopf.mat-ug-kopf { margin: 4px 0 6px 16px; }
 .mat-gruppenkopf + .mat-ug-kopf { margin-top: 8px; }
 .mat-gruppenkopf:not(.mat-ug-kopf, :first-child) { border-top: 1px solid var(--linie); padding-top: 14px; margin-top: 12px; }
-.mat-gruppenkopf > :is(.mat-gruppe, .mat-untergruppe) { grid-column: 1; margin: 0; overflow-wrap: anywhere; }
-.mat-kopf-knoepfe { grid-column: 2; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; min-width: 0; }
-/* Zugeklappt (alle Punkte „n. z.“): der Name grau. */
+.mat-gruppenkopf > :is(.mat-gruppe, .mat-untergruppe) { flex: 1 1 12em; min-width: 0; margin: 0; overflow-wrap: anywhere; }
+.mat-kopf-knoepfe { flex: 0 1 auto; max-width: 100%; margin-left: auto; display: flex; flex-wrap: wrap; justify-content: flex-end;
+  align-items: center; gap: 4px 12px; }
+/* Zugeklappt (alle Punkte „n. z.“): der Name grau. Die Marke „nicht zutreffend“ ist zugleich der Knopf, der es aufhebt
+   (Wunsch vom 05.11.2026, statt eines eigenen Knopfs „n. z. aufheben“) – Aussehen der Marke, Hand als Zeiger; am Finger
+   44 px Tippfläche über ::before, ohne dass die Marke größer aussieht (die Zeile hält dafür 44 px frei). */
 .mat-gruppenkopf[hidden] { display: none; }
 .mat-gruppenkopf[data-zustand="zu"] > :is(h3, h4), .mat-gruppenkopf[data-zustand="auf"] > :is(h3, h4) { color: var(--grau); }
-@media (pointer: coarse) { .mat-kopf-knoepfe > :is(.mat-alle-nz, .mat-nz-auf) { min-height: 44px; } }
+button.mat-nz-pille { position: relative; border: 0; font-family: inherit; line-height: inherit; cursor: pointer; }
+@media (hover: hover) and (pointer: fine) { button.mat-nz-pille:hover { box-shadow: inset 0 0 0 1px var(--grau); } }
+@media (pointer: coarse) {
+  .mat-kopf-knoepfe, .mat-kopf-knoepfe > .mat-alle-nz { min-height: 44px; }
+  button.mat-nz-pille::before { content: ""; position: absolute; left: 0; right: 0; top: calc(50% - 22px); bottom: calc(50% - 22px); }
+  button.mat-nz-pille:active { box-shadow: inset 0 0 0 1px var(--grau); }
+}
 .mat-punkt { border: 1px solid var(--linie); border-left: 4px solid var(--linie); background: var(--weiss); padding: 10px 12px; margin: 0 0 10px; }
 .mat-punkt.mangel { border-left-color: var(--rot); background: var(--rot-hell); }
 .mat-punkt.nz { border-left-color: var(--grau-hell); }

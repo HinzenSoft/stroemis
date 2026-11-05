@@ -13,13 +13,17 @@ python tests/test_material_gruppe_nz.py  oder  pytest tests/test_material_gruppe
    „alle n. z.“ an Gruppe und Untergruppe (Name für Bildschirmleser, 44 px am Finger, Tipp auf die Mitte trifft), ohne
    Rückfrage mit Toast, mit Rückfrage bei einem Mangel (Zahl genannt; Abbrechen ändert nichts), optionale Punkte bleiben,
    Werte in der Datenbank, zurück je Punkt; zugeklappt, wenn alles „n. z.“ ist (Marke, „n Punkte zeigen“ mit
-   aria-expanded, „n. z. aufheben“, Untergruppen mit der Gruppe, nach dem Neuladen ebenso); Festschreiben danach über
+   aria-expanded, Aufheben über die Marke, Untergruppen mit der Gruppe, nach dem Neuladen ebenso); Festschreiben danach über
    die Oberfläche; 30 Punkte unter 1 s; kein
    waagerechter Bildlauf, keine Konsolenfehler. Ohne Chromium „übersprungen“ mit rc 0.
    Gruppenkopf (Bauauftrag planung/pruefung-gruppenkopf, 05.11.2026): Knopf „n. z.“ statt „alle n. z.“ (Name für
-   Bildschirmleser unverändert); die Knöpfe aller Köpfe – auch zugeklappt „nicht zutreffend“ – in einer senkrechten
-   Flucht (±1 px) direkt hinter dem längsten Namen statt rechtsbündig, kein Name ragt hinein; vor jeder Gruppe außer der
-   ersten ein neutraler Trenner (1 px, Farbe --linie), vor Untergruppen keiner.
+   Bildschirmleser unverändert); vor jeder Gruppe außer der ersten ein neutraler Trenner (1 px, Farbe --linie), vor
+   Untergruppen keiner.
+   Marke als Knopf (Bauauftrag planung/pruefung-nz-pille, 05.11.2026): die Knöpfe aller Köpfe – auch zugeklappt – wieder
+   rechtsbündig (±1 px am rechten Rand der Liste), der Name breit bis 12 px davor, kein Name ragt hinein; kein Knopf
+   „n. z. aufheben“ mehr – die graue Marke „nicht zutreffend“ ist ein Knopf (data-act nz-aufheben, Name „<Name>: nicht
+   zutreffend – aufheben“, title, Hand als Zeiger, sichtbarer Fokus, Tastatur mit Umschalt+Tab und Enter, am Finger
+   44 px Tippfläche gemessen über elementFromPoint, die Marke selbst nicht höher).
 3. Statisch: Knopfsprache und Touch-Regel.
 Alle Inhalte sind Platzhalter."""
 import io
@@ -225,7 +229,8 @@ KOPF = """(() => {{ const k = document.querySelector('.mat-gruppenkopf[data-g="{
   const z = k.querySelector('.mat-nz-zeigen');
   return [k.dataset.zustand, k.hidden, k.querySelector('.mat-befund') ? k.querySelector('.mat-befund').textContent : '',
           z ? z.textContent.trim() : '', z ? z.getAttribute('aria-expanded') : '',
-          (k.querySelector('.mat-nz-auf') || {{}}).textContent || '', !!k.querySelector('.mat-alle-nz')]; }})()"""
+          k.querySelector('.mat-nz-auf') ? 'alter Knopf' : k.querySelector('.mat-befund') ? k.querySelector('.mat-befund').tagName + ' '
+            + (k.querySelector('.mat-befund').dataset.act || '') : '', !!k.querySelector('.mat-alle-nz')]; }})()"""
 
 
 def kopf(s, g, u=-1):
@@ -236,35 +241,31 @@ def sichtbar(s, rid):
     return s.js(f"(() => {{ const k = document.querySelector('#pp-{rid}'); return !!k && k.getClientRects().length > 0; }})()")
 
 
-FLUCHT = """(() => {
+RECHTS = """(() => {
   const koepfe = [...document.querySelectorAll('.mat-gruppenkopf')].filter((k) => k.getClientRects().length);
   const text = (t) => { const r = document.createRange(); r.selectNodeContents(t); return Math.max(...[...r.getClientRects()].map((x) => x.right)); };
   const liste = document.querySelector('.mat-pliste').getBoundingClientRect();
-  return { liste: [liste.left, liste.right], em: parseFloat(getComputedStyle(document.querySelector('.mat-pliste')).fontSize), koepfe: koepfe.map((k) => { const t = k.querySelector('h3, h4');
-    const b = k.querySelector('.mat-kopf-knoepfe > :first-child');
-    return [t.textContent.trim(), text(t), b ? b.getBoundingClientRect().left : null, b ? b.getBoundingClientRect().right : null]; }) }; })()"""
+  return { liste: [liste.left, liste.right], koepfe: koepfe.map((k) => { const t = k.querySelector('h3, h4'); const tr = t.getBoundingClientRect();
+    const b = k.querySelector('.mat-kopf-knoepfe'); const br = b && b.getBoundingClientRect();
+    return [t.textContent.trim(), text(t), tr.right, tr.bottom, br ? [br.left, br.right, br.top] : null]; }) }; })()"""
 
 
-def flucht(s, breite):
-    """Die Knöpfe aller sichtbaren Köpfe in einer senkrechten Flucht (±1 px), direkt hinter dem längsten Namen (12 px
-    Abstand, höchstens 60 % der Breite bzw. alles bis auf 10em für die Namen) – nicht rechtsbündig; kein Name ragt in die
-    Flucht, kein Knopf aus seiner Spalte."""
-    m = s.js(FLUCHT)
-    links = [k[2] for k in m["koepfe"] if k[2] is not None]
-    assert links and max(links) - min(links) <= 1, m
-    kante = min(links)
+def rechts(s, breite):
+    """Die Knöpfe aller sichtbaren Köpfe rechtsbündig (±1 px am rechten Rand der Liste); neben dem Namen reicht der Name
+    bis 12 px davor (kein Name ragt hinein), sonst stehen die Knöpfe in einer eigenen Zeile darunter. Am Rechner
+    alle neben dem Namen."""
+    m = s.js(RECHTS)
     l, r = m["liste"]
-    assert all(k[1] <= kante - 12 + 1 for k in m["koepfe"]), m
-    laengster = max(k[1] for k in m["koepfe"])
-    # Spalte der Namen = längster Name, oder er bricht an der Grenze um: 60 % der Breite, schmal 10em Platz für die Knöpfe.
-    grenze = l + min(0.6 * (r - l), r - l - 10 * m["em"])
-    assert kante - 12 <= laengster + 1 or abs(kante - 12 - grenze) <= 1, m
-    assert kante - 12 <= grenze + 1, m
-    if breite >= 1000:   # am Rechner weit weg vom rechten Rand
-        assert max(k[3] for k in m["koepfe"] if k[3] is not None) < r - 200, m
-    assert all(k[3] is None or k[3] <= r + 1 for k in m["koepfe"]), m
+    mit = [k for k in m["koepfe"] if k[4] is not None]
+    assert mit and all(abs(k[4][1] - r) <= 1 for k in mit), m
+    for name, text_rechts, t_rechts, t_unten, (kl, _, ko) in mit:
+        if ko < t_unten - 1:   # in einer Zeile mit dem Namen
+            assert text_rechts <= kl - 12 + 1 and abs(t_rechts - (kl - 12)) <= 1, (name, m)
+        else:
+            assert breite < 1000, (name, m)
+    assert all(k[1] <= r + 1 for k in m["koepfe"]), m
     assert s.js("[...document.querySelectorAll('.mat-kopf-knoepfe')].every((k) => k.scrollWidth <= k.clientWidth)"), m
-    return len(links)
+    return len(mit)
 
 
 def trenner(s):
@@ -302,7 +303,7 @@ def ablauf(u, ids, gid, breite, hoehe, touch):
         assert [x[:2] for x in knoepfe] == [["H3", GA], ["H4", UK], ["H4", US], ["H3", GB], ["H3", GV]], knoepfe
         for _, name, klasse, knopf in knoepfe:
             assert klasse == "btn secondary small mat-alle-nz" and knopf == [f"{name}: alle Punkte nicht zutreffend", "n. z.", 0], knoepfe
-        flucht(s, breite)
+        rechts(s, breite)
         assert trenner(s) == [["H3", False], ["H4", False], ["H4", False], ["H3", True], ["H3", True]], trenner(s)
         # Optionale Antwortpunkte: nur das Feld bzw. Ja/Nein – kein Befund, keine Bemerkung, kein Foto.
         def nur_antwort(t, art):
@@ -336,20 +337,33 @@ def ablauf(u, ids, gid, breite, hoehe, touch):
         d = _db(u, pid)
         assert [d[t]["finding"] for t in ("Platzhalter K1", "Platzhalter K2", "Platzhalter K3")] == ["nicht_zutreffend"] * 3, d
         assert d["Platzhalter A1"]["finding"] == "ok" and d["Platzhalter S1"]["finding"] == "ok"
-        # Zugeklappt (dritter Wunsch): „nicht zutreffend“, „3 Punkte zeigen“, „n. z. aufheben“; die Punkte weg.
+        # Zugeklappt (dritter Wunsch): „nicht zutreffend“ (ein Knopf, der aufhebt), „3 Punkte zeigen“; die Punkte weg.
         assert s.warte("document.querySelector('.mat-gruppenkopf[data-g=\"0\"][data-u=\"0\"]').dataset.zustand === 'zu'")
-        assert kopf(s, 0, 0) == ["zu", False, "nicht zutreffend", "3 Punkte zeigen", "false", "n. z. aufheben", False], kopf(s, 0, 0)
+        assert kopf(s, 0, 0) == ["zu", False, "nicht zutreffend", "3 Punkte zeigen", "false", "BUTTON nz-aufheben", False], kopf(s, 0, 0)
         assert not any(sichtbar(s, n[t]) for t in ("Platzhalter K1", "Platzhalter K2", "Platzhalter K3"))
         assert sichtbar(s, n["Platzhalter A1"]) and sichtbar(s, n["Platzhalter S1"])
-        assert flucht(s, breite) == 5   # zugeklappt: „nicht zutreffend“ in derselben Flucht
+        assert rechts(s, breite) == 5   # zugeklappt ebenso rechtsbündig
         if not touch:   # Fokus nach dem Zuklappen am Kopf (nicht verloren)
             assert s.js("!!document.activeElement.closest('.mat-gruppenkopf[data-g=\"0\"][data-u=\"0\"]')")
-        assert s.js("document.querySelector('.mat-gruppenkopf[data-g=\"0\"][data-u=\"0\"] .mat-nz-auf').getAttribute('aria-label')") == (
-            f"{UK}: nicht zutreffend aufheben")
+        pille = '.mat-gruppenkopf[data-g="0"][data-u="0"] .mat-nz-pille'
+        assert s.js(f"""(() => {{ const b = document.querySelector({json.dumps(pille)}); const c = getComputedStyle(b);
+          return [b.className, b.type, b.getAttribute('aria-label'), b.title, b.tabIndex, c.cursor, c.borderTopWidth,
+                  (() => {{ const p = document.createElement('div'); p.style.color = 'var(--grau-hell)'; document.body.append(p);
+                            const f = getComputedStyle(p).color; p.remove(); return c.backgroundColor === f; }})()]; }})()""") == [
+            "mat-befund b-nicht_zutreffend mat-nz-pille", "button", f"{UK}: nicht zutreffend – aufheben", "n. z. aufheben", 0,
+            "pointer", "0px", True]
+        assert not s.js("!!document.querySelector('.mat-nz-auf')")
         if touch:
-            for sel in ('.mat-gruppenkopf[data-g="0"][data-u="0"] .mat-nz-zeigen', '.mat-gruppenkopf[data-g="0"][data-u="0"] .mat-nz-auf'):
-                _mitte_trifft(s, sel)
-                assert s.js(f"document.querySelector({json.dumps(sel)}).getBoundingClientRect().height") >= 44, sel
+            _mitte_trifft(s, '.mat-gruppenkopf[data-g="0"][data-u="0"] .mat-nz-zeigen')
+            assert s.js("document.querySelector('.mat-gruppenkopf[data-g=\"0\"][data-u=\"0\"] .mat-nz-zeigen').getBoundingClientRect().height") >= 44
+            # Die Marke bleibt so klein, wie sie aussieht; getroffen wird sie aber 44 px hoch (::before) – oben und
+            # unten 21 px von der Mitte, an beiden Enden.
+            _mitte_trifft(s, pille)
+            flaeche = s.js(f"""(() => {{ const b = document.querySelector({json.dumps(pille)}); const r = b.getBoundingClientRect();
+              const y = r.top + r.height / 2; const trifft = (x, yy) => {{ const t = document.elementFromPoint(x, yy); return !!t && (t === b || b.contains(t)); }};
+              return [r.height, ...[r.left + 2, r.left + r.width / 2, r.right - 2].flatMap((x) => [trifft(x, y - 21.5), trifft(x, y + 21.5)]),
+                      trifft(r.left + r.width / 2, y - 24), trifft(r.left + r.width / 2, y + 24)]; }})()""")
+            assert flaeche[0] < 30 and flaeche[1:7] == [True] * 6 and flaeche[7:] == [False, False], flaeche
         # Aufklappen und wieder zu (aria-expanded).
         assert klick(s, '.mat-gruppenkopf[data-g="0"][data-u="0"] .mat-nz-zeigen') is None
         assert s.warte("document.querySelector('.mat-gruppenkopf[data-g=\"0\"][data-u=\"0\"] .mat-nz-zeigen').getAttribute('aria-expanded') === 'true'")
@@ -384,7 +398,7 @@ def ablauf(u, ids, gid, breite, hoehe, touch):
         assert d["Platzhalter S2 optional"]["finding"] == "ok" and d["Platzhalter B1"]["finding"] == "ok"
         # Gruppe A zugeklappt – samt Untergruppen und optionalen Punkten.
         assert s.warte("document.querySelector('.mat-gruppenkopf[data-g=\"0\"][data-u=\"-1\"]').dataset.zustand === 'zu'")
-        assert kopf(s, 0) == ["zu", False, "nicht zutreffend", "8 Punkte zeigen", "false", "n. z. aufheben", False], kopf(s, 0)
+        assert kopf(s, 0) == ["zu", False, "nicht zutreffend", "8 Punkte zeigen", "false", "BUTTON nz-aufheben", False], kopf(s, 0)
         assert kopf(s, 0, 0)[:2] == ["schlicht", True] and kopf(s, 0, 1)[:2] == ["schlicht", True]
         assert not any(sichtbar(s, n[t]) for t in ("Platzhalter A1", "Platzhalter A2 optional", "Platzhalter K1", "Platzhalter S2 optional"))
         # Aufklappen: alles da, Untergruppen schlicht (sie klappen mit der Gruppe).
@@ -400,8 +414,21 @@ def ablauf(u, ids, gid, breite, hoehe, touch):
         assert s.warte("document.querySelector('.mat-gruppenkopf[data-g=\"0\"][data-u=\"-1\"]').dataset.zustand === 'normal'")
         assert kopf(s, 0)[6] and kopf(s, 0, 0)[0] == "zu" and kopf(s, 0, 1)[0] == "zu", (kopf(s, 0), kopf(s, 0, 0), kopf(s, 0, 1))
         assert not sichtbar(s, n["Platzhalter K1"]) and not sichtbar(s, n["Platzhalter S1"])
-        # „n. z. aufheben“ an „Schnapper“: S1 wieder auf seinem Soll („nein“), Toast; der optionale S2 bleibt.
-        assert klick(s, '.mat-gruppenkopf[data-g="0"][data-u="1"] .mat-nz-auf') is None
+        # Aufheben über die Marke an „Schnapper“: S1 wieder auf seinem Soll („nein“), Toast; der optionale S2 bleibt.
+        # Mit der Maus über die Tastatur: von „1 Punkt zeigen“ mit Umschalt+Tab auf die Marke (sichtbarer Fokus), Enter.
+        pille = '.mat-gruppenkopf[data-g="0"][data-u="1"] .mat-nz-pille'
+        if touch:
+            assert klick(s, pille) is None
+        else:
+            _mitte(s, pille)
+            s.js("document.querySelector('.mat-gruppenkopf[data-g=\"0\"][data-u=\"1\"] .mat-nz-zeigen').focus()")
+            for art in ("keyDown", "keyUp"):
+                s.b.rufen("Input.dispatchKeyEvent", type=art, key="Tab", code="Tab", windowsVirtualKeyCode=9, modifiers=8)
+            fokus = s.js(f"""(() => {{ const b = document.activeElement; const c = getComputedStyle(b);
+              return [b.matches({json.dumps(pille)}), b.matches(':focus-visible'), c.outlineStyle, parseFloat(c.outlineWidth) > 0]; }})()""")
+            assert fokus == [True, True, "solid", True], fokus
+            s.b.rufen("Input.dispatchKeyEvent", type="keyDown", key="Enter", code="Enter", windowsVirtualKeyCode=13, text="\r")
+            s.b.rufen("Input.dispatchKeyEvent", type="keyUp", key="Enter", code="Enter", windowsVirtualKeyCode=13)
         assert _toast(s, f"„{US}“: 1 Punkt wieder offen"), "Toast fehlt"
         assert s.warte("document.querySelector('.mat-gruppenkopf[data-g=\"0\"][data-u=\"1\"]').dataset.zustand === 'normal'")
         assert (_db(u, pid)["Platzhalter S1"]["finding"], _db(u, pid)["Platzhalter S1"]["value"]) == ("ok", "nein")
@@ -419,7 +446,7 @@ def ablauf(u, ids, gid, breite, hoehe, touch):
         assert s.warte("!!document.querySelector('.mat-gruppenkopf')")
         assert [kopf(s, 2)[0], kopf(s, 0, 0)[0], kopf(s, 0, 1)[0], kopf(s, 0)[0]] == ["zu", "zu", "normal", "normal"]
         assert kopf(s, 2)[3] == "30 Punkte zeigen" and not sichtbar(s, n["Platzhalter V1"]) and not sichtbar(s, n["Platzhalter K2"])
-        assert flucht(s, breite) == 5
+        assert rechts(s, breite) == 5
         assert trenner(s) == [["H3", False], ["H4", False], ["H4", False], ["H3", True], ["H3", True]], trenner(s)
         assert s.js("document.documentElement.scrollWidth <= document.documentElement.clientWidth")
         # Festschreiben danach über die Oberfläche (Unterschrift im Profil hinterlegt).
@@ -472,15 +499,21 @@ def test_statisch():
     assert "alle n. z.</button>" not in js and kopf.count('<div class="mat-kopf-knoepfe">') == 2
     assert '<div class="mat-pliste">${html}</div>' in js
     assert 'class="lnk mat-nz-zeigen"' in kopf and 'aria-expanded="${auf}"' in kopf
-    assert 'class="btn secondary small mat-nz-auf"' in kopf and ': nicht zutreffend aufheben">n. z. aufheben</button>' in kopf
+    assert "mat-nz-auf" not in js and "n. z. aufheben</button>" not in js and "mat-nz-auf" not in css
+    assert ('<button type="button" class="mat-befund b-nicht_zutreffend mat-nz-pille" data-act="nz-aufheben"' in kopf
+            and ': nicht zutreffend – aufheben" title="n. z. aufheben">nicht zutreffend</button>' in kopf)
+    assert kopf.index("mat-nz-pille") < kopf.index("mat-nz-zeigen")
     aktion = js[js.index('"alle-nz": async'):js.index('"pnotiz-auf":')]
     assert "endgueltig: false" in aktion and "btn ghost" not in aktion and "nzFaehig(x)" in aktion
     assert "const nzFaehig = (x) => !nurAntwort(x)" in js
-    regel = ".mat-kopf-knoepfe > :is(.mat-alle-nz, .mat-nz-auf) { min-height: 44px; }"
-    i = css.index(regel)
-    assert css.rfind("@media (pointer: coarse) {", 0, i) > css.rfind("\n}\n", 0, i), regel
-    # Flucht über ein Teilraster, Trenner neutral (--linie, kein Rot), nur vor Gruppen.
-    assert ".mat-gruppenkopf { display: grid; grid-template-columns: subgrid;" in css
+    for regel in (".mat-kopf-knoepfe, .mat-kopf-knoepfe > .mat-alle-nz { min-height: 44px; }",
+                  "button.mat-nz-pille::before { content: \"\"; position: absolute;", "button.mat-nz-pille:active {"):
+        i = css.index(regel)
+        assert css.rfind("@media (pointer: coarse) {", 0, i) > css.rfind("\n}\n", 0, i), regel
+    assert css.index("button.mat-nz-pille:hover") > css.index("@media (hover: hover) and (pointer: fine) { button.mat-nz-pille:hover")
+    # Rechtsbündig statt Teilraster, Trenner neutral (--linie, kein Rot), nur vor Gruppen.
+    assert "subgrid" not in css and ".mat-gruppenkopf { display: flex;" in css and "justify-content: space-between" in css
+    assert "margin-left: auto" in next(z for z in css.splitlines() if z.startswith(".mat-kopf-knoepfe {"))
     trenner = next(z for z in css.splitlines() if z.startswith(".mat-gruppenkopf:not(.mat-ug-kopf, :first-child)"))
     assert "border-top: 1px solid var(--linie)" in trenner and "rot" not in trenner, trenner
     with open(os.path.join(WURZEL, "app/static/js/uebung/material.js"), encoding="utf-8") as fh:

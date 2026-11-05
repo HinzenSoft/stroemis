@@ -6707,9 +6707,10 @@
        Antwortpunkte und ein Längenpunkt ohne vorgesehene Länge zählen nicht (sie kennen kein „n. z.“ bzw. nichts anderes).
        Stehen alle übrigen Punkte eines Blocks auf „n. z.“, ist er zugeklappt (dritter Wunsch vom 05.11.2026, aus den
        Befunden abgeleitet – nach dem Neuladen ebenso): an der Überschrift „nicht zutreffend“, „n Punkte zeigen“
-       (aria-expanded; aufgeklappt bleibt er nur in diesem Fenster) und „n. z. aufheben“ (die Punkte wieder auf ihre
-       Vorbelegung, wie ein zweiter Tipp auf „n. z.“). Untergruppen einer zugeklappten Gruppe klappen mit ihr. Die Knöpfe
-       stehen im zweiten Feld des Kopfs (.mat-kopf-knoepfe), in einer Flucht hinter dem längsten Namen (material.css). */
+       (aria-expanded; aufgeklappt bleibt er nur in diesem Fenster); ein Tipp auf die graue Marke „nicht zutreffend“ hebt
+       es auf (die Punkte wieder auf ihre Vorbelegung, wie ein zweiter Tipp auf „n. z.“; bis zum 05.11.2026 ein eigener
+       Knopf „n. z. aufheben“). Untergruppen einer zugeklappten Gruppe klappen mit ihr. Die Knöpfe stehen gesammelt
+       rechts im Kopf (.mat-kopf-knoepfe, material.css). */
     const nzFaehig = (x) => !nurAntwort(x) && !(x.art === "laenge" && !(pr.laenge && pr.laenge.moeglich));
     const aufgeklappt = new Set();   // „g:u“ der zugeklappten Blöcke, die jemand aufgeklappt hat
     function blockDaten(bloecke, g, u) {
@@ -6735,9 +6736,8 @@
       }
       const auf = aufgeklappt.has(`${g}:${u}`);
       return { zustand: auf ? "auf" : "zu",
-        html: `${titel}<div class="mat-kopf-knoepfe"><span class="mat-befund b-nicht_zutreffend">nicht zutreffend</span>
-          <button type="button" class="lnk mat-nz-zeigen" data-act="nz-zeigen" data-g="${g}" data-u="${u}" aria-expanded="${auf}" aria-controls="${z.teil.map((y) => `pp-${y.x.id}`).join(" ")}">${auf ? "Punkte ausblenden" : plural(z.teil.length, "Punkt zeigen", "Punkte zeigen")}</button>
-          <button type="button" class="btn secondary small mat-nz-auf" data-act="nz-aufheben" data-g="${g}" data-u="${u}" aria-label="${esc(name)}: nicht zutreffend aufheben">n. z. aufheben</button></div>` };
+        html: `${titel}<div class="mat-kopf-knoepfe"><button type="button" class="mat-befund b-nicht_zutreffend mat-nz-pille" data-act="nz-aufheben" data-g="${g}" data-u="${u}" aria-label="${esc(name)}: nicht zutreffend – aufheben" title="n. z. aufheben">nicht zutreffend</button>
+          <button type="button" class="lnk mat-nz-zeigen" data-act="nz-zeigen" data-g="${g}" data-u="${u}" aria-expanded="${auf}" aria-controls="${z.teil.map((y) => `pp-${y.x.id}`).join(" ")}">${auf ? "Punkte ausblenden" : plural(z.teil.length, "Punkt zeigen", "Punkte zeigen")}</button></div>` };
     }
     const kopfHtml = (bloecke, g, u) => {
       const k = kopfInnen(bloecke, g, u);
@@ -6774,7 +6774,8 @@
       });
       $$(".mat-ug-kopf", box).forEach((k) => { k.hidden = zu(+k.dataset.g, -1); });
       const ziel = fokusKopf.find(Boolean);
-      const knopf = ziel && $("button", ziel);
+      // Zugeklappt auf „n Punkte zeigen“, nicht auf die Marke davor – ein versehentliches Enter höbe sonst gleich wieder auf.
+      const knopf = ziel && ($(".mat-nz-zeigen", ziel) || $("button", ziel));
       if (knopf) knopf.focus({ preventScroll: true });
     }
 

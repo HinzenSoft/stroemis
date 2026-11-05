@@ -13104,3 +13104,27 @@ sichtbaren Köpfe ±1 px – auch zugeklappt und nach dem Neuladen –, direkt h
 Grenze, kein Knopf ragt aus seiner Spalte, kein Name ragt hinein, am Rechner nicht am rechten Rand; Trenner nur vor der 2. und 3. Gruppe in der Farbe
 von `--linie`; statisch: Knopftext, Raster, Touch-Regel, Trenner ohne Rot). `tests/test_material_untergruppen.py`:
 Karten ohne Untergruppe stehen jetzt in `.mat-pliste` (Selektor angepasst).
+
+## Prüfung: Knöpfe am Gruppenkopf wieder rechts, „n. z. aufheben“ über die graue Marke (Wunsch des Nutzers, 05.11.2026)
+
+Wunsch (Bildschirmfoto zugeklappter Gruppen): „Die Buttons können doch wieder ganz nach rechts wandern. Allerdings soll
+der n. z. aufheben-Button weg. Stattdessen kann diese Funktion über ein Klicken auf die graue Bubble mit ‚nicht
+zutreffend‘ erfolgen.“ Bauauftrag `planung/pruefung-nz-pille/auftrag.md`, nur Oberfläche, kein Schemaschritt.
+
+- **Rechtsbündig**: Die Knöpfe der Gruppen- und Untergruppenköpfe (`.mat-kopf-knoepfe`: „n. z.“ bzw. zugeklappt Marke
+  und „n Punkte zeigen“) stehen wieder am rechten Rand; die Flucht hinter dem längsten Namen (Teilraster mit `subgrid`)
+  entfällt, der Name nimmt wieder die ganze Breite bis 12 px davor. Reicht der Platz neben dem Namen nicht (Telefon,
+  zugeklappt), stehen die Knöpfe in einer eigenen Zeile darunter, ebenfalls rechts. Die Punktliste `.mat-pliste` bleibt
+  ein Raster mit einer Spalte (Abstände unverändert); die Trenner vor Gruppen bleiben.
+- **Kein Knopf „n. z. aufheben“** mehr: Die graue Marke „nicht zutreffend“ ist selbst der Knopf (`data-act="nz-aufheben"`,
+  gleiche Wirkung, Toast „„Name“: n Punkte wieder offen“) – Aussehen der Marke, Name für Bildschirmleser „<Name>: nicht
+  zutreffend – aufheben“, title „n. z. aufheben“, Hand als Zeiger, mit der Maus beim Überfahren eine graue Kontur,
+  sichtbarer Tastaturfokus, Enter/Leertaste. Am Finger 44 px Tippfläche über `::before`, die Marke selbst bleibt so
+  klein, wie sie aussieht (die Kopfzeile hält dafür 44 px frei). Klappt ein Block unter dem Fokus zu, geht der Fokus auf
+  „n Punkte zeigen“ (nicht auf die Marke, damit ein zweites Enter nicht gleich wieder aufhebt).
+
+**Tests**: `tests/test_material_gruppe_nz.py` – Flucht-Prüfung durch Rechtsbündigkeit ersetzt (rechter Rand ±1 px, Name
+bis 12 px davor, am Rechner neben dem Namen); Marke als Knopf (Klasse, Name, title, Zeiger, Grau, kein `.mat-nz-auf`),
+Aufheben mit der Maus über die Tastatur (Umschalt+Tab mit sichtbarem Fokus, Enter) und am Finger per Tipp, Tippfläche
+44 px über `elementFromPoint` gemessen (Marke unter 30 px hoch); statisch: kein `mat-nz-auf`, kein `subgrid`,
+Touch-Regeln nur unter `(pointer: coarse)`, Überfahren nur unter `(hover: hover) and (pointer: fine)`.
