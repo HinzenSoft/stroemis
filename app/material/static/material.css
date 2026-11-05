@@ -601,6 +601,16 @@ tr.mat-entwurf a:not(.btn) { color: var(--rot-auf-flaeche); }
 /* Untergruppe (Schritt 39): kleinere Zwischenüberschrift unter der Gruppe, ihre Karten darunter eingezogen. */
 .mat-untergruppe { margin: 14px 0 6px 16px; font-size: var(--fs-mittel); color: var(--anthrazit); }
 .mat-in-ug { margin-left: 16px; }
+/* Gruppen- und Untergruppenkopf im Entwurf mit „alle n. z.“ rechts daneben (Wunsch vom 05.11.2026); der Abstand liegt
+   dann am Kopf, ein langer Name bricht um, der Knopf bleibt rechts. */
+.mat-gruppenkopf { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 12px; margin: 18px 0 6px; }
+.mat-gruppenkopf.mat-ug-kopf { margin: 14px 0 6px 16px; }
+.mat-gruppenkopf > :is(.mat-gruppe, .mat-untergruppe) { flex: 1 1 12em; min-width: 0; margin: 0; overflow-wrap: break-word; }
+.mat-gruppenkopf > :is(.mat-alle-nz, .mat-nz-auf, .mat-nz-zeigen, .mat-befund) { flex: none; }
+/* Zugeklappt (alle Punkte „n. z.“): „nicht zutreffend“, „n Punkte zeigen“ und „n. z. aufheben“ rechts neben dem Namen. */
+.mat-gruppenkopf[hidden] { display: none; }
+.mat-gruppenkopf[data-zustand="zu"] > :is(h3, h4), .mat-gruppenkopf[data-zustand="auf"] > :is(h3, h4) { color: var(--grau); }
+@media (pointer: coarse) { .mat-gruppenkopf > :is(.mat-alle-nz, .mat-nz-auf) { min-height: 44px; } }
 .mat-punkt { border: 1px solid var(--linie); border-left: 4px solid var(--linie); background: var(--weiss); padding: 10px 12px; margin: 0 0 10px; }
 .mat-punkt.mangel { border-left-color: var(--rot); background: var(--rot-hell); }
 .mat-punkt.nz { border-left-color: var(--grau-hell); }

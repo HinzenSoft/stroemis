@@ -405,6 +405,22 @@ def _soll_text(r):
     return r["expected_value"] or ""
 
 
+def _befund_text(r):
+    """„in Ordnung“, „Mangel“, „nicht zutreffend“ – ein leeres Unterschriftsfeld „nicht unterschrieben“, ein optionaler
+    Ja/Nein-, Text-, Zahl- oder Datumspunkt „optional“: Er nimmt nur seine Antwort auf, die in „Wert“ steht (Wünsche vom
+    05.11.2026; pruefung.nur_antwort)."""
+    if r["editor"] == "signature" and r["finding"] == "ok" and not r["signature_png"]:
+        return "nicht unterschrieben"
+    if _nur_antwort(r):
+        return "optional"
+    return BEFUND_TEXT.get(r["finding"], "")
+
+
+def _nur_antwort(r):
+    from .pruefung import nur_antwort
+    return nur_antwort(r) and r["finding"] == "ok"
+
+
 def _nummern_text(r):
     """Seriennummern der Bestandteile an einer Zeile „… vorhanden“ (Schritt 25): je Stück mit Nummer „Seriennummer A1“
     bzw. „Seriennummer A1 → A2“ (vom Prüfer geändert; „–“ für keine) – bei mehr als einem Stück mit „Stück n:“ davor."""
@@ -439,9 +455,8 @@ def _befunde(pid):
         if r["finding"] == "mangel":
             maengel += 1
         punkt = {"nr": nr, "text": r["checklist_text"], "art": r["editor"], "soll": _soll_text(r),
-                 "pflicht": bool(r["mandatory"]), "befund": r["finding"] or "ok",
-                 "befund_text": ("nicht unterschrieben" if r["editor"] == "signature" and r["finding"] == "ok"
-                                 and not r["signature_png"] else BEFUND_TEXT.get(r["finding"], "")),
+                 "pflicht": bool(r["mandatory"]), "befund": "optional" if _nur_antwort(r) else r["finding"] or "ok",
+                 "befund_text": _befund_text(r),
                  "wert": _wert_text(r), "notiz": r["note"] or "",
                  "foto_nr": foto_nr, "unterschrift": _png(r["signature_png"]), "nummern": _nummern_text(r)}
         if not gruppen or gruppen[-1]["name"] != (r["group_name"] or ""):

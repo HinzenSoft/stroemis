@@ -654,8 +654,9 @@
       const p = x && x.punkte.find((y) => y.id === nr(m, 2));
       if (!p) return fehlt("Diesen Prüfpunkt");
       ["wert", "befund", "notiz"].forEach((k) => { if (body && typeof body[k] === "string") p[k] = body[k]; });
-      // Ja/Nein: der Wert entscheidet den Befund (Soll erfüllt = in Ordnung); „n. z.“ zurückgenommen = wieder der Sollwert.
-      if (p.art === "yesno" && body && typeof body.wert === "string") p.befund = !p.soll || body.wert === p.soll ? "ok" : "mangel";
+      // Ja/Nein: der Wert entscheidet den Befund (Soll erfüllt = in Ordnung; an einem optionalen Punkt ist jede Antwort in
+      // Ordnung); „n. z.“ zurückgenommen = wieder der Sollwert.
+      if (p.art === "yesno" && body && typeof body.wert === "string") p.befund = !p.soll || body.wert === p.soll || !p.pflicht ? "ok" : "mangel";
       if (p.art === "yesno" && body && body.befund === "ok") p.wert = p.wert || p.soll;
       return { punkt: kopie(p) };
     }],
