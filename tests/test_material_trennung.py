@@ -328,6 +328,13 @@ def trigger_38():
     return neu, set(models.TRIGGER_WEG_38)
 
 
+def trigger_39():
+    """Die Trigger, die Schritt 39 anlegt (mat_result_untergruppe) – für Tests, die Trigger eines älteren Stands mit dem
+    Endstand vergleichen."""
+    from app.material import models
+    return {models._trigger_name(x) for x in models.TRIGGER_39}
+
+
 def spalten_vor_37(conn):
     """Die Set-Spalten, die Schritt 37 entfernt, leer wieder anlegen (ohne Commit) – für Tests, die Schritt 26 auf dem
     Endstand noch einmal laufen lassen (er liest sie); models._schritt_37 räumt sie danach wieder ab, wie in der Kette."""

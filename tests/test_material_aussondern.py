@@ -21,7 +21,7 @@ from test_material_antrag import _pdf_text  # noqa: E402
 from test_material_mangel import geprueft, item, melden, neue_sekunde, post_mangel, pruefung  # noqa: E402
 from test_material_meine_psa import aufbau  # noqa: E402
 from test_material_set_rueckbau import _schema, _unterschied, roh  # noqa: E402
-from test_material_trennung import bis_schritt, endversion, objekte_weg_37, trigger_38, zeilen  # noqa: E402
+from test_material_trennung import bis_schritt, endversion, objekte_weg_37, trigger_38, trigger_39, zeilen  # noqa: E402
 from test_material_ueberblick import sperren  # noqa: E402
 
 API = "/api/material"
@@ -244,7 +244,7 @@ def test_schritt_28():
                   + models.TRIGGER_36}
         neu_30.add("idx_mat_product_formular_von")
         # Schritt 38: Trigger und Indizes des Formular-Pools (mat_form neu aufgebaut, dazu mat_formular und Zuweisungen).
-        neu_30 |= trigger_38()[0] | {"ux_mat_form_aktiv", "ux_mat_formular_uid", "idx_mat_formular_kategorie",
+        neu_30 |= trigger_38()[0] | trigger_39() | {"ux_mat_form_aktiv", "ux_mat_formular_uid", "idx_mat_formular_kategorie",
                                      "ux_mat_zuweisung_kategorie", "ux_mat_zuweisung_produkt", "idx_mat_zuweisung_formular"}
         nachher = sorted(r for r in conn.execute("SELECT name, sql FROM sqlite_master WHERE type IN ('trigger', 'index')")
                          if r[0] not in neu_30 and "mat_lebenslauf" not in r[0])

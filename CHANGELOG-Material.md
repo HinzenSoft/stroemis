@@ -12778,7 +12778,10 @@ rund und alte Datei, Prüfung, Berichtigung, PDF, festgeschriebenes Protokoll un
 Angepasst: `test_material_formular_pool` (Migration 37 → 38 vergleicht die Spalten von Stand 37; Schemaversion nach dem
 Start nicht mehr fest 38), `test_material_trennung` (`bis_schritt` rüstet für Stände vor 39 die Spalten `untergruppe`
 nach), `test_material_formular_editor` (statisch: `flach()` mit `untergruppe`), `test_einfuehrung_katalog` (Auswahl mit
-`untergruppe`).
+`untergruppe`); nach dem ersten Suitelauf die Triggervergleiche in `_antrag`, `_antrag_zustaendig`, `_aussondern`
+(Helfer `trigger_39` in `_trennung`), der Rückbau auf Stand 24 in `_bestandteile` und auf Stand 19 in `_laenge` (ohne
+die Spalten aus Schritt 39), `_formular_titel` (zwei Neuzeichnungen mehr: Untergruppe neu, weg) und `_ohne_kritisch`
+(Feld `untergruppe` im Export).
 
 **Strömipedia** (nur genannt, Nachzug durch wiki-autor): Artikel „Prüfformulare“ (Editor: Untergruppen anlegen,
 ziehen, entfernen; Reihenfolge-Regel), „Prüfung“ und „Prüfprotokoll“ (Zwischenüberschrift), „Katalogimport und -export“
