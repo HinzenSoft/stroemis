@@ -94,7 +94,7 @@ def test_skript_und_stil():
     # Umbruch statt Rollen, wenn fünf Reiter auch in der eigenen Zeile nicht passen.
     assert 'matNav.classList.remove("eng", "enger", "umbruch");' in js
     assert 'if (matNav.classList.contains("enger") && reiter.scrollWidth > reiter.clientWidth + 1) matNav.classList.add("umbruch");' in js
-    for regel in (".mat-nav.umbruch .mat-reiter { display: contents; }", ".mat-nav.umbruch .mat-reiter > a { order: 3; }",
+    for regel in (".mat-nav.umbruch .mat-reiter { display: contents; overflow: visible; }", ".mat-nav.umbruch .mat-reiter > a { order: 3; }",
                   ".mat-nav.umbruch .mat-lupe { order: 4; }", ".mat-nav.umbruch .mat-suche { order: 5; }"):
         assert regel in css, regel
     # Die Übung: Start im Katalog, erster Schritt auf den Reiter.

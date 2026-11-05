@@ -1032,7 +1032,8 @@ button.mat-ue-klapp:focus-visible { outline: 3px solid var(--gelb); outline-offs
    eigenen Zeile nicht: Dann brechen sie um, statt zu rollen (material.js, navAnordnen: .umbruch) – als Glieder der
    Navigation selbst, sodass „☰“ (Produkt, Formular, Meldungen, Prüfung) vorn in der ersten Zeile steht statt in einer
    eigenen darüber; die Lupe folgt rechts auf die Reiter, die geöffnete Nummernsuche darunter. */
-.mat-nav.umbruch .mat-reiter { display: contents; }
+/* overflow: wirkt ohne eigenen Kasten ohnehin nicht – zurückgesetzt, damit nichts die Reiter für beschnitten hält (st-geraete). */
+.mat-nav.umbruch .mat-reiter { display: contents; overflow: visible; }
 .mat-nav.umbruch .mat-reiter > a { order: 3; }
 .mat-nav.umbruch .mat-lupe { order: 4; }
 .mat-nav.umbruch .mat-suche { order: 5; }

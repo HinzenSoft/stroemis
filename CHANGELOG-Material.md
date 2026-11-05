@@ -12892,7 +12892,7 @@ bleiben, wie sie waren.
 **Telefon** (`navAnordnen`, neue Klasse `.umbruch`): Die vier Reiter passten bis 344 px gerade in eine Zeile (Fold
 zugeklappt mit 4 px Polster), ein fünfter nicht – auch nicht als „Formulare“ statt „Prüfformulare“ (gemessen: bei 412 px
 fehlen 28 px, bei 360 px 80 px); die Beschriftung bleibt deshalb überall „Prüfformulare“. Statt seitlich zu rollen, brechen die Reiter dann um: Sie werden Glieder der Navigation selbst
-(`.mat-reiter { display: contents }`), sodass „☰“ (Produkt, Formular, Meldungen, Prüfung) vorn in der ersten Zeile
+(`.mat-reiter { display: contents; overflow: visible }`), sodass „☰“ (Produkt, Formular, Meldungen, Prüfung) vorn in der ersten Zeile
 steht statt in einer eigenen darüber – die Navigation bleibt zwei Zeilen hoch (101 px). Gemessen (Chromium, Touch,
 DEMO-Bestand): 344, 360, 375, 412 px – Katalog, Übersicht, Prüfungen: „Übersicht · Prüfungen · Bestand · Katalog“ /
 „Prüfformulare“; Formular- und Produktseite bei 344/360: „☰ · Übersicht · Prüfungen · Bestand“ / „Katalog ·
