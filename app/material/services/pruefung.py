@@ -38,6 +38,12 @@ Anhängen, demselben Prüftag und Verweis auf das Original, das unverändert ble
     offener Meldung nie frei. Die Aussonderung erledigt sie ebenso, „instandsetzen“ nicht.
   - Bestandteil-Liste des Produkts (Schritt 25): je Position eine Zeile „… vorhanden“ (stueckliste.pruefzeilen) – was
     fehlt, ist ein Mangel; Seriennummern der Bestandteile trägt der Prüfer dort ein (teilnummern).
+  - Optionale Punkte der Arten Ja/Nein, Text, Zahl und Datum (pflicht = false, Wünsche vom 05.11.2026) nehmen nur ihre
+    Antwort auf: Befund immer „in Ordnung“ (auch „Nein“ gegen das Soll ist kein Mangel), kein „nicht zutreffend“, keine
+    neue Bemerkung, kein Foto (nur_antwort); das Protokoll nennt als Befund „optional“. Was ein älterer Entwurf (oder die
+    Berichtigung einer älteren Prüfung) dort noch als Mangel oder „nicht zutreffend“ trägt, wird beim Festschreiben
+    „in Ordnung“ (_nur_antwort_angleichen); festgeschriebene Prüfungen bleiben, wie sie sind. Foto, Unterschrift und
+    Länge sind ihr Feld selbst und bleiben wie Pflichtpunkte.
 
 Wer handelt, kommt als „pruefer“-dict herein ({id, name, urkunde, unterschrift, login}) – aus dem
 angemeldeten Konto (pruefer_aus) oder, für die Demodaten auf der Kommandozeile, von Hand."""
@@ -58,6 +64,8 @@ from . import unterschrift as us
 from .interval import plus_monate, wirksam
 
 BEFUND_TEXT = {"ok": "in Ordnung", "mangel": "Mangel", "nicht_zutreffend": "nicht zutreffend"}
+NUR_ANTWORT = "Ein optionaler Prüfpunkt nimmt nur seine Antwort auf – ohne Mangel, „nicht zutreffend“, Bemerkung und Foto."
+NUR_ANTWORT_ARTEN = ("yesno", "text", "number", "date")
 ABGESCHLOSSEN = ("Die Prüfung ist festgeschrieben und lässt sich nicht mehr ändern – eine Korrektur geht nur als "
                  "Berichtigung.")
 # Sperre ohne Prüfung mit einem Grund, den es seit 01.11.2026 nur noch über „Mangel melden“ gibt.
@@ -440,6 +448,11 @@ def _befund(pid, rid):
     return r
 
 
+def nur_antwort(r):
+    """Optionaler Ja/Nein-, Text-, Zahl- oder Datumspunkt: Er nimmt nur seine Antwort auf (Wünsche vom 05.11.2026)."""
+    return r["editor"] in NUR_ANTWORT_ARTEN and not r["mandatory"]
+
+
 def _zahl(wert, name):
     s = (wert or "").strip().replace(" ", "")
     if not s:
@@ -456,7 +469,9 @@ def _zahl(wert, name):
 def punkt_setzen(pid, rid, d, pruefer):
     """Befund eines Prüfpunkts ändern. Ja/Nein: Wert „ja“/„nein“ – weicht er vom Soll ab, ist das ein Mangel;
     befund „nicht_zutreffend“ nimmt den Punkt heraus. Andere Arten: Wert und Befund (ok, mangel,
-    nicht_zutreffend) getrennt. Was die Anfrage nicht nennt, bleibt."""
+    nicht_zutreffend) getrennt. Was die Anfrage nicht nennt, bleibt. Ein optionaler Ja/Nein-, Text-, Zahl- oder
+    Datumspunkt nimmt nur den Wert (nur_antwort): Befund „in Ordnung“; „mangel“, „nicht_zutreffend“ und eine neue
+    Bemerkung lehnt er ab – eine alte leeren geht."""
     with db.transaction(sofort=True):
         p = _entwurf_des(pid, pruefer)
         r = _befund(pid, rid)
@@ -464,6 +479,11 @@ def punkt_setzen(pid, rid, d, pruefer):
         befund, wert, notiz = r["finding"], r["value"], r["note"]
         if "notiz" in d:
             notiz = text(d, "notiz", "Bemerkung zum Prüfpunkt", 1000, einzeilig=False)
+        if nur_antwort(r):
+            if d.get("befund", "ok") != "ok" or (notiz and notiz != (r["note"] or "")):
+                raise Abgelehnt(NUR_ANTWORT)
+            d = {k: v for k, v in d.items() if k != "befund"}
+            befund = "ok"
         if art == "signature":
             # Unterschriftsfeld des Formulars: gezeichnet auf dem Signatur-Pad; leer = noch nicht unterschrieben.
             bild = r["signature_png"]
@@ -486,7 +506,7 @@ def punkt_setzen(pid, rid, d, pruefer):
                 befund, wert = "nicht_zutreffend", ""
             elif "wert" in d:
                 wert = auswahl(d.get("wert"), ("ja", "nein"), "Wert")
-                befund = "ok" if wert == r["expected_value"] else "mangel"
+                befund = "ok" if wert == r["expected_value"] or nur_antwort(r) else "mangel"
             elif "befund" in d:
                 befund = auswahl(d.get("befund"), ("ok", "mangel"), "Befund")
                 gegenteil = "nein" if r["expected_value"] == "ja" else "ja"
@@ -695,6 +715,17 @@ def _laenge_zahl(text):
     return laenge(t) if t else None
 
 
+def _nur_antwort_angleichen(punkte):
+    """Optionale Ja/Nein-, Text-, Zahl- und Datumspunkte sind „in Ordnung“ (nur_antwort): Was ein älterer Entwurf oder
+    die Berichtigung einer älteren Prüfung dort noch als Mangel oder „nicht zutreffend“ trägt, wird es vor den Prüfungen
+    des Abschlusses; Antwort, Bemerkung und Foto bleiben. Festgeschriebene Prüfungen berührt das nicht. Liefert, ob etwas
+    gesetzt wurde."""
+    zeilen = [r["id"] for r in punkte if nur_antwort(r) and r["finding"] != "ok"]
+    for rid in zeilen:
+        db.execute("UPDATE mat_inspection_result SET finding = 'ok' WHERE id = ?", (rid,))
+    return bool(zeilen)
+
+
 def _laenge_ohne_vorgabe(item, punkte):
     """Sieht die Kategorie (inzwischen) keine Länge vor, ist jeder Längenpunkt „nicht zutreffend“ – gesetzt vor den
     Pflicht-, Mangel- und Grundprüfungen des Abschlusses (Prüfung der Länge, B4). Ein gemessener Wert, der vom Soll
@@ -790,6 +821,8 @@ def punkt_foto_setzen(pid, rid, file_storage, pruefer):
     alt = _befund(pid, rid)
     if alt["editor"] == "signature":
         raise Abgelehnt("Ein Unterschriftsfeld nimmt eine Unterschrift auf, kein Foto.")
+    if nur_antwort(alt):
+        raise Abgelehnt(NUR_ANTWORT)
     neu = katalog.foto_ablegen(file_storage, vorschau_ganz=True)
     try:
         with db.transaction(sofort=True):
@@ -953,6 +986,7 @@ def abschliessen(pid, d, pruefer, pruefdatum=None):
         tag = _tag(pruefdatum or (p["inspected_on"] if p["corrects_inspection_id"] else heute()))
         heimat = bestand.heimat(item)
         _laenge_ohne_vorgabe(item, befunde(pid))      # vor den Prüfungen unten: Längenpunkte „nicht zutreffend“ (B4)
+        _nur_antwort_angleichen(befunde(pid))         # … und optionale Antwortpunkte „in Ordnung“
         punkte = befunde(pid)
         offen = [punktname(r) for r in punkte if r["mandatory"] and not _beantwortet(r)]
         if offen:

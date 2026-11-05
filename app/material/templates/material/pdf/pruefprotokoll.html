@@ -31,7 +31,7 @@ table.befunde tr.lang { break-inside: auto; }
 /* Mangel: Nummer als rote Marke, Befund fett – auch schwarz-weiß gedruckt erkennbar */
 table.befunde tr.mangel .nr-marke { background: var(--rot); color: #ffffff; font-weight: 700; }
 .befund-mangel { font-weight: 700; color: var(--rot-dunkel); }
-.befund-nicht_zutreffend { color: var(--grau); }
+.befund-nicht_zutreffend, .befund-optional { color: var(--grau); }
 /* „nicht zutreffend“ nicht trennen – die Regel für alle Tabellenzellen (table.liste td) setzt hyphens: auto */
 table.liste td.befund-mangel, table.liste td.befund-ok, table.liste td.befund-nicht_zutreffend { hyphens: manual; }
 .notiz { color: var(--anthrazit); margin-top: .8mm; font-size: 8pt; }
