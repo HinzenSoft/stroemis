@@ -73,6 +73,7 @@ LOKAL = {"localhost", "127.0.0.1"}
 # Was IDNA außer dem Punkt als Trenner liest: ideographischer, vollbreiter und halbbreiter ideographischer Punkt.
 PUNKTE = re.compile("[\u3002\uff0e\uff61]")
 SICHERUNG_VORSATZ = "sicherung-material-"
+BESTAND_VORSATZ = "sicherung-bestand-"         # Sicherungen von dev-bestand-leeren (bestand_leeren.py) – auch genannt
 SCHALTER = "--ja-alles-loeschen"
 WARTEN = 30                                   # Sekunden auf die Schreibsperre (busy_timeout)
 RESERVE = 64 * 1024 * 1024                    # so viel Platz bleibt nach der Sicherung mindestens frei
@@ -252,13 +253,14 @@ def sicherungsziel(jetzt=None):
 
 
 def aeltere_sicherungen(ausser=None):
-    """[(Name, Zeitpunkt, Bytes)] der Sicherungsordner unter DATA_DIR, ältester zuerst – ohne ausser (die eben
-    angelegte). Sie enthalten alle Konten und sollen nach dem ersten erfolgreichen Test weg."""
+    """[(Name, Zeitpunkt, Bytes)] der Sicherungsordner unter DATA_DIR (beider Befehle: dev-zuruecksetzen und
+    dev-bestand-leeren), ältester zuerst – ohne ausser (die eben angelegte). Sie enthalten alle Konten und sollen nach dem
+    ersten erfolgreichen Test weg."""
     daten = current_app.config["DATA_DIR"]
     out = []
     for name in sorted(os.listdir(daten)):
         pfad = os.path.join(daten, name)
-        if name.startswith(SICHERUNG_VORSATZ) and os.path.isdir(pfad) and pfad != ausser:
+        if name.startswith((SICHERUNG_VORSATZ, BESTAND_VORSATZ)) and os.path.isdir(pfad) and pfad != ausser:
             out.append((name, datetime.fromtimestamp(os.stat(pfad).st_mtime, ZONE), _groesse(pfad)[1]))
     return sorted(out, key=lambda x: x[1])
 
