@@ -310,7 +310,8 @@ ohne Frage die Vorgabe 800 (die Ausgabe sagt es).
 Die Ausgabe nennt die Konten mit Passwort (`demo-wart-a@example.invalid` Materialwart, `demo-pruefer@…` Prüfer,
 `demo-extern@…` externer Prüfer, `demo-mv@…` Material-Verwaltung, `demo-mitglied@…`, `demo-einsatzkraft-01@…` …).
 Mails gehen keine hinaus. Für einen zweiten Stand einen neuen Datenordner nehmen – der Beispielbestand läuft je
-Datenbank nur einmal.
+Datenbank nur einmal – oder im selben Ordner erst `flask --app "app:create_app()" material dev-bestand-leeren
+--ja-bestand-loeschen` (der Katalog bleibt; „Nur den Bestand leeren“ unten), dann das Skript erneut.
 
 ### Beispielbestand (nur dev)
 
@@ -387,8 +388,9 @@ Vorher:
    Katalog-Lieferungen, siehe „Inbetriebnahme in der Produktion“). Der Beispielbestand und seine DEMO-Formulare kommen mit keinem Export mit.
 2. Wissen, was danach gilt: Jede benutzte **Formularversion ist „benutzt“** und lässt sich nur noch über eine neue
    Version ändern. Jedes Produkt mit Artikeln lässt sich **nicht mehr löschen und seine Materialart nicht mehr
-   ändern**; seine Kategorie lässt sich nicht mehr löschen. Der Bestand lässt sich **nicht entfernen** – zurück geht es
-   nur, indem man das Modul auf dev zurücksetzt („Materialablage auf dev zurücksetzen“) und den Export importiert.
+   ändern**; seine Kategorie lässt sich nicht mehr löschen. In der App lässt sich der Bestand **nicht entfernen** – auf
+   dev leert ihn `material dev-bestand-leeren` („Nur den Bestand leeren“ unten, Katalog und Formulare bleiben); alles
+   zurück geht, indem man das Modul auf dev zurücksetzt („Materialablage auf dev zurücksetzen“) und den Export importiert.
 
 Auf dem VPS im Klon der Entwicklung (das Abbild enthält `scripts/` nicht – Skript und Petzl-Datei gehen per tar in das
 flüchtige `/tmp` des Containers, die App liegt dort unter `/srv`, die Daten unter `/data`):
@@ -407,8 +409,8 @@ kurze Pause (0,05 s), damit andere Schreiber dazwischenkommen; er zählt je Mona
 weniger (60 Artikel: knapp zwei Minuten). **dev ist während des Laufs nur
 eingeschränkt benutzbar**: Anmelden und Speichern gehen, können aber einige Sekunden warten – am besten laufen lassen,
 wenn niemand auf dev arbeitet. Er endet mit einem Bericht: Konten mit Passwörtern, Mengen, Zustände, angelegte Formulare
-mit ihren Quellen, Hinweise auf Gescheitertes. Er läuft nur einmal – gibt es die Gliederungen schon, legt er nichts an.
-**Nie in der Produktion** (Container `stroemis`).
+mit ihren Quellen, Hinweise auf Gescheitertes. Er läuft nur einmal – gibt es die Gliederungen schon, legt er nichts an; neu anlegen nach
+`material dev-bestand-leeren` (unten). **Nie in der Produktion** (Container `stroemis`).
 
 **Den Befehl in `tmux` oder `screen` starten** und die **Ausgabe mit den Passwörtern sichern** (aus dem Fenster in den
 Passwortmanager – sie werden nirgends gespeichert und nicht erneut angezeigt). Strg-C oder eine abgerissene Verbindung
@@ -421,8 +423,61 @@ docker exec stroemis-dev sh -c 'kill -TERM "$(cat /tmp/bb/pid)"'
 ```
 
 Nach einem Abbruch bleibt ein Teilbestand, und kein weiterer Lauf vervollständigt ihn: Er meldet „unvollständig“ mit
-Rückgabewert 1 und legt nichts an. Neu geht es dann nur, indem man das Modul auf dev zurücksetzt und danach den
-Katalog-Export importiert.
+Rückgabewert 1 und legt nichts an. Neu geht es dann nach `material dev-bestand-leeren` (der Katalog bleibt).
+
+#### Nur den Bestand leeren (`dev-bestand-leeren`, nur dev)
+
+`flask material dev-bestand-leeren` leert auf dev **nur den Bestand** der Materialablage, damit sich der Beispielbestand
+neu anlegen lässt (Wunsch des Nutzers vom 08.11.2026) – anders als `dev-zuruecksetzen` (unten), das auch Katalog und
+Formulare leert:
+
+- **Gelöscht**: Ordner und Gliederungen samt Systemordnern, Artikel, Prüfungen samt Befunden, Anhängen und Protokollen,
+  Durchgänge samt Sammel- und Set-Protokollen, Set-Läufe, Freigaben, Zuordnungen, Änderungsanträge, Mangelmeldungen,
+  Erinnerungslog, Mailfehler-Protokoll, Bestandsimporte samt Nacharbeit, Lebensläufe, das Protokoll der globalen Suche,
+  die Journaleinträge an Artikeln, Ordnern, Prüfungen und Durchgängen, die Merker des Beispielbestands und die Artikel
+  unter „Zuletzt besucht“ der Startseite. Dazu die **DEMO-Konten des Beispielbestands** – genau die Adressen aus dem
+  Skript (`demo-wart-a@example.invalid` … `demo-einsatzkraft-NN@…`, Name „DEMO-…“) samt ihren Journaleinträgen und
+  Merkern, und nur, wenn außerhalb des Bestands nichts auf sie verweist; andere Konten mit `@example.invalid` und
+  DEMO-Konten mit Verweisen bleiben (die Ausgabe nennt sie mit Grund). Der nächste Beispielbestand legt sie mit neuen
+  Passwörtern wieder an.
+- **Bleibt**: Kategorien, Produkte, Bestandteil-Listen, Dokumente, Bilder, Prüfformulare (Pool, Versionen, Zuweisungen,
+  Standards – auch die DEMO-Formulare des Beispielbestands, der nächste Lauf benutzt sie wieder), Rückrufe (ihre
+  Erledigung je Artikel wird nur abgeleitet, nie gespeichert), Produktmeldungen (sie verlieren nur ihren Ordner), das
+  Journal an Katalog und Konten, alle übrigen Konten, Strömipedia, Ankerplätze, Riegenkarten und die Einstellungen.
+- **Zähler laufen weiter**: Inventar- und STR-Nummern, Protokoll-IDs und Lebenslauf-Kennungen beginnen nicht wieder
+  bei 1 – keine Nummer, die einmal auf einem Etikett oder Protokoll stand, wird zweimal vergeben (die Zählerdateien
+  unter `pdf/lebenslauf` bleiben deshalb liegen). Die internen Kennungen von Artikeln und Ordnern beginnen neu; die
+  QR-Adressen hängen nicht an ihnen.
+- **Vorher** sichert der Befehl die ganze Datenbank (Online-Backup wie `dev-zuruecksetzen`) und **verschiebt** die Medien
+  des Bestands – Ordner-, Befund- und Mangelfotos unter `media/material`, `media/material/anhang` und `pdf/` (ohne
+  `pdf/lebenslauf`) – nach `data/sicherung-bestand-JJJJ-MM-TT_hhmmss/` (0700, Kopie 0600, mit `LIESMICH.txt` samt
+  Rückweg); Produktbilder und Herstellerdokumente bleiben am Platz. Scheitert die Sicherung, löscht er nichts.
+- **Wie**: in einer Transaktion; die Trigger der Unveränderlichkeit werden dafür gezielt entfernt und mit ihrem genauen
+  SQL wieder angelegt. Vor dem Abschluss prüft er, dass das Schema samt Triggern Zeichen für Zeichen wie vorher ist
+  (Schemaversion unverändert), keine neuen Fremdschlüsselverstöße entstanden sind und `quick_check` ok ist – sonst
+  rollt er zurück und legt die Medien zurück (Rückgabewert 1). Eine Tabelle des Moduls, die er nicht kennt (ein neuer
+  Schemaschritt), lässt ihn abbrechen, bevor er etwas ändert.
+- **Sperren** wie `dev-zuruecksetzen`: nur mit `STROEMIS_NAME` auf `-dev`, `BASE_URL` in der `.env` **und** unter
+  Leitstelle → Einstellungen auf dev/localhost und dem Schalter `--ja-bestand-loeschen` (sonst Rückgabewert 2, auch in
+  der Produktion); läuft ein Katalogimport, bricht er ab (1). Einen laufenden Beispielbestand erkennt er nicht – vorher
+  abbrechen oder enden lassen. SIGTERM/SIGHUP (Neustart, Deploy) brechen sauber ab wie bei `dev-zuruecksetzen`.
+
+Auf dem VPS im Klon der Entwicklung:
+
+```bash
+cd /pfad/zur/produktion-dev
+# 1. Ansehen, was geschähe: Zeilen je Tabelle, Medien, DEMO-Konten, Sicherungsordner – ändert nichts
+docker compose exec -e VIDEOPFLEGE=0 stroemis flask --app "app:create_app()" material dev-bestand-leeren --trocken
+# 2. Sichern und leeren
+docker compose exec -e VIDEOPFLEGE=0 stroemis flask --app "app:create_app()" material dev-bestand-leeren --ja-bestand-loeschen
+# 3. Neu starten, dann den Beispielbestand neu anlegen (oben)
+docker compose restart
+```
+
+Rückgabewert 0 = geleert; 1 = Sicherung oder ein späterer Schritt gescheitert oder Katalogimport läuft – nichts
+geändert; 2 = nicht dev oder ohne Schalter. Die Sicherung enthält alle Konten: löschen, sobald Neustart und erster Test
+geklappt haben (`rm -rf data/sicherung-bestand-…`, steht in der Ausgabe); beide Befehle nennen ältere Sicherungen
+beider Arten.
 
 ### Materialablage auf dev zurücksetzen (nur dev)
 
@@ -795,7 +850,8 @@ Account und mindestens das Recht Mitglied, oder machen keine Lehrgänge.“ Best
 
 ## Daten und Sicherung
 
-Alles liegt im Volume `/data`: `stroemis.db` (SQLite), `media/orig` (Originale), `media/web` und `media/thumb` (erzeugte Varianten), `media/slide` (Fassungen der Anmeldeseite, entstehen bei Bedarf neu – muss nicht gesichert werden), `media/wiki` (Wiki-Bilder), `media/avatar` (Profilbilder), `media/pruefungen` (Medien zu Prüfungen), `media/material` (Fotos, Herstellerdokumente und Prüfanhänge der Materialablage; Herstellerdokumente unter `media/material/dok/<SHA-256>.<Endung>`, eine Datei je Inhalt), `pdf/` (festgeschriebene Protokolle der Materialablage, schreibgeschützt – unbedingt mitsichern: die Datenbank verweist auf sie, und ihre Prüfsummen lassen sich nicht neu erzeugen), `secret_key`, nur auf dev `sicherung-material-…` (Sicherungen von `material dev-zuruecksetzen`, siehe dort) und `tmp/` (Zwischendateien laufender Uploads und Exporte – muss nicht gesichert werden), `katalog-import/` (Zwischendaten des Katalogimports im Hintergrund, nach 7 Tagen weg – muss nicht gesichert werden). Verwaiste Dateien unter `media/wiki` räumt der Hintergrundlauf nach einer Woche weg (siehe „Wie die Anwendung abgesichert ist“).
+Alles liegt im Volume `/data`: `stroemis.db` (SQLite), `media/orig` (Originale), `media/web` und `media/thumb` (erzeugte Varianten), `media/slide` (Fassungen der Anmeldeseite, entstehen bei Bedarf neu – muss nicht gesichert werden), `media/wiki` (Wiki-Bilder), `media/avatar` (Profilbilder), `media/pruefungen` (Medien zu Prüfungen), `media/material` (Fotos, Herstellerdokumente und Prüfanhänge der Materialablage; Herstellerdokumente unter `media/material/dok/<SHA-256>.<Endung>`, eine Datei je Inhalt), `pdf/` (festgeschriebene Protokolle der Materialablage, schreibgeschützt – unbedingt mitsichern: die Datenbank verweist auf sie, und ihre Prüfsummen lassen sich nicht neu erzeugen), `secret_key`, nur auf dev `sicherung-material-…` und `sicherung-bestand-…` (Sicherungen von `material dev-zuruecksetzen` bzw.
+`material dev-bestand-leeren`, siehe dort) und `tmp/` (Zwischendateien laufender Uploads und Exporte – muss nicht gesichert werden), `katalog-import/` (Zwischendaten des Katalogimports im Hintergrund, nach 7 Tagen weg – muss nicht gesichert werden). Verwaiste Dateien unter `media/wiki` räumt der Hintergrundlauf nach einer Woche weg (siehe „Wie die Anwendung abgesichert ist“).
 
 **Stündliche Sicherung nach `~/data.bak`** – ein einzelner Cron-Eintrag auf dem VPS. Er gehört in den Cron des
 Nutzers, dem `data/` gehört (uid 1000), oder in den von root: Nur die dürfen `secret_key` lesen. Mit `crontab -e`
@@ -1368,6 +1424,7 @@ python tests/test_material_beispielbestand.py  # Beispielbestand: Katalog unver�
                                                # übrige Module/Einstellungen/vorhandene Konten unverändert, Artikelzahl (Schalter, Frage am Terminal, Vorgabe)
 python tests/test_material_dev_zuruecksetzen.py  # material dev-zuruecksetzen: Sperren (dev-Kennung, BASE_URL als Positivliste, Schalter), --trocken, Sicherung (0700/0600), Abbruch bei laufendem Katalogimport
                                                  # vollständig, Schema wie neu, übrige Module byteidentisch, Scheitern und SIGTERM/SIGHUP ändern nichts
+python tests/test_material_bestand_leeren.py  # material dev-bestand-leeren: nur der Bestand weg, Katalog/Formulare/Konten/übrige Module/Schema unverändert, Medien in der Sicherung, Trigger wieder da, Neustart, Beispielbestand erneut; Sperren, Scheitern, SIGTERM
 python scripts/material_beispielbestand.py --beispielbestand  # DEMO-Bestand und DEMO-Konten aus dem vorhandenen Katalog, nur Materialablage (nur dev/localhost,
                                                               # siehe „Beispielbestand (nur dev)“; die Passwörter stehen nur in der Ausgabe;
                                                               # ohne --artikel N fragt es am Terminal nach der Zahl, sonst Vorgabe 800)

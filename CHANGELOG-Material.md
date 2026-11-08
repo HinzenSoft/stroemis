@@ -90,6 +90,7 @@ Geschichte stehen. Schemaversion nach der Nachbesserung vor dem Merge: 30; mit d
 | Formular-Pool je Kategorie (Schritt 38) | Statt generischer Formulare je Kategorie, spezifischer je Produkt und „Prüfformular übernehmen“: jedes Formular im Pool seiner Kategorie, Standard je Kategorie (erbt in Unterkategorien) oder Zuweisung an Produkte; Seite „Prüfformulare“ (nur Material-Verwaltung) mit Anlegen und Dialog „Zuweisen“, Formularseite „Gilt für“ und „Kopie anlegen“, Produkt- und Kategorieseite nur Anzeige; Migration mit Vorher/Nachher-Vergleich je Produkt; Katalogdatei Format 3 (aktive Formulare samt Zuweisungen, Import ohne DEMO, Datei maßgeblich); Zähler `katalog_stand` für die Übung | gebaut 04.11.2026 (Schema 38), Zweig formular-pool, wartet auf Freigabe |
 | Untergruppen in Prüfformularen (Schritt 39) | Eine Ebene unter der Gruppe: Feld `untergruppe` je Prüfpunkt und als Kopie in den Befundzeilen; Reihenfolge-Regel (erst ohne Untergruppe, dann Blöcke) im Dienst; Editor mit „+ Untergruppe“, Zwischenzeile, Griff, „Untergruppe entfernen“; Prüfung, Nur-Lese-Ansicht und PDF mit Zwischenüberschrift und Einzug; Katalogdatei Format 3 mit `untergruppe`; Übung | gebaut 04.11.2026 (Schema 39), Zweig untergruppen, wartet auf Freigabe |
 | Reiter „Prüfformulare“ | Eigener Reiter rechts neben „Katalog“ statt des Knopfs im Katalogkopf, nur für die Material-Verwaltung; markiert auf der Seite „Prüfformulare“ und den Formularseiten; am Telefon brechen fünf Reiter um statt zu rollen; Übung „Prüfformulare zuweisen“ beginnt mit dem Reiter | gebaut 05.11.2026 (kein Schemaschritt), Zweig tab-pruefformulare, wartet auf Freigabe |
+| Nur den Bestand leeren (nur dev) | `flask material dev-bestand-leeren` – leert auf dev nur den Bestand (Ordner, Artikel, Prüfungen, Durchgänge, Freigaben, Anträge, Meldungen, Importe, Logs, ihr Journal, DEMO-Konten des Beispielbestands) nach einer Sicherung; Katalog, Formulare, Rückrufe, Produktmeldungen, Zähler und Schema bleiben; dazu `bestand-leeren [--ja]` im Harness-Zugang | gebaut 08.11.2026 (kein Schemaschritt, Schema bleibt 39), Freigabe offen |
 
 ## Abgleich mit dem Bestand (vor Lieferung 1)
 
@@ -10069,6 +10070,7 @@ oder Plattform-Verwaltung).
 | `flask --app "app:create_app()" material remind [--trocken [--demo]] [--stichtag JJJJ-MM-TT] [--erneut]` | Kommandozeile im Container | Erinnerungslauf: `--trocken` zeigt die Mails des nächsten Laufs mit Adressen und schreibt nichts (auch bei „aus“ oder gesperrt), `--stichtag` und `--demo` (DEMO-Bestand einbeziehen, nur Ansicht) nur mit `--trocken`; ohne `--trocken` ein echter Lauf für heute (nie DEMO), `--erneut` noch einmal am selben Tag (nur, was nicht im Log steht). Exit 0, 1 (Mail gescheitert, Fehler), 2 (aus, gesperrt, kein Mailserver, `--stichtag` oder `--demo` ohne `--trocken`, unlesbares Datum) (Phase 2 · 2) |
 | `flask --app "app:create_app()" material dok-zusammenfuehren [--probe]` | Kommandozeile im Container | Herstellerdokumente einmal je Inhalt (Schritt 18): Altbestand unter `media/material/dok` auf Inhaltsnamen bringen, Dubletten zusammenführen, Prüfsummen aus den Dateien nachtragen – läuft beim ersten Start nach dem Update von selbst; hier mit Bericht (Dateien und MB vorher/nachher, frei, fehlende Dateien, Dateien ohne Zeile und davon entfernte Dubletten, entfernte Zwischendateien älter als ein Tag), `--probe` rechnet nur. Exit 0, 1 (Dateien fehlen), 2 (Ordner nicht erreichbar) (22.10.2026) |
 | `flask --app "app:create_app()" material dev-zuruecksetzen [--trocken] [--ja-alles-loeschen]` | Kommandozeile im Container, nur dev | Modul Material leeren: erst die ganze Datenbank nach `sicherung-material-<Zeitstempel>/` sichern und `media/material`, `pdf/` dorthin verschieben, dann alle `mat_`-Objekte entfernen und das Schema frisch anlegen (Version 21); Konten, Wiki, Spots, Prüfungen, Einstellungen bleiben, DEMO-Konten werden nur genannt. `--trocken` zeigt nur. Nur mit `STROEMIS_NAME` auf `-dev`, `BASE_URL` (Umgebung und Einstellungen) mit Host `dev.…`, `localhost` oder `127.0.0.1` und `--ja-alles-loeschen`; SIGTERM/SIGHUP brechen sauber ab (Exit 1), Sicherung 0700/0600, ältere Sicherungen werden genannt. Exit 0, 1 (Sicherung oder späterer Schritt gescheitert – nichts geändert), 2 (nicht dev, ohne Schalter) (23.10.2026) |
+| `flask --app "app:create_app()" material dev-bestand-leeren [--trocken] [--ja-bestand-loeschen]` | Kommandozeile im Container, nur dev | Nur den Bestand leeren: erst die ganze Datenbank nach `sicherung-bestand-<Zeitstempel>/` sichern und die Medien des Bestands (Ordner-, Befund-, Mangelfotos, `media/material/anhang`, `pdf/` ohne `pdf/lebenslauf`) dorthin verschieben, dann die Tabellen des Bestands, ihr Journal, die Merker des Beispielbestands und dessen DEMO-Konten löschen (Trigger gezielt entfernt und exakt wieder angelegt); Katalog, Formulare, Rückrufe, Produktmeldungen (ohne Ordner), Zähler, übrige Konten und Module bleiben. `--trocken` zählt nur. Sperren wie `dev-zuruecksetzen`, Schalter `--ja-bestand-loeschen`; Exit 0, 1 (Sicherung, späterer Schritt, Katalogimport läuft oder nicht eingeordnete Tabelle – nichts geändert), 2 (nicht dev, ohne Schalter) (08.11.2026) |
 | `GET /materialablage/ordner/<id>/import` | Materialwart am Ordner (sonst 403-Seite, fremd 404, Systemordner 409) | Seite „Bestandsliste importieren“ mit der Nacharbeit dieses Zielordners (Phase 2 · 3) |
 | `POST /api/material/ordner/<id>/import/probelauf` (Formular: `file`, `zuordnung` JSON `{"<Spalte>": feld}`) | Materialwart am Ordner | Probelauf, schreibt nichts (außer einer Protokollzeile, wenn er fremde Dubletten nennt) → Bericht: `datei`, `nacharbeit_csv`, `spalten`, `felder`, `fehlt`, `warnungen`, `schon_importiert`, `sperre_bis` (dieselbe Datei bis dahin gesperrt, ISO in UTC, sonst `null`), `keine_seriennummer` (keine Spalte als Seriennummer zugeordnet), `ohne_seriennummern_bestaetigen` (Übernehmen braucht `ohne_seriennummern`, Entscheidung vom 20.10.2026), `zahlen` (mit `ohne_serie`), `faelligkeit`, `produkte_offen`, `ordner_unbekannt`, `zeilen`, `frist`; 400 unlesbar, 409 Systemordner, 413 zu groß, 429 anderer Import läuft (Phase 2 · 3) |
 | `POST /api/material/ordner/<id>/import` (wie der Probelauf, dazu `ohne_seriennummern` ja/nein) | Materialwart am Ordner | Übernehmen in einer Transaktion → 201, Bericht mit Zeilen `angelegt` (`artikel` {id, inventory_no}, vergebene STR-Nummer) und `import` {id, angelegt, im_bestand, nacharbeit, ersetzt}; 409 nichts zu tun, ohne Seriennummernspalte ohne `ohne_seriennummern` = ja („Keine Spalte ist als Seriennummer zugeordnet – bitte bestätigen …“, nichts geschrieben), dieselbe Datei vor weniger als 10 Minuten, Ordnerbaum geändert; anderes als ja/nein → 400 (Phase 2 · 3) |
@@ -13156,3 +13158,79 @@ außerhalb von `media/material` und `pdf/` und die vorhandenen Konten; neue Kont
 Karte, Wiki, Riegenkarten und Leitstelle. Neu `test_artikelzahl` (Schalter mit ungültigen Werten, Frage mit Vorgabe,
 erneuter Frage und Abbruch, keine Frage ohne Terminal, gesperrt oder bei schon vorhandenem Bestand; Läufe mit 6 Artikeln
 am Terminal und mit der Vorgabe ohne Terminal). `test_ohne_schalter` mit „²“ und 5001.
+
+## Nur den Bestand leeren: `flask material dev-bestand-leeren` (Wunsch des Nutzers, 08.11.2026)
+
+Wunsch: „Ich möchte die Materialablage vom Bestand leeren und mit dem Skript jetzt neu anlegen.“ Bauauftrag
+`planung/bestand-leeren/auftrag.md`. `dev-zuruecksetzen` leert das ganze Modul (auch Katalog, Formulare, Pool,
+Zuweisungen) und kam nicht in Frage – deshalb ein eigener Befehl. Kein Schemaschritt (Schema bleibt 39).
+
+- **Befehl** (`app/material/cli.py`, `app/material/services/bestand_leeren.py`): `flask material dev-bestand-leeren
+  [--trocken | --ja-bestand-loeschen]`. Sperren wie `dev-zuruecksetzen` (`zuruecksetzen.sperrgrund`: `STROEMIS_NAME` auf
+  „-dev“, `BASE_URL` in Umgebung und Anwendung auf der Positivliste) – sonst Rückgabewert 2, auch mit Schalter; ohne den
+  Schalter ebenso 2. Läuft ein Katalogimport, bricht er ab (1), sonst hält er dessen Sperre bis zum Schluss. `--trocken`
+  zählt nur: Zeilen je Tabelle des Bestands, Journaleinträge je Entität, Merker, Produktmeldungen mit Ordner, Medien
+  (Dateien, Größe), Sicherungsziel und freier Platz, was bleibt, DEMO-Konten (gelöscht bzw. bleiben mit Grund), ältere
+  Sicherungen.
+- **Gelöscht** (eine exklusive Transaktion, Fremdschlüssel aus wie in `migrieren`): die Tabellen `BESTAND` ganz –
+  `mat_folder` (Ordner, Gliederungen, Systemordner), `mat_item`, `mat_item_component_serial`, `mat_item_change`,
+  `mat_inspection`, `mat_inspection_result`, `mat_inspection_attachment`, `mat_round`, `mat_round_item`,
+  `mat_round_setprotokoll`, `mat_set_lauf`, `mat_set_protokoll_zeile`, `mat_folder_grant`, `mat_defect_report`,
+  `mat_reminder_log`, `mat_mail_fehler` (ganz, auch Zeilen zu Rückrufen und Meldungen – ein Log mit Gliederung),
+  `mat_import`, `mat_import_row`, `mat_lebenslauf`, `mat_global_search`, `mat_antrag_ohne_verwalter` – und der
+  Volltextindex `mat_item_fts` (neu aufgebaut, also leer); aus `mat_audit` die Einträge an `item`, `folder`,
+  `inspection`, `round`; aus `mat_meta` die Merker `beispielbestand_gross` und `beispielbestand` und unter „Zuletzt
+  besucht“ der Startseite (`start:ziele:<Konto>`) die Artikel (ihre Kennungen werden neu vergeben, Alben und Lehrgänge
+  bleiben); Produktmeldungen bekommen `folder_id = NULL` (wie ON DELETE SET NULL).
+- **DEMO-Konten**: genau die Adressen aus `scripts/material_beispielbestand.py` (`DEMO_KONTEN`: `demo-wart-a`,
+  `demo-wart-b`, `demo-pruefer`, `demo-pruefer-2`, `demo-pruefer-ns`, `demo-extern`, `demo-mitglied`, `demo-mv`,
+  `demo-einsatzkraft-NN` jeweils `@example.invalid`, Name „DEMO-…“) – samt ihren Journaleinträgen am Konto und ihren
+  Merkern (`start:besuch`, `start:ziele`, `einfuehrung`, `willkommen`). Gelöscht wird ein Konto nur, wenn nach dem Leeren
+  kein Fremdschlüssel außerhalb des Bestands mehr auf es zeigt (alle Tabellen, auch Katalog, Journal und die übrigen
+  Module; bis zum Fixpunkt, weil Einträge an gelöschten Konten mitgehen); sonst bleibt es und die Ausgabe nennt den
+  Verweis. Andere Konten mit `@example.invalid` bleiben und werden genannt. Sitzungen eines gelöschten Kontos verfallen
+  auch bei neu vergebener Kennung (Sitzung an den Passwortstand gebunden).
+- **Bleibt**: Kategorien, Produkte, Bestandteil-Listen, Dokumente, Bilder, Prüfformulare (Pool, Versionen, Zuweisungen,
+  Standards – auch die DEMO-Formulare des Beispielbestands; der nächste Lauf findet die Standards und legt keine neuen
+  an), Rückrufe (die Erledigung je Artikel wird abgeleitet, nie gespeichert – ohne Artikel hat ein Rückruf einfach
+  keine Betroffenen; `mail_count`/`mail_failed` bleiben als Geschichte), Produktmeldungen, das Journal an Katalog und
+  Konten, alle übrigen Konten, Strömipedia, Ankerplätze, Riegenkarten, Einstellungen, die Tageslauf-Marken.
+- **Zähler bleiben** (Entscheidung im Bericht: keine Nummer zweimal): `inventar_zaehler` (Inventar- und STR-Nummern),
+  `lebenslauf_zaehler_<jahr>` samt Zählerdateien unter `pdf/lebenslauf` (bleiben deshalb liegen), `sqlite_sequence` von
+  `mat_inspection`, `mat_round`, `mat_round_setprotokoll` (Protokoll-IDs P/A/S/T) – `DELETE` setzt sie nicht zurück.
+  Kennungen ohne AUTOINCREMENT (Artikel, Ordner) beginnen wieder bei 1; QR-Adressen hängen am zufälligen `qr_token`.
+- **Sicherung vorher**: die ganze Datenbank über die Backup-API (`zuruecksetzen._sichern`: quick_check, Zeilen je
+  `mat_`-Tabelle) nach `<DATA_DIR>/sicherung-bestand-<Zeitstempel>/` (0700, Kopie und `LIESMICH.txt` 0600); dann werden
+  die Medien des Bestands dorthin **verschoben** (gleiche relative Pfade): Ordner-, Befund- und Mangelfotos unter
+  `media/material/{orig,web,thumb,slide}` (nur Schlüssel, die kein Produktbild und keine Produktmeldung nennt),
+  `media/material/anhang` und `pdf/` ohne `pdf/lebenslauf`. Scheitert die Sicherung: nichts gelöscht, nichts
+  verschoben. `LIESMICH.txt` nennt den Rückweg (`cp` der Datenbank, `cp -a` der Medien zurück in `data/`).
+- **Trigger**: Die Trigger der berührten Tabellen (Unveränderlichkeit der Nachweise und des Journals, Volltext) werden in
+  der Transaktion entfernt und danach mit ihrem genauen SQL wieder angelegt. Vor dem COMMIT: `sqlite_master` Zeichen
+  für Zeichen wie vorher (Trigger, Schema, Version), `PRAGMA foreign_key_check` ohne neue Verstöße, `quick_check` ok,
+  Tabellen des Bestands leer – sonst ROLLBACK, Medien zurück, eigene Sicherung weg (Rückgabewert 1). SIGTERM/SIGHUP
+  wie bei `dev-zuruecksetzen` (`_signale_abfangen`). Danach die Startschritte des Moduls.
+- **Einordnung**: Eine Tabelle des Moduls, die weder `BESTAND` noch `BLEIBT`/`TEILWEISE` kennt, oder eine unbekannte
+  Journal-Entität lässt Probelauf und Lauf mit 1 abbrechen, bevor etwas geschieht – ein neuer Schemaschritt muss
+  entscheiden, wohin seine Tabelle gehört (`test_einordnung` prüft das am frischen Schema).
+- **Ältere Sicherungen**: `zuruecksetzen.aeltere_sicherungen` nennt jetzt beide Arten (`sicherung-material-…` und
+  `sicherung-bestand-…`) – beide Befehle erinnern so an jede Kopie mit Konten.
+- **Beispielbestand**: Die Hinweise des Skripts („schon da“, „unvollständig“) nennen jetzt `dev-bestand-leeren` statt
+  „zurückgesetzte dev-Datenbank“; Kopftext ebenso.
+- **Harness-Zugang** (nicht im Repository): `planung/vps-zugang/einrichten.sh` hat den Befehl `bestand-leeren [--ja]` –
+  ohne `--ja` Probelauf, mit `--ja` echt und danach `docker restart stroemis-dev` (nur bei Rückgabewert 0); lehnt ab,
+  solange der Beispielbestand läuft. Auf dem VPS noch nicht eingerichtet.
+- **README**: „Nur den Bestand leeren (`dev-bestand-leeren`, nur dev)“ im Abschnitt „Beispielbestand (nur dev)“, Hinweise
+  dort und unter „DEMO-Daten“, Datenordner (`sicherung-bestand-…`), Testliste.
+
+**Tests**: neu `tests/test_material_bestand_leeren.py` – `test_einordnung` (jede Tabelle und Journal-Entität des frischen
+Schemas eingeordnet, Muster der DEMO-Adressen), `test_sperren` (Produktion, falsche Kennung, BASE_URL in Umgebung und
+Anwendung, ohne Schalter, fremder Schalter, nicht eingeordnete Tabelle – nichts geändert), `test_leeren` (Bestand mit
+jeder Art Inhalt und Beispielbestand mit 8 Artikeln: Tabellen des Bestands und Volltext leer; Schema, Trigger,
+`sqlite_sequence`, Katalog, Formulare, Rückrufe Zeile für Zeile gleich, Produktmeldungen nur ohne Ordner; Journal nur
+Katalog und Konten; `mat_meta` ohne Merker, Zähler gleich, „Zuletzt besucht“ ohne Artikel; Konten bis auf die
+DEMO-Konten gleich, übrige Module gleich; verschobene Dateien Datei für Datei in der Sicherung, alle anderen am Platz;
+Kopie der Datenbank gleich der alten; Rechte 0700/0600; Integrität und Fremdschlüssel; Trigger sperren wieder; Neustart;
+Beispielbestand erneut mit höheren Inventarnummern und ohne neue Formulare; zweiter Lauf nennt die ältere Sicherung),
+`test_scheitern` (fsync, Verschieben, Löschen, fehlender Trigger – nichts geändert, keine Sicherung), `test_katalogimport`,
+`test_abbruch_per_signal` (SIGTERM). Angepasst: `test_material_beispielbestand.py` (Hinweistext nach Abbruch).

@@ -59,7 +59,8 @@ MTW 2 ist die Jahresprüfung ausgefallen (überfällig), die persönliche Ausrü
 Was danach gilt (deshalb vorher den Katalog exportieren – README):
   - Jede benutzte Formularversion lässt sich nur noch über eine neue Version ändern; jedes Produkt mit Artikeln lässt
     sich nicht mehr löschen und seine Materialart nicht mehr ändern, seine Kategorie nicht mehr löschen.
-  - Der Bestand lässt sich nicht wieder entfernen (Prüfnachweise bleiben). Zurück geht es nur über
+  - Der Bestand lässt sich in der App nicht wieder entfernen (Prüfnachweise bleiben). Auf dev leert ihn
+    flask material dev-bestand-leeren (Katalog und Formulare bleiben, seit 08.11.2026); alles zurück geht über
     flask material dev-zuruecksetzen und den Katalog-Export.
   - Einmalig: Gibt es eine der Gliederungen schon, legt ein weiterer Lauf nichts an. Erst am Ende steht der Merker
     „beispielbestand_gross“ in mat_meta; ein abgebrochener Lauf hinterlässt einen Teilbestand, den ein weiterer Lauf als
@@ -642,8 +643,8 @@ class Beispielbestand:
         if not self.gl:
             return "Nichts angelegt – ein neuer Lauf beginnt von vorn."
         return ("Was bis dahin fertig war, bleibt – jeder Vorgang ganz oder gar nicht. Der Beispielbestand ist damit "
-                "unvollständig, und kein weiterer Lauf ergänzt ihn: Neu geht es nur mit einer zurückgesetzten "
-                "dev-Datenbank und dem Katalog-Export (README, „Beispielbestand (nur dev)“).")
+                "unvollständig, und kein weiterer Lauf ergänzt ihn: Neu geht es erst nach flask material "
+                "dev-bestand-leeren (der Katalog bleibt; README, „Beispielbestand (nur dev)“).")
 
     @staticmethod
     def fertig():
@@ -700,11 +701,11 @@ class Beispielbestand:
         da = self.schon_da()
         if da and not self.fertig():
             raise Abbruch(f"Abgebrochen: Der Beispielbestand ist unvollständig ({', '.join(da)}) – ein früherer Lauf "
-                          "wurde abgebrochen. Ergänzen lässt er sich nicht; neu geht es nur mit einer zurückgesetzten "
-                          "dev-Datenbank und dem Katalog-Export (README, „Beispielbestand (nur dev)“). Nichts angelegt.")
+                          "wurde abgebrochen. Ergänzen lässt er sich nicht; neu geht es erst nach flask material "
+                          "dev-bestand-leeren (der Katalog bleibt; README, „Beispielbestand (nur dev)“). Nichts angelegt.")
         if da:
-            print(f"Beispielbestand ist schon da ({', '.join(da)}) – nichts angelegt. Er lässt sich nicht entfernen; "
-                  "neu anlegen geht nur mit einer zurückgesetzten dev-Datenbank.")
+            print(f"Beispielbestand ist schon da ({', '.join(da)}) – nichts angelegt. Neu anlegen: erst "
+                  "flask material dev-bestand-leeren (der Katalog bleibt).")
             return
         produkte, ausgelassen = self.produkte()
         if not produkte:

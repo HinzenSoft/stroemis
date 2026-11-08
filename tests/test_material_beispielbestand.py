@@ -811,7 +811,7 @@ def test_abgebrochener_lauf():
         finally:
             pruefdienst.abschliessen = abschliessen
         assert code == "unterbrochen", (code, aus[-2000:])
-        assert "Unterbrochen." in aus and "unvollständig" in aus and "zurückgesetzten dev-Datenbank" in aus, aus[-2000:]
+        assert "Unterbrochen." in aus and "unvollständig" in aus and "dev-bestand-leeren" in aus, aus[-2000:]
         assert signal.getsignal(signal.SIGHUP) is alt                    # das Skript stellt die Signale zurück
         with app.app_context():
             from app import db
