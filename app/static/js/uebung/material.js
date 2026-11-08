@@ -750,11 +750,16 @@
       const geaendert = nachher.filter((x) => !vorher.includes(x)).length + vorher.filter((x) => !nachher.includes(x)).length;
       return { formular: poolInfo(z, f), geaendert };
     }],
-    // Gespeichert wird nur die Übungskopie des Formulars – der echte Katalog bleibt, wie er ist.
+    // Gespeichert wird nur die Übungskopie des Formulars – der echte Katalog bleibt, wie er ist. Der Editor speichert von
+    // selbst (06.11.2026); was der Server ablehnt (Titel fehlt, Ja/Nein ohne Sollwert), lehnt die Übung ebenso ab – der
+    // Editor zeigt es am Feld.
     ["PUT", /^\/api\/material\/formulare\/(\d+)$/, (m, body, z) => {
       const f = formularVon(z, nr(m));
       if (!f) return fehlt("Dieses Formular");
-      if (body && typeof body.titel === "string" && body.titel.trim()) f.titel = body.titel.trim();
+      if (body && typeof body.titel === "string" && !body.titel.trim()) return { status: 400, error: "Ein Prüfformular braucht einen Titel." };
+      const ohneSoll = body && Array.isArray(body.punkte) ? body.punkte.findIndex((p) => (p.art || "yesno") === "yesno" && !["ja", "nein"].includes(String(p.soll || "").toLowerCase())) : -1;
+      if (ohneSoll >= 0) return { status: 400, error: `Prüfpunkt ${ohneSoll + 1} (Ja/Nein) braucht den Sollwert „ja“ oder „nein“.` };
+      if (body && typeof body.titel === "string") f.titel = body.titel.trim();
       if (body && Array.isArray(body.punkte)) {
         let neu = Math.max(ID.punktNeu - 1, ...f.punkte.map((p) => p.id)) + 1;
         f.punkte = body.punkte.map((p, i) => ({ id: p.id || neu++, position: i + 1, gruppe: String(p.gruppe || ""), untergruppe: String(p.untergruppe || ""), text: String(p.text || ""),
@@ -916,11 +921,13 @@
       { ziel: "#fp-tabelle", text: "Hier pflegst du die Prüfpunkte des Formulars – jede Gruppe steht in einer eigenen Zeile über ihren Punkten." },
       { ziel: punktNeu, text: `Leg ${mehrereGruppen ? "in der ersten Gruppe" : "in der Gruppe"} einen Prüfpunkt an${ausKatalog("gurt") ? " – geändert wird nur eine Übungskopie des Formulars" : ""}.`,
         warten: { klick: punktNeu } },
-      { ziel: neuerPunkt, text: "Gib ihm einen Text, hier „Platzhalter“.", warten: { wert: [neuerPunkt, /\S/] }, probe: { tippen: [neuerPunkt, "Platzhalter"] } },
+      // Gespeichert wird von selbst (Wunsch vom 06.11.2026): Der Schritt geht weiter, sobald der Text beim (Übungs-)Server ist.
+      { ziel: neuerPunkt, text: "Gib ihm einen Text, hier „Platzhalter“ – gespeichert wird von selbst.", warten: { anfrage: `PUT ${API}/formulare/${formGurt.id}` },
+        probe: { tippen: [neuerPunkt, "Platzhalter"] } },
       { ziel: neuerPunktMenue, text: "Über „⋯“ schiebst du einen Punkt nach oben, nach unten oder in eine andere Gruppe. Am Griff ⠿ links ziehst du ihn an seinen Platz." },
-      { ziel: "[data-act=speichern]", text: "Speichere das Formular.", warten: { anfrage: `PUT ${API}/formulare/${formGurt.id}` }, probe: { klick: "[data-act=speichern]" } },
+      { ziel: "#fp-stand", text: `Hier oben steht, ob alles gespeichert ist – einen Knopf „Speichern“ gibt es nicht${ausKatalog("gurt") ? ". In der Übung ändert sich nur die Kopie" : ""}.` },
       // Ziel ist „Neue Version“ oben – bei einem langen Formular stünde die ganze Tabelle nicht im Bild.
-      { ziel: "[data-act=neue-version]", text: `Gespeichert${ausKatalog("gurt") ? " – in der Übung nur die Kopie" : ""}. Ist eine Version schon für Prüfungen benutzt, änderst du sie nur über „Neue Version“ – alte Protokolle bleiben, wie sie waren.` },
+      { ziel: "[data-act=neue-version]", text: "Ist eine Version schon für Prüfungen benutzt, änderst du sie nur über „Neue Version“ – alte Protokolle bleiben, wie sie waren." },
     ] },
     // Formular-Pool (Entscheidung U1 B): die Seite „Prüfformulare“ und der Dialog „Zuweisen“.
     { titel: "Prüfformulare zuweisen", start: "/materialablage/katalog", schritte: [

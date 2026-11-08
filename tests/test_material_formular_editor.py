@@ -8,7 +8,8 @@ planung/formular-editor/auftrag.md): python tests/test_material_formular_editor.
    unten“ (auch über die Gruppengrenze), „In Gruppe verschieben“ (bestehende und neue Gruppe), „Entfernen“; Gruppe
    umbenennen, nach oben/unten, entfernen (mit Rückfrage samt Anzahl, leer ohne); „+ Prüfpunkt“ je Gruppe; „+ Gruppe“;
    ein Name mit 80 Zeichen ganz sichtbar; Getipptes (Titel, Gruppenname, Prüfpunkt) überlebt jedes Neuzeichnen;
-   „Speichern“ schickt Reihenfolge und Gruppe richtig (geprüft in der Datenbank, leere Gruppe fällt weg); die
+   das automatische Speichern (seit 06.11.2026, kein Knopf „Speichern“ mehr) schickt Reihenfolge und Gruppe richtig
+   (geprüft in der Datenbank, leere Gruppe fällt weg); die
    Nur-Lese-Ansicht zeigt dieselben Zwischenzeilen ohne Griff und Menü. Am Finger sind Griff, „⋯“, „+ Prüfpunkt“, die
    Menüeinträge und die Gruppenwahl im Dialog mindestens 44 × 44 px (gemessen, nicht nur die Regel), ein Tipp auf ihre
    Mitte trifft sie; keine Konsolenfehler, kein waagerechter Bildlauf. Ohne Chromium „übersprungen“ mit rc 0.
@@ -17,6 +18,7 @@ planung/formular-editor/auftrag.md): python tests/test_material_formular_editor.
    bleibt Text (Formular und Prüfung). Server, Import/Export und PDF: tests/test_material_pruefpunkt_absatz.py.
 4. Häkchen „optional“ statt „Pflicht“ (Zusatz vom 04.11.2026): leer bei Pflichtpunkten, gesetzt = pflicht false beim
    Speichern (Datenbank); ohne Bearbeiten nur bei optionalen Punkten die Marke „optional“, sonst nichts.
+   Automatisches Speichern im Einzelnen: tests/test_material_formular_autosave.py.
 5. Gruppen per Griff ⠿ am Kopf ziehen (Bauauftrag planung/gruppe-ziehen/auftrag.md): echte Maus- bzw. Touch-Ereignisse,
    beim Ziehen rückt keine Zeile, Einfügemarke an einer Grenze zwischen Gruppen, Esc bricht ab, an den Anfang (auch mit
    Bildlauf am Rand) und ans Ende, Getipptes zieht mit, Reihenfolge in der Datenbank nach dem Speichern; Griff in der Flucht
@@ -72,8 +74,11 @@ def test_statisch():
     assert 'p.pflicht = !$(".fp-optional", tr).checked;' in editor and "fp-pflicht\"" not in editor
     assert '${p.pflicht ? "" : \'<span class="badge grey">optional</span>\'}' in editor and '"Pflicht" : "optional"' not in editor
     assert 'const neuerPunkt = () => ({ text: "", art: "yesno", soll: "ja", pflicht: true });' in editor
-    # Schnittstelle unverändert: die flache Liste mit „gruppe“ je Punkt (seit Schritt 39 dazu „untergruppe“).
-    assert editor.count("punkte: flach()") == 2 and 'Object.assign({}, p, { gruppe: g.name, untergruppe: "" })' in editor
+    # Schnittstelle unverändert: die flache Liste mit „gruppe“ je Punkt (seit Schritt 39 dazu „untergruppe“); gespeichert
+    # wird von selbst (06.11.2026), Punkte ohne Text erst mit Text.
+    assert editor.count("flach()") == 1 and 'Object.assign({}, p, { gruppe: g.name, untergruppe: "" })' in editor
+    assert 'const koerper = () => ({ titel: titelEingabe, punkte: flach().filter((p) => p.text.trim()) });' in editor
+    assert 'data-act="speichern"' not in editor and "speichern," not in editor
     css = lies("app/material/static/material.css")
     assert "touch-action: none" in abschnitt(css, ".mat-formtabelle .fp-griff {", "}")
     assert ".mat-formtabelle .btn-row .btn.small" not in css
@@ -139,6 +144,16 @@ def menue(s, zeilen_sel, act):
     klick(s, f"{zeilen_sel} .fp-menue summary")
     assert s.js("Boolean(document.querySelector('#fp-tabelle details.menue[open]'))"), "Menü nicht offen"
     klick(s, f'#fp-tabelle details.menue[open] [data-act="{act}"]')
+
+
+def gespeichert(s, sek=15):
+    """Warten, bis der Speicherstand „Gespeichert HH:MM“ zeigt und eine Weile so bleibt (nichts mehr unterwegs)."""
+    ende = time.time() + sek
+    ruhig = 0
+    while time.time() < ende and ruhig < 3:
+        ruhig = ruhig + 1 if re.fullmatch(r"Gespeichert \d\d:\d\d", s.js("document.querySelector('#fp-stand').textContent")) else 0
+        s.b.warten(0.25)
+    assert ruhig >= 3, ("nicht gespeichert", s.js("document.querySelector('#fp-stand').textContent"))
 
 
 def mitte(s, sel, anteil=0.5):
@@ -479,10 +494,8 @@ def ablauf(u, kategorie, breite, hoehe, touch):
             assert s.js("getComputedStyle(document.querySelector('#fp-tabelle tr.fp-punkt')).touchAction") == "auto"
         assert s.js("document.documentElement.scrollWidth <= document.documentElement.clientWidth")
 
-        # Speichern: Reihenfolge und Gruppe je Punkt in der Datenbank.
-        klick(s, '[data-act="speichern"]')
-        assert s.warte("!document.querySelector('#fp-tabelle .fp-text') || document.querySelector('#fp-titel').value === 'Platzhalter Editor getippt'")
-        s.b.warten(0.8)
+        # Gespeichert wird von selbst (06.11.2026): Reihenfolge und Gruppe je Punkt in der Datenbank.
+        gespeichert(s)
         zeilen = u.sql("SELECT group_name, label, editor, mandatory FROM mat_checklist_item WHERE form_id = ? ORDER BY position", (fid,))
         assert [(z["group_name"], z["label"]) for z in zeilen] == [
             (LANG, "Platzhalter lang"), ("Gruppe C", "Platzhalter 4"), ("Gruppe C", "Platzhalter neu\nAbsatz zwei"),
@@ -504,7 +517,7 @@ def ablauf(u, kategorie, breite, hoehe, touch):
         oeffnen(m, fid)
         koepfe = m.js("[...document.querySelectorAll('#fp-tabelle tr.fp-gruppenzeile th')].map((t) => t.textContent.trim())")
         assert koepfe == [LANG, "Gruppe C", "Gruppe A neu", "Gruppe B gezogen"], koepfe
-        assert not m.js("document.querySelector('#fp-tabelle .fp-griff, #fp-tabelle .fp-menue, #fp-tabelle textarea, [data-act=speichern]')")
+        assert not m.js("document.querySelector('#fp-tabelle .fp-griff, #fp-tabelle .fp-menue, #fp-tabelle textarea, #fp-stand')")
         assert m.js("document.querySelectorAll('#fp-tabelle tbody tr:not(.fp-gruppenzeile)').length") == 6
         hoch = m.js("(() => { const t = document.querySelector('#fp-tabelle tr.fp-gruppenzeile th');"
                     " return t.scrollWidth <= t.clientWidth; })()")

@@ -39,29 +39,36 @@ def _als_text(werte):
     return json.dumps(_sauber(werte), ensure_ascii=False, sort_keys=True, default=str, allow_nan=False)
 
 
-def eintragen(entity, entity_id, action, vorher=None, nachher=None, name=None):
+def eintragen(entity, entity_id, action, vorher=None, nachher=None, name=None, fuer=None):
     """Einen Eintrag schreiben. name: Anzeigename, wenn niemand angemeldet ist (Import, Startlauf);
     ein Kommandozeilenlauf setzt ihn für alle Einträge über g.mat_akteur. Wer angemeldet handelt, steht mit Namen da –
     nie mit der E-Mail. NaN und Unendlich nimmt json.dumps hier nicht an (allow_nan=False – ValueError statt eines
-    ungültigen JSON im unveränderlichen Journal, das sonst jede Antwort mit diesem Eintrag unlesbar machte)."""
-    u = current_user() if has_request_context() else None
-    if not u and not name:
-        name = g.get("mat_akteur")
+    ungültigen JSON im unveränderlichen Journal, das sonst jede Antwort mit diesem Eintrag unlesbar machte).
+    fuer: (Kennung, Name) dessen, von dem die Änderung stammt, wenn sie erst später nachgetragen wird – das automatische
+    Speichern des Prüfformular-Editors schreibt höchstens einen Eintrag je Bearbeiter in zehn Minuten, den Rest trägt
+    der nächste Schritt an der Version in seinem Namen nach (katalog.journal_nachziehen)."""
+    if fuer is not None:
+        uid, wer = fuer
+    else:
+        u = current_user() if has_request_context() else None
+        if not u and not name:
+            name = g.get("mat_akteur")
+        uid = u["id"] if u else None
+        wer = ((u["name"] or "").strip() or OHNE_NAMEN) if u else (name or "System")
     db.execute(
         "INSERT INTO mat_audit (entity, entity_id, user_id, user_name, action, before_json, after_json, created_at) "
         "VALUES (?,?,?,?,?,?,?,?)",
-        (entity, entity_id, u["id"] if u else None,
-         ((u["name"] or "").strip() or OHNE_NAMEN) if u else (name or "System"), action,
+        (entity, entity_id, uid, wer, action,
          _als_text(vorher) if vorher is not None else None, _als_text(nachher) if nachher is not None else None,
          db.now()))
 
 
-def aenderung(entity, entity_id, alt, neu, action="geaendert"):
+def aenderung(entity, entity_id, alt, neu, action="geaendert", fuer=None):
     """Eintrag für eine Änderung – nur wenn sich wirklich etwas geändert hat. Liefert, ob."""
     vorher, nachher = unterschied(alt, neu)
     if not nachher:
         return False
-    eintragen(entity, entity_id, action, vorher, nachher)
+    eintragen(entity, entity_id, action, vorher, nachher, fuer=fuer)
     return True
 
 

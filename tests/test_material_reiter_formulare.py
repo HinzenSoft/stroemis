@@ -182,7 +182,12 @@ def test_browser():
                         assert s.warte("location.pathname === '/materialablage/katalog/formulare' && document.querySelector('.mat-nav a.aktiv')?.dataset.nav === 'formulare'", 10), breite
                         if breite >= 1024:
                             # Baum links: die Kategorie zeigt die Formulare ihrer Ebene, „alle Kategorien“ alle.
-                            assert s.klick(f'a[data-kat="{kat}"]') is None
+                            # Nach Zurück/Vor zeichnet die Seite die Leiste neu – erst warten, bis der Eintrag steht
+                            # (unter Last in der ganzen Suite einmal „nicht gefunden“, 08.11.2026).
+                            assert s.warte(f"Boolean(document.querySelector('a[data-kat=\"{kat}\"]')?.getClientRects().length)", 10), breite
+                            s.b.warten(0.3)
+                            befund = s.klick(f'a[data-kat="{kat}"]')
+                            assert befund is None, (breite, befund)
                             assert s.warte(f"location.pathname === '/materialablage/katalog/formulare' && location.search === '?kategorie={kat}' && Boolean(document.querySelector('.mat-pool-nur'))", 10), breite
                             pfad = s.js("[...document.querySelectorAll('#mat-inhalt .mat-pfad .mat-pfad-glied')].map((g) => g.textContent.replace(/^\\/\\s*/, '').trim())")
                             assert pfad == ["Prüfformulare", "Platzhalter Kategorie"], (breite, pfad)

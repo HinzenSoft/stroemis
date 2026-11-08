@@ -121,6 +121,15 @@ table.list.mat-tabelle { table-layout: auto; }
 table.list.mat-formtabelle { table-layout: fixed; }
 /* Zwischenüberschrift „Prüfpunkte“ (mit „i“, 27.10.2026) – Abstand zum Feld „Titel“ darüber. */
 .mat-fp-punkte { margin: 22px 0 6px; }
+/* Speicherstand des Formular-Editors (automatisches Speichern, 06.11.2026) im Kopf vor den Knöpfen: klein und grau wie
+   im Editor der Strömipedia, „Nicht gespeichert – …“ rot und fett (.mat-warn). Die Knopfzeile bleibt rechts und in einer
+   Zeile – auch umgebrochen unter dem Titel –, damit die Knöpfe nicht springen, wenn der Stand wechselt; ein langer Grund
+   bricht im Stand um. Die Grundlinie der Zeile geben die Knöpfe (align-self: baseline) – sonst gäbe sie der Stand, und
+   die Zeile rückte, sobald er Text bekommt. */
+.page-head .btn-row.fp-kopfknoepfe { margin-left: auto; flex-wrap: nowrap; }
+.fp-kopfknoepfe > :not(.mat-speicherstand) { flex: none; align-self: baseline; }
+.mat-speicherstand { flex: 0 1 auto; min-width: 0; max-width: 40ch; text-align: right; color: var(--grau); font-size: var(--fs-klein); }
+.mat-speicherstand.mat-warn { color: var(--rot); }
 /* Untergruppen (Schritt 39): eine Stufe tiefer als die Gruppe – Einzug statt neuer Farbe. In der Tabelle rücken Punkte,
    Hinweis und „+ Prüfpunkt“ einer Untergruppe bis unter ihren Namen (hinter ihrem Griff), ohne Bearbeiten um 24 px; als
    Karte (unten) rückt die ganze Zeile ein. Hier vor den Kartenregeln, damit die gleich spezifischen Karten gewinnen. */
@@ -2286,9 +2295,15 @@ dialog .mat-knopfgrund { margin: 10px 0 0; }
 .mat-wirksam > summary { display: list-item; cursor: pointer; color: var(--rot-auf-flaeche); width: fit-content; }
 .mat-wirksam-ul { margin: 4px 0 0; padding-left: 18px; }
 .mat-gilt-fuer .mat-wirksam { display: block; margin-top: 6px; }
+/* Ohne aktive Version (08.11.2026): über „Aktivieren“ und dem ausgegrauten „Zuweisen“ der Grund (.mat-kopfaktion, rechts
+   wie die Knöpfe); in der Zeile als Karte beides links. */
+.mat-zw-aktion > .btn-row { margin: 0; justify-content: flex-end; }
 @container mat-seite (max-width: 760px) {
   .mat-pool-zeile { grid-template-columns: minmax(0, 1fr); padding-left: 10px; }
   .mat-pool-aktion { text-align: left; }
+  .mat-pool-aktion .mat-zw-aktion { align-items: flex-start; }
+  .mat-pool-aktion .mat-zw-aktion .mat-knopfgrund { text-align: left; }
+  .mat-pool-aktion .mat-zw-aktion > .btn-row { justify-content: flex-start; }
 }
 dialog:where(.mat-zuweisen) .mat-zw-teil { border: 0; margin: 14px 0 0; padding: 0; min-width: 0; }
 dialog:where(.mat-zuweisen) .mat-zw-teil > legend { font-weight: 700; padding: 0; margin-bottom: 4px; }

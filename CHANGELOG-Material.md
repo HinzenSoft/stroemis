@@ -13234,3 +13234,67 @@ der Datei und in der Auswahl, ein Modell mit gleichem Anfang ohne Grund, eine na
 (Erneut prüfen ohne Schreiben, dann Übernehmen), Dublette am selben Produkt weiter „schon im Bestand“. Die vorhandenen
 Fälle in `test_varianten_zeilenweise` und `test_befunde_vor_auslieferung` sind Varianten „Modell | Zusatz“ und gelten
 unverändert.
+
+## Prüfformular-Editor ohne „Speichern“ – Änderungen werden von selbst übernommen (Wunsch des Nutzers, 06.11.2026)
+
+Wunsch (Bildschirmfoto Editor unten: „Prüfpunkt anlegen“, „Untergruppe anlegen“, „Gruppe anlegen“, rotes „Speichern“):
+„Entferne den Speichern-Knopf, Änderungen sollen automatisch übernommen werden.“ Bauauftrag
+`planung/formular-autosave/auftrag.md`. Kein Schemaschritt, Schnittstelle unverändert (`PUT /api/material/formulare/<id>`).
+
+- **Kein Knopf „Speichern“** mehr unten im Editor; „Gruppe anlegen“ bleibt grau, die Hauptaktion im Kopf („Aktivieren“
+  bzw. „Neue Version“) bleibt im Editor grau – kein neues Rot.
+- **Von selbst gespeichert**: Getipptes (Titel, Gruppen- und Untergruppennamen, Punkttext, Sollwert) nach einer Sekunde
+  Ruhe bzw. beim Verlassen des Felds; Art, Soll, „optional“, Ziehen, Menü „⋯“, Anlegen und Entfernen sofort. Höchstens
+  eine Anfrage ist unterwegs; was währenddessen dazukommt, geht danach als neuester Stand – nie ein älterer nach einem
+  neueren. Ein eben angelegter Punkt ohne Text ist kein Fehler und wird erst mit Text gespeichert (wie eine leere Gruppe).
+- **Stand im Kopf** vor den Knöpfen (`#fp-stand`, `role="status"`, `aria-live="polite"`, Texte wie im Editor der
+  Strömipedia): „Ungespeichert“, „Speichert …“, „Gespeichert 13:02“; nach 10 s ohne Antwort „Noch nicht gespeichert –
+  keine Antwort vom Server“. Die Knöpfe im Kopf springen dabei nicht; ein langer Grund bricht im Stand um.
+- **Fehler** am Feld, ohne den Fokus zu nehmen (`S.feldFehler(feld, text, { fokus: false })`, neue Option in common.js),
+  und im Stand rot „Nicht gespeichert – <Grund>“: Titel fehlt, Untergruppe ohne Namen oder doppelt (vorher prüft der
+  Editor), Ablehnungen des Servers mit „Prüfpunkt n …“ am Feld dieses Punkts (Soll, Art, Text), kein Netz (Toast „Nicht
+  gespeichert – keine Verbindung.“; wieder online geht es los). Im Editor bleibt alles stehen; nach der Behebung
+  speichert er weiter. Benutzt, kein Recht mehr oder gelöscht (409/403/404): keine weiteren Versuche.
+- **Verlassen der Seite** (Link, Zurück, Neuladen, Reiter zu): Offenes geht beim `pagehide` noch los (`fetch` mit
+  `keepalive` über `api()`, mit dem CSRF-Kopf `X-Requested-With` wie jede Anfrage; bis 60 000 Zeichen); ließe es sich nicht speichern (Fehler, kein Netz, sehr langes
+  Formular), fragt der Browser vorher (`beforeunload`). „Aktivieren“, „Deaktivieren“, „Neue Version“, „Kopie anlegen“
+  und das Neuzeichnen nach „Zuweisen“ warten auf den letzten Speichervorgang; „Löschen“ hält das Speichern an.
+- **Journal**: höchstens ein Eintrag „geändert“ je Version und Bearbeiter in zehn Minuten (`katalog.JOURNAL_ZEITRAUM`).
+  Liegt der letzte eigene Eintrag „geändert“ kürzer zurück, schreibt das Speichern keinen; danach nennt der nächste
+  alles seit dem Stand, den das Journal zuletzt nennt (aus „angelegt“ und den folgenden „geändert“ zusammengesetzt).
+  Was noch fehlt, trägt `katalog.journal_nachziehen` im Namen des Bearbeiters nach (`journal.eintragen(…, fuer=…)`),
+  bevor jemand anders an der Version etwas tut: Speichern durch ein anderes Konto, Aktivieren (auch das Deaktivieren
+  der bisher aktiven Version), Deaktivieren, neue Version oder Kopie daraus, die erste Prüfung – das Journal nennt dann
+  den ganzen Stand. Ohne Schemaschritt; benutzte Versionen bleiben unveränderlich wie bisher (409).
+- **Übung** (Material-Verwaltung, „Prüfformular bearbeiten“): Der Schritt mit dem Punkttext geht weiter, sobald der
+  Text beim Übungsserver ist; statt „Speichere das Formular“ zeigt ein Schritt auf den Stand im Kopf. Der Übungsserver
+  lehnt wie der echte einen fehlenden Titel und Ja/Nein ohne Sollwert ab.
+
+**Tests**: neu `tests/test_material_formular_autosave.py` – statisch (kein „Speichern“, kein neues Rot, Live-Region,
+Ruhepause, eine Anfrage, keepalive, Warten der Aktionen, Übung); Journal-Regel im Dienst (ein Eintrag je Bearbeiter in
+zehn Minuten, anderes Konto, Uhr verstellt, Aktivieren, Deaktivieren, neue Version, erste Prüfung, benutzt 409,
+Zeitstempel ohne Zeitzone; das Journal ergibt den Stand der Datenbank); Browser 1280 Maus und 360 Touch (Tippen →
+Datenbank, Strukturänderungen sofort, leerer Punkt, Titel leer, Ablehnung des Servers am Feld, Untergruppe ohne Namen,
+Reihenfolge mit angehaltener erster Anfrage, 10 s ohne Antwort, kein Netz, Verlassen über Adresse und Link, Rückfrage
+mit Fehler, Aktivieren gleich nach dem Tippen, Tippflächen 44 px gemessen, kein waagerechter Bildlauf) und die Übung.
+Angepasst: `tests/test_material_formular_editor.py` und `tests/test_material_untergruppen.py` (Warten auf
+„Gespeichert“ statt Klick auf „Speichern“, Untergruppe ohne Namen ohne Fokuswechsel, Journal-Nachtrag).
+
+### Zusatz: „Zuweisen“ ohne aktive Version mit Grund und „Aktivieren“ (Entscheidung des Nutzers, 08.11.2026)
+
+„Zuweisen“ bleibt bei Formularen ohne aktive Version gesperrt (Entscheidung Z4) – bisher sah man das erst im Dialog.
+
+- Auf der Formularseite (Abschnitt „Gilt für“) und je Zeile der Seite „Prüfformulare“ ist „Zuweisen“ dann ausgegraut
+  (`aria-disabled`, knopfGrund-Muster): Der Grund „Erst aktivieren – dann zuweisen.“ steht sichtbar darüber
+  (`.mat-knopfgrund`, per `aria-describedby` verknüpft; ein Klick auf „Zuweisen“ öffnet nichts und hebt ihn hervor),
+  direkt daneben ein grauer Knopf „Aktivieren“ (`zuweisenKnoepfe`, kein neues Rot).
+- „Aktivieren“ auf der Formularseite ist dieselbe Aktion wie im Kopf (wartet auf das letzte automatische Speichern);
+  in der Zeile der Seite „Prüfformulare“ aktiviert es die neueste Version (Name für Bildschirmleser „„Titel“ Version n
+  aktivieren“), danach zeichnet die Seite neu, „Zuweisen“ ist frei und hat den Fokus. Ohne Prüfpunkte lehnt der
+  Server wie bisher ab (Toast).
+- Am Rechner stehen Grund und Knöpfe rechts; in der Zeile als Karte (unter 760 px Inhalt) links.
+
+**Tests**: `tests/test_material_formular_autosave.py` (statisch und Browser 1280/360: Grund sichtbar, Klick auf
+„Zuweisen“ ohne Dialog, „Aktivieren“ gleich nach dem Tippen speichert erst, danach „Zuweisen“ frei und Dialog; Zeile der
+Seite „Prüfformulare“ mit Datenbank und Fokus; 44 px am Finger gemessen); angepasst die statischen Prüfungen in
+`tests/test_material_formular_pool.py` und `tests/test_module_letzte_offene.py`.

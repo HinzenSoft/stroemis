@@ -640,7 +640,9 @@ def test_oberflaeche_statisch():
     # Anlegen-Knopf nach dem Muster, Zuweisen als Abschnittsaktion grau, die eine Hauptaktion im Dialog rot.
     assert ('<button class="btn secondary" type="button" data-act="anlegen"><span class="k-text"><span class="k-plus" '
             'aria-hidden="true">+ </span>Prüfformular<span class="k-anlegen"> anlegen</span></span></button>') in js
-    assert '<button class="btn secondary small" type="button" data-act="zuweisen">Zuweisen</button>' in js
+    # Seit dem 08.11.2026 ohne aktive Version ausgegraut mit Grund und „Aktivieren“ daneben (beides grau).
+    assert '<button class="btn secondary small" type="button" data-act="zuweisen"${zusatz.zuweisen}${aktiv ? "" : knopfAus(id, NUR_AKTIV_ZUWEISEN)}>Zuweisen</button>' in js
+    assert '<button class="btn secondary small" type="button" data-act="aktivieren"${zusatz.aktivieren}>Aktivieren</button>' in js
     assert '<button class="btn" id="zw-ok" type="button"${knopfAus("zw-grund", true)}>Zuweisung speichern</button>' in js
     # 44 px nur am Finger.
     finger = css[css.index("@media (pointer: coarse) {\n  .mat-zw-zeile"):]

@@ -5304,7 +5304,14 @@
   }
 
   /* --- Prüfformular ---------------------------------------------------------------------------------- */
+  // Die Lauscher des automatischen Speicherns gehören der gerade gezeichneten Formularseite – zeichnet zeigen(formular)
+  // sie neu (nach „Aktivieren“, „Zuweisen“ …), räumt der Abbruch die der vorigen weg.
+  let formularAbbruch = null;
   async function formular() {
+    if (formularAbbruch) formularAbbruch.abort();
+    const abbruch = new AbortController();
+    formularAbbruch = abbruch;
+    const { signal } = abbruch;
     const d = await api(`${API}/formulare/${DATEN.id}`);
     const f = d.formular;
     const pool = f.formular;                 // das Formular im Pool: Heimat, Standard für, zugewiesen (Schritt 38)
@@ -5342,9 +5349,9 @@
     // Alle Abschnitte in der Reihenfolge des Formulars – für „Nach oben/unten“ über Gruppen- und Untergruppengrenzen.
     const abschnitte = () => gruppen.flatMap((g, gi) => [{ gi, ui: -1 }].concat(g.unter.map((u, ui) => ({ gi, ui }))));
     const punktZahl = (g) => g.punkte.length + g.unter.reduce((n, u) => n + u.punkte.length, 0);
-    // Der getippte, noch nicht gespeicherte Titel: zeichnen() baut das Feld neu (Prüfpunkt anlegen, verschieben,
-    // entfernen, Art ändern) – vorher stand dort wieder der gespeicherte Titel und das Getippte war weg. Gruppennamen
-    // und Prüfpunkte sammelt einsammeln() ebenso vor jedem Neuzeichnen ein.
+    // Der getippte Titel: zeichnen() baut das Feld neu (Prüfpunkt anlegen, verschieben, entfernen, Art ändern) – vorher
+    // stand dort wieder der gespeicherte Titel und das Getippte war weg. Gruppennamen und Prüfpunkte sammelt einsammeln()
+    // ebenso vor jedem Neuzeichnen und vor jedem Speichern ein.
     let titelEingabe = f.titel || "";
     const heimatText = pool.heimat.pfad.map((x) => x.name).join(" / ");
     // Der Weg zurück: für die Material-Verwaltung in die Seite „Prüfformulare“ an diese Kategorie, sonst zur Kategorie.
@@ -5444,7 +5451,8 @@
     /* Kopf des Formulars (UI/UX vor dem Merge, B6): EINE Hauptaktion als Knopf, der Rest im Menü „Mehr“ – vorher standen
        „Deaktivieren“, „Neue Version“ und „Löschen“ gleichrangig im Kopf. Ein Entwurf (nie benutzt, inaktiv) wird
        aktiviert; sonst ist die Hauptaktion „Neue Version“ – Änderungen an einer benutzten oder aktiven Version gehen nur
-       so. Rot ist sie nur, wenn unten kein rotes „Speichern“ steht. Bleibt im Menü ein Eintrag, wird er ein Knopf. */
+       so. Rot ist sie nur ohne Bearbeiten; im Editor bleibt sie grau, auch seit unten kein rotes „Speichern“ mehr steht
+       (Wunsch vom 06.11.2026 – kein neues Rot). Bleibt im Menü ein Eintrag, wird er ein Knopf. */
     function formularKnoepfe() {
       const entwurf = !f.aktiv && !f.benutzt;
       const klasse = bearbeitbar ? "btn secondary small" : "btn small";
@@ -5459,34 +5467,38 @@
           : { text: "Aktivieren", satz: "Diese Version gilt wieder.", attrs: 'data-act="aktivieren"' }, kopie] });
     }
     /* „Gilt für“ (Formular-Pool): Standard für welche Kategorien, welchen Produkten zugewiesen, für wie viele Produkte
-       insgesamt (aufklappbar) – die eine Abschnittsaktion „Zuweisen“ rechts daneben (Material-Verwaltung). */
+       insgesamt (aufklappbar) – die eine Abschnittsaktion „Zuweisen“ rechts daneben (Material-Verwaltung). Ohne aktive
+       Version ist „Zuweisen“ ausgegraut (Z4) – mit dem Grund darüber und daneben „Aktivieren“ (zuweisenKnoepfe). */
     function giltFuerHtml() {
       const kats = pool.standard_fuer.map((k) => `<a href="/materialablage/katalog?kategorie=${k.id}">${esc(k.name)}</a>`).join(", ");
       const prods = pool.zugewiesen.map((p) => `<a class="mat-produktname" href="/materialablage/katalog/produkt/${p.id}">${nameHtml(p)}</a>${zusatzHtml(p)}`).join(", ");
       const zeilen = `${kats ? `<dt>Standard für</dt><dd>${kats}</dd>` : ""}${prods ? `<dt>Zugewiesen</dt><dd>${prods}</dd>` : ""}`;
       return `<section class="section mat-gilt-fuer"><div class="abschnittskopf"><h2>Gilt für${infoKnopf("Gilt für", GILT_FUER_INFO)}</h2>
-          ${DARF.katalog ? '<button class="btn secondary small" type="button" data-act="zuweisen">Zuweisen</button>' : ""}</div>
+          ${DARF.katalog ? zuweisenKnoepfe("fp-zw-grund", Boolean(pool.aktive_version)) : ""}</div>
         ${zeilen ? `<dl class="mat-daten">${zeilen}</dl>` : leer(pool.aktive_version ? "Nirgends zugewiesen – das Formular gilt für kein Produkt." : "Ohne aktive Version gilt das Formular für kein Produkt.")}
         ${pool.wirksam_n ? `<details class="mat-auf mat-wirksam" data-version="${f.id}"><summary>Insgesamt für ${plural(pool.wirksam_n, "Produkt", "Produkte")}</summary><div class="mat-wirksam-liste"></div></details>` : ""}</section>`;
     }
     function zeichnen(ziel) {
       // Im Reiter auch, wozu das Formular gehört (B13) – „Prüfformular“ allein stand vorher in jedem Tab.
       seitenTitel(`${f.titel || "Prüfformular"} v${f.version}`.replace(/\s+/g, " "));
+      // Das Ersetzen nimmt ein Feld mit dem Fokus weg – Chromium meldet dabei „change“, während das Modell schon neu und
+      // die Tabelle noch die alte ist. Solange hört das Speichern nicht hin; was getippt war, hat einsammeln() schon.
+      neuZeichnen = true;
       inhalt.innerHTML = `${f.demo ? '<p class="mat-demo-banner">DEMO – nicht für echte Prüfungen.</p>' : ""}
         <div class="mat-pfad">${DARF.katalog ? poolPfad(pool.heimat.pfad, true)
           : pfadHtml(['<a href="/materialablage/katalog">Katalog</a>', `<a href="${heimatLink}">${esc(pool.heimat.name)}</a>`])}</div>
-        <div class="page-head"><h1>${f.titel ? esc(f.titel) : formularTitel({ titel: "", herkunft: pool.herkunft })} <span class="badge grey">Version ${f.version}</span> ${f.aktiv ? '<span class="mat-status s-einsatzbereit">aktiv</span>' : '<span class="badge grey">inaktiv</span>'} ${demoMarke(f.demo)}${anleitungKopf("formular")}</h1>
-          ${DARF.katalog ? `<div class="btn-row">${formularKnoepfe()}</div>` : ""}</div>
+        <div class="page-head"><h1><span id="fp-kopftitel">${kopfTitel()}</span> <span class="badge grey">Version ${f.version}</span> ${f.aktiv ? '<span class="mat-status s-einsatzbereit">aktiv</span>' : '<span class="badge grey">inaktiv</span>'} ${demoMarke(f.demo)}${anleitungKopf("formular")}</h1>
+          ${DARF.katalog ? `<div class="btn-row${bearbeitbar ? " fp-kopfknoepfe" : ""}">${bearbeitbar ? '<span id="fp-stand-platz"></span>' : ""}${formularKnoepfe()}</div>` : ""}</div>
         <p class="help">Im Pool von „${esc(heimatText)}“. ${f.gueltig_ab ? `Gültig ab ${esc(fmtTag(f.gueltig_ab))}.` : "Noch nie aktiviert."}
           ${f.benutzt ? " Diese Version wurde schon für Prüfungen benutzt und bleibt unverändert – Änderungen gehen über eine neue Version." : ""}</p>
         ${giltFuerHtml()}
         ${bearbeitbar ? `<label for="fp-titel">Titel</label><input type="text" id="fp-titel" value="${esc(titelEingabe)}" maxlength="160" required>` : ""}
         <h2 class="mat-fp-punkte">Prüfpunkte${infoKnopf("Prüfpunkte", PRUEFPUNKTE_INFO + mehrDazu("pruefpunkte"))}</h2>
         ${punkteTabelle()}
-        ${bearbeitbar ? `<div class="btn-row mat-knoepfe">${gruppen.length ? "" : '<button class="btn secondary" data-act="punkt-neu"><span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Prüfpunkt<span class="k-anlegen"> anlegen</span></span></button>'}<button class="btn secondary" data-act="gruppe-neu"><span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Gruppe<span class="k-anlegen"> anlegen</span></span></button><button class="btn" data-act="speichern">Speichern</button></div>` : ""}
-        <section class="section"><h2>Versionen</h2><ul class="mat-versionen">${f.versionen.map((v) => `<li>${v.id === f.id ? `<strong>Version ${v.version}</strong>` : `<a href="/materialablage/katalog/formular/${v.id}">Version ${v.version}</a>`}
-          ${v.aktiv ? '<span class="mat-status s-einsatzbereit">aktiv</span>' : ""}${v.benutzt ? ' <span class="badge grey">benutzt</span>' : ""} <span class="muted">${esc(v.titel || "")} · ${plural(v.punkte_anzahl, "Prüfpunkt", "Prüfpunkte")}</span></li>`).join("")}</ul></section>
+        ${bearbeitbar ? `<div class="btn-row mat-knoepfe">${gruppen.length ? "" : '<button class="btn secondary" data-act="punkt-neu"><span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Prüfpunkt<span class="k-anlegen"> anlegen</span></span></button>'}<button class="btn secondary" data-act="gruppe-neu"><span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Gruppe<span class="k-anlegen"> anlegen</span></span></button></div>` : ""}
+        <section class="section"><h2>Versionen</h2><ul class="mat-versionen">${versionenHtml()}</ul></section>
         <details class="section mat-auf"><summary>Journal</summary>${journalHtml(f.journal)}</details>`;
+      neuZeichnen = false;
       $$(".fp-art", inhalt).forEach((s) => s.addEventListener("change", () => {
         const tr = s.closest("tr");
         const p = liste(+tr.dataset.g, uVon(tr))[+tr.dataset.i];
@@ -5503,15 +5515,23 @@
       const tabelle = $("#fp-tabelle.fp-editor", inhalt);
       if (tabelle) tabelle.addEventListener("pointerdown", ziehen);
       wirksamVerdrahten(inhalt);
+      const platz = $("#fp-stand-platz", inhalt);
+      if (platz) platz.replaceWith(standEl);     // dieselbe Live-Region über jedes Neuzeichnen
       if (ziel) zielFokus(ziel);
+      // Jedes Neuzeichnen nach dem ersten folgt einer Änderung (Art, Menü, Ziehen, Anlegen, Entfernen): gleich speichern.
+      // Ändert es nichts (Ziehen mit Esc abgebrochen), geht keine Anfrage.
+      if (bearbeitbar && gezeichnet) senden();
+      gezeichnet = true;
     }
+    const kopfTitel = () => (f.titel ? esc(f.titel) : formularTitel({ titel: "", herkunft: pool.herkunft }));
+    const versionenHtml = () => f.versionen.map((v) => `<li>${v.id === f.id ? `<strong>Version ${v.version}</strong>` : `<a href="/materialablage/katalog/formular/${v.id}">Version ${v.version}</a>`}
+          ${v.aktiv ? '<span class="mat-status s-einsatzbereit">aktiv</span>' : ""}${v.benutzt ? ' <span class="badge grey">benutzt</span>' : ""} <span class="muted">${esc(v.titel || "")} · ${plural(v.punkte_anzahl, "Prüfpunkt", "Prüfpunkte")}</span></li>`).join("");
     // Nach dem Neuzeichnen dorthin, wo man war: auf „⋯“ des verschobenen Punkts, ins neue Feld … Ein Textfeld bekommt am
     // Finger keinen Fokus (sonst ginge die Tastatur auf, siehe fokus()) – es kommt nur ins Bild.
     function zielFokus(ziel) {
       let el = null;
       if (ziel.p) {
-        const a = abschnitte().find((x) => liste(x.gi, x.ui).includes(ziel.p));
-        const tr = a && $(`#fp-tabelle tr.fp-punkt[data-g="${a.gi}"][data-i="${liste(a.gi, a.ui).indexOf(ziel.p)}"]${a.ui < 0 ? ":not([data-u])" : `[data-u="${a.ui}"]`}`, inhalt);
+        const tr = punktZeileVon(ziel.p);
         el = tr && $({ text: ".fp-text", art: ".fp-art", menue: ".fp-menue summary" }[ziel.teil], tr);
       } else if (ziel.u) {
         const gi = gruppen.findIndex((g) => g.unter.includes(ziel.u));
@@ -5524,6 +5544,11 @@
       if (!el) return;
       if (el.matches("textarea, input") && window.matchMedia("(pointer: coarse)").matches) el.scrollIntoView({ block: "nearest" });
       else el.focus();
+    }
+    // Die Zeile eines Punkts (Stand des letzten Zeichnens) – oder null.
+    function punktZeileVon(p) {
+      const a = abschnitte().find((x) => liste(x.gi, x.ui).includes(p));
+      return a ? $(`#fp-tabelle tr.fp-punkt[data-g="${a.gi}"][data-i="${liste(a.gi, a.ui).indexOf(p)}"]${a.ui < 0 ? ":not([data-u])" : `[data-u="${a.ui}"]`}`, inhalt) : null;
     }
     /* Ziehen am Griff ⠿ (Maus, Finger, Stift – Pointer Events; der Seitenbaum der Strömipedia zieht mit HTML-Drag-and-drop,
        das am Finger nicht geht): Die Zeile wandert beim Ziehen mit – über die untere Hälfte eines Gruppenkopfs an den
@@ -5704,34 +5729,182 @@
       document.addEventListener("keydown", taste, true);
       lauf = requestAnimationFrame(rollen);
     }
-    /* Vor dem Speichern: Eine Untergruppe mit Punkten braucht einen Namen (leer hieße „keine Untergruppe“, die Punkte
-       rutschten nach vorn zu denen der Gruppe), und in einer Gruppe heißt keine zwei gleich (der Server legte sie zu einer
-       zusammen). Fehler am Namensfeld; liefert false, wenn etwas nicht stimmt. */
-    function ugPruefen() {
+    /* Von selbst speichern (Wunsch vom 06.11.2026: „Entferne den Speichern-Knopf, Änderungen sollen automatisch übernommen
+       werden.“): Jede Änderung geht über PUT …/formulare/<id> an den Server (Schnittstelle unverändert) – Getipptes nach
+       einer Sekunde Ruhe bzw. beim Verlassen des Felds, alles andere (Art, Soll, „optional“, Ziehen, Menü, Anlegen,
+       Entfernen) sofort. Unterwegs ist höchstens eine Anfrage; was währenddessen dazukommt, geht danach als neuester Stand –
+       nie ein älterer nach einem neueren. Ein Punkt ohne Text bleibt ungespeichert, bis er einen hat (ein eben angelegter
+       Punkt ist kein Fehler), wie eine leere Gruppe. Was nicht geht – Titel fehlt, Untergruppe ohne Namen oder doppelt,
+       eine Ablehnung des Servers, kein Netz –, steht am Feld (ohne den Fokus zu nehmen) und oben im Stand („Nicht
+       gespeichert – …“); im Editor bleibt alles stehen, die nächste Änderung versucht es wieder. Der Stand steht im Kopf
+       vor den Knöpfen, eine Live-Region wie im Editor der Strömipedia: „Ungespeichert“, „Speichert …“, „Gespeichert 13:02“,
+       nach 10 s ohne Antwort „Noch nicht gespeichert – keine Antwort vom Server“. Ins Journal kommt davon höchstens ein
+       Eintrag je Bearbeiter in zehn Minuten (katalog.formular_speichern). */
+    const TIPP_MS = 1000;
+    const KEEPALIVE_MAX = 60000;     // keepalive trägt höchstens 64 KiB – ein sehr langes Formular geht ohne
+    const standEl = document.createElement("span");
+    standEl.id = "fp-stand";
+    standEl.className = "mat-speicherstand";
+    standEl.setAttribute("role", "status");
+    standEl.setAttribute("aria-live", "polite");
+    const uhrzeit = () => new Date().toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
+    const zeige = (text, warnung = false) => { standEl.textContent = text; standEl.classList.toggle("mat-warn", warnung); };
+    let gezeichnet = false;
+    let neuZeichnen = false;         // zeichnen() ersetzt gerade die Ansicht
+    let gespeichertText = "";
+    let lauf = null;                 // der laufende Speicherlauf (Promise)
+    let nochmal = false;             // während des Laufs kam eine Änderung dazu
+    let zeitgeber = 0;
+    let unterwegs = null;            // der Stand (JSON) der Anfrage, die gerade läuft
+    let gesendet = [];               // die Punkte dieser Anfrage – „Prüfpunkt n“ in einer Ablehnung meint gesendet[n - 1]
+    let fehlgeschlagen = false;      // die letzte Anfrage kam nicht durch
+    let gesperrt = false;            // benutzt, kein Recht mehr, gelöscht, Ansicht neu gezeichnet: keine Versuche mehr
+    let letzterFehler = "";
+    let markiert = null;             // das Feld mit der Fehlermeldung
+    const mitText = () => gruppen.flatMap((g) => g.punkte.concat(g.unter.flatMap((u) => u.punkte))).filter((p) => p.text.trim());
+    const koerper = () => ({ titel: titelEingabe, punkte: flach().filter((p) => p.text.trim()) });
+    let bestaetigt = JSON.stringify(koerper());      // der Stand, den der Server hat
+    signal.addEventListener("abort", () => { gesperrt = true; clearTimeout(zeitgeber); });
+    // Was jetzt im Editor steht (JSON) – oder null, wenn es dem Stand beim Server gleicht.
+    function offen() {
+      if (!bearbeitbar || signal.aborted) return null;
+      einsammeln();
+      const json = JSON.stringify(koerper());
+      return json === bestaetigt ? null : json;
+    }
+    /* Was der Server ablehnen würde, prüft der Editor vorher: der Titel (Pflicht seit dem Formular-Pool); eine
+       Untergruppe mit Punkten braucht einen Namen (leer hieße „keine Untergruppe“, die Punkte rutschten nach vorn zu denen
+       der Gruppe), und in einer Gruppe heißt keine zwei gleich (der Server legte sie zu einer zusammen). Liefert { feld,
+       text, kurz } oder null. */
+    function pruefen() {
+      if (!titelEingabe.trim()) return { feld: $("#fp-titel", inhalt), text: "Ein Prüfformular braucht einen Titel.", kurz: "Titel fehlt" };
       for (const [gi, g] of gruppen.entries()) {
         const namen = new Set();
         for (const [ui, u] of g.unter.entries()) {
-          if (!u.punkte.length) continue;
+          if (!u.punkte.some((p) => p.text.trim())) continue;
           const name = u.name.trim().replace(/\s+/g, " ");
-          const fehler = !name ? "Eine Untergruppe mit Prüfpunkten braucht einen Namen."
-            : namen.has(name) ? `In ${gruppeText(g)} gibt es schon eine Untergruppe „${name}“.` : "";
+          const fehler = !name ? ["Eine Untergruppe mit Prüfpunkten braucht einen Namen.", "Untergruppe ohne Namen"]
+            : namen.has(name) ? [`In ${gruppeText(g)} gibt es schon eine Untergruppe „${name}“.`, `Untergruppe „${name}“ doppelt`] : null;
           namen.add(name);
-          if (fehler) {
-            const feld = $(`#fp-tabelle tr.fp-ug-zeile[data-g="${gi}"][data-u="${ui}"] .fp-ug-name`, inhalt);
-            if (feld) { feld.scrollIntoView({ block: "nearest" }); S.feldFehler(feld, fehler); feld.focus(); } else toast(fehler, true);
-            return false;
-          }
+          if (fehler) return { feld: $(`#fp-tabelle tr.fp-ug-zeile[data-g="${gi}"][data-u="${ui}"] .fp-ug-name`, inhalt), text: fehler[0], kurz: fehler[1] };
         }
       }
+      return null;
+    }
+    // Das Feld zu einer Ablehnung des Servers: „Prüfpunkt n …“ (Sollwert, „Länge“, Text) bzw. der Titel – sonst null.
+    function fehlerFeld(text) {
+      const m = /Prüfpunkt (\d+)/.exec(text);
+      if (!m) return /Titel/.test(text) ? $("#fp-titel", inhalt) : null;
+      const tr = gesendet[+m[1] - 1] ? punktZeileVon(gesendet[+m[1] - 1]) : null;
+      return tr && $(/Sollwert/.test(text) ? ".fp-soll" : /„Länge“/.test(text) ? ".fp-art" : ".fp-text", tr);
+    }
+    function markieren(feld, text) {
+      if (markiert && markiert !== feld && markiert.isConnected) S.feldOk(markiert);
+      markiert = feld || null;
+      if (feld) S.feldFehler(feld, text, { fokus: false });
+    }
+    async function speicherLauf() {
+      for (;;) {
+        nochmal = false;
+        if (gesperrt) return false;
+        einsammeln();
+        const fehler = pruefen();
+        markieren(fehler && fehler.feld, fehler && fehler.text);
+        if (fehler) { zeige(`Nicht gespeichert – ${fehler.kurz}`, true); return false; }
+        const body = koerper();
+        const json = JSON.stringify(body);
+        if (json === bestaetigt) { fehlgeschlagen = false; zeige(gespeichertText); return true; }
+        gesendet = mitText();
+        unterwegs = json;
+        zeige("Speichert …");
+        const langsam = setTimeout(() => zeige("Noch nicht gespeichert – keine Antwort vom Server", true), 10000);
+        try {
+          const r = await api(`${API}/formulare/${f.id}`, { method: "PUT", body, keepalive: json.length < KEEPALIVE_MAX });
+          bestaetigt = json;
+          fehlgeschlagen = false;
+          letzterFehler = "";
+          gespeichertText = `Gespeichert ${uhrzeit()}`;
+          uebernehmen(r.formular);
+        } catch (e) {
+          if (signal.aborted) return false;
+          fehlgeschlagen = true;
+          // Benutzt (409), kein Recht mehr (403), gelöscht (404): Weitere Versuche brächten dieselbe Ablehnung.
+          if ([403, 404, 409].includes(e.status)) gesperrt = true;
+          const feld = e.status ? fehlerFeld(e.message) : null;
+          markieren(feld, e.message);
+          zeige(`Nicht gespeichert – ${e.status ? e.message.replace(/\.$/, "") : "keine Verbindung"}`, true);
+          if (!feld && e.message !== letzterFehler) toast(e.status ? e.message : "Nicht gespeichert – keine Verbindung.", true);
+          letzterFehler = e.message;
+          return false;
+        } finally {
+          clearTimeout(langsam);
+          unterwegs = null;
+        }
+        if (!nochmal) break;
+      }
+      // Inzwischen weitergetippt: Das geht nach der Ruhepause von selbst hinterher.
+      zeige(offen() ? "Ungespeichert" : gespeichertText);
       return true;
     }
-    async function speichern() {
-      einsammeln();
-      if (!ugPruefen()) return;
-      try {
-        await api(`${API}/formulare/${f.id}`, { method: "PUT", body: { titel: $("#fp-titel").value, punkte: flach() } });
-        toast("Formular gespeichert"); zeigen(formular);
-      } catch (e) { toast(e.message, true); }
+    // Jetzt speichern (läuft schon ein Lauf, nimmt er den neuesten Stand danach mit). Liefert den Lauf.
+    function senden() {
+      clearTimeout(zeitgeber);
+      zeitgeber = 0;
+      if (lauf) { nochmal = true; return lauf; }
+      lauf = speicherLauf().finally(() => { lauf = null; });
+      return lauf;
+    }
+    function spaeter() {
+      if (gesperrt) return;
+      if (!lauf) zeige("Ungespeichert");
+      clearTimeout(zeitgeber);
+      zeitgeber = setTimeout(() => { zeitgeber = 0; senden(); }, TIPP_MS);
+    }
+    // Die Antwort: Titel in Kopf, Reiter und Versionsliste (die Tabelle bleibt, wie sie ist – man tippt ja vielleicht).
+    function uebernehmen(neu) {
+      f.titel = neu.titel;
+      const kopf = $("#fp-kopftitel", inhalt);
+      if (kopf) kopf.innerHTML = kopfTitel();
+      seitenTitel(`${f.titel || "Prüfformular"} v${f.version}`.replace(/\s+/g, " "));
+      const v = f.versionen.find((x) => x.id === f.id);
+      if (v) { v.titel = neu.titel; v.punkte_anzahl = neu.punkte.length; }
+      const ul = $(".mat-versionen", inhalt);
+      if (ul) ul.innerHTML = versionenHtml();
+    }
+    /* Vor „Aktivieren“, „Deaktivieren“, „Neue Version“, „Kopie anlegen“ und dem Neuzeichnen nach „Zuweisen“: erst der
+       letzte Stand. Liefert, ob alles beim Server ist; sonst steht der Grund am Feld (mit Fokus) bzw. als Toast. */
+    async function gesichert() {
+      if (!bearbeitbar) return true;
+      await senden();
+      if (!offen()) return true;
+      if (markiert && markiert.isConnected) { markiert.scrollIntoView({ block: "nearest" }); markiert.focus(); }
+      else toast(standEl.textContent || "Nicht gespeichert.", true);
+      return false;
+    }
+    if (bearbeitbar) {
+      inhalt.addEventListener("input", (e) => { if (!neuZeichnen && e.target.matches("#fp-titel, .fp-text, .fp-gruppenname, .fp-ug-name, input.fp-soll")) spaeter(); }, { signal });
+      inhalt.addEventListener("change", (e) => {
+        if (!neuZeichnen && e.target.matches("#fp-titel, .fp-text, .fp-gruppenname, .fp-ug-name, .fp-soll, .fp-optional")) senden();
+      }, { signal });
+      /* Verlassen der Seite (Link, Zurück, Neuladen, Reiter zu): Offenes geht noch los – die Anfrage trägt keepalive und
+         kommt auch an, wenn die Seite schon weg ist. Läuft gerade eine, geht der neueste Stand gleich hinterher (warten
+         geht nicht mehr). Ließe es sich nicht speichern (Fehler, kein Netz, sehr langes Formular), fragt der Browser
+         vorher nach. */
+      window.addEventListener("beforeunload", (e) => {
+        const json = offen();
+        if (!json) return;
+        if (!gesperrt && !pruefen() && !fehlgeschlagen && json.length < KEEPALIVE_MAX) { if (!lauf) senden(); return; }
+        e.preventDefault();
+        e.returnValue = "";
+      }, { signal });
+      window.addEventListener("pagehide", () => {
+        const json = offen();
+        if (!json || gesperrt || pruefen() || json === unterwegs) return;
+        if (!lauf) { senden(); return; }
+        api(`${API}/formulare/${f.id}`, { method: "PUT", body: koerper(), keepalive: json.length < KEEPALIVE_MAX }).catch(() => {});
+      }, { signal });
+      document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden" && offen()) senden(); }, { signal });
+      window.addEventListener("online", () => { if (fehlgeschlagen && offen()) senden(); }, { signal });
     }
     // Ein Eintrag im Menü „⋯“ einer Punktzeile: Gruppe, Untergruppe (ui, -1 = keine), Liste und Punkt, um die es geht
     // (Stand des letzten Zeichnens).
@@ -5866,9 +6039,9 @@
         zeichnen(nachbar ? { u: nachbar, teil: "menue" } : { sel: `[data-act="ug-neu"][data-g="${gruppen.indexOf(g)}"]` });
         toast(`${name} entfernt`);
       },
-      speichern,
-      aktivieren: async () => { try { if (bearbeitbar) { einsammeln(); if (!ugPruefen()) return; await api(`${API}/formulare/${f.id}`, { method: "PUT", body: { titel: $("#fp-titel").value, punkte: flach() } }); } await api(`${API}/formulare/${f.id}/aktivieren`, { method: "POST", body: {} }); toast("Aktiviert"); zeigen(formular); } catch (e) { toast(e.message, true); } },
-      deaktivieren: async () => { try { await api(`${API}/formulare/${f.id}/deaktivieren`, { method: "POST", body: {} }); toast("Deaktiviert"); zeigen(formular); } catch (e) { toast(e.message, true); } },
+      // Erst der letzte Stand, dann aktivieren (der Server prüft die Punkte, die er hat).
+      aktivieren: async () => { if (!(await gesichert())) return; try { await api(`${API}/formulare/${f.id}/aktivieren`, { method: "POST", body: {} }); toast("Aktiviert"); zeigen(formular); } catch (e) { toast(e.message, true); } },
+      deaktivieren: async () => { if (!(await gesichert())) return; try { await api(`${API}/formulare/${f.id}/deaktivieren`, { method: "POST", body: {} }); toast("Deaktiviert"); zeigen(formular); } catch (e) { toast(e.message, true); } },
       // Neue Version desselben Formulars; trägt diese Version keinen Titel (ältere, benutzte), fragt ein Dialog nach
       // einem – Titel sind seit dem Formular-Pool Pflicht.
       "neue-version": async () => {
@@ -5879,6 +6052,8 @@
             location.href = S.ziel(`/materialablage/katalog/formular/${r.formular.id}`);
           } catch (e) { if (knopf) S.fehlschlag(knopf, e, body); else toast(e.message, true); }
         };
+        // Die neue Version übernimmt die Punkte vom Server – also erst den letzten Stand dorthin.
+        if (!(await gesichert())) return;
         if (f.titel) { anlegen(); return; }
         dialog(`<h2>Neue Version</h2><label for="nv-titel">Titel</label><input type="text" id="nv-titel" maxlength="160" required>
           <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button><button class="btn" id="nv-ok" type="button">Anlegen</button></div>`,
@@ -5892,16 +6067,22 @@
           };
         });
       },
-      kopie: () => formularAnlegenDialog({ kategorie: pool.heimat.id, vorlage: f }),
-      zuweisen: () => zuweisenDialog(f.formular_id, () => zeigen(formular)),
+      kopie: async () => { if (await gesichert()) formularAnlegenDialog({ kategorie: pool.heimat.id, vorlage: f }); },
+      // Danach zeichnet die Seite neu (Abschnitt „Gilt für“) – vorher geht der letzte Stand an den Server.
+      zuweisen: () => zuweisenDialog(f.formular_id, async () => { if (await gesichert()) zeigen(formular); }),
       loeschen: async () => {
         if (!(await confirm(`Version ${f.version} löschen?`, "Löschen"))) return;
+        // Nach dem Löschen ginge jedes Speichern ins Leere: keine Versuche mehr, eine laufende Anfrage erst abwarten.
+        const warGesperrt = gesperrt;
+        gesperrt = true;
+        clearTimeout(zeitgeber);
+        if (lauf) await lauf;
         try {
           const r = await api(`${API}/formulare/${f.id}`, { method: "DELETE" });
           // War es die letzte Version, ist das Formular aus dem Pool – zurück auf die Seite „Prüfformulare“.
           const andere = f.versionen.find((v) => v.id !== f.id);
           location.href = S.ziel(r.formular_geloescht || !andere ? heimatLink : `/materialablage/katalog/formular/${andere.id}`);
-        } catch (e) { toast(e.message, true); }
+        } catch (e) { gesperrt = warGesperrt; toast(e.message, true); }
       },
     };
     zeichnen();
@@ -5913,6 +6094,18 @@
      Kategorienbaum mit Standard und Formularen je Pool – nur für die Material-Verwaltung (Entscheidung O6); Anlegen,
      „Prüfpunkte übernehmen von …“ und je Zeile „Zuweisen“. Zuweisen nur im Teilbaum der Heimat (Z1), nur mit aktiver
      Version (Z4); ein Haken holt eine Zuweisung von einem anderen Formular her (Z5, „bisher: …“). */
+  /* „Zuweisen“ (Formularseite, Abschnitt „Gilt für“, und je Zeile der Seite „Prüfformulare“). Ohne aktive Version bleibt
+     es gesperrt (Entscheidung Z4) – seit dem 08.11.2026 (Entscheidung des Nutzers) nicht mehr erst im Dialog: Der Knopf
+     ist ausgegraut, der Grund steht sichtbar darüber (knopfGrund-Muster), und direkt daneben steht ein grauer Knopf
+     „Aktivieren“ – dieselbe Wirkung wie im Kopf der Formularseite; danach zeichnet die Seite neu, „Zuweisen“ ist frei.
+     id: die Kennung des Grund-Satzes; zusatz: weitere Attribute beider Knöpfe (data-id und Name je Zeile). */
+  const NUR_AKTIV_ZUWEISEN = "Erst aktivieren – dann zuweisen.";
+  const zuweisenKnoepfe = (id, aktiv, zusatz = { zuweisen: "", aktivieren: "" }) => {
+    const zuweisen = `<button class="btn secondary small" type="button" data-act="zuweisen"${zusatz.zuweisen}${aktiv ? "" : knopfAus(id, NUR_AKTIV_ZUWEISEN)}>Zuweisen</button>`;
+    if (aktiv) return zuweisen;
+    return `<div class="mat-kopfaktion mat-zw-aktion">${grundSatz(id, NUR_AKTIV_ZUWEISEN)}<div class="btn-row">`
+      + `<button class="btn secondary small" type="button" data-act="aktivieren"${zusatz.aktivieren}>Aktivieren</button>${zuweisen}</div></div>`;
+  };
   const GILT_FUER_INFO = "Als Standard gilt ein Formular für die Produkte der Kategorie und ihrer Unterkategorien ohne eigenen Standard; einem Produkt zugewiesen geht es dem Standard vor. Eine neue aktive Version gilt sofort überall, laufende Prüfungen behalten ihre.";
   const formularTitel = (x) => (x.titel ? esc(x.titel)
     : `<span class="muted">(ohne Titel${x.herkunft ? ` – bisher ${esc(x.herkunft)}` : ""})</span>`);
@@ -6089,7 +6282,10 @@
         <div class="mat-pool-titel"><a href="/materialablage/katalog/formular/${x.link}"><strong>${formularTitel(x)}</strong></a> ${demoMarke(x.demo)}</div>
         <div class="mat-pool-status small">${statusHtml(x)}</div>
         <div class="mat-pool-gilt small">${giltHtml(x, k)}</div>
-        <div class="mat-pool-aktion"><button class="btn secondary small" type="button" data-act="zuweisen" data-id="${x.id}" aria-label="${esc(`„${x.titel || "ohne Titel"}“ zuweisen`)}">Zuweisen</button></div></li>`;
+        <div class="mat-pool-aktion">${zuweisenKnoepfe(`pool-zw-grund-${x.id}`, Boolean(x.aktive_version), {
+          zuweisen: ` data-id="${x.id}" aria-label="${esc(`„${x.titel || "ohne Titel"}“ zuweisen`)}"`,
+          // Aktiviert wird die neueste Version (wie „Aktivieren“ im Kopf ihrer Seite) – ohne aktive Version ist sie der Link.
+          aktivieren: x.neueste_version ? ` data-id="${x.id}" data-version="${x.neueste_version.id}" aria-label="${esc(`„${x.titel || "ohne Titel"}“ Version ${x.neueste_version.version} aktivieren`)}"` : " hidden" })}</div></li>`;
     const gruppe = (k) => `<section class="mat-pool-gruppe" data-such="${esc(k.pfad.join(" ").toLowerCase())}">
         <div class="mat-pool-kopf"><h2><a href="/materialablage/katalog?kategorie=${k.id}">${k.pfad.map(esc).join(" › ")}</a> ${demoMarke(k.demo)}</h2>
           <p class="small mat-pool-standard">${standardHtml(k)}</p></div>
@@ -6131,6 +6327,17 @@
         .map((k) => ({ gruppe: k.pfad.join(" › "), formulare: k.formulare.filter((x) => x.link).map((x) => ({
           version: x.link, nummer: (x.aktive_version || x.neueste_version).version, titel: x.titel })) })) }),
       zuweisen: (b) => zuweisenDialog(+b.dataset.id, () => zeigen(formulare)),
+      // Ohne aktive Version neben dem ausgegrauten „Zuweisen“: aktivieren, danach ist „Zuweisen“ frei.
+      aktivieren: async (b) => {
+        b.disabled = true;
+        try {
+          await api(`${API}/formulare/${b.dataset.version}/aktivieren`, { method: "POST", body: {} });
+          toast("Aktiviert");
+          await zeigen(formulare);
+          const frei = $(`[data-act="zuweisen"][data-id="${b.dataset.id || ""}"]`);
+          if (frei) frei.focus();
+        } catch (e) { S.fehlschlag(b, e); }
+      },
       "pool-leeren": () => { const f = $("#pool-q"); f.value = ""; q = ""; suchen(); f.focus(); },
     };
   }

@@ -17,8 +17,8 @@ Zwischenüberschrift, die Punkte darunter eingezogen; der Editor wie Gruppen ein
    mit '' dazu, sonst nichts verändert, Trigger da, Protokoll unverändert; zweiter Lauf ändert nichts.
 5. Browser (1280 Maus, 360 Touch): Untergruppe anlegen, umbenennen, Punkte hinein und heraus ziehen, Untergruppe
    innerhalb einer Gruppe und in eine andere ziehen, entfernen (Rückfrage mit Anzahl), „+ Prüfpunkt“ je Untergruppe,
-   „Nach oben/unten“ und „In Gruppe verschieben“ über Untergruppen, Pflicht eines Namens beim Speichern, Speichern in
-   der Datenbank, Getipptes bleibt bei jedem Neuzeichnen, Nur-Lese-Ansicht und Prüfungsansicht mit Zwischenüberschrift;
+   „Nach oben/unten“ und „In Gruppe verschieben“ über Untergruppen, Pflicht eines Namens beim (seit 06.11.2026
+   automatischen) Speichern – am Feld, ohne den Fokus zu nehmen –, Speichern in der Datenbank, Getipptes bleibt bei jedem Neuzeichnen, Nur-Lese-Ansicht und Prüfungsansicht mit Zwischenüberschrift;
    Tippflächen am Finger gemessen (≥ 44 px, Tipp auf die Mitte trifft), kein waagerechter Bildlauf, keine
    Konsolenfehler. Ohne Chromium „übersprungen“ mit rc 0.
 Alle Inhalte sind Platzhalter."""
@@ -130,13 +130,20 @@ def test_schnittstelle_und_transfer():
         punkte_journal = json.loads(journal["after_json"])["punkte"]
         assert punkte_journal[2].startswith(f"{GA} › {UK}: Platzhalter K1 [yesno"), punkte_journal
         assert punkte_journal[0].startswith(f"{GA}: Platzhalter D1"), punkte_journal
-        # Ohne Gruppe, mit Untergruppe: nur die Untergruppe vorn.
+        # Ohne Gruppe, mit Untergruppe: nur die Untergruppe vorn. Seit dem automatischen Speichern (06.11.2026) schreibt
+        # dieselbe Person binnen zehn Minuten keinen zweiten Eintrag – der Rest kommt beim nächsten Schritt an der Version
+        # (hier direkt über katalog.journal_nachziehen) in ihrem Namen dazu.
         r = kp.put(f"{API}/formulare/{fid}", json={"punkte": UNGEORDNET + [{"untergruppe": "U", "text": "x", "art": "text"}]})
         assert r.status_code == 200
         with app.app_context():
             from app import db
+            from app.material.services import katalog
+            zahl = db.query("SELECT COUNT(*) AS n FROM mat_audit WHERE entity = 'form' AND entity_id = ?", (fid,), one=True)["n"]
+            with db.transaction():
+                assert katalog.journal_nachziehen(fid)
             j = db.query("SELECT after_json FROM mat_audit WHERE entity = 'form' AND entity_id = ? ORDER BY id DESC LIMIT 1",
                          (fid,), one=True)
+            assert db.query("SELECT COUNT(*) AS n FROM mat_audit WHERE entity = 'form' AND entity_id = ?", (fid,), one=True)["n"] == zahl + 1
         assert json.loads(j["after_json"])["punkte"][-1].startswith("U: x ["), j
         assert kp.put(f"{API}/formulare/{fid}", json={"punkte": UNGEORDNET}).status_code == 200
         # Zu lang: Fehler mit Stelle.
@@ -424,7 +431,7 @@ def browser_formular(u, kategorie):
 
 
 def editor_ablauf(u, kategorie, breite, hoehe, touch):
-    from test_material_formular_editor import klick, menue, oeffnen, tippen, tippflaechen, ziehen
+    from test_material_formular_editor import gespeichert, klick, menue, oeffnen, tippen, tippflaechen, ziehen
     fid = browser_formular(u, kategorie)
     s = u.seite("matverwaltung", breite, hoehe, touch)
     try:
@@ -511,14 +518,19 @@ def editor_ablauf(u, kategorie, breite, hoehe, touch):
         lang = s.js(f"""(() => {{ const t = document.querySelector({json.dumps(ug_kopf(0, 1) + ' .fp-ug-name')});
           return [t.value, t.scrollHeight - t.clientHeight, t.scrollWidth - t.clientWidth]; }})()""")
         assert lang[0] == LANG_UG and lang[1] <= 1 and lang[2] <= 1, lang
-        # Leere Untergruppe mit Namen in Gruppe B, eine ohne Namen mit Punkt → Speichern verlangt den Namen am Feld.
+        # Leere Untergruppe mit Namen in Gruppe B, eine ohne Namen mit Punkt → das automatische Speichern verlangt den
+        # Namen am Feld (der Fokus bleibt im Punkt, in dem getippt wird) und speichert bis dahin nicht.
+        gespeichert(s)
         klick(s, '#fp-tabelle [data-act="ug-neu"][data-g="1"]')
         klick(s, '#fp-tabelle tr.fp-fuss [data-act="punkt-neu"][data-g="1"][data-u="0"]')
         tippen(s, f"{punkt(1, 0, 0)} .fp-text", "Platzhalter ohne Namen")
-        klick(s, '[data-act="speichern"]')
+        assert s.warte("document.querySelector('#fp-stand').textContent === 'Nicht gespeichert – Untergruppe ohne Namen'")
         fehler = s.js(f"""(() => {{ const t = document.querySelector({json.dumps(ug_kopf(1, 0) + ' .fp-ug-name')});
           const p = document.getElementById(t.id + '-fehler'); return [t.getAttribute('aria-invalid'), p && p.textContent]; }})()""")
         assert fehler == ["true", "Eine Untergruppe mit Prüfpunkten braucht einen Namen."], fehler
+        if not touch:
+            assert s.js(f"document.activeElement.matches({json.dumps(punkt(1, 0, 0) + ' .fp-text')})")
+        assert "Platzhalter ohne Namen" not in [z["label"] for z in u.sql("SELECT label FROM mat_checklist_item WHERE form_id = ?", (fid,))]
         # Untergruppe entfernen: mit Punkt nach Rückfrage samt Anzahl.
         klick(s, f'{ug_kopf(1, 0)} [data-act="ug-weg"]')
         assert s.warte("!!document.querySelector('dialog[open] #c-titel')")
@@ -534,9 +546,8 @@ def editor_ablauf(u, kategorie, breite, hoehe, touch):
                 tippflaechen(s, sel)
             assert s.js(f"getComputedStyle(document.querySelector({json.dumps(ug_kopf(0, 0) + ' .fp-griff')})).touchAction") == "none"
         assert s.js("document.documentElement.scrollWidth <= document.documentElement.clientWidth")
-        # Speichern: Reihenfolge, Gruppe und Untergruppe je Punkt in der Datenbank.
-        klick(s, '[data-act="speichern"]')
-        s.b.warten(1.0)
+        # Gespeichert von selbst: Reihenfolge, Gruppe und Untergruppe je Punkt in der Datenbank.
+        gespeichert(s)
         zeilen = u.sql("SELECT group_name, untergruppe, label FROM mat_checklist_item WHERE form_id = ? ORDER BY position", (fid,))
         assert [(z["group_name"], z["untergruppe"], z["label"]) for z in zeilen] == [
             (GA, "", "Platzhalter K1"), (GA, UK + " neu", "Platzhalter K2 getippt"), (GA, UK + " neu", "Platzhalter D1"),

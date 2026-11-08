@@ -74,8 +74,10 @@ def test_a1_zurueck_schliesst_overlays():
 
 def test_a2_fehler_am_feld():
     co = lies(COMMON)
-    for teil in ("function feldFehler(feld, text) {", "function fehlschlag(knopf, fehler, feld) {", 'feld.setAttribute("aria-invalid", "true");',
-                 "feld.setAttribute(\"aria-describedby\", [...beschr, p.id].join(\" \"));", "feld.focus();",
+    # Seit dem 06.11.2026 mit { fokus: false } für Fehler, die von selbst auftauchen (automatisches Speichern im
+    # Prüfformular-Editor) – sonst geht der Fokus wie bisher aufs Feld.
+    for teil in ("function feldFehler(feld, text, opt = {}) {", "function fehlschlag(knopf, fehler, feld) {", 'feld.setAttribute("aria-invalid", "true");',
+                 "feld.setAttribute(\"aria-describedby\", [...beschr, p.id].join(\" \"));", "if (opt.fokus !== false) feld.focus();",
                  "const m = text.match(/^„([^“]+)“/);",
                  '(!ae || ae === document.body || ae.tagName === "DIALOG" || ae === knopf)) knopf.focus();'):
         assert teil in co, teil

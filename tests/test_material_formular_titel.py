@@ -52,8 +52,12 @@ def test_titel_bleibt_beim_neuzeichnen():
     assert aufrufe == 10, aufrufe
     ziehen = abschnitt(editor, "    function ziehen(e) {", "\n    }\n")
     assert ziehen.index("einsammeln();") < ziehen.index("zeichnen();")
-    # Speichern und Aktivieren nehmen den Titel aus dem Feld.
-    assert editor.count('titel: $("#fp-titel").value') == 2
+    # Gespeichert wird von selbst (seit 06.11.2026, kein Knopf „Speichern“): Jeder Speicherlauf sammelt vorher ein und
+    # schickt den getippten Titel (titelEingabe) – auch vor „Aktivieren“ (gesichert()).
+    lauf = abschnitt(editor, "    async function speicherLauf() {", "\n    }\n")
+    assert lauf.index("einsammeln();") < lauf.index("const body = koerper();")
+    assert "const koerper = () => ({ titel: titelEingabe, punkte: flach().filter((p) => p.text.trim()) });" in editor
+    assert 'titel: $("#fp-titel").value' not in editor
     print("Titel im Formular-Editor bestanden.")
 
 

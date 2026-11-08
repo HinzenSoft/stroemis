@@ -92,11 +92,12 @@ def test_abschnittsaktion_in_der_kopfzeile():
     assert "Sammelprotokoll (PDF)</a>" not in mat
     # Produkt: Prüfformular und Herstellerdokumente – je eine Aktion neben der Überschrift.
     # Seit dem Formular-Pool (Schritt 38) ist „Prüfformular“ am Produkt nur Anzeige (ohne Aktion); die eine Aktion
-    # „Zuweisen“ steht neben „Gilt für“ auf der Formularseite.
+    # „Zuweisen“ steht neben „Gilt für“ auf der Formularseite (seit 08.11.2026 ohne aktive Version mit Grund und
+    # „Aktivieren“ daneben, zuweisenKnoepfe).
     assert '<section class="section"><h2>Prüfformular${pruefformularInfo(p.category_id)}</h2>' in mat
     assert "formularMenue" not in mat and "Spezifisches Formular bearbeiten" not in mat
     assert ('<div class="abschnittskopf"><h2>Gilt für${infoKnopf("Gilt für", GILT_FUER_INFO)}</h2>\n          ${DARF.katalog ? '
-            '\'<button class="btn secondary small" type="button" data-act="zuweisen">Zuweisen</button>\' : ""}</div>') in mat
+            'zuweisenKnoepfe("fp-zw-grund", Boolean(pool.aktive_version)) : ""}</div>') in mat
     doks = mat[mat.index('<div class="abschnittskopf"><h2>Herstellerdokumente'):]
     doks = doks[:doks.index("</section>")]
     assert doks.index('data-act="dok-neu"') < doks.index("</div>") < doks.index("dokTabelle(p.dokumente, k)")
