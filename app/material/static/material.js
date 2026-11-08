@@ -3596,6 +3596,23 @@
     if (gruppe) doppeltePruefen(gruppe);
   });
 
+  /* „Durch Systemnummer ersetzen“ (Wunsch vom 08.11.2026): statt der Herstellernummer die STR-Nummer, die das System dem
+     Artikel gibt (a.systemnummer – wie beim Anlegen ohne Herstellernummer; null, wenn er schon eine hat). Im Dialog
+     „Bearbeiten“ bis zur ersten Prüfung mit Rückfrage beim Speichern, danach als Wahl im Antrag. Im Dialog „Bearbeiten“
+     unter der Zeile mit der Seriennummer (sie bleibt auch am Telefon zweispaltig und ist unten bündig – in der Spalte
+     schöbe das Kästchen die Herstellung nach unten), im Antrag direkt unter dem Feld (oben bündig, am Telefon einspaltig).
+     Gewählt ist das Feld der Seriennummer gesperrt. */
+  const systemnummerWahl = (id, a) => (a.systemnummer ? `<label class="inline mat-sys-wahl" for="${id}"><input type="checkbox" id="${id}"> <span>Durch Systemnummer ersetzen <span class="mat-nowrap">(${esc(a.systemnummer)})</span></span></label>` : "");
+  function systemnummerKoppeln(body, wahl, feld, leer) {
+    const k = $(`#${wahl}`, body);
+    const f = $(`#${feld}`, body);
+    if (!k || !f) return;
+    k.onchange = () => {
+      f.disabled = k.checked;
+      f.value = k.checked ? "" : leer;
+    };
+  }
+
   function artikelDialog(a) {
     const textil = a.produkt.material_kind === "textil";
     const fest = !!a.stammdaten_fest;
@@ -3630,6 +3647,7 @@
       ${festBlock}
       ${produktFeldHtml}
       ${gesperrt ? "" : `<div class="field-row mat-stammzeile"><div>${sn}</div><div>${herst}</div></div>
+      ${systemnummerWahl("ad-sys", a)}
       <div class="help">Seriennummer: Leer lassen behält die Nummer. Eine echte Herstellernummer ersetzt die vom System vergebene.</div>
       <div class="field-row"><div><label for="ad-kauf">Kauf (Monat)</label>${datumFeld("ad-kauf", a.purchased_on, "monat")}</div>
         <div><label for="ad-erst">Erstgebrauch (Monat)</label>${datumFeld("ad-erst", a.first_use_on, "monat")}</div></div>
@@ -3643,6 +3661,7 @@
       <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button><button class="btn" id="ad-ok" type="button">Speichern</button></div>`,
     (dlg, body) => {
       doppelteZeigen(body);
+      systemnummerKoppeln(body, "ad-sys", "ad-sn", a.serial_generated ? "" : a.serial_no);
       // Ein anderes Produkt (null: es bleibt). Der Dialog zeigt es mit seinen Folgen; Lebensende und Länge folgen ihm.
       let neuesProdukt = null;
       const anders = $("#ad-anders", body);
@@ -3712,17 +3731,19 @@
               interval_months: $("#ad-int", body).value || null, serial_no: $("#ad-sn", body).value,
               manufactured_on: datumBehalten(datumWert($("#ad-herst", body), "Herstellung"), a.manufactured_on) });
             if (textil && !neuesProdukt) daten.retire_by = datumWert($("#ad-ende", body), "Lebensende") || null;
+            if ($("#ad-sys", body) && $("#ad-sys", body).checked) Object.assign(daten, { systemnummer: true, serial_no: "" });
             if (neuesProdukt) daten.product_id = neuesProdukt.id;
             else if ($("#ad-tn", body)) daten.bestandteil_nummern = teilnummernLesen($("#ad-tn", body));
           }
           const laengeZeile = $("#ad-laenge-zeile", body);
           if (laengeZeile && !laengeZeile.hidden) daten.length_m = $("#ad-laenge", body).value.trim() || null;
         } catch (e) { toast(e.message, true); return; }
+        if (daten.systemnummer && !(await confirm(`Seriennummer „${a.serial_no}“ durch die Systemnummer ${a.systemnummer} ersetzen? Die bisherige Nummer steht danach nur noch im Verlauf. Bitte die neue Nummer dauerhaft am Artikel anbringen.`, "Ersetzen", "", { endgueltig: false }))) return;
         knopf.disabled = true;
         try {
           await api(`${API}/artikel/${a.id}`, { method: "PUT", body: daten });
           dlg.close();
-          toast(neuesProdukt ? `Gespeichert – Produkt jetzt ${produktName(neuesProdukt)}` : "Gespeichert");
+          toast(neuesProdukt ? `Gespeichert – Produkt jetzt ${produktName(neuesProdukt)}` : daten.systemnummer ? `Gespeichert – Seriennummer jetzt ${a.systemnummer}` : "Gespeichert");
           zeigen(artikel);
         } catch (e) { S.fehlschlag(knopf, e, body); }
       };
@@ -3791,7 +3812,8 @@
         <p class="error" id="aa-produkt-fehler" hidden></p>
         <div class="notice small" id="aa-folgen" hidden></div></div>`
         : `<p class="small">Produkt: <strong>${nameHtml(a.produkt)}</strong>${zusatzHtml(a.produkt)}</p>`}
-      <div class="field-row mat-antragzeile"><div><label for="aa-sn">Seriennummer</label><input type="text" id="aa-sn" ${TASTATUR_NUMMER} maxlength="80" value="${esc(a.serial_no)}"></div>
+      <div class="field-row mat-antragzeile"><div><label for="aa-sn">Seriennummer</label><input type="text" id="aa-sn" ${TASTATUR_NUMMER} maxlength="80" value="${esc(a.serial_no)}">
+        ${systemnummerWahl("aa-sys", a)}</div>
         <div><label for="aa-herst">Herstellung (Monat)</label>${datumFeld("aa-herst", a.manufactured_on, "monat")}</div></div>
       <div class="field-row"><div><label for="aa-kauf">Kauf (Monat)</label>${datumFeld("aa-kauf", a.purchased_on, "monat")}</div>
         <div><label for="aa-erst">Erstgebrauch (Monat)</label>${datumFeld("aa-erst", a.first_use_on, "monat")}</div></div>
@@ -3804,6 +3826,7 @@
       <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button><button class="btn" id="aa-ok" type="button">Antrag senden</button></div>`,
     (dlg, body) => {
       doppelteZeigen(body);
+      systemnummerKoppeln(body, "aa-sys", "aa-sn", a.serial_no);
       let neuesProdukt = null;
       const fehler = (text) => { const el = $("#aa-produkt-fehler", body); el.textContent = text || ""; el.hidden = !text; };
       function produktSetzen(p) {
@@ -3843,7 +3866,9 @@
         const anders = (neu, alt) => (neu || null) !== (alt || null);
         try {
           const sn = $("#aa-sn", body).value.trim();
-          if (sn !== a.serial_no) daten.serial_no = sn;
+          // Die Systemnummer vergibt erst die Bestätigung; der Antrag nennt sie schon.
+          if ($("#aa-sys", body) && $("#aa-sys", body).checked) daten.systemnummer = true;
+          else if (sn !== a.serial_no) daten.serial_no = sn;
           for (const [id, feld, name] of [["aa-herst", "manufactured_on", "Herstellung"], ["aa-kauf", "purchased_on", "Kauf"],
             ["aa-erst", "first_use_on", "Erstgebrauch"]]) {
             const wert = datumBehalten(datumWert($(`#${id}`, body), name), a[feld]);

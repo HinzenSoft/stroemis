@@ -90,6 +90,7 @@ Geschichte stehen. Schemaversion nach der Nachbesserung vor dem Merge: 30; mit d
 | Formular-Pool je Kategorie (Schritt 38) | Statt generischer Formulare je Kategorie, spezifischer je Produkt und „Prüfformular übernehmen“: jedes Formular im Pool seiner Kategorie, Standard je Kategorie (erbt in Unterkategorien) oder Zuweisung an Produkte; Seite „Prüfformulare“ (nur Material-Verwaltung) mit Anlegen und Dialog „Zuweisen“, Formularseite „Gilt für“ und „Kopie anlegen“, Produkt- und Kategorieseite nur Anzeige; Migration mit Vorher/Nachher-Vergleich je Produkt; Katalogdatei Format 3 (aktive Formulare samt Zuweisungen, Import ohne DEMO, Datei maßgeblich); Zähler `katalog_stand` für die Übung | gebaut 04.11.2026 (Schema 38), Zweig formular-pool, wartet auf Freigabe |
 | Untergruppen in Prüfformularen (Schritt 39) | Eine Ebene unter der Gruppe: Feld `untergruppe` je Prüfpunkt und als Kopie in den Befundzeilen; Reihenfolge-Regel (erst ohne Untergruppe, dann Blöcke) im Dienst; Editor mit „+ Untergruppe“, Zwischenzeile, Griff, „Untergruppe entfernen“; Prüfung, Nur-Lese-Ansicht und PDF mit Zwischenüberschrift und Einzug; Katalogdatei Format 3 mit `untergruppe`; Übung | gebaut 04.11.2026 (Schema 39), Zweig untergruppen, wartet auf Freigabe |
 | Reiter „Prüfformulare“ | Eigener Reiter rechts neben „Katalog“ statt des Knopfs im Katalogkopf, nur für die Material-Verwaltung; markiert auf der Seite „Prüfformulare“ und den Formularseiten; am Telefon brechen fünf Reiter um statt zu rollen; Übung „Prüfformulare zuweisen“ beginnt mit dem Reiter | gebaut 05.11.2026 (kein Schemaschritt), Zweig tab-pruefformulare, wartet auf Freigabe |
+| Systemnummer statt Seriennummer; Import ab 3 Zeichen | „Durch Systemnummer ersetzen“ im Dialog „Bearbeiten“ (bis zur ersten Prüfung, Rückfrage) und als Wahl im Änderungsantrag (Nummer erst mit der Bestätigung); Seriennummern im Bestandsimport und in der globalen Suche ab 3 statt 4 Zeichen | gebaut 08.11.2026 (kein Schemaschritt), Zweig seriennummer-system |
 
 ## Abgleich mit dem Bestand (vor Lieferung 1)
 
@@ -13129,3 +13130,50 @@ bis 12 px davor, am Rechner neben dem Namen); Marke als Knopf (Klasse, Name, tit
 Aufheben mit der Maus über die Tastatur (Umschalt+Tab mit sichtbarem Fokus, Enter) und am Finger per Tipp, Tippfläche
 44 px gemessen (Rechteck des Knopfs, Treffer oben und unten über `elementFromPoint`; gefärbt unter 30 px hoch); statisch: kein `mat-nz-auf`, kein `subgrid`,
 Touch-Regeln nur unter `(pointer: coarse)`, Überfahren nur unter `(hover: hover) and (pointer: fine)`.
+
+## Seriennummer durch Systemnummer ersetzen; Seriennummern im Import ab 3 Zeichen (Wunsch des Nutzers, 08.11.2026)
+
+Wunsch: „Es fehlt die Funktion, eine Seriennummer mit einer vom System generierten zu überschreiben. Bei Artikeln mit
+Prüfung nur mit Antrag.“ – „Seriennummern im Import können nur 3 Zeichen statt 4 lang sein.“ Bauauftrag
+`planung/seriennummer-system/auftrag.md`, kein Schemaschritt (Schema bleibt 39).
+
+- **„Durch Systemnummer ersetzen“**: ein Kästchen unter der Seriennummer, beschriftet mit der Nummer, die der Artikel
+  bekommt („Durch Systemnummer ersetzen (STR-000010)“) – dieselbe STR-Nummer wie beim Anlegen ohne Herstellernummer,
+  also STR- mit der Zahl seiner Inventarnummer (`nummern.systemnummer`). Sie hängt an der Inventarnummer: eindeutig wie
+  sie, nie bei einem anderen Artikel, auch wenn dieser Artikel sie später wieder gegen eine Herstellernummer tauscht
+  (dann bekommt er beim nächsten Mal dieselbe); einen Zähler verbraucht sie nicht. Gewählt ist das Feld der Seriennummer
+  gesperrt und leer. Hat der Artikel schon eine Nummer vom System, fehlt das Kästchen (`artikel.systemnummer` null).
+  - **Bis zur ersten Prüfung** im Dialog „Bearbeiten“ (nur der Materialwart – Prüfer und Führungskraft 403 wie bei
+    jeder Seriennummer): beim Speichern die Rückfrage „Seriennummer „…“ durch die Systemnummer STR-… ersetzen?“ (grau
+    „Abbrechen“, rot „Ersetzen“ – sie vernichtet nichts, die alte Nummer steht im Verlauf), Toast „Gespeichert –
+    Seriennummer jetzt STR-…“. Journal „geaendert“ mit Seriennummer alt → neu und „Seriennummer vom System: nein → ja“.
+  - **Nach der ersten Prüfung** nur per Änderungsantrag: dasselbe Kästchen im Antragsdialog. Der Antrag nennt die
+    Nummer schon (Zeile „Seriennummer: AN-100 → STR-000010 (vom System)“ in Liste, Artikel und Mail – „(vom System)“ steht
+    jetzt hinter jeder STR-Nummer eines Antrags), die Seriennummer des Artikels wird sie erst mit der Bestätigung
+    (`serial_generated` 1). Abgelehnt oder zurückgezogen ändert sich nichts. Folgen wie bei jeder
+    Seriennummernänderung: Rückruf-Hinweise (Karte und Bestätigen, Journal `rueckruf_nicht_mehr`), „vormals …
+    (Änderungsantrag Nr. …)“ in einem späteren Sammelprotokoll, Trigger `mat_item_stammdaten_fest` (ohne bestätigten,
+    nicht angewendeten Antrag mit genau dieser alten und neuen Nummer keine Änderung; Antragsinhalt fest) – unverändert,
+    die Systemnummer steht wie jede neue Nummer in `new_value`. Journal „antrag_gestellt“ und „antrag_bestaetigt“ mit
+    beiden Nummern und „Seriennummer vom System: nein → ja“. Rechte wie beim Beantragen und Entscheiden.
+  - Eine getippte STR-Nummer bleibt gesperrt – auch die eigene (Bearbeiten wie bisher, im Antrag jetzt schon beim
+    Stellen statt erst beim Prüfen des Plans); die Systemnummer gibt es nur über das Kästchen. Kästchen und zugleich eine
+    andere Nummer: 400; schon eine vom System: 409; liegt die Nummer (an der Schnittstelle vorbei) schon bei einem
+    anderen Artikel desselben Produkts: 409 wie jede Dublette, auch beim Bestätigen.
+- **Seriennummern ab 3 Zeichen** im Bestandsimport (bisher 4): Die Grenze war die der globalen Suche
+  (`globalsuche.MIN_ZEICHEN`) – der Import übernimmt nur Nummern, die sie beantwortet, damit eine Dublette in einem
+  fremden Bereich auffindbar bleibt (die Meldung verweist auf die Suche). Deshalb gilt 3 für beide: Zeilen mit 1–2
+  Zeichen gehen weiter als „Seriennummer von Hand anlegen“ in die Nacharbeit („… zu kurz (weniger als 3 Zeichen) …“),
+  die globale Suche nimmt Anfragen ab 3 Zeichen („Mindestens 3 und höchstens 80 Zeichen …“), jede steht wie bisher im
+  Protokoll. Anlegen und Bearbeiten hatten keine Mindestlänge und bleiben so.
+- Die Übung (`uebung/material.js`) berührt keinen der geänderten Schritte (sie legt einen Artikel mit Seriennummer an)
+  und bleibt unverändert.
+
+**Schnittstelle**: `PUT /api/material/artikel/<id>` und `POST /api/material/artikel/<id>/antrag` nehmen `systemnummer`
+(ja/nein; `serial_no` dazu leer oder unverändert, sonst 400; schon vom System 409); `GET /api/material/artikel/<id>`
+liefert `artikel.systemnummer` (die STR-Nummer oder null). `POST /api/material/globalsuche`: `q` ab 3 Zeichen.
+
+**Tests**: `tests/test_material_systemnummer.py` (neu) – direkt (Nummer, Kennzeichen, Journal, Rechte, 400/409, nach
+der ersten Prüfung 409, wieder Herstellernummer, nie doppelt), per Antrag (Zeile, Journal beim Stellen und Bestätigen,
+Ablehnen, 409 danach), Eindeutigkeit beim Bestätigen, Trigger, Rückruf und „vormals“, Import und globale Suche ab
+3 Zeichen, Oberfläche statisch; `tests/test_material_globalsuche.py`: „ABC“ ist nicht mehr zu kurz (jetzt „AB“).

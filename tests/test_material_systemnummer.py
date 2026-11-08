@@ -246,6 +246,25 @@ def test_import_drei_zeichen():
     print("Import ab 3 Zeichen bestanden.")
 
 
+# --- 6. Oberfläche (statisch) ------------------------------------------------------------------------------------------
+
+def test_oberflaeche_statisch():
+    """Dialog „Bearbeiten“ und Antrag: Kästchen „Durch Systemnummer ersetzen (STR-…)“ nur mit a.systemnummer, sperrt das
+    Feld; beim Speichern eine Rückfrage, die nichts vernichtet (endgueltig: false); geschickt wird „systemnummer: true“.
+    Die Wahl ist ein Kästchen, kein weiterer Knopf; README und CHANGELOG nennen sie."""
+    wurzel = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    js = open(os.path.join(wurzel, "app/material/static/material.js"), encoding="utf-8").read()
+    assert js.count('systemnummerWahl("ad-sys", a)') == 1 and js.count('systemnummerWahl("aa-sys", a)') == 1
+    assert 'type="checkbox" id="${id}"> <span>Durch Systemnummer ersetzen <span class="mat-nowrap">(${esc(a.systemnummer)})</span></span></label>' in js
+    assert "systemnummer: true, serial_no: \"\"" in js and "daten.systemnummer = true" in js
+    assert "durch die Systemnummer ${a.systemnummer} ersetzen?" in js and '"Ersetzen", "", { endgueltig: false }' in js
+    assert "f.disabled = k.checked" in js
+    for datei in ("README.md", "CHANGELOG-Material.md"):
+        text = open(os.path.join(wurzel, datei), encoding="utf-8").read()
+        assert "Durch Systemnummer ersetzen" in text, datei
+    print("Oberfläche (statisch) bestanden.")
+
+
 if __name__ == "__main__":
     test_direkt()
     test_antrag()
@@ -253,3 +272,4 @@ if __name__ == "__main__":
     test_trigger()
     test_rueckruf_und_vormals()
     test_import_drei_zeichen()
+    test_oberflaeche_statisch()
