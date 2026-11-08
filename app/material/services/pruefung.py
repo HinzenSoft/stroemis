@@ -391,6 +391,10 @@ def starten(iid, pruefer, art=None, durchgang_id=None):
             raise Abgelehnt("Für dieses Produkt gilt kein Prüfformular – weder ihm zugewiesen noch als Standard seiner "
                             "Kategorie. Die Material-Verwaltung legt es unter „Prüfformulare“ fest.", 409)
         punkte = katalog.punkte(formular["id"])
+        # Die erste Prüfung friert die Version ein: Was ihr Bearbeiter zuletzt gespeichert hat und das Journal noch nicht
+        # nennt (automatisches Speichern, ein Eintrag je zehn Minuten), trägt es jetzt in seinem Namen nach.
+        if not katalog.ist_benutzt(formular["id"]):
+            katalog.journal_nachziehen(formular["id"])
         if durchgang_id:
             runde = durchgang.runde_fuer_start(durchgang_id, iid)
         else:

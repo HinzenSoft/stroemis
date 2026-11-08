@@ -943,7 +943,9 @@ window.S = (function () {
      Vorher meldete fast jeder Dialog einen Fehler nur als Toast; der Fokus fiel dabei auf die Seite (BODY), weil der
      ausgegraute Knopf ihn verlor, und das Feld blieb unmarkiert. Wie „Mangel melden“ jetzt überall:
      feldFehler(feld, text) – das Feld trägt aria-invalid, darunter steht der Satz (role="alert", mit aria-describedby
-     verknüpft), der Fokus geht aufs Feld; die nächste Eingabe nimmt beides wieder weg.
+     verknüpft), der Fokus geht aufs Feld; die nächste Eingabe nimmt beides wieder weg. Mit { fokus: false } bleibt der
+     Fokus, wo er ist – für Fehler, die von selbst auftauchen (automatisches Speichern im Prüfformular-Editor), während
+     man woanders tippt.
      fehlschlag(knopf, fehler, feld) – für das catch nach einer Anfrage: gibt den Knopf frei und meldet am Feld, wenn
      eins betroffen ist. feld ist das Feld selbst oder ein Bereich (Dialog): Dann sucht die Hilfe das Feld, das die
      Meldung des Servers nennt („„Titel“ fehlt.“ → das Feld mit der Beschriftung „Titel“). Ohne Feld: Toast und der Fokus
@@ -969,7 +971,7 @@ window.S = (function () {
     const p = feld.id ? document.getElementById(`${feld.id}-fehler`) : null;
     if (p) p.hidden = true;
   }
-  function feldFehler(feld, text) {
+  function feldFehler(feld, text, opt = {}) {
     if (!feld) return;
     if (!feld.id) feld.id = `feld-${++fehlerZahl}`;
     let p = document.getElementById(`${feld.id}-fehler`);
@@ -997,7 +999,7 @@ window.S = (function () {
       feld.addEventListener("input", weg);
       feld.addEventListener("change", weg);
     }
-    feld.focus();
+    if (opt.fokus !== false) feld.focus();
     return false;
   }
   function fehlschlag(knopf, fehler, feld) {

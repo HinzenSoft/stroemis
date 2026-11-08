@@ -25,6 +25,7 @@ import os
 import re
 import secrets
 import sqlite3
+from datetime import datetime, timedelta, timezone
 
 from flask import current_app, g, has_request_context
 
@@ -1191,6 +1192,8 @@ def pool_anlegen(d, demo=False):
     with db.transaction(sofort=True):
         kategorie(kid)
         vorlage = formular(vorlage_id) if vorlage_id else None
+        if vorlage:
+            journal_nachziehen(vorlage["id"])
         demo = demo or bool(eigene is None and vorlage and vorlage["demo"])
         pf = db.execute("INSERT INTO mat_formular (category_id, demo, created_by, created_at, updated_at) "
                         "VALUES (?,?,?,?,?)", (kid, int(bool(demo)), uid, ts, ts))
@@ -1224,6 +1227,8 @@ def formular_anlegen(d, demo=False):
         pool_formular(pf)
         letzte = db.query("SELECT * FROM mat_form WHERE formular_id = ? ORDER BY version DESC LIMIT 1", (pf,), one=True)
         vorlage = formular(vorlage_id) if vorlage_id else letzte
+        if vorlage:
+            journal_nachziehen(vorlage["id"])
         version = (letzte["version"] + 1) if letzte else 1
         titel = titel or (vorlage["title"] if vorlage else "")
         if not titel:
@@ -1242,6 +1247,78 @@ def formular_anlegen(d, demo=False):
     return vid
 
 
+# Das automatische Speichern des Editors (Wunsch vom 06.11.2026: „Entferne den Speichern-Knopf, Änderungen sollen
+# automatisch übernommen werden.“) schickt jede Änderung – ins Journal kommt davon höchstens ein Eintrag je Version und
+# Bearbeiter in diesem Zeitraum (formular_speichern).
+JOURNAL_ZEITRAUM = timedelta(minutes=10)
+
+
+def _form_eintraege(fid):
+    """Die Journal-Einträge der Version fid seit ihrer letzten Löschung (die Kennung kann wiederkommen), älteste zuerst."""
+    ab = db.query("SELECT MAX(id) AS m FROM mat_audit WHERE entity = 'form' AND entity_id = ? AND action = 'geloescht'",
+                  (fid,), one=True)["m"] or 0
+    return db.query("SELECT id, user_id, user_name, action, after_json, created_at FROM mat_audit "
+                    "WHERE entity = 'form' AND entity_id = ? AND id > ? ORDER BY id", (fid, ab))
+
+
+def _journal_stand(eintraege, sonst):
+    """Titel und Prüfpunkte, wie das Journal sie zuletzt nennt: „angelegt“ mit allem, danach je „geändert“ das
+    Geänderte. Was es nicht nennt (Versionen aus der Zeit vor dem Journal), kommt aus sonst."""
+    stand = dict(sonst)
+    for e in eintraege:
+        nachher = json.loads(e["after_json"]) if e["after_json"] else {}
+        stand.update({k: nachher[k] for k in ("title", "punkte") if k in nachher})
+    return stand
+
+
+def _form_stand(fid):
+    return {"title": formular(fid)["title"], "punkte": _punkte_kurz([dict(p) for p in punkte(fid)])}
+
+
+def journal_nachziehen(fid):
+    """Was seit dem letzten Eintrag „geändert“ der Version fid gespeichert, aber noch nicht im Journal steht, nachtragen
+    – im Namen dessen, der den Eintrag schrieb: Nur er hat seitdem gespeichert (formular_speichern schreibt für jeden
+    anderen sofort einen eigenen Eintrag). Aufgerufen, bevor ein anderer an der Version etwas tut (Speichern, Aktivieren,
+    Deaktivieren, eine neue Version oder Kopie daraus, die erste Prüfung), damit das Journal dann den ganzen Stand nennt.
+    Liefert, ob etwas nachgetragen wurde."""
+    eintraege = _form_eintraege(fid)
+    letzter = eintraege[-1] if eintraege else None
+    if not letzter or letzter["action"] != "geaendert":
+        return False
+    jetzt = _form_stand(fid)
+    return journal.aenderung("form", fid, _journal_stand(eintraege, jetzt), jetzt,
+                             fuer=(letzter["user_id"], letzter["user_name"]))
+
+
+def _journal_fortschreiben(fid, alt, neu):
+    """Ins Journal nach dem Speichern von alt → neu (Titel und Prüfpunkte als Text). Hat dieselbe Person den letzten
+    Eintrag „geändert“ der Version vor weniger als JOURNAL_ZEITRAUM geschrieben, kommt keiner dazu – sonst einer, der
+    alles seit dem letzten Stand im Journal nennt (eigenes, das noch fehlte, zählt mit). Stammt der letzte Eintrag von
+    jemand anderem, trägt journal_nachziehen dessen Rest in seinem Namen nach, und der neue Eintrag beginnt bei alt."""
+    eintraege = _form_eintraege(fid)
+    letzter = eintraege[-1] if eintraege else None
+    uid, _ = akteur()
+    if letzter and letzter["action"] == "geaendert":
+        if uid is not None and letzter["user_id"] == uid:
+            if _jetzt_utc() - _zeitpunkt(letzter["created_at"]) < JOURNAL_ZEITRAUM:
+                return
+            alt = _journal_stand(eintraege, alt)
+        else:
+            journal.aenderung("form", fid, _journal_stand(eintraege, alt), alt,
+                              fuer=(letzter["user_id"], letzter["user_name"]))
+    journal.aenderung("form", fid, alt, neu)
+
+
+def _jetzt_utc():
+    return datetime.fromisoformat(db.now())
+
+
+def _zeitpunkt(wert):
+    """created_at eines Eintrags als Zeitpunkt in UTC – ältere Zeilen ohne Zeitzone (SQLite-Zeitstempel) gelten als UTC."""
+    t = datetime.fromisoformat(str(wert).replace(" ", "T"))
+    return t if t.tzinfo else t.replace(tzinfo=timezone.utc)
+
+
 def formular_speichern(fid, d):
     alt = formular(fid)
     titel = _titel(d) if "titel" in d else alt["title"]
@@ -1258,8 +1335,8 @@ def formular_speichern(fid, d):
             raise Abgelehnt("Ein aktives Formular braucht mindestens einen Prüfpunkt.")
         db.execute("UPDATE mat_form SET title = ?, updated_at = ? WHERE id = ?", (titel, db.now(), fid))
         _punkte_schreiben(fid, liste)
-        journal.aenderung("form", fid, {"title": alt["title"], "punkte": _punkte_kurz(alte_punkte)},
-                          {"title": titel, "punkte": _punkte_kurz(liste)})
+        _journal_fortschreiben(fid, {"title": alt["title"], "punkte": _punkte_kurz(alte_punkte)},
+                               {"title": titel, "punkte": _punkte_kurz(liste)})
 
 
 def formular_aktivieren(fid):
@@ -1268,8 +1345,11 @@ def formular_aktivieren(fid):
         f = formular(fid)
         if not punkte(fid):
             raise Abgelehnt("Ein Formular ohne Prüfpunkte lässt sich nicht aktivieren.")
+        # Das Journal nennt beim Aktivieren den ganzen Stand (Zusammenfassen beim automatischen Speichern).
+        journal_nachziehen(fid)
         for anderes in db.query("SELECT id FROM mat_form WHERE formular_id = ? AND active = 1 AND id <> ?",
                                 (f["formular_id"], fid)):
+            journal_nachziehen(anderes["id"])
             db.execute("UPDATE mat_form SET active = 0, updated_at = ? WHERE id = ?", (db.now(), anderes["id"]))
             journal.eintragen("form", anderes["id"], "deaktiviert", {"active": 1}, {"active": 0, "ersetzt_durch": fid})
         db.execute("UPDATE mat_form SET active = 1, valid_from = COALESCE(valid_from, ?), updated_at = ? WHERE id = ?",
@@ -1291,6 +1371,7 @@ def formular_deaktivieren(fid):
         if not f["active"]:
             return
         _zugewiesen_sperre(f["formular_id"], "Deaktivieren")
+        journal_nachziehen(fid)
         db.execute("UPDATE mat_form SET active = 0, updated_at = ? WHERE id = ?", (db.now(), fid))
         journal.eintragen("form", fid, "deaktiviert", {"active": 1}, {"active": 0})
 
