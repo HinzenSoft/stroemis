@@ -6311,7 +6311,7 @@
           await zeigen(formulare);
           const frei = $(`[data-act="zuweisen"][data-id="${b.dataset.id || ""}"]`);
           if (frei) frei.focus();
-        } catch (e) { b.disabled = false; toast(e.message, true); }
+        } catch (e) { S.fehlschlag(b, e); }
       },
       "pool-leeren": () => { const f = $("#pool-q"); f.value = ""; q = ""; suchen(); f.focus(); },
     };
