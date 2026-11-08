@@ -11,6 +11,8 @@ Im Container:
         flask --app "app:create_app()" material dok-zusammenfuehren --probe
     docker compose exec -e VIDEOPFLEGE=0 stroemis \
         flask --app "app:create_app()" material dev-zuruecksetzen --trocken      (nur dev, README)
+    docker compose exec -e VIDEOPFLEGE=0 stroemis \
+        flask --app "app:create_app()" material dev-bestand-leeren --trocken     (nur dev, README)
 (Die Datei muss im Datenordner liegen, nur der ist im Container sichtbar. VIDEOPFLEGE=0 hält den
 Hintergrundlauf für Videos aus diesem kurzen Prozess heraus.)"""
 import os
@@ -22,8 +24,8 @@ import click
 from flask import current_app, g
 from flask.cli import with_appcontext
 
-from .services import (ZONE, Abgelehnt, datum, dokablage, erinnerung, heute, importer, katalog, katalog_export,
-                       zuruecksetzen)
+from .services import (ZONE, Abgelehnt, bestand_leeren, datum, dokablage, erinnerung, heute, importer, katalog,
+                       katalog_export, zuruecksetzen)
 
 
 @click.command("import-catalog")
@@ -284,8 +286,48 @@ def dev_zuruecksetzen(trocken, ja):
     click.echo(zuruecksetzen.bericht_text(ergebnis))
 
 
+@click.command("dev-bestand-leeren")
+@click.option("--trocken", is_flag=True, help="Nur zählen, was gesichert, verschoben und gelöscht würde – nichts ändern.")
+@click.option(bestand_leeren.SCHALTER, "ja", is_flag=True, help="Wirklich leeren (nur auf dev).")
+@with_appcontext
+def dev_bestand_leeren(trocken, ja):
+    """Nur den Bestand der Materialablage auf dev leeren – Katalog und Prüfformulare bleiben: erst die ganze Datenbank
+    sichern und die Medien des Bestands (Fotos, Anhänge, pdf/) in die Sicherung verschieben
+    (<DATA_DIR>/sicherung-bestand-<Zeitstempel>), dann Ordner, Artikel, Prüfungen, Durchgänge, Freigaben, Anträge,
+    Meldungen, Importe, Logs, ihr Journal und die DEMO-Konten des Beispielbestands löschen. Sperren wie
+    dev-zuruecksetzen (sonst Exit 2), dazu --ja-bestand-loeschen. Exit 1, wenn die Sicherung oder ein späterer Schritt
+    scheiterte oder ein Katalogimport läuft – dann ist nichts geändert. Danach: docker compose restart. Siehe
+    services/bestand_leeren.py."""
+    from .. import einstellungen
+    einstellungen.anwenden()
+    grund = zuruecksetzen.sperrgrund()
+    if grund:
+        click.echo(f"Abgelehnt: {grund} Dieser Befehl wirkt nur auf dev – nichts geändert.", err=True)
+        sys.exit(2)
+    if trocken:
+        conn = sqlite3.connect(current_app.config["DB_PATH"], timeout=zuruecksetzen.WARTEN)
+        try:
+            click.echo(bestand_leeren.trocken_text(bestand_leeren.bestand(conn), bestand_leeren.sicherungsziel()))
+        except zuruecksetzen.Gescheitert as exc:
+            click.echo(f"FEHLER  {exc}", err=True)
+            sys.exit(1)
+        finally:
+            conn.close()
+        return
+    if not ja:
+        click.echo(f"Abgelehnt: Ohne {bestand_leeren.SCHALTER} leert der Befehl nichts – nichts geändert. "
+                   "Erst ansehen, was geschähe: dev-bestand-leeren --trocken", err=True)
+        sys.exit(2)
+    try:
+        ergebnis = bestand_leeren.leeren()
+    except zuruecksetzen.Gescheitert as exc:
+        click.echo(f"FEHLER  {exc}", err=True)
+        sys.exit(1)
+    click.echo(bestand_leeren.bericht_text(ergebnis))
+
+
 def anmelden(blueprint):
     """Die Befehle an der Kommandozeilengruppe des Blueprints eintragen („flask material …“)."""
-    for befehl in (import_catalog, export_catalog, remind, dok_zusammenfuehren, dev_zuruecksetzen):
+    for befehl in (import_catalog, export_catalog, remind, dok_zusammenfuehren, dev_zuruecksetzen, dev_bestand_leeren):
         if befehl.name not in blueprint.cli.commands:
             blueprint.cli.add_command(befehl)

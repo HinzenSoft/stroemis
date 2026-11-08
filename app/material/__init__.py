@@ -13,7 +13,8 @@ Aufbau:
                  Routen der Phase 2 · Lieferung 3: Bestandsimport und Nacharbeit (die Prüfanleitung aus dem Wiki,
                  routes_wiki.py, ist seit dem 04.11.2026 entfernt)
   routes_psa.py  Routen der Phase 3 · Lieferung 1: „Meine PSA“ (auch ohne Modulstufe) und Mangelmeldung
-  cli.py         flask material import-catalog, export-catalog, remind, dok-zusammenfuehren, dev-zuruecksetzen
+  cli.py         flask material import-catalog, export-catalog, remind, dok-zusammenfuehren, dev-zuruecksetzen,
+                 dev-bestand-leeren
   tageslauf.py   Thread je Arbeitsprozess: einmal am Tag ab 6 Uhr Pflege und Erinnerungsmails (seit Phase 2 · L2)
   services/      Fachregeln: rechte, katalog, bestand, status, interval, search, nummern, qr, journal,
                  importer, katalog_export, pruefung, durchgang, anhang, meldung, protokoll (Festschreiben,
@@ -28,7 +29,8 @@ Aufbau:
                  Phase 4 · L2 stueckliste (seit dem Rückbau der Set-Funktion, Schritt 26, nur noch die
                  Bestandteil-Liste eines Produkts) und seit Schritt 25 teilnummern (Seriennummern der Bestandteile);
                  seit 23.10.2026 zuruecksetzen (das Modul auf dev sichern und frisch anlegen), seit 24.10.2026
-                 importauftrag (Katalogimport im Hintergrund)
+                 importauftrag (Katalogimport im Hintergrund), seit 08.11.2026 bestand_leeren (nur den Bestand auf
+                 dev sichern und leeren)
   templates/, static/   Seite und Oberfläche (material.js, material.css)
 """
 from .. import db
@@ -73,7 +75,8 @@ def _dokumente_zusammenfuehren(conn):
 
 
 # Was beim Start nach dem Kernschema läuft, in dieser Reihenfolge (schema_anmelden) – auch nach „flask material
-# dev-zuruecksetzen“ (services/zuruecksetzen.py), damit das frisch angelegte Modul so dasteht wie nach einem Start.
+# dev-zuruecksetzen“ (services/zuruecksetzen.py), damit das frisch angelegte Modul so dasteht wie nach einem Start, und
+# nach „dev-bestand-leeren“ (services/bestand_leeren.py).
 START_SCHRITTE = (models.migrieren, _dokumente_zusammenfuehren, _suchprotokoll_aufraeumen, _erinnerungslog_aufraeumen,
                   _mailfehler_aufraeumen, _nacharbeit_aufraeumen, _verwaiste_protokolle, _bilder_reparieren)
 
