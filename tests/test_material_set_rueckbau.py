@@ -484,9 +484,11 @@ def test_rechte_bestandteile():
 # --- Statisch -----------------------------------------------------------------------------------------------------------
 
 # Außerhalb dieser Dateien darf nichts mehr die Set-Strukturen lesen oder schreiben: das Schema (Schritte 21/22/26), die
-# Lesetexte des Journals, dieser Test und die älteren Migrationstests, die den Stand vor Schritt 26 nachstellen.
+# Lesetexte des Journals, dieser Test, die älteren Migrationstests, die den Stand vor Schritt 26 nachstellen, und
+# dev-bestand-leeren (bestand_leeren.py), das jede Tabelle des Bestands beim Namen kennt – auch die stillgelegten, die es
+# mit leert (seit 08.11.2026).
 ERLAUBT = {"app/material/models.py", "app/material/services/beschriftung.py", "tests/test_material_set_rueckbau.py",
-           "tests/test_material_trennung.py"}
+           "tests/test_material_trennung.py", "app/material/services/bestand_leeren.py"}
 SET_BEGRIFFE = re.compile(r"parent_item_id|lock_cause|set_lock_origin|set_pruefen|\bis_set\b|set_lauf_id|mat_item_set_slot|"
                           r"mat_set_lauf|mat_set_protokoll_zeile|\b(?:sets|setlauf|setaustausch|setkopie)\.")
 

@@ -13233,4 +13233,5 @@ DEMO-Konten gleich, übrige Module gleich; verschobene Dateien Datei für Datei 
 Kopie der Datenbank gleich der alten; Rechte 0700/0600; Integrität und Fremdschlüssel; Trigger sperren wieder; Neustart;
 Beispielbestand erneut mit höheren Inventarnummern und ohne neue Formulare; zweiter Lauf nennt die ältere Sicherung),
 `test_scheitern` (fsync, Verschieben, Löschen, fehlender Trigger – nichts geändert, keine Sicherung), `test_katalogimport`,
-`test_abbruch_per_signal` (SIGTERM). Angepasst: `test_material_beispielbestand.py` (Hinweistext nach Abbruch).
+`test_abbruch_per_signal` (SIGTERM). Angepasst: `test_material_beispielbestand.py` (Hinweistext nach Abbruch),
+`test_material_set_rueckbau.py` (`bestand_leeren.py` darf die stillgelegten Set-Tabellen nennen – es leert sie mit).
