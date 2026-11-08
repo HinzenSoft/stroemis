@@ -24,7 +24,9 @@ from .nummern import INVENTAR_VORSATZ, sieht_generiert_aus
 FELDER = frozenset({"inventory_no", "serial_no", "hersteller", "modell", "beschreibung", "artikelnummer", "norm",
                     "materialart", "kategorie", "vorschau", "hergestellt", "lebensende", "gliederung", "ordner", "sperre",
                     "demo"})
-MIN_ZEICHEN, MAX_ZEICHEN = 4, 80
+# Ab 3 Zeichen (Wunsch vom 08.11.2026, vorher 4): Es gibt Herstellernummern mit drei Zeichen – dieselbe Grenze gilt für den
+# Bestandsimport, der nur Nummern übernimmt, die diese Suche beantwortet (bestandsimport._mit_produkt).
+MIN_ZEICHEN, MAX_ZEICHEN = 3, 80
 
 
 def normalform(q):
@@ -33,7 +35,7 @@ def normalform(q):
 
 
 def suchbar(q):
-    """Taugt die Anfrage für die globale Suche? 4 bis 80 Zeichen und keine vom System vergebene Nummer – Inventar- und
+    """Taugt die Anfrage für die globale Suche? 3 bis 80 Zeichen und keine vom System vergebene Nummer – Inventar- und
     STR-Nummern sind fortlaufend und ließen sich abzählen."""
     n = normalform(q)
     return (MIN_ZEICHEN <= len(n) <= MAX_ZEICHEN and not sieht_generiert_aus(n)

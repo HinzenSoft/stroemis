@@ -967,7 +967,8 @@ def _mit_produkt(e, lauf, doppelt, varianten):
     # 5. Fremde Bereiche – nur für Nummern, die auch die globale Suche beantwortet.
     if e.serie_ok:
         if not globalsuche.suchbar(e.serie):
-            e.grund("serie_von_hand", f"Seriennummer „{e.serie}“ ist für den Import zu kurz (weniger als 4 Zeichen) "
+            e.grund("serie_von_hand", f"Seriennummer „{e.serie}“ ist für den Import zu kurz (weniger als "
+                                      f"{globalsuche.MIN_ZEICHEN} Zeichen) "
                                       "oder hat die Form einer Inventarnummer – bitte prüfen und von Hand anlegen.")
         elif e.konflikt:
             e.grund("fremde_dublette", bestand.FremdeDublette.TEXT)

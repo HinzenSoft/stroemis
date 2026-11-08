@@ -5,7 +5,10 @@ wird nie zurückgesetzt, auch nicht, wenn ein falsch angelegter Artikel wieder g
 Nummer, die einmal auf einem Etikett stand, bezeichnet nie ein anderes Stück.
 Seriennummer ohne Herstellerangabe: „STR-000001“ mit derselben Zahl wie die Inventarnummer – damit
 ebenso eindeutig. Das Muster ist für Herstellernummern gesperrt, damit nie eine echte mit einer
-vergebenen zusammenfällt.
+vergebenen zusammenfällt. Dieselbe Nummer bekommt ein Artikel, dessen Seriennummer nachträglich „durch die
+Systemnummer ersetzt“ wird (Wunsch vom 08.11.2026: Dialog „Bearbeiten“, nach der ersten Prüfung per Änderungsantrag) –
+sie hängt an seiner Inventarnummer, ist also ebenso eindeutig und geht nie an einen anderen Artikel, auch wenn er sie
+später wieder gegen eine Herstellernummer tauscht. Ein Zähler wird dafür nicht verbraucht.
 
 Beides muss in der Schreibtransaktion laufen, in der auch der Artikel entsteht (BEGIN IMMEDIATE):
 Zwei gleichzeitige Anlagen bekämen sonst dieselbe Nummer."""
@@ -28,6 +31,12 @@ def naechste_inventarnummer():
 
 def seriennummer_fuer(inventarnummer):
     return SERIEN_VORSATZ + inventarnummer[len(INVENTAR_VORSATZ):]
+
+
+def systemnummer(item):
+    """Die Seriennummer, die das System dem Artikel item gibt (Zeile mit inventory_no) – wie beim Anlegen ohne
+    Herstellernummer."""
+    return seriennummer_fuer(item["inventory_no"])
 
 
 def sieht_generiert_aus(seriennummer):

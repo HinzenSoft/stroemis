@@ -59,6 +59,9 @@ PRODUKT_FEST = ("Das Produkt steht seit der ersten Prüfung fest – es steht im
 FREIGABEPFLICHTIG = ("product_id", "serial_no", "manufactured_on", "purchased_on", "first_use_on", "retire_by",
                      "interval_months")
 DIREKT = ("notes", "length_m", "next_due_on")
+# „Durch Systemnummer ersetzen“ (Wunsch vom 08.11.2026) – im Dialog „Bearbeiten“ und im Änderungsantrag.
+SYSTEMNUMMER_SCHON = "Der Artikel hat schon eine Seriennummer vom System."
+SYSTEMNUMMER_ODER = "Entweder eine neue Seriennummer eintragen oder durch die Systemnummer ersetzen – nicht beides."
 NUR_DIREKT = ("Als Prüfer änderst du hier Bemerkung, Länge und die nächste Prüfung (vorziehen) – alles andere ändert der "
               "Materialwart, nach der ersten Prüfung per Änderungsantrag.")
 PRODUKT_ENTWURF = "Das Produkt lässt sich erst ändern, wenn die Prüfung festgeschrieben oder verworfen ist."
@@ -570,6 +573,18 @@ def _lebensende_wirksam(rechnung, manuell):
     return rechnung or manuell
 
 
+def systemnummer_wahl(item, eingabe):
+    """„Durch Systemnummer ersetzen“ (Wunsch vom 08.11.2026): die STR-Nummer, die das System dem Artikel gibt
+    (nummern.systemnummer, wie beim Anlegen ohne Herstellernummer) – nicht, wenn er schon eine vom System hat oder
+    zugleich eine andere Nummer eingetragen ist (eingabe: die Seriennummer der Anfrage, leer heißt „bleibt“). Ob sie
+    direkt geht oder nur per Antrag, entscheiden die Regeln jeder Seriennummernänderung."""
+    if item["serial_generated"]:
+        raise Abgelehnt(SYSTEMNUMMER_SCHON, 409)
+    if eingabe and eingabe.casefold() != (item["serial_no"] or "").casefold():
+        raise Abgelehnt(SYSTEMNUMMER_ODER)
+    return nummern.systemnummer(item)
+
+
 def serie_konflikt(produkt_id, serie, ausser=None):
     """Gibt es diese Seriennummer bei diesem Produkt schon? {"item": Zeile, "sichtbar": bool} oder None – die Abfrage aus
     _serie_frei, ohne zu werfen und ohne Protokoll (für den Bestandsimport, der Sichtbares und Fremdes selbst
@@ -708,6 +723,11 @@ def artikel_aendern(iid, d):
         if fest in d and d.get(fest) != alt[fest]:
             raise Abgelehnt("Inventarnummer, QR-Kennung und Sperrzustand lassen sich nicht bearbeiten.")
     w, p = artikel_werte(d, alt)
+    # Durch die Systemnummer ersetzen: danach eine Seriennummernänderung wie jede andere – nur der Materialwart, nur bis zur
+    # ersten Prüfung (abweichungen unten), danach per Antrag.
+    system = wahr(d, "systemnummer", "Durch Systemnummer ersetzen")
+    if system:
+        w["serial_no"] = systemnummer_wahl(alt, w["serial_no"])
     # Seriennummern der Bestandteile (Schritt 25): wie die freigabepflichtigen Stammdaten – direkt nur der Materialwart und
     # nur bis zur ersten Prüfung; danach in der Prüfung oder per Antrag. Gelesen gegen die Liste des (neuen) Produkts.
     from . import teilnummern
@@ -729,8 +749,10 @@ def artikel_aendern(iid, d):
     wechsel = w["product_id"] != alt["product_id"]
     if wechsel:
         produktwechsel_pruefen(alt, p)
-    # Seriennummer: leer heißt „bleibt“. Eine echte Herstellernummer ersetzt die vergebene.
-    if not w["serial_no"]:
+    # Seriennummer: leer heißt „bleibt“. Eine echte Herstellernummer ersetzt die vergebene, die Systemnummer eine echte.
+    if system:
+        generiert = 1
+    elif not w["serial_no"]:
         w["serial_no"], generiert = alt["serial_no"], alt["serial_generated"]
     else:
         generiert = alt["serial_generated"] if w["serial_no"].casefold() == alt["serial_no"].casefold() else 0
@@ -997,6 +1019,8 @@ def artikel_json(i, voll=False):
                              "lock_reason", "next_due_on", "interval_months", "notes", "created_at", "updated_at",
                              "last_inspected_on", "length_m")}
     out["serial_generated"] = bool(i["serial_generated"])
+    # Die Nummer für „Durch Systemnummer ersetzen“ (Dialog „Bearbeiten“, Antrag) – nur, wenn er noch keine vom System hat.
+    out["systemnummer"] = None if i["serial_generated"] else nummern.systemnummer(i)
     out["demo"] = ist_demo(i["id"])
     # Länge (Schritt 20): als Text „57,5 m“ und ob die Kategorie des Produkts sie vorsieht (Feld im Dialog).
     out["laenge_text"] = laenge_text(i["length_m"])
