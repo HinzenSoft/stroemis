@@ -5442,13 +5442,14 @@
           : { text: "Aktivieren", satz: "Diese Version gilt wieder.", attrs: 'data-act="aktivieren"' }, kopie] });
     }
     /* „Gilt für“ (Formular-Pool): Standard für welche Kategorien, welchen Produkten zugewiesen, für wie viele Produkte
-       insgesamt (aufklappbar) – die eine Abschnittsaktion „Zuweisen“ rechts daneben (Material-Verwaltung). */
+       insgesamt (aufklappbar) – die eine Abschnittsaktion „Zuweisen“ rechts daneben (Material-Verwaltung). Ohne aktive
+       Version ist „Zuweisen“ ausgegraut (Z4) – mit dem Grund darüber und daneben „Aktivieren“ (zuweisenKnoepfe). */
     function giltFuerHtml() {
       const kats = pool.standard_fuer.map((k) => `<a href="/materialablage/katalog?kategorie=${k.id}">${esc(k.name)}</a>`).join(", ");
       const prods = pool.zugewiesen.map((p) => `<a class="mat-produktname" href="/materialablage/katalog/produkt/${p.id}">${nameHtml(p)}</a>${zusatzHtml(p)}`).join(", ");
       const zeilen = `${kats ? `<dt>Standard für</dt><dd>${kats}</dd>` : ""}${prods ? `<dt>Zugewiesen</dt><dd>${prods}</dd>` : ""}`;
       return `<section class="section mat-gilt-fuer"><div class="abschnittskopf"><h2>Gilt für${infoKnopf("Gilt für", GILT_FUER_INFO)}</h2>
-          ${DARF.katalog ? '<button class="btn secondary small" type="button" data-act="zuweisen">Zuweisen</button>' : ""}</div>
+          ${DARF.katalog ? zuweisenKnoepfe("fp-zw-grund", Boolean(pool.aktive_version)) : ""}</div>
         ${zeilen ? `<dl class="mat-daten">${zeilen}</dl>` : leer(pool.aktive_version ? "Nirgends zugewiesen – das Formular gilt für kein Produkt." : "Ohne aktive Version gilt das Formular für kein Produkt.")}
         ${pool.wirksam_n ? `<details class="mat-auf mat-wirksam" data-version="${f.id}"><summary>Insgesamt für ${plural(pool.wirksam_n, "Produkt", "Produkte")}</summary><div class="mat-wirksam-liste"></div></details>` : ""}</section>`;
     }
@@ -6068,6 +6069,18 @@
      Kategorienbaum mit Standard und Formularen je Pool – nur für die Material-Verwaltung (Entscheidung O6); Anlegen,
      „Prüfpunkte übernehmen von …“ und je Zeile „Zuweisen“. Zuweisen nur im Teilbaum der Heimat (Z1), nur mit aktiver
      Version (Z4); ein Haken holt eine Zuweisung von einem anderen Formular her (Z5, „bisher: …“). */
+  /* „Zuweisen“ (Formularseite, Abschnitt „Gilt für“, und je Zeile der Seite „Prüfformulare“). Ohne aktive Version bleibt
+     es gesperrt (Entscheidung Z4) – seit dem 08.11.2026 (Entscheidung des Nutzers) nicht mehr erst im Dialog: Der Knopf
+     ist ausgegraut, der Grund steht sichtbar darüber (knopfGrund-Muster), und direkt daneben steht ein grauer Knopf
+     „Aktivieren“ – dieselbe Wirkung wie im Kopf der Formularseite; danach zeichnet die Seite neu, „Zuweisen“ ist frei.
+     id: die Kennung des Grund-Satzes; zusatz: weitere Attribute beider Knöpfe (data-id und Name je Zeile). */
+  const NUR_AKTIV_ZUWEISEN = "Erst aktivieren – dann zuweisen.";
+  const zuweisenKnoepfe = (id, aktiv, zusatz = { zuweisen: "", aktivieren: "" }) => {
+    const zuweisen = `<button class="btn secondary small" type="button" data-act="zuweisen"${zusatz.zuweisen}${aktiv ? "" : knopfAus(id, NUR_AKTIV_ZUWEISEN)}>Zuweisen</button>`;
+    if (aktiv) return zuweisen;
+    return `<div class="mat-kopfaktion mat-zw-aktion">${grundSatz(id, NUR_AKTIV_ZUWEISEN)}<div class="btn-row">`
+      + `<button class="btn secondary small" type="button" data-act="aktivieren"${zusatz.aktivieren}>Aktivieren</button>${zuweisen}</div></div>`;
+  };
   const GILT_FUER_INFO = "Als Standard gilt ein Formular für die Produkte der Kategorie und ihrer Unterkategorien ohne eigenen Standard; einem Produkt zugewiesen geht es dem Standard vor. Eine neue aktive Version gilt sofort überall, laufende Prüfungen behalten ihre.";
   const formularTitel = (x) => (x.titel ? esc(x.titel)
     : `<span class="muted">(ohne Titel${x.herkunft ? ` – bisher ${esc(x.herkunft)}` : ""})</span>`);
@@ -6244,7 +6257,10 @@
         <div class="mat-pool-titel"><a href="/materialablage/katalog/formular/${x.link}"><strong>${formularTitel(x)}</strong></a> ${demoMarke(x.demo)}</div>
         <div class="mat-pool-status small">${statusHtml(x)}</div>
         <div class="mat-pool-gilt small">${giltHtml(x, k)}</div>
-        <div class="mat-pool-aktion"><button class="btn secondary small" type="button" data-act="zuweisen" data-id="${x.id}" aria-label="${esc(`„${x.titel || "ohne Titel"}“ zuweisen`)}">Zuweisen</button></div></li>`;
+        <div class="mat-pool-aktion">${zuweisenKnoepfe(`pool-zw-grund-${x.id}`, Boolean(x.aktive_version), {
+          zuweisen: ` data-id="${x.id}" aria-label="${esc(`„${x.titel || "ohne Titel"}“ zuweisen`)}"`,
+          // Aktiviert wird die neueste Version (wie „Aktivieren“ im Kopf ihrer Seite) – ohne aktive Version ist sie der Link.
+          aktivieren: x.neueste_version ? ` data-id="${x.id}" data-version="${x.neueste_version.id}" aria-label="${esc(`„${x.titel || "ohne Titel"}“ Version ${x.neueste_version.version} aktivieren`)}"` : " hidden" })}</div></li>`;
     const gruppe = (k) => `<section class="mat-pool-gruppe" data-such="${esc(k.pfad.join(" ").toLowerCase())}">
         <div class="mat-pool-kopf"><h2><a href="/materialablage/katalog?kategorie=${k.id}">${k.pfad.map(esc).join(" › ")}</a> ${demoMarke(k.demo)}</h2>
           <p class="small mat-pool-standard">${standardHtml(k)}</p></div>
@@ -6286,6 +6302,17 @@
         .map((k) => ({ gruppe: k.pfad.join(" › "), formulare: k.formulare.filter((x) => x.link).map((x) => ({
           version: x.link, nummer: (x.aktive_version || x.neueste_version).version, titel: x.titel })) })) }),
       zuweisen: (b) => zuweisenDialog(+b.dataset.id, () => zeigen(formulare)),
+      // Ohne aktive Version neben dem ausgegrauten „Zuweisen“: aktivieren, danach ist „Zuweisen“ frei.
+      aktivieren: async (b) => {
+        b.disabled = true;
+        try {
+          await api(`${API}/formulare/${b.dataset.version}/aktivieren`, { method: "POST", body: {} });
+          toast("Aktiviert");
+          await zeigen(formulare);
+          const frei = $(`[data-act="zuweisen"][data-id="${b.dataset.id || ""}"]`);
+          if (frei) frei.focus();
+        } catch (e) { b.disabled = false; toast(e.message, true); }
+      },
       "pool-leeren": () => { const f = $("#pool-q"); f.value = ""; q = ""; suchen(); f.focus(); },
     };
   }

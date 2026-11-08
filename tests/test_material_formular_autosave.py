@@ -18,6 +18,10 @@ python tests/test_material_formular_autosave.py  oder  pytest tests/test_materia
    Verlassen der Seite gleich nach dem Tippen (Adresse und Link) speichert noch; mit einem Fehler fragt der Browser vor
    dem Verlassen; „Aktivieren“ wartet auf das Speichern; Journal mit einem Eintrag statt vieler; am Finger 44 px
    (gemessen), kein waagerechter Bildlauf, keine Konsolenfehler außer den erwarteten Ablehnungen.
+4. Zusatz vom 08.11.2026 (Browser, beide Größen): „Zuweisen“ ohne aktive Version ausgegraut mit sichtbarem Grund „Erst
+   aktivieren – dann zuweisen.“ und grauem „Aktivieren“ daneben – auf der Formularseite (Klick auf „Zuweisen“ öffnet
+   nichts, hebt den Grund hervor; „Aktivieren“ gleich nach dem Tippen speichert erst, danach ist „Zuweisen“ frei) und je
+   Zeile der Seite „Prüfformulare“ (aktiviert die neueste Version, Datenbank, Fokus auf „Zuweisen“); 44 px am Finger.
 Alle Inhalte sind Platzhalter."""
 import json
 import os
@@ -91,6 +95,17 @@ def test_statisch():
     uebung = lies("app/static/js/uebung/material.js")
     assert "[data-act=speichern]" not in uebung and 'ziel: "#fp-stand"' in uebung
     assert "„Platzhalter“ – gespeichert wird von selbst.\", warten: { anfrage: `PUT ${API}/formulare/${formGurt.id}` }" in uebung
+    # Zusatz vom 08.11.2026: „Zuweisen“ ohne aktive Version ausgegraut mit sichtbarem Grund, daneben grau „Aktivieren“ –
+    # auf der Formularseite (wartet über aktionen.aktivieren auf das letzte Speichern) und je Zeile der Seite „Prüfformulare“.
+    assert 'const NUR_AKTIV_ZUWEISEN = "Erst aktivieren – dann zuweisen.";' in js
+    knoepfe = abschnitt(js, "  const zuweisenKnoepfe = ", "\n  };\n")
+    assert "grundSatz(id, NUR_AKTIV_ZUWEISEN)" in knoepfe and "knopfAus(id, NUR_AKTIV_ZUWEISEN)" in knoepfe
+    assert 'class="btn secondary small" type="button" data-act="aktivieren"' in knoepfe and 'class="btn"' not in knoepfe
+    assert 'zuweisenKnoepfe("fp-zw-grund", Boolean(pool.aktive_version))' in editor
+    pool = abschnitt(js, "  async function formulare() {", "\n  }\n")
+    assert "zuweisenKnoepfe(`pool-zw-grund-${x.id}`, Boolean(x.aktive_version), {" in pool
+    assert "await api(`${API}/formulare/${b.dataset.version}/aktivieren`, { method: \"POST\", body: {} });" in pool
+    assert ".mat-pool-aktion .mat-zw-aktion { align-items: flex-start; }" in css
     print("Statisch bestanden.")
 
 
@@ -491,6 +506,80 @@ def ablauf(u, kategorie, breite, hoehe, touch):
     return fid
 
 
+def ohne_aktive(u, kategorie, breite, hoehe, touch):
+    """Zusatz vom 08.11.2026: Ohne aktive Version ist „Zuweisen“ ausgegraut – der Grund steht sichtbar darüber, daneben
+    „Aktivieren“ (grau); ein Klick auf „Zuweisen“ öffnet nichts und hebt den Grund hervor. Auf der Formularseite wartet
+    „Aktivieren“ auf das letzte automatische Speichern; danach – wie in der Zeile der Seite „Prüfformulare“ – ist
+    „Zuweisen“ frei."""
+    from test_material_formular_editor import klick, oeffnen, tippen, tippflaechen
+
+    def neu(titel):
+        r = u.adm.post(f"{API}/formular-pool", json={"kategorie_id": kategorie, "titel": titel, "punkte": PUNKTE})
+        assert r.status_code == 201, r.get_json()
+        return r.json["formular"]["formular_id"], r.json["formular"]["id"]
+
+    pf, fid = neu(f"Platzhalter ohne aktive {breite}")
+    s = u.seite("matverwaltung", breite, hoehe, touch)
+    try:
+        oeffnen(s, fid)
+        zw, akt = ".mat-gilt-fuer [data-act=zuweisen]", ".mat-gilt-fuer [data-act=aktivieren]"
+        assert s.js(f"""(() => {{ const z = document.querySelector('{zw}'), g = document.getElementById('fp-zw-grund');
+          return [z.getAttribute('aria-disabled'), z.getAttribute('aria-describedby'), g.hidden, g.textContent,
+                  document.querySelector('{akt}').className]; }})()""") == [
+            "true", "fp-zw-grund", False, "Erst aktivieren – dann zuweisen.", "btn secondary small"]
+        if touch:
+            tippflaechen(s, zw)
+            tippflaechen(s, akt)
+        klick(s, zw)
+        assert not s.js("document.querySelector('dialog[open]')")
+        assert s.js("document.getElementById('fp-zw-grund').classList.contains('betont')")
+        # Gleich nach dem Tippen „Aktivieren“ im Abschnitt: erst das Speichern, dann aktivieren; danach „Zuweisen“ frei.
+        tippen(s, "#fp-titel", " getippt")
+        n = len(u.protokoll)
+        klick(s, akt)
+        assert s.warte("!!document.querySelector('.page-head .s-einsatzbereit')", 6)
+        folge = [(m, p) for m, p, _r in u.protokoll[n:] if m in ("PUT", "POST") and p.startswith(f"{API}/formulare/{fid}")]
+        assert folge[:2] == [("PUT", f"{API}/formulare/{fid}"), ("POST", f"{API}/formulare/{fid}/aktivieren")], folge
+        assert titel_db(u, fid) == f"Platzhalter ohne aktive {breite} getippt"
+        assert s.js(f"""(() => {{ const z = document.querySelector('{zw}');
+          return [z.hasAttribute('aria-disabled'), !!document.getElementById('fp-zw-grund'), !!document.querySelector('{akt}')]; }})()""") == [False, False, False]
+        klick(s, zw)
+        assert s.warte("!!document.querySelector('dialog.mat-zuweisen[open]')")
+        s.taste()
+        s.b.warten(0.3)
+
+        # Seite „Prüfformulare“: je Zeile ohne aktive Version derselbe Grund und „Aktivieren“ (die neueste Version).
+        pf2, fid2 = neu(f"Platzhalter Zeile ohne aktive {breite}")
+        s.oeffnen("/materialablage/katalog/formulare", warten=0.6)
+        s.warte(f"!!document.querySelector('[data-act=zuweisen][data-id=\"{pf2}\"]')")
+        zw2, akt2 = f'[data-act=zuweisen][data-id="{pf2}"]', f'[data-act=aktivieren][data-id="{pf2}"]'
+        assert s.js(f"""(() => {{ const z = document.querySelector({json.dumps(zw2)}), a = document.querySelector({json.dumps(akt2)}),
+          g = document.getElementById('pool-zw-grund-{pf2}');
+          return [z.getAttribute('aria-disabled'), g && !g.hidden && g.textContent, a.className, a.dataset.version, a.getAttribute('aria-label')]; }})()""") == [
+            "true", "Erst aktivieren – dann zuweisen.", "btn secondary small", str(fid2), f"„Platzhalter Zeile ohne aktive {breite}“ Version 1 aktivieren"]
+        # Eine Zeile mit aktiver Version: nur „Zuweisen“, frei.
+        assert s.js(f"""(() => {{ const z = document.querySelector('[data-act=zuweisen][data-id="{pf}"]');
+          return [z.hasAttribute('aria-disabled'), !!document.querySelector('[data-act=aktivieren][data-id="{pf}"]')]; }})()""") == [False, False]
+        if touch:
+            tippflaechen(s, zw2)
+            tippflaechen(s, akt2)
+        klick(s, zw2)
+        assert not s.js("document.querySelector('dialog[open]')")
+        klick(s, akt2)
+        assert s.warte(f"!document.querySelector({json.dumps(zw2)} + '[aria-disabled]') && !document.getElementById('pool-zw-grund-{pf2}')", 6)
+        assert u.sql("SELECT active FROM mat_form WHERE id = ?", (fid2,))[0]["active"] == 1
+        if not touch:
+            assert s.js(f"document.activeElement.matches({json.dumps(zw2)})")
+        assert s.js("document.documentElement.scrollWidth <= document.documentElement.clientWidth")
+        klick(s, zw2)
+        assert s.warte("!!document.querySelector('dialog.mat-zuweisen[open]')")
+        s.taste()
+        s.sammeln()
+        assert not s.fehler, s.fehler
+    finally:
+        s.schliessen()
+
+
 def uebung(u, breite, hoehe, touch):
     """Die Übung der Material-Verwaltung („Katalog und Prüfformular“) mit dem automatischen Speichern."""
     u.merker_leeren("matverwaltung")
@@ -509,6 +598,8 @@ def test_browser():
             los = time.time()
             ablauf(u, ids["gurte"], breite, hoehe, touch)
             print(f"Automatisches Speichern {breite}×{hoehe}{' Touch' if touch else ''}: bestanden ({time.time() - los:.1f} s)")
+            ohne_aktive(u, ids["gurte"], breite, hoehe, touch)
+            print(f"Zuweisen ohne aktive Version {breite}×{hoehe}: bestanden")
             uebung(u, breite, hoehe, touch)
             print(f"Übung der Material-Verwaltung {breite}×{hoehe}: bestanden")
 

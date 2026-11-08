@@ -109,7 +109,11 @@ Einstellungen, Gruppe „Seite“).
   Unterkategorien ohne eigenen Standard; eine Unterkategorie darf einen Standard aus dem Pool darüber haben) oder ist
   einem **Produkt zugewiesen** (geht dem Standard vor und bleibt, auch wenn sich der Standard ändert). Eine neue aktive
   Version gilt sofort überall, laufende Prüfungen behalten ihre. Zuweisen lässt sich ein Formular nur im Teilbaum seiner
-  Heimat (Produkte und Kategorien dort; Trigger als Netz), nur mit aktiver Version; deaktivieren und löschen geht erst,
+  Heimat (Produkte und Kategorien dort; Trigger als Netz), nur mit aktiver Version – ohne ist „Zuweisen“ auf der
+  Formularseite („Gilt für“) und je Zeile der Seite „Prüfformulare“ ausgegraut, der Grund „Erst aktivieren – dann
+  zuweisen.“ steht sichtbar darüber und daneben ein grauer Knopf „Aktivieren“ (wie im Kopf der Formularseite, wartet
+  dort auf das letzte automatische Speichern; in der Zeile die neueste Version), danach ist „Zuweisen“ frei (seit
+  08.11.2026); deaktivieren und löschen geht erst,
   wenn es nirgends mehr zugewiesen ist. Ein Formular mit Prüfpunkt „Länge (m)“ nur an Produkte mit Artikellänge. Ohne
   Zuweisung und ohne Standard (auch oben) ist ein Artikel nicht prüfbar – Produkt- und Kategorieseite warnen.
   **Seite „Prüfformulare“** (`/materialablage/katalog/formulare`, eigener Reiter rechts neben „Katalog“ – seit dem

@@ -13174,3 +13174,22 @@ Reihenfolge mit angehaltener erster Anfrage, 10 s ohne Antwort, kein Netz, Verla
 mit Fehler, Aktivieren gleich nach dem Tippen, Tippflächen 44 px gemessen, kein waagerechter Bildlauf) und die Übung.
 Angepasst: `tests/test_material_formular_editor.py` und `tests/test_material_untergruppen.py` (Warten auf
 „Gespeichert“ statt Klick auf „Speichern“, Untergruppe ohne Namen ohne Fokuswechsel, Journal-Nachtrag).
+
+### Zusatz: „Zuweisen“ ohne aktive Version mit Grund und „Aktivieren“ (Entscheidung des Nutzers, 08.11.2026)
+
+„Zuweisen“ bleibt bei Formularen ohne aktive Version gesperrt (Entscheidung Z4) – bisher sah man das erst im Dialog.
+
+- Auf der Formularseite (Abschnitt „Gilt für“) und je Zeile der Seite „Prüfformulare“ ist „Zuweisen“ dann ausgegraut
+  (`aria-disabled`, knopfGrund-Muster): Der Grund „Erst aktivieren – dann zuweisen.“ steht sichtbar darüber
+  (`.mat-knopfgrund`, per `aria-describedby` verknüpft; ein Klick auf „Zuweisen“ öffnet nichts und hebt ihn hervor),
+  direkt daneben ein grauer Knopf „Aktivieren“ (`zuweisenKnoepfe`, kein neues Rot).
+- „Aktivieren“ auf der Formularseite ist dieselbe Aktion wie im Kopf (wartet auf das letzte automatische Speichern);
+  in der Zeile der Seite „Prüfformulare“ aktiviert es die neueste Version (Name für Bildschirmleser „„Titel“ Version n
+  aktivieren“), danach zeichnet die Seite neu, „Zuweisen“ ist frei und hat den Fokus. Ohne Prüfpunkte lehnt der
+  Server wie bisher ab (Toast).
+- Am Rechner stehen Grund und Knöpfe rechts; in der Zeile als Karte (unter 760 px Inhalt) links.
+
+**Tests**: `tests/test_material_formular_autosave.py` (statisch und Browser 1280/360: Grund sichtbar, Klick auf
+„Zuweisen“ ohne Dialog, „Aktivieren“ gleich nach dem Tippen speichert erst, danach „Zuweisen“ frei und Dialog; Zeile der
+Seite „Prüfformulare“ mit Datenbank und Fokus; 44 px am Finger gemessen); angepasst die statischen Prüfungen in
+`tests/test_material_formular_pool.py` und `tests/test_module_letzte_offene.py`.

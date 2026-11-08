@@ -2295,9 +2295,15 @@ dialog .mat-knopfgrund { margin: 10px 0 0; }
 .mat-wirksam > summary { display: list-item; cursor: pointer; color: var(--rot-auf-flaeche); width: fit-content; }
 .mat-wirksam-ul { margin: 4px 0 0; padding-left: 18px; }
 .mat-gilt-fuer .mat-wirksam { display: block; margin-top: 6px; }
+/* Ohne aktive Version (08.11.2026): über „Aktivieren“ und dem ausgegrauten „Zuweisen“ der Grund (.mat-kopfaktion, rechts
+   wie die Knöpfe); in der Zeile als Karte beides links. */
+.mat-zw-aktion > .btn-row { margin: 0; justify-content: flex-end; }
 @container mat-seite (max-width: 760px) {
   .mat-pool-zeile { grid-template-columns: minmax(0, 1fr); padding-left: 10px; }
   .mat-pool-aktion { text-align: left; }
+  .mat-pool-aktion .mat-zw-aktion { align-items: flex-start; }
+  .mat-pool-aktion .mat-zw-aktion .mat-knopfgrund { text-align: left; }
+  .mat-pool-aktion .mat-zw-aktion > .btn-row { justify-content: flex-start; }
 }
 dialog:where(.mat-zuweisen) .mat-zw-teil { border: 0; margin: 14px 0 0; padding: 0; min-width: 0; }
 dialog:where(.mat-zuweisen) .mat-zw-teil > legend { font-weight: 700; padding: 0; margin-bottom: 4px; }
