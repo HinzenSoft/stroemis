@@ -13129,3 +13129,30 @@ bis 12 px davor, am Rechner neben dem Namen); Marke als Knopf (Klasse, Name, tit
 Aufheben mit der Maus über die Tastatur (Umschalt+Tab mit sichtbarem Fokus, Enter) und am Finger per Tipp, Tippfläche
 44 px gemessen (Rechteck des Knopfs, Treffer oben und unten über `elementFromPoint`; gefärbt unter 30 px hoch); statisch: kein `mat-nz-auf`, kein `subgrid`,
 Touch-Regeln nur unter `(pointer: coarse)`, Überfahren nur unter `(hover: hover) and (pointer: fine)`.
+
+## Beispielbestand: nur Materialablage, Zahl der Artikel wählbar (Wunsch des Nutzers, 08.11.2026)
+
+Wunsch: „Aktualisiere die Skripte zum Generieren von Bestand. Dort soll nur noch die Materialablage generiert werden,
+mit auswählbarer Anzahl an Artikeln.“ Bauauftrag `planung/bestand-skript/auftrag.md`; kein App-Code, kein Schemaschritt.
+
+- **Bestandsaufnahme**: Im Repository erzeugt nur `scripts/material_beispielbestand.py` Daten (`flask material
+  dev-zuruecksetzen` leert nur, `scripts/dev-einrichten.sh` legt keine Daten an, `uebungsdateien.py` schreibt
+  Übungsbilder ins Repository, `vor_merge_riegenkarten.py` liest nur). Das Skript schrieb schon bisher nur in die
+  Materialablage – Ordner, Artikel, Prüfungen, Durchgänge, Zuordnungen, Anträge, DEMO-Formulare, Journal – und legte
+  DEMO-Konten mit einer Stufe nur dort an. Es entfällt also nichts; neu ist, dass das jetzt zugesagt und geprüft ist:
+  Kopftext, README und Bericht („in den übrigen Modulen nichts angelegt“) sagen es, der Test vergleicht alle übrigen
+  Tabellen, die Einstellungen, die Dateien außerhalb von Medien und Protokollen des Moduls und die vorhandenen Konten.
+- **Zahl der Artikel**: `--artikel N` bleibt (1 bis 5000; nur noch die Ziffern 0–9 – „²“ brach bisher mit einem
+  Python-Fehler ab, jetzt Rückgabewert 2). Ohne `--artikel` fragt das Skript im Terminal nach der Zahl – erst nach den
+  Sperren (nur dev/lokal), „schon da“/„unvollständig“ und der Prüfung auf echte Produkte, vor den Konten (die Zahl der
+  Einsatzkräfte hängt an ihr). Eingabe ohne Zahl nimmt die Vorgabe 800, Ungültiges fragt erneut, Strg-D/Strg-C oder
+  dreimal ungültig: Abbruch mit Rückgabewert 2, nichts angelegt. Gefragt wird nur, wenn Ein- **und** Ausgabe ein Terminal
+  sind; sonst (Pipe, Umleitung in eine Datei, `docker exec` ohne `-t` wie im Befehl für den VPS) gilt ohne Frage die
+  Vorgabe 800, die Ausgabe sagt es. Der Befehl für den VPS im README nennt die Zahl jetzt ausdrücklich (`--artikel 800`).
+
+**Tests**: `tests/test_material_beispielbestand.py` – `test_beispielbestand` vergleicht vorher/nachher jede Zeile aller
+Tabellen außerhalb von `mat_*` (Strömipedia, Ankerplätze, Riegenkarten, Einstellungen, Anmeldeversuche), die Dateien
+außerhalb von `media/material` und `pdf/` und die vorhandenen Konten; neue Konten nur `@example.invalid` ohne Stufe in
+Karte, Wiki, Riegenkarten und Leitstelle. Neu `test_artikelzahl` (Schalter mit ungültigen Werten, Frage mit Vorgabe,
+erneuter Frage und Abbruch, keine Frage ohne Terminal, gesperrt oder bei schon vorhandenem Bestand; Läufe mit 6 Artikeln
+am Terminal und mit der Vorgabe ohne Terminal). `test_ohne_schalter` mit „²“ und 5001.

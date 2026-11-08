@@ -12,6 +12,9 @@ ist (bestand.demo_sql). Ein zweiter Lauf legt nichts an, ohne Schalter endet das
 ohne echte Produkte mit 1; ein abgebrochener Lauf (Strg-C oder SIGHUP) hinterlässt einen Teilbestand, den der nächste
 Lauf als unvollständig meldet (Rückgabewert 1) statt „schon da“. Die Prüfer prüfen dauerhaft, nur der externe befristet.
 Die Formulare nach den Petzl-Prüfberichten (scripts/beispielbestand_petzl_punkte.json) prüft test_formulare.
+Nur die Materialablage (Wunsch vom 08.11.2026): Die Tabellen und Dateien der übrigen Module, die Einstellungen und die
+vorhandenen Konten bleiben unverändert, neue DEMO-Konten haben nur dort eine Stufe (test_beispielbestand); ohne --artikel
+fragt das Skript am Terminal nach der Zahl, sonst gilt die Vorgabe (test_artikelzahl).
 Alle Namen und Nummern hier sind erfunden und nur für den Test da."""
 import contextlib
 import hashlib
@@ -144,6 +147,31 @@ def bestand_stand(app):
         return {t: db.query(f"SELECT * FROM {t} ORDER BY rowid") for t in BESTAND_TABELLEN}
 
 
+# Dateien, die der Beispielbestand schreiben darf: die Datenbank, die Medien und Protokolle der Materialablage.
+EIGENE_DATEIEN = ("stroemis.db", "media/material/", "pdf/")
+
+
+def fremd_stand(app):
+    """Alles außerhalb der Materialablage: jede Zeile jeder Tabelle, die nicht mat_* heißt (die Konten extra, ohne
+    sqlite_sequence – die zählt auch die Tabellen des Moduls), und jede Datei im Datenordner außer Datenbank, Medien
+    und Protokollen des Moduls (mit Prüfsumme)."""
+    with app.app_context():
+        from flask import current_app
+
+        from app import db
+        tabellen = [r["name"] for r in db.query("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name")
+                    if not r["name"].startswith(("mat_", "sqlite_")) and r["name"] != "users"]
+        daten = current_app.config["DATA_DIR"]
+        stand = {t: db.query(f"SELECT * FROM {t} ORDER BY rowid") for t in tabellen}
+    dateien = {}
+    for wurzel, _, namen in os.walk(daten):
+        for name in namen:
+            rel = os.path.relpath(os.path.join(wurzel, name), daten).replace(os.sep, "/")
+            if not rel.startswith(EIGENE_DATEIEN):
+                dateien[rel] = sha(os.path.join(wurzel, name))
+    return {"tabellen": stand, "dateien": dateien}
+
+
 def platzhalterkatalog(k):
     """Echte Produkte (ohne DEMO-Kennzeichen, Platzhalter): Gurt Alpha (textil, 10 Jahre, zugewiesenes Formular mit
     Ja/Nein, Zahl ohne Soll und freiem Text), HMS Beta (Metall, Standard der Kategorie), Helm Gamma (ohne Formular). Dazu
@@ -202,7 +230,8 @@ def test_ohne_schalter():
     with tempfile.TemporaryDirectory() as tmp:
         app = make_app(tmp)
         vorher = bestand_stand(app)
-        for schalter in ((), ("--artikel", "10"), ("--beispielbestand", "--artikel", "null"), ("--beispiel",)):
+        for schalter in ((), ("--artikel", "10"), ("--beispielbestand", "--artikel", "null"), ("--beispiel",),
+                         ("--beispielbestand", "--artikel", "²"), ("--beispielbestand", "--artikel=5001")):
             aus, code = laufen(*schalter)
             assert code == 2 and "Abgebrochen" in aus and "--beispielbestand" in aus, (schalter, aus[-300:])
             # Die Hilfe nennt, was danach im Katalog nicht mehr geht.
@@ -331,6 +360,9 @@ def test_beispielbestand():
         with app.app_context():
             from app import db
             journal_vor = db.query("SELECT MAX(id) AS n FROM mat_audit", one=True)["n"]
+            konten_vor = {u["id"]: u for u in db.query("SELECT * FROM users")}
+        fremd_vorher = fremd_stand(app)
+        assert {"einstellungen", "wiki_pages", "albums", "pruef_lehrgaenge"} <= set(fremd_vorher["tabellen"])
 
         t0 = time.time()
         ablage = {}
@@ -342,6 +374,20 @@ def test_beispielbestand():
         assert not re.search(r"^Hinweise", aus, re.M), aus[-3000:]          # nichts gescheitert
         # Der Bericht nennt die Folge für die Katalogpflege: Produkte mit Artikeln bleiben, ihre Materialart steht fest.
         assert "Jetzt mit Artikeln: 3 Produkte" in aus, aus[-2000:]
+        assert "in den übrigen Modulen nichts angelegt" in aus, aus[-3000:]
+        # 0. Nur die Materialablage: Strömipedia, Ankerplätze, Riegenkarten, Einstellungen und Anmeldeversuche Zeile für
+        # Zeile gleich, keine Datei außerhalb von Medien und Protokollen des Moduls; die vorhandenen Konten unverändert
+        # (auch ohne neuen Kontoverweis), neue nur mit @example.invalid und ohne Stufe in den übrigen Modulen.
+        assert fremd_stand(app) == fremd_vorher
+        with app.app_context():
+            from app import db
+            konten_nach = {u["id"]: u for u in db.query("SELECT * FROM users")}
+        assert {i: konten_nach[i] for i in konten_vor} == konten_vor
+        neue = [u for i, u in konten_nach.items() if i not in konten_vor]
+        assert neue and all(u["email"].endswith("@example.invalid") and u["name"].startswith("DEMO-") for u in neue)
+        assert all(u["recht_karte"] == u["recht_wiki"] == u["recht_pruefungen"] == u["recht_verwaltung"] == 0
+                   for u in neue), [(u["email"], u["recht_karte"], u["recht_wiki"], u["recht_pruefungen"],
+                                     u["recht_verwaltung"]) for u in neue]
         r = k["katalog"].delete(f"/api/material/produkte/{ids['helm']}", headers=H)
         assert r.status_code == 409, r.get_json()
 
@@ -462,7 +508,7 @@ def test_beispielbestand():
                 soll = 3 if u["email"].startswith("demo-mv@") else (
                     0 if re.match(r"demo-einsatzkraft-(?!01@)", u["email"]) else 1)
                 assert u["recht_material"] == soll and u["recht_karte"] == 0 and u["recht_wiki"] == 0 \
-                    and u["recht_verwaltung"] == 0, (u["email"], u["recht_material"])
+                    and u["recht_pruefungen"] == 0 and u["recht_verwaltung"] == 0, (u["email"], u["recht_material"])
             for x in fertig:
                 kurz = (x["id"], x["kind"], x["result"], x["inspector_name"])
                 assert x["locked_at"] and x["protocol_id"] and x["pdf_path"], kurz
@@ -787,6 +833,122 @@ def test_abgebrochener_lauf():
     print("Abgebrochener Lauf bestanden.")
 
 
+def antworten(*liste):
+    """Ersatz für input() im Skript: liefert die Antworten der Reihe nach (eine Ausnahmeklasse wird geworfen) und merkt
+    sich die Fragen."""
+    fragen, rest = [], list(liste)
+
+    def eingabe(frage=""):
+        fragen.append(frage)
+        a = rest.pop(0)
+        if isinstance(a, type) and issubclass(a, BaseException):
+            raise a
+        return a
+    return eingabe, fragen
+
+
+def am_terminal(*liste, vorgabe=None, ablage=None):
+    """Für laufen(anpassen=…): als säße jemand am Terminal und tippte liste (ohne liste: kein Terminal); vorgabe ersetzt
+    die Vorgabe der Artikelzahl, ablage merkt sich den Lauf (lauf_merken) und die Fragen (ablage["fragen"])."""
+    ablage = {} if ablage is None else ablage
+    merken = lauf_merken(ablage)
+
+    def anpassen(modul):
+        merken(modul)
+        if vorgabe:
+            modul.VORGABE_ARTIKEL = vorgabe
+        if liste:
+            modul.interaktiv = lambda: True
+            modul.input, ablage["fragen"] = antworten(*liste)
+        else:
+            modul.interaktiv = lambda: False
+            modul.input, ablage["fragen"] = antworten()
+    return anpassen
+
+
+def erstbestand(app):
+    """Zahl der Artikel des Beispielbestands ohne Nachkäufe (Seriennummer „DEMO-…“ ohne -E/-N am Ende)."""
+    with app.app_context():
+        from app import db
+        return len([i for i in db.query("SELECT serial_no FROM mat_item WHERE serial_no LIKE 'DEMO-%'")
+                    if not re.search(r"-[EN]$", i["serial_no"])])
+
+
+def test_artikelzahl():
+    """Die Zahl der Artikel: --artikel N (1 bis 5000, nur Ziffern 0–9); ohne fragt das Skript am Terminal – erst nach den
+    Sperren und Vorprüfungen, Eingabe ohne Zahl nimmt die Vorgabe, Ungültiges fragt erneut, Strg-D/Strg-C oder dreimal
+    ungültig brechen ab (2, nichts angelegt). Ohne Terminal (Pipe, Datei, docker exec ohne -t) gilt ohne Frage die
+    Vorgabe."""
+    modul = skript()
+    assert modul.schalter(["--beispielbestand"]) is None
+    assert modul.schalter(["--beispielbestand", "--artikel=7"]) == 7
+    assert modul.schalter(["--artikel", "5000", "--beispielbestand"]) == 5000
+    for falsch in ("0", "5001", "-3", "²", "٣", "7.5", ""):
+        try:
+            modul.schalter(["--beispielbestand", "--artikel", falsch])
+        except modul.Abbruch as exc:
+            assert exc.code == 2 and "1 bis 5000" in str(exc), (falsch, exc)
+        else:
+            raise AssertionError(falsch)
+
+    def fragen(*liste):
+        eingabe, gestellt = antworten(*liste)
+        modul.input, puffer = eingabe, io.StringIO()
+        try:
+            with contextlib.redirect_stdout(puffer):
+                return modul.zahl_erfragen(), gestellt, puffer.getvalue()
+        except modul.Abbruch as exc:
+            return exc, gestellt, puffer.getvalue()
+
+    n, gestellt, aus = fragen("")
+    assert n == 800 and len(gestellt) == 1 and "Vorgabe 800" in gestellt[0] and "1 bis 5000" in gestellt[0], gestellt
+    n, gestellt, aus = fragen("viele", "0", " 12 ")
+    assert n == 12 and len(gestellt) == 3 and "„viele“ ist keine Zahl von 1 bis 5000." in aus, (n, aus)
+    for liste in (("a", "²", "9999"), (EOFError,), (KeyboardInterrupt,), ("x", EOFError)):
+        exc, gestellt, aus = fragen(*liste)
+        assert isinstance(exc, modul.Abbruch) and exc.code == 2 and "Nichts angelegt" in str(exc), (liste, exc)
+    # Kein Terminal: weder Eingabe noch Ausgabe ersetzt (hier eine Datei bzw. ein Puffer) – keine Frage.
+    alt = sys.stdin
+    try:
+        sys.stdin = io.StringIO("12\n")
+        assert modul.interaktiv() is False
+    finally:
+        sys.stdin = alt
+
+    with tempfile.TemporaryDirectory() as tmp:
+        app, k = umgebung(tmp)
+        platzhalterkatalog(k)
+        vorher = bestand_stand(app)
+        # Gesperrt (nicht dev) oder ohne Antwort (Strg-D): keine Frage bzw. nichts angelegt.
+        ablage = {}
+        aus, code = laufen("--beispielbestand", adresse="https://strömis.de", anpassen=am_terminal("6", ablage=ablage))
+        assert code == 1 and "gehört nur auf dev" in aus and ablage["fragen"] == [], (code, aus[-500:])
+        ablage = {}
+        aus, code = laufen("--beispielbestand", anpassen=am_terminal(EOFError, ablage=ablage))
+        assert code == 2 and "keine Zahl eingegeben. Nichts angelegt." in aus and len(ablage["fragen"]) == 1, aus[-500:]
+        assert bestand_stand(app) == vorher
+        # Am Terminal: erst ungültig, dann 6.
+        ablage = {}
+        aus, code = laufen("--beispielbestand", anpassen=am_terminal("sechs", "6", ablage=ablage))
+        assert code == 0 and "Beispielbestand angelegt" in aus, aus[-3000:]
+        assert len(ablage["fragen"]) == 2 and ablage["lauf"].n == 6 and erstbestand(app) == 6, (ablage, aus[-2000:])
+        assert aus.index("Datenbank:") < aus.index("„sechs“ ist keine Zahl") < aus.index("Gliederungen:"), aus[:2000]
+        # Ein zweiter Lauf am Terminal fragt nicht erst: Der Bestand ist schon da.
+        ablage = {}
+        aus, code = laufen("--beispielbestand", anpassen=am_terminal("7", ablage=ablage))
+        assert code == 0 and "schon da" in aus and ablage["fragen"] == [], aus[-500:]
+
+    with tempfile.TemporaryDirectory() as tmp:
+        app, k = umgebung(tmp)
+        platzhalterkatalog(k)
+        # Ohne Terminal: die Vorgabe (hier auf 5 gesetzt), ohne Frage, mit Hinweis.
+        ablage = {}
+        aus, code = laufen("--beispielbestand", anpassen=am_terminal(vorgabe=5, ablage=ablage))
+        assert code == 0 and "Artikel: Vorgabe 5 (ohne --artikel und ohne Terminal" in aus, aus[-3000:]
+        assert ablage["fragen"] == [] and ablage["lauf"].n == 5 and erstbestand(app) == 5, ablage
+    print("Artikelzahl bestanden.")
+
+
 # Die echten Kategorienamen beider Katalogstände (lieferung-20261024 auf dev und die aktuelle Lieferung) – nur die
 # Namen, keine Produktdaten – mit dem Typ, den der Beispielbestand ihnen gibt.
 OBEN = "Persöhnliche Schutzausrüstung gegen Absturz"
@@ -997,3 +1159,4 @@ if __name__ == "__main__":
     test_formulare()
     test_beispielbestand()
     test_abgebrochener_lauf()
+    test_artikelzahl()

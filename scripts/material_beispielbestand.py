@@ -1,10 +1,16 @@
 """Beispielbestand für die Materialablage – NUR für dev und Tests, nie für echte Prüfungen.
 
+Nur die Materialablage (Wunsch des Nutzers vom 08.11.2026): Ordner, Artikel, Prüfungen samt Protokollen, Durchgänge,
+Zuordnungen, Anträge, DEMO-Formulare im Katalog und das Journal des Moduls – dazu die DEMO-Konten, die das braucht, mit
+einer Stufe nur in der Materialablage (Strömipedia, Ankerplätze, Riegenkarten und Leitstelle: kein Zugriff). In den
+übrigen Modulen legt das Skript nichts an und ändert nichts, auch nicht an den Einstellungen (Leitstelle).
+
 Ein realistischer Bestand einer großen Gliederung mit gut zwei Jahren Geschichte, gebaut allein aus dem vorhandenen
 Katalog (Wunsch des Nutzers vom 25.10.2026): der „DEMO-Kreisverband Flussland“ mit Zentrallager (Regale, Reserve), fünf
 Fahrzeugen mit Seilrucksäcken und Taschen als Ordner der Art „Set“ (auch ein Set im Set), drei Einsatzgruppen und
 persönlichen Ordnern für bis zu 40 DEMO-Einsatzkräfte – dazu die kleine „DEMO-OG Nachbarstadt“, damit sich die Trennung
-je Gliederung und die globale Suche (Seriennummer DEMO-NS-4711) ausprobieren lassen. Vorgabe 800 Artikel.
+je Gliederung und die globale Suche (Seriennummer DEMO-NS-4711) ausprobieren lassen. Die Zahl der Artikel ist wählbar
+(Vorgabe 800).
 
 Eigenständiges Werkzeug außerhalb von app/, dazu die Datei der Petzl-Prüfpunkte daneben (beide zusammen per tar in den
 Container reichen – README; fehlt die Datei, gibt es nur Platzhalter-Formulare) – das Docker-Abbild enthält scripts/
@@ -12,7 +18,9 @@ nicht. Es läuft nur mit ausdrücklichem Schalter:
 
     python scripts/material_beispielbestand.py --beispielbestand [--artikel N]
 
---artikel N: so viele Artikel zu Beginn und als geplante Nachkäufe (Vorgabe 800; Ersatz für Ausgesondertes kommt dazu).
+--artikel N: so viele Artikel zu Beginn und als geplante Nachkäufe (1 bis 5000; Ersatz für Ausgesondertes kommt dazu).
+Ohne --artikel fragt das Skript im Terminal nach der Zahl (Eingabe ohne Zahl: Vorgabe 800) – nur, wenn Ein- und Ausgabe
+ein Terminal sind; sonst (Pipe, Umleitung in eine Datei, docker exec ohne -t) gilt ohne Frage die Vorgabe 800.
 Ohne Angabe landen die Daten wie bei run.py in ./data; für eine andere Datenbank vorher DATA_DIR setzen. Auf dem
 dev-Server: README, Abschnitt „Beispielbestand (nur dev)“. Nur auf dev oder lokal: BASE_URL muss gesetzt sein (das
 Skript belegt sie nicht vor) und in der Umgebung UND in der Anwendung (Leitstelle → Einstellungen) die Positivliste von
@@ -209,23 +217,63 @@ class Abbruch(Exception):
         self.code = code
 
 
+def _zahl(wert):
+    """Die Artikelzahl aus einem Text (1 bis HOECHSTENS_ARTIKEL, nur Ziffern 0–9) oder None."""
+    wert = (wert or "").strip()
+    if not (wert.isascii() and wert.isdigit()) or not 1 <= int(wert) <= HOECHSTENS_ARTIKEL:
+        return None
+    return int(wert)
+
+
 def schalter(argv):
-    """Zahl der Artikel – nur mit --beispielbestand. Ohne Schalter oder mit Unbekanntem: Abbruch mit Rückgabewert 2."""
-    ja, n, rest = False, VORGABE_ARTIKEL, list(argv)
+    """Zahl der Artikel – nur mit --beispielbestand; None ohne --artikel (dann fragt main bzw. der Lauf). Ohne Schalter
+    oder mit Unbekanntem: Abbruch mit Rückgabewert 2."""
+    ja, n, rest = False, None, list(argv)
     while rest:
         a = rest.pop(0)
         if a == "--beispielbestand":
             ja = True
         elif a == "--artikel" or a.startswith("--artikel="):
-            wert = a.split("=", 1)[1] if "=" in a else (rest.pop(0) if rest else "")
-            if not wert.isdigit() or not 1 <= int(wert) <= HOECHSTENS_ARTIKEL:
+            n = _zahl(a.split("=", 1)[1] if "=" in a else (rest.pop(0) if rest else ""))
+            if n is None:
                 raise Abbruch(f"Abgebrochen: --artikel braucht eine Zahl von 1 bis {HOECHSTENS_ARTIKEL}.", 2)
-            n = int(wert)
         else:
             raise Abbruch(f"Abgebrochen: unbekannte Angabe „{a}“.", 2)
     if not ja:
         raise Abbruch("Abgebrochen: Der Beispielbestand wird nur mit dem Schalter --beispielbestand angelegt.", 2)
     return n
+
+
+def interaktiv():
+    """Sitzt jemand am Terminal? Nur dann fragt das Skript nach der Zahl – Ein- UND Ausgabe müssen ein Terminal sein:
+    Bei einer Pipe oder docker exec ohne -t käme keine Antwort, bei einer Umleitung in eine Datei sähe niemand die
+    Frage (der Lauf hinge dann still)."""
+    try:
+        return sys.stdin.isatty() and sys.stdout.isatty()
+    except (AttributeError, ValueError):                 # geschlossen oder ersetzt
+        return False
+
+
+VERSUCHE = 3                         # so oft fragt das Skript nach einer gültigen Zahl
+
+
+def zahl_erfragen():
+    """Die Zahl der Artikel im Terminal: Eingabe ohne Zahl nimmt die Vorgabe, eine ungültige fragt erneut (VERSUCHE).
+    Strg-D, Strg-C oder dreimal ungültig: Abbruch mit Rückgabewert 2, nichts angelegt."""
+    for _ in range(VERSUCHE):
+        try:
+            wert = input(f"Wie viele Artikel? 1 bis {HOECHSTENS_ARTIKEL}, Eingabe ohne Zahl = Vorgabe "
+                         f"{VORGABE_ARTIKEL} (60 Artikel: knapp zwei Minuten, 800: rund eine halbe Stunde): ")
+        except (EOFError, KeyboardInterrupt):
+            print()
+            raise Abbruch("Abgebrochen: keine Zahl eingegeben. Nichts angelegt.", 2) from None
+        if not wert.strip():
+            return VORGABE_ARTIKEL
+        n = _zahl(wert)
+        if n:
+            return n
+        print(f"„{wert.strip()}“ ist keine Zahl von 1 bis {HOECHSTENS_ARTIKEL}.")
+    raise Abbruch(f"Abgebrochen: keine gültige Zahl von 1 bis {HOECHSTENS_ARTIKEL}. Nichts angelegt.", 2)
 
 
 def typ_fuer(pfad):
@@ -664,6 +712,15 @@ class Beispielbestand:
                           "mit Prüfintervall) – der Beispielbestand nimmt nur Produkte aus dem vorhandenen Katalog. Erst "
                           "den Katalog importieren." + (f" Nicht verwendbar: {'; '.join(ausgelassen)}." if ausgelassen
                                                         else ""))
+        # Ohne --artikel erst hier fragen – nach den Sperren, damit niemand eine Zahl für einen Lauf eingibt, der dann
+        # nichts anlegt; vor den Konten, denn die Zahl der Einsatzkräfte hängt an ihr.
+        if self.n is None:
+            if interaktiv():
+                self.n = zahl_erfragen()
+            else:
+                self.n = VORGABE_ARTIKEL
+                print(f"Artikel: Vorgabe {VORGABE_ARTIKEL} (ohne --artikel und ohne Terminal; eine andere Zahl mit "
+                      "--artikel N).")
         konten = self._konten_roh()
         unpassend = self.konten_pruefen(konten)
         if unpassend:
@@ -1637,7 +1694,8 @@ class Beispielbestand:
         print(f"Beispielbestand angelegt – Laufzeit {self._dauer()}.")
         for g in self.gl.values():
             print(f"  {g['name']:<34} {len(bestand.unterbaum(g['id'])) - 1} Ordner darunter")
-        print(f"  Konten        {len(self.passwoerter)} DEMO-Konten")
+        print(f"  Konten        {len(self.passwoerter)} DEMO-Konten (neue nur mit Stufe in der Materialablage); in den "
+              "übrigen Modulen nichts angelegt")
         print(f"  Artikel       {len(artikel)} aus {len({a['produkt']['id'] for a in self.artikel if a.get('iid')})} "
               f"Produkten, davon {demo} als DEMO gekennzeichnet; {self.zahl['nachkauf']} Nachkäufe als Ersatz")
         print(f"  Geschichte    ab {x['erste'] or '–'}; {x['fest'] or 0} Prüfungen festgeschrieben mit Protokoll (davon "

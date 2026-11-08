@@ -303,6 +303,10 @@ python scripts/material_beispielbestand.py --beispielbestand --artikel 60       
 python run.py                                                                      # dann mit den Konten aus der Ausgabe anmelden
 ```
 
+Ohne `--artikel` fragt das Skript im Terminal nach der Zahl (1 bis 5000, Eingabe ohne Zahl = Vorgabe 800) – nur, wenn
+Ein- und Ausgabe ein Terminal sind; bei einer Pipe, einer Umleitung in eine Datei oder `docker exec` ohne `-t` gilt
+ohne Frage die Vorgabe 800 (die Ausgabe sagt es).
+
 Die Ausgabe nennt die Konten mit Passwort (`demo-wart-a@example.invalid` Materialwart, `demo-pruefer@…` Prüfer,
 `demo-extern@…` externer Prüfer, `demo-mv@…` Material-Verwaltung, `demo-mitglied@…`, `demo-einsatzkraft-01@…` …).
 Mails gehen keine hinaus. Für einen zweiten Stand einen neuen Datenordner nehmen – der Beispielbestand läuft je
@@ -311,14 +315,21 @@ Datenbank nur einmal.
 ### Beispielbestand (nur dev)
 
 `scripts/material_beispielbestand.py` legt aus dem **vorhandenen Katalog** den Bestand einer großen Gliederung mit gut
-zwei Jahren Geschichte an (Wunsch des Nutzers vom 25.10.2026):
+zwei Jahren Geschichte an (Wunsch des Nutzers vom 25.10.2026) – **nur in der Materialablage** (Wunsch vom 08.11.2026):
+Strömipedia, Ankerplätze, Riegenkarten und die Einstellungen der Leitstelle bleiben Zeile für Zeile unverändert, neue
+DEMO-Konten haben nur dort eine Stufe (in den übrigen Modulen „kein Zugriff“), vorhandene Konten bleiben, wie sie sind.
+DEMO-Inhalte für die übrigen Module legt kein Skript im Repository an. Die **Zahl der Artikel ist wählbar**:
+`--artikel N` (1 bis 5000); ohne die Angabe fragt das Skript im Terminal nach ihr – erst nach den Sperren und
+Vorprüfungen, Eingabe ohne Zahl nimmt die Vorgabe 800, Ungültiges fragt erneut, Strg-D/Strg-C oder dreimal ungültig
+brechen ab (Rückgabewert 2, nichts angelegt). Ohne Terminal (Pipe, Datei, `docker exec` ohne `-t`, wie im Befehl für
+den VPS unten) gilt ohne Frage die Vorgabe 800.
 
 - **Struktur:** „DEMO-Kreisverband Flussland“ mit Zentrallager (Regale Seile, Hardware, PSA, Reserve), fünf Fahrzeugen
   (zwei GW-Wasserrettung, zwei MTW, Mehrzweckboot) mit Seilrucksäcken und Taschen als Ordner der Art „Set“ (die
   Flaschenzugtasche liegt im Seilrucksack 1 – ein Set im Set), drei Strömungsrettungsgruppen und persönlichen Ordnern für
   bis zu 40 DEMO-Einsatzkräfte (je 20 Artikel eine); dazu die kleine „DEMO-OG Nachbarstadt“ (Lager, MTW) für die
   Trennung je Gliederung und die globale Suche (Seriennummer `DEMO-NS-4711`).
-- **Artikel:** Vorgabe 800 (`--artikel N`), nur echte Produkte ohne Bestandteil-Liste. Mix nach Kategorien: viele Karabiner und
+- **Artikel:** Vorgabe 800 (`--artikel N` oder die Frage im Terminal), nur echte Produkte ohne Bestandteil-Liste. Mix nach Kategorien: viele Karabiner und
   Textilmaterial, je Einsatzkraft Gurt, Helm, Karabiner, Schlinge, Abseilgerät (soweit der Katalog sie hat; von Anfang
   an, Ersatz nach einer Aussonderung), Seile mit einer Länge, wenige Rollen, Flaschenzüge und Seilklemmen; je Typ wenige
   Standardprodukte. Den Typ gibt der Name der Kategorie (die unterste zuerst): Abseilgeräte und Abseilachten sind
@@ -384,8 +395,11 @@ flüchtige `/tmp` des Containers, die App liegt dort unter `/srv`, die Daten unt
 
 ```bash
 tmux new -s beispielbestand          # oder screen – siehe unten
-tar c scripts/material_beispielbestand.py scripts/beispielbestand_petzl_punkte.json | docker exec -i stroemis-dev sh -c 'rm -rf /tmp/bb && mkdir /tmp/bb && tar x -C /tmp/bb && echo $$ > /tmp/bb/pid && export VIDEOPFLEGE=0 PYTHONPATH=/srv && exec python /tmp/bb/scripts/material_beispielbestand.py --beispielbestand'
+tar c scripts/material_beispielbestand.py scripts/beispielbestand_petzl_punkte.json | docker exec -i stroemis-dev sh -c 'rm -rf /tmp/bb && mkdir /tmp/bb && tar x -C /tmp/bb && echo $$ > /tmp/bb/pid && export VIDEOPFLEGE=0 PYTHONPATH=/srv && exec python /tmp/bb/scripts/material_beispielbestand.py --beispielbestand --artikel 800'
 ```
+
+Hier kommt die Eingabe aus der Pipe (kein Terminal), das Skript fragt also nicht – die Zahl steht deshalb im Befehl
+(`--artikel 800`, für weniger etwa `--artikel 200`; ohne die Angabe ebenfalls 800).
 
 Der Lauf dauert bei 800 Artikeln rund **eine halbe Stunde** (gemessen 28 Minuten neben der laufenden Testsuite, unter
 Last länger) – jede Prüfung bekommt ihr Protokoll (gut eine halbe Sekunde je PDF), und nach jedem Vorgang lässt er eine
@@ -1350,11 +1364,13 @@ python tests/test_material_stufen.py     # Phase 2: Modulstufe (Migration 9 → 
                                         # Personensuche je Zweck, Mails, Profil, Vorgabe neuer Konten)
 python tests/test_material_beispielbestand.py  # Beispielbestand: Katalog unverändert bis auf DEMO-Formulare (nicht im Export), Struktur, Geschichte über zwei Jahre,
                                                # alle Zustände, Protokolle, DEMO-Kennzeichnung, Konten, Petzl- und Platzhalter-Formulare, abgebrochener Lauf,
-                                               # Sperre (BASE_URL, dev-Kennung), Typ nach Kategorienamen, Mangelpunkte, Uhr, vorhandene Konten, „Neue Version“ bleibt DEMO
+                                               # Sperre (BASE_URL, dev-Kennung), Typ nach Kategorienamen, Mangelpunkte, Uhr, vorhandene Konten, „Neue Version“ bleibt DEMO,
+                                               # übrige Module/Einstellungen/vorhandene Konten unverändert, Artikelzahl (Schalter, Frage am Terminal, Vorgabe)
 python tests/test_material_dev_zuruecksetzen.py  # material dev-zuruecksetzen: Sperren (dev-Kennung, BASE_URL als Positivliste, Schalter), --trocken, Sicherung (0700/0600), Abbruch bei laufendem Katalogimport
                                                  # vollständig, Schema wie neu, übrige Module byteidentisch, Scheitern und SIGTERM/SIGHUP ändern nichts
-python scripts/material_beispielbestand.py --beispielbestand  # DEMO-Bestand und DEMO-Konten aus dem vorhandenen Katalog (nur dev/localhost,
-                                                              # siehe „Beispielbestand (nur dev)“; die Passwörter stehen nur in der Ausgabe)
+python scripts/material_beispielbestand.py --beispielbestand  # DEMO-Bestand und DEMO-Konten aus dem vorhandenen Katalog, nur Materialablage (nur dev/localhost,
+                                                              # siehe „Beispielbestand (nur dev)“; die Passwörter stehen nur in der Ausgabe;
+                                                              # ohne --artikel N fragt es am Terminal nach der Zahl, sonst Vorgabe 800)
 flask --app "app:create_app()" material import-catalog katalog.json --trocken   # Katalogdatei prüfen (JSON oder ZIP)
 flask --app "app:create_app()" material export-catalog katalog.zip              # Katalog ohne DEMO als ZIP (Format 3)
 ```
