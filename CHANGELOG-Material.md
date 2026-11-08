@@ -91,6 +91,7 @@ Geschichte stehen. Schemaversion nach der Nachbesserung vor dem Merge: 30; mit d
 | Untergruppen in Prüfformularen (Schritt 39) | Eine Ebene unter der Gruppe: Feld `untergruppe` je Prüfpunkt und als Kopie in den Befundzeilen; Reihenfolge-Regel (erst ohne Untergruppe, dann Blöcke) im Dienst; Editor mit „+ Untergruppe“, Zwischenzeile, Griff, „Untergruppe entfernen“; Prüfung, Nur-Lese-Ansicht und PDF mit Zwischenüberschrift und Einzug; Katalogdatei Format 3 mit `untergruppe`; Übung | gebaut 04.11.2026 (Schema 39), Zweig untergruppen, wartet auf Freigabe |
 | Reiter „Prüfformulare“ | Eigener Reiter rechts neben „Katalog“ statt des Knopfs im Katalogkopf, nur für die Material-Verwaltung; markiert auf der Seite „Prüfformulare“ und den Formularseiten; am Telefon brechen fünf Reiter um statt zu rollen; Übung „Prüfformulare zuweisen“ beginnt mit dem Reiter | gebaut 05.11.2026 (kein Schemaschritt), Zweig tab-pruefformulare, wartet auf Freigabe |
 | Systemnummer statt Seriennummer; Import ab 3 Zeichen | „Durch Systemnummer ersetzen“ im Dialog „Bearbeiten“ (bis zur ersten Prüfung, Rückfrage) und als Wahl im Änderungsantrag (Nummer erst mit der Bestätigung); Seriennummern im Bestandsimport und in der globalen Suche ab 3 statt 4 Zeichen | gebaut 08.11.2026 (kein Schemaschritt), Zweig seriennummer-system |
+| Bestandsimport: „Seriennummer bei anderer Variante“ nur je Modell | Schritt 6 meldet dieselbe Seriennummer nur noch bei einem anderen Produkt desselben Herstellers UND Modells (im Bestand und in derselben Datei bzw. Auswahl), nicht mehr bei jedem Produkt des Herstellers; offene Zeilen nach der alten Regel lösen sich mit „Erneut prüfen“ | gebaut 08.11.2026 (kein Schemaschritt), Zweig serie-variante |
 
 ## Abgleich mit dem Bestand (vor Lieferung 1)
 
@@ -13204,3 +13205,32 @@ liefert `artikel.systemnummer` (die STR-Nummer oder null). `POST /api/material/g
 der ersten Prüfung 409, wieder Herstellernummer, nie doppelt), per Antrag (Zeile, Journal beim Stellen und Bestätigen,
 Ablehnen, 409 danach), Eindeutigkeit beim Bestätigen, Trigger, Rückruf und „vormals“, Import und globale Suche ab
 3 Zeichen, Oberfläche statisch; `tests/test_material_globalsuche.py`: „ABC“ ist nicht mehr zu kurz (jetzt „AB“).
+
+## Bestandsimport: „Seriennummer bei anderer Variante“ nur innerhalb desselben Modells (Wunsch des Nutzers, 08.11.2026)
+
+Wunsch: „Seriennummer bei Aliens scheinen nur je Produkt einzigartig, nicht global, das muss implementiert werden.“
+Anlass: eine Sicherheitsschlinge in der Nacharbeit, weil dieselbe Seriennummer schon bei einem Karabiner desselben
+Herstellers im Bestand stand. Entscheidung: „Nur gleiches Modell“. Bauauftrag `planung/serie-variante/auftrag.md`, kein
+Schemaschritt (Schema bleibt 39).
+
+- **Schritt 6 der Prüfung** (`bestandsimport._mit_produkt`) meldet „Seriennummer bei anderer Variante“ nur noch, wenn
+  das andere Produkt denselben Hersteller **und** dasselbe Modell hat – beide vereinheitlicht wie die Dublettenprüfung
+  (`katalog._einheitlich`, nur Buchstaben und Ziffern), das Modell als Name vor „|“ wie in der Produktsuche des Imports
+  (`katalog.modell_teile`). Varianten und Größen eines Modells („Schlinge“ 60 und 120 cm, „Sequoia | S“ und
+  „Sequoia | M“) bleiben Nacharbeit, ein anderes Modell desselben Herstellers – auch mit gleichem Anfang („D Classic“
+  und „D Classic Straight“) – läuft durch. Vorher genügte derselbe Hersteller. Der neue Schlüssel
+  `_modell_schluessel` gilt für beide Stellen: den Abgleich mit dem sichtbaren Bestand und die Sammlung „in derselben
+  Datei“ bzw. „in der Auswahl“ (`zeilen_pruefen`). Text der Meldung unverändert.
+- **Offene Nacharbeit nach der alten Regel**: Die Gründe einer offenen Zeile stehen nur gespeichert; „Erneut prüfen“
+  (Auswahl in „Offene Zeilen“) und „Übernehmen“ an der Karte rechnen sie auf den gespeicherten Werten neu
+  (`nachpruefen`). Eine Zeile, die nur wegen eines anderen Modells offen war, ist danach übernehmbar und wird mit
+  „1 Artikel übernehmen“ angelegt; bis dahin zeigt die Liste den alten Grund. Kein Umbau nötig.
+- Unverändert: die Eindeutigkeit Produkt + Seriennummer in der Datenbank, Schritt 4 („doppelt in der Datei“ am selben
+  Produkt) und Schritt 5 (fremde Bereiche).
+
+**Tests**: `tests/test_material_import.py::test_serie_variante_nur_gleiches_modell` (neu) – anderes Modell im Bestand
+und in derselben Datei ohne Grund, andere Variante desselben Modells (auch „Modell | Zusatz“) mit Grund im Bestand, in
+der Datei und in der Auswahl, ein Modell mit gleichem Anfang ohne Grund, eine nach der alten Regel offene Zeile
+(Erneut prüfen ohne Schreiben, dann Übernehmen), Dublette am selben Produkt weiter „schon im Bestand“. Die vorhandenen
+Fälle in `test_varianten_zeilenweise` und `test_befunde_vor_auslieferung` sind Varianten „Modell | Zusatz“ und gelten
+unverändert.

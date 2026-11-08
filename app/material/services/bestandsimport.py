@@ -955,6 +955,13 @@ def _fertig_pruefen(e, lauf, doppelt, varianten=None):
         e.plan = None
 
 
+def _modell_schluessel(p):
+    """Hersteller und Modellname vor „|“, vereinheitlicht wie im Katalog – ein Modell mit seinen Varianten und Größen
+    („Sicherheitsschlinge“ 60 und 120 cm, „Sequoia | S“ und „Sequoia | M“), nicht aber ein anderes Modell desselben
+    Herstellers („D Classic“, „D Classic Straight“). Schlüssel für Schritt 6 („Seriennummer bei anderer Variante“)."""
+    return (katalog._einheitlich(p["manufacturer"]), katalog._einheitlich(katalog.modell_teile(p["model"])[0]))
+
+
 def _mit_produkt(e, lauf, doppelt, varianten):
     p, w, T = e.produkt, e.werte, lauf.stichtag
     textil = p["material_kind"] == "textil"
@@ -973,19 +980,22 @@ def _mit_produkt(e, lauf, doppelt, varianten):
         elif e.konflikt:
             e.grund("fremde_dublette", bestand.FremdeDublette.TEXT)
             e.fremd = e.konflikt["item"]["id"]
-        # 6. Dieselbe Nummer bei einer anderen Variante desselben Herstellers (nur Sichtbares).
-        he = katalog._einheitlich(p["manufacturer"])
+        # 6. Dieselbe Nummer bei einer anderen Variante desselben Modells (nur Sichtbares). Seriennummern sind bei
+        # vielen Herstellern nur je Produkt eindeutig (Aliens: Schlinge und Karabiner mit derselben Nummer) – ein
+        # anderes Modell desselben Herstellers ist deshalb kein Grund (Entscheidung vom 08.11.2026: „Nur gleiches
+        # Modell“; vorher jedes Produkt des Herstellers).
+        modell = _modell_schluessel(p)
         for r in db.query(f"SELECT i.id, i.inventory_no, i.lock_state, i.folder_id, i.origin_folder_id, "
                           f"p.manufacturer, p.model, p.description FROM mat_item i JOIN mat_product p "
                           f"ON p.id = i.product_id WHERE i.serial_no = ? COLLATE NOCASE AND i.product_id <> ? "
                           f"AND {rechte.artikel_filter('i')} ORDER BY i.id", (e.serie, p["id"])):
-            if katalog._einheitlich(r["manufacturer"]) == he:
+            if _modell_schluessel(r) == modell:
                 e.grund("serie_variante", f"Seriennummer gibt es schon bei {katalog.produktname(r)} (Inventarnummer "
                                           f"{r['inventory_no']}) – andere Variante oder Größe? Bitte das Produkt "
                                           "prüfen.")
                 break
-        # … und in derselben Datei (bzw. Auswahl) bei einem anderen Produkt desselben Herstellers.
-        andere = [x for x in varianten.get((he, e.serie.casefold()), []) if x.produkt["id"] != p["id"]]
+        # … und in derselben Datei (bzw. Auswahl) bei einem anderen Produkt desselben Modells.
+        andere = [x for x in varianten.get((modell, e.serie.casefold()), []) if x.produkt["id"] != p["id"]]
         if andere:
             namen = sorted({katalog.produktname(x.produkt) for x in andere})
             e.grund("serie_variante", f"Seriennummer kommt {lauf.mehrfach_text} auch bei {', '.join(namen)} vor "
@@ -1143,14 +1153,14 @@ def _mit_produkt(e, lauf, doppelt, varianten):
 
 
 def zeilen_pruefen(daten, lauf):
-    """Alle Zeilen in zwei Durchgängen (erst alle Schlüssel Produkt + Seriennummer und Hersteller + Seriennummer, dann
+    """Alle Zeilen in zwei Durchgängen (erst alle Schlüssel Produkt + Seriennummer und Modell + Seriennummer, dann
     die Entscheidung)."""
     ergebnisse = [_vorpruefen(z, lauf) for z in daten]
     doppelt, varianten = {}, {}
     for e in ergebnisse:
         if e.produkt is not None and e.serie and e.status not in ("erledigt",):
             doppelt.setdefault((e.produkt["id"], e.serie.casefold()), []).append(e.zeile_id or e.nr)
-            varianten.setdefault((katalog._einheitlich(e.produkt["manufacturer"]), e.serie.casefold()), []).append(e)
+            varianten.setdefault((_modell_schluessel(e.produkt), e.serie.casefold()), []).append(e)
     for e in ergebnisse:
         _fertig_pruefen(e, lauf, doppelt, varianten)
     return ergebnisse

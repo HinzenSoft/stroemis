@@ -929,6 +929,66 @@ def test_varianten_zeilenweise():
     print("Varianten zeilenweise bestanden.")
 
 
+def test_serie_variante_nur_gleiches_modell():
+    """„Seriennummer bei anderer Variante“ nur innerhalb desselben Modells (Entscheidung vom 08.11.2026: „Nur gleiches
+    Modell“) – bei vielen Herstellern sind Seriennummern nur je Produkt eindeutig (Schlinge und Karabiner mit derselben
+    Nummer). Im Bestand, in derselben Datei und in der Auswahl der Nacharbeit; eine offene Zeile mit dem Grund nach
+    der alten Regel lässt sich erneut prüfen und übernehmen. Platzhalter statt echter Katalogdaten."""
+    with ohne_post(), tempfile.TemporaryDirectory() as tmp:
+        t = aufbau(tmp)
+        app, w, kar = t.app, t.w, t.ids["karabiner"]
+        s60 = produkt(t.mv, kar, "Leinwerk", "Schlaufe", "LW-S60", description="60 cm")
+        s120 = produkt(t.mv, kar, "Leinwerk", "Schlaufe", "LW-S120", description="120 cm")
+        ringel = produkt(t.mv, kar, "Leinwerk", "Ringel", "LW-R1", description="Schraub")
+        produkt(t.mv, kar, "Leinwerk", "Ringel Gerade", "LW-RG")
+        produkt(t.mv, kar, "Leinwerk", "Ringel | Kugel", "LW-RK")
+        eigen_ringel = neuer_artikel(w, ringel, t.lager, serial_no="LW-1160")
+        eigen_s60 = neuer_artikel(w, s60, t.lager, serial_no="LW-2000")
+        kopf = ["Hersteller", "Modell", "Artikelnummer", "Seriennummer"]
+        liste = csv_bytes([kopf,
+                           ["Leinwerk", "Schlaufe", "LW-S120", "LW-1160"],        # 2: anderes Modell im Bestand
+                           ["Leinwerk", "Schlaufe", "LW-S120", "lw-2000"],        # 3: andere Variante im Bestand
+                           ["Leinwerk", "Schlaufe", "LW-S60", "LW-3000"],         # 4/5: anderes Modell in der Datei
+                           ["Leinwerk", "Ringel", "LW-R1", "LW-3000"],
+                           ["Leinwerk", "Schlaufe", "LW-S60", "LW-4000"],         # 6/7: andere Variante in der Datei
+                           ["Leinwerk", "Schlaufe", "LW-S120", "LW-4000"],
+                           ["Leinwerk", "Ringel Gerade", "LW-RG", "LW-1160"],     # 8: anderes Modell, gleicher Anfang
+                           ["Leinwerk", "Ringel | Kugel", "LW-RK", "LW-1160"]])   # 9: Variante „Modell | Zusatz“
+        z = nach_nr(ok(probelauf(w, t.lager, liste)))
+        assert [z[n]["status"] for n in (2, 4, 5, 8)] == ["uebernehmbar"] * 4, z
+        assert codes(z[3]) == ["serie_variante"] and eigen_s60["inventory_no"] in z[3]["gruende"][0]["text"], z[3]
+        assert "andere Variante oder Größe" in z[3]["gruende"][0]["text"]
+        assert codes(z[6]) == codes(z[7]) == ["serie_variante"] and "(Zeilen 7)" in z[6]["gruende"][0]["text"], z[6]
+        assert codes(z[9]) == ["serie_variante"] and eigen_ringel["inventory_no"] in z[9]["gruende"][0]["text"], z[9]
+        r = ok(uebernehmen(w, t.lager, liste), 201)
+        assert r["import"]["angelegt"] == 4 and r["import"]["nacharbeit"] == 4, r["import"]
+        assert {i["product_id"] for i in zeilen(app, "SELECT product_id FROM mat_item WHERE serial_no = 'LW-1160'")} \
+            == {ringel, s120, z[8]["produkt"]["id"]}
+        # In der Auswahl der Nacharbeit: dieselbe Regel.
+        e = ok(w.post(f"/api/material/ordner/{t.lager}/nacharbeit/pruefen", json={"zeilen": "alle"}))
+        assert [codes(x) for x in e["zeilen"]] == [["serie_variante"]] * 4, e["zeilen"]
+        assert "in der Auswahl" in nach_nr(e)[6]["gruende"][0]["text"]
+        ok(w.post(f"/api/material/ordner/{t.lager}/nacharbeit/verwerfen", json={"zeilen": "alle"}))
+        # Eine Zeile, die nach der alten Regel (jedes Produkt des Herstellers) offen blieb: Der Grund steht nur
+        # gespeichert; „Erneut prüfen“ rechnet ihn neu, „Übernehmen“ legt den Artikel an.
+        ok(uebernehmen(w, t.lager, csv_bytes([kopf, ["Nirgendwerk", "Phantom", "NW-1", "LW-1161"]])), 201)
+        neuer_artikel(w, ringel, t.lager, serial_no="LW-1161")
+        alt = offene_zeilen(app, t.lager)[0]
+        sql(app, "UPDATE mat_import_row SET product_id = ?, reason_code = 'serie_variante', reason = ? WHERE id = ?",
+            (s120, "Seriennummer gibt es schon bei Leinwerk Ringel Schraub – andere Variante oder Größe?", alt["id"]))
+        e = ok(w.post(f"/api/material/ordner/{t.lager}/nacharbeit/pruefen", json={"zeilen": [alt["id"]]}))
+        assert e["zahlen"]["uebernehmbar"] == 1 and offene_zeilen(app, t.lager)[0]["reason_code"] == "serie_variante"
+        e = ok(w.post(f"/api/material/ordner/{t.lager}/nacharbeit/pruefen", json={"zeilen": [alt["id"]],
+                                                                                 "uebernehmen": True}))
+        assert e["zahlen"]["angelegt"] == 1 and not offene_zeilen(app, t.lager), e["zahlen"]
+        assert zeilen(app, "SELECT product_id FROM mat_item WHERE serial_no = 'LW-1161' AND product_id = ?", (s120,))
+        # Die Datenbank-Eindeutigkeit bleibt Produkt + Seriennummer: dieselbe Nummer am selben Produkt ist schon im
+        # Bestand.
+        z = nach_nr(ok(probelauf(w, t.lager, csv_bytes([kopf, ["Leinwerk", "Schlaufe", "LW-S120", "LW-1161"]]))))
+        assert z[2]["status"] == "im_bestand", z[2]
+    print("Seriennummer bei anderer Variante nur je Modell bestanden.")
+
+
 # --- 15. Sammelzeilen -----------------------------------------------------------------------------------------------
 
 def test_sammelzeilen():
