@@ -6,7 +6,8 @@ mat_item_stammdaten_fest und mat_item_produkt_fest) – sie stehen im Prüfproto
 Kauf, Erstgebrauch, Lebensende (vorziehen und wieder nach hinten) und das Prüfintervall am Artikel (E1). Direkt bleiben Bemerkung, Länge
 und das Vorziehen der nächsten Prüfung – durch Materialwart und Prüfer (E2, bestand.artikel_aendern). Jede andere
 Änderung – auch eine STR-Nummer durch die echte Herstellernummer ersetzen, auch ein leeres Feld nachtragen (E3), auch das
-Produkt wechseln (E4) – wird mit BEGRÜNDUNG BEANTRAGT.
+Produkt wechseln (E4), auch die Seriennummer durch die Systemnummer ersetzen (Wunsch vom 08.11.2026) – wird mit
+BEGRÜNDUNG BEANTRAGT.
 
 Beantragen darf, wer den Artikel verwaltet (Materialwart, die Material-Verwaltung eingeschlossen) oder an ihm prüfen
 darf (Prüfer); die Route prüft das (requires_folder), der Dienst in der Transaktion am frisch gelesenen Artikel noch
@@ -25,7 +26,9 @@ Journal zeigen offene Anträge wie bisher jedem, der den Artikel liest (ohne Beg
 
 Geprüft wird beim Antrag UND beim Bestätigen (der Stand kann sich geändert haben) – der GESAMTE neue Stand nach den
 Regeln des Anlegens (bestand.artikel_werte): Herstellung nicht in der Zukunft, nicht nach Kauf und Erstgebrauch, bei
-textil Pflicht, nie leer; Seriennummer nicht leer, keine STR-Nummer, je Produkt frei; Intervall nicht über der
+textil Pflicht, nie leer; Seriennummer nicht leer, keine STR-Nummer (außer der eigenen Systemnummer des Artikels,
+„systemnummer“: nummern.systemnummer – sie hängt an seiner Inventarnummer, steht schon im Antrag und wird erst mit der
+Bestätigung seine Seriennummer, serial_generated 1), je Produkt frei; Intervall nicht über der
 Herstellervorgabe; Lebensende nur textil und höchstens bis zur Rechnung aus Herstellung und Lebensdauer (Wunsch vom
 25.10.2026: auch wieder nach hinten); Produkt nicht mit offenem Prüfentwurf, nicht über die DEMO-Grenze. Beim Bestätigen muss der Artikel jeden alten Wert noch tragen,
 sonst 409 – der Antrag lässt sich dann nur noch ablehnen. Bestätigt oder abgelehnt wird der ganze Sammelantrag, in einer
@@ -59,7 +62,7 @@ from flask import current_app
 from ... import db
 from ...auth import _im_hintergrund
 from ..models import ANTRAGSFELDER, ANTRAGSSTATUS
-from . import Abgelehnt, akteur, datum, ganzzahl, kennung, monat_oder_datum, text
+from . import Abgelehnt, akteur, datum, ganzzahl, kennung, monat_oder_datum, text, wahr
 from . import bestand, erinnerung, faelligkeit, journal, katalog, mailprotokoll, nummern, rechte, rueckruf
 from .interval import lebensende, wirksam
 
@@ -175,6 +178,8 @@ def wert_text(feld, wert):
         return f"{wert} Monat" if str(wert) == "1" else f"{wert} Monate"
     if feld in MONATSFELDER or feld == "retire_by":
         return _tag(str(wert))
+    if feld == "serial_no" and nummern.sieht_generiert_aus(str(wert)):
+        return f"{wert} (vom System)"
     return str(wert)
 
 
@@ -406,9 +411,13 @@ def _wuensche(d, item):
         pid = kennung(d.get("product_id"), "Produkt")
         if pid != item["product_id"]:
             out["product_id"] = pid
-    if "serial_no" in d:
+    if wahr(d, "systemnummer", "Durch Systemnummer ersetzen"):
+        out["serial_no"] = bestand.systemnummer_wahl(item, text(d, "serial_no", "Seriennummer", 80))
+    elif "serial_no" in d:
         sn = text(d, "serial_no", "Seriennummer", 80)
         if sn and sn != item["serial_no"]:
+            if nummern.sieht_generiert_aus(sn):
+                raise Abgelehnt(STR_GESPERRT)       # auch die eigene Systemnummer nur über „systemnummer“
             out["serial_no"] = sn
     for feld, name in MONATSFELDER.items():
         if feld in d:
@@ -460,20 +469,28 @@ def _plan(item, wuensche):
         positionen = {z["id"]: z for z in stueckliste.kurzliste(item["product_id"])}
         if any(cid not in positionen or st > positionen[cid]["anzahl"] for cid, st in wuensche["component_serial"]):
             raise Abgelehnt(TEIL_WEG, 409)
+    # Die Systemnummer des Artikels (die einzige STR-Nummer, die ein Antrag nennen darf) – artikel_werte sperrt das Muster
+    # für eingetragene Nummern, deshalb prüft es hier die heutige und bekommt die Systemnummer danach.
+    system = "serial_no" in wuensche and _ist_systemnummer(item, wuensche["serial_no"])
     d = {f: item[f] for f in bestand.ARTIKEL_FELDER}
-    d.update({f: v for f, v in wuensche.items() if f not in ("retire_by", "component_serial")})
+    d.update({f: v for f, v in wuensche.items()
+              if f not in ("retire_by", "component_serial") and not (f == "serial_no" and system)})
     d["retire_by"] = None                         # das Lebensende rechnet unten – artikel_werte prüft nur sein Format
     w, p = bestand.artikel_werte(d, alt=item)
+    if system:
+        w["serial_no"] = wuensche["serial_no"]
     if "product_id" in wuensche:
         bestand.produktwechsel_pruefen(item, p, antrag=True)
-    if "serial_no" in wuensche and nummern.sieht_generiert_aus(wuensche["serial_no"]):
+    if "serial_no" in wuensche and not system and nummern.sieht_generiert_aus(wuensche["serial_no"]):
         raise Abgelehnt(STR_GESPERRT)
     if {"serial_no", "product_id"} & set(wuensche):
         bestand._serie_frei(p["id"], w["serial_no"], ausser=item["id"])
     if not wirksam(p, bestand.heimat(item), w["interval_months"])["monate"]:
         raise Abgelehnt(katalog.KEIN_INTERVALL, 409)
     setzen = {f: w[f] for f in wuensche if f not in ("retire_by", "component_serial")}
-    if "serial_no" in wuensche and item["serial_generated"]:
+    if system:
+        setzen["serial_generated"] = 1            # die Systemnummer ersetzt die Herstellernummer
+    elif "serial_no" in wuensche and item["serial_generated"]:
         setzen["serial_generated"] = 0            # eine echte Herstellernummer ersetzt die vergebene
     # Lebensende (nur textil): Rechnung aus Herstellung und Lebensdauer; ein von Hand gesetztes gilt, solange es früher
     # liegt. Beantragt wird ein Datum bis höchstens zur Rechnung – vorziehen oder ein vorgezogenes wieder nach hinten
@@ -511,6 +528,11 @@ def _plan(item, wuensche):
     if w["length_m"] != item["length_m"]:
         setzen["length_m"] = w["length_m"]        # die Kategorie des neuen Produkts sieht keine Länge vor
     return setzen
+
+
+def _ist_systemnummer(item, serie):
+    """Ist serie die Systemnummer des Artikels, die er noch nicht trägt (ein Antrag „Durch Systemnummer ersetzen“)?"""
+    return not item["serial_generated"] and serie == nummern.systemnummer(item)
 
 
 def _produktnamen(vorher, nachher, item, wuensche):
@@ -575,6 +597,8 @@ def stellen(iid, d):
         if "component_serial" in wuensche:
             vorher["bestandteil_nummern"] = _teile_journal(item, wuensche["component_serial"], neu=False)
             nachher["bestandteil_nummern"] = _teile_journal(item, wuensche["component_serial"])
+        if "serial_no" in wuensche and _ist_systemnummer(item, wuensche["serial_no"]):
+            vorher["serial_generated"], nachher["serial_generated"] = False, True
         _produktnamen(vorher, nachher, item, wuensche)
         journal.eintragen("item", iid, "antrag_gestellt", vorher, nachher)
         if not zustaendige(item):
@@ -657,7 +681,8 @@ def bestaetigen(aid, d):
             nachher["bestandteil_nummern"] = [{"bestandteil": r["component_label"], "seriennummer": r["new_value"] or ""}
                                               for r in rows if r["field"] == "component_serial"]
         if "serial_generated" in setzen:                 # im Journal als ja/nein wie beim Anlegen und Bearbeiten
-            vorher["serial_generated"], nachher["serial_generated"] = True, False
+            vorher["serial_generated"] = bool(item["serial_generated"])
+            nachher["serial_generated"] = bool(setzen["serial_generated"])
         _produktnamen(vorher, nachher, item, wuensche)
         if antwort:
             nachher["anmerkung"] = antwort

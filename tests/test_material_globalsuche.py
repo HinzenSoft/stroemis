@@ -124,7 +124,8 @@ def test_eingaben():
                   {"q": "TEST-B-0001", "bestaetigt": 1}, {"q": "TEST-B-0001", "bestaetigt": False}, {}):
             r = w.post(SUCHE, json=d, headers=H)
             assert r.status_code == 400 and r.json["error"] == globalsuche.BESTAETIGEN, (d, r.get_json())
-        for q in ("ABC", "  A  B ", "x" * 81, "", None, 12345678, ["TEST-B-0001"]):
+        # Seit dem 08.11.2026 ab 3 Zeichen (vorher 4): „AB“ und „ A  “ (Leerraum außen zählt nicht) sind zu kurz.
+        for q in ("AB", "  A ", " A  ", "x" * 81, "", None, 12345678, ["TEST-B-0001"]):
             r = global_suchen(w, q)
             assert r.status_code == 400 and r.json["error"] == globalsuche.ZU_KURZ, (q, r.get_json())
         assert global_suchen(w, "x" * 80).status_code == 200            # 80 Zeichen gehen noch
@@ -309,7 +310,7 @@ def test_keine_bremse():
         # weiter wie sonst.
         r = f.post(SUCHE, json={"q": "TEST-B-0001"}, headers=H)
         assert r.status_code == 400 and r.json["error"] == globalsuche.BESTAETIGEN
-        assert global_suchen(f, "ABC").status_code == 400
+        assert global_suchen(f, "AB").status_code == 400
         assert global_suchen(t.adm, "TEST-B-0001").status_code == 409
         assert steckbrief_holen(f, token_von(t.art_a)).json == {"weiter": f"/materialablage/artikel/{t.art_a['id']}"}
         assert len(protokoll(t.app)) == 36
@@ -476,7 +477,7 @@ def test_sperrwort():
 
 
 def test_angebot():
-    """Entscheidung 2: Angeboten wird die globale Suche zu jeder tauglichen Anfrage (4–80 Zeichen, keine vergebene
+    """Entscheidung 2: Angeboten wird die globale Suche zu jeder tauglichen Anfrage (3–80 Zeichen, keine vergebene
     Nummer) – unabhängig von lokalen Treffern, auch wenn ein eigener Artikel genau diese Nummer hat. Nur wer alles
     sieht (Material-Verwaltung, die Plattform-Verwaltung eingeschlossen), bekommt kein Angebot; ein Konto ganz ohne
     Bestand (Mitglied ohne Freigabe) schon. Die Schalter der Lieferung sind fort."""
@@ -489,7 +490,7 @@ def test_angebot():
         t = zwei_gliederungen(tmp)
         _, mg_id = neues_konto(t.app, "mitglied2@example.org", name="Mitglied Test")
         adm_id = zeilen(t.app, "SELECT id FROM users WHERE email = 'admin@example.org'")[0]["id"]
-        fragen = ("TEST-A-0001", " test-a-0001 ", "TEST-B-0001", "TEST-A-000", "TEST", "ABC", "x" * 81, "STR-000001",
+        fragen = ("TEST-A-0001", " test-a-0001 ", "TEST-B-0001", "TEST-A-000", "TEST", "AB", "x" * 81, "STR-000001",
                   "M-000001")
         tauglich = [True] * 5 + [False] * 4
 
@@ -630,7 +631,7 @@ def test_eindeutiger_treffer():
         r = w.get("/materialablage/suche", query_string={"q": a["inventory_no"]})
         assert r.status_code == 302 and r.headers["Location"].endswith(f"/materialablage/artikel/{a['id']}"), r.headers
         # Was nicht taugt, übergeht die Artikelseite.
-        for q in (a["inventory_no"], "STR-000001", "ABC", "x" * 81, ""):
+        for q in (a["inventory_no"], "STR-000001", "AB", "x" * 81, ""):
             assert seiten_daten(w.get(f"/materialablage/artikel/{a['id']}", query_string={"q": q})) == {"id": a["id"]}, q
         # Die Material-Verwaltung (hier die Plattform-Verwaltung) sieht alles: kein Angebot, also auch kein q.
         r = t.adm.get("/materialablage/suche", query_string={"q": "TEST-B-0001"})
@@ -660,7 +661,7 @@ def test_angebot_ueber_suche():
         assert r.json["gesamt"] == 1 and r.json["exakt_lokal"] is True and r.json["global_angebot"] is True, r.json
         r = w.get("/api/material/suche", query_string={"q": "TEST-A-000"})               # Teiltreffer, kein exakter
         assert r.json["gesamt"] >= 1 and r.json["exakt_lokal"] is False and r.json["global_angebot"] is True, r.json
-        for q in ("ABC", "M-000001", "STR-000001"):
+        for q in ("AB", "M-000001", "STR-000001"):
             assert w.get("/api/material/suche", query_string={"q": q}).json["global_angebot"] is False, q
         mg, _ = neues_konto(t.app, "mitglied2@example.org", name="Mitglied Test")
         r = mg.get("/api/material/suche", query_string={"q": "TEST-B-0001"})
