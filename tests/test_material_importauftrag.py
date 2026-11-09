@@ -724,6 +724,10 @@ def test_oberflaeche_statisch():
     assert "btn ghost" not in js
     # Nachbesserung: vor dem Hochladen nachfragen, nach 100 % „Datei wird abgelegt …“, Zahlen im Balken als Zahl.
     assert "xhr.upload.onload" in js and "Datei wird abgelegt …" in js and "Number(m)" in js
+    # Nachbesserung r1 zum Feinschliff (Prüfung Browser r1, Befund 1; Prüfung Ablauf r1, Befund 4): nach „Übernehmen“
+    # und dem Neuladen der Fokus auf „Bericht ansehen“; ältere Berichte ohne „davon“ zeigen die Zahl wie bisher.
+    assert "sessionStorage.setItem(IMPORT_FOKUS" in js and "sessionStorage.removeItem(IMPORT_FOKUS)" in js
+    assert "kw.davon || (kw.zuweisungen_geloest ? `davon ${kw.zuweisungen_geloest} durch Kategoriewechsel`" in js
     print("Oberfläche (statisch) bestanden.")
 
 

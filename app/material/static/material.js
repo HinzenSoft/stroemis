@@ -4375,7 +4375,9 @@
     // Produkte, die die Kategorie wechseln, und verschobene Kategorien (Wünsche vom 09.11.2026): Die Zusammenfassung steht
     // gleich unter dem Stand – vor „Übernehmen“ nicht zu übersehen; gelöste Zuweisungen zählen unter „gelöst“ mit.
     const kw = b.kategoriewechsel || {};
-    const durchWechsel = kw.davon ? ` (${esc(kw.davon)})` : "";
+    // Ein Bericht von vor dem Feinschliff (bleibt 7 Tage) hat noch kein „davon“, nur die Zahl (Prüfung Ablauf r1, Befund 4).
+    const davon = kw.davon || (kw.zuweisungen_geloest ? `davon ${kw.zuweisungen_geloest} durch Kategoriewechsel` : "");
+    const durchWechsel = davon ? ` (${esc(davon)})` : "";
     const zuweisungen = zw.neu || zw.geloest || zw.unveraendert ? `<p class="help">Zuweisungen der Prüfformulare: ${zw.neu || 0} gesetzt, ${zw.geloest || 0} gelöst${durchWechsel}, ${zw.unveraendert || 0} unverändert.</p>` : "";
     // EIN Kasten „Achtung“ für alles, was vorhandene Artikel betrifft (Prüfung Browser r3, Verbesserung 2): oben die
     // Zusammenfassung, darunter je alte → neue (bzw. verschobene) Kategorie eine Zeile mit Zahlen und Folge, die
@@ -4559,8 +4561,12 @@
         if (!a.trocken && a.bericht && a.bericht.gespeichert && !gemeldet) {
           gemeldet = true;
           toast("Katalog übernommen");
-          // Leiste und Liste zeigen den neuen Stand, sobald der Bericht gelesen und der Dialog zu ist.
-          dlg.addEventListener("close", () => location.reload(), { once: true });
+          // Leiste und Liste zeigen den neuen Stand, sobald der Bericht gelesen und der Dialog zu ist. Nach dem Neuladen
+          // kommt der Fokus auf „Bericht ansehen“ (importHinweis) – sonst stand er auf der Seite (Prüfung Browser r1, Befund 1).
+          dlg.addEventListener("close", () => {
+            try { sessionStorage.setItem(IMPORT_FOKUS, "1"); } catch (e) { /* privat: dann eben nicht */ }
+            location.reload();
+          }, { once: true });
         }
       }
 
@@ -4674,10 +4680,14 @@
      höchstens einem Tag zu Ende ging – mit „Stand ansehen“ bzw. „Bericht ansehen“ (öffnet den Dialog mit diesem
      Auftrag). Einen beendeten blendet „Ausblenden“ in diesem Browser aus. */
   const IMPORT_AUSGEBLENDET = "mat-katalogimport-ausgeblendet";
+  const IMPORT_FOKUS = "mat-katalogimport-fokus";     // nach „Übernehmen“ neu geladen: Fokus auf „Bericht ansehen“
   let importHinweisUhr = null;
   async function importHinweis() {
     clearTimeout(importHinweisUhr);
     if (!$("#kat-import-hinweis")) return;
+    // Gleich gelesen und gelöscht: Das Schließen des Dialogs ruft importHinweis noch vor dem Neuladen auf.
+    let nachLaden = false;
+    try { nachLaden = sessionStorage.getItem(IMPORT_FOKUS) === "1"; sessionStorage.removeItem(IMPORT_FOKUS); } catch (e) { /* egal */ }
     let a;
     try { a = (await api(`${API}/katalog/import/aktuell`)).auftrag; } catch (e) { return; }
     const ziel = $("#kat-import-hinweis");      // die Seite kann inzwischen neu gezeichnet sein
@@ -4701,7 +4711,7 @@
     ziel.innerHTML = `<div class="mat-importhinweis${laeuft ? " laeuft" : a.zustand === "fertig" ? "" : " bad"}" role="status">
       <p><strong>${esc(text)}</strong> <span class="help">${a.von ? `${esc(a.von)} · ` : ""}${esc(a.quelle || "")} · ${esc(fmtZeit(laeuft ? a.gestartet : a.beendet))}</span></p>
       <p><button type="button" class="lnk" data-act="kat-import-stand" data-id="${esc(a.id)}">${laeuft || a.zustand === "abgebrochen" ? "Stand ansehen" : "Bericht ansehen"}</button>${laeuft ? "" : ` · <button type="button" class="lnk" data-act="kat-import-aus" data-id="${esc(a.id)}">Ausblenden</button>`}</p></div>`;
-    const knopf = fokus && $(`[data-act="${fokus}"]`, ziel);
+    const knopf = (fokus || (nachLaden && "kat-import-stand")) && $(`[data-act="${fokus || "kat-import-stand"}"]`, ziel);
     if (knopf) knopf.focus();
     if (laeuft) importHinweisUhr = setTimeout(importHinweis, 5000);
   }

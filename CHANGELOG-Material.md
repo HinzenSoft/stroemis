@@ -13587,3 +13587,42 @@ Standard aus dem Pool der alten Oberkategorie und Produkt-Zuweisung gelöst, „
 hinein und zählt nicht doppelt; Warnung, Zahlen, `verschiebung`, `davon`, Gruppen in Probelauf und echtem Lauf;
 Kommandozeile; Journal; zweiter Lauf ohne Meldung; Rückweg „bisher keins“); angepasst die übrigen auf den kürzeren
 Wortlaut und `gruppen`, `tests/test_material_katalog.py::test_kategorie_umbenennen` ebenso.
+
+### Nachbesserung Runde 1 (09.11.2026)
+
+Nach `planung/import-warnung-feinschliff/pruefung-ablauf-r1.md` (Befunde 1–4) und `pruefung-browser-r1.md` (Befund 1,
+Verbesserungen 2, 5, 6, 7). Kein Schemaschritt (Schema bleibt 39).
+
+- **„betrifft n Artikel“ bei verschobenen Kategorien** (Ablauf r1, Befund 1): Die Zahl zählt wie bisher beim Verschieben.
+  Verlässt ein Produkt mit Artikeln die Kategorie in derselben Datei (eigene Warnung), sagt die Warnung jetzt „betrifft
+  4 Artikel im Bestand, davon 2 mit eigener Warnung“ (bzw. „alle mit eigener Warnung“), in Warnung und Gruppenzeile –
+  so passt sie zu den Folgen dahinter und zur Zusammenfassung `verschiebung`. `_verschiebung_merken` hält dafür die
+  Teile des Satzes fest (`_folgen_satz`), `_verschoben_melden` schreibt ihn am Ende neu. Die gelösten Zuweisungen stehen
+  auch dann in der Warnung, wenn darunter kein Produkt ohne eigene Warnung bleibt.
+- **Alter Pfad vor dem Import** (Befund 2): `lauf.pfade_vorher` (`_pfade`, zu Beginn jedes Durchgangs) – Produktwarnung,
+  Gruppenzeile, „aus …“ im Hinweis auf eine alte Datei und „verschoben „alt“ → …“ nennen den Pfad vor dem Import, auch
+  wenn dieselbe Datei die alte Kategorie oder eine darüber verschiebt; „neu“ ist der Stand am Ende.
+- **Zwei Ebenen zugleich verschoben** (Befund 3): Jedes Produkt steht nur bei der innersten verschobenen Kategorie über
+  ihm (die tiefste zuerst) – keine Folgen der inneren Kategorie mehr in der Warnung der äußeren, kein Produkt doppelt im
+  Kasten; die Zahlen der Zusammenfassung bleiben.
+- **Gespeicherte Berichte von vor dem Feinschliff** (Befund 4, `material.js`): ohne `davon` zeigt die Zeile der
+  Zuweisungen wie bisher „(davon n durch Kategoriewechsel)“ aus `zuweisungen_geloest`.
+- **Fokus nach „Übernehmen“** (Browser r1, Befund 1): Nach dem echten Lauf lädt die Seite beim Schließen neu; der Fokus
+  stand danach auf der Seite. Jetzt merkt sich der Dialog das in `sessionStorage` (`mat-katalogimport-fokus`),
+  `importHinweis` liest und löscht es sofort und setzt den Fokus auf „Bericht ansehen“.
+- **„→ oberste Ebene“** (Browser r1, Verbesserung 2, `_verschoben_text`): „verschoben „PSA / Schlingen“ → oberste Ebene“
+  statt „→ „Schlingen““ (mit anderem Namen: „→ „Bänder“ (oberste Ebene)“).
+- **„hier“ im Hinweis zu Zuweisungen** (Verbesserung 6): „… liegt in dieser Materialablage nicht unter „…“ – nicht
+  zugewiesen.“
+- **CSS** (Verbesserungen 5 und 7): Einzug der Listen unter „Einzelheiten“ 14 statt 18 px; unter dem letzten Aufklapper
+  im Kasten kein Außenabstand mehr.
+- **Nicht umgesetzt** (Browser r1): 1 (eine Gruppe nicht doppelt neben der Zusammenfassung – die Gruppenzeile nennt die
+  Kategorien, die Zusammenfassung alle Produkte samt denen ohne Artikel; welche weichen soll, ist eine Entscheidung), 3
+  („Einzelheiten“ umbenennen – Wortwahl), 4 („Produkt-Zuweisung“, offene Frage), 8 (Fokusring am Stand – erst auf einem
+  echten Gerät ansehen), 9 (Übungsleiste, eigener Auftrag).
+
+**Tests**: neu `test_verschobene_kategorie_grenzfaelle` (Produkt verlässt die verschobene Kategorie: „davon 2 mit eigener
+Warnung“, alter Pfad in seiner Warnung; zwei Ebenen zugleich verschoben: jedes Produkt einmal, bei der inneren; auf die
+oberste Ebene, alle Produkte gehen: „→ oberste Ebene“, „alle mit eigener Warnung“, ohne Gruppe); Vorbereitung als
+`_verschoben_vorbereiten` herausgelöst; `test_material_importauftrag.py::test_oberflaeche_statisch` prüft Fokus-Merker
+und den Rückfall für `davon`.
