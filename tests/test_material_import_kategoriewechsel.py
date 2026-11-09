@@ -348,12 +348,40 @@ def test_gruppen():
 
 def _kategorien_mit_kennung(schlingen_unter):
     """Format 2 mit Kennung (wie ein Katalog-Export): „PSA (Test)“ mit „Andere (Test)“, „Wasser (Test)“ – „Schlingen
-    (Test)“ steht unter schlingen_unter. Nur über die Kennung kann eine Datei eine Kategorie verschieben."""
+    (Test)“ steht unter schlingen_unter („oben“: auf der obersten Ebene). Nur über die Kennung kann eine Datei eine
+    Kategorie verschieben."""
     schlingen = dict(_kat("Schlingen (Test)"), uid="5" * 32)
     psa = dict(_kat("PSA (Test)", *([schlingen] if schlingen_unter == "PSA" else []),
                     dict(_kat("Andere (Test)"), uid="6" * 32)), uid="1" * 32)
     wasser = dict(_kat("Wasser (Test)", *([schlingen] if schlingen_unter == "Wasser" else [])), uid="7" * 32)
-    return [psa, wasser]
+    return [psa, wasser] + ([schlingen] if schlingen_unter == "oben" else [])
+
+
+VERSCHOBEN_MODELLE = ("Delta", "Epsilon", "Eta", "Zeta", "Theta")
+
+
+def _verschoben_vorbereiten(tmp):
+    """„PSA (Test)“ mit „Schlingen (Test)“ (Standard „Schlingen-Prüfung“ aus dem Pool von „PSA“) und „Andere (Test)“,
+    daneben „Wasser (Test)“; „PSA-Prüfung“ ist Standard von „PSA“. Delta (2 Artikel), Epsilon (1 Artikel, „Extra-Prüfung“
+    aus dem Pool von „PSA“), Eta (1 Artikel, eigenes Formular) und Zeta (ohne Artikel) in „Schlingen“, Theta (1 Artikel)
+    in „Andere“. Liefert app, Konten, Produkte und die Kennungen von „PSA“, „Schlingen“, „Wasser“."""
+    app, k = umgebung(tmp)
+    kp, w = k["katalog"], k["wart"]
+    modelle, alt_schl = VERSCHOBEN_MODELLE, ("PSA (Test)", "Schlingen (Test)")
+    eins = _datei([(m, alt_schl) for m in modelle[:4]] + [("Theta", ("PSA (Test)", "Andere (Test)"))],
+                  _kategorien_mit_kennung("PSA"))
+    ber = importieren(kp, eins, False, name="eins.json")
+    assert ber["gespeichert"] and not ber["fehler"], ber
+    psa, schlingen, wasser = _ids(app, "mat_category", "name", ("PSA (Test)", "Schlingen (Test)", "Wasser (Test)"))
+    p = dict(zip(modelle, _ids(app, "mat_product", "model", modelle)))
+    formular_neu(kp, {"kategorie_id": psa}, "PSA-Prüfung (Test)", PUNKT)
+    _pool(kp, psa, "Schlingen-Prüfung (Test)", kategorien=(schlingen,))
+    _pool(kp, psa, "Extra-Prüfung (Test)", produkte=(p["Epsilon"],))
+    formular_neu(kp, {"produkt_id": p["Eta"]}, "Eta-Prüfung (Test)", PUNKT)       # Heimat „Schlingen“: bleibt
+    gid, _ = gliederung(w, "OG Testdorf")
+    for m, n in (("Delta", 2), ("Epsilon", 1), ("Eta", 1), ("Theta", 1)):
+        _artikel(w, p[m], gid, n)
+    return app, k, p, (psa, schlingen, wasser)
 
 
 def test_verschobene_kategorie():
@@ -367,23 +395,9 @@ def test_verschobene_kategorie():
     from app import db
     from app.material.services import katalog
     with tempfile.TemporaryDirectory() as tmp:
-        app, k = umgebung(tmp)
-        kp, w = k["katalog"], k["wart"]
-        modelle = ("Delta", "Epsilon", "Eta", "Zeta", "Theta")
-        alt_schl, neu_schl, andere = ("PSA (Test)", "Schlingen (Test)"), ("Wasser (Test)", "Schlingen (Test)"), \
-            ("PSA (Test)", "Andere (Test)")
-        eins = _datei([(m, alt_schl) for m in modelle[:4]] + [("Theta", andere)], _kategorien_mit_kennung("PSA"))
-        ber = importieren(kp, eins, False, name="eins.json")
-        assert ber["gespeichert"] and not ber["fehler"], ber
-        psa, schlingen, wasser = _ids(app, "mat_category", "name", ("PSA (Test)", "Schlingen (Test)", "Wasser (Test)"))
-        p = dict(zip(modelle, _ids(app, "mat_product", "model", modelle)))
-        formular_neu(kp, {"kategorie_id": psa}, "PSA-Prüfung (Test)", PUNKT)
-        _pool(kp, psa, "Schlingen-Prüfung (Test)", kategorien=(schlingen,))
-        _pool(kp, psa, "Extra-Prüfung (Test)", produkte=(p["Epsilon"],))
-        formular_neu(kp, {"produkt_id": p["Eta"]}, "Eta-Prüfung (Test)", PUNKT)       # Heimat „Schlingen“: bleibt
-        gid, _ = gliederung(w, "OG Testdorf")
-        for m, n in (("Delta", 2), ("Epsilon", 1), ("Eta", 1), ("Theta", 1)):
-            _artikel(w, p[m], gid, n)
+        app, k, p, (psa, schlingen, wasser) = _verschoben_vorbereiten(tmp)
+        kp, modelle = k["katalog"], VERSCHOBEN_MODELLE
+        alt_schl, neu_schl = ("PSA (Test)", "Schlingen (Test)"), ("Wasser (Test)", "Schlingen (Test)")
         vorher = _stand(app)
         zwei = _datei([(m, neu_schl) for m in modelle], _kategorien_mit_kennung("Wasser"))
 
@@ -494,9 +508,99 @@ def test_verschobene_kategorie():
     print("Verschobene Kategorie bestanden.")
 
 
+def test_verschobene_kategorie_grenzfaelle():
+    """Nachbesserung r1 (Prüfung Ablauf r1, Befunde 1–3; Prüfung Browser r1, Verbesserung 2):
+    - Verlässt ein Produkt mit Artikeln die verschobene Kategorie in derselben Datei, zählt „betrifft n Artikel“ wie
+      beim Verschieben und sagt „davon m mit eigener Warnung“; seine eigene Warnung nennt als Herkunft den Pfad vor dem
+      Import, nicht den schon verschobenen.
+    - Verschiebt die Datei eine Kategorie und zugleich eine zweite unter sie, steht jedes Produkt nur bei der inneren.
+    - Auf die oberste Ebene: „→ oberste Ebene“; gehen alle Produkte mit Artikeln selbst, „alle mit eigener Warnung“."""
+    pfeil = "verschoben „PSA (Test) / Schlingen (Test)“ → "
+    extra = ("1 Artikel hat danach kein Prüfformular mehr (bisher „Extra-Prüfung (Test)“, dem Produkt zugewiesen) und "
+             "lässt sich nicht prüfen")
+    geloest = ("2 Zuweisungen {}: „Schlingen-Prüfung (Test)“ an Kategorie „PSA (Test) / Schlingen (Test)“, "
+               "„Extra-Prüfung (Test)“ an „Testwerk Epsilon“.")
+    andere, neu_schl = ("PSA (Test)", "Andere (Test)"), ("Wasser (Test)", "Schlingen (Test)")
+    with tempfile.TemporaryDirectory() as tmp:
+        app, k, p, _ = _verschoben_vorbereiten(tmp)
+        kp, modelle = k["katalog"], VERSCHOBEN_MODELLE
+        # Delta (2 Artikel) wechselt nach „Andere“, „Schlingen“ wandert unter „Wasser“.
+        zwei = _datei([("Delta", andere)] + [(m, neu_schl) for m in modelle[1:]], _kategorien_mit_kennung("Wasser"))
+        for speichern in (False, True):
+            ber = importieren(kp, zwei, not speichern, name="zwei.json")
+            assert not ber["fehler"] and ber["gespeichert"] is speichern, ber
+            wird = "wurden gelöst" if speichern else "werden gelöst"
+            assert ber["warnungen"][0] == (
+                f"kategorien[1].unterkategorien[0] (Schlingen (Test)): {pfeil}„Wasser (Test) / Schlingen (Test)“ – betrifft "
+                f"4 Artikel im Bestand, davon 2 mit eigener Warnung; {extra}; für 1 Artikel gilt „Eta-Prüfung (Test)“ "
+                "weiter (dem Produkt zugewiesen); " + geloest.format(wird)), ber["warnungen"]
+            assert ber["warnungen"][1].startswith(
+                "produkte[0] (Testwerk Delta): Kategorie „Schlingen (Test)“ → „Andere (Test)“ (unter „PSA (Test)“) – "
+                "betrifft 2 Artikel im Bestand; "), ber["warnungen"]
+            kw = ber["kategoriewechsel"]
+            assert (kw["verschoben"]["mit_artikeln"], kw["verschoben"]["artikel"]) == (2, 2), kw
+            gruppe, = [g for g in kw["gruppen"] if g["warnungen"] == [0]]
+            assert gruppe["zeile"].startswith(f"Kategorie „Schlingen (Test)“: {pfeil}„Wasser (Test) / Schlingen (Test)“ "
+                                              "– betrifft 4 Artikel im Bestand, davon 2 mit eigener Warnung; 1 Artikel "), \
+                gruppe
+            assert [f["zeile"].split(":")[0] for f in gruppe["folgen"]] == [
+                "1 Artikel (Testwerk Epsilon)", "1 Artikel (Testwerk Eta)", f"2 Zuweisungen {wird}"], gruppe
+
+    with tempfile.TemporaryDirectory() as tmp:
+        app, k, p, _ = _verschoben_vorbereiten(tmp)
+        kp, w, modelle = k["katalog"], k["wart"], VERSCHOBEN_MODELLE
+        # „Wasser“ bekommt Iota (1 Artikel); dann wandert „Wasser“ unter „Seil (Test)“ und „Schlingen“ unter „Wasser“.
+        seil = dict(_kat("Seil (Test)"), uid="8" * 32)
+        drei = _datei([(m, ("PSA (Test)", "Schlingen (Test)")) for m in modelle[:4]] + [("Theta", andere),
+                      ("Iota", ("Wasser (Test)",))], _kategorien_mit_kennung("PSA") + [seil])
+        assert importieren(kp, drei, False, name="drei.json")["gespeichert"]
+        iota, = _ids(app, "mat_product", "model", ("Iota",))
+        gid, _ = gliederung(w, "OG Testdorf 2")
+        _artikel(w, iota, gid)
+        kategorien = _kategorien_mit_kennung("Wasser")
+        kategorien.append(dict(seil, unterkategorien=[kategorien.pop(1)]))
+        innen = ("Seil (Test)", "Wasser (Test)", "Schlingen (Test)")
+        vier = _datei([(m, innen) for m in modelle[:4]] + [("Theta", andere), ("Iota", innen[:2])], kategorien)
+        for speichern in (False, True):
+            ber = importieren(kp, vier, not speichern, name="vier.json")
+            assert not ber["fehler"] and ber["gespeichert"] is speichern, ber
+            assert ber["warnungen"][0] == (
+                "kategorien[1].unterkategorien[0] (Wasser (Test)): verschoben „Wasser (Test)“ → „Seil (Test) / Wasser "
+                "(Test)“ – betrifft 1 Artikel im Bestand; 1 Artikel hat weiterhin kein Prüfformular."), ber["warnungen"]
+            assert ber["warnungen"][1].startswith(
+                f"kategorien[1].unterkategorien[0].unterkategorien[0] (Schlingen (Test)): {pfeil}„Seil (Test) / Wasser "
+                "(Test) / Schlingen (Test)“ – betrifft 4 Artikel im Bestand; 2 Artikel haben danach kein Prüfformular "
+                "mehr"), ber["warnungen"]
+            gruppen = ber["kategoriewechsel"]["gruppen"]
+            assert [[f["zeile"].split(":")[0] for f in g["folgen"]] for g in gruppen] == [
+                ["1 Artikel (Testwerk Iota)"],
+                ["2 Artikel (Testwerk Delta)", "1 Artikel (Testwerk Epsilon)", "1 Artikel (Testwerk Eta)",
+                 "2 Zuweisungen " + ("wurden gelöst" if speichern else "werden gelöst")]], gruppen
+            assert gruppen[0]["zeile"].endswith("– betrifft 1 Artikel im Bestand."), gruppen[0]
+            assert ber["kategoriewechsel"]["verschoben"]["artikel"] == 5, ber["kategoriewechsel"]
+
+    with tempfile.TemporaryDirectory() as tmp:
+        app, k, p, _ = _verschoben_vorbereiten(tmp)
+        kp, modelle = k["katalog"], VERSCHOBEN_MODELLE
+        # „Schlingen“ auf die oberste Ebene, Delta, Epsilon und Eta gehen nach „Andere“.
+        zwei = _datei([(m, andere) for m in modelle[:3]] + [("Zeta", ("Schlingen (Test)",)), ("Theta", andere)],
+                      _kategorien_mit_kennung("oben"))
+        ber = importieren(kp, zwei, True, name="zwei.json")
+        assert not ber["fehler"], ber
+        assert ber["warnungen"][0] == (
+            f"kategorien[2] (Schlingen (Test)): {pfeil}oberste Ebene – betrifft 4 Artikel im Bestand, alle mit eigener "
+            "Warnung; " + geloest.format("werden gelöst")), ber["warnungen"]
+        kw = ber["kategoriewechsel"]
+        assert kw["verschiebung"] is None and kw["verschoben"]["mit_artikeln"] == 0, kw
+        assert not any(0 in g["warnungen"] for g in kw["gruppen"]), kw["gruppen"]       # steht im Kasten als Warnung
+        assert kw["davon"] == "davon 3 durch Kategoriewechsel und verschobene Kategorien", kw
+    print("Verschobene Kategorie, Grenzfälle bestanden.")
+
+
 if __name__ == "__main__":
     test_alte_datei_probelauf_und_echter_lauf()
     test_gilt_weiter_und_ohne_formular()
     test_kommandozeile()
     test_gruppen()
     test_verschobene_kategorie()
+    test_verschobene_kategorie_grenzfaelle()

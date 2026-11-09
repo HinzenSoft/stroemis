@@ -243,6 +243,7 @@ class _Lauf:
         self.kategorien, self.produkte = set(), set()     # Kennungen hier, die die Datei nennt (E2, _zuweisungen)
         self.neue_kategorien = set()          # Kategorien, die dieser Durchgang angelegt hat
         self.geltend_vorher = {}              # Produkt → (Version, Formular, Standard-Kategorie) vor dem Durchgang
+        self.pfade_vorher = {}                # Kategorie → Pfad (Namen) vor dem Durchgang, siehe _pfad_vorher
         self.kategoriewechsel = {}            # Produkt → Wechsel der Kategorie, siehe _kategoriewechsel_melden
         self.wechsel_gespeichert = []         # (Stelle in warnungen, Satz nach dem Speichern), _kategoriewechsel_melden
         self.verschoben = {}                  # verschobene Kategorie → gelöste Zuweisungen, Warnung; _verschiebung_merken
@@ -357,19 +358,24 @@ def _folgen(seit):
     return n.get("faelligkeit", 0), n.get("lebensende", 0)
 
 
+def _folgen_satz(teile, artikel, vorgezogen, lebensende, zusatz=""):
+    """„Prüfintervall … – betrifft n Artikel im Bestand[zusatz]; bei n rückt die nächste Prüfung vor …“ (ohne Punkt)."""
+    satz = "; ".join(teile) or "verschoben"
+    satz += f" – betrifft {artikel} Artikel im Bestand{zusatz}"
+    if vorgezogen:
+        satz += f"; bei {vorgezogen} rückt die nächste Prüfung vor"
+    if lebensende:
+        satz += f"; bei {lebensende} ändert sich das Lebensende"
+    return satz
+
+
 def _folgen_melden(lauf, ort, name, artikel, teile, seit):
     """Warnung für den Bericht, wenn eine Änderung an Intervall oder Lebensdauer Artikel im Bestand betrifft – liefert
     ihre Stelle in „warnungen“ (None: keine Warnung)."""
     vorgezogen, lebensende = _folgen(seit)
     if not artikel or not (teile or vorgezogen or lebensende):
         return None
-    satz = "; ".join(teile) or "verschoben"
-    satz += f" – betrifft {artikel} Artikel im Bestand"
-    if vorgezogen:
-        satz += f"; bei {vorgezogen} rückt die nächste Prüfung vor"
-    if lebensende:
-        satz += f"; bei {lebensende} ändert sich das Lebensende"
-    lauf.bericht["warnungen"].append(f"{ort} ({name}): {satz}.")
+    lauf.bericht["warnungen"].append(f"{ort} ({name}): {_folgen_satz(teile, artikel, vorgezogen, lebensende)}.")
     return len(lauf.bericht["warnungen"]) - 1
 
 
@@ -406,17 +412,40 @@ def _kategoriewechsel_merken(lauf, ort, name, vorhanden, nach, stand_vorher):
     lauf.bericht["zuweisungen"]["geloest"] += stand_vorher[0] - n_nach
 
 
-def _verschiebung_merken(lauf, kid, ort, name, folgen, n_vorher, warnung):
+def _verschiebung_merken(lauf, kid, ort, name, folgen, n_vorher, warnung, satz):
     """Die Kategorie kid ist eben unter eine andere Oberkategorie gewandert; folgen: was katalog.verschieben_folgen davor
     als gelöst ankündigte, n_vorher: Zahl aller Zuweisungen davor, warnung: Stelle ihrer Warnung in „warnungen“ (oder
-    None, wenn darunter keine Artikel stehen). Zählt die gelösten Zuweisungen und merkt sie für _kategoriewechsel_melden."""
+    None, wenn darunter keine Artikel stehen), satz: ihre Teile (die übrigen Änderungen, Artikel, vorgezogen, Lebensende)
+    – _verschoben_melden schreibt sie am Ende neu. Zählt die gelösten Zuweisungen und merkt sie für
+    _kategoriewechsel_melden."""
     geloest = n_vorher - db.query("SELECT COUNT(*) AS n FROM mat_formular_zuweisung", one=True)["n"]
     lauf.bericht["zuweisungen"]["geloest"] += geloest
-    lauf.verschoben[kid] = {"ort": ort, "name": name, "geloest": geloest, "folgen": folgen, "warnung": warnung}
+    lauf.verschoben[kid] = {"ort": ort, "name": name, "geloest": geloest, "folgen": folgen, "warnung": warnung,
+                            "satz": satz}
 
 
 def _namen(kid):
     return [k["name"] for k in katalog.kategorie_pfad(kid)]
+
+
+def _pfade():
+    """Kategorie → Pfad (Liste der Namen), festgehalten zu Beginn des Durchgangs – für _pfad_vorher."""
+    zeilen = {k["id"]: k for k in db.query("SELECT id, parent_id, name FROM mat_category")}
+    out = {}
+    for kid in zeilen:
+        pfad, k, gesehen = [], kid, set()
+        while k in zeilen and k not in gesehen:
+            gesehen.add(k)
+            pfad.insert(0, zeilen[k]["name"])
+            k = zeilen[k]["parent_id"]
+        out[kid] = pfad
+    return out
+
+
+def _pfad_vorher(lauf, kid):
+    """Der Pfad der Kategorie kid vor dem Durchgang (Prüfung Ablauf r1, Befund 2): Verschiebt dieselbe Datei sie oder
+    eine darüber, stünde sonst schon der neue Pfad als „alt“ da. Eine eben angelegte hat keinen – dann der jetzige."""
+    return lauf.pfade_vorher.get(kid) or _namen(kid)
 
 
 def _pfeil(von, nach):
@@ -471,10 +500,10 @@ def _formularfolge(n, alt, jetzt, eigene, fertig, produkte=1):
     return teile
 
 
-def _kategoriewechsel_satz(w, n, alt, jetzt, fertig):
+def _kategoriewechsel_satz(lauf, w, n, alt, jetzt, fertig):
     """Die Warnung für ein Produkt mit n Artikeln, das die Kategorie gewechselt hat (w aus _kategoriewechsel_merken) –
     fertig: nach dem Speichern."""
-    satz = f"Kategorie {_pfeil(_namen(w['von']), _namen(w['nach']))} – betrifft {n} Artikel im Bestand"
+    satz = f"Kategorie {_pfeil(_pfad_vorher(lauf, w['von']), _namen(w['nach']))} – betrifft {n} Artikel im Bestand"
     return f"{w['ort']} ({w['name']}): " + "; ".join([satz] + _formularfolge(n, alt, jetzt, w["eigene"], fertig)) + "."
 
 
@@ -600,19 +629,19 @@ def _kategoriewechsel_melden(lauf):
         # Im Probelauf als Aussicht; nach dem Speichern tauscht _abschluss den Satz gegen den im Ergebnis („wurde
         # gelöst“, „jetzt gilt“ – Prüfung Browser r1, B2), damit er zur Zusammenfassung darüber passt.
         i = len(lauf.bericht["warnungen"])
-        lauf.bericht["warnungen"].append(_kategoriewechsel_satz(w, n, alt, jetzt, False))
-        lauf.wechsel_gespeichert.append((i, _kategoriewechsel_satz(w, n, alt, jetzt, True)))
+        lauf.bericht["warnungen"].append(_kategoriewechsel_satz(lauf, w, n, alt, jetzt, False))
+        lauf.wechsel_gespeichert.append((i, _kategoriewechsel_satz(lauf, w, n, alt, jetzt, True)))
         folge = (w["eigene"], alt and alt[1:], jetzt and jetzt[1:])
         paare.setdefault((w["von"], w["nach"]), {}).setdefault(folge, []).append((w, n, alt, jetzt, i))
     zahl["neue_kategorien"] = [{"kategorie": _kategorie_pfadname(kid), "produkte": sum(aus.values()),
-                                "aus": [_kategorie_pfadname(k) for k in sorted(aus, key=aus.get, reverse=True)]}
+                                "aus": [" / ".join(_pfad_vorher(lauf, k)) for k in sorted(aus, key=aus.get, reverse=True)]}
                                for kid, aus in neu.items()]
     for (von, nach), folgen in paare.items():
         alle = [x for liste in folgen.values() for x in liste]
         n = sum(x[1] for x in alle)
         zahlen = [sum(x[1] for x in alle if _folge_art(x[2], x[3]) == art) for art in (0, 1)]
         wer = alle[0][0]["name"] if len(alle) == 1 else f"{len(alle)} Produkte"
-        kopf = (f"Kategorie {_pfeil(_namen(von), _namen(nach))} – {wer} mit {n} Artikel{'n' if n != 1 else ''} im "
+        kopf = (f"Kategorie {_pfeil(_pfad_vorher(lauf, von), _namen(nach))} – {wer} mit {n} Artikel{'n' if n != 1 else ''} im "
                 "Bestand")
         geloest = sum(x[0]["geloest"] for x in alle)
         lauf.gruppen.append(tuple(_gruppe(
@@ -625,51 +654,72 @@ def _kategoriewechsel_melden(lauf):
     lauf.bericht["kategoriewechsel"] = zahl
 
 
+def _verschoben_text(von, nach):
+    """„verschoben „alt“ → „neu““ für zwei Kategoriepfade; auf die oberste Ebene „→ oberste Ebene“ (Prüfung Browser r1,
+    Verbesserung 2: „→ „Schlingen““ las sich wie ein doppelter Name)."""
+    if len(nach) == 1:
+        return f"verschoben „{' / '.join(von)}“ → " + ("oberste Ebene" if von[-1:] == nach else
+                                                     f"„{nach[0]}“ (oberste Ebene)")
+    return f"verschoben {_pfeil(von, nach)}"
+
+
 def _verschoben_melden(lauf, wechsel, nachher, artikel):
     """Die verschobenen Kategorien (lauf.verschoben): Folgen für die Prüfformulare der Produkte darunter, die nicht selbst
     die Kategorie gewechselt haben (die haben ihre eigene Warnung) – an die Warnung „verschoben – betrifft n Artikel“ der
-    Kategorie angehängt statt doppelt gemeldet, als Gruppe mit den Produkten und als Zahlen (jedes Produkt einmal, auch
-    unter zwei verschobenen Kategorien)."""
+    Kategorie angehängt statt doppelt gemeldet, als Gruppe mit den Produkten und als Zahlen. Jedes Produkt steht bei der
+    innersten verschobenen Kategorie über ihm, einmal (Prüfung Ablauf r1, Befund 3: verschiebt die Datei auch eine
+    Kategorie darüber, stand es sonst bei beiden). „betrifft n Artikel“ zählt wie bisher beim Verschieben; wie viele
+    davon eine eigene Warnung haben – ihr Produkt wechselt selbst die Kategorie oder steht unter einer weiteren
+    verschobenen –, sagt ein Zusatz (Befund 1). Pfade wie vor dem Durchgang → wie am Ende (Befund 2)."""
     zahl = {"kategorien": len(lauf.verschoben), "mit_artikeln": 0, "artikel": 0, "ohne_formular": 0,
             "anderes_formular": 0, "zuweisungen_geloest": sum(v["geloest"] for v in lauf.verschoben.values())}
-    gezaehlt = set()
-    for kid, v in lauf.verschoben.items():
+    eintraege, gezaehlt = {}, set()
+    for kid in sorted(lauf.verschoben, key=lambda k: len(_namen(k)), reverse=True):      # die innerste zuerst
         bedingung, args = in_kategorie(kid)
-        eintraege = []
+        eintraege[kid] = []
         for p in db.query(f"SELECT p.* FROM mat_product p WHERE {bedingung} ORDER BY p.manufacturer COLLATE NOCASE, "
                           "p.model COLLATE NOCASE, p.id", args):
+            if p["id"] in gezaehlt:
+                continue
+            gezaehlt.add(p["id"])
             n = artikel(p["id"]) if p["id"] not in wechsel else 0
             if not n:
                 continue
             alt, jetzt = lauf.geltend_vorher.get(p["id"]), nachher.get(p["id"])
-            eintraege.append((katalog.produktname(p), n, alt, jetzt))
-            if p["id"] not in gezaehlt:
-                gezaehlt.add(p["id"])
-                zahl["mit_artikeln"] += 1
-                zahl["artikel"] += n
-                if alt and not jetzt:
-                    zahl["ohne_formular"] += n
-                elif alt and jetzt[1] != alt[1]:
-                    zahl["anderes_formular"] += n
+            eintraege[kid].append((katalog.produktname(p), n, alt, jetzt))
+            zahl["mit_artikeln"] += 1
+            zahl["artikel"] += n
+            if alt and not jetzt:
+                zahl["ohne_formular"] += n
+            elif alt and jetzt[1] != alt[1]:
+                zahl["anderes_formular"] += n
+    for kid, v in lauf.verschoben.items():
         i = v["warnung"]
-        if i is None or not eintraege:
+        if i is None:
             continue
+        liste = eintraege[kid]
+        teile, n_vorher, vorgezogen, lebensende = v["satz"]
+        rest = n_vorher - sum(e[1] for e in liste)
+        zusatz = (f", davon {rest} mit eigener Warnung" if liste else ", alle mit eigener Warnung") if rest > 0 else ""
         ort = f"{v['ort']} ({v['name']}): "
-        basis = lauf.bericht["warnungen"][i].removesuffix(".")
+        basis = ort + _folgen_satz(teile + [_verschoben_text(_pfad_vorher(lauf, kid), _namen(kid))], n_vorher,
+                                   vorgezogen, lebensende, zusatz)
 
-        def satz(fertig, basis=basis, eintraege=eintraege, v=v):
+        def satz(fertig, basis=basis, liste=liste, v=v):
             g = _geloest_text(v, fertig)
-            return "; ".join([basis] + _folgen_je_artikel([e[1:] for e in eintraege], fertig) + ([g] if g else [])) + "."
+            return "; ".join([basis] + _folgen_je_artikel([e[1:] for e in liste], fertig) + ([g] if g else [])) + "."
         lauf.bericht["warnungen"][i] = satz(False)
         lauf.wechsel_gespeichert.append((i, satz(True)))
+        if not liste:
+            continue
         # Für die Oberfläche: die Warnung ohne Fundstelle mit den Zahlen, aufklappbar je gleicher Folge die Produkte.
         folgen = {}
-        for e in eintraege:
+        for e in liste:
             folgen.setdefault((e[2] and e[2][1:], e[3] and e[3][1:]), []).append(e)
-        zahlen = [sum(e[1] for e in eintraege if _folge_art(e[2], e[3]) == art) for art in (0, 1)]
+        zahlen = [sum(e[1] for e in liste if _folge_art(e[2], e[3]) == art) for art in (0, 1)]
 
         def unterzeilen(fertig, folgen=folgen, v=v):
-            out = [_unterzeile(liste, None, fertig) for liste in folgen.values()]
+            out = [_unterzeile(gleich, None, fertig) for gleich in folgen.values()]
             g = _geloest_text(v, fertig)
             return out + ([(g[0].upper() + g[1:] + ".", [])] if g else [])
         lauf.gruppen.append(tuple(_gruppe(
@@ -827,7 +877,6 @@ def _kategorie(e, parent, ort, lauf, tiefe):
                 # verschieben_folgen vorher – für die Warnung, gezählt in _verschiebung_merken.
                 verschoben = nachher["parent_id"] != vorher["parent_id"]
                 if verschoben:
-                    pfad_vorher = _namen(kid)
                     folgen = katalog.verschieben_folgen(kategorie_id=kid, parent_id=nachher["parent_id"])
                     n_zuweisungen = db.query("SELECT COUNT(*) AS n FROM mat_formular_zuweisung", one=True)["n"]
                 # „Jedes Produkt hat ein Prüfintervall“ erst nach den Produkten der Datei (_intervalle_pruefen).
@@ -840,7 +889,7 @@ def _kategorie(e, parent, ort, lauf, tiefe):
                     teile.append(f"Prüfintervall (Vorgabe) {vorher['default_interval_months'] or '–'} → "
                                  f"{nachher['default_interval_months'] or '–'} Monate")
                 if verschoben:
-                    teile.append(f"verschoben {_pfeil(pfad_vorher, _namen(kid))}")
+                    teile.append(_verschoben_text(_pfad_vorher(lauf, kid), _namen(kid)))
                 warnung = None
                 if teile:
                     bedingung, args = in_kategorie(kid)
@@ -848,7 +897,8 @@ def _kategorie(e, parent, ort, lauf, tiefe):
                                        f"WHERE i.lock_state <> 'ausgesondert' AND {bedingung}", args, one=True)["n"]
                     warnung = _folgen_melden(lauf, ort, name, artikel, teile, seit)
                 if verschoben:
-                    _verschiebung_merken(lauf, kid, ort, name, folgen, n_zuweisungen, warnung)
+                    _verschiebung_merken(lauf, kid, ort, name, folgen, n_zuweisungen, warnung,
+                                         (teile[:-1], artikel, *_folgen(seit)))
             else:
                 bericht["kategorien"]["unveraendert"] += 1
             lauf.uid_uebernehmen("mat_category", "category", vorhanden, uid)
@@ -1562,7 +1612,7 @@ def _zuweisungen(lauf):
         heimat = katalog.pool_formular(pf)["category_id"]
         kategorie = ziel if spalte == "category_id" else katalog.produkt(ziel)["category_id"]
         if kategorie not in katalog._unterkategorien(heimat):
-            bericht["hinweise"].append(f"{ort} ({titel}): {_ziel_text(spalte, ziel)} liegt hier nicht unter "
+            bericht["hinweise"].append(f"{ort} ({titel}): {_ziel_text(spalte, ziel)} liegt in dieser Materialablage nicht unter "
                                        f"„{_kategorie_pfadname(heimat)}“ – nicht zugewiesen.")
             continue
         aktiv = katalog._aktive_version(pf)
@@ -1870,6 +1920,7 @@ def _durchgang(daten, lauf, speichern):
         with db.transaction(sofort=True):
             # Was vor dem Durchgang galt – für _kategoriewechsel_melden, gelesen unter der Schreibsperre.
             lauf.geltend_vorher = katalog._geltend()
+            lauf.pfade_vorher = _pfade()
             try:
                 _kategorien(daten.get("kategorien") or [], None, "kategorien", lauf)
                 _nachholen(lauf)
