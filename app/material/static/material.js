@@ -4372,8 +4372,15 @@
     const flach = bl.neu || bl.geaendert || bl.unveraendert ? `<tr><th scope="row">Bestandteil-Listen</th><td>${bl.neu || 0}</td><td>${bl.geaendert || 0}</td><td>${bl.unveraendert || 0}</td></tr>` : "";
     // Zuweisungen der Prüfformulare (Format 3, Formular-Pool): gesetzt, gelöst (die Datei ist maßgeblich), unverändert.
     const zw = b.zuweisungen || {};
-    const zuweisungen = zw.neu || zw.geloest || zw.unveraendert ? `<p class="help">Zuweisungen der Prüfformulare: ${zw.neu || 0} gesetzt, ${zw.geloest || 0} gelöst, ${zw.unveraendert || 0} unverändert.</p>` : "";
+    // Produkte, die die Kategorie wechseln (Wunsch vom 09.11.2026): Die Zusammenfassung steht gleich unter dem Stand – vor
+    // „Übernehmen“ nicht zu übersehen; gelöste Zuweisungen an diese Produkte zählen unter „gelöst“ mit.
+    const kw = b.kategoriewechsel || {};
+    const durchWechsel = kw.zuweisungen_geloest ? ` (davon ${kw.zuweisungen_geloest} durch Kategoriewechsel)` : "";
+    const zuweisungen = zw.neu || zw.geloest || zw.unveraendert ? `<p class="help">Zuweisungen der Prüfformulare: ${zw.neu || 0} gesetzt, ${zw.geloest || 0} gelöst${durchWechsel}, ${zw.unveraendert || 0} unverändert.</p>` : "";
+    const wechsel = kw.zusammenfassung || kw.alte_datei ? `<div class="mat-austausch-liste warnung mat-kategoriewechsel"><strong>Achtung – Produkte wechseln die Kategorie</strong>
+        ${[kw.zusammenfassung, kw.alte_datei].filter(Boolean).map((t) => `<p>${esc(t)}</p>`).join("")}</div>` : "";
     return `${stand}
+      ${wechsel}
       ${h.quelle || h.erstellt ? `<p class="help">Export von ${esc(h.quelle || "?")}${h.erstellt ? `, erstellt ${esc(fmtZeit(h.erstellt))}.` : /…$/.test(h.quelle || "") ? "" : "."}</p>` : ""}
       <table class="mat-austausch"><thead><tr><th></th><th>neu</th><th>geändert${b.version >= 2 ? infoKnopf("neu und geändert", "Eine geänderte Prüfliste wird eine neue Formularversion (zählt als neu); eine neue Dokumentversion zählt als geändert." + mehrDazu("katalogimport")) : ""}</th><th>unverändert</th></tr></thead>
         <tbody>${arten.map(zeile).join("")}${flach}</tbody></table>

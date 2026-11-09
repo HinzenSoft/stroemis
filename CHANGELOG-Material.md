@@ -94,6 +94,7 @@ Geschichte stehen. Schemaversion nach der Nachbesserung vor dem Merge: 30; mit d
 | Bestandsimport: „Seriennummer bei anderer Variante“ nur je Modell | Schritt 6 meldet dieselbe Seriennummer nur noch bei einem anderen Produkt desselben Herstellers UND Modells (im Bestand und in derselben Datei bzw. Auswahl), nicht mehr bei jedem Produkt des Herstellers; offene Zeilen nach der alten Regel lösen sich mit „Erneut prüfen“ | gebaut 08.11.2026 (kein Schemaschritt), Zweig serie-variante |
 | Nur den Bestand leeren (nur dev) | `flask material dev-bestand-leeren` – leert auf dev nur den Bestand (Ordner, Artikel, Prüfungen, Durchgänge, Freigaben, Anträge, Meldungen, Importe, Logs, ihr Journal, DEMO-Konten des Beispielbestands) nach einer Sicherung; Katalog, Formulare, Rückrufe, Produktmeldungen, Zähler und Schema bleiben; dazu `bestand-leeren [--ja]` im Harness-Zugang | gebaut 08.11.2026 (kein Schemaschritt, Schema bleibt 39), Freigabe offen |
 | Kategorie „Schlingen“ statt „Textilmaterial“ | Beispielbestand erkennt die Schlingen-Kategorie unter „Schlingen“ und den früheren Namen („Textilmaterial“, „Bandmaterial“), Petzl-Vorlage unter „Schlingen“; README „Kategorie im Katalog umbenennen“ mit Weg, Folgen und Warnung vor alten ZIPs; Tests | gebaut 09.11.2026 (kein Schemaschritt, Schema bleibt 39), Zweig kategorie-schlingen |
+| Warnung im Katalogimport bei Kategoriewechsel | Je Produkt mit Artikeln, das durch den Import die Kategorie wechselt, eine Warnung (alte → neue Kategorie, Artikel, Prüfformular verloren/anders/gleich, gelöste Zuweisung); Zusammenfassung oben im Bericht samt Hinweis auf eine alte Datei, wenn eine neue Kategorie Produkte aus einer bestehenden aufnimmt; gelöste Produkt-Zuweisungen zählen unter „gelöst“ mit; Oberfläche und Kommandozeile | gebaut 09.11.2026 (kein Schemaschritt, Schema bleibt 39), Zweig import-warnung-kategorie |
 
 ## Abgleich mit dem Bestand (vor Lieferung 1)
 
@@ -13442,3 +13443,53 @@ Schlinge, Schlinge in der persönlichen Ausrüstung, Petzl-Formular als geltende
 Materialwart; Kennung, Pool, Standard, Zuweisungen, Produkte und Artikel unverändert, Journal, Export mit „Schlingen“;
 neue Serie unverändert; Export von vorher benennt zurück; alte Serie: neue Kategorie, Produkte zurück, Zuweisung gelöst,
 kein geltendes Formular).
+
+## Warnung im Katalogimport, wenn Produkte die Kategorie wechseln (Wunsch des Nutzers, 09.11.2026)
+
+Wunsch: „Ja, Warnung einbauen“ (Frage 1 aus dem Bericht zu „Schlingen“). Anlass: Nach dem Umbenennen „Textilmaterial“ →
+„Schlingen“ legt eine alte Katalog-ZIP (Kategorien am Namen erkannt) „Textilmaterial“ neu an und schiebt ihre Produkte
+zurück; der Probelauf zeigte dafür nur „neu“ und „geändert (Kategorie)“, `zuweisungen.geloest` zählte 0. Bauauftrag
+`planung/import-warnung-kategorie/auftrag.md`. Am Import selbst ändert sich nichts (nur Melden), kein Schemaschritt
+(Schema bleibt 39).
+
+- **Kern** (`services/importer.py`): Jeder Durchgang liest am Anfang unter der Schreibsperre, welches Formular je Produkt
+  gilt (`katalog._geltend`, dieselbe Regel wie `formular_fuer_produkt`). Wechselt ein vorhandenes Produkt die Kategorie
+  (`_produkt`), zählt `_kategoriewechsel_merken` die Zuweisungen, die `produkt_aendern` dabei löst (Z6), unter
+  `zuweisungen.geloest` mit und merkt die eigene Zuweisung des Produkts. Nach `_zuweisungen` – erst dann steht fest, was
+  gilt – schreibt `_kategoriewechsel_melden` je Produkt mit Artikeln (nicht ausgesondert) eine Warnung in `warnungen`
+  (Format wie `_folgen_melden`: „produkte[n] (Name): Kategorie „alt“ → „neu“ – betrifft n Artikel hier; …“ mit gelöster
+  Zuweisung und einem von: kein Prüfformular mehr (bisher „…“, Herkunft) und nicht prüfbar / künftig gilt „…“ statt „…“ /
+  „…“ gilt weiter / künftig gilt „…“, bisher keins / weiterhin keins) und die Zahlen in den neuen Berichtsschlüssel
+  `kategoriewechsel`. Produkte ohne Artikel: keine Warnung, sie zählen in der Zusammenfassung mit.
+  `_kategoriewechsel_text` (in `_abschluss`, wenn feststeht, ob gespeichert wurde) setzt `zusammenfassung` – nur wenn
+  ein Produkt mit Artikeln betroffen ist oder eine neu angelegte Kategorie Produkte aus einer bestehenden aufnimmt; im
+  Probelauf „wechseln … verlieren … wird gelöst“, nach dem Speichern „haben gewechselt … verloren … wurde gelöst“ – und
+  im zweiten Fall `alte_datei` („Neu angelegt: „…“ nimmt n Produkte aus „…“ auf. Vielleicht ist die Datei älter …“,
+  Probelauf: „dann nicht übernehmen, sondern eine aktuelle Datei nehmen“, danach: „dann die Produkte über „Bearbeiten“
+  zurückverschieben und ihre Zuweisungen neu setzen“).
+- **Oberfläche** (`material.js` `importBerichtHtml`, Dialog „Katalog importieren“ und „Bericht ansehen“): Kasten
+  „Achtung – Produkte wechseln die Kategorie“ (Stil der Warnliste, `.mat-austausch-liste.warnung`, neu
+  `.mat-kategoriewechsel p`) gleich unter dem Stand, also vor Tabelle, Listen und „Übernehmen“; keine neuen Knöpfe. Die
+  Zeile „Zuweisungen der Prüfformulare“ nennt „(davon n durch Kategoriewechsel)“. Die Warnungen je Produkt stehen wie
+  die übrigen unter „Achtung – betrifft vorhandene Artikel“.
+- **Kommandozeile** (`flask material import-catalog`): Zeile „Zuweisungen … (davon n durch Kategoriewechsel)“,
+  Zusammenfassung und Hinweis als erste „ACHTUNG“-Zeilen vor den Hinweisen, danach die Warnungen je Produkt.
+- **README**: „Katalog exportieren und importieren“ und „Kategorie im Katalog umbenennen“ (Probelauf zeigt es jetzt mit
+  Warnung) nachgezogen, Testliste.
+
+**Schnittstelle**
+
+| Route | Rechte | Änderung |
+| --- | --- | --- |
+| `GET /api/material/katalog/import/<kennung>` (Bericht), `flask material import-catalog` | wie bisher | Bericht neu `kategoriewechsel`: `null` ohne Wechsel, sonst `{produkte, mit_artikeln, artikel, ohne_formular, anderes_formular, zuweisungen_geloest, neue_kategorien: [{kategorie, produkte, aus: [Pfad]}], zusammenfassung, alte_datei}` (die beiden Texte `null`, wenn kein Produkt mit Artikeln betroffen ist und keine neue Kategorie Produkte aufnimmt); `zuweisungen.geloest` zählt die beim Wechsel gelösten Zuweisungen mit; `warnungen` je Produkt mit Artikeln |
+
+**Tests**: neu `tests/test_material_import_kategoriewechsel.py` – `test_alte_datei_probelauf_und_echter_lauf` (alte
+Datei: neue Kategorie nimmt drei Produkte auf, eins wechselt in eine bestehende mit eigenem Standard, eins bleibt;
+Warnungen wörtlich für Standard verloren, Produkt-Zuweisung gelöst, anderes Formular; Produkt ohne Artikel ohne
+Warnung, aber mit „geändert (Kategorie)“; ausgesonderter Artikel zählt nicht; `geloest` 2; Zahlen, Zusammenfassung
+und Hinweis im Probelauf und echten Lauf; Probelauf ändert nichts; Zuweisungen gelöst mit Journal; zweiter Lauf ohne
+Meldung; Rückweg in bestehende Kategorien ohne Hinweis, „bisher keins“), `test_gilt_weiter_und_ohne_formular`
+(Standard der Oberkategorie gilt weiter, weiterhin keins, nur ein Produkt ohne Artikel: keine Warnung, keine
+Zusammenfassung), `test_kommandozeile` (Trockenlauf und echter Lauf: „davon … durch Kategoriewechsel“, Reihenfolge der
+„ACHTUNG“-Zeilen). `tests/test_material_katalog.py::test_kategorie_umbenennen`: die alte Serie meldet jetzt die
+Warnung, die Zusammenfassung und `geloest` 1 statt keiner Warnung.

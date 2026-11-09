@@ -992,6 +992,7 @@ button.mat-ue-klapp:focus-visible { outline: 3px solid var(--gelb); outline-offs
 .mat-austausch-liste.warnung { border-left-color: var(--co-warning-ka); background: var(--co-warning-fl); }
 .mat-austausch-liste.fehler { border-left-color: var(--rot); background: var(--rot-hell); }
 .mat-austausch-liste ul, .mat-austausch-aenderungen { margin: 4px 0 0; padding-left: 18px; }
+.mat-kategoriewechsel p { margin: 4px 0 0; }
 .mat-austausch-liste li, .mat-austausch-aenderungen li { overflow-wrap: anywhere; margin: 2px 0; }
 .mat-austausch-aenderungen { max-height: 280px; overflow-y: auto; font-size: var(--fs-klein); }
 .mat-austausch-bericht:empty { display: none; }
