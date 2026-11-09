@@ -996,6 +996,12 @@ button.mat-ue-klapp:focus-visible { outline: 3px solid var(--gelb); outline-offs
 .mat-austausch-liste li, .mat-austausch-aenderungen li { overflow-wrap: anywhere; margin: 2px 0; }
 .mat-austausch-aenderungen { max-height: 280px; overflow-y: auto; font-size: var(--fs-klein); }
 .mat-austausch-bericht:empty { display: none; }
+/* Feinschliff Katalogimport (Prüfung Browser r3): je Gruppe im Kasten „Achtung“ die Produkte aufklappbar darunter, klein
+   wie die Liste „Im Einzelnen“; der Fokusring auf dem roten Hauptknopf bekommt innen einen weißen Ring – der dunkle Ring
+   außen allein grenzt gegen Rot kaum ab (Verbesserung 6). Auf weißen Knöpfen fällt der innere Ring nicht auf. */
+.mat-kw-einzeln { margin: 2px 0 4px; }
+.mat-kw-einzeln ul { font-size: var(--fs-klein); }
+.btn:focus-visible { box-shadow: inset 0 0 0 2px var(--weiss), 0 0 0 5px var(--fokus-hof); }
 /* Katalogimport im Hintergrund (24.10.2026): Stand im Dialog und Hinweis oben auf der Katalogseite. */
 .mat-import-stand:empty { display: none; }
 .mat-import-stand { margin: 10px 0 4px; }

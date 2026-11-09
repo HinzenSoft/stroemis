@@ -4309,8 +4309,7 @@
   }
   /* Eine Liste des Importberichts. Fehler gleichen Wortlauts an vielen Stellen (etwa 18 Produkte ohne Materialart) stehen
      als eine Zeile mit ihren Fundstellen darunter. */
-  const austauschListe = (titel, zeilen, art) => {
-    if (!zeilen || !zeilen.length) return "";
+  const austauschZeilen = (zeilen) => {
     const gruppen = new Map();
     zeilen.map(fundstelleLesbar).forEach((z) => {
       const i = z.indexOf(": ");
@@ -4318,11 +4317,12 @@
       if (!gruppen.has(satz)) gruppen.set(satz, []);
       gruppen.get(satz).push(i > 0 ? z.slice(0, i) : "");
     });
-    const li = [...gruppen].map(([satz, orte]) => (orte.length >= 3 && orte.every(Boolean)
+    return [...gruppen].map(([satz, orte]) => (orte.length >= 3 && orte.every(Boolean)
       ? `<li>${esc(satz)} <span class="muted">(${orte.length}×)</span><ul>${orte.map((o) => `<li>${esc(o)}</li>`).join("")}</ul></li>`
-      : orte.map((o) => `<li>${esc(o ? `${o}: ${satz}` : satz)}</li>`).join("")));
-    return `<div class="mat-austausch-liste ${art || ""}"><strong>${esc(titel)}</strong><ul>${li.join("")}</ul></div>`;
+      : orte.map((o) => `<li>${esc(o ? `${o}: ${satz}` : satz)}</li>`).join(""))).join("");
   };
+  const austauschListe = (titel, zeilen, art) => (!zeilen || !zeilen.length ? ""
+    : `<div class="mat-austausch-liste ${art || ""}"><strong>${esc(titel)}</strong><ul>${austauschZeilen(zeilen)}</ul></div>`);
 
   async function katalogExportDialog() {
     let v;
@@ -4372,24 +4372,37 @@
     const flach = bl.neu || bl.geaendert || bl.unveraendert ? `<tr><th scope="row">Bestandteil-Listen</th><td>${bl.neu || 0}</td><td>${bl.geaendert || 0}</td><td>${bl.unveraendert || 0}</td></tr>` : "";
     // Zuweisungen der Prüfformulare (Format 3, Formular-Pool): gesetzt, gelöst (die Datei ist maßgeblich), unverändert.
     const zw = b.zuweisungen || {};
-    // Produkte, die die Kategorie wechseln (Wunsch vom 09.11.2026): Die Zusammenfassung steht gleich unter dem Stand – vor
-    // „Übernehmen“ nicht zu übersehen; gelöste Zuweisungen an diese Produkte zählen unter „gelöst“ mit.
+    // Produkte, die die Kategorie wechseln, und verschobene Kategorien (Wünsche vom 09.11.2026): Die Zusammenfassung steht
+    // gleich unter dem Stand – vor „Übernehmen“ nicht zu übersehen; gelöste Zuweisungen zählen unter „gelöst“ mit.
     const kw = b.kategoriewechsel || {};
-    const durchWechsel = kw.zuweisungen_geloest ? ` (davon ${kw.zuweisungen_geloest} durch Kategoriewechsel)` : "";
+    const durchWechsel = kw.davon ? ` (${esc(kw.davon)})` : "";
     const zuweisungen = zw.neu || zw.geloest || zw.unveraendert ? `<p class="help">Zuweisungen der Prüfformulare: ${zw.neu || 0} gesetzt, ${zw.geloest || 0} gelöst${durchWechsel}, ${zw.unveraendert || 0} unverändert.</p>` : "";
-    const wechsel = kw.zusammenfassung || kw.alte_datei ? `<div class="mat-austausch-liste warnung mat-kategoriewechsel"><strong>Achtung – Produkte wechseln die Kategorie</strong>
-        ${[kw.zusammenfassung, kw.alte_datei].filter(Boolean).map((t) => `<p>${esc(t)}</p>`).join("")}</div>` : "";
+    // EIN Kasten „Achtung“ für alles, was vorhandene Artikel betrifft (Prüfung Browser r3, Verbesserung 2): oben die
+    // Zusammenfassung, darunter je alte → neue (bzw. verschobene) Kategorie eine Zeile mit Zahlen und Folge, die
+    // Prüfformulare und Produkte aufklappbar unter „Einzelheiten“ (Verbesserung 1 – statt einer langen Warnung je Produkt;
+    // welche Warnungen eine Gruppe ersetzt, sagt der Server in „gruppen“), dann die übrigen Warnungen (Prüfintervall,
+    // Lebensdauer, Format 3).
+    const saetze = [kw.zusammenfassung, kw.verschiebung, kw.alte_datei].filter(Boolean);
+    const gruppen = kw.gruppen || [];
+    const inGruppe = new Set(gruppen.flatMap((g) => g.warnungen));
+    const liste = (z) => (z.length ? `<ul>${z.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>` : "");
+    const zeilen = gruppen.map((g) => `<li>${esc(g.zeile)}<details class="mat-auf mat-kw-einzeln"><summary>Einzelheiten</summary>
+        <ul>${g.folgen.map((f) => `<li>${esc(f.zeile)}${liste(f.einzeln)}</li>`).join("")}</ul></details></li>`).join("")
+      + austauschZeilen(b.warnungen.filter((_, i) => !inGruppe.has(i)));
+    const achtungTitel = !saetze.length ? "Achtung – betrifft vorhandene Artikel"
+      : kw.zusammenfassung || kw.alte_datei ? "Achtung – Produkte wechseln die Kategorie" : "Achtung – Kategorien werden verschoben";
+    const achtung = saetze.length || zeilen ? `<div class="mat-austausch-liste warnung${saetze.length ? " mat-kategoriewechsel" : ""}"><strong>${achtungTitel}</strong>
+        ${saetze.map((t) => `<p>${esc(t)}</p>`).join("")}${zeilen ? `<ul>${zeilen}</ul>` : ""}</div>` : "";
     // Der Server kürzt eine lange Quelle mit „…“ – eine Klammer darin bliebe offen (Prüfung Browser r2, Verbesserung 5).
     const q = h.quelle || "";
     const quelleZu = /…$/.test(q) && (q.match(/\(/g) || []).length > (q.match(/\)/g) || []).length ? ")" : "";
     return `${stand}
-      ${wechsel}
+      ${achtung}
       ${h.quelle || h.erstellt ? `<p class="help">Export von ${esc(h.quelle || "?")}${quelleZu}${h.erstellt ? `, erstellt ${esc(fmtZeit(h.erstellt))}.` : /…$/.test(h.quelle || "") ? "" : "."}</p>` : ""}
       <table class="mat-austausch"><thead><tr><th></th><th>neu</th><th>geändert${b.version >= 2 ? infoKnopf("neu und geändert", "Eine geänderte Prüfliste wird eine neue Formularversion (zählt als neu); eine neue Dokumentversion zählt als geändert." + mehrDazu("katalogimport")) : ""}</th><th>unverändert</th></tr></thead>
         <tbody>${arten.map(zeile).join("")}${flach}</tbody></table>
       ${zuweisungen}
       ${austauschListe("Fehler", b.fehler, "fehler")}
-      ${austauschListe("Achtung – betrifft vorhandene Artikel", b.warnungen, "warnung")}
       ${austauschListe("Hinweis", b.hinweise, "")}
       ${b.aenderungen.length ? `<details class="mat-auf"${b.aenderungen.length <= 12 ? " open" : ""}><summary>Im Einzelnen (${b.aenderungen.length})</summary>
         <ul class="mat-austausch-aenderungen">${b.aenderungen.map((z) => `<li>${esc(z)}</li>`).join("")}</ul></details>` : ""}
@@ -4508,6 +4521,17 @@
         ok.hidden = !a.uebernehmbar;
         ok.disabled = false;
         ok.textContent = "Übernehmen";
+        // Fokus (Prüfung Browser r3, Verbesserung 4): Liegt er auf keinem sichtbaren Bedienelement des Dialogs oder am
+        // Dateifeld – nach „Bericht ansehen“ am Titel (Touch) bzw. am Dateifeld (das erste Bedienelement), nach dem
+        // Hochladen am verborgenen Dateifeld, nach „Übernehmen“ am verborgenen Knopf –, kommt er auf den Stand des Berichts („Probelauf – noch nichts gespeichert.“), ohne zu rollen; so liest
+        // die Vorlesehilfe dort weiter. Wie beim Bestandsimport (Stand mit tabindex -1, Ring nur für die Tastatur).
+        const anfang = $(".mat-austausch-stand", bericht);
+        const ae = document.activeElement;
+        if (anfang && (!ae || !body.contains(ae) || ae === $("h2", body) || ae === $("#ki-datei", body)
+                       || !ae.getClientRects().length)) {
+          anfang.tabIndex = -1;
+          anfang.focus({ preventScroll: true });
+        }
         // Kasten „Produkte wechseln die Kategorie“ (Prüfung Browser r1, B1): Am Telefon klebt „Übernehmen“ unten im
         // Dialog, der Kasten stand unter Kopf und Ablage erst nach dem Rollen im Bild. Ist er nicht ganz zu sehen, rollt
         // der Dialog den Bericht (Stand und Kasten) nach oben.
@@ -4671,9 +4695,14 @@
     } else if (a.fehler) text = `${a.trocken ? "Probelauf" : "Katalogimport"} mit Fehler beendet.`;
     else text = `${a.trocken ? "Probelauf" : "Katalogimport"} mit Fehlern beendet – nichts gespeichert.`;
     const laeuft = IMPORT_OFFEN.has(a.zustand);
+    // Neu gezeichnet verlöre der Knopf den Fokus – etwa gleich nach dem Schließen des Dialogs, der ihn eben dorthin
+    // zurückgegeben hat (Prüfung Browser r3, Verbesserung 4: nach Esc stand er auf der Seite statt auf „Bericht ansehen“).
+    const fokus = ziel.contains(document.activeElement) ? document.activeElement.dataset.act : null;
     ziel.innerHTML = `<div class="mat-importhinweis${laeuft ? " laeuft" : a.zustand === "fertig" ? "" : " bad"}" role="status">
       <p><strong>${esc(text)}</strong> <span class="help">${a.von ? `${esc(a.von)} · ` : ""}${esc(a.quelle || "")} · ${esc(fmtZeit(laeuft ? a.gestartet : a.beendet))}</span></p>
       <p><button type="button" class="lnk" data-act="kat-import-stand" data-id="${esc(a.id)}">${laeuft || a.zustand === "abgebrochen" ? "Stand ansehen" : "Bericht ansehen"}</button>${laeuft ? "" : ` · <button type="button" class="lnk" data-act="kat-import-aus" data-id="${esc(a.id)}">Ausblenden</button>`}</p></div>`;
+    const knopf = fokus && $(`[data-act="${fokus}"]`, ziel);
+    if (knopf) knopf.focus();
     if (laeuft) importHinweisUhr = setTimeout(importHinweis, 5000);
   }
 

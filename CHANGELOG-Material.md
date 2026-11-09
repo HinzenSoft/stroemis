@@ -95,6 +95,7 @@ Geschichte stehen. Schemaversion nach der Nachbesserung vor dem Merge: 30; mit d
 | Nur den Bestand leeren (nur dev) | `flask material dev-bestand-leeren` – leert auf dev nur den Bestand (Ordner, Artikel, Prüfungen, Durchgänge, Freigaben, Anträge, Meldungen, Importe, Logs, ihr Journal, DEMO-Konten des Beispielbestands) nach einer Sicherung; Katalog, Formulare, Rückrufe, Produktmeldungen, Zähler und Schema bleiben; dazu `bestand-leeren [--ja]` im Harness-Zugang | gebaut 08.11.2026 (kein Schemaschritt, Schema bleibt 39), Freigabe offen |
 | Kategorie „Schlingen“ statt „Textilmaterial“ | Beispielbestand erkennt die Schlingen-Kategorie unter „Schlingen“ und den früheren Namen („Textilmaterial“, „Bandmaterial“), Petzl-Vorlage unter „Schlingen“; README „Kategorie im Katalog umbenennen“ mit Weg, Folgen und Warnung vor alten ZIPs; Tests | gebaut 09.11.2026 (kein Schemaschritt, Schema bleibt 39), Zweig kategorie-schlingen |
 | Warnung im Katalogimport bei Kategoriewechsel | Je Produkt mit Artikeln, das durch den Import die Kategorie wechselt, eine Warnung (alte → neue Kategorie, Artikel, Prüfformular verloren/anders/gleich, gelöste Zuweisung); Zusammenfassung oben im Bericht samt Hinweis auf eine alte Datei, wenn eine neue Kategorie Produkte aus einer bestehenden aufnimmt; gelöste Produkt-Zuweisungen zählen unter „gelöst“ mit; Oberfläche und Kommandozeile | gebaut 09.11.2026 (kein Schemaschritt, Schema bleibt 39), Zweig import-warnung-kategorie |
+| Import-Warnung: Feinschliff und verschobene Kategorien | Verschiebt eine Katalogdatei (mit Kennung) eine Kategorie, gleiche Warnung und Zählung wie beim Kategoriewechsel (Formularfolgen, gelöste Zuweisungen, Zusammenfassung); im Dialog ein Kasten „Achtung“ mit einer Zeile je alte → neue Kategorie und „Einzelheiten“ zum Aufklappen, „im Bestand“ statt „hier“, Fokus auf dem Bericht und zurück auf den Auslöser, weißer innerer Fokusring auf dem roten Knopf | gebaut 09.11.2026 (kein Schemaschritt, Schema bleibt 39), Zweig import-warnung-feinschliff |
 
 ## Abgleich mit dem Bestand (vor Lieferung 1)
 
@@ -13522,3 +13523,67 @@ Warnung, die Zusammenfassung und `geloest` 1 statt keiner Warnung.
 - Herkunftszeile im Bericht: Kürzt der Server eine lange Quelle mit „…“, schließt die Anzeige eine darin offene Klammer
   („… Selbstsicherungen …), erstellt …“; Browser, Verbesserung 5) – gilt für jeden Katalogimport.
 - Test: `test_alte_datei_probelauf_und_echter_lauf` mit dem neuen Hinweis.
+
+## Import-Warnung: Feinschliff und verschobene Kategorien (09.11.2026)
+
+Auftrag `planung/import-warnung-feinschliff/auftrag.md`: Frage 1 aus dem Bericht zu import-warnung-kategorie („Ja, mit
+abdecken“) und die Verbesserungen 1, 2, 4, 6 und 9 der Browserprüfung r3. Am Importverhalten ändert sich nichts (nur
+Melden), kein Schemaschritt (Schema bleibt 39).
+
+- **Verschobene Kategorien** (`services/importer.py`): Ändert der Import die Oberkategorie einer vorhandenen Kategorie
+  (nur über die Kennung möglich), holt `_kategorie` vorher `katalog.verschieben_folgen` (was Z6 lösen wird) und zählt in
+  `_verschiebung_merken` die gelösten Zuweisungen unter `zuweisungen.geloest` mit. Die vorhandene Warnung der Kategorie
+  sagt jetzt „verschoben „alt“ → „neu“ – betrifft n Artikel im Bestand“ (auch neben einer Intervalländerung) und wird in
+  `_verschoben_melden` nach allen Zuweisungen der Datei um die Folgen ergänzt statt doppelt gemeldet: je gleicher Folge
+  die Zahl der Artikel („2 Artikel haben danach kein Prüfformular mehr (bisher „…“, Herkunft) und lassen sich nicht
+  prüfen“, „für n Artikel gilt künftig „…“ statt „…““, „… gilt weiter“, „…, bisher keins“, „weiterhin kein
+  Prüfformular“) und die gelösten Zuweisungen („die Zuweisung von „…“ an Kategorie „…“ wird gelöst“). Produkte, die
+  selbst die Kategorie wechseln, behalten ihre eigene Warnung und zählen dort. Nach dem Speichern in der Vergangenheit.
+- **Zusammenfassung**: `kategoriewechsel` entsteht auch, wenn nur Kategorien verschoben werden; neu `verschoben`
+  (Zahlen) und der Satz `verschiebung` („1 Kategorie wird verschoben – darin m Produkte mit Artikeln im Bestand (a
+  Artikel); x Artikel verlieren ihr Prüfformular, y bekommen ein anderes, z Zuweisungen werden gelöst.“, nur wenn
+  Produkte mit Artikeln darunter stehen), `davon` für die Zeile der Zuweisungen („davon n durch Kategoriewechsel“,
+  „… durch verschobene Kategorien“ oder beides).
+- **Kürzere Warnzeilen** (Browser r3, Verbesserung 1 und 9): der gemeinsame Oberpfad nur einmal („Kategorie „Schlingen“ →
+  „Textilmaterial“ (unter „Persönliche Schutzausrüstung gegen Absturz“)“), der Titel einer gelösten eigenen Zuweisung
+  nur einmal (kein „(bisher „…“, dem Produkt zugewiesen)“ dahinter), „im Bestand“ statt „hier“ – auch in den übrigen
+  Folgen-Warnungen („Prüfintervall … – betrifft n Artikel im Bestand“) und in der Zusammenfassung.
+- **Gruppen** (`kategoriewechsel.gruppen`, für die Oberfläche): je alte → neue Kategorie eine Zeile mit Zahl der Produkte
+  und Artikel und der Folge („– 6 Produkte mit 19 Artikeln im Bestand; 19 Artikel bekommen ein anderes Prüfformular, 1
+  Produkt-Zuweisung wird gelöst.“), je verschobener Kategorie ihre Warnung ohne Fundstelle mit diesen Zahlen; darunter
+  `folgen` – je gleicher Folge eine Zeile mit Formulartiteln und Herkunft und den Produkten (`einzeln`) – und
+  `warnungen`, die Stellen der Warnungen in `warnungen`, die die Gruppe zusammenfasst.
+- **Oberfläche** (`material.js` `importBerichtHtml`, Dialog „Katalog importieren“; Browser r3, Verbesserung 2): EIN gelber
+  Kasten für alles, was vorhandene Artikel betrifft, gleich unter dem Stand: Zusammenfassung, Hinweis auf eine alte
+  Datei, die Gruppenzeilen mit „Einzelheiten“ zum Aufklappen, dann die übrigen Warnungen (bisher eine zweite Liste
+  „Achtung – betrifft vorhandene Artikel“ unter der Tabelle – sie steht jetzt in diesem Kasten, auch ohne
+  Kategoriewechsel). Titel „Achtung – Produkte wechseln die Kategorie“, „Achtung – Kategorien werden verschoben“ bzw.
+  „Achtung – betrifft vorhandene Artikel“.
+- **Fokus** (Browser r3, Verbesserung 4): Zeigt der Dialog einen fertigen Bericht und liegt der Fokus nicht auf einem
+  sichtbaren Bedienelement (Titel nach „Bericht ansehen“ am Finger, Dateifeld, verborgener Knopf nach „Übernehmen“),
+  kommt er ohne zu rollen auf den Stand des Berichts (tabindex -1, Ring nur für die Tastatur, wie beim Bestandsimport).
+  Nebenwirkung in WebKit: Der Sprung 414 → 0 → 414 beim Öffnen über „Bericht ansehen“ (Verbesserung 7) tritt nicht mehr
+  auf (gemessen 360×780, 375×667, 844×390: nur noch ein Rollereignis). Nach Esc kommt der Fokus auf den Auslöser zurück:
+  `importHinweis` zeichnet den Hinweis nach dem Schließen neu und gibt den Fokus an den neuen Knopf „Bericht ansehen“
+  weiter (vorher landete er auf der Seite); über das Menü geöffnet, wie bisher auf „Export / Import“.
+- **Fokusring auf dem roten Knopf** (`material.css`, Browser r3, Verbesserung 6): `.btn:focus-visible` bekommt innen einen
+  weißen Ring (`inset 0 0 0 2px var(--weiss)`) zum vorhandenen dunklen Ring und gelben Hof – in der ganzen Materialablage;
+  auf weißen Knöpfen fällt er nicht auf.
+- **Kommandozeile** (`cli.py`): „ACHTUNG“ auch für `verschiebung`; die Zeile der Zuweisungen nimmt `davon`.
+- **Nicht umgesetzt** (Browser r3): 3 Übungsleiste bei offenem Dialog und 5 Toast über „Übernommen.“ (betreffen alle
+  Dialoge bzw. Toasts – eigener Auftrag), 8 Begriff „Produkt-Zuweisung“ (offene Frage), 10 Titel nach dem Rollen außer
+  Sicht (gewollt); 7 hat sich mit dem Fokus erledigt.
+
+**Schnittstelle**
+
+| Route | Rechte | Änderung |
+| --- | --- | --- |
+| `GET /api/material/katalog/import/<kennung>` (Bericht), `flask material import-catalog` | wie bisher | `kategoriewechsel` auch bei nur verschobenen Kategorien; neu `verschoben` (`null` oder `{kategorien, mit_artikeln, artikel, ohne_formular, anderes_formular, zuweisungen_geloest}`), `verschiebung` (Satz oder `null`), `davon` (Text oder `null`), `gruppen` (`[{zeile, folgen: [{zeile, einzeln: [Text]}], warnungen: [Stelle in warnungen]}]`); `zuweisungen_geloest` zählt weiter nur die Produktwechsel; `zuweisungen.geloest` zählt die beim Verschieben gelösten mit; Wortlaut der Warnungen gekürzt (siehe oben) |
+
+**Tests** (`tests/test_material_import_kategoriewechsel.py`): neu `test_gruppen` (zwei Produkte mit gleichem Standard in
+einer Unterzeile mit Namen, zwei mit derselben eigenen Zuweisung „an die Produkte“, eine Zeile für das Paar; Probelauf und
+echter Lauf), neu `test_verschobene_kategorie` (Datei mit Kennung verschiebt „Schlingen (Test)“ unter „Wasser (Test)“:
+Standard aus dem Pool der alten Oberkategorie und Produkt-Zuweisung gelöst, „gilt weiter“, ein Produkt wechselt selbst
+hinein und zählt nicht doppelt; Warnung, Zahlen, `verschiebung`, `davon`, Gruppen in Probelauf und echtem Lauf;
+Kommandozeile; Journal; zweiter Lauf ohne Meldung; Rückweg „bisher keins“); angepasst die übrigen auf den kürzeren
+Wortlaut und `gruppen`, `tests/test_material_katalog.py::test_kategorie_umbenennen` ebenso.
