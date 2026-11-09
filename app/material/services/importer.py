@@ -471,12 +471,11 @@ def _formularfolge(n, alt, jetzt, eigene, fertig, produkte=1):
     return teile
 
 
-def _kategoriewechsel_satz(w, n, alt, jetzt, fertig, wer=None, produkte=1):
+def _kategoriewechsel_satz(w, n, alt, jetzt, fertig):
     """Die Warnung für ein Produkt mit n Artikeln, das die Kategorie gewechselt hat (w aus _kategoriewechsel_merken) –
-    fertig: nach dem Speichern. Mit wer (Name oder „n Produkte“) die Zeile einer Gruppe ohne Fundstelle."""
+    fertig: nach dem Speichern."""
     satz = f"Kategorie {_pfeil(_namen(w['von']), _namen(w['nach']))} – betrifft {n} Artikel im Bestand"
-    satz = "; ".join([satz + (f" ({wer})" if wer else "")] + _formularfolge(n, alt, jetzt, w["eigene"], fertig, produkte))
-    return f"{satz}." if wer else f"{w['ort']} ({w['name']}): {satz}."
+    return f"{w['ort']} ({w['name']}): " + "; ".join([satz] + _formularfolge(n, alt, jetzt, w["eigene"], fertig)) + "."
 
 
 def _folgen_je_artikel(eintraege, fertig):
@@ -520,6 +519,50 @@ def _geloest_text(v, fertig):
             + (": " + ", ".join(namen[:3]) + (" und weitere" if len(namen) > 3 else "") if namen else ""))
 
 
+def _verb(fertig, n, eins, viele, eins_vorbei, viele_vorbei):
+    if fertig:
+        return eins_vorbei if n == 1 else viele_vorbei
+    return eins if n == 1 else viele
+
+
+def _folgen_kurz(ohne, anders, geloest, zuweisung, fertig):
+    """„; n Artikel verlieren ihr Prüfformular, n bekommen ein anderes, n Zuweisungen werden gelöst“ – für die
+    Zusammenfassung und die Zeilen der Gruppen; leer, wenn nichts davon zutrifft."""
+    out = []
+    if ohne:
+        out.append(f"{ohne} Artikel " + _verb(fertig, ohne, "verliert sein Prüfformular", "verlieren ihr Prüfformular",
+                                              "hat sein Prüfformular verloren", "haben ihr Prüfformular verloren"))
+    if anders:
+        out.append(f"{anders} Artikel " + _verb(fertig, anders, "bekommt ein anderes Prüfformular",
+                                                "bekommen ein anderes Prüfformular",
+                                                "hat ein anderes Prüfformular bekommen",
+                                                "haben ein anderes Prüfformular bekommen"))
+    if geloest:
+        out.append(f"{geloest} {zuweisung}{'en' if geloest != 1 else ''} "
+                   + _verb(fertig, geloest, "wird gelöst", "werden gelöst", "wurde gelöst", "wurden gelöst"))
+    return "; " + ", ".join(out) if out else ""
+
+
+def _folge_art(alt, jetzt):
+    """0 Prüfformular verloren, 1 ein anderes, sonst 2 (gilt weiter, neu, weiterhin keins) – für die Zahlen."""
+    return 0 if alt and not jetzt else 1 if alt and jetzt[1] != alt[1] else 2
+
+
+def _unterzeile(liste, eigene, fertig):
+    """Eine Zeile unter „Einzelheiten“ einer Gruppe: liste [(Name, n Artikel, alt, jetzt)] mit gleicher Folge – dazu die
+    Namen, wenn es mehrere Produkte sind."""
+    n = sum(e[1] for e in liste)
+    wer = liste[0][0] if len(liste) == 1 else f"{len(liste)} Produkte"
+    satz = "; ".join(_formularfolge(n, liste[0][2], liste[0][3], eigene, fertig, len(liste)))
+    return f"{n} Artikel ({wer}): {satz}.", [f"{e[0]} ({e[1]} Artikel)" for e in liste] if len(liste) > 1 else []
+
+
+def _gruppe(zeile, folgen, warnungen):
+    """Eine Gruppe für die Oberfläche: die Zeile, darunter aufklappbar je gleicher Folge eine Zeile mit den Produkten
+    (folgen: [(Zeile, [Namen])]), dazu die Stellen der Warnungen in „warnungen“, die sie zusammenfasst."""
+    return {"zeile": zeile, "folgen": [{"zeile": z, "einzeln": namen} for z, namen in folgen], "warnungen": warnungen}
+
+
 def _kategoriewechsel_melden(lauf):
     """Nach den Zuweisungen der Datei – erst dann steht fest, welches Formular danach gilt: je Produkt mit Artikeln
     (nicht ausgesondert), das die Kategorie gewechselt hat, eine Warnung; die Warnung jeder verschobenen Kategorie um die
@@ -539,7 +582,7 @@ def _kategoriewechsel_melden(lauf):
             "zuweisungen_geloest": sum(w["geloest"] for w in lauf.kategoriewechsel.values()), "neue_kategorien": [],
             "verschoben": None}
     neu = {}                               # neu angelegte Kategorie → {bisherige Kategorie: Produkte}
-    gruppen = {}                           # (von, nach, eigene, alt, jetzt) → [(w, n, alt, jetzt, Stelle)]
+    paare = {}                             # (von, nach) → {(eigene, alt, jetzt): [(w, n, alt, jetzt, Stelle)]}
     for pid, w in wechsel.items():
         if w["nach"] in lauf.neue_kategorien and w["von"] not in lauf.neue_kategorien:
             aus = neu.setdefault(w["nach"], {})
@@ -559,19 +602,24 @@ def _kategoriewechsel_melden(lauf):
         i = len(lauf.bericht["warnungen"])
         lauf.bericht["warnungen"].append(_kategoriewechsel_satz(w, n, alt, jetzt, False))
         lauf.wechsel_gespeichert.append((i, _kategoriewechsel_satz(w, n, alt, jetzt, True)))
-        schluessel = (w["von"], w["nach"], w["eigene"], alt and alt[1:], jetzt and jetzt[1:])
-        gruppen.setdefault(schluessel, []).append((w, n, alt, jetzt, i))
+        folge = (w["eigene"], alt and alt[1:], jetzt and jetzt[1:])
+        paare.setdefault((w["von"], w["nach"]), {}).setdefault(folge, []).append((w, n, alt, jetzt, i))
     zahl["neue_kategorien"] = [{"kategorie": _kategorie_pfadname(kid), "produkte": sum(aus.values()),
                                 "aus": [_kategorie_pfadname(k) for k in sorted(aus, key=aus.get, reverse=True)]}
                                for kid, aus in neu.items()]
-    for liste in gruppen.values():
-        w, _n, alt, jetzt, _i = liste[0]
-        n = sum(x[1] for x in liste)
-        wer = w["name"] if len(liste) == 1 else f"{len(liste)} Produkte"
-        lauf.gruppen.append(tuple(
-            {"zeile": _kategoriewechsel_satz(w, n, alt, jetzt, fertig, wer, len(liste)),
-             "einzeln": [f"{x[0]['name']} ({x[1]} Artikel)" for x in liste] if len(liste) > 1 else [],
-             "warnungen": [x[4] for x in liste]} for fertig in (False, True)))
+    for (von, nach), folgen in paare.items():
+        alle = [x for liste in folgen.values() for x in liste]
+        n = sum(x[1] for x in alle)
+        zahlen = [sum(x[1] for x in alle if _folge_art(x[2], x[3]) == art) for art in (0, 1)]
+        wer = alle[0][0]["name"] if len(alle) == 1 else f"{len(alle)} Produkte"
+        kopf = (f"Kategorie {_pfeil(_namen(von), _namen(nach))} – {wer} mit {n} Artikel{'n' if n != 1 else ''} im "
+                "Bestand")
+        geloest = sum(x[0]["geloest"] for x in alle)
+        lauf.gruppen.append(tuple(_gruppe(
+            kopf + _folgen_kurz(*zahlen, geloest, "Produkt-Zuweisung", fertig) + ".",
+            [_unterzeile([(x[0]["name"], *x[1:4]) for x in liste], liste[0][0]["eigene"], fertig)
+             for liste in folgen.values()],
+            [x[4] for x in alle]) for fertig in (False, True)))
     if lauf.verschoben:
         zahl["verschoben"] = _verschoben_melden(lauf, wechsel, nachher, artikel)
     lauf.bericht["kategoriewechsel"] = zahl
@@ -614,11 +662,20 @@ def _verschoben_melden(lauf, wechsel, nachher, artikel):
             return "; ".join([basis] + _folgen_je_artikel([e[1:] for e in eintraege], fertig) + ([g] if g else [])) + "."
         lauf.bericht["warnungen"][i] = satz(False)
         lauf.wechsel_gespeichert.append((i, satz(True)))
-        lauf.gruppen.append(tuple(
-            {"zeile": f"Kategorie „{v['name']}“: {satz(fertig).removeprefix(ort)}",
-             "einzeln": [f"{name} ({n} Artikel): " + "; ".join(_formularfolge(n, alt, jetzt, None, fertig))
-                         for name, n, alt, jetzt in eintraege],
-             "warnungen": [i]} for fertig in (False, True)))
+        # Für die Oberfläche: die Warnung ohne Fundstelle mit den Zahlen, aufklappbar je gleicher Folge die Produkte.
+        folgen = {}
+        for e in eintraege:
+            folgen.setdefault((e[2] and e[2][1:], e[3] and e[3][1:]), []).append(e)
+        zahlen = [sum(e[1] for e in eintraege if _folge_art(e[2], e[3]) == art) for art in (0, 1)]
+
+        def unterzeilen(fertig, folgen=folgen, v=v):
+            out = [_unterzeile(liste, None, fertig) for liste in folgen.values()]
+            g = _geloest_text(v, fertig)
+            return out + ([(g[0].upper() + g[1:] + ".", [])] if g else [])
+        lauf.gruppen.append(tuple(_gruppe(
+            f"Kategorie „{v['name']}“: {basis.removeprefix(ort)}"
+            + _folgen_kurz(*zahlen, v["geloest"], "Zuweisung", fertig) + ".", unterzeilen(fertig), [i])
+            for fertig in (False, True)))
     return zahl
 
 
@@ -638,25 +695,8 @@ def _kategoriewechsel_text(b):
                                              "Kategoriewechsel" if a else "verschobene Kategorien")) if a + k else None
     fertig = b.get("gespeichert")
 
-    def verb(n, eins, viele, eins_vorbei, viele_vorbei):
-        if fertig:
-            return eins_vorbei if n == 1 else viele_vorbei
-        return eins if n == 1 else viele
-
-    def folgen(ohne, anders, geloest, zuweisung):
-        out = []
-        if ohne:
-            out.append(f"{ohne} Artikel " + verb(ohne, "verliert sein Prüfformular", "verlieren ihr Prüfformular",
-                                                 "hat sein Prüfformular verloren", "haben ihr Prüfformular verloren"))
-        if anders:
-            out.append(f"{anders} Artikel " + verb(anders, "bekommt ein anderes Prüfformular",
-                                                   "bekommen ein anderes Prüfformular",
-                                                   "hat ein anderes Prüfformular bekommen",
-                                                   "haben ein anderes Prüfformular bekommen"))
-        if geloest:
-            out.append(f"{geloest} {zuweisung}{'en' if geloest != 1 else ''} "
-                       + verb(geloest, "wird gelöst", "werden gelöst", "wurde gelöst", "wurden gelöst"))
-        return "; " + ", ".join(out) if out else ""
+    def verb(n, *formen):
+        return _verb(fertig, n, *formen)
 
     if v.get("mit_artikeln"):
         n, m = v["kategorien"], v["mit_artikeln"]
@@ -664,7 +704,7 @@ def _kategoriewechsel_text(b):
                                                              "wurde verschoben", "wurden verschoben")
         satz += (f" – darin 1 Produkt mit {v['artikel']} Artikel{'n' if v['artikel'] != 1 else ''} im Bestand" if m == 1
                  else f" – darin {m} Produkte mit Artikeln im Bestand ({v['artikel']} Artikel)")
-        z["verschiebung"] = satz + folgen(v["ohne_formular"], v["anderes_formular"], k, "Zuweisung") + "."
+        z["verschiebung"] = satz + _folgen_kurz(v["ohne_formular"], v["anderes_formular"], k, "Zuweisung", fertig) + "."
     if not (z["mit_artikeln"] or z["neue_kategorien"]):
         return
     p, m = z["produkte"], z["mit_artikeln"]
@@ -676,7 +716,8 @@ def _kategoriewechsel_text(b):
         satz += f" – mit {z['artikel']} Artikel{'n' if z['artikel'] != 1 else ''} im Bestand"
     else:
         satz += f" – {'alle' if m == p else f'davon {m}'} mit Artikeln im Bestand ({z['artikel']} Artikel)"
-    z["zusammenfassung"] = satz + folgen(z["ohne_formular"], z["anderes_formular"], a, "Produkt-Zuweisung") + "."
+    z["zusammenfassung"] = satz + _folgen_kurz(z["ohne_formular"], z["anderes_formular"], a, "Produkt-Zuweisung",
+                                               fertig) + "."
     if z["neue_kategorien"]:
         teile = [f"„{k['kategorie']}“ nimmt {k['produkte']} Produkt{'e' if k['produkte'] != 1 else ''} aus "
                  + ", ".join(f"„{a}“" for a in k["aus"][:3]) + (" und weiteren" if len(k["aus"]) > 3 else "") + " auf"

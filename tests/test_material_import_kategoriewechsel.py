@@ -116,14 +116,29 @@ def _zahlen(kw):
     return {s: kw[s] for s in ZAHLEN}
 
 
-def _gruppen(warnungen, namen):
-    """Die Gruppen der Oberfläche, wenn jedes Produkt eine eigene Folge hat: je Warnung eine Zeile ohne Fundstelle, der
-    Name hinter der Zahl der Artikel."""
-    out = []
-    for i, (w, name) in enumerate(zip(warnungen, namen)):
-        zeile = w.split(": ", 1)[1]
-        out.append({"zeile": zeile.replace(" im Bestand", f" im Bestand ({name})", 1), "einzeln": [], "warnungen": [i]})
-    return out
+def _gruppen(fertig):
+    """Die Gruppen der Oberfläche zur alten Datei (Prüfung Browser r3, Verbesserung 1): je alte → neue Kategorie eine Zeile
+    mit Zahlen und Folge, aufklappbar je gleicher Folge die Einzelheiten – die Warnungen 0 und 1 bzw. 2 fassen sie zusammen."""
+    def zeit(probe, ergebnis):
+        return ergebnis if fertig else probe
+    pfeil = "Kategorie „Schlingen (Test)“ → „{}“ (unter „PSA (Test)“)"
+    return [
+        {"zeile": pfeil.format("Alt (Test)") + " – 2 Produkte mit 3 Artikeln im Bestand; 3 Artikel "
+                  + zeit("verlieren ihr Prüfformular", "haben ihr Prüfformular verloren") + ", 1 Produkt-Zuweisung "
+                  + zeit("wird gelöst", "wurde gelöst") + ".",
+         "folgen": [{"zeile": "2 Artikel (Testwerk Delta): sie haben danach kein Prüfformular mehr (bisher „Schlingen-"
+                              "Prüfung (Test)“, Standard der Kategorie „Schlingen (Test)“) und lassen sich nicht prüfen.",
+                     "einzeln": []},
+                    {"zeile": "1 Artikel (Testwerk Epsilon): die Zuweisung von „Epsilon-Prüfung (Test)“ an das Produkt "
+                              + zeit("wird gelöst", "wurde gelöst") + "; er hat danach kein Prüfformular mehr und lässt "
+                              "sich nicht prüfen.", "einzeln": []}],
+         "warnungen": [0, 1]},
+        {"zeile": pfeil.format("Andere (Test)") + " – Testwerk Eta mit 1 Artikel im Bestand; 1 Artikel "
+                  + zeit("bekommt ein anderes Prüfformular", "hat ein anderes Prüfformular bekommen") + ".",
+         "folgen": [{"zeile": "1 Artikel (Testwerk Eta): " + zeit("künftig gilt", "jetzt gilt") + " „Andere-Prüfung "
+                              "(Test)“ (Standard der Kategorie „Andere (Test)“) statt „Schlingen-Prüfung (Test)“ (Standard "
+                              "der Kategorie „Schlingen (Test)“).", "einzeln": []}],
+         "warnungen": [2]}]
 
 
 def test_alte_datei_probelauf_und_echter_lauf():
@@ -148,7 +163,7 @@ def test_alte_datei_probelauf_und_echter_lauf():
                                          "Artikel); 3 Artikel verlieren ihr Prüfformular, 1 Artikel bekommt ein anderes "
                                          "Prüfformular, 2 Produkt-Zuweisungen werden gelöst."), kw
         assert kw["davon"] == "davon 2 durch Kategoriewechsel" and kw["verschiebung"] is None, kw
-        assert kw["gruppen"] == _gruppen(WARNUNGEN, ("Testwerk Delta", "Testwerk Epsilon", "Testwerk Eta")), kw["gruppen"]
+        assert kw["gruppen"] == _gruppen(False), kw["gruppen"]
         assert kw["alte_datei"] == ("Neu angelegt: „PSA (Test) / Alt (Test)“ nimmt 3 Produkte aus „PSA (Test) / "
                                     "Schlingen (Test)“ auf. Vielleicht ist die Datei älter und nennt eine Kategorie noch "
                                     "mit ihrem früheren Namen – dann nicht übernehmen, sondern eine aktuelle Datei "
@@ -166,7 +181,7 @@ def test_alte_datei_probelauf_und_echter_lauf():
         assert kw["zusammenfassung"] == ("4 Produkte haben die Kategorie gewechselt – davon 3 mit Artikeln im Bestand "
                                          "(4 Artikel); 3 Artikel haben ihr Prüfformular verloren, 1 Artikel hat ein "
                                          "anderes Prüfformular bekommen, 2 Produkt-Zuweisungen wurden gelöst."), kw
-        assert kw["gruppen"] == _gruppen(WARNUNGEN_GESPEICHERT, ("Testwerk Delta", "Testwerk Epsilon", "Testwerk Eta"))
+        assert kw["gruppen"] == _gruppen(True), kw["gruppen"]
         assert kw["alte_datei"].endswith("– dann jedes Produkt auf seiner Seite über „Bearbeiten“ (Feld „Kategorie“) "
                                          "zurückverschieben und seine Zuweisungen neu setzen."), kw
         with app.app_context():
@@ -287,9 +302,10 @@ def _pool(kp, heimat, titel, kategorien=(), produkte=()):
 
 
 def test_gruppen():
-    """Die Oberfläche bekommt je alte → neue Kategorie und gleicher Folge EINE Zeile (Prüfung Browser r3, Verbesserung 1):
-    zwei Produkte mit gleichem Standard zusammen, mit ihren Namen darunter; zwei mit derselben eigenen Zuweisung zusammen
-    („die Zuweisungen … an die Produkte“). Die Warnungen je Produkt bleiben in „warnungen“ (Kommandozeile)."""
+    """Die Oberfläche bekommt je alte → neue Kategorie EINE Zeile mit Zahlen und Folge (Prüfung Browser r3, Verbesserung
+    1), darunter je gleicher Folge eine Zeile: zwei Produkte mit gleichem Standard zusammen, mit ihren Namen; zwei mit
+    derselben eigenen Zuweisung zusammen („die Zuweisungen … an die Produkte“). Die Warnungen je Produkt bleiben in
+    „warnungen“ (Kommandozeile)."""
     with tempfile.TemporaryDirectory() as tmp:
         app, k = umgebung(tmp)
         kp, w = k["katalog"], k["wart"]
@@ -313,14 +329,16 @@ def test_gruppen():
             gilt, geloest = ("jetzt gilt", "wurden gelöst") if speichern else ("künftig gilt", "werden gelöst")
             pfeil = "Kategorie „A (Test)“ → „B (Test)“ (unter „Ober (Test)“)"
             b_std = "„B-Prüfung (Test)“ (Standard der Kategorie „B (Test)“)"
-            assert ber["kategoriewechsel"]["gruppen"] == [
-                {"zeile": f"{pfeil} – betrifft 3 Artikel im Bestand (2 Produkte); {gilt} {b_std} statt „A-Prüfung (Test)“ "
-                          "(Standard der Kategorie „A (Test)“).",
-                 "einzeln": ["Testwerk Kappa (1 Artikel)", "Testwerk Lambda (2 Artikel)"], "warnungen": [0, 1]},
-                {"zeile": f"{pfeil} – betrifft 2 Artikel im Bestand (2 Produkte); die Zuweisungen von „Eigen-Prüfung "
-                          f"(Test)“ an die Produkte {geloest}; {gilt} {b_std}.",
-                 "einzeln": ["Testwerk My (1 Artikel)", "Testwerk Ny (1 Artikel)"], "warnungen": [2, 3]},
-            ], ber["kategoriewechsel"]["gruppen"]
+            verlieren = "haben ein anderes Prüfformular bekommen" if speichern else "bekommen ein anderes Prüfformular"
+            assert ber["kategoriewechsel"]["gruppen"] == [{
+                "zeile": f"{pfeil} – 4 Produkte mit 5 Artikeln im Bestand; 5 Artikel {verlieren}, 2 Produkt-Zuweisungen "
+                         f"{geloest}.",
+                "folgen": [
+                    {"zeile": f"3 Artikel (2 Produkte): {gilt} {b_std} statt „A-Prüfung (Test)“ (Standard der Kategorie "
+                              "„A (Test)“).", "einzeln": ["Testwerk Kappa (1 Artikel)", "Testwerk Lambda (2 Artikel)"]},
+                    {"zeile": f"2 Artikel (2 Produkte): die Zuweisungen von „Eigen-Prüfung (Test)“ an die Produkte "
+                              f"{geloest}; {gilt} {b_std}.", "einzeln": ["Testwerk My (1 Artikel)", "Testwerk Ny (1 Artikel)"]}],
+                "warnungen": [0, 1, 2, 3]}], ber["kategoriewechsel"]["gruppen"]
             assert len(ber["warnungen"]) == 4 and ber["warnungen"][1].startswith(
                 f"produkte[1] (Testwerk Lambda): {pfeil} – betrifft 2 Artikel im Bestand; {gilt} {b_std}"), ber["warnungen"]
             assert ber["zuweisungen"]["geloest"] == 2 and ber["kategoriewechsel"]["davon"] == \
@@ -381,18 +399,32 @@ def test_verschobene_kategorie():
             satz = ("verschoben „PSA (Test) / Schlingen (Test)“ → „Wasser (Test) / Schlingen (Test)“ – betrifft 4 Artikel "
                     "im Bestand; " + folgen)
             theta = ("Kategorie „PSA (Test) / Andere (Test)“ → „Wasser (Test) / Schlingen (Test)“ – betrifft 1 Artikel im "
-                     "Bestand{wer}; er hat danach kein Prüfformular mehr (bisher „PSA-Prüfung (Test)“, Standard der "
+                     "Bestand; er hat danach kein Prüfformular mehr (bisher „PSA-Prüfung (Test)“, Standard der "
                      "Kategorie „PSA (Test)“) und lässt sich nicht prüfen.")
             warnungen = [f"kategorien[1].unterkategorien[0] (Schlingen (Test)): {satz}",
-                         "produkte[4] (Testwerk Theta): " + theta.format(wer="")]
-            gruppen = [{"zeile": theta.format(wer=" (Testwerk Theta)"), "einzeln": [], "warnungen": [1]},
-                       {"zeile": f"Kategorie „Schlingen (Test)“: {satz}", "einzeln": [
-                           "Testwerk Delta (2 Artikel): sie haben danach kein Prüfformular mehr (bisher „Schlingen-Prüfung "
-                           "(Test)“, Standard der Kategorie „Schlingen (Test)“) und lassen sich nicht prüfen",
-                           "Testwerk Epsilon (1 Artikel): er hat danach kein Prüfformular mehr (bisher „Extra-Prüfung "
-                           "(Test)“, dem Produkt zugewiesen) und lässt sich nicht prüfen",
-                           "Testwerk Eta (1 Artikel): das Prüfformular „Eta-Prüfung (Test)“ gilt weiter (dem Produkt "
-                           "zugewiesen)"], "warnungen": [0]}]
+                         "produkte[4] (Testwerk Theta): " + theta]
+            verloren = "haben ihr Prüfformular verloren" if fertig else "verlieren ihr Prüfformular"
+            gruppen = [{"zeile": "Kategorie „PSA (Test) / Andere (Test)“ → „Wasser (Test) / Schlingen (Test)“ – Testwerk "
+                                 "Theta mit 1 Artikel im Bestand; 1 Artikel "
+                                 + ("hat sein Prüfformular verloren." if fertig else "verliert sein Prüfformular."),
+                        "folgen": [{"zeile": "1 Artikel (Testwerk Theta): er hat danach kein Prüfformular mehr (bisher "
+                                             "„PSA-Prüfung (Test)“, Standard der Kategorie „PSA (Test)“) und lässt sich "
+                                             "nicht prüfen.", "einzeln": []}], "warnungen": [1]},
+                       {"zeile": "Kategorie „Schlingen (Test)“: verschoben „PSA (Test) / Schlingen (Test)“ → „Wasser (Test) "
+                                 f"/ Schlingen (Test)“ – betrifft 4 Artikel im Bestand; 3 Artikel {verloren}, 2 Zuweisungen "
+                                 f"{wird}.",
+                        "folgen": [
+                            {"zeile": "2 Artikel (Testwerk Delta): sie haben danach kein Prüfformular mehr (bisher "
+                                      "„Schlingen-Prüfung (Test)“, Standard der Kategorie „Schlingen (Test)“) und lassen sich "
+                                      "nicht prüfen.", "einzeln": []},
+                            {"zeile": "1 Artikel (Testwerk Epsilon): er hat danach kein Prüfformular mehr (bisher "
+                                      "„Extra-Prüfung (Test)“, dem Produkt zugewiesen) und lässt sich nicht prüfen.",
+                             "einzeln": []},
+                            {"zeile": "1 Artikel (Testwerk Eta): das Prüfformular „Eta-Prüfung (Test)“ gilt weiter (dem "
+                                      "Produkt zugewiesen).", "einzeln": []},
+                            {"zeile": f"2 Zuweisungen {wird}: „Schlingen-Prüfung (Test)“ an Kategorie „PSA (Test) / "
+                                      "Schlingen (Test)“, „Extra-Prüfung (Test)“ an „Testwerk Epsilon“.", "einzeln": []}],
+                        "warnungen": [0]}]
             return warnungen, gruppen
 
         for speichern in (False, True):
