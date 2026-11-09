@@ -6938,13 +6938,14 @@
        einer Gruppe samt ihren Untergruppen – auf „nicht zutreffend“, über denselben Weg wie ein Tipp je Punkt. Optionale
        Antwortpunkte und ein Längenpunkt ohne vorgesehene Länge zählen nicht (sie kennen kein „n. z.“ bzw. nichts anderes).
        Stehen alle übrigen Punkte eines Blocks auf „n. z.“, ist er zugeklappt (dritter Wunsch vom 05.11.2026, aus den
-       Befunden abgeleitet – nach dem Neuladen ebenso): an der Überschrift „nicht zutreffend“, „n Punkte zeigen“
-       (aria-expanded; aufgeklappt bleibt er nur in diesem Fenster); ein Tipp auf die graue Marke „nicht zutreffend“ hebt
-       es auf (die Punkte wieder auf ihre Vorbelegung, wie ein zweiter Tipp auf „n. z.“; bis zum 05.11.2026 ein eigener
-       Knopf „n. z. aufheben“). Untergruppen einer zugeklappten Gruppe klappen mit ihr. Die Knöpfe stehen gesammelt
+       Befunden abgeleitet – nach dem Neuladen ebenso): an der Überschrift allein die graue Marke „nicht zutreffend“; ein
+       Tipp darauf hebt es auf (die Punkte wieder auf ihre Vorbelegung, wie ein zweiter Tipp auf „n. z.“; bis zum
+       05.11.2026 ein eigener Knopf „n. z. aufheben“) und klappt damit auf – anders lässt sich ein solcher Block nicht
+       aufklappen (bis 09.11.2026 stand daneben ein Textknopf, der nur aufklappte – Wunsch des Nutzers: doppelt zur
+       Marke). Bildschirmleser hören an Überschrift und Marke „nicht zutreffend, n Punkte ausgeblendet“ (aria-describedby
+       auf zwei versteckte Sätze). Untergruppen einer zugeklappten Gruppe klappen mit ihr. Die Knöpfe stehen gesammelt
        rechts im Kopf (.mat-kopf-knoepfe, material.css). */
     const nzFaehig = (x) => !nurAntwort(x) && !(x.art === "laenge" && !(pr.laenge && pr.laenge.moeglich));
-    const aufgeklappt = new Set();   // „g:u“ der zugeklappten Blöcke, die jemand aufgeklappt hat
     function blockDaten(bloecke, g, u) {
       const teil = bloecke.filter((y) => y.g === g && (u < 0 || y.u === u));
       const faehig = teil.filter((y) => nzFaehig(y.x));
@@ -6960,16 +6961,19 @@
     function kopfInnen(bloecke, g, u) {
       const erster = bloecke.find((y) => y.g === g && (u < 0 || y.u === u)).x;
       const name = u < 0 ? erster.gruppe : erster.untergruppe;
-      const titel = u < 0 ? `<h3 class="mat-gruppe">${esc(name)}</h3>` : `<h4 class="mat-untergruppe">${esc(name)}</h4>`;
       const z = kopfZustand(bloecke, g, u);
-      if (z.zustand === "schlicht") return { html: titel, zustand: "schlicht" };
-      if (z.zustand === "normal") {
+      const ebene = u < 0 ? "h3" : "h4";
+      const klasse = u < 0 ? "mat-gruppe" : "mat-untergruppe";
+      if (z.zustand !== "zu") {
+        const titel = `<${ebene} class="${klasse}">${esc(name)}</${ebene}>`;
+        if (z.zustand === "schlicht") return { html: titel, zustand: "schlicht" };
         return { html: titel + (z.faehig.length ? `<div class="mat-kopf-knoepfe"><button type="button" class="btn secondary small mat-alle-nz" data-act="alle-nz" data-g="${g}" data-u="${u}" aria-label="${esc(name)}: alle Punkte nicht zutreffend">n. z.</button></div>` : ""), zustand: "normal" };
       }
-      const auf = aufgeklappt.has(`${g}:${u}`);
-      return { zustand: auf ? "auf" : "zu",
-        html: `${titel}<div class="mat-kopf-knoepfe"><button type="button" class="mat-befund b-nicht_zutreffend mat-nz-pille" data-act="nz-aufheben" data-g="${g}" data-u="${u}" aria-label="${esc(name)}: nicht zutreffend – aufheben" title="n. z. aufheben">nicht zutreffend</button>
-          <button type="button" class="lnk mat-nz-zeigen" data-act="nz-zeigen" data-g="${g}" data-u="${u}" aria-expanded="${auf}" aria-controls="${z.teil.map((y) => `pp-${y.x.id}`).join(" ")}">${auf ? "Punkte ausblenden" : plural(z.teil.length, "Punkt zeigen", "Punkte zeigen")}</button></div>` };
+      // Zugeklappt: Die Überschrift nimmt den Fokus, wenn der Block unter dem Fokus zuklappt (tabindex -1, bloeckeZeichnen).
+      const id = `nz-${g}-${u}`;
+      return { zustand: "zu",
+        html: `<${ebene} class="${klasse}" tabindex="-1" aria-describedby="${id}-nz ${id}-zahl">${esc(name)}</${ebene}><div class="mat-kopf-knoepfe"><button type="button" class="mat-befund b-nicht_zutreffend mat-nz-pille" data-act="nz-aufheben" data-g="${g}" data-u="${u}" aria-label="${esc(name)}: nicht zutreffend – aufheben" aria-describedby="${id}-zahl" title="n. z. aufheben">nicht zutreffend</button>
+          <span id="${id}-nz" hidden>nicht zutreffend,</span><span id="${id}-zahl" hidden>${plural(z.teil.length, "Punkt", "Punkte")} ausgeblendet</span></div>` };
     }
     const kopfHtml = (bloecke, g, u) => {
       const k = kopfInnen(bloecke, g, u);
@@ -6977,7 +6981,8 @@
     };
 
     // Köpfe und Sichtbarkeit nach jeder Änderung (abschlussAktualisieren): nur Köpfe, deren Zustand wechselt, werden neu
-    // gezeichnet; lag der Fokus darin oder in einem Punkt, der jetzt zuklappt, geht er auf den ersten Knopf des Kopfs.
+    // gezeichnet; lag der Fokus darin oder in einem Punkt, der jetzt zuklappt, geht er an den Kopf – zugeklappt auf die
+    // Überschrift, sonst auf den ersten Knopf.
     function bloeckeZeichnen() {
       const box = $(".mat-punkte", inhalt);
       if (!box) return;
@@ -6988,7 +6993,6 @@
         const g = +kopf.dataset.g;
         const u = +kopf.dataset.u;
         const k = kopfInnen(bloecke, g, u);
-        if (k.zustand !== "zu" && k.zustand !== "auf") aufgeklappt.delete(`${g}:${u}`);
         if (kopf.dataset.zustand === k.zustand) return;
         const drin = kopf.contains(ae);
         kopf.dataset.zustand = k.zustand;
@@ -7005,9 +7009,11 @@
         el.hidden = weg;
       });
       $$(".mat-ug-kopf", box).forEach((k) => { k.hidden = zu(+k.dataset.g, -1); });
-      const ziel = fokusKopf.find(Boolean);
-      // Zugeklappt auf „n Punkte zeigen“, nicht auf die Marke davor – ein versehentliches Enter höbe sonst gleich wieder auf.
-      const knopf = ziel && ($(".mat-nz-zeigen", ziel) || $("button", ziel));
+      // Lag der Fokus im Kopf einer Untergruppe, die jetzt mit ihrer Gruppe zuklappt (versteckt), geht er an die Gruppe.
+      let ziel = fokusKopf.find(Boolean);
+      if (ziel && ziel.hidden) ziel = $(`.mat-gruppenkopf[data-g="${ziel.dataset.g}"][data-u="-1"]`, box);
+      // Zugeklappt auf die Überschrift, nicht auf die Marke – ein versehentliches Enter höbe sonst gleich wieder auf.
+      const knopf = ziel && (ziel.dataset.zustand === "zu" ? $(":scope > :is(h3, h4)", ziel) : $("button", ziel));
       if (knopf) knopf.focus({ preventScroll: true });
     }
 
@@ -7545,15 +7551,6 @@
           if (!ja) return;
         }
         await befundFuerAlle(b, name, liste, "nicht_zutreffend", "nicht zutreffend");
-      },
-      "nz-zeigen": (b) => {
-        const schluessel = `${b.dataset.g}:${b.dataset.u}`;
-        if (aufgeklappt.has(schluessel)) aufgeklappt.delete(schluessel); else aufgeklappt.add(schluessel);
-        const kopf = b.closest(".mat-gruppenkopf");
-        kopf.dataset.zustand = "";              // neu zeichnen
-        bloeckeZeichnen();
-        const neu = $('[data-act="nz-zeigen"]', kopf);
-        if (neu) neu.focus({ preventScroll: true });
       },
       "nz-aufheben": async (b) => {
         if (b.getAttribute("aria-busy") === "true") return;

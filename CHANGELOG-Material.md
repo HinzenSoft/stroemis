@@ -13377,3 +13377,36 @@ Beispielbestand erneut mit höheren Inventarnummern und ohne neue Formulare; zwe
 `test_scheitern` (fsync, Verschieben, Löschen, fehlender Trigger – nichts geändert, keine Sicherung), `test_katalogimport`,
 `test_abbruch_per_signal` (SIGTERM). Angepasst: `test_material_beispielbestand.py` (Hinweistext nach Abbruch),
 `test_material_set_rueckbau.py` (`bestand_leeren.py` darf die stillgelegten Set-Tabellen nennen – es leert sie mit).
+
+## Prüfung: zugeklappte Gruppe ohne „n Punkte zeigen“ (Wunsch des Nutzers, 09.11.2026)
+
+Wunsch (Bildschirmfoto eines zugeklappten Gruppenkopfs mit der grauen Marke „nicht zutreffend“ und dem Link „3 Punkte
+zeigen“): „Das x Punkte anzeigen ist redundant mit dem nicht zutreffend und soll weg.“ Bauauftrag
+`planung/nz-ohne-zeigen/auftrag.md`, nur Oberfläche, kein Schemaschritt (Schema bleibt 39).
+
+- **Kein Textknopf „n Punkte zeigen“ / „Punkte ausblenden“** mehr (`kopfInnen`): Weg sind der Knopf, seine Aktion
+  `nz-zeigen`, der Zustand „aufgeklappt trotz n. z.“ (`aufgeklappt`, Kopfzustand `auf`, `aria-expanded`/`aria-controls`)
+  und die Regel für den Zustand `auf` in `material.css`. Ein Block, dessen Punkte alle „n. z.“ sind, ist immer
+  zugeklappt; aufklappen geht nur über das Aufheben – ein Klick auf die Marke (wie bisher: Punkte zurück auf ihre
+  Vorbelegung, Toast „„Name“: n Punkte wieder offen“). Wer einen einzelnen Punkt eines solchen Blocks ändern will, hebt
+  auf und setzt die übrigen einzeln wieder auf „n. z.“.
+- **Ausrichtung**: Die Marke steht allein in `.mat-kopf-knoepfe` und damit rechtsbündig wie die Knöpfe der übrigen
+  Köpfe (Telefon, Tablet, Rechner; reicht der Platz neben dem Namen nicht, in einer eigenen Zeile darunter, auch dort
+  rechts).
+- **Fokus nach dem Zuklappen** (`bloeckeZeichnen`): auf die Überschrift des Blocks (`tabindex="-1"`, nur im zugeklappten
+  Zustand), nicht auf die Marke – ein versehentliches zweites Enter höbe sonst gleich wieder auf; von der Überschrift
+  führt Tab zur Marke. Mit der Tastatur trägt die Überschrift den üblichen Fokusrahmen, nach Klick oder Tipp keinen
+  (`:focus:not(:focus-visible)`). Lag der Fokus im Kopf einer Untergruppe, die mit ihrer Gruppe zuklappt (Kopf
+  versteckt), geht er jetzt auf die Überschrift der Gruppe statt verloren.
+- **Bildschirmleser**: Überschrift und Marke verweisen mit `aria-describedby` auf zwei versteckte Sätze im Kopf – an der
+  Überschrift „nicht zutreffend, n Punkte ausgeblendet“, an der Marke (Name weiter „<Name>: nicht zutreffend –
+  aufheben“) „n Punkte ausgeblendet“. Der Toast „„Name“: n Punkte nicht zutreffend“ bleibt.
+- **README**: Abschnitt „Prüfung“ nachgezogen. Die App-Anleitungen im Repository nennen den Link nicht.
+
+**Tests**: `tests/test_material_gruppe_nz.py` (1280 Maus, 360 Touch) – zugeklappt nur ein Knopf im Kopf, kein
+`nz-zeigen`/`aria-expanded`, Marke rechts ±1 px am Rand der Liste (Untergruppe, Gruppe, nach dem Neuladen),
+Beschreibung der Überschrift und der Marke, Fokus nach dem Zuklappen auf der Überschrift (nach Klick bzw. Tipp ohne
+Rahmen, auch wenn der Fokus im Punkt lag, der wegklappt), Klick auf die Überschrift klappt nicht auf; aufklappen über die
+Marke an der Gruppe (A1 vom Mangel zurück auf sein Soll), Untergruppen danach einzeln per Tipp auf „n. z.“ wieder zu;
+am Rechner ganz mit der Tastatur (Enter auf „n. z.“ → Fokus mit Rahmen auf der Überschrift, zweites Enter ändert nichts,
+Tab zur Marke, Enter hebt auf, Fokus auf „n. z.“); statisch: keine Reste von Link, Handler, Zustand und Regel.
