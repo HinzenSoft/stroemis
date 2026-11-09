@@ -517,7 +517,8 @@ def _kategoriewechsel_text(b):
         rest = len(z["neue_kategorien"]) - 3
         z["alte_datei"] = ("Neu angelegt: " + "; ".join(teile) + (f"; dazu {rest} weitere" if rest > 0 else "")
                            + ". Vielleicht ist die Datei älter und nennt eine Kategorie noch mit ihrem früheren Namen – "
-                           + ("dann die Produkte über „Bearbeiten“ zurückverschieben und ihre Zuweisungen neu setzen."
+                           + ("dann jedes Produkt auf seiner Seite über „Bearbeiten“ (Feld „Kategorie“) "
+                              "zurückverschieben und seine Zuweisungen neu setzen."
                               if fertig else "dann nicht übernehmen, sondern eine aktuelle Datei nehmen."))
 
 

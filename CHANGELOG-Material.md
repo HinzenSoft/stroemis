@@ -13465,8 +13465,9 @@ zurück; der Probelauf zeigte dafür nur „neu“ und „geändert (Kategorie)�
   ein Produkt mit Artikeln betroffen ist oder eine neu angelegte Kategorie Produkte aus einer bestehenden aufnimmt; im
   Probelauf „wechseln … verlieren … wird gelöst“, nach dem Speichern „haben gewechselt … verloren … wurde gelöst“ – und
   im zweiten Fall `alte_datei` („Neu angelegt: „…“ nimmt n Produkte aus „…“ auf. Vielleicht ist die Datei älter …“,
-  Probelauf: „dann nicht übernehmen, sondern eine aktuelle Datei nehmen“, danach: „dann die Produkte über „Bearbeiten“
-  zurückverschieben und ihre Zuweisungen neu setzen“).
+  Probelauf: „dann nicht übernehmen, sondern eine aktuelle Datei nehmen“, danach: „dann jedes Produkt auf seiner Seite
+  über „Bearbeiten“ (Feld „Kategorie“) zurückverschieben und seine Zuweisungen neu setzen“ – Wortlaut seit der
+  Nachbesserung Runde 2).
 - **Oberfläche** (`material.js` `importBerichtHtml`, Dialog „Katalog importieren“ und „Bericht ansehen“): Kasten
   „Achtung – Produkte wechseln die Kategorie“ (Stil der Warnliste, `.mat-austausch-liste.warnung`, neu
   `.mat-kategoriewechsel p`) gleich unter dem Stand, also vor Tabelle, Listen und „Übernehmen“; keine neuen Knöpfe. Die
@@ -13508,3 +13509,16 @@ Warnung, die Zusammenfassung und `geloest` 1 statt keiner Warnung.
   Stand und Kasten – nach oben (Browser, B1). Am Rechner, wo alles Platz hat, rollt nichts.
 - Tests: `test_alte_datei_probelauf_und_echter_lauf` und `test_kommandozeile` mit den Sätzen nach dem Speichern,
   `test_gilt_weiter_und_ohne_formular` mit einem einzelnen Produkt mit zwei Artikeln (Probelauf und echter Lauf).
+
+**Nachbesserung Runde 2** (nach den Prüfungen Ablauf und Browser, 09.11.2026; Berichte
+`planung/import-warnung-kategorie/pruefung-ablauf-r2.md` ohne Befund, `pruefung-browser-r2.md`):
+
+- Dialog „Katalog importieren“ in WebKit (Safari-Familie): Öffnet „Bericht ansehen“ den Dialog, hat am Touchgerät der
+  Titel den Fokus, und WebKit rollt ihn nach dem nächsten Layout von sich aus wieder ins Bild – der eben ins Bild gerollte
+  Kasten stand wieder unter der Knopfleiste (Browser, B1). Springt der Bericht in der ersten Sekunde nach dem Rollen in
+  einem Schritt ganz nach oben, rollt der Dialog ihn zurück; schrittweises Wischen nach oben bleibt unberührt.
+- Hinweis nach dem Speichern genauer: „… dann jedes Produkt auf seiner Seite über „Bearbeiten“ (Feld „Kategorie“)
+  zurückverschieben und seine Zuweisungen neu setzen.“ (Browser, Verbesserung 8).
+- Herkunftszeile im Bericht: Kürzt der Server eine lange Quelle mit „…“, schließt die Anzeige eine darin offene Klammer
+  („… Selbstsicherungen …), erstellt …“; Browser, Verbesserung 5) – gilt für jeden Katalogimport.
+- Test: `test_alte_datei_probelauf_und_echter_lauf` mit dem neuen Hinweis.

@@ -152,8 +152,8 @@ def test_alte_datei_probelauf_und_echter_lauf():
         assert kw["zusammenfassung"] == ("4 Produkte haben die Kategorie gewechselt – davon 3 mit Artikeln hier "
                                          "(4 Artikel); 3 Artikel haben ihr Prüfformular verloren, 1 Artikel hat ein "
                                          "anderes Prüfformular bekommen, 2 Produkt-Zuweisungen wurden gelöst."), kw
-        assert kw["alte_datei"].endswith("– dann die Produkte über „Bearbeiten“ zurückverschieben und ihre Zuweisungen "
-                                         "neu setzen."), kw
+        assert kw["alte_datei"].endswith("– dann jedes Produkt auf seiner Seite über „Bearbeiten“ (Feld „Kategorie“) "
+                                         "zurückverschieben und seine Zuweisungen neu setzen."), kw
         with app.app_context():
             assert katalog.formular_fuer_produkt(p["Delta"]) is None and katalog.formular_fuer_produkt(p["Epsilon"]) is None
             assert katalog.formular_fuer_produkt(p["Eta"])["title"] == "Andere-Prüfung (Test)"

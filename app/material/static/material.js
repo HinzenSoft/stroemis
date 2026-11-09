@@ -4379,9 +4379,12 @@
     const zuweisungen = zw.neu || zw.geloest || zw.unveraendert ? `<p class="help">Zuweisungen der Prüfformulare: ${zw.neu || 0} gesetzt, ${zw.geloest || 0} gelöst${durchWechsel}, ${zw.unveraendert || 0} unverändert.</p>` : "";
     const wechsel = kw.zusammenfassung || kw.alte_datei ? `<div class="mat-austausch-liste warnung mat-kategoriewechsel"><strong>Achtung – Produkte wechseln die Kategorie</strong>
         ${[kw.zusammenfassung, kw.alte_datei].filter(Boolean).map((t) => `<p>${esc(t)}</p>`).join("")}</div>` : "";
+    // Der Server kürzt eine lange Quelle mit „…“ – eine Klammer darin bliebe offen (Prüfung Browser r2, Verbesserung 5).
+    const q = h.quelle || "";
+    const quelleZu = /…$/.test(q) && (q.match(/\(/g) || []).length > (q.match(/\)/g) || []).length ? ")" : "";
     return `${stand}
       ${wechsel}
-      ${h.quelle || h.erstellt ? `<p class="help">Export von ${esc(h.quelle || "?")}${h.erstellt ? `, erstellt ${esc(fmtZeit(h.erstellt))}.` : /…$/.test(h.quelle || "") ? "" : "."}</p>` : ""}
+      ${h.quelle || h.erstellt ? `<p class="help">Export von ${esc(h.quelle || "?")}${quelleZu}${h.erstellt ? `, erstellt ${esc(fmtZeit(h.erstellt))}.` : /…$/.test(h.quelle || "") ? "" : "."}</p>` : ""}
       <table class="mat-austausch"><thead><tr><th></th><th>neu</th><th>geändert${b.version >= 2 ? infoKnopf("neu und geändert", "Eine geänderte Prüfliste wird eine neue Formularversion (zählt als neu); eine neue Dokumentversion zählt als geändert." + mehrDazu("katalogimport")) : ""}</th><th>unverändert</th></tr></thead>
         <tbody>${arten.map(zeile).join("")}${flach}</tbody></table>
       ${zuweisungen}
@@ -4508,11 +4511,26 @@
         // Kasten „Produkte wechseln die Kategorie“ (Prüfung Browser r1, B1): Am Telefon klebt „Übernehmen“ unten im
         // Dialog, der Kasten stand unter Kopf und Ablage erst nach dem Rollen im Bild. Ist er nicht ganz zu sehen, rollt
         // der Dialog den Bericht (Stand und Kasten) nach oben.
+        // WebKit (Prüfung Browser r2, B1): Öffnet „Bericht ansehen“ den Dialog, hat am Touchgerät der Titel den Fokus, und
+        // WebKit rollt ihn nach dem nächsten Layout von sich aus zurück ins Bild – der Bericht stünde wieder ganz oben.
+        // Diesen einen Sprung (in einem Schritt von hier nach ganz oben, nicht schrittweise wie beim Wischen) nimmt der
+        // Dialog in der ersten Sekunde zurück.
         const kasten = $(".mat-kategoriewechsel", bericht);
         if (kasten) {
           const r = body.getBoundingClientRect(), k = kasten.getBoundingClientRect();
           const unten = Math.min(r.bottom, ok.parentElement.getBoundingClientRect().top);
           if (k.top < r.top || k.bottom > unten) body.scrollTop += bericht.getBoundingClientRect().top - r.top;
+          const ziel = body.scrollTop;
+          if (ziel > 0) {
+            let vorher = ziel;
+            const aus = () => { body.removeEventListener("scroll", zurueck); clearTimeout(frist); };
+            const zurueck = () => {
+              const jetzt = body.scrollTop;
+              if (jetzt < 1 && vorher >= ziel - 1) { body.scrollTop = ziel; aus(); } else vorher = jetzt;
+            };
+            const frist = setTimeout(aus, 1000);
+            body.addEventListener("scroll", zurueck, { signal: weg.signal });
+          }
         }
         if (!a.trocken && a.bericht && a.bericht.gespeichert && !gemeldet) {
           gemeldet = true;
