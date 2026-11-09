@@ -1071,10 +1071,10 @@ für diese Produkte nicht mehr, ihre Zuweisungen an Formulare aus dem Pool von �
 „Produkt in eine andere Kategorie verschoben“) – ihre Artikel haben dann kein Prüfformular und lassen sich nicht prüfen.
 Rückgängig nur von Hand: jedes Produkt über „Bearbeiten“ wieder in „Schlingen“, die Zuweisungen neu setzen, die leere
 „Textilmaterial“ löschen. Erkennbar ist das vorher im **Probelauf**: Seit dem 09.11.2026 steht gleich unter dem Stand
-der Kasten „Achtung – Produkte wechseln die Kategorie“ (Kommandozeile: die ersten „ACHTUNG“-Zeilen), etwa „62 Produkte
-wechseln die Kategorie – davon 8 mit Artikeln hier (19 Artikel); 19 Artikel verlieren ihr Prüfformular, 1
-Produkt-Zuweisung wird gelöst.“ und „Neu angelegt: „Persönliche Schutzausrüstung gegen Absturz / Textilmaterial“ nimmt
-62 Produkte aus „… / Schlingen“ auf. Vielleicht ist die Datei älter …“; unter „Achtung – betrifft vorhandene Artikel“
+der Kasten „Achtung – Produkte wechseln die Kategorie“ (Kommandozeile: die ersten „ACHTUNG“-Zeilen) mit „n Produkte
+wechseln die Kategorie – davon m mit Artikeln hier (a Artikel); a Artikel verlieren ihr Prüfformular, z
+Produkt-Zuweisungen werden gelöst.“ und „Neu angelegt: „Persönliche Schutzausrüstung gegen Absturz / Textilmaterial“
+nimmt n Produkte aus „… / Schlingen“ auf. Vielleicht ist die Datei älter …“; unter „Achtung – betrifft vorhandene Artikel“
 je Produkt mit Artikeln die alte und neue Kategorie, die Zahl der Artikel und was aus ihrem Prüfformular wird (siehe
 „Katalog exportieren und importieren“). Dazu wie bisher „Kategorien neu 1“, „Kategorie „… / Textilmaterial“: neu“ und
 „Produkt „…“: geändert (Kategorie)“ – dann nicht „Übernehmen“. Ein **Katalog-Export von vor dem Umbenennen**
