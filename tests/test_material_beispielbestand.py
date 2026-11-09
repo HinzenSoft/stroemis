@@ -949,21 +949,23 @@ def test_artikelzahl():
     print("Artikelzahl bestanden.")
 
 
-# Die echten Kategorienamen beider Katalogstände (lieferung-20261024 auf dev und die aktuelle Lieferung) – nur die
-# Namen, keine Produktdaten – mit dem Typ, den der Beispielbestand ihnen gibt.
+# Die echten Kategorienamen der Katalogstände (lieferung-20261024, die Lieferungen bis 09.11.2026 und die aktuelle) – nur
+# die Namen, keine Produktdaten – mit dem Typ, den der Beispielbestand ihnen gibt. Die Schlingen hießen erst
+# „Bandmaterial“, dann „Textilmaterial“, seit dem 09.11.2026 „Schlingen“.
 OBEN = "Persöhnliche Schutzausrüstung gegen Absturz"
 KATEGORIE_TYPEN = {
     "Gurte": "gurt", "Karabiner": "karabiner", "Anschlageinrichtungen": "sonstiges", "Abseilgeräte": "abseil",
-    "Abseilachten": "abseil", "Seilrollen": "rolle", "Bandmaterial": "schlinge", "Textilmaterial": "schlinge",
-    "Seile": "seil", "Seilklemmen": "seilklemme", "Kantenschutz": "sonstiges", "Flaschenzüge": "rolle",
-    "Selbstsicherungen": "sonstiges", "Verbindungselemente": "sonstiges",
+    "Abseilachten": "abseil", "Seilrollen": "rolle", "Schlingen": "schlinge", "Textilmaterial": "schlinge",
+    "Bandmaterial": "schlinge", "Seile": "seil", "Seilklemmen": "seilklemme", "Kantenschutz": "sonstiges",
+    "Flaschenzüge": "rolle", "Selbstsicherungen": "sonstiges", "Verbindungselemente": "sonstiges",
 }
 
 
 def test_typen():
     """Der Artikeltyp hängt am Kategorienamen (unterste Ebene zuerst), nicht an einem Teilstring des Pfads: Abseilgeräte,
-    Abseilachten und Seilklemmen sind keine Seile, Band- und Textilmaterial Schlingen, Flaschenzüge (mit ü) Rollen. Die
-    Petzl-Vorlage „Textilmaterial“ gilt auch für „Bandmaterial“ (älterer Katalogstand)."""
+    Abseilachten und Seilklemmen sind keine Seile, Schlingen (auch unter den früheren Namen Band- und Textilmaterial)
+    Schlingen, Flaschenzüge (mit ü) Rollen. Die Petzl-Vorlage „Schlingen“ gilt auch für „Textilmaterial“ und
+    „Bandmaterial“ (ältere Katalogstände); einen Schlüssel unter einem früheren Namen hat die Datei nicht mehr."""
     modul = skript()
     for name, typ in KATEGORIE_TYPEN.items():
         assert modul.typ_fuer([OBEN, name]) == typ, (name, modul.typ_fuer([OBEN, name]))
@@ -971,28 +973,72 @@ def test_typen():
     assert modul.typ_fuer(["Seile", "Unterart ohne Stichwort (Test)"]) == "seil"     # erst dann die Oberkategorie
     assert modul.typ_fuer(["Gurte", "Seilklemmen"]) == "seilklemme"                # die unterste zuerst
     vorlagen, _ = modul.petzl_vorlagen()
-    assert modul.petzl_vorlage(vorlagen, "Bandmaterial") is vorlagen["Textilmaterial"]
+    for name in ("Schlingen", "Textilmaterial", "Bandmaterial"):
+        assert modul.petzl_vorlage(vorlagen, name) is vorlagen["Schlingen"], name
+    assert not set(modul.PETZL_ALIAS) & set(vorlagen), modul.PETZL_ALIAS
     assert modul.petzl_vorlage(vorlagen, "Sonderbau (Test)") is None
-    with tempfile.TemporaryDirectory() as tmp:
-        app = make_app(tmp)
-        with app.app_context():
-            from flask import g
+    for name in ("Schlingen", "Textilmaterial", "Bandmaterial"):
+        with tempfile.TemporaryDirectory() as tmp:
+            app = make_app(tmp)
+            with app.app_context():
+                from flask import g
 
-            from app import db
-            from app.material.services import importer, katalog
-            g.mat_akteur = "Test"
-            assert not importer.importieren({"format": "stroemis-material-katalog", "version": 1, "kategorien": [
-                {"name": OBEN, "unterkategorien": [
-                    {"name": "Bandmaterial", "materialart": "textil", "intervall_monate": 12}]}]},
-                quelle="Test")["fehler"]
-            petzl, platzhalter = modul.formulare(vorlagen)
-            assert petzl == ["Bandmaterial"] and platzhalter == [OBEN], (petzl, platzhalter)
-            f = db.query("SELECT f.* FROM mat_form f JOIN mat_formular p ON p.id = f.formular_id JOIN mat_category k "
-                         "ON k.id = p.category_id WHERE k.name = 'Bandmaterial'", one=True)
-            assert f["demo"] and f["title"].endswith("– Bandmaterial"), f
-            assert [p["label"] for p in katalog.punkte(f["id"])] == [p["text"] for p in vorlagen["Textilmaterial"]["punkte"]]
+                from app import db
+                from app.material.services import importer, katalog
+                g.mat_akteur = "Test"
+                assert not importer.importieren({"format": "stroemis-material-katalog", "version": 1, "kategorien": [
+                    {"name": OBEN, "unterkategorien": [
+                        {"name": name, "materialart": "textil", "intervall_monate": 12}]}]},
+                    quelle="Test")["fehler"]
+                petzl, platzhalter = modul.formulare(vorlagen)
+                assert petzl == [name] and platzhalter == [OBEN], (name, petzl, platzhalter)
+                f = db.query("SELECT f.* FROM mat_form f JOIN mat_formular p ON p.id = f.formular_id JOIN mat_category k "
+                             "ON k.id = p.category_id WHERE k.name = ?", (name,), one=True)
+                assert f["demo"] and f["title"].endswith(f"– {name}"), f
+                assert [p["label"] for p in katalog.punkte(f["id"])] == [p["text"] for p in vorlagen["Schlingen"]["punkte"]]
     print("Typen nach Kategorienamen bestanden.")
 
+
+def test_schlingen():
+    """Der Beispielbestand mit der Schlingen-Kategorie unter ihrem Namen seit dem 09.11.2026 („Schlingen“) und den
+    früheren („Textilmaterial“, „Bandmaterial“), mit einem Katalog wie die Serie (Oberkategorie, darunter Schlingen und
+    Gurte): Ihre Produkte sind verwendbar und Schlingen – sie gehören zur persönlichen Ausrüstung jeder Einsatzkraft
+    (KIT; die Verteilung prüft test_beispielbestand) –, die Kategorie bekommt das DEMO-Formular nach der Petzl-Vorlage
+    „Schlingen“, die Oberkategorie den Platzhalter. Ohne den ganzen Lauf (die Geschichte über zwei Jahre)."""
+    modul = skript()
+    vorlagen, _ = modul.petzl_vorlagen()
+    assert ("schlinge", 1) in modul.KIT
+    for name in ("Schlingen", "Textilmaterial", "Bandmaterial"):
+        with tempfile.TemporaryDirectory() as tmp:
+            app = make_app(tmp)
+            with app.app_context():
+                from flask import g
+
+                from app import db
+                from app.material.services import importer, katalog
+                g.mat_akteur = "Test"
+                produkte = [{"kategorie": [OBEN, kat], "hersteller": "Testwerk", "modell": modell, "artikelnummer": nr,
+                             "materialart": "textil", "lebensdauer_jahre": 10, "lebensdauer_quelle": "Testquelle S. 1"}
+                            for kat, modell, nr in ((name, "Schlinge Delta", "SD-1"), ("Gurte", "Gurt Zeta", "GZ-1"))]
+                assert not importer.importieren({"format": "stroemis-material-katalog", "version": 1, "kategorien": [
+                    {"name": OBEN, "unterkategorien": [
+                        {"name": name, "materialart": "textil", "intervall_monate": 12},
+                        {"name": "Gurte", "materialart": "textil", "intervall_monate": 12}]}],
+                    "produkte": produkte}, quelle="Test")["fehler"]
+                lauf = modul.Beispielbestand(app, 40, None)
+                gut, ausgelassen = lauf.produkte()
+                assert not ausgelassen and {p["name"]: p["typ"] for p in gut} == {
+                    "Testwerk Schlinge Delta": "schlinge", "Testwerk Gurt Zeta": "gurt"}, (name, gut, ausgelassen)
+                petzl, platzhalter = modul.formulare(vorlagen)
+                assert sorted(petzl) == sorted([name, "Gurte"]) and platzhalter == [OBEN], (name, petzl, platzhalter)
+                kid = db.query("SELECT id FROM mat_category WHERE name = ?", (name,), one=True)["id"]
+                f = db.query("SELECT f.* FROM mat_form f JOIN mat_formular p ON p.id = f.formular_id "
+                             "WHERE p.category_id = ?", (kid,), one=True)
+                assert f["demo"] and f["active"] and f["title"].endswith(f"– {name}"), (name, dict(f))
+                assert [p["label"] for p in katalog.punkte(f["id"])] == [p["text"] for p in vorlagen["Schlingen"]["punkte"]]
+                schlinge = db.query("SELECT id FROM mat_product WHERE model = 'Schlinge Delta'", one=True)["id"]
+                assert katalog.formular_fuer_produkt(schlinge)["id"] == f["id"]
+    print("Schlingen unter allen Namen bestanden.")
 
 def test_mangelpunkt():
     """Wo ein Befund abweicht: Ein Mangel (instandsetzen) wie ein schwerer (aussondern empfohlen) an einem Ja/Nein-Punkt,
@@ -1150,6 +1196,7 @@ def test_neue_version_demo():
 if __name__ == "__main__":
     test_ohne_schalter()
     test_typen()
+    test_schlingen()
     test_mangelpunkt()
     test_uhr()
     test_konten()

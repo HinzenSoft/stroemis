@@ -110,9 +110,9 @@ PAUSE = 0.05                         # Sekunden nach jedem Vorgang – andere Sc
 TAGE = 2 * 365 + 60                  # Beginn der Geschichte: gut zwei Jahre vor heute
 FORMULAR_TITEL = "DEMO-Prüfformular (Platzhalter) – "
 PETZL_DATEI = os.path.join(os.path.dirname(os.path.abspath(__file__)), "beispielbestand_petzl_punkte.json")
-# Frühere Namen einer Kategorie mit Petzl-Vorlage: Der Katalog bis 24.10.2026 (lieferung-20261024) heißt „Bandmaterial“,
-# was seither „Textilmaterial“ heißt.
-PETZL_ALIAS = {"Bandmaterial": "Textilmaterial"}
+# Frühere Namen einer Kategorie mit Petzl-Vorlage: Die Schlingen hießen im Katalog bis 24.10.2026 (lieferung-20261024)
+# „Bandmaterial“, danach bis 09.11.2026 „Textilmaterial“ – ältere Kataloge laufen so weiter.
+PETZL_ALIAS = {"Bandmaterial": "Schlingen", "Textilmaterial": "Schlingen"}
 
 # Die Gliederungen: Kürzel (Seriennummern), Name, Anteil am Bestand, Ordnerbaum.
 GROSS, KLEIN = "FL", "NS"
@@ -164,7 +164,8 @@ OHNE_ZUGANG = "ohne Modulzugang – sieht „Meine PSA“"
 
 # Artikeltypen nach Stichwörtern im Kategorienamen (typ_fuer: die unterste Kategorie zuerst, erst ohne Treffer ihre
 # Oberkategorien) – in dieser Reihenfolge, denn „Seilrollen“ sind Rollen, „Abseilgeräte“ und „Abseilachten“ Abseilgeräte
-# und „Seilklemmen“ Seilklemmen, keine Seile; Bandmaterial (Katalog bis 24.10.2026) und Textilmaterial sind Schlingen.
+# und „Seilklemmen“ Seilklemmen, keine Seile; Schlingen auch unter den früheren Namen Bandmaterial (Katalog bis
+# 24.10.2026) und Textilmaterial (bis 09.11.2026).
 # Dazu ihr Gewicht im allgemeinen Bestand und die Ordner, in die sie kommen (Gewichte). Was zu keinem Typ passt, ist
 # „sonstiges“. Typen ohne Produkt im Katalog fallen weg.
 TYPEN = [

@@ -932,6 +932,108 @@ def test_zip_verzeichnis_vor_dem_lesen():
     print("ZIP-Verzeichnistest bestanden.")
 
 
+# --- Kategorie in der Oberfläche umbenennen, danach Kataloge ohne Kennung -----------------------------------------------
+
+def _serie(name):
+    """Eine Datei wie die Katalogserie (Format 2, ohne uid, nur JSON): eine Oberkategorie mit der Schlingen-Kategorie
+    unter dem Namen name und zwei Platzhalterprodukten darin."""
+    produkte = [{"kategorie": ["PSA (Test)", name], "hersteller": "Testwerk", "modell": modell, "artikelnummer": nr,
+                 "materialart": "textil", "lebensdauer_jahre": 10, "lebensdauer_quelle": "Testquelle S. 1"}
+                for modell, nr in (("Schlinge Delta", "SD-1"), ("Schlinge Epsilon", "SE-1"))]
+    return json.dumps({"format": "stroemis-material-katalog", "version": 2, "kategorien": [
+        {"name": "PSA (Test)", "unterkategorien": [{"name": name, "materialart": "textil", "intervall_monate": 12}]}],
+        "produkte": produkte}, ensure_ascii=False).encode()
+
+
+def test_kategorie_umbenennen():
+    """„Textilmaterial“ heißt seit dem 09.11.2026 „Schlingen“ (README „Kategorie im Katalog umbenennen“): Umbenennen
+    darf nur die Material-Verwaltung (Katalog → Kategorie → „Bearbeiten“ → „Kategorie bearbeiten“). Es ändert nur den
+    Namen – Kennung, Prüfformular-Pool, Standard, Zuweisungen und Artikel bleiben, der Export schreibt den neuen Namen.
+    Eine Serie mit dem neuen Namen ergibt danach „unverändert“; ein Katalog-Export von vorher (mit Kennung) benennt sie
+    zurück. Eine ALTE Serie (ohne Kennung, Kategorien am Namen
+    erkannt) legt „Textilmaterial“ neu an und schiebt ihre Produkte dorthin zurück: Das Produkt mit eigener Zuweisung
+    verliert sie, keins hat danach ein Prüfformular – deshalb die Warnung im README, alte Dateien nicht mehr einzuspielen."""
+    from app.material.services import katalog, katalog_export
+    with tempfile.TemporaryDirectory() as tmp:
+        app, k = umgebung(tmp)
+        kp, w = k["katalog"], k["wart"]
+        ber = importieren(kp, _serie("Textilmaterial"), False, name="serie.json")
+        assert ber["gespeichert"] and ber["kategorien"]["neu"] == 2 and ber["produkte"]["neu"] == 2, ber
+        with app.app_context():
+            from app import db
+            kid = db.query("SELECT id FROM mat_category WHERE name = 'Textilmaterial'", one=True)["id"]
+            delta, epsilon = (db.query("SELECT id FROM mat_product WHERE model = ?", (m,), one=True)["id"]
+                              for m in ("Schlinge Delta", "Schlinge Epsilon"))
+        standard = formular_neu(kp, {"kategorie_id": kid}, "Schlingen-Prüfung (Test)",
+                                [{"text": "Testpunkt Standard", "art": "yesno", "soll": "ja"}])
+        eigenes = formular_neu(kp, {"produkt_id": epsilon}, "Epsilon-Prüfung (Test)",
+                               [{"text": "Testpunkt Epsilon", "art": "yesno", "soll": "ja"}])
+        gid, _ = gliederung(w, "OG Testdorf")
+        artikel = w.post("/api/material/artikel", json={"product_id": delta, "folder_id": gid, "manufactured_on": "2025-01"})
+        assert artikel.status_code == 201, artikel.get_json()
+        with app.app_context():
+            vorher = {t: db.query(f"SELECT * FROM {t} ORDER BY id") for t in (
+                "mat_formular", "mat_formular_zuweisung", "mat_form", "mat_product", "mat_item")}
+            uid = db.query("SELECT uid FROM mat_category WHERE id = ?", (kid,), one=True)["uid"]
+        export_alt = exportieren(kp)                      # „Katalog exportieren“ vor dem Umbenennen (mit Kennungen)
+
+        # Nur die Material-Verwaltung; der Materialwart nicht.
+        assert w.put(f"/api/material/kategorien/{kid}", json={"name": "Schlingen"}).status_code == 403
+        r = kp.put(f"/api/material/kategorien/{kid}", json={"name": "Schlingen"})
+        assert r.status_code == 200 and r.json["kategorie"]["name"] == "Schlingen", r.get_json()
+        with app.app_context():
+            k_neu = db.query("SELECT * FROM mat_category WHERE id = ?", (kid,), one=True)
+            assert (k_neu["name"], k_neu["uid"], k_neu["default_interval_months"]) == ("Schlingen", uid, 12), dict(k_neu)
+            for t, zeilen in vorher.items():
+                assert db.query(f"SELECT * FROM {t} ORDER BY id") == zeilen, t
+            geltend = katalog.formular_fuer_produkt(delta)
+            assert (geltend["id"], geltend["quelle"]) == (standard, "Standard der Kategorie „Schlingen“"), geltend
+            assert katalog.formular_fuer_produkt(epsilon)["id"] == eigenes
+            j = db.query("SELECT * FROM mat_audit WHERE entity = 'category' AND entity_id = ? ORDER BY id DESC", (kid,),
+                         one=True)
+            assert "Textilmaterial" in j["before_json"] and "Schlingen" in j["after_json"], dict(j)
+            daten, _, _ = katalog_export.sammeln(mit_dateien=False)
+            assert [u["name"] for u in daten["kategorien"][0]["unterkategorien"]] == ["Schlingen"], daten["kategorien"]
+            assert {tuple(p["kategorie"]) for p in daten["produkte"]} == {("PSA (Test)", "Schlingen")}
+            assert {f["kategorie"][-1] for f in daten["formulare"]} == {"Schlingen"}, daten["formulare"]
+
+        # Die neue Serie („Schlingen“): unverändert, Formulare und Zuweisungen bleiben.
+        ber = importieren(kp, _serie("Schlingen"), False, name="serie-neu.json")
+        assert ber["gespeichert"] and not ber["fehler"], ber
+        assert ber["kategorien"] == {"neu": 0, "geaendert": 0, "unveraendert": 2}, ber
+        assert ber["produkte"]["neu"] == 0 and ber["produkte"]["geaendert"] == 0, ber
+        with app.app_context():
+            for t, zeilen in vorher.items():
+                assert db.query(f"SELECT * FROM {t} ORDER BY id") == zeilen, t
+
+        # Ein Katalog-Export von vor dem Umbenennen trägt die Kennung: Er findet die Kategorie und benennt sie zurück.
+        ber = importieren(kp, export_alt, True)
+        assert not ber["fehler"] and ber["kategorien"] == {"neu": 0, "geaendert": 1, "unveraendert": 1}, ber
+        assert "Kategorie „PSA (Test) / Textilmaterial“: geändert (Name)" in ber["aenderungen"], ber["aenderungen"]
+
+        # Eine alte Serie („Textilmaterial“): der Probelauf zeigt es – eine neue Kategorie, zwei geänderte Produkte.
+        ber = importieren(kp, _serie("Textilmaterial"), True, name="serie-alt.json")
+        assert not ber["fehler"], ber
+        assert ber["kategorien"]["neu"] == 1 and ber["produkte"]["geaendert"] == 2, ber
+        assert ber["aenderungen"] == ["Kategorie „PSA (Test) / Textilmaterial“: neu",
+                                      "Produkt „Testwerk Schlinge Delta“: geändert (Kategorie)",
+                                      "Produkt „Testwerk Schlinge Epsilon“: geändert (Kategorie)"], ber["aenderungen"]
+        assert not ber["warnungen"], ber["warnungen"]          # keine eigene Warnung – nur die Zeilen oben
+        ber = importieren(kp, _serie("Textilmaterial"), False, name="serie-alt.json")
+        assert ber["gespeichert"], ber
+        with app.app_context():
+            alt = db.query("SELECT id FROM mat_category WHERE name = 'Textilmaterial'", one=True)["id"]
+            assert alt != kid
+            assert {r["category_id"] for r in db.query("SELECT category_id FROM mat_product")} == {alt}
+            assert katalog.formular_fuer_produkt(delta) is None and katalog.formular_fuer_produkt(epsilon) is None
+            assert db.query("SELECT COUNT(*) AS n FROM mat_formular WHERE category_id = ?", (kid,), one=True)["n"] == 2
+            assert not db.query("SELECT 1 FROM mat_formular_zuweisung WHERE product_id = ?", (epsilon,), one=True)
+            j = db.query("SELECT * FROM mat_audit WHERE entity = 'product' AND entity_id = ? AND "
+                         "action = 'formular_zuweisung_geloest'", (epsilon,), one=True)
+            assert j and "Produkt in eine andere Kategorie verschoben" in j["after_json"], j
+    print("Kategorie umbenennen bestanden.")
+
+
 if __name__ == "__main__":
     test_rundlauf()
     test_zuordnung_und_nebenwirkungen()
@@ -945,3 +1047,4 @@ if __name__ == "__main__":
     test_namenskette_grenze()
     test_bild_an_der_uploadgrenze()
     test_zip_verzeichnis_vor_dem_lesen()
+    test_kategorie_umbenennen()
