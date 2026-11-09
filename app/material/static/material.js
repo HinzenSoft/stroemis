@@ -4505,6 +4505,15 @@
         ok.hidden = !a.uebernehmbar;
         ok.disabled = false;
         ok.textContent = "Übernehmen";
+        // Kasten „Produkte wechseln die Kategorie“ (Prüfung Browser r1, B1): Am Telefon klebt „Übernehmen“ unten im
+        // Dialog, der Kasten stand unter Kopf und Ablage erst nach dem Rollen im Bild. Ist er nicht ganz zu sehen, rollt
+        // der Dialog den Bericht (Stand und Kasten) nach oben.
+        const kasten = $(".mat-kategoriewechsel", bericht);
+        if (kasten) {
+          const r = body.getBoundingClientRect(), k = kasten.getBoundingClientRect();
+          const unten = Math.min(r.bottom, ok.parentElement.getBoundingClientRect().top);
+          if (k.top < r.top || k.bottom > unten) body.scrollTop += bericht.getBoundingClientRect().top - r.top;
+        }
         if (!a.trocken && a.bericht && a.bericht.gespeichert && !gemeldet) {
           gemeldet = true;
           toast("Katalog übernommen");

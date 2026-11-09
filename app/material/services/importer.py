@@ -244,6 +244,7 @@ class _Lauf:
         self.neue_kategorien = set()          # Kategorien, die dieser Durchgang angelegt hat
         self.geltend_vorher = {}              # Produkt → (Version, Formular, Standard-Kategorie) vor dem Durchgang
         self.kategoriewechsel = {}            # Produkt → Wechsel der Kategorie, siehe _kategoriewechsel_melden
+        self.wechsel_gespeichert = []         # (Stelle in warnungen, Satz nach dem Speichern), _kategoriewechsel_melden
         self.bericht = _bericht()
 
     def notiz(self, zeile):
@@ -404,6 +405,32 @@ def _herkunft(geltend):
     return f"Standard der Kategorie „{k['name'] if k else '?'}“"
 
 
+def _kategoriewechsel_satz(w, n, alt, jetzt, fertig):
+    """Die Warnung für ein Produkt mit n Artikeln, das die Kategorie gewechselt hat (w aus _kategoriewechsel_merken; alt,
+    jetzt: was vorher und nachher gilt, aus katalog._geltend) – fertig: nach dem Speichern."""
+    er = n == 1
+    gilt = "jetzt gilt" if fertig else "künftig gilt"
+    satz = (f"Kategorie „{_kategorie_pfadname(w['von'])}“ → „{_kategorie_pfadname(w['nach'])}“ – betrifft {n} "
+            "Artikel hier")
+    if w["eigene"]:
+        satz += (f"; die Zuweisung von „{katalog._anzeige_titel(w['eigene'])}“ an das Produkt "
+                 + ("wurde gelöst" if fertig else "wird gelöst"))
+    if alt and not jetzt:
+        satz += (f"; {'er hat' if er else 'sie haben'} danach kein Prüfformular mehr (bisher "
+                 f"„{katalog._anzeige_titel(alt[1])}“, {_herkunft(alt)}) und {'lässt' if er else 'lassen'} sich "
+                 "nicht prüfen")
+    elif alt and jetzt[1] != alt[1]:
+        satz += (f"; {gilt} „{katalog._anzeige_titel(jetzt[1])}“ ({_herkunft(jetzt)}) statt "
+                 f"„{katalog._anzeige_titel(alt[1])}“ ({_herkunft(alt)})")
+    elif alt:
+        satz += f"; das Prüfformular „{katalog._anzeige_titel(jetzt[1])}“ gilt weiter ({_herkunft(jetzt)})"
+    elif jetzt:
+        satz += f"; {gilt} „{katalog._anzeige_titel(jetzt[1])}“ ({_herkunft(jetzt)}), bisher keins"
+    else:
+        satz += f"; ein Prüfformular {'hat er' if er else 'haben sie'} weiterhin nicht"
+    return f"{w['ort']} ({w['name']}): {satz}."
+
+
 def _kategoriewechsel_melden(lauf):
     """Nach den Zuweisungen der Datei – erst dann steht fest, welches Formular danach gilt: je Produkt mit Artikeln
     (nicht ausgesondert), das die Kategorie gewechselt hat, eine Warnung; die Zahlen für die Zusammenfassung in
@@ -426,27 +453,15 @@ def _kategoriewechsel_melden(lauf):
         zahl["mit_artikeln"] += 1
         zahl["artikel"] += n
         alt, jetzt = lauf.geltend_vorher.get(pid), nachher.get(pid)
-        er = n == 1
-        satz = (f"Kategorie „{_kategorie_pfadname(w['von'])}“ → „{_kategorie_pfadname(w['nach'])}“ – betrifft {n} "
-                "Artikel hier")
-        if w["eigene"]:
-            satz += f"; die Zuweisung von „{katalog._anzeige_titel(w['eigene'])}“ an das Produkt wird gelöst"
         if alt and not jetzt:
             zahl["ohne_formular"] += n
-            satz += (f"; {'er hat' if er else 'sie haben'} danach kein Prüfformular mehr (bisher "
-                     f"„{katalog._anzeige_titel(alt[1])}“, {_herkunft(alt)}) und {'lässt' if er else 'lassen'} sich "
-                     "nicht prüfen")
         elif alt and jetzt[1] != alt[1]:
             zahl["anderes_formular"] += n
-            satz += (f"; künftig gilt „{katalog._anzeige_titel(jetzt[1])}“ ({_herkunft(jetzt)}) statt "
-                     f"„{katalog._anzeige_titel(alt[1])}“ ({_herkunft(alt)})")
-        elif alt:
-            satz += f"; das Prüfformular „{katalog._anzeige_titel(jetzt[1])}“ gilt weiter ({_herkunft(jetzt)})"
-        elif jetzt:
-            satz += f"; künftig gilt „{katalog._anzeige_titel(jetzt[1])}“ ({_herkunft(jetzt)}), bisher keins"
-        else:
-            satz += f"; ein Prüfformular {'hat er' if er else 'haben sie'} weiterhin nicht"
-        lauf.bericht["warnungen"].append(f"{w['ort']} ({w['name']}): {satz}.")
+        # Im Probelauf als Aussicht; nach dem Speichern tauscht _abschluss den Satz gegen den im Ergebnis („wurde
+        # gelöst“, „jetzt gilt“ – Prüfung Browser r1, B2), damit er zur Zusammenfassung darüber passt.
+        i = len(lauf.bericht["warnungen"])
+        lauf.bericht["warnungen"].append(_kategoriewechsel_satz(w, n, alt, jetzt, False))
+        lauf.wechsel_gespeichert.append((i, _kategoriewechsel_satz(w, n, alt, jetzt, True)))
     zahl["neue_kategorien"] = [{"kategorie": _kategorie_pfadname(kid), "produkte": sum(aus.values()),
                                 "aus": [_kategorie_pfadname(k) for k in sorted(aus, key=aus.get, reverse=True)]}
                                for kid, aus in neu.items()]
@@ -477,7 +492,7 @@ def _kategoriewechsel_text(b):
     if not m:
         satz += " – ohne Artikel hier" if p == 1 else " – keins mit Artikeln hier"
     elif p == 1:
-        satz += f" – mit {z['artikel']} Artikel hier"
+        satz += f" – mit {z['artikel']} Artikel{'n' if z['artikel'] != 1 else ''} hier"
     else:
         satz += f" – {'alle' if m == p else f'davon {m}'} mit Artikeln hier ({z['artikel']} Artikel)"
     folgen = []
@@ -487,8 +502,9 @@ def _kategoriewechsel_text(b):
                                              "hat sein Prüfformular verloren", "haben ihr Prüfformular verloren"))
     n = z["anderes_formular"]
     if n:
-        folgen.append(f"{n} Artikel " + verb(n, "bekommt ein anderes", "bekommen ein anderes", "hat ein anderes bekommen",
-                                             "haben ein anderes bekommen"))
+        folgen.append(f"{n} Artikel " + verb(n, "bekommt ein anderes Prüfformular", "bekommen ein anderes Prüfformular",
+                                             "hat ein anderes Prüfformular bekommen",
+                                             "haben ein anderes Prüfformular bekommen"))
     n = z["zuweisungen_geloest"]
     if n:
         folgen.append(f"{n} Produkt-Zuweisung{'en' if n != 1 else ''} "
@@ -1657,6 +1673,9 @@ def _abschluss(lauf, bericht_basis):
     b = lauf.bericht
     b.update(bericht_basis)
     _kategoriewechsel_text(b)
+    if b.get("gespeichert"):
+        for i, satz in lauf.wechsel_gespeichert:
+            b["warnungen"][i] = satz
     k, p, f = lauf.zugeordnet["category"], lauf.zugeordnet["product"], lauf.zugeordnet["formular"]
     if k or p or f:
         # Prüfformulare zählen mit: gefunden über den Titel in derselben Heimat (E3; Sicherheitsprüfung Formular-Pool,

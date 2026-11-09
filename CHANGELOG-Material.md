@@ -13493,3 +13493,18 @@ Meldung; Rückweg in bestehende Kategorien ohne Hinweis, „bisher keins“), `t
 Zusammenfassung), `test_kommandozeile` (Trockenlauf und echter Lauf: „davon … durch Kategoriewechsel“, Reihenfolge der
 „ACHTUNG“-Zeilen). `tests/test_material_katalog.py::test_kategorie_umbenennen`: die alte Serie meldet jetzt die
 Warnung, die Zusammenfassung und `geloest` 1 statt keiner Warnung.
+
+**Nachbesserung Runde 1** (nach den Prüfungen Ablauf und Browser, 09.11.2026; Berichte
+`planung/import-warnung-kategorie/pruefung-ablauf-r1.md`, `pruefung-browser-r1.md`):
+
+- Wortlaut der Zusammenfassung: genau ein Produkt mit mehreren Artikeln „– mit 3 Artikeln hier“ statt „mit 3 Artikel“
+  (Ablauf, Befund 1); „bekommen ein anderes Prüfformular“ bzw. „haben ein anderes Prüfformular bekommen“ statt „ein
+  anderes“ ohne Bezugswort (Browser, B3).
+- Die Warnungen je Produkt stehen nach dem Speichern im Ergebnis wie die Zusammenfassung darüber: „die Zuweisung … wurde
+  gelöst“, „jetzt gilt …“ statt „wird gelöst“, „künftig gilt“ (Browser, B2). `_kategoriewechsel_satz` baut beide
+  Formen, `_abschluss` tauscht sie, wenn gespeichert wurde (auch auf der Kommandozeile).
+- Dialog „Katalog importieren“: Steht der Kasten „Achtung – Produkte wechseln die Kategorie“ beim Anzeigen des Berichts
+  nicht ganz im Bild (Telefon quer oder klein, „Übernehmen“ klebt unter Touch unten), rollt der Dialog den Bericht –
+  Stand und Kasten – nach oben (Browser, B1). Am Rechner, wo alles Platz hat, rollt nichts.
+- Tests: `test_alte_datei_probelauf_und_echter_lauf` und `test_kommandozeile` mit den Sätzen nach dem Speichern,
+  `test_gilt_weiter_und_ohne_formular` mit einem einzelnen Produkt mit zwei Artikeln (Probelauf und echter Lauf).
