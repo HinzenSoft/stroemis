@@ -164,8 +164,9 @@ def test_alte_datei_probelauf_und_echter_lauf():
                                          "Prüfformular, 2 Produkt-Zuweisungen werden gelöst."), kw
         assert kw["davon"] == "davon 2 durch Kategoriewechsel" and kw["verschiebung"] is None, kw
         assert kw["gruppen"] == _gruppen(False), kw["gruppen"]
-        assert kw["alte_datei"] == ("Neu angelegt: „PSA (Test) / Alt (Test)“ nimmt 3 Produkte aus „PSA (Test) / "
-                                    "Schlingen (Test)“ auf. Vielleicht ist die Datei älter und nennt eine Kategorie noch "
+        # Der gemeinsame Oberpfad nur einmal (Prüfung Browser r2, Verbesserung 2).
+        assert kw["alte_datei"] == ("Neu angelegt: „Alt (Test)“ (unter „PSA (Test)“) nimmt 3 Produkte aus „Schlingen "
+                                    "(Test)“ auf. Vielleicht ist die Datei älter und nennt eine Kategorie noch "
                                     "mit ihrem früheren Namen – dann nicht übernehmen, sondern eine aktuelle Datei "
                                     "nehmen."), kw
         # Die Zeile „geändert (Kategorie)“ bleibt – auch für Zeta ohne Artikel.
@@ -212,6 +213,18 @@ def test_alte_datei_probelauf_und_echter_lauf():
                 "betrifft 2 Artikel im Bestand; künftig gilt „Schlingen-Prüfung (Test)“ (Standard der Kategorie "
                 "„Schlingen (Test)“), bisher keins.") in ber["warnungen"], ber["warnungen"]
     print("Alte Datei: Probelauf und echter Lauf bestanden.")
+
+
+def test_unter():
+    """„Neu angelegt: …“ nennt den gemeinsamen Oberpfad der neuen und aller bisherigen Kategorien nur einmal (Prüfung
+    Browser r2, Verbesserung 2); ohne gemeinsamen Anfang bleiben die vollen Pfade."""
+    from app.material.services.importer import _unter
+    assert _unter(["A (Test)", "B (Test)", "Neu (Test)"], [["A (Test)", "B (Test)", "Alt (Test)"]]) == (
+        "„Neu (Test)“ (unter „A (Test) / B (Test)“)", ["„Alt (Test)“"])
+    assert _unter(["A (Test)", "Neu (Test)"], [["A (Test)", "X (Test)"], ["B (Test)", "Y (Test)"]]) == (
+        "„A (Test) / Neu (Test)“", ["„A (Test) / X (Test)“", "„B (Test) / Y (Test)“"])
+    assert _unter(["A (Test)", "Neu (Test)"], [["A (Test)"]]) == ("„A (Test) / Neu (Test)“", ["„A (Test)“"])
+    assert _unter(["Neu (Test)"], [["X (Test)"]]) == ("„Neu (Test)“", ["„X (Test)“"])
 
 
 def test_gilt_weiter_und_ohne_formular():
@@ -284,7 +297,7 @@ def test_kommandozeile():
             assert "Zuweisungen neu 0, geloest 2, unveraendert 0 (davon 2 durch Kategoriewechsel)" in zeilen, r.output
             achtung = [z for z in zeilen if z.startswith("ACHTUNG ")]
             assert achtung[0].startswith(f"ACHTUNG {satz} – davon 3 mit Artikeln im Bestand"), r.output
-            assert achtung[1].startswith("ACHTUNG Neu angelegt: „PSA (Test) / Alt (Test)“"), r.output
+            assert achtung[1].startswith("ACHTUNG Neu angelegt: „Alt (Test)“ (unter „PSA (Test)“)"), r.output
             assert achtung[2:] == [f"ACHTUNG {w}" for w in (WARNUNGEN_GESPEICHERT if not zusatz else WARNUNGEN)], r.output
             assert zeilen[-1] == schluss, r.output
     print("Kommandozeile bestanden.")
@@ -514,7 +527,10 @@ def test_verschobene_kategorie_grenzfaelle():
       beim Verschieben und sagt „davon m mit eigener Warnung“; seine eigene Warnung nennt als Herkunft den Pfad vor dem
       Import, nicht den schon verschobenen.
     - Verschiebt die Datei eine Kategorie und zugleich eine zweite unter sie, steht jedes Produkt nur bei der inneren.
-    - Auf die oberste Ebene: „→ oberste Ebene“; gehen alle Produkte mit Artikeln selbst, „alle mit eigener Warnung“."""
+    - Auf die oberste Ebene: „→ oberste Ebene“; gehen alle Produkte mit Artikeln selbst, „alle mit eigener Warnung“.
+    Nachbesserung r2 (Prüfung Ablauf r2, Befund 1): Wandert „PSA“ unter „Wasser“ und steht „Schlingen“ (bisher unter
+    „PSA“) in der Datei danach auf der obersten Ebene, nennen auch die gelösten Zuweisungen den Pfad vor dem Import, nicht
+    den Zwischenstand „Wasser / PSA / Schlingen“."""
     pfeil = "verschoben „PSA (Test) / Schlingen (Test)“ → "
     extra = ("1 Artikel hat danach kein Prüfformular mehr (bisher „Extra-Prüfung (Test)“, dem Produkt zugewiesen) und "
              "lässt sich nicht prüfen")
@@ -594,11 +610,29 @@ def test_verschobene_kategorie_grenzfaelle():
         assert kw["verschiebung"] is None and kw["verschoben"]["mit_artikeln"] == 0, kw
         assert not any(0 in g["warnungen"] for g in kw["gruppen"]), kw["gruppen"]       # steht im Kasten als Warnung
         assert kw["davon"] == "davon 3 durch Kategoriewechsel und verschobene Kategorien", kw
+
+    with tempfile.TemporaryDirectory() as tmp:
+        app, k, p, _ = _verschoben_vorbereiten(tmp)
+        kp, modelle = k["katalog"], VERSCHOBEN_MODELLE
+        psa, wasser, schl = _kategorien_mit_kennung("oben")
+        wasser["unterkategorien"].append(psa)
+        zwei = _datei([(m, ("Schlingen (Test)",)) for m in modelle[:4]]
+                      + [("Theta", ("Wasser (Test)", "PSA (Test)", "Andere (Test)"))], [wasser, schl])
+        for speichern in (False, True):
+            ber = importieren(kp, zwei, not speichern, name="zwei.json")
+            assert not ber["fehler"] and ber["gespeichert"] is speichern, ber
+            wird = "wurden gelöst" if speichern else "werden gelöst"
+            satz = ber["warnungen"][1]
+            assert satz.startswith(f"kategorien[1] (Schlingen (Test)): {pfeil}oberste Ebene – betrifft 4 Artikel im "
+                                   "Bestand; ") and satz.endswith(geloest.format(wird)), ber["warnungen"]
+            gruppe, = [g for g in ber["kategoriewechsel"]["gruppen"] if g["warnungen"] == [1]]
+            assert gruppe["folgen"][-1]["zeile"] == geloest.format(wird), gruppe
     print("Verschobene Kategorie, Grenzfälle bestanden.")
 
 
 if __name__ == "__main__":
     test_alte_datei_probelauf_und_echter_lauf()
+    test_unter()
     test_gilt_weiter_und_ohne_formular()
     test_kommandozeile()
     test_gruppen()

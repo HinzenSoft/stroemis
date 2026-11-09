@@ -1620,7 +1620,9 @@ def _eltern(kid=None, parent_id=None):
 
 def verschieben_folgen(kategorie_id=None, parent_id=None, produkt_id=None, category_id=None):
     """Was ein Verschieben lösen würde (Entscheidung Z6) – für den Satz im Dialog, bevor gespeichert wird: eine Kategorie
-    unter parent_id (None: oberste Ebene) oder ein Produkt in category_id. [{formular_id, formular, ziel}]."""
+    unter parent_id (None: oberste Ebene) oder ein Produkt in category_id. [{formular_id, formular, ziel, kategorie_id}];
+    kategorie_id ist die Kategorie des Ziels (None bei einem Produkt) – der Katalogimport nennt damit ihren Pfad vor dem
+    Import."""
     if produkt_id:
         liste = _ungueltige_zuweisungen(_eltern(), {produkt_id: category_id})
         liste = [z for z in liste if z["product_id"] == produkt_id]
@@ -1631,7 +1633,8 @@ def verschieben_folgen(kategorie_id=None, parent_id=None, produkt_id=None, categ
         spalte, ziel = ("category_id", z["category_id"]) if z["category_id"] else ("product_id", z["product_id"])
         name = _ziel_name(spalte, ziel)
         out.append({"formular_id": z["formular_id"], "formular": _anzeige_titel(z["formular_id"]),
-                    "ziel": f"Kategorie „{name['kategorie']}“" if "kategorie" in name else f"„{name['produkt']}“"})
+                    "ziel": f"Kategorie „{name['kategorie']}“" if "kategorie" in name else f"„{name['produkt']}“",
+                    "kategorie_id": z["category_id"]})
     return out
 
 

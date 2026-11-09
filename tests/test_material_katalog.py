@@ -1030,7 +1030,7 @@ def test_kategorie_umbenennen():
             "2 Produkte wechseln die Kategorie – davon 1 mit Artikeln im Bestand (1 Artikel); 1 Artikel verliert sein "
             "Prüfformular, 1 Produkt-Zuweisung wird gelöst."), ber["kategoriewechsel"]
         assert ber["kategoriewechsel"]["alte_datei"].startswith(
-            "Neu angelegt: „PSA (Test) / Textilmaterial“ nimmt 2 Produkte aus „PSA (Test) / Schlingen“ auf."), ber
+            "Neu angelegt: „Textilmaterial“ (unter „PSA (Test)“) nimmt 2 Produkte aus „Schlingen“ auf."), ber
         ber = importieren(kp, _serie("Textilmaterial"), False, name="serie-alt.json")
         assert ber["gespeichert"], ber
         with app.app_context():

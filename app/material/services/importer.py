@@ -248,6 +248,7 @@ class _Lauf:
         self.wechsel_gespeichert = []         # (Stelle in warnungen, Satz nach dem Speichern), _kategoriewechsel_melden
         self.verschoben = {}                  # verschobene Kategorie → gelöste Zuweisungen, Warnung; _verschiebung_merken
         self.gruppen = []                     # (Gruppe im Probelauf, nach dem Speichern), _kategoriewechsel_melden
+        self.neu_angelegt = []                # Satzteile „„Neu“ (unter …) nimmt n Produkte aus … auf“, ebenda
         self.bericht = _bericht()
 
     def notiz(self, zeile):
@@ -448,6 +449,16 @@ def _pfad_vorher(lauf, kid):
     return lauf.pfade_vorher.get(kid) or _namen(kid)
 
 
+def _unter(neu, aus):
+    """„„Neu“ (unter „Ober“)“ und die Pfade aus (Listen der Namen) ohne den gemeinsamen Anfang aller – für „Neu angelegt:
+    … nimmt n Produkte aus … auf“ wie in _pfeil (Prüfung Browser r2, Verbesserung 2: der volle Oberpfad stand zweimal)."""
+    n = 0
+    while all(n < len(p) - 1 and p[n] == neu[n] for p in [neu] + aus):
+        n += 1
+    return (f"„{' / '.join(neu[n:])}“" + (f" (unter „{' / '.join(neu[:n])}“)" if n else ""),
+            [f"„{' / '.join(p[n:])}“" for p in aus])
+
+
 def _pfeil(von, nach):
     """„alt“ → „neu“ für zwei Kategoriepfade (Listen der Namen), den gemeinsamen Anfang nur einmal dahinter: „Schlingen“ →
     „Textilmaterial“ (unter „Persönliche Schutzausrüstung gegen Absturz“). Prüfung Browser r1/r3: Der volle Pfad stand
@@ -536,12 +547,16 @@ def _folgen_je_artikel(eintraege, fertig):
     return teile
 
 
-def _geloest_text(v, fertig):
-    """Die Zuweisungen, die das Verschieben der Kategorie (v aus _verschiebung_merken) gelöst hat – oder None."""
+def _geloest_text(lauf, v, fertig):
+    """Die Zuweisungen, die das Verschieben der Kategorie (v aus _verschiebung_merken) gelöst hat – oder None. Eine
+    Kategorie als Ziel mit ihrem Pfad vor dem Durchgang (Prüfung Ablauf r2): verschieben_folgen läuft mitten darin, nach
+    einer schon verschobenen Oberkategorie stünde sonst ein Zwischenstand da."""
     n = v["geloest"]
     if not n:
         return None
-    namen = [f"„{f['formular'] or 'ohne Titel'}“ an {f['ziel']}" for f in v["folgen"]]
+    namen = [f"„{f['formular'] or 'ohne Titel'}“ an "
+             + (f"Kategorie „{' / '.join(_pfad_vorher(lauf, f['kategorie_id']))}“" if f["kategorie_id"] else f["ziel"])
+             for f in v["folgen"]]
     if n == 1 and len(namen) == 1:
         return f"die Zuweisung von {namen[0]} " + ("wurde gelöst" if fertig else "wird gelöst")
     return (f"{n} Zuweisungen " + ("wurden gelöst" if fertig else "werden gelöst")
@@ -636,6 +651,11 @@ def _kategoriewechsel_melden(lauf):
     zahl["neue_kategorien"] = [{"kategorie": _kategorie_pfadname(kid), "produkte": sum(aus.values()),
                                 "aus": [" / ".join(_pfad_vorher(lauf, k)) for k in sorted(aus, key=aus.get, reverse=True)]}
                                for kid, aus in neu.items()]
+    for kid, aus in list(neu.items())[:3]:
+        name, von = _unter(_namen(kid), [_pfad_vorher(lauf, k) for k in sorted(aus, key=aus.get, reverse=True)[:3]])
+        n = sum(aus.values())
+        lauf.neu_angelegt.append(f"{name} nimmt {n} Produkt{'e' if n != 1 else ''} aus " + ", ".join(von)
+                                 + (" und weiteren" if len(aus) > 3 else "") + " auf")
     for (von, nach), folgen in paare.items():
         alle = [x for liste in folgen.values() for x in liste]
         n = sum(x[1] for x in alle)
@@ -706,7 +726,7 @@ def _verschoben_melden(lauf, wechsel, nachher, artikel):
                                    vorgezogen, lebensende, zusatz)
 
         def satz(fertig, basis=basis, liste=liste, v=v):
-            g = _geloest_text(v, fertig)
+            g = _geloest_text(lauf, v, fertig)
             return "; ".join([basis] + _folgen_je_artikel([e[1:] for e in liste], fertig) + ([g] if g else [])) + "."
         lauf.bericht["warnungen"][i] = satz(False)
         lauf.wechsel_gespeichert.append((i, satz(True)))
@@ -720,7 +740,7 @@ def _verschoben_melden(lauf, wechsel, nachher, artikel):
 
         def unterzeilen(fertig, folgen=folgen, v=v):
             out = [_unterzeile(gleich, None, fertig) for gleich in folgen.values()]
-            g = _geloest_text(v, fertig)
+            g = _geloest_text(lauf, v, fertig)
             return out + ([(g[0].upper() + g[1:] + ".", [])] if g else [])
         lauf.gruppen.append(tuple(_gruppe(
             f"Kategorie „{v['name']}“: {basis.removeprefix(ort)}"
@@ -729,12 +749,13 @@ def _verschoben_melden(lauf, wechsel, nachher, artikel):
     return zahl
 
 
-def _kategoriewechsel_text(b):
+def _kategoriewechsel_text(b, neu_angelegt):
     """Die Zusammenfassung oben im Bericht (Oberfläche und Kommandozeile): wenn ein Produkt mit Artikeln die Kategorie
     wechselt oder eine neu angelegte Kategorie Produkte aus einer bestehenden aufnimmt – dann vielleicht eine alte Datei
     mit einem früheren Kategorienamen (README „Kategorie im Katalog umbenennen“) –, und eigens, wenn verschobene
     Kategorien Produkte mit Artikeln tragen. Dazu „davon“ für die Zeile der gelösten Zuweisungen. Im Probelauf (und wenn
-    nichts gespeichert wurde) als Aussicht, nach dem Speichern als Ergebnis."""
+    nichts gespeichert wurde) als Aussicht, nach dem Speichern als Ergebnis. neu_angelegt: die Satzteile der neuen
+    Kategorien aus _kategoriewechsel_melden."""
     z = b.get("kategoriewechsel")
     if not z:
         return
@@ -769,11 +790,8 @@ def _kategoriewechsel_text(b):
     z["zusammenfassung"] = satz + _folgen_kurz(z["ohne_formular"], z["anderes_formular"], a, "Produkt-Zuweisung",
                                                fertig) + "."
     if z["neue_kategorien"]:
-        teile = [f"„{k['kategorie']}“ nimmt {k['produkte']} Produkt{'e' if k['produkte'] != 1 else ''} aus "
-                 + ", ".join(f"„{a}“" for a in k["aus"][:3]) + (" und weiteren" if len(k["aus"]) > 3 else "") + " auf"
-                 for k in z["neue_kategorien"][:3]]
         rest = len(z["neue_kategorien"]) - 3
-        z["alte_datei"] = ("Neu angelegt: " + "; ".join(teile) + (f"; dazu {rest} weitere" if rest > 0 else "")
+        z["alte_datei"] = ("Neu angelegt: " + "; ".join(neu_angelegt) + (f"; dazu {rest} weitere" if rest > 0 else "")
                            + ". Vielleicht ist die Datei älter und nennt eine Kategorie noch mit ihrem früheren Namen – "
                            + ("dann jedes Produkt auf seiner Seite über „Bearbeiten“ (Feld „Kategorie“) "
                               "zurückverschieben und seine Zuweisungen neu setzen."
@@ -1946,7 +1964,7 @@ def _abschluss(lauf, bericht_basis):
     b.update(bericht_basis)
     if b.get("kategoriewechsel"):
         b["kategoriewechsel"]["gruppen"] = [g[1] if b.get("gespeichert") else g[0] for g in lauf.gruppen]
-    _kategoriewechsel_text(b)
+    _kategoriewechsel_text(b, lauf.neu_angelegt)
     if b.get("gespeichert"):
         for i, satz in lauf.wechsel_gespeichert:
             b["warnungen"][i] = satz
