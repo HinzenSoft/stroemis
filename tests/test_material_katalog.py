@@ -952,7 +952,8 @@ def test_kategorie_umbenennen():
     Eine Serie mit dem neuen Namen ergibt danach „unverändert“; ein Katalog-Export von vorher (mit Kennung) benennt sie
     zurück. Eine ALTE Serie (ohne Kennung, Kategorien am Namen
     erkannt) legt „Textilmaterial“ neu an und schiebt ihre Produkte dorthin zurück: Das Produkt mit eigener Zuweisung
-    verliert sie, keins hat danach ein Prüfformular – deshalb die Warnung im README, alte Dateien nicht mehr einzuspielen."""
+    verliert sie, keins hat danach ein Prüfformular – deshalb die Warnung im README, alte Dateien nicht mehr einzuspielen;
+    seit dem 09.11.2026 warnt auch der Bericht."""
     from app.material.services import katalog, katalog_export
     with tempfile.TemporaryDirectory() as tmp:
         app, k = umgebung(tmp)
@@ -1018,7 +1019,18 @@ def test_kategorie_umbenennen():
         assert ber["aenderungen"] == ["Kategorie „PSA (Test) / Textilmaterial“: neu",
                                       "Produkt „Testwerk Schlinge Delta“: geändert (Kategorie)",
                                       "Produkt „Testwerk Schlinge Epsilon“: geändert (Kategorie)"], ber["aenderungen"]
-        assert not ber["warnungen"], ber["warnungen"]          # keine eigene Warnung – nur die Zeilen oben
+        # Seit dem 09.11.2026 mit Warnung (Delta hat einen Artikel; Epsilon ohne Artikel keine), Zusammenfassung samt
+        # Hinweis auf eine alte Datei und der gelösten Zuweisung an Epsilon (tests/test_material_import_kategoriewechsel.py).
+        assert ber["warnungen"] == [
+            "produkte[0] (Testwerk Schlinge Delta): Kategorie „PSA (Test) / Schlingen“ → „PSA (Test) / Textilmaterial“ "
+            "– betrifft 1 Artikel hier; er hat danach kein Prüfformular mehr (bisher „Schlingen-Prüfung (Test)“, "
+            "Standard der Kategorie „Schlingen“) und lässt sich nicht prüfen."], ber["warnungen"]
+        assert ber["zuweisungen"]["geloest"] == 1, ber["zuweisungen"]
+        assert ber["kategoriewechsel"]["zusammenfassung"] == (
+            "2 Produkte wechseln die Kategorie – davon 1 mit Artikeln hier (1 Artikel); 1 Artikel verliert sein "
+            "Prüfformular, 1 Produkt-Zuweisung wird gelöst."), ber["kategoriewechsel"]
+        assert ber["kategoriewechsel"]["alte_datei"].startswith(
+            "Neu angelegt: „PSA (Test) / Textilmaterial“ nimmt 2 Produkte aus „PSA (Test) / Schlingen“ auf."), ber
         ber = importieren(kp, _serie("Textilmaterial"), False, name="serie-alt.json")
         assert ber["gespeichert"], ber
         with app.app_context():

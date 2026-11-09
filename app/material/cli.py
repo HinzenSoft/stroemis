@@ -50,9 +50,17 @@ def import_catalog(datei, trocken):
     teile = ("kategorien", "produkte", "formulare") + (("bilder", "dokumente") if (bericht.get("version") or 0) >= 2
                                                        else ()) + tuple(
         t for t in ("bestandteillisten", "zuweisungen") if any(bericht.get(t, {}).values()))
+    # Produkte, die die Kategorie wechseln (Wunsch vom 09.11.2026): gelöste Zuweisungen an Produkte zählen unter
+    # „geloest“ mit; die Zusammenfassung steht vor den Hinweisen und den Warnungen je Produkt.
+    wechsel = bericht.get("kategoriewechsel") or {}
     for teil in teile:
         zahlen = ", ".join(f"{k} {v}" for k, v in bericht[teil].items())
+        if teil == "zuweisungen" and wechsel.get("zuweisungen_geloest"):
+            zahlen += f" (davon {wechsel['zuweisungen_geloest']} durch Kategoriewechsel)"
         click.echo(f"{namen.get(teil, teil.capitalize()):<11} {zahlen}")
+    for satz in (wechsel.get("zusammenfassung"), wechsel.get("alte_datei")):
+        if satz:
+            click.echo(f"ACHTUNG {satz}")
     for h in bericht["hinweise"]:
         click.echo(f"HINWEIS {h}")
     for w in bericht["warnungen"]:

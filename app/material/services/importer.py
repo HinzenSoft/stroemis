@@ -200,6 +200,7 @@ def _bericht():
             "bilder": {"neu": 0, "geaendert": 0, "unveraendert": 0},
             "dokumente": {"neu": 0, "neue_version": 0, "unveraendert": 0},
             "bestandteillisten": {"neu": 0, "geaendert": 0, "unveraendert": 0},
+            "kategoriewechsel": None,
             "aenderungen": [], "hinweise": [], "warnungen": [], "fehler": [], "gespeichert": False}
 
 
@@ -240,6 +241,9 @@ class _Lauf:
         self.formularverweise = []            # (Fundstelle, Name, Angabe, Produkt) mit „formular_von“ (Format 1/2)
         self.formulare = []                   # (Fundstelle, Titel, Formular, standard_fuer, zugewiesen), _zuweisungen
         self.kategorien, self.produkte = set(), set()     # Kennungen hier, die die Datei nennt (E2, _zuweisungen)
+        self.neue_kategorien = set()          # Kategorien, die dieser Durchgang angelegt hat
+        self.geltend_vorher = {}              # Produkt → (Version, Formular, Standard-Kategorie) vor dem Durchgang
+        self.kategoriewechsel = {}            # Produkt → Wechsel der Kategorie, siehe _kategoriewechsel_melden
         self.bericht = _bericht()
 
     def notiz(self, zeile):
@@ -364,6 +368,143 @@ def _folgen_melden(lauf, ort, name, artikel, teile, seit):
     lauf.bericht["warnungen"].append(f"{ort} ({name}): {satz}.")
 
 
+# --- Produkte wechseln die Kategorie (Wunsch des Nutzers vom 09.11.2026) --------------------------------------------------
+# Anlass: Eine alte Katalog-ZIP (Kategorien am Namen erkannt) legt nach dem Umbenennen einer Kategorie die alte neu an und
+# schiebt ihre Produkte dorthin zurück – sie erben den Standard der bisherigen Kategorie nicht mehr, eine Zuweisung an
+# das Produkt wird gelöst (katalog.produkt_aendern, Z6), ihre Artikel lassen sich danach nicht prüfen. Der Import
+# verhält sich weiter so; er meldet es nur: je Produkt mit Artikeln eine Warnung, oben im Bericht eine Zusammenfassung
+# (_kategoriewechsel_text) und die gelösten Zuweisungen unter „zuweisungen“ → „geloest“.
+
+def _zuweisungen_stand(pid):
+    """(Zahl aller Zuweisungen hier, Formular der Zuweisung an das Produkt pid oder None) – vor und nach dem Wechsel."""
+    n = db.query("SELECT COUNT(*) AS n FROM mat_formular_zuweisung", one=True)["n"]
+    z = db.query("SELECT formular_id FROM mat_formular_zuweisung WHERE product_id = ?", (pid,), one=True)
+    return n, z["formular_id"] if z else None
+
+
+def _kategoriewechsel_merken(lauf, ort, name, vorhanden, nach, stand_vorher):
+    """Das Produkt vorhanden ist eben in die Kategorie nach gewechselt; stand_vorher aus _zuweisungen_stand. Zählt, was
+    produkt_aendern dabei gelöst hat, und merkt den Wechsel für _kategoriewechsel_melden."""
+    pid = vorhanden["id"]
+    n_nach, eigen_nach = _zuweisungen_stand(pid)
+    w = lauf.kategoriewechsel.setdefault(pid, {"ort": ort, "name": name, "von": vorhanden["category_id"],
+                                               "geloest": 0, "eigene": None})
+    w["nach"] = nach
+    w["geloest"] += stand_vorher[0] - n_nach
+    if stand_vorher[1] and eigen_nach != stand_vorher[1]:
+        w["eigene"] = stand_vorher[1]
+    lauf.bericht["zuweisungen"]["geloest"] += stand_vorher[0] - n_nach
+
+
+def _herkunft(geltend):
+    """Woher ein Formular für ein Produkt gilt (Tripel aus katalog._geltend), in Worten wie formular_fuer_produkt."""
+    if geltend[2] is None:
+        return "dem Produkt zugewiesen"
+    k = db.query("SELECT name FROM mat_category WHERE id = ?", (geltend[2],), one=True)
+    return f"Standard der Kategorie „{k['name'] if k else '?'}“"
+
+
+def _kategoriewechsel_melden(lauf):
+    """Nach den Zuweisungen der Datei – erst dann steht fest, welches Formular danach gilt: je Produkt mit Artikeln
+    (nicht ausgesondert), das die Kategorie gewechselt hat, eine Warnung; die Zahlen für die Zusammenfassung in
+    bericht["kategoriewechsel"] (Wortlaut in _kategoriewechsel_text, erst wenn feststeht, ob gespeichert wurde)."""
+    wechsel = {pid: w for pid, w in lauf.kategoriewechsel.items() if w["nach"] != w["von"]}
+    if not wechsel:
+        return
+    nachher = katalog._geltend()
+    zahl = {"produkte": len(wechsel), "mit_artikeln": 0, "artikel": 0, "ohne_formular": 0, "anderes_formular": 0,
+            "zuweisungen_geloest": sum(w["geloest"] for w in lauf.kategoriewechsel.values()), "neue_kategorien": []}
+    neu = {}                               # neu angelegte Kategorie → {bisherige Kategorie: Produkte}
+    for pid, w in wechsel.items():
+        if w["nach"] in lauf.neue_kategorien and w["von"] not in lauf.neue_kategorien:
+            aus = neu.setdefault(w["nach"], {})
+            aus[w["von"]] = aus.get(w["von"], 0) + 1
+        n = db.query("SELECT COUNT(*) AS n FROM mat_item WHERE product_id = ? AND lock_state <> 'ausgesondert'",
+                     (pid,), one=True)["n"]
+        if not n:
+            continue
+        zahl["mit_artikeln"] += 1
+        zahl["artikel"] += n
+        alt, jetzt = lauf.geltend_vorher.get(pid), nachher.get(pid)
+        er = n == 1
+        satz = (f"Kategorie „{_kategorie_pfadname(w['von'])}“ → „{_kategorie_pfadname(w['nach'])}“ – betrifft {n} "
+                "Artikel hier")
+        if w["eigene"]:
+            satz += f"; die Zuweisung von „{katalog._anzeige_titel(w['eigene'])}“ an das Produkt wird gelöst"
+        if alt and not jetzt:
+            zahl["ohne_formular"] += n
+            satz += (f"; {'er hat' if er else 'sie haben'} danach kein Prüfformular mehr (bisher "
+                     f"„{katalog._anzeige_titel(alt[1])}“, {_herkunft(alt)}) und {'lässt' if er else 'lassen'} sich "
+                     "nicht prüfen")
+        elif alt and jetzt[1] != alt[1]:
+            zahl["anderes_formular"] += n
+            satz += (f"; künftig gilt „{katalog._anzeige_titel(jetzt[1])}“ ({_herkunft(jetzt)}) statt "
+                     f"„{katalog._anzeige_titel(alt[1])}“ ({_herkunft(alt)})")
+        elif alt:
+            satz += f"; das Prüfformular „{katalog._anzeige_titel(jetzt[1])}“ gilt weiter ({_herkunft(jetzt)})"
+        elif jetzt:
+            satz += f"; künftig gilt „{katalog._anzeige_titel(jetzt[1])}“ ({_herkunft(jetzt)}), bisher keins"
+        else:
+            satz += f"; ein Prüfformular {'hat er' if er else 'haben sie'} weiterhin nicht"
+        lauf.bericht["warnungen"].append(f"{w['ort']} ({w['name']}): {satz}.")
+    zahl["neue_kategorien"] = [{"kategorie": _kategorie_pfadname(kid), "produkte": sum(aus.values()),
+                                "aus": [_kategorie_pfadname(k) for k in sorted(aus, key=aus.get, reverse=True)]}
+                               for kid, aus in neu.items()]
+    lauf.bericht["kategoriewechsel"] = zahl
+
+
+def _kategoriewechsel_text(b):
+    """Die Zusammenfassung oben im Bericht (Oberfläche und Kommandozeile): wenn ein Produkt mit Artikeln die Kategorie
+    wechselt oder eine neu angelegte Kategorie Produkte aus einer bestehenden aufnimmt – dann vielleicht eine alte Datei
+    mit einem früheren Kategorienamen (README „Kategorie im Katalog umbenennen“). Im Probelauf (und wenn nichts
+    gespeichert wurde) als Aussicht, nach dem Speichern als Ergebnis."""
+    z = b.get("kategoriewechsel")
+    if not z:
+        return
+    z["zusammenfassung"] = z["alte_datei"] = None
+    if not (z["mit_artikeln"] or z["neue_kategorien"]):
+        return
+    fertig = b.get("gespeichert")
+
+    def verb(n, eins, viele, eins_vorbei, viele_vorbei):
+        if fertig:
+            return eins_vorbei if n == 1 else viele_vorbei
+        return eins if n == 1 else viele
+
+    p, m = z["produkte"], z["mit_artikeln"]
+    satz = f"{p} Produkt{'e' if p != 1 else ''} " + verb(p, "wechselt die Kategorie", "wechseln die Kategorie",
+                                                        "hat die Kategorie gewechselt", "haben die Kategorie gewechselt")
+    if not m:
+        satz += " – ohne Artikel hier" if p == 1 else " – keins mit Artikeln hier"
+    elif p == 1:
+        satz += f" – mit {z['artikel']} Artikel hier"
+    else:
+        satz += f" – {'alle' if m == p else f'davon {m}'} mit Artikeln hier ({z['artikel']} Artikel)"
+    folgen = []
+    n = z["ohne_formular"]
+    if n:
+        folgen.append(f"{n} Artikel " + verb(n, "verliert sein Prüfformular", "verlieren ihr Prüfformular",
+                                             "hat sein Prüfformular verloren", "haben ihr Prüfformular verloren"))
+    n = z["anderes_formular"]
+    if n:
+        folgen.append(f"{n} Artikel " + verb(n, "bekommt ein anderes", "bekommen ein anderes", "hat ein anderes bekommen",
+                                             "haben ein anderes bekommen"))
+    n = z["zuweisungen_geloest"]
+    if n:
+        folgen.append(f"{n} Produkt-Zuweisung{'en' if n != 1 else ''} "
+                      + verb(n, "wird gelöst", "werden gelöst", "wurde gelöst", "wurden gelöst"))
+    z["zusammenfassung"] = satz + ("; " + ", ".join(folgen) if folgen else "") + "."
+    if z["neue_kategorien"]:
+        teile = [f"„{k['kategorie']}“ nimmt {k['produkte']} Produkt{'e' if k['produkte'] != 1 else ''} aus "
+                 + ", ".join(f"„{a}“" for a in k["aus"][:3]) + (" und weiteren" if len(k["aus"]) > 3 else "") + " auf"
+                 for k in z["neue_kategorien"][:3]]
+        rest = len(z["neue_kategorien"]) - 3
+        z["alte_datei"] = ("Neu angelegt: " + "; ".join(teile) + (f"; dazu {rest} weitere" if rest > 0 else "")
+                           + ". Vielleicht ist die Datei älter und nennt eine Kategorie noch mit ihrem früheren Namen – "
+                           + ("dann die Produkte über „Bearbeiten“ zurückverschieben und ihre Zuweisungen neu setzen."
+                              if fertig else "dann nicht übernehmen, sondern eine aktuelle Datei nehmen."))
+
+
 def _geaendert(vorher, nachher):
     return ", ".join(_FELDNAMEN.get(k, k) for k in nachher if nachher[k] != vorher.get(k))
 
@@ -477,6 +618,7 @@ def _kategorie(e, parent, ort, lauf, tiefe):
         else:
             kid = _ohne_konflikt(katalog.kategorie_anlegen, d)
             lauf.uid_setzen("mat_category", kid, uid)
+            lauf.neue_kategorien.add(kid)
             bericht["kategorien"]["neu"] += 1
             lauf.notiz(f"Kategorie „{_kategorie_pfadname(kid)}“: neu")
         lauf.kategorien.add(kid)
@@ -604,7 +746,11 @@ def _produkt(n, e, lauf):
                 _materialart_pruefen(vorhanden, nachher)
                 intervall_vorher = herstellerseite(vorhanden)[0]
                 seit = _journalstand()
+                wechsel = nachher["category_id"] != vorhanden["category_id"]
+                zuweisungen = _zuweisungen_stand(pid) if wechsel else None
                 _ohne_konflikt(katalog.produkt_aendern, pid, d, importiert=True)
+                if wechsel:
+                    _kategoriewechsel_merken(lauf, ort, name, vorhanden, nachher["category_id"], zuweisungen)
                 bericht["produkte"]["geaendert"] += 1
                 lauf.notiz(f"Produkt „{katalog.produktname(nachher)}“: geändert "
                            f"({_geaendert(vorher, nachher)})")
@@ -1485,6 +1631,8 @@ def _durchgang(daten, lauf, speichern):
     entscheidet am Ende, ob er bleibt. Liefert, ob gespeichert wurde."""
     try:
         with db.transaction(sofort=True):
+            # Was vor dem Durchgang galt – für _kategoriewechsel_melden, gelesen unter der Schreibsperre.
+            lauf.geltend_vorher = katalog._geltend()
             try:
                 _kategorien(daten.get("kategorien") or [], None, "kategorien", lauf)
                 _nachholen(lauf)
@@ -1494,6 +1642,7 @@ def _durchgang(daten, lauf, speichern):
                 _intervalle_pruefen(lauf)
                 _formulare(daten.get("formulare") or [], lauf)
                 _zuweisungen(lauf)
+                _kategoriewechsel_melden(lauf)
             except Abgelehnt as exc:
                 lauf.bericht["fehler"].append(str(exc))
             if not speichern(lauf):
@@ -1507,6 +1656,7 @@ def _abschluss(lauf, bericht_basis):
     """Kennzahlen, die nicht aus dem Durchgang selbst kommen, in seinen Bericht übernehmen."""
     b = lauf.bericht
     b.update(bericht_basis)
+    _kategoriewechsel_text(b)
     k, p, f = lauf.zugeordnet["category"], lauf.zugeordnet["product"], lauf.zugeordnet["formular"]
     if k or p or f:
         # Prüfformulare zählen mit: gefunden über den Titel in derselben Heimat (E3; Sicherheitsprüfung Formular-Pool,
