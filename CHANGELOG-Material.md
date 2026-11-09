@@ -13627,3 +13627,39 @@ Warnung“, alter Pfad in seiner Warnung; zwei Ebenen zugleich verschoben: jedes
 oberste Ebene, alle Produkte gehen: „→ oberste Ebene“, „alle mit eigener Warnung“, ohne Gruppe); Vorbereitung als
 `_verschoben_vorbereiten` herausgelöst; `test_material_importauftrag.py::test_oberflaeche_statisch` prüft Fokus-Merker
 und den Rückfall für `davon`.
+
+### Nachbesserung Runde 2 (09.11.2026)
+
+Nach `planung/import-warnung-feinschliff/pruefung-ablauf-r2.md` (Befund 1) und `pruefung-browser-r2.md` (Befund 1,
+Verbesserung 2). Kein Schemaschritt (Schema bleibt 39).
+
+- **Pfad vor dem Import auch in gelösten Zuweisungen** (Ablauf r2, Befund 1): Verschiebt die Datei eine Oberkategorie und
+  nimmt eine ihrer Unterkategorien, die in der Datei dahinter steht, zugleich heraus, nannte „… an Kategorie „…““ den
+  Zwischenstand („Wasser / PSA / Schlingen“). `katalog.verschieben_folgen` liefert je Eintrag jetzt `kategorie_id` (die
+  Kategorie des Ziels, `null` bei einem Produkt); `_geloest_text` bildet daraus den Pfad vor dem Durchgang
+  (`_pfad_vorher`).
+- **Fokus auf dem Stand ohne Ring nach Klick oder Tipp** (Browser r2, Befund 1, `material.js`): WebKit (und Firefox nach
+  Skript-Klick) zeigte den Ring am Stand auch nach Zeigerbedienung. Der Dialog merkt sich die letzte Eingabe
+  (`pointerdown` / `keydown`, `importPerZeiger`) und setzt den Fokus nach Zeigerbedienung mit `focusVisible: false`; mit
+  der Tastatur bleibt der Ring.
+- **„Neu angelegt: …“ kürzer** (Browser r2, Verbesserung 2, `_unter`): der gemeinsame Oberpfad der neuen und der
+  bisherigen Kategorien nur einmal, wie in den Gruppenzeilen: „Neu angelegt: „Textilmaterial“ (unter „Persönliche
+  Schutzausrüstung gegen Absturz“) nimmt 15 Produkte aus „Schlingen“ auf.“ Ohne gemeinsamen Anfang bleiben die vollen
+  Pfade. `neue_kategorien` bleibt unverändert.
+- **Nicht umgesetzt** (Browser r2): 1 (Gruppenzeile bei einem Paar weglassen – offene Frage), der zweite Teil von 2 (Satz
+  „Vielleicht ist die Datei älter …“ verlegen – Wortwahl/Aufbau), 3 („Formular 15“ ist die Fundstelle in der Datei wie bei
+  allen Hinweisen des Imports; Abstimmung mit dem Kasten ist eine Wortfrage), 4 und 5 (offene Fragen), 6 und 7
+  (Übungsleiste, Toast – eigener Auftrag), 8 (Formulartitel einmal je Gruppe – Umbau der Einzelheiten), 9 („geändert (i)“
+  einzeilig – am schmalen Telefon wäre die Tabelle dann breiter als der Dialog).
+
+**Schnittstelle**
+
+| Route | Rechte | Änderung |
+| --- | --- | --- |
+| `GET /api/material/formular-pool/folgen` | wie bisher | je Eintrag neu `kategorie_id` (Kategorie des Ziels oder `null`) |
+| `GET /api/material/katalog/import/<kennung>` (Bericht), `flask material import-catalog` | wie bisher | `kategoriewechsel.alte_datei` mit dem gemeinsamen Oberpfad nur einmal; gelöste Zuweisungen an Kategorien mit dem Pfad vor dem Import |
+
+**Tests**: `test_verschobene_kategorie_grenzfaelle` um den Fall „PSA wandert unter Wasser, Schlingen dahinter auf die
+oberste Ebene“ ergänzt (Probelauf und echter Lauf, Warnung und Gruppe); neu `test_unter`; `test_alte_datei_…`,
+`test_kommandozeile` und `test_material_katalog.py::test_kategorie_umbenennen` auf den kürzeren Satz angepasst;
+`test_material_importauftrag.py::test_oberflaeche_statisch` prüft `focusVisible: false` am Stand.

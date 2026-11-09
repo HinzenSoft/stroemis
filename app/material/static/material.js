@@ -4475,6 +4475,12 @@
     });
   }
 
+  /* Zuletzt mit einem Zeiger (Maus, Finger, Stift) bedient? Dann setzt der Dialog den Fokus auf den Stand ohne Ring – auch
+     WebKit zeigt sonst nach Klick oder Tipp den Ring, der nur der Tastatur gilt (Prüfung Browser r2 zum Feinschliff). */
+  let importPerZeiger = false;
+  document.addEventListener("pointerdown", () => { importPerZeiger = true; }, true);
+  document.addEventListener("keydown", () => { importPerZeiger = false; }, true);
+
   function katalogImportDialog(kennung) {
     dialog(`<h2>Katalog importieren</h2>
       <p>Erst ein Probelauf (speichert nichts), übernommen wird mit „Übernehmen“. Gelöscht wird nie etwas; der Import läuft
@@ -4532,7 +4538,7 @@
         if (anfang && (!ae || !body.contains(ae) || ae === $("h2", body) || ae === $("#ki-datei", body)
                        || !ae.getClientRects().length)) {
           anfang.tabIndex = -1;
-          anfang.focus({ preventScroll: true });
+          anfang.focus(importPerZeiger ? { preventScroll: true, focusVisible: false } : { preventScroll: true });
         }
         // Kasten „Produkte wechseln die Kategorie“ (Prüfung Browser r1, B1): Am Telefon klebt „Übernehmen“ unten im
         // Dialog, der Kasten stand unter Kopf und Ablage erst nach dem Rollen im Bild. Ist er nicht ganz zu sehen, rollt

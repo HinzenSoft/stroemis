@@ -727,6 +727,8 @@ def test_oberflaeche_statisch():
     # Nachbesserung r1 zum Feinschliff (Prüfung Browser r1, Befund 1; Prüfung Ablauf r1, Befund 4): nach „Übernehmen“
     # und dem Neuladen der Fokus auf „Bericht ansehen“; ältere Berichte ohne „davon“ zeigen die Zahl wie bisher.
     assert "sessionStorage.setItem(IMPORT_FOKUS" in js and "sessionStorage.removeItem(IMPORT_FOKUS)" in js
+    # Nach Klick oder Tipp kommt der Fokus ohne Ring auf den Stand, auch in WebKit (Prüfung Browser r2, Befund 1).
+    assert "anfang.focus(importPerZeiger ? { preventScroll: true, focusVisible: false }" in js
     assert "kw.davon || (kw.zuweisungen_geloest ? `davon ${kw.zuweisungen_geloest} durch Kategoriewechsel`" in js
     print("Oberfläche (statisch) bestanden.")
 
