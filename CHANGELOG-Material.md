@@ -13609,7 +13609,8 @@ Verbesserungen 2, 5, 6, 7). Kein Schemaschritt (Schema bleibt 39).
   Zuweisungen wie bisher „(davon n durch Kategoriewechsel)“ aus `zuweisungen_geloest`.
 - **Fokus nach „Übernehmen“** (Browser r1, Befund 1): Nach dem echten Lauf lädt die Seite beim Schließen neu; der Fokus
   stand danach auf der Seite. Jetzt merkt sich der Dialog das in `sessionStorage` (`mat-katalogimport-fokus`),
-  `importHinweis` liest und löscht es sofort und setzt den Fokus auf „Bericht ansehen“.
+  `importHinweis` liest und löscht es sofort und setzt den Fokus auf „Bericht ansehen“ – am Finger
+  (`pointer: coarse`) mit `focusVisible: false`, ohne Ring (der Ring gilt der Tastatur).
 - **„→ oberste Ebene“** (Browser r1, Verbesserung 2, `_verschoben_text`): „verschoben „PSA / Schlingen“ → oberste Ebene“
   statt „→ „Schlingen““ (mit anderem Namen: „→ „Bänder“ (oberste Ebene)“).
 - **„hier“ im Hinweis zu Zuweisungen** (Verbesserung 6): „… liegt in dieser Materialablage nicht unter „…“ – nicht

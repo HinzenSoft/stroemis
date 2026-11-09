@@ -4562,9 +4562,11 @@
           gemeldet = true;
           toast("Katalog übernommen");
           // Leiste und Liste zeigen den neuen Stand, sobald der Bericht gelesen und der Dialog zu ist. Nach dem Neuladen
-          // kommt der Fokus auf „Bericht ansehen“ (importHinweis) – sonst stand er auf der Seite (Prüfung Browser r1, Befund 1).
+          // kommt der Fokus auf „Bericht ansehen“ (importHinweis) – sonst stand er auf der Seite (Prüfung Browser r1, Befund 1);
+          // am Finger ohne Ring (der Ring gilt der Tastatur).
           dlg.addEventListener("close", () => {
-            try { sessionStorage.setItem(IMPORT_FOKUS, "1"); } catch (e) { /* privat: dann eben nicht */ }
+            const wert = matchMedia("(pointer: coarse)").matches ? "finger" : "tastatur";
+            try { sessionStorage.setItem(IMPORT_FOKUS, wert); } catch (e) { /* privat: dann eben nicht */ }
             location.reload();
           }, { once: true });
         }
@@ -4686,8 +4688,8 @@
     clearTimeout(importHinweisUhr);
     if (!$("#kat-import-hinweis")) return;
     // Gleich gelesen und gelöscht: Das Schließen des Dialogs ruft importHinweis noch vor dem Neuladen auf.
-    let nachLaden = false;
-    try { nachLaden = sessionStorage.getItem(IMPORT_FOKUS) === "1"; sessionStorage.removeItem(IMPORT_FOKUS); } catch (e) { /* egal */ }
+    let nachLaden = null;
+    try { nachLaden = sessionStorage.getItem(IMPORT_FOKUS); sessionStorage.removeItem(IMPORT_FOKUS); } catch (e) { /* egal */ }
     let a;
     try { a = (await api(`${API}/katalog/import/aktuell`)).auftrag; } catch (e) { return; }
     const ziel = $("#kat-import-hinweis");      // die Seite kann inzwischen neu gezeichnet sein
@@ -4712,7 +4714,7 @@
       <p><strong>${esc(text)}</strong> <span class="help">${a.von ? `${esc(a.von)} · ` : ""}${esc(a.quelle || "")} · ${esc(fmtZeit(laeuft ? a.gestartet : a.beendet))}</span></p>
       <p><button type="button" class="lnk" data-act="kat-import-stand" data-id="${esc(a.id)}">${laeuft || a.zustand === "abgebrochen" ? "Stand ansehen" : "Bericht ansehen"}</button>${laeuft ? "" : ` · <button type="button" class="lnk" data-act="kat-import-aus" data-id="${esc(a.id)}">Ausblenden</button>`}</p></div>`;
     const knopf = (fokus || (nachLaden && "kat-import-stand")) && $(`[data-act="${fokus || "kat-import-stand"}"]`, ziel);
-    if (knopf) knopf.focus();
+    if (knopf) knopf.focus(!fokus && nachLaden === "finger" ? { focusVisible: false } : undefined);
     if (laeuft) importHinweisUhr = setTimeout(importHinweis, 5000);
   }
 
