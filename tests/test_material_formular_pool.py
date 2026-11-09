@@ -234,7 +234,7 @@ def test_verschieben_loeschen_trigger():
         assert r.status_code == 200 and r.json["folgen"] == [], r.json
         r = kp.get(f"{API}/formular-pool/folgen?produkt={ids['a']}&kategorie={ids['gurte']}")
         assert r.json["folgen"] == [{"formular_id": pf, "formular": "Platzhalter Karabiner",
-                                     "ziel": "„Testwerk Platzhalter A“"}], r.json
+                                     "ziel": "„Testwerk Platzhalter A“", "kategorie_id": None}], r.json
         r = kp.put(f"{API}/produkte/{ids['a']}", json={"category_id": ids["gurte"], "material_kind": "metall_hardware"})
         assert r.status_code == 200, r.get_json()
         assert r.json["produkt"]["formular"] is None                          # Gurte hat keinen Standard
@@ -245,6 +245,8 @@ def test_verschieben_loeschen_trigger():
         r = kp.get(f"{API}/formular-pool/folgen?kategorie={ids['unter']}&parent={ids['gurte']}")
         assert sorted(x["ziel"] for x in r.json["folgen"]) == [
             "Kategorie „PSA gegen Absturz / Karabiner / Verschluss (Test)“", "„Testwerk Platzhalter C“"], r.json
+        # kategorie_id: die Kategorie des Ziels (für den Pfad vor dem Import im Katalogimport), bei einem Produkt None.
+        assert sorted((x["kategorie_id"] or 0) for x in r.json["folgen"]) == [0, ids["unter"]], r.json
         r = kp.put(f"{API}/kategorien/{ids['unter']}", json={"parent_id": ids["gurte"]})
         assert r.status_code == 200, r.get_json()
         assert geltend(kp, ids["c"]) is None

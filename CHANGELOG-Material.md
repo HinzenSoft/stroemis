@@ -13662,4 +13662,5 @@ Verbesserung 2). Kein Schemaschritt (Schema bleibt 39).
 **Tests**: `test_verschobene_kategorie_grenzfaelle` um den Fall „PSA wandert unter Wasser, Schlingen dahinter auf die
 oberste Ebene“ ergänzt (Probelauf und echter Lauf, Warnung und Gruppe); neu `test_unter`; `test_alte_datei_…`,
 `test_kommandozeile` und `test_material_katalog.py::test_kategorie_umbenennen` auf den kürzeren Satz angepasst;
-`test_material_importauftrag.py::test_oberflaeche_statisch` prüft `focusVisible: false` am Stand.
+`test_material_importauftrag.py::test_oberflaeche_statisch` prüft `focusVisible: false` am Stand;
+`test_material_formular_pool.py::test_verschieben_loeschen_trigger` erwartet `kategorie_id` in `…/formular-pool/folgen`.
