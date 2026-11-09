@@ -90,15 +90,17 @@ def _vorbereiten(tmp):
 ALTE_DATEI = _datei([("Delta", ALT), ("Epsilon", ALT), ("Zeta", ALT), ("Eta", ANDERE), ("Theta", SCHLINGEN)],
                     [_kat("PSA (Test)", _kat("Alt (Test)"), _kat("Schlingen (Test)"), _kat("Andere (Test)"))])
 
+# Seit dem Feinschliff (Prüfung Browser r3, Verbesserungen 1 und 9): der gemeinsame Oberpfad einmal („unter …“), „im
+# Bestand“ statt „hier“, der Titel einer gelösten eigenen Zuweisung nur einmal.
 WARNUNGEN = [
-    "produkte[0] (Testwerk Delta): Kategorie „PSA (Test) / Schlingen (Test)“ → „PSA (Test) / Alt (Test)“ – betrifft 2 "
-    "Artikel hier; sie haben danach kein Prüfformular mehr (bisher „Schlingen-Prüfung (Test)“, Standard der Kategorie "
-    "„Schlingen (Test)“) und lassen sich nicht prüfen.",
-    "produkte[1] (Testwerk Epsilon): Kategorie „PSA (Test) / Schlingen (Test)“ → „PSA (Test) / Alt (Test)“ – betrifft 1 "
-    "Artikel hier; die Zuweisung von „Epsilon-Prüfung (Test)“ an das Produkt wird gelöst; er hat danach kein "
-    "Prüfformular mehr (bisher „Epsilon-Prüfung (Test)“, dem Produkt zugewiesen) und lässt sich nicht prüfen.",
-    "produkte[3] (Testwerk Eta): Kategorie „PSA (Test) / Schlingen (Test)“ → „PSA (Test) / Andere (Test)“ – betrifft 1 "
-    "Artikel hier; künftig gilt „Andere-Prüfung (Test)“ (Standard der Kategorie „Andere (Test)“) statt "
+    "produkte[0] (Testwerk Delta): Kategorie „Schlingen (Test)“ → „Alt (Test)“ (unter „PSA (Test)“) – betrifft 2 "
+    "Artikel im Bestand; sie haben danach kein Prüfformular mehr (bisher „Schlingen-Prüfung (Test)“, Standard der "
+    "Kategorie „Schlingen (Test)“) und lassen sich nicht prüfen.",
+    "produkte[1] (Testwerk Epsilon): Kategorie „Schlingen (Test)“ → „Alt (Test)“ (unter „PSA (Test)“) – betrifft 1 "
+    "Artikel im Bestand; die Zuweisung von „Epsilon-Prüfung (Test)“ an das Produkt wird gelöst; er hat danach kein "
+    "Prüfformular mehr und lässt sich nicht prüfen.",
+    "produkte[3] (Testwerk Eta): Kategorie „Schlingen (Test)“ → „Andere (Test)“ (unter „PSA (Test)“) – betrifft 1 "
+    "Artikel im Bestand; künftig gilt „Andere-Prüfung (Test)“ (Standard der Kategorie „Andere (Test)“) statt "
     "„Schlingen-Prüfung (Test)“ (Standard der Kategorie „Schlingen (Test)“).",
 ]
 # Nach dem Speichern als Ergebnis (Prüfung Browser r1, B2): „wurde gelöst“, „jetzt gilt“.
@@ -112,6 +114,16 @@ ZAHLEN = {"produkte": 4, "mit_artikeln": 3, "artikel": 4, "ohne_formular": 3, "a
 
 def _zahlen(kw):
     return {s: kw[s] for s in ZAHLEN}
+
+
+def _gruppen(warnungen, namen):
+    """Die Gruppen der Oberfläche, wenn jedes Produkt eine eigene Folge hat: je Warnung eine Zeile ohne Fundstelle, der
+    Name hinter der Zahl der Artikel."""
+    out = []
+    for i, (w, name) in enumerate(zip(warnungen, namen)):
+        zeile = w.split(": ", 1)[1]
+        out.append({"zeile": zeile.replace(" im Bestand", f" im Bestand ({name})", 1), "einzeln": [], "warnungen": [i]})
+    return out
 
 
 def test_alte_datei_probelauf_und_echter_lauf():
@@ -132,9 +144,11 @@ def test_alte_datei_probelauf_und_echter_lauf():
         assert ber["zuweisungen"] == {"neu": 0, "geloest": 2, "unveraendert": 0}, ber["zuweisungen"]
         kw = ber["kategoriewechsel"]
         assert _zahlen(kw) == ZAHLEN, kw
-        assert kw["zusammenfassung"] == ("4 Produkte wechseln die Kategorie – davon 3 mit Artikeln hier (4 Artikel); "
-                                         "3 Artikel verlieren ihr Prüfformular, 1 Artikel bekommt ein anderes "
+        assert kw["zusammenfassung"] == ("4 Produkte wechseln die Kategorie – davon 3 mit Artikeln im Bestand (4 "
+                                         "Artikel); 3 Artikel verlieren ihr Prüfformular, 1 Artikel bekommt ein anderes "
                                          "Prüfformular, 2 Produkt-Zuweisungen werden gelöst."), kw
+        assert kw["davon"] == "davon 2 durch Kategoriewechsel" and kw["verschiebung"] is None, kw
+        assert kw["gruppen"] == _gruppen(WARNUNGEN, ("Testwerk Delta", "Testwerk Epsilon", "Testwerk Eta")), kw["gruppen"]
         assert kw["alte_datei"] == ("Neu angelegt: „PSA (Test) / Alt (Test)“ nimmt 3 Produkte aus „PSA (Test) / "
                                     "Schlingen (Test)“ auf. Vielleicht ist die Datei älter und nennt eine Kategorie noch "
                                     "mit ihrem früheren Namen – dann nicht übernehmen, sondern eine aktuelle Datei "
@@ -149,9 +163,10 @@ def test_alte_datei_probelauf_und_echter_lauf():
         assert ber["zuweisungen"]["geloest"] == 2, ber["zuweisungen"]
         kw = ber["kategoriewechsel"]
         assert _zahlen(kw) == ZAHLEN, kw
-        assert kw["zusammenfassung"] == ("4 Produkte haben die Kategorie gewechselt – davon 3 mit Artikeln hier "
+        assert kw["zusammenfassung"] == ("4 Produkte haben die Kategorie gewechselt – davon 3 mit Artikeln im Bestand "
                                          "(4 Artikel); 3 Artikel haben ihr Prüfformular verloren, 1 Artikel hat ein "
                                          "anderes Prüfformular bekommen, 2 Produkt-Zuweisungen wurden gelöst."), kw
+        assert kw["gruppen"] == _gruppen(WARNUNGEN_GESPEICHERT, ("Testwerk Delta", "Testwerk Epsilon", "Testwerk Eta"))
         assert kw["alte_datei"].endswith("– dann jedes Produkt auf seiner Seite über „Bearbeiten“ (Feld „Kategorie“) "
                                          "zurückverschieben und seine Zuweisungen neu setzen."), kw
         with app.app_context():
@@ -176,11 +191,11 @@ def test_alte_datei_probelauf_und_echter_lauf():
         kw = ber["kategoriewechsel"]
         assert kw["alte_datei"] is None and kw["neue_kategorien"] == [], kw
         assert (kw["produkte"], kw["mit_artikeln"], kw["ohne_formular"], kw["anderes_formular"]) == (4, 3, 0, 1), kw
-        assert kw["zusammenfassung"] == ("4 Produkte wechseln die Kategorie – davon 3 mit Artikeln hier (4 Artikel); "
-                                         "1 Artikel bekommt ein anderes Prüfformular."), kw
-        assert ("produkte[0] (Testwerk Delta): Kategorie „PSA (Test) / Alt (Test)“ → „PSA (Test) / Schlingen (Test)“ – "
-                "betrifft 2 Artikel hier; künftig gilt „Schlingen-Prüfung (Test)“ (Standard der Kategorie „Schlingen "
-                "(Test)“), bisher keins.") in ber["warnungen"], ber["warnungen"]
+        assert kw["zusammenfassung"] == ("4 Produkte wechseln die Kategorie – davon 3 mit Artikeln im Bestand (4 "
+                                         "Artikel); 1 Artikel bekommt ein anderes Prüfformular."), kw
+        assert ("produkte[0] (Testwerk Delta): Kategorie „Alt (Test)“ → „Schlingen (Test)“ (unter „PSA (Test)“) – "
+                "betrifft 2 Artikel im Bestand; künftig gilt „Schlingen-Prüfung (Test)“ (Standard der Kategorie "
+                "„Schlingen (Test)“), bisher keins.") in ber["warnungen"], ber["warnungen"]
     print("Alte Datei: Probelauf und echter Lauf bestanden.")
 
 
@@ -204,12 +219,14 @@ def test_gilt_weiter_und_ohne_formular():
                                       ("Sigma", ("D (Test)",))], kategorien), True, name="zwei.json")
         assert not ber["fehler"] and ber["zuweisungen"]["geloest"] == 0, ber
         assert ber["warnungen"] == [
-            "produkte[0] (Testwerk Pi): Kategorie „Ober (Test) / A (Test)“ → „Ober (Test) / B (Test)“ – betrifft 1 "
-            "Artikel hier; das Prüfformular „Ober-Prüfung (Test)“ gilt weiter (Standard der Kategorie „Ober (Test)“).",
-            "produkte[2] (Testwerk Sigma): Kategorie „C (Test)“ → „D (Test)“ – betrifft 1 Artikel hier; ein "
+            "produkte[0] (Testwerk Pi): Kategorie „A (Test)“ → „B (Test)“ (unter „Ober (Test)“) – betrifft 1 Artikel im "
+            "Bestand; das Prüfformular „Ober-Prüfung (Test)“ gilt weiter (Standard der Kategorie „Ober (Test)“).",
+            "produkte[2] (Testwerk Sigma): Kategorie „C (Test)“ → „D (Test)“ – betrifft 1 Artikel im Bestand; ein "
             "Prüfformular hat er weiterhin nicht."], ber["warnungen"]
         kw = ber["kategoriewechsel"]
-        assert kw["zusammenfassung"] == "3 Produkte wechseln die Kategorie – davon 2 mit Artikeln hier (2 Artikel).", kw
+        assert kw["zusammenfassung"] == ("3 Produkte wechseln die Kategorie – davon 2 mit Artikeln im Bestand (2 "
+                                         "Artikel)."), kw
+        assert kw["davon"] is None, kw
         assert kw["alte_datei"] is None, kw
         # Nur ein Produkt ohne Artikel wechselt in eine bestehende Kategorie: keine Warnung, keine Zusammenfassung.
         ber = importieren(kp, _datei([("Pi", ("Ober (Test)", "A (Test)")), ("Rho", ("D (Test)",)),
@@ -223,14 +240,14 @@ def test_gilt_weiter_und_ohne_formular():
         # Genau ein Produkt mit mehreren Artikeln (Prüfung Ablauf r1, Befund 1): „mit 2 Artikeln hier“.
         _artikel(w, pi, gid)
         fuenf = _datei([("Pi", ("Ober (Test)", "B (Test)")), ("Rho", ("D (Test)",)), ("Sigma", ("C (Test)",))], kategorien)
-        for speichern, satz in ((False, "1 Produkt wechselt die Kategorie – mit 2 Artikeln hier."),
-                                (True, "1 Produkt hat die Kategorie gewechselt – mit 2 Artikeln hier.")):
+        for speichern, satz in ((False, "1 Produkt wechselt die Kategorie – mit 2 Artikeln im Bestand."),
+                                (True, "1 Produkt hat die Kategorie gewechselt – mit 2 Artikeln im Bestand.")):
             ber = importieren(kp, fuenf, not speichern, name="fuenf.json")
             assert not ber["fehler"] and ber["gespeichert"] is speichern, ber
             assert ber["kategoriewechsel"]["zusammenfassung"] == satz, ber["kategoriewechsel"]
             assert ber["warnungen"] == [
-                "produkte[0] (Testwerk Pi): Kategorie „Ober (Test) / A (Test)“ → „Ober (Test) / B (Test)“ – betrifft 2 "
-                "Artikel hier; das Prüfformular „Ober-Prüfung (Test)“ gilt weiter (Standard der Kategorie „Ober "
+                "produkte[0] (Testwerk Pi): Kategorie „A (Test)“ → „B (Test)“ (unter „Ober (Test)“) – betrifft 2 "
+                "Artikel im Bestand; das Prüfformular „Ober-Prüfung (Test)“ gilt weiter (Standard der Kategorie „Ober "
                 "(Test)“)."], ber["warnungen"]
     print("Gilt weiter und ohne Formular bestanden.")
 
@@ -251,14 +268,203 @@ def test_kommandozeile():
             zeilen = r.output.splitlines()
             assert "Zuweisungen neu 0, geloest 2, unveraendert 0 (davon 2 durch Kategoriewechsel)" in zeilen, r.output
             achtung = [z for z in zeilen if z.startswith("ACHTUNG ")]
-            assert achtung[0].startswith(f"ACHTUNG {satz} – davon 3 mit Artikeln hier"), r.output
+            assert achtung[0].startswith(f"ACHTUNG {satz} – davon 3 mit Artikeln im Bestand"), r.output
             assert achtung[1].startswith("ACHTUNG Neu angelegt: „PSA (Test) / Alt (Test)“"), r.output
             assert achtung[2:] == [f"ACHTUNG {w}" for w in (WARNUNGEN_GESPEICHERT if not zusatz else WARNUNGEN)], r.output
             assert zeilen[-1] == schluss, r.output
     print("Kommandozeile bestanden.")
 
 
+def _pool(kp, heimat, titel, kategorien=(), produkte=()):
+    """Ein aktives Formular im Pool der Kategorie heimat, zugewiesen an genau diese Kategorien und Produkte."""
+    r = kp.post("/api/material/formular-pool", json={"kategorie_id": heimat, "titel": titel, "punkte": PUNKT})
+    assert r.status_code == 201, r.get_json()
+    f = r.json["formular"]
+    assert kp.post(f"/api/material/formulare/{f['id']}/aktivieren", json={}).status_code == 200
+    r = kp.put(f"/api/material/formular-pool/{f['formular_id']}/zuweisung",
+               json={"kategorien": list(kategorien), "produkte": list(produkte)})
+    assert r.status_code == 200, r.get_json()
+
+
+def test_gruppen():
+    """Die Oberfläche bekommt je alte → neue Kategorie und gleicher Folge EINE Zeile (Prüfung Browser r3, Verbesserung 1):
+    zwei Produkte mit gleichem Standard zusammen, mit ihren Namen darunter; zwei mit derselben eigenen Zuweisung zusammen
+    („die Zuweisungen … an die Produkte“). Die Warnungen je Produkt bleiben in „warnungen“ (Kommandozeile)."""
+    with tempfile.TemporaryDirectory() as tmp:
+        app, k = umgebung(tmp)
+        kp, w = k["katalog"], k["wart"]
+        kategorien = [_kat("Ober (Test)", _kat("A (Test)"), _kat("B (Test)"))]
+        a, b = ("Ober (Test)", "A (Test)"), ("Ober (Test)", "B (Test)")
+        modelle = ("Kappa", "Lambda", "My", "Ny")
+        ber = importieren(kp, _datei([(m, a) for m in modelle], kategorien), False, name="eins.json")
+        assert ber["gespeichert"], ber
+        ka, kb = _ids(app, "mat_category", "name", ("A (Test)", "B (Test)"))
+        p = dict(zip(modelle, _ids(app, "mat_product", "model", modelle)))
+        formular_neu(kp, {"kategorie_id": ka}, "A-Prüfung (Test)", PUNKT)
+        formular_neu(kp, {"kategorie_id": kb}, "B-Prüfung (Test)", PUNKT)
+        _pool(kp, ka, "Eigen-Prüfung (Test)", produkte=(p["My"], p["Ny"]))
+        gid, _ = gliederung(w, "OG Testdorf")
+        for m, n in (("Kappa", 1), ("Lambda", 2), ("My", 1), ("Ny", 1)):
+            _artikel(w, p[m], gid, n)
+        zwei = _datei([(m, b) for m in modelle], kategorien)
+        for speichern in (False, True):
+            ber = importieren(kp, zwei, not speichern, name="zwei.json")
+            assert not ber["fehler"] and ber["gespeichert"] is speichern, ber
+            gilt, geloest = ("jetzt gilt", "wurden gelöst") if speichern else ("künftig gilt", "werden gelöst")
+            pfeil = "Kategorie „A (Test)“ → „B (Test)“ (unter „Ober (Test)“)"
+            b_std = "„B-Prüfung (Test)“ (Standard der Kategorie „B (Test)“)"
+            assert ber["kategoriewechsel"]["gruppen"] == [
+                {"zeile": f"{pfeil} – betrifft 3 Artikel im Bestand (2 Produkte); {gilt} {b_std} statt „A-Prüfung (Test)“ "
+                          "(Standard der Kategorie „A (Test)“).",
+                 "einzeln": ["Testwerk Kappa (1 Artikel)", "Testwerk Lambda (2 Artikel)"], "warnungen": [0, 1]},
+                {"zeile": f"{pfeil} – betrifft 2 Artikel im Bestand (2 Produkte); die Zuweisungen von „Eigen-Prüfung "
+                          f"(Test)“ an die Produkte {geloest}; {gilt} {b_std}.",
+                 "einzeln": ["Testwerk My (1 Artikel)", "Testwerk Ny (1 Artikel)"], "warnungen": [2, 3]},
+            ], ber["kategoriewechsel"]["gruppen"]
+            assert len(ber["warnungen"]) == 4 and ber["warnungen"][1].startswith(
+                f"produkte[1] (Testwerk Lambda): {pfeil} – betrifft 2 Artikel im Bestand; {gilt} {b_std}"), ber["warnungen"]
+            assert ber["zuweisungen"]["geloest"] == 2 and ber["kategoriewechsel"]["davon"] == \
+                "davon 2 durch Kategoriewechsel", ber
+    print("Gruppen bestanden.")
+
+
+def _kategorien_mit_kennung(schlingen_unter):
+    """Format 2 mit Kennung (wie ein Katalog-Export): „PSA (Test)“ mit „Andere (Test)“, „Wasser (Test)“ – „Schlingen
+    (Test)“ steht unter schlingen_unter. Nur über die Kennung kann eine Datei eine Kategorie verschieben."""
+    schlingen = dict(_kat("Schlingen (Test)"), uid="5" * 32)
+    psa = dict(_kat("PSA (Test)", *([schlingen] if schlingen_unter == "PSA" else []),
+                    dict(_kat("Andere (Test)"), uid="6" * 32)), uid="1" * 32)
+    wasser = dict(_kat("Wasser (Test)", *([schlingen] if schlingen_unter == "Wasser" else [])), uid="7" * 32)
+    return [psa, wasser]
+
+
+def test_verschobene_kategorie():
+    """Eine Datei mit Kennung verschiebt „Schlingen (Test)“ von „PSA (Test)“ unter „Wasser (Test)“ (Wunsch des Nutzers vom
+    09.11.2026, Frage 1 des Berichts zu import-warnung-kategorie): Der Standard von „Schlingen“ aus dem Pool von „PSA“ und
+    die Zuweisung eines Formulars aus diesem Pool an Epsilon liegen danach außerhalb ihrer Heimat und werden gelöst (Z6)
+    – sie zählen unter „gelöst“ („davon 2 durch verschobene Kategorien“), die Warnung „verschoben – betrifft n Artikel“
+    der Kategorie nennt die Folgen für die Prüfformulare (Delta und Epsilon verlieren es, Eta behält seins), oben steht
+    eine eigene Zusammenfassung. Theta wechselt selbst in die verschobene Kategorie: eigene Warnung, nicht doppelt
+    gezählt. Probelauf = echter Lauf, Kommandozeile; ein zweiter Lauf meldet nichts mehr."""
+    from app import db
+    from app.material.services import katalog
+    with tempfile.TemporaryDirectory() as tmp:
+        app, k = umgebung(tmp)
+        kp, w = k["katalog"], k["wart"]
+        modelle = ("Delta", "Epsilon", "Eta", "Zeta", "Theta")
+        alt_schl, neu_schl, andere = ("PSA (Test)", "Schlingen (Test)"), ("Wasser (Test)", "Schlingen (Test)"), \
+            ("PSA (Test)", "Andere (Test)")
+        eins = _datei([(m, alt_schl) for m in modelle[:4]] + [("Theta", andere)], _kategorien_mit_kennung("PSA"))
+        ber = importieren(kp, eins, False, name="eins.json")
+        assert ber["gespeichert"] and not ber["fehler"], ber
+        psa, schlingen, wasser = _ids(app, "mat_category", "name", ("PSA (Test)", "Schlingen (Test)", "Wasser (Test)"))
+        p = dict(zip(modelle, _ids(app, "mat_product", "model", modelle)))
+        formular_neu(kp, {"kategorie_id": psa}, "PSA-Prüfung (Test)", PUNKT)
+        _pool(kp, psa, "Schlingen-Prüfung (Test)", kategorien=(schlingen,))
+        _pool(kp, psa, "Extra-Prüfung (Test)", produkte=(p["Epsilon"],))
+        formular_neu(kp, {"produkt_id": p["Eta"]}, "Eta-Prüfung (Test)", PUNKT)       # Heimat „Schlingen“: bleibt
+        gid, _ = gliederung(w, "OG Testdorf")
+        for m, n in (("Delta", 2), ("Epsilon", 1), ("Eta", 1), ("Theta", 1)):
+            _artikel(w, p[m], gid, n)
+        vorher = _stand(app)
+        zwei = _datei([(m, neu_schl) for m in modelle], _kategorien_mit_kennung("Wasser"))
+
+        def erwartet(fertig):
+            wird = "wurden gelöst" if fertig else "werden gelöst"
+            folgen = ("2 Artikel haben danach kein Prüfformular mehr (bisher „Schlingen-Prüfung (Test)“, Standard der "
+                      "Kategorie „Schlingen (Test)“) und lassen sich nicht prüfen; 1 Artikel hat danach kein Prüfformular "
+                      "mehr (bisher „Extra-Prüfung (Test)“, dem Produkt zugewiesen) und lässt sich nicht prüfen; für 1 "
+                      "Artikel gilt „Eta-Prüfung (Test)“ weiter (dem Produkt zugewiesen); 2 Zuweisungen " + wird
+                      + ": „Schlingen-Prüfung (Test)“ an Kategorie „PSA (Test) / Schlingen (Test)“, „Extra-Prüfung "
+                      "(Test)“ an "
+                      "„Testwerk Epsilon“.")
+            satz = ("verschoben „PSA (Test) / Schlingen (Test)“ → „Wasser (Test) / Schlingen (Test)“ – betrifft 4 Artikel "
+                    "im Bestand; " + folgen)
+            theta = ("Kategorie „PSA (Test) / Andere (Test)“ → „Wasser (Test) / Schlingen (Test)“ – betrifft 1 Artikel im "
+                     "Bestand{wer}; er hat danach kein Prüfformular mehr (bisher „PSA-Prüfung (Test)“, Standard der "
+                     "Kategorie „PSA (Test)“) und lässt sich nicht prüfen.")
+            warnungen = [f"kategorien[1].unterkategorien[0] (Schlingen (Test)): {satz}",
+                         "produkte[4] (Testwerk Theta): " + theta.format(wer="")]
+            gruppen = [{"zeile": theta.format(wer=" (Testwerk Theta)"), "einzeln": [], "warnungen": [1]},
+                       {"zeile": f"Kategorie „Schlingen (Test)“: {satz}", "einzeln": [
+                           "Testwerk Delta (2 Artikel): sie haben danach kein Prüfformular mehr (bisher „Schlingen-Prüfung "
+                           "(Test)“, Standard der Kategorie „Schlingen (Test)“) und lassen sich nicht prüfen",
+                           "Testwerk Epsilon (1 Artikel): er hat danach kein Prüfformular mehr (bisher „Extra-Prüfung "
+                           "(Test)“, dem Produkt zugewiesen) und lässt sich nicht prüfen",
+                           "Testwerk Eta (1 Artikel): das Prüfformular „Eta-Prüfung (Test)“ gilt weiter (dem Produkt "
+                           "zugewiesen)"], "warnungen": [0]}]
+            return warnungen, gruppen
+
+        for speichern in (False, True):
+            ber = importieren(kp, zwei, not speichern, name="zwei.json")
+            assert not ber["fehler"] and ber["gespeichert"] is speichern, ber
+            assert ber["kategorien"]["geaendert"] == 1 and ber["produkte"]["geaendert"] == 1, ber
+            warnungen, gruppen = erwartet(speichern)
+            assert ber["warnungen"] == warnungen, ber["warnungen"]
+            assert ber["zuweisungen"] == {"neu": 0, "geloest": 2, "unveraendert": 0}, ber["zuweisungen"]
+            kw = ber["kategoriewechsel"]
+            assert kw["verschoben"] == {"kategorien": 1, "mit_artikeln": 3, "artikel": 4, "ohne_formular": 3,
+                                        "anderes_formular": 0, "zuweisungen_geloest": 2}, kw
+            assert (kw["produkte"], kw["mit_artikeln"], kw["ohne_formular"], kw["zuweisungen_geloest"]) == (1, 1, 1, 0), kw
+            assert kw["davon"] == "davon 2 durch verschobene Kategorien", kw
+            assert kw["zusammenfassung"] == (
+                "1 Produkt hat die Kategorie gewechselt – mit 1 Artikel im Bestand; 1 Artikel hat sein Prüfformular "
+                "verloren." if speichern else
+                "1 Produkt wechselt die Kategorie – mit 1 Artikel im Bestand; 1 Artikel verliert sein Prüfformular."), kw
+            assert kw["verschiebung"] == (
+                "1 Kategorie wurde verschoben – darin 3 Produkte mit Artikeln im Bestand (4 Artikel); 3 Artikel haben "
+                "ihr Prüfformular verloren, 2 Zuweisungen wurden gelöst." if speichern else
+                "1 Kategorie wird verschoben – darin 3 Produkte mit Artikeln im Bestand (4 Artikel); 3 Artikel verlieren "
+                "ihr Prüfformular, 2 Zuweisungen werden gelöst."), kw
+            assert kw["alte_datei"] is None and kw["gruppen"] == gruppen, kw
+            if not speichern:
+                assert _stand(app) == vorher                                   # Probelauf: nichts gespeichert
+                # Kommandozeile (Trockenlauf): dieselben Sätze, „davon … durch verschobene Kategorien“.
+                datei = os.path.join(tmp, "zwei.json")
+                with open(datei, "wb") as fh:
+                    fh.write(zwei)
+                r = app.test_cli_runner().invoke(args=["material", "import-catalog", datei, "--trocken"])
+                assert r.exit_code == 0, r.output
+                zeilen = r.output.splitlines()
+                assert "Zuweisungen neu 0, geloest 2, unveraendert 0 (davon 2 durch verschobene Kategorien)" in zeilen, \
+                    r.output
+                assert [z for z in zeilen if z.startswith("ACHTUNG ")] == [
+                    f"ACHTUNG {kw['zusammenfassung']}", f"ACHTUNG {kw['verschiebung']}"] + \
+                    [f"ACHTUNG {x}" for x in warnungen], r.output
+                assert _stand(app) == vorher
+        with app.app_context():
+            assert db.query("SELECT parent_id FROM mat_category WHERE id = ?", (schlingen,), one=True)["parent_id"] == wasser
+            assert katalog.formular_fuer_produkt(p["Delta"]) is None and katalog.formular_fuer_produkt(p["Epsilon"]) is None
+            assert katalog.formular_fuer_produkt(p["Eta"])["title"] == "Eta-Prüfung (Test)"
+            assert katalog.formular_fuer_produkt(p["Theta"]) is None
+            gruende = [r["after_json"] for r in db.query("SELECT after_json FROM mat_audit WHERE entity = 'formular' "
+                                                         "AND action = 'zuweisung_geloest'")]
+            assert sum("Kategorie „Schlingen (Test)“ verschoben" in g for g in gruende) == 2, gruende
+
+        # Derselbe Lauf noch einmal: nichts verschoben, nichts gelöst, keine Meldung.
+        ber = importieren(kp, zwei, True, name="zwei.json")
+        assert not ber["fehler"] and not ber["warnungen"] and ber["kategoriewechsel"] is None, ber
+        assert ber["zuweisungen"]["geloest"] == 0, ber["zuweisungen"]
+        # Zurück unter „PSA“: Niemand verliert etwas (Delta, Epsilon und Theta bekommen den Standard von „PSA“ zurück,
+        # Eta behält seins) – die Zusammenfassung nennt nur die Zahlen, die Warnung der Kategorie, was gilt.
+        drei = _datei([(m, alt_schl) for m in modelle], _kategorien_mit_kennung("PSA"))
+        ber = importieren(kp, drei, True, name="drei.json")
+        assert not ber["fehler"] and ber["zuweisungen"]["geloest"] == 0, ber
+        kw = ber["kategoriewechsel"]
+        assert kw["verschoben"]["mit_artikeln"] == 4 and kw["davon"] is None, kw
+        assert kw["verschiebung"] == ("1 Kategorie wird verschoben – darin 4 Produkte mit Artikeln im Bestand (5 "
+                                      "Artikel)."), kw
+        assert ber["warnungen"] == [
+            "kategorien[0].unterkategorien[0] (Schlingen (Test)): verschoben „Wasser (Test) / Schlingen (Test)“ → „PSA "
+            "(Test) / Schlingen (Test)“ – betrifft 5 Artikel im Bestand; für 4 Artikel gilt künftig „PSA-Prüfung (Test)“ "
+            "(Standard der Kategorie „PSA (Test)“), bisher keins; für 1 Artikel gilt „Eta-Prüfung (Test)“ weiter (dem "
+            "Produkt zugewiesen)."], ber["warnungen"]
+    print("Verschobene Kategorie bestanden.")
+
+
 if __name__ == "__main__":
     test_alte_datei_probelauf_und_echter_lauf()
     test_gilt_weiter_und_ohne_formular()
     test_kommandozeile()
+    test_gruppen()
+    test_verschobene_kategorie()

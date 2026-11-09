@@ -1022,12 +1022,12 @@ def test_kategorie_umbenennen():
         # Seit dem 09.11.2026 mit Warnung (Delta hat einen Artikel; Epsilon ohne Artikel keine), Zusammenfassung samt
         # Hinweis auf eine alte Datei und der gelösten Zuweisung an Epsilon (tests/test_material_import_kategoriewechsel.py).
         assert ber["warnungen"] == [
-            "produkte[0] (Testwerk Schlinge Delta): Kategorie „PSA (Test) / Schlingen“ → „PSA (Test) / Textilmaterial“ "
-            "– betrifft 1 Artikel hier; er hat danach kein Prüfformular mehr (bisher „Schlingen-Prüfung (Test)“, "
+            "produkte[0] (Testwerk Schlinge Delta): Kategorie „Schlingen“ → „Textilmaterial“ (unter „PSA (Test)“) – "
+            "betrifft 1 Artikel im Bestand; er hat danach kein Prüfformular mehr (bisher „Schlingen-Prüfung (Test)“, "
             "Standard der Kategorie „Schlingen“) und lässt sich nicht prüfen."], ber["warnungen"]
         assert ber["zuweisungen"]["geloest"] == 1, ber["zuweisungen"]
         assert ber["kategoriewechsel"]["zusammenfassung"] == (
-            "2 Produkte wechseln die Kategorie – davon 1 mit Artikeln hier (1 Artikel); 1 Artikel verliert sein "
+            "2 Produkte wechseln die Kategorie – davon 1 mit Artikeln im Bestand (1 Artikel); 1 Artikel verliert sein "
             "Prüfformular, 1 Produkt-Zuweisung wird gelöst."), ber["kategoriewechsel"]
         assert ber["kategoriewechsel"]["alte_datei"].startswith(
             "Neu angelegt: „PSA (Test) / Textilmaterial“ nimmt 2 Produkte aus „PSA (Test) / Schlingen“ auf."), ber
