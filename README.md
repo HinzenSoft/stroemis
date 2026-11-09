@@ -335,10 +335,11 @@ den VPS unten) gilt ohne Frage die Vorgabe 800.
   bis zu 40 DEMO-Einsatzkräfte (je 20 Artikel eine); dazu die kleine „DEMO-OG Nachbarstadt“ (Lager, MTW) für die
   Trennung je Gliederung und die globale Suche (Seriennummer `DEMO-NS-4711`).
 - **Artikel:** Vorgabe 800 (`--artikel N` oder die Frage im Terminal), nur echte Produkte ohne Bestandteil-Liste. Mix nach Kategorien: viele Karabiner und
-  Textilmaterial, je Einsatzkraft Gurt, Helm, Karabiner, Schlinge, Abseilgerät (soweit der Katalog sie hat; von Anfang
+  Schlingen, je Einsatzkraft Gurt, Helm, Karabiner, Schlinge, Abseilgerät (soweit der Katalog sie hat; von Anfang
   an, Ersatz nach einer Aussonderung), Seile mit einer Länge, wenige Rollen, Flaschenzüge und Seilklemmen; je Typ wenige
   Standardprodukte. Den Typ gibt der Name der Kategorie (die unterste zuerst): Abseilgeräte und Abseilachten sind
-  Abseilgeräte, Band- und Textilmaterial Schlingen, Seilrollen und Flaschenzüge Rollen – keine Seile. Seriennummern
+  Abseilgeräte, die Kategorie „Schlingen“ (auch unter ihren früheren Namen „Textilmaterial“ und „Bandmaterial“)
+  Schlingen, Seilrollen und Flaschenzüge Rollen – keine Seile. Seriennummern
   `DEMO-FL-0001` …, Ersatz `…-E`.
 - **Geschichte („volles Leben“):** Ersterfassung je Bereich kurz vor seiner ersten Jahresprüfung, jährliche
   Prüfdurchgänge je Bereich (abgeschlossen, mit Sammelprotokoll), dazwischen Prüfungen bei kürzerem Intervall und
@@ -359,8 +360,8 @@ den VPS unten) gilt ohne Frage die Vorgabe 800.
 - **Formulare:** Hat eine echte Kategorie kein wirksames aktives Prüfformular, legt das Skript eins an –
   DEMO-gekennzeichnet und aktiv (seit dem 05.11.2026 nimmt der Katalog-Export jedes aktive Formular einer echten Kategorie
   mit, also auch diese; der Import nimmt „DEMO“ vorn aus dem Titel und kein Kennzeichen): nach den **Petzl-Prüfberichten**, wo
-  `scripts/beispielbestand_petzl_punkte.json` die Kategorie nach ihrem Namen kennt (13 Kategorien – „Textilmaterial“
-  auch unter dem älteren Namen „Bandmaterial“ –, Punkte wörtlich mit Gruppe und Soll – das Feld „kritisch“ der Datei
+  `scripts/beispielbestand_petzl_punkte.json` die Kategorie nach ihrem Namen kennt (13 Kategorien – „Schlingen“
+  auch unter den früheren Namen „Textilmaterial“ und „Bandmaterial“ –, Punkte wörtlich mit Gruppe und Soll – das Feld „kritisch“ der Datei
   bleibt seit dem 03.11.2026 ungenutzt; Fundstelle je Punkt in der Datei, Quellen mit Version im Bericht – Petzl, „Überprüfung von PSA – Prüfbericht/Vorgehensweise bei der
   Überprüfung“ je Produktgruppe, z. B. Gurte 110526, Karabiner 260625, Seile 071215; Abseilachten und Kantenschutz mit
   der nächstliegenden Vorlage), sonst ein Platzhalter (Ja/Nein, Text, Zahl, bei Artikellänge „Länge (m)“) an der
@@ -1026,6 +1027,55 @@ Konten versehen). Es geht keine Mail von selbst hinaus (Erinnerungsmails sind au
 8. **Erinnerungsmails zuletzt:** erst wenn Gliederungen, Freigaben und Bestand stehen – Materialablage → Übersicht →
    „Probelauf ansehen“, dann Leitstelle → Einstellungen → Materialablage → „Erinnerungsmails verschicken“ an. In der
    `.env` der Produktion weder `MATERIAL_ERINNERUNGEN_SPERRE` noch `STROEMIS_NAME=…-dev`.
+
+## Kategorie im Katalog umbenennen (Beispiel „Textilmaterial“ → „Schlingen“, 09.11.2026)
+
+Die Kategorie der Schlingen (Band-, Rund-, Express-, Reepschnur-, Tritt- und Stahlseilschlingen) heißt seit dem
+09.11.2026 „Schlingen“ statt „Textilmaterial“ (davor bis 24.10.2026 „Bandmaterial“). Umbenannt wird sie in der App –
+in der Produktion und auf dev; die Katalog-ZIPs sind mit dem neuen Namen neu gebaut.
+
+**Wer:** nur die Material-Verwaltung (Stufe „Verwaltung“ in der Materialablage, die Plattform-Verwaltung
+eingeschlossen). Materialwarte sehen den Eintrag nicht, die Schnittstelle antwortet ihnen mit 403.
+
+**Weg:** Materialablage → Reiter „Katalog“ → links im Kategorienbaum unter „Persönliche Schutzausrüstung gegen Absturz“
+die Kategorie „Textilmaterial“ wählen (unter 1024 px über „☰“ links in der Suchzeile) → im Kopf der Kategorie
+„Bearbeiten“ → „Kategorie bearbeiten“ → im Feld „Name“ `Schlingen` eintragen, die übrigen Felder (Oberkategorie, Norm,
+Materialart, Prüfintervall, Lebensdauer, „Artikel haben eine Länge“) so lassen → „Speichern“. Zurück geht es auf
+demselben Weg.
+
+**Was dabei passiert:** Es ändert sich nur der Name (Journal der Kategorie: Name „Textilmaterial“ → „Schlingen“).
+Kennung und Katalogkennung (uid), Produkte, Artikel, Prüfintervalle und Fälligkeiten bleiben.
+- **Prüfformular-Pool, Standard, Zuweisungen:** hängen an der Kennung der Kategorie, nicht am Namen – die Formulare
+  bleiben im Pool derselben Kategorie, ihr Standard und die Zuweisungen an Produkte bleiben, nichts wird gelöst. Titel
+  von Prüfformularen ändern sich nicht mit: Nennt ein Titel den alten Namen (auf dev etwa das DEMO-Formular des
+  Beispielbestands „… – Textilmaterial“), bleibt er so – bei Bedarf unter „Prüfformulare“ im Editor ändern (eine schon
+  benutzte Version nur über eine neue Version).
+- **Anzeige:** Katalog, Prüfformulare, Bestand, Artikelseiten, Suche und die Exporte der Artikelliste lesen den Namen
+  jedes Mal neu und zeigen sofort „Schlingen“. Neue Prüfprotokolle nennen „Schlingen“; festgeschriebene Protokolle
+  bleiben, wie sie sind („Textilmaterial“).
+- **Katalog-Export:** schreibt ab dann „Schlingen“ (mit derselben Katalogkennung), auch als Heimat der Formulare.
+- **Übung der Einführung:** nicht betroffen – sie nimmt ihre Beispielprodukte aus Gurten, Seilen und Helmen bzw.
+  Karabinern (`einfuehrung.KATALOG_ROLLEN`), nie aus den Schlingen; die Übungsdatei nennt weder „Textilmaterial“ noch „Schlingen“.
+- **Beispielbestand (nur dev):** erkennt die Kategorie unter „Schlingen“ wie unter den früheren Namen (Typ Schlinge,
+  Petzl-Vorlage „Schlingen“).
+
+**Reihenfolge:** erst in beiden Anlagen umbenennen, danach nur noch die neuen ZIPs einspielen (was schon da ist, ergibt
+im Probelauf „unverändert“); einen Katalog-Export von dev erst nach dem Umbenennen auf dev ziehen.
+
+**Warnung – keine alte ZIP mehr einspielen.** Die Katalogserie und die Einzelimporte tragen keine Katalogkennung; der
+Import erkennt Kategorien am Namen an derselben Stelle des Baums. Eine alte Datei mit „Textilmaterial“ legt nach dem
+Umbenennen deshalb eine neue Kategorie „Textilmaterial“ an (auch ein Teil ohne Schlingen – fast jede ZIP bringt den
+ganzen Kategorienbaum mit) und schiebt jedes ihrer Produkte, das schon unter „Schlingen“ steht, dorthin zurück (gefunden
+über Hersteller + Modell + Artikelnummer, die Kategorie kommt aus der Datei). Folgen: Der Standard von „Schlingen“ gilt
+für diese Produkte nicht mehr, ihre Zuweisungen an Formulare aus dem Pool von „Schlingen“ werden gelöst (Journal
+„Produkt in eine andere Kategorie verschoben“) – ihre Artikel haben dann kein Prüfformular und lassen sich nicht prüfen.
+Rückgängig nur von Hand: jedes Produkt über „Bearbeiten“ wieder in „Schlingen“, die Zuweisungen neu setzen, die leere
+„Textilmaterial“ löschen. Erkennbar ist das vorher im **Probelauf**: „Kategorien neu 1“, im Bericht
+„Kategorie „Persönliche Schutzausrüstung gegen Absturz / Textilmaterial“: neu“ und „Produkt „…“: geändert (Kategorie)“
+– dann nicht „Übernehmen“. Eine eigene Warnung gibt der Bericht nicht. Ein **Katalog-Export von vor dem Umbenennen**
+(mit Kennung, etwa dev → Produktion) findet die Kategorie dagegen über ihre Kennung und benennt sie zurück in
+„Textilmaterial“ (Probelauf: „Kategorien geändert 1“, „geändert (Name)“) – Produkte und Zuweisungen bleiben, nur der
+Name ist wieder der alte. Geprüft in `tests/test_material_katalog.py::test_kategorie_umbenennen`.
 
 ## Als App installieren (PWA)
 

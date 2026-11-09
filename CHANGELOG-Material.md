@@ -93,6 +93,7 @@ Geschichte stehen. Schemaversion nach der Nachbesserung vor dem Merge: 30; mit d
 | Systemnummer statt Seriennummer; Import ab 3 Zeichen | „Durch Systemnummer ersetzen“ im Dialog „Bearbeiten“ (bis zur ersten Prüfung, Rückfrage) und als Wahl im Änderungsantrag (Nummer erst mit der Bestätigung); Seriennummern im Bestandsimport und in der globalen Suche ab 3 statt 4 Zeichen | gebaut 08.11.2026 (kein Schemaschritt), Zweig seriennummer-system |
 | Bestandsimport: „Seriennummer bei anderer Variante“ nur je Modell | Schritt 6 meldet dieselbe Seriennummer nur noch bei einem anderen Produkt desselben Herstellers UND Modells (im Bestand und in derselben Datei bzw. Auswahl), nicht mehr bei jedem Produkt des Herstellers; offene Zeilen nach der alten Regel lösen sich mit „Erneut prüfen“ | gebaut 08.11.2026 (kein Schemaschritt), Zweig serie-variante |
 | Nur den Bestand leeren (nur dev) | `flask material dev-bestand-leeren` – leert auf dev nur den Bestand (Ordner, Artikel, Prüfungen, Durchgänge, Freigaben, Anträge, Meldungen, Importe, Logs, ihr Journal, DEMO-Konten des Beispielbestands) nach einer Sicherung; Katalog, Formulare, Rückrufe, Produktmeldungen, Zähler und Schema bleiben; dazu `bestand-leeren [--ja]` im Harness-Zugang | gebaut 08.11.2026 (kein Schemaschritt, Schema bleibt 39), Freigabe offen |
+| Kategorie „Schlingen“ statt „Textilmaterial“ | Beispielbestand erkennt die Schlingen-Kategorie unter „Schlingen“ und den früheren Namen („Textilmaterial“, „Bandmaterial“), Petzl-Vorlage unter „Schlingen“; README „Kategorie im Katalog umbenennen“ mit Weg, Folgen und Warnung vor alten ZIPs; Tests | gebaut 09.11.2026 (kein Schemaschritt, Schema bleibt 39), Zweig kategorie-schlingen |
 
 ## Abgleich mit dem Bestand (vor Lieferung 1)
 
@@ -13410,3 +13411,34 @@ Rahmen, auch wenn der Fokus im Punkt lag, der wegklappt), Klick auf die Übersch
 Marke an der Gruppe (A1 vom Mangel zurück auf sein Soll), Untergruppen danach einzeln per Tipp auf „n. z.“ wieder zu;
 am Rechner ganz mit der Tastatur (Enter auf „n. z.“ → Fokus mit Rahmen auf der Überschrift, zweites Enter ändert nichts,
 Tab zur Marke, Enter hebt auf, Fokus auf „n. z.“); statisch: keine Reste von Link, Handler, Zustand und Regel.
+
+## Kategorie „Schlingen“ statt „Textilmaterial“ (Wunsch des Nutzers, 09.11.2026)
+
+Wunsch: „Die Schlingen sollen in die Kategorie Schlingen statt Textilmaterial.“ Entscheidungen: die ganze Kategorie wird
+umbenannt (alle Produkte der Serie samt Einzelimporte; Prüfformulare und Zuweisungen bleiben), die gelieferten ZIPs
+werden mit dem neuen Namen neu gebaut (eigener Auftrag). Bauauftrag `planung/kategorie-schlingen/auftrag.md`, hier der
+App-Teil; kein Schemaschritt (Schema bleibt 39), keine Änderung an der Oberfläche – umbenannt wird in der App über
+„Kategorie bearbeiten“.
+
+- **Beispielbestand** (`scripts/material_beispielbestand.py`): `PETZL_ALIAS` führt jetzt beide früheren Namen auf
+  „Schlingen“ (`{"Bandmaterial": "Schlingen", "Textilmaterial": "Schlingen"}`) – ältere Kataloge laufen weiter. Die
+  Typ-Zuordnung (`TYPEN`, Stichwörter „schling“, „band“, „textil“) erkannte „Schlingen“ schon; nur ihr Kommentar nennt
+  die Namen jetzt. `scripts/beispielbestand_petzl_punkte.json`: Schlüssel „Textilmaterial“ → „Schlingen“ (Inhalt
+  unverändert, kein Schlüssel unter einem früheren Namen mehr).
+- **README**: neuer Abschnitt „Kategorie im Katalog umbenennen (Beispiel „Textilmaterial“ → „Schlingen“)“ – wer darf
+  (Material-Verwaltung), der Weg in der Oberfläche, was mit Pool, Standard, Zuweisungen, Formulartiteln, Anzeige,
+  Protokollen, Export, Übung und Beispielbestand geschieht, die Reihenfolge und die Warnung: Eine alte ZIP ohne
+  Katalogkennung legt danach „Textilmaterial“ neu an und schiebt ihre Produkte zurück (Standard und Zuweisungen gehen
+  diesen Produkten verloren, der Bericht zeigt es nur als „neu“/„geändert (Kategorie)“); ein Katalog-Export von vorher
+  benennt die Kategorie über ihre Kennung zurück. Abschnitt „Beispielbestand“ nachgezogen.
+- Weitere Fundstellen von „Textilmaterial“ im Repository: nur ältere Einträge dieses CHANGELOGs (bleiben als
+  Geschichte). App, Vorlagen, Skripte, Übungsdateien und App-Anleitungen nennen den Kategorienamen nicht.
+
+**Tests**: `tests/test_material_beispielbestand.py` – `test_typen` (Typ Schlinge für „Schlingen“, „Textilmaterial“,
+„Bandmaterial“; die Petzl-Vorlage „Schlingen“ unter allen drei Namen, kein Alias als eigener Schlüssel; DEMO-Formular
+nach der Vorlage je Name), neu `test_schlingen` (Katalog wie die Serie je Name: Produkte verwendbar und vom Typ
+Schlinge, Schlinge in der persönlichen Ausrüstung, Petzl-Formular als geltendes Formular der Schlinge).
+`tests/test_material_katalog.py` – neu `test_kategorie_umbenennen` (nur die Material-Verwaltung, 403 für den
+Materialwart; Kennung, Pool, Standard, Zuweisungen, Produkte und Artikel unverändert, Journal, Export mit „Schlingen“;
+neue Serie unverändert; Export von vorher benennt zurück; alte Serie: neue Kategorie, Produkte zurück, Zuweisung gelöst,
+kein geltendes Formular).
