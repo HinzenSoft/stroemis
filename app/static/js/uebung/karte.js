@@ -258,7 +258,7 @@
       ] },
       redakteur: { ablaeufe: [
         { titel: "Album anlegen", start: "/ankerplaetze", schritte: [
-          { ziel: "#btn-new-album", text: "Als Redakteur legst du eigene Alben an. Tippe auf „Album anlegen“.",
+          { ziel: "#btn-new-album", get text() { return `Als Redakteur legst du eigene Alben an. Tippe auf ${S.einfuehrung.anlegen("Album")}.`; },
             warten: { klick: "#btn-new-album" } },
           { ziel: "#al-title", text: "Gib dem Album einen Titel, hier „Übungsalbum D“.",
             warten: { wert: ["#al-title", /\S{3}/] }, probe: { tippen: ["#al-title", "Übungsalbum D"] } },

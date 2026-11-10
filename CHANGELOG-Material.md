@@ -13757,3 +13757,25 @@ Platzhalter-Formularen. Kein Schemaschritt, Schnittstelle unverändert.
 **Tests**: `tests/test_einfuehrung_material.py` neu `test_systemnummer` (Feld an den Übungsartikeln, neuer Artikel ohne
 und mit Herstellernummer, keine Anfrage am Server, Datenbank unverändert); `tests/test_wiki_fehlertabelle.py` schneidet
 die Fehlertabelle bis zum Ende der Hilfeseite und prüft, dass es keinen Abschnitt „Quellen“ mehr gibt.
+
+### Nachbesserung nach der Prüfung im Browser (10.11.2026)
+
+Prüfung `planung/nachzug-1011/pruefung-tutorials.md` (Chromium und WebKit, 360 Touch und 1280): zwei Befunde, dazu die
+kleinen, eindeutigen Verbesserungen.
+
+- **Anlegen-Knöpfe am Telefon (B1, B2)**: „Tippe auf „Album anlegen““ (Ankerplätze, Redakteur) und „… mit „Prüfformular
+  anlegen“ an“ (Materialablage, Prüfformulare zuweisen) nennen bis 600 px jetzt „+ Album“ bzw. „+ Prüfformular“, wie der
+  Knopf dasteht. Der Helfer dafür steht jetzt in `einfuehrung.js` (`S.einfuehrung.anlegen(wort)`); die Riegenkarten nutzen
+  ihn statt ihres eigenen.
+- **Schrittzähler (Verbesserung 1)**: Im Ablauf „Artikel finden“ trugen „Öffne den Treffer“ und die Artikelansicht
+  dieselbe Nummer, weil der Schritt beim Betreten des Ablaufs (Startseite) nicht zutraf und so nicht mitzählte. Er gilt
+  jetzt auf jeder Seite außer der Artikelansicht – entfällt nur, wenn ein Vorschlag direkt zum Artikel führt.
+- **Texte (Verbesserungen 2, 4, 8)**: Nach „Zuweisung speichern“ heißt es „Am Formular steht jetzt „zugewiesen:“ mit
+  „<Produkt>““ (so steht es im Formularpool; „dem Produkt zugewiesen“ steht nur auf der Produktseite). Der Prüfdurchgang
+  wird „ganz oben über der Liste mit „Durchgang abschließen““ abgeschlossen (statt „oben rechts“ – am Telefon steht der
+  Knopf unter dem Titel). „Schick die Meldung ab“ und „Speichere die Zuweisung“ nennen die Knöpfe: „Tippe auf „Melden und
+  sperren““, „Tippe auf „Zuweisung speichern““.
+
+**Tests**: `tests/einfuehrung_browser.py` prüft in jedem Durchlauf, dass „Schritt n von m“ von Schritt zu Schritt steigt
+(n ≤ m) und dass eine Blase, die einen Anlegen-Knopf der Seite nennt, die Form nennt, die dasteht. Gegenprobe auf dem
+Stand vor der Nachbesserung: rot mit genau den Befunden B1, B2 und dem doppelten Schritt.

@@ -857,7 +857,9 @@
         probe: { klick: "#mat-suche button[type=submit], #mat-vorschlaege .mv-alle a" } },
       // Nur auf der Trefferseite – hat ein Vorschlag schon zum Artikel geführt, entfällt der Schritt. (Die Führung fragt
       // „wenn“ erst auf der neuen Seite, nicht während der Seitenwechsel läuft.)
-      { ziel: artikelLink(ID.gurt), wenn: () => ansicht() === "suche", text: "Öffne den Treffer.", warten: { klick: artikelLink(ID.gurt) } },
+      // („wenn“ nicht „=== suche“: Beim Betreten des Ablaufs steht die Startseite da – der Schritt muss dort schon zählen,
+      // sonst trügen er und der nächste dieselbe Nummer; Befund der Prüfung vom 10.11.2026.)
+      { ziel: artikelLink(ID.gurt), wenn: () => ansicht() !== "artikel", text: "Öffne den Treffer.", warten: { klick: artikelLink(ID.gurt) } },
       { ziel: ".mat-artikeltitel", text: "Die Artikelansicht: Status, Stammdaten, Prüfungen und Verlauf. Ein roter Banner hieße: nicht verwenden." },
       { ziel: "#mat-qr", text: "Über den QR-Code auf dem Etikett kommst du direkt hierher – ganz ohne Suche." },
     ] },
@@ -866,7 +868,7 @@
       { ziel: "#mg-text", text: "Beschreib kurz, was nicht stimmt. Fotos sind freiwillig.", warten: { wert: ["#mg-text", /\S.*\S.*\S/] },
         datei: { input: "#mg-fotos", bild: "/static/uebung/material/uebungsbild-7.jpg" },
         probe: { tippen: ["#mg-text", "Übung: Platzhalter für einen Mangel"] } },
-      { ziel: "#mg-ok", text: "Schick die Meldung ab.", warten: { anfrage: `POST ${API}/artikel/${ID.gurt}/mangel` }, probe: { klick: "#mg-ok" } },
+      { ziel: "#mg-ok", text: "Tippe auf „Melden und sperren“.", warten: { anfrage: `POST ${API}/artikel/${ID.gurt}/mangel` }, probe: { klick: "#mg-ok" } },
       { ziel: ".mat-mangel-banner", text: "Der Artikel ist jetzt gesperrt, und Materialwart und Prüfer bekommen eine Mail. In der Übung ging nichts raus." },
     ] },
   ] };
@@ -915,7 +917,7 @@
       { ziel: "[data-act=runde]", text: "Wähle „Prüfdurchgang anlegen“.", warten: { klick: "[data-act=runde]" } },
       { ziel: "#rd-titel", text: "Gib dem Durchgang einen Titel und wähle den Ordner – alle Artikel darin kommen auf eine Liste." },
       { ziel: "#rd-ok", text: "Leg den Prüfdurchgang an.", warten: { anfrage: `POST ${API}/durchgaenge` }, probe: { klick: "#rd-ok" } },
-      { ziel: "#dg-liste", text: "Mehrere Prüfer arbeiten diese Liste ab; abgeschlossen wird oben rechts." },
+      { ziel: "#dg-liste", text: "Mehrere Prüfer arbeiten diese Liste ab; abgeschlossen wird ganz oben über der Liste mit „Durchgang abschließen“." },
     ] },
   ] };
 
@@ -945,9 +947,12 @@
       { ziel: "#dlg .mat-zw-teil", text: "Ein Haken bei einer Kategorie macht das Formular zu ihrem Standard. Hängt dort schon ein anderes, steht „bisher: …“ daneben – der Haken holt die Zuweisung hierher." },
       { ziel: gurtHaken, text: `Setz den Haken bei „${N.gurt}“: Dann gilt das Formular für dieses Produkt, auch wenn sich der Standard der Kategorie später ändert.`,
         warten: { klick: gurtHaken } },
-      { ziel: "#zw-ok", text: `Speichere die Zuweisung${ausKatalog("gurt") ? " – in der Übung ändert sich nur der Übungsbestand" : ""}.`,
+      { ziel: "#zw-ok", text: `Tippe auf „Zuweisung speichern“${ausKatalog("gurt") ? " – in der Übung ändert sich nur der Übungsbestand" : ""}.`,
         warten: { anfrage: `PUT ${API}/formular-pool/${formGurt.pool}/zuweisung` }, probe: { klick: "#zw-ok" } },
-      { ziel: zuweisenKnopf, text: "Gespeichert. Am Produkt steht jetzt „dem Produkt zugewiesen“; neue Formulare legst du oben mit „Prüfformular anlegen“ an." },
+      // Was im Formularpool zu sehen ist: „zugewiesen: <Produkt>“ (die Produktseite sagt „dem Produkt zugewiesen“).
+      { ziel: zuweisenKnopf, get text() {
+        return `Gespeichert. Am Formular steht jetzt „zugewiesen:“ mit „${N.gurt}“; neue Formulare legst du oben mit ${S.einfuehrung.anlegen("Prüfformular")} an.`;
+      } },
     ] },
   ] };
 

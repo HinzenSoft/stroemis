@@ -31,6 +31,8 @@
    "/static/uebung/…"} – Knopf „Übungsbild nehmen“), probe (nur für den Durchlauftest: {klick: sel} | {klick: sel, frei:
    true, sonst: sel} | {tippen: [sel, text]} | {datei: true}). Ein Text darf ein Getter sein (er folgt der Lage), ebenso
    ein Ziel als Funktion. „Tippe“ in Texten sagt die Blase ohne Touch-Zeiger als „Klicke“ (wortlaut).
+   Anlegen-Knöpfe nennt ein Text mit S.einfuehrung.anlegen("Album") – „+ Album“ bis 600 px, sonst „Album anlegen“ – in
+   einem Getter (gelesen, wenn die Blase zeichnet).
    Testschnittstelle (nur lesend): S.einfuehrung.zustand(), S.einfuehrung.teile(modul). */
 (function () {
   const S = window.S;
@@ -187,6 +189,9 @@
                leiste: Boolean(blase && blase.classList.contains("als-leiste")) };
     },
     teile(modul) { return beschreiben(registriert[modul || (E && E.modul)]); },
+    // Anlegen-Knöpfe heißen bis 600 px Breite „+ XY“, sonst „XY anlegen“ (app.css, .k-plus/.k-anlegen) – der Text der
+    // Blase nennt, was dasteht, in Anführung („+“ und Wort bleiben zusammen; Befunde der Prüfung vom 10.11.2026).
+    anlegen(wort) { return window.matchMedia("(max-width: 600px)").matches ? `„+\u00a0${wort}“` : `„${wort} anlegen“`; },
     // Nur für das Abmelden (common.js, ablageLeeren): die echte Ablage, auch wenn die Übung sie umgelegt hat.
     echteAblage() { return [echt.lokal, echt.sitzung].filter(Boolean); },
   };
@@ -524,7 +529,9 @@
   // Der Merker geht nie auf einen kleineren Ablauf zurück (ein zweiter Reiter, Befund 1 der Endprüfung).
   function neuerAblauf(n) {
     ablageAufraeumen();
-    zustand = { modul: E.modul, teil: UEBUNG, ablauf: n, schritt: 0, z: frischerBestand() };
+    // Was die Abläufe davor zählten (zaehlungFesthalten), bleibt.
+    const zahl = zustand && zustand.modul === E.modul && zustand.teil === UEBUNG ? zustand.zahl : null;
+    zustand = { modul: E.modul, teil: UEBUNG, ablauf: n, schritt: 0, z: frischerBestand(), ...(zahl ? { zahl } : {}) };
     speichern();
     merken(E.modul, UEBUNG, "unterbrochen", Math.max(n, gemerkt()));
   }
@@ -955,11 +962,16 @@
   }
   /* „Schritt n von m“ über den ganzen Teil; Schritte, die nicht zutreffen (wenn), zählen nicht. Welche das sind, hält die
      Führung beim Betreten eines Ablaufs fest (zaehlungFesthalten) – kippt ein „wenn“ durch die Aktion eines Schritts,
-     springt m nicht. Zeigt sie einen Schritt, der beim Betreten nicht zutraf, zählt er als nächster. */
+     springt m nicht. Zeigt sie einen Schritt, der beim Betreten nicht zutraf, zählt er als nächster. Die Abläufe davor
+     behalten, was beim Betreten jedes von ihnen galt – auf der Seite des neuen Ablaufs träfe ein „wenn“ von dort oft nicht
+     mehr zu, und die Nummern sprängen zurück (Prüfung vom 10.11.2026, „Artikel finden“ → „Mangel melden“). */
   function zaehlungFesthalten() {
     if (zustand.zahl && zustand.zahl.ablauf === zustand.ablauf) return;
-    const aus = [];
-    teilDef().ablaeufe.forEach((a, i) => (a.schritte || []).forEach((s, j) => { if (s.wenn && !sicher(s.wenn)) aus.push(`${i}:${j}`); }));
+    const ab = zustand.zahl ? zustand.ablauf : 0;      // erst ab hier neu fragen (ohne Festlegung: alle)
+    const aus = zustand.zahl ? zustand.zahl.aus.filter((k) => Number(k.split(":")[0]) < ab) : [];
+    teilDef().ablaeufe.forEach((a, i) => (a.schritte || []).forEach((s, j) => {
+      if (i >= ab && s.wenn && !sicher(s.wenn)) aus.push(`${i}:${j}`);
+    }));
     zustand.zahl = { ablauf: zustand.ablauf, aus };
   }
   function zaehlung() {

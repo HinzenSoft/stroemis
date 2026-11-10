@@ -24,9 +24,11 @@ nicht im Bild ist (auch verdeckt von einer Leiste oder der Blase), die Blase Zie
 obersten Dialogs deckt (deckt_befund), eine Anfrage unbeantwortet bleibt (auf jeder Seite
 gesammelt), eine Anfrage an /api/ (außer Merker und /api/me) oder /media/ das Netz erreicht, eine Seite ohne
 Übungskennung lädt, die Konsole einen Fehler zeigt, die Seite waagerecht rollt, ein Schritt nicht weiterzählt oder am
-Ende nicht „Geschafft“ mit dem Merker „erledigt“ steht."""
+Ende nicht „Geschafft“ mit dem Merker „erledigt“ steht. Dazu (Prüfung vom 10.11.2026): „Schritt n von m“ steigt von
+Schritt zu Schritt, und nennt die Blase einen Anlegen-Knopf der Seite („XY anlegen“ / „+ XY“), dann so, wie er dasteht."""
 import json
 import os
+import re
 import shutil
 import socket
 import sys
@@ -461,6 +463,23 @@ class Seite:
           return null;
         })()""")
 
+    def anlegen_befund(self):
+        """Nennt die Blase einen Anlegen-Knopf der Seite (.k-text, app.css) als „XY anlegen“ oder „+ XY“, muss es die Form
+        sein, die dasteht (bis 600 px „+ XY“) – sonst ein Satz."""
+        return self.js("""(() => {
+          const text = (document.querySelector('.fuehrung-blase .fuehrung-text')?.textContent || '').replace(/\\u00a0/g, ' ');
+          for (const k of document.querySelectorAll('.k-text')) {
+            const plus = k.querySelector('.k-plus');
+            if (!plus || !k.getClientRects().length) continue;
+            const wort = k.textContent.replace(/\\u00a0/g, ' ').replace(/^\\s*\\+\\s*/, '').replace(/\\s*anlegen\\s*$/, '').trim();
+            const kurz = getComputedStyle(plus).display !== 'none';
+            const steht = kurz ? `„+ ${wort}“` : `„${wort} anlegen“`;
+            const anders = kurz ? `„${wort} anlegen“` : `„+ ${wort}“`;
+            if (text.includes(anders)) return `Die Blase nennt ${anders}, der Knopf zeigt ${steht}.`;
+          }
+          return '';
+        })()""")
+
     def durchlauf(self, modul, teil, max_schritte=200, foto=None):
         befunde = []
         rolle = self.rolle
@@ -472,6 +491,7 @@ class Seite:
         if teil not in beschreibung:
             return [f"Die Übungsdatei kennt den Teil „{teil}“ nicht."]
         ende_netz = None
+        zahl_vorher = 0
         for _ in range(max_schritte):
             z = self.warte("(() => { const z = window.S && S.einfuehrung && S.einfuehrung.zustand();"
                            " return z && (z.bereit || z.geschafft || z.sackgasse) && !z.umgeleitet ? z : null; })()", 15)
@@ -488,6 +508,19 @@ class Seite:
                 break
             if self.js("document.documentElement.scrollWidth > document.documentElement.clientWidth + 1"):
                 befunde.append(f"{wo}: Die Seite rollt waagerecht.")
+            # „Schritt n von m“: jeder gezeigte Schritt hat eine eigene, höhere Nummer, n höchstens m.
+            kopf = self.js("document.querySelector('.fuehrung-blase .fuehrung-kopf')?.textContent || ''") or ""
+            zahl = re.search(r"Schritt (\d+) von (\d+)", kopf)
+            if not zahl:
+                befunde.append(f"{wo}: Kein „Schritt n von m“ in der Blase ({kopf!r}).")
+            else:
+                n, m = int(zahl.group(1)), int(zahl.group(2))
+                if n <= zahl_vorher or n > m:
+                    befunde.append(f"{wo}: „Schritt {n} von {m}“ nach Schritt {zahl_vorher}.")
+                zahl_vorher = n
+            knopf = self.anlegen_befund()
+            if knopf:
+                befunde.append(f"{wo}: {knopf}")
             schritt = beschreibung[teil]["ablaeufe"][z["ablauf"]]["schritte"][z["schritt"]]
             if z["ziel"] is not None:
                 fehler = self.lage_befund()

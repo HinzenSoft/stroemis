@@ -1302,7 +1302,8 @@ oder RegExp, `{da: sel}`, `{bedingung: (z) => bool}`), `wenn` (`() => bool`, Sch
 `sonst: sel` auf jenes –, `{tippen: [sel, text]}`, `{datei: true}`; ohne probe klickt der Test `warten.klick` bzw.
 „Weiter“). Mehrere Angaben in `warten`: was zuerst eintritt. `text` darf ein Getter sein und `ziel` eine Funktion – beide
 fragt die Führung immer wieder neu (die Lupe der Materialablage, bis das Suchfeld offen ist). Texte schreiben „Tippe“; am
-Rechner sagt die Blase „Klicke“. Ziele sind einfache Selektoren oder
+Rechner sagt die Blase „Klicke“. Anlegen-Knöpfe nennt ein Text mit `S.einfuehrung.anlegen("Album")` in einem Getter – bis
+600 px „+ Album“, sonst „Album anlegen“, wie der Knopf dasteht. Ziele sind einfache Selektoren oder
 Funktionen, die sagen, wann ein Ziel zur richtigen Seite gehört – Bildlauf, Dialoge, Schriften und Schubladen wartet die
 Führung selbst ab. Testschnittstelle
 (nur lesend): `S.einfuehrung.zustand()`, `S.einfuehrung.teile(modul)`. Übungsbilder und die Übungsdatei erzeugt
@@ -1310,7 +1311,8 @@ Führung selbst ab. Testschnittstelle
 eines Teils, `--von`, `--bis`).
 
 **Nach einer Änderung an der Oberfläche nachziehen:** Wird ein Durchlauftest rot (`tests/test_einfuehrung_browser.py`,
-je Modul `tests/test_einfuehrung_<modul>.py`; Befunde nennen Ablauf, Schritt und Ziel), stimmt meist ein Selektor in
+je Modul `tests/test_einfuehrung_<modul>.py`; Befunde nennen Ablauf, Schritt und Ziel; der Test prüft auch, dass
+„Schritt n von m“ von Schritt zu Schritt steigt und ein genannter Anlegen-Knopf so heißt, wie er dasteht), stimmt meist ein Selektor in
 `uebung/<modul>.js` nicht mehr, oder die Seite stellt eine neue Anfrage, die die Antworttabelle noch nicht kennt
 („Unbeantwortete Anfragen“). Neue programmatische Seitenwechsel im Modul gehen über `S.ziel(…)`. Bekommt eine Seite einen
 Übungszweig, gehört ihr Endpunkt in `UEBUNGSSEITEN` (sonst „In der Übung nicht verfügbar“). Ändern sich Abläufe

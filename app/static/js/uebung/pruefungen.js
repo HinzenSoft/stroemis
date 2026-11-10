@@ -513,9 +513,8 @@
   const zelle = `[data-act=zelle][data-tid="${TN[0]}"][data-lid="${LEI[0]}"]`;
   const titelLink = `tr[data-id="${LG}"] a.titel`;
   const ergebnisKnopf = ".erg-knopf[data-act=tn-ergebnis][data-erg=bestanden]";
-  // Anlegen-Knöpfe heißen bis 600 px Breite „+ XY“, sonst „XY anlegen“ (app.css, .k-plus/.k-anlegen) – der Text der
-  // Blase nennt, was dasteht (deshalb als Getter: gelesen, wenn die Blase zeichnet; „+“ und Wort bleiben zusammen).
-  const anlegen = (wort) => (window.matchMedia("(max-width: 600px)").matches ? `„+\u00a0${wort}“` : `„${wort} anlegen“`);
+  // Anlegen-Knöpfe: „+ XY“ bis 600 px, sonst „XY anlegen“ (einfuehrung.js) – deshalb Texte als Getter.
+  const anlegen = S.einfuehrung.anlegen;
 
   const teile = {
     grund: { ablaeufe: [
