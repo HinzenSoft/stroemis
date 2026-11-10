@@ -195,7 +195,44 @@ def test_durchlauf_katalog():
     print("Durchläufe mit Katalog bestanden.")
 
 
+def test_systemnummer():
+    """Systemnummer (Nachzug 10.11.2026, wie bestand.artikel_json und bestand.anlegen): Die Übungsartikel tragen
+    `systemnummer` „STR-“ mit der Zahl ihrer Inventarnummer; ein Artikel ohne Herstellernummer bekommt sie als
+    Seriennummer (vom System, `systemnummer` dann null), einer mit Herstellernummer behält sie. Alles in der Schicht der
+    Übung – keine Anfrage erreicht den Server."""
+    if uebersprungen():
+        print("übersprungen – kein Chromium")
+        return
+    with Umgebung() as u:
+        s = Seite(u, "materialwart", 1280, 900, False)
+        u.seiten.append(s)
+        try:
+            s.oeffnen(u.adresse("material", "materialwart"))
+            assert s.warte("window.S && S.einfuehrung && S.einfuehrung.zustand() && S.einfuehrung.zustand().bereit", 15)
+            vorher = pruefsumme(u)
+            r = s.js("""(async () => {
+              const post = (sn) => fetch('/api/material/artikel', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ product_id: 900000023, folder_id: 900000002, serial_no: sn }) }).then((x) => x.json());
+              const alt = (await fetch('/api/material/artikel/900000011').then((x) => x.json())).artikel;
+              const ohne = (await post('')).artikel;
+              const mit = (await post('Ü-SN-9')).artikel;
+              return { alt: [alt.serial_no, alt.serial_generated, alt.systemnummer],
+                       ohne: [ohne.inventory_no, ohne.serial_no, ohne.serial_generated, ohne.systemnummer],
+                       mit: [mit.serial_no, mit.serial_generated, mit.systemnummer] };
+            })()""")
+            assert r["alt"] == ["Ü-SN-0001", False, "STR-0001"], r
+            assert r["ohne"] == ["Ü-0004", "STR-0004", True, None], r
+            assert r["mit"] == ["Ü-SN-9", False, "STR-0005"], r
+            assert pruefsumme(u) == vorher
+            s.sammeln()
+            assert not s.netz_befunde() and not s.fehler, (s.netz_befunde(), s.fehler)
+        finally:
+            s.schliessen()
+    print("Systemnummer bestanden.")
+
+
 if __name__ == "__main__":
     test_statisch()
     test_durchlauf()
     test_durchlauf_katalog()
+    test_systemnummer()

@@ -1226,7 +1226,9 @@ Intervalle oder Lebensdauern – die Materialablage nimmt Produkte und Prüfform
   „Materialwart“ (Artikel anlegen, Freigabe erteilen, Prüfdurchgang), „Material-Verwaltung“ (Katalog und Prüfformular,
   Prüfformulare zuweisen – beginnt im Katalog mit dem Reiter „Prüfformulare“). Übungsbestand: „Übung – Gliederung“ mit
   Lager und Fahrzeug 1 (und den Systemordnern), drei Übungsartikel (Ü-0001 Gurt,
-  Ü-0002 Seil, Ü-0003 Helm), Übungsperson A/B; Kennungen 900000001–900000999. Jeder Seitenwechsel in `material.js`,
+  Ü-0002 Seil, Ü-0003 Helm), Übungsperson A/B; Kennungen 900000001–900000999. Ein im Teil „Materialwart“ angelegter
+  Artikel ohne Herstellernummer bekommt wie echt eine Systemnummer „STR-…“ (Zahl der Übungsinventarnummer), die Artikel
+  tragen `systemnummer` wie `GET …/artikel/<id>` (seit 10.11.2026). Jeder Seitenwechsel in `material.js`,
   `suche.js`, `global.js`, `freigaben.js` geht über `S.ziel`. Tests `tests/test_einfuehrung_material.py`,
   `tests/test_einfuehrung_katalog.py`.
   **Produkte aus dem Katalog** (seit 04.11.2026, Wunsch „Produkte und Prüfbögen, die im Katalog sind – ohne Echtdaten der
@@ -1353,7 +1355,8 @@ Nach `:::art` steht optional das Emoji (Standard: 💡 info und tip, ⚠️ warn
 
 Unter `docs/` liegt die Seite „Editor: Bedienung und Kürzel“ als Markdown-Datei. Sie erklärt
 Kürzel, Einfügemenü, Auswahlleiste, Callouts, Spalten, Tabellen und Medien – und ist zugleich ihr
-eigenes Beispiel. In eine frische Installation kommt sie über eine neue Seite, in die der Inhalt
+eigenes Beispiel. Als App-Anleitung hat sie keinen Abschnitt „Quellen“ (seit 10.11.2026); „Typische Fehler“ ist der
+letzte. In eine frische Installation kommt sie über eine neue Seite, in die der Inhalt
 der Datei eingefügt wird.
 
 ## Entwicklung ohne Docker

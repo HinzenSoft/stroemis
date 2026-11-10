@@ -144,6 +144,8 @@
         datei: d.datei ? "datei" : null })),
     });
   }
+  // Die Seriennummer vom System: „STR-“ mit der Zahl der Inventarnummer (nummern.seriennummer_fuer).
+  const systemnummer = (a) => `STR-${String(a.inventory_no).replace(/^\D+/, "")}`;
   function artikel(id, nummer, produktId, folder, sn, zuletzt, faellig) {
     return { id, inventory_no: nummer, product_id: produktId, folder_id: folder, origin_folder_id: null, serial_no: sn,
              serial_generated: false, manufactured_on: null, purchased_on: null, first_use_on: null, retire_by: null,
@@ -322,7 +324,7 @@
     const p = produktVon(z, a.product_id);
     const e = offenerEntwurf(z, a);
     const st = status(a);
-    const k = { id: a.id, inventory_no: a.inventory_no, serial_no: a.serial_no, serial_generated: false, folder_id: a.folder_id,
+    const k = { id: a.id, inventory_no: a.inventory_no, serial_no: a.serial_no, serial_generated: Boolean(a.serial_generated), folder_id: a.folder_id,
                 product_id: a.product_id, manufacturer: p.manufacturer, model: p.model, description: p.description,
                 article_no: p.article_no, material_kind: p.material_kind, kategorie: { id: p.category_id, name: p.category_name },
                 vorschau: p.vorschau, lock_state: a.lock_state, last_inspected_on: a.last_inspected_on, next_due_on: a.next_due_on,
@@ -358,6 +360,9 @@
     const gl = ordnerVon(z, ID.gliederung);
     return Object.assign(artikelKurz(z, a), {
       origin_folder_id: a.origin_folder_id, manufactured_on: null, purchased_on: null, first_use_on: null, notes: a.notes,
+      // Wie bestand.artikel_json (08.11.2026): die STR-Nummer, die „Durch Systemnummer ersetzen“ vergäbe – null, wenn die
+      // Seriennummer schon vom System ist.
+      systemnummer: a.serial_generated ? null : systemnummer(a),
       lock_reason: a.lock_reason, pfad: pfad(z, a.folder_id), gliederung: { id: gl.id, kind: gl.kind, name: gl.name, system_kind: null },
       produkt: Object.assign({}, p), produkt_aenderbar: false, produkt_beantragbar: false,
       intervall: intervall(p), interval_months: null, lebensdauer: lebensdauer(p), laenge_moeglich: false, formular: formularKurz(z, p),
@@ -695,8 +700,10 @@
       const d = body || {};
       const p = produktVon(z, Number(d.product_id)) || z.produkte[0];
       const nummer = String(z.naechsteNummer).padStart(4, "0");
-      const a = artikel(ID.neuerArtikel, `Ü-${nummer}`, p.id, ordnerVon(z, Number(d.folder_id)) ? Number(d.folder_id) : ID.fahrzeug,
-                        String(d.serial_no || "").trim() || `Ü-SN-${nummer}`, null, null);
+      const sn = String(d.serial_no || "").trim();
+      const a = artikel(ID.neuerArtikel, `Ü-${nummer}`, p.id, ordnerVon(z, Number(d.folder_id)) ? Number(d.folder_id) : ID.fahrzeug, sn, null, null);
+      // Ohne Herstellernummer vergibt das System eine (wie bestand.anlegen).
+      if (!sn) Object.assign(a, { serial_no: systemnummer(a), serial_generated: true });
       a.notes = String(d.notes || "");
       z.naechsteNummer += 1;
       z.artikel = z.artikel.filter((x) => x.id !== a.id).concat(a);
@@ -887,7 +894,7 @@
         probe: { tippen: ["#an-q", suchwort(P.helm)] } },
       { ziel: "#an-treffer", text: `Wähle „${N.helm}“.`, warten: { klick: "#an-treffer .mat-treffer-wahl" },
         probe: { klick: `#an-treffer .mat-treffer-wahl[data-i="${Math.max(0, helmTreffer)}"]` } },
-      { ziel: "#an-sn", text: "Trag die Seriennummer ein, hier „Ü-SN-1“.", warten: { wert: ["#an-sn", /\S/] }, probe: { tippen: ["#an-sn", "Ü-SN-1"] } },
+      { ziel: "#an-sn", text: "Trag die Seriennummer des Herstellers ein, hier „Ü-SN-1“. Hat ein Artikel keine, lässt du das Feld leer – dann vergibt das System eine Nummer (STR-…).", warten: { wert: ["#an-sn", /\S/] }, probe: { tippen: ["#an-sn", "Ü-SN-1"] } },
       { ziel: "[data-act=anlegen]", text: "Leg den Artikel an. Neue Artikel stehen auf „neu“, bis die Eingangsprüfung gemacht ist.",
         warten: { anfrage: `POST ${API}/artikel` }, probe: { klick: "[data-act=anlegen]" } },
       { ziel: ".mat-artikeltitel", text: "Da ist er – mit Inventarnummer und Status „neu“. Den QR-Code für das Etikett findest du weiter unten." },
