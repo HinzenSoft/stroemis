@@ -1373,7 +1373,7 @@
         ${[...kacheln.filter(([s]) => z[s]), ...kacheln.filter(([s]) => !z[s])].map(kachel).join("")}
       </div></div>
       <div id="mat-runden"></div>
-      <div class="mat-nebeneinander"><section class="section"><h2>Fälligkeiten je Ordner${d.ordner_uebersicht.length ? infoKnopf("Fälligkeiten je Ordner", ordnerUebersichtInfo(d.ordner_uebersicht) + mehrDazu("faelligkeiten_je_ordner")) : ""}</h2>
+      <div class="mat-nebeneinander"><section class="section"><h2>Fälligkeiten je Ordner${d.ordner_uebersicht.length || ausgeblendet.length ? infoKnopf("Fälligkeiten je Ordner", ordnerUebersichtInfo(d.ordner_uebersicht) + mehrDazu("faelligkeiten_je_ordner")) : ""}</h2>
         ${d.ordner_uebersicht.length ? ordnerUebersichtHtml(d.ordner_uebersicht)
           : ausgeblendet.length ? leer("Alle Gliederungen sind hier ausgeblendet.")
           : leer(DARF.gliederung_anlegen ? "Noch keine Gliederung – lege unter „Bestand“ die erste an." : "Noch keine Gliederung angelegt.")}
@@ -1707,7 +1707,7 @@
   }
   const ordnerUebersichtInfo = (zeilen) => `Die Zahlen gelten für den ganzen Zweig. Gesperrte und ausgesonderte Artikel liegen in ihrer Gliederung und zählen dort.
     Nächste Fälligkeit: das früheste Prüfdatum im Zweig – ohne neue (Eingangsprüfung), gesperrte und Artikel am Lebensende, die ihre eigenen Spalten haben.
-    Eine Gliederung, die nicht hierher gehört, blendet aus, wer sie verwaltet: „Bearbeiten“ → „Nicht in „Fälligkeiten je Ordner“ zeigen“. Ihr Name steht dann unter der Tabelle.
+    Eine Gliederung, die hier nicht hingehört, kannst du ausblenden, wenn du sie verwaltest: im Ordner „Bearbeiten“ → „Ordner bearbeiten“, Häkchen unter „Erinnerungsmails aus“. Ihr Name steht dann unter der Tabelle.
     ${zeilen.some((o) => o.nur_pfad) ? "Grau: übergeordnete Ordner, in denen du keine Freigabe hast – nur der Weg zu deinen." : ""}
     ${zeilen.some((o) => o.teilweise) ? "„Gesperrt (deine Artikel)“: deine gesperrten Artikel in einer Gliederung, die du sonst nicht siehst." : ""}`;
   /* Unter der Tabelle: die ausgeblendeten Gliederungen (overview_off, /start „ordner_ausgeblendet“) – sonst gingen ihre

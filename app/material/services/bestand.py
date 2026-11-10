@@ -250,15 +250,18 @@ def ordner_aendern(fid, d):
     Ebene) „Nicht in „Fälligkeiten je Ordner“ zeigen“. Wird ein Ordner zur Gliederung, bekommt er „Gesperrt“ und
     „Ausgesondert“, und gesperrte, verlorene und ausgesonderte Artikel mit Heimat darin ziehen aus den Systemordnern der
     bisherigen Gliederung in seine (wie beim Verschieben, 1.3). Wer das darf, prüft die Route (1.7 Nr. 2)."""
-    alt = ordner(fid)
-    if alt["system_kind"]:
-        raise Abgelehnt(SYSTEMORDNER_FEST, 409)
-    w = ordner_werte(d, alt)
-    if alt["kind"] == "gliederung" and w["kind"] != "gliederung":
-        raise Abgelehnt("Eine Gliederung bleibt eine Gliederung – an ihr hängen „Gesperrt“ und „Ausgesondert“. "
-                        "Lege einen neuen Ordner an und verschiebe den Inhalt.", 409)
-    _uebersicht_pruefen(w, alt["parent_id"])
-    with db.transaction():
+    # Lesen, Prüfen und Schreiben unter einer Schreibsperre (wie ordner_verschieben): Verschöbe jemand die Gliederung
+    # zwischen Prüfung und UPDATE unter eine andere, stünde dort sonst overview_off = 1 – und jedes weitere Bearbeiten
+    # scheiterte an _uebersicht_pruefen, weil ordner_werte den alten Wert übernimmt.
+    with db.transaction(sofort=True):
+        alt = ordner(fid)
+        if alt["system_kind"]:
+            raise Abgelehnt(SYSTEMORDNER_FEST, 409)
+        w = ordner_werte(d, alt)
+        if alt["kind"] == "gliederung" and w["kind"] != "gliederung":
+            raise Abgelehnt("Eine Gliederung bleibt eine Gliederung – an ihr hängen „Gesperrt“ und „Ausgesondert“. "
+                            "Lege einen neuen Ordner an und verschiebe den Inhalt.", 409)
+        _uebersicht_pruefen(w, alt["parent_id"])
         db.execute("UPDATE mat_folder SET name = ?, description = ?, kind = ?, interval_months = ?, reminders_off = ?, "
                    "overview_off = ?, updated_at = ? WHERE id = ?",
                    (w["name"], w["description"], w["kind"], w["interval_months"], w["reminders_off"], w["overview_off"],

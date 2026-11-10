@@ -5,7 +5,8 @@ planung/uebersicht-ausblenden):  python tests/test_material_uebersicht_aus.py
   2. Schalter: nur an Gliederungen der obersten Ebene, Rechte wie beim Bearbeiten, Journal und Beschriftung.
   3. Übersicht: der ganze Zweig fehlt in der Tabelle, „ordner_ausgeblendet“ nennt die Gliederung (auch als Pfad-Knoten);
      Ordnerleiste und übrige Zahlen bleiben.
-  4. Verschieben unter eine andere Gliederung setzt den Schalter zurück.
+  4. Verschieben unter eine andere Gliederung setzt den Schalter zurück; Bearbeiten prüft und schreibt unter einer
+     Schreibsperre, ein gleichzeitiges Verschieben kommt nicht dazwischen (Prüfung Ablauf R1, Befund 1).
   5. Oberfläche (statisch): Häkchen im Dialog, Zeile „Nicht gezeigt“, Info, Journal-Beschriftung.
 
 Alle Namen sind Platzhalter."""
@@ -203,6 +204,47 @@ def test_ausblenden():
     print("Schalter, Übersicht und Verschieben bestanden.")
 
 
+def test_wettlauf_bearbeiten_verschieben():
+    """Prüfung Ablauf R1, Befund 1: Zwischen der Prüfung „nur oberste Ebene“ und dem UPDATE darf kein anderes Konto
+    die Gliederung unter eine andere schieben – sonst stünde dort overview_off = 1 und jedes weitere Bearbeiten
+    scheiterte. Einschub genau in diesem Fenster: ein Schreibversuch über eine zweite Verbindung findet die Sperre."""
+    with tempfile.TemporaryDirectory() as tmp:
+        app, k = umgebung(tmp)
+        katalog_grund(k["adm"])
+        adm, w = k["adm"], k["wart"]
+        echt, _ = gliederung(w, "OG Platzhalter")
+        privat, _ = gliederung(w, "Platzhalter Privat")
+        from app.material.services import bestand
+        orig, erlebt = bestand._uebersicht_pruefen, []
+
+        def einschub(werte, parent_id):
+            orig(werte, parent_id)
+            fremd = sqlite3.connect(os.path.join(tmp, "stroemis.db"), timeout=0)
+            try:
+                fremd.execute("UPDATE mat_folder SET parent_id = ? WHERE id = ?", (echt, privat))
+                fremd.commit()
+                erlebt.append("verschoben")
+            except sqlite3.OperationalError as e:
+                erlebt.append(str(e))
+            finally:
+                fremd.close()
+
+        bestand._uebersicht_pruefen = einschub
+        try:
+            r = _aus(w, privat, True)
+        finally:
+            bestand._uebersicht_pruefen = orig
+        assert r.status_code == 200, r.get_json()
+        assert erlebt == ["database is locked"], erlebt
+        assert [dict(z) for z in zeilen(app, "SELECT parent_id, overview_off FROM mat_folder WHERE id = ?", (privat,))] == \
+               [{"parent_id": None, "overview_off": 1}]
+        # Das Verschieben danach setzt zurück, Bearbeiten geht weiter.
+        assert adm.post(f"{API}/ordner/{privat}/verschieben", json={"parent_id": echt}).status_code == 200
+        r = w.put(f"{API}/ordner/{privat}", json={"name": "Platzhalter Privat neu"})
+        assert r.status_code == 200 and r.json["ordner"]["overview_off"] is False, r.get_json()
+    print("Wettlauf Bearbeiten gegen Verschieben bestanden.")
+
+
 # --- 5. Oberfläche (statisch) -------------------------------------------------------------------------------------------
 
 def test_oberflaeche_statisch():
@@ -217,7 +259,10 @@ def test_oberflaeche_statisch():
     # Zeile „Nicht gezeigt“ unter der Tabelle und der Schalter im Info-Fenster.
     assert "const ausgeblendet = d.ordner_ausgeblendet || [];" in js and "${ordnerAusgeblendetHtml(ausgeblendet)}" in js
     assert "Nicht gezeigt: " in js and "Alle Gliederungen sind hier ausgeblendet." in js
-    assert "„Nicht in „Fälligkeiten je Ordner“ zeigen“" in js.split("const ordnerUebersichtInfo", 1)[1].split("\n  //", 1)[0]
+    # Der Weg im Info-Fenster wie in der Oberfläche; das „i“ auch, wenn alle Gliederungen ausgeblendet sind (Browser R1).
+    info = js.split("const ordnerUebersichtInfo", 1)[1].split("\n  //", 1)[0]
+    assert "im Ordner „Bearbeiten“ → „Ordner bearbeiten“, Häkchen unter „Erinnerungsmails aus“" in info
+    assert "Fälligkeiten je Ordner${d.ordner_uebersicht.length || ausgeblendet.length ? infoKnopf(" in js
     print("Oberfläche (statisch) bestanden.")
 
 
@@ -225,5 +270,6 @@ if __name__ == "__main__":
     test_migration_frisch()
     test_migration_39_40()
     test_ausblenden()
+    test_wettlauf_bearbeiten_verschieben()
     test_oberflaeche_statisch()
     print("Alle Tests für „Gliederung ausblenden“ bestanden.")

@@ -35,7 +35,7 @@ ADMIN_HTML, PROFIL = "app/templates/admin.html", "app/templates/profil.html"
 STELLEN = [
     ("M1", MAT, '<h1>Bestand${infoKnopf("Bestand", info + mehrDazu("bestand"))}</h1>', "Oben stehen die Gliederungen"),
     ("M2", MAT, '<span class="info-absatz">${ZAEHLER_LEGENDE}</span>', '!<p class="help mat-legende">'),
-    ("M3", MAT, '<h2>Fälligkeiten je Ordner${d.ordner_uebersicht.length ? infoKnopf("Fälligkeiten je Ordner", ordnerUebersichtInfo(',
+    ("M3", MAT, '<h2>Fälligkeiten je Ordner${d.ordner_uebersicht.length || ausgeblendet.length ? infoKnopf("Fälligkeiten je Ordner", ordnerUebersichtInfo(',
      "Die Zahlen gelten für den ganzen Zweig"),
     ("M4", MAT, 'if (zuInfo) zuInfo.innerHTML = infoKnopf("Zu prüfen", `Überfällig, Lebensdauer erreicht', "Überfällig, Lebensdauer erreicht"),
     ("M5", MAT, '<h2>Offene Prüfungen${infoKnopf("Offene Prüfungen", "Eine offene Prüfung reserviert', "Eine offene Prüfung reserviert"),

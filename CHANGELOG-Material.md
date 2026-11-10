@@ -13717,3 +13717,16 @@ Unsinn 400, Anlegen; Journal und Beschriftung; Übersicht ohne Zweig, `ordner_au
 Ordnerleiste gleich; Konto nur mit Unterordner: Pfad-Knoten; `null`; anderes Feld ändern lässt es stehen; Verschieben
 setzt zurück; Oberfläche statisch). Angepasst: `test_material_trennung.bis_schritt` rüstet `SPALTEN_40` nach (ältere
 Stände legen über den Dienst Ordner an), `test_material_untergruppen` erwartet die Endversion statt „39“.
+
+**Nachbesserung nach den Prüfungen Runde 1 (10.11.2026)**
+
+- **Ablauf, Befund 1** (`services/bestand.py`): `ordner_aendern` liest den Ordner, prüft und schreibt jetzt in **einer**
+  Transaktion mit Schreibsperre (`db.transaction(sofort=True)`, wie `ordner_verschieben`). Vorher konnte ein
+  gleichzeitiges Verschieben unter eine andere Gliederung zwischen Prüfung und UPDATE fallen: Dort stand dann
+  `overview_off = 1`, und jedes weitere Bearbeiten scheiterte mit 400, weil `ordner_werte` den alten Wert übernimmt.
+  Test `test_wettlauf_bearbeiten_verschieben` (Einschub im Fenster: ein Schreibversuch über eine zweite Verbindung findet
+  die Sperre; auf dem Stand davor schlägt er fehl).
+- **Browser, Verbesserungen 1 und 2** (`material.js`): Das „i“ an „Fälligkeiten je Ordner“ steht auch, wenn alle
+  Gliederungen ausgeblendet sind (Leerzustand „Alle Gliederungen sind hier ausgeblendet.“). Der Weg im Info-Text stimmt
+  jetzt mit der Oberfläche überein: „im Ordner „Bearbeiten“ → „Ordner bearbeiten“, Häkchen unter „Erinnerungsmails aus““.
+  `test_module_info_i` (M3) erwartet die neue Bedingung.
