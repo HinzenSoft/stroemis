@@ -299,7 +299,7 @@ def test_migration_frisch():
         make_app(tmp)
         conn = sqlite3.connect(os.path.join(tmp, "stroemis.db"))
         from app.material import models
-        assert conn.execute("SELECT wert FROM mat_meta WHERE schluessel = 'schema_version'").fetchone()[0] == "39"
+        assert conn.execute("SELECT wert FROM mat_meta WHERE schluessel = 'schema_version'").fetchone()[0] == str(models.SCHEMA_VERSION)
         for tabelle in ("mat_checklist_item", "mat_inspection_result"):
             spalte = [r for r in conn.execute(f"PRAGMA table_info({tabelle})") if r[1] == "untergruppe"]
             assert spalte and spalte[0][2] == "TEXT" and spalte[0][3] == 1 and spalte[0][4] == "''", (tabelle, spalte)
@@ -357,9 +357,10 @@ def test_migration_38_39():
         conn.close()
         assert "mat_result_untergruppe" not in trigger
 
-        make_app(tmp)                                                             # Start: Schritt 39
+        make_app(tmp)                                                             # Start: Schritt 39 (und folgende)
+        from app.material import models
         conn = sqlite3.connect(pfad)
-        assert conn.execute("SELECT wert FROM mat_meta WHERE schluessel = 'schema_version'").fetchone()[0] == "39"
+        assert conn.execute("SELECT wert FROM mat_meta WHERE schluessel = 'schema_version'").fetchone()[0] == str(models.SCHEMA_VERSION)
         for t in tabellen:
             nachher = conn.execute(f"SELECT {', '.join(spalten[t])} FROM {t} ORDER BY 1").fetchall()
             if t == "mat_meta":

@@ -48,6 +48,8 @@ FELD = {
     "freigabe": "Freigabe Nr.", "konto": "Person", "recht": "Recht", "bis": "bis", "notiz_geaendert": "Notiz geändert",
     # Phase 2 · Lieferung 2: Erinnerungen
     "reminders_off": "Erinnerungsmails aus",
+    # Schritt 40: Gliederung aus „Fälligkeiten je Ordner“ ausblenden
+    "overview_off": "In „Fälligkeiten je Ordner“ ausgeblendet",
     # Phase 2 · Lieferung 3: Bestandsimport und Prüfanleitung aus dem Wiki
     "bestandsimport": "Bestandsimport Nr.", "datei": "Datei", "zeile": "Zeile", "zeilen": "Zeilen",
     "artikel_angelegt": "Artikel angelegt", "schon_im_bestand": "schon im Bestand", "nacharbeit": "Nacharbeit (Zeilen)",
@@ -153,8 +155,8 @@ SPERRZUSTAND = {"frei": "frei", "gesperrt": "gesperrt", "verloren": "verloren (g
 RECHT = {"lesen": "lesen", "pruefen": "prüfen", "verwalten": "verwalten"}
 PERSON = "(Person)"
 # „mat_katalog“ bleibt für alte Einträge stehen (das Häkchen gibt es seit Schritt 10 nicht mehr).
-_JA_NEIN = ("serial_generated", "active", "mat_pruefer", "mat_katalog", "notiz_geaendert", "reminders_off", "items_have_length",
-            "aus_nacharbeit", "is_set", "freigegeben")
+_JA_NEIN = ("serial_generated", "active", "mat_pruefer", "mat_katalog", "notiz_geaendert", "reminders_off", "overview_off",
+            "items_have_length", "aus_nacharbeit", "is_set", "freigegeben")
 # Werte der Set-Felder (Schritt 21, K2; Altbestand vor Schritt 26) – wie wert() in material.js.
 SET_WERTE = {"lock_cause": {"eigen": "eigener Grund", "set": "mit dem Set"},
              "verbleib": {"aussondern": "mit aussondern", "weiterfuehren": "entnommen und weitergeführt"},

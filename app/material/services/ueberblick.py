@@ -18,6 +18,9 @@ Form der Tabelle:
     Pfad-Knoten als Zeile ohne Zahlen („nur_pfad“). Sieht das Konto seine Gliederung nicht, aber eigene gesperrte
     Artikel in deren „Gesperrt“, bekommt dieser Systemordner eine eigene Zeile „Gesperrt (deine Artikel)“ unter der
     Gliederung – sonst fehlten sie in der Tabelle.
+  - Eine Gliederung der obersten Ebene mit „Nicht in „Fälligkeiten je Ordner“ zeigen“ (mat_folder.overview_off, Schritt
+    40) fehlt samt ihrem Zweig in der Tabelle; nicht_gezeigt() nennt sie für die Zeile darunter – sonst gingen etwa
+    Artikel mit erreichter Lebensdauer dort unbemerkt verloren. Die Ordnerleiste und alle übrigen Zahlen zählen sie mit.
 """
 from ... import db
 from . import bestand, rechte
@@ -45,11 +48,26 @@ def _frueheste(eltern):
     return gesamt
 
 
+def ausgeblendet():
+    """Die Gliederungen, die nicht in „Fälligkeiten je Ordner“ stehen (overview_off, nur oberste Ebene)."""
+    return {r["id"] for r in db.query("SELECT id FROM mat_folder WHERE parent_id IS NULL AND overview_off = 1")}
+
+
+def nicht_gezeigt(alle=None):
+    """Die ausgeblendeten Gliederungen, die das Konto im Baum hat (auch als Pfad-Knoten), in Baumreihenfolge – für die
+    Zeile „Nicht gezeigt“ unter der Tabelle: [{id, name, nur_pfad}]."""
+    alle = bestand.baum() if alle is None else alle
+    aus = ausgeblendet()
+    return [{"id": o["id"], "name": o["name"], "nur_pfad": bool(o.get("nur_pfad"))}
+            for o in alle if o["parent_id"] is None and o["id"] in aus]
+
+
 def ordner_uebersicht(alle=None):
     """Fälligkeiten je Ordner für die Übersicht (/start): eine Zeile je Ordner außer den Systemordnern, in
-    Baumreihenfolge, mit Bestand und Zählung des ganzen Zweigs und der nächsten Fälligkeit. alle: das
-    Ergebnis von bestand.baum(), wenn der Aufrufer es schon hat."""
+    Baumreihenfolge, mit Bestand und Zählung des ganzen Zweigs und der nächsten Fälligkeit – ohne ausgeblendete
+    Gliederungen und ihren Zweig. alle: das Ergebnis von bestand.baum(), wenn der Aufrufer es schon hat."""
     alle = bestand.baum() if alle is None else alle
+    aus = ausgeblendet()
     eltern = {o["id"]: o["parent_id"] for o in alle}
     frueh = _frueheste(eltern)
     # Pfad-Knoten nur, wenn darunter etwas Sichtbares liegt (bei baum() immer – hier abgesichert).
@@ -63,7 +81,7 @@ def ordner_uebersicht(alle=None):
                 p = eltern.get(p)
     kinder = {}
     for o in alle:                                   # baum() liefert schon nach Position und Name sortiert
-        if o.get("nur_pfad") and o["id"] not in mit_inhalt:
+        if (o.get("nur_pfad") and o["id"] not in mit_inhalt) or (o["parent_id"] is None and o["id"] in aus):
             continue
         if not o["system_kind"] or (o.get("teilweise") and o["system_kind"] == "gesperrt"):
             kinder.setdefault(o["parent_id"], []).append(o)

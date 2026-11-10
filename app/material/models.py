@@ -339,6 +339,12 @@ Feldnamen folgen dem Konzept vom 16.10.2026 (englisch, wie dort festgelegt). Abw
     mat_result_bestandteil aus Schritt 25). Rein additiv (ADD COLUMN mit Vorgabe '', Trigger entfernt und neu), kein
     Journal, nichts Sichtbares ändert sich am Altbestand; wiederholbar. Die Reihenfolge-Regel (in einer Gruppe erst die
     Punkte ohne Untergruppe, dann die Untergruppen als zusammenhängende Blöcke) hält der Dienst (katalog.punkte_pruefen).
+  - Schritt 40 (Gliederung aus „Fälligkeiten je Ordner“ ausblenden, Wunsch vom 10.11.2026; Bauauftrag
+    planung/uebersicht-ausblenden): Spalte mat_folder.overview_off (0/1, Vorgabe 0) – 1 = diese Gliederung samt ihrem
+    Zweig steht nicht in der Tabelle der Übersicht (ueberblick.ordner_uebersicht), nur unter ihr als „Nicht gezeigt“.
+    Nur an Gliederungen der obersten Ebene; wer eine darunter verschiebt, setzt sie zurück (bestand.ordner_verschieben).
+    Ordnerleiste, Bestand, Erinnerungen und alle übrigen Zählungen lesen sie nicht. Rein additiv (ADD COLUMN mit Vorgabe
+    0, wie reminders_off in Schritt 11), kein Journal, am Altbestand ändert sich nichts; wiederholbar.
 """
 import json
 import logging
@@ -347,7 +353,7 @@ import sqlite3
 import unicodedata
 from datetime import datetime, timezone
 
-SCHEMA_VERSION = 39
+SCHEMA_VERSION = 40
 
 # --- Wertelisten -------------------------------------------------------------------------------
 # Was die Datenbank per CHECK erzwingt, steht hier ein zweites Mal – mit den Wörtern, die die
@@ -3597,6 +3603,17 @@ def _schritt_39(conn):
         conn.execute(sql)
 
 
+# --- Schritt 40: Gliederung aus „Fälligkeiten je Ordner“ ausblenden (Wunsch vom 10.11.2026) ---------------------------
+SPALTEN_40 = (
+    ("mat_folder", "overview_off", "INTEGER NOT NULL DEFAULT 0 CHECK (overview_off IN (0, 1))"),
+)
+
+
+def _schritt_40(conn):
+    """Die Spalte aus SPALTEN_40, wenn sie fehlt. Rein additiv, wiederholbar; siehe Kopf."""
+    spalten_nachruesten(conn, SPALTEN_40)
+
+
 # Je Version die Schritte, die von der Vorversion dorthin führen: eine Liste von SQL-Befehlen (für sich
 # wiederholbar, IF NOT EXISTS) oder eine Funktion. Alle Schritte eines Starts laufen in EINER
 # Transaktion – bricht einer ab, bleibt die Datenbank, wie sie war, und der nächste Start versucht es neu.
@@ -3606,7 +3623,7 @@ SCHRITTE = {1: SCHRITT_1, 2: _schritt_2, 3: _schritt_3, 4: SCHRITT_4, 5: _schrit
             20: _schritt_20, 21: _schritt_21, 22: _schritt_22, 23: _schritt_23, 24: _schritt_24,
             25: _schritt_25, 26: _schritt_26, 27: _schritt_27, 28: _schritt_28, 29: SCHRITT_29, 30: SCHRITT_30,
             31: SCHRITT_31, 32: _schritt_32, 33: _schritt_33, 34: _schritt_34, 35: _schritt_35,
-            36: _schritt_36, 37: _schritt_37, 38: _schritt_38, 39: _schritt_39}
+            36: _schritt_36, 37: _schritt_37, 38: _schritt_38, 39: _schritt_39, 40: _schritt_40}
 
 
 def _meta(conn, schluessel, vorgabe=None):

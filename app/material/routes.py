@@ -456,7 +456,8 @@ def start():
     wenn es nichts zu zeigen gibt (Phase 4 · L1). „antraege_offen“:
     offene Änderungsanträge, die das Konto als Materialwart des Ordners entscheiden darf (antrag.zu_entscheiden – für
     jedes Konto, seit dem 24.10.2026 nicht mehr nur für die Material-Verwaltung). „aussonderung_empfohlen“ (A4): je
-    „Gesperrt“-Ordner die Zahl der Artikel mit Aussonderungsempfehlung, die das Konto aussondern darf (sonst leer)."""
+    „Gesperrt“-Ordner die Zahl der Artikel mit Aussonderungsempfehlung, die das Konto aussondern darf (sonst leer).
+    „ordner_ausgeblendet“: die Gliederungen, die „ordner_uebersicht“ weglässt (ueberblick.nicht_gezeigt, Schritt 40)."""
     alle = bestand.baum()
     maengel, maengel_gesamt = mangel.offene_liste()
     gliederungen = [o for o in alle if o["kind"] == "gliederung" and not o["system_kind"] and not o.get("nur_pfad")]
@@ -464,6 +465,7 @@ def start():
     z = bestand.zaehlung()
     return jsonify(darf=darf_alles(), zaehlung=z, bestand=sum(z[s] for s in st.BESTAND),
                    ordner_uebersicht=ueberblick.ordner_uebersicht(alle),
+                   ordner_ausgeblendet=ueberblick.nicht_gezeigt(alle),
                    gliederungen=gliederungen, naechste=naechste, faellig_gesamt=faellig,
                    schwelle_tage=st.schwelle_tage(), status_text=st.LABEL,
                    meldungen_offen=meldung.anzahl_offen() if ist_material_verwaltung() else None,

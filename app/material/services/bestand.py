@@ -43,6 +43,8 @@ NUR_SYSTEM = ("In „Gesperrt“ und „Ausgesondert“ kommen Artikel nur durch
 GESPERRT_BLEIBT = ("Gesperrte und ausgesonderte Artikel bleiben in ihrem Systemordner. Zurück bringt einen "
                    "gesperrten Artikel nur eine Freiprüfung mit dem Ergebnis „einsatzbereit“.")
 NUR_GLIEDERUNG_OBEN = "Auf oberster Ebene stehen nur Gliederungen – lege den Ordner in einer Gliederung an."
+UEBERSICHT_AUS = "Nicht in „Fälligkeiten je Ordner“ zeigen"
+NUR_OBEN_AUS = f"„{UEBERSICHT_AUS}“ gibt es nur an Gliederungen der obersten Ebene."
 VORZIEHEN = ("Die nächste Prüfung lässt sich nur vorziehen, nicht verschieben – auf einen späteren Tag setzt "
              "sie nur eine Prüfung.")
 # Grund im Journal, wenn gesperrte und ausgesonderte Artikel mit ihrem Ordner die Gliederung wechseln (1.7 Nr. 3).
@@ -190,7 +192,9 @@ def unterbaum(fid):
 
 
 # reminders_off (Phase 2 · L2): „Erinnerungsmails aus“ für diesen Ordner und alle darunter (services/erinnerung.py).
-ORDNER_FELDER = ("name", "description", "kind", "interval_months", "reminders_off")
+# overview_off (Schritt 40): „Nicht in „Fälligkeiten je Ordner“ zeigen“ – nur an Gliederungen der obersten Ebene
+# (_uebersicht_pruefen), die Übersicht lässt den ganzen Zweig weg (ueberblick.ordner_uebersicht).
+ORDNER_FELDER = ("name", "description", "kind", "interval_months", "reminders_off", "overview_off")
 
 
 def ordner_werte(d, alt=None):
@@ -200,7 +204,15 @@ def ordner_werte(d, alt=None):
             "description": text(e, "description", "Beschreibung", 2000, einzeilig=False),
             "kind": auswahl(e.get("kind") or "sonstiges", ORDNERARTEN, "Ordnertyp"),
             "interval_months": ganzzahl(e.get("interval_months"), "Prüfintervall (Monate)", 1, 120),
-            "reminders_off": int(wahr(e, "reminders_off", "Erinnerungsmails aus"))}
+            "reminders_off": int(wahr(e, "reminders_off", "Erinnerungsmails aus")),
+            "overview_off": int(wahr(e, "overview_off", UEBERSICHT_AUS))}
+
+
+def _uebersicht_pruefen(w, parent_id):
+    """Ausblenden aus der Übersicht nur an einer Gliederung der obersten Ebene – darunter enthielten die Zahlen der
+    Gliederung darüber sonst Ausgeblendetes."""
+    if w["overview_off"] and (parent_id is not None or w["kind"] != "gliederung"):
+        raise Abgelehnt(NUR_OBEN_AUS)
 
 
 def _systemordner_anlegen(gid, demo):
@@ -220,12 +232,13 @@ def ordner_anlegen(d, demo=False):
         raise Abgelehnt(NUR_GLIEDERUNG_OBEN)
     if parent_id is not None and ordner(parent_id)["system_kind"]:
         raise Abgelehnt(NUR_SYSTEM, 409)
+    _uebersicht_pruefen(w, parent_id)
     ts = db.now()
     with db.transaction(sofort=True):
         fid = db.execute("INSERT INTO mat_folder (parent_id, name, description, kind, interval_months, reminders_off, "
-                         "demo, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?)",
+                         "overview_off, demo, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?)",
                          (parent_id, w["name"], w["description"], w["kind"], w["interval_months"], w["reminders_off"],
-                          int(bool(demo)), ts, ts))
+                          w["overview_off"], int(bool(demo)), ts, ts))
         journal.eintragen("folder", fid, "angelegt", None, dict(w, parent_id=parent_id))
         if w["kind"] == "gliederung":
             _systemordner_anlegen(fid, demo)
@@ -233,7 +246,8 @@ def ordner_anlegen(d, demo=False):
 
 
 def ordner_aendern(fid, d):
-    """Name, Beschreibung, Ordnertyp, Prüfintervall und „Erinnerungsmails aus“. Wird ein Ordner zur Gliederung, bekommt er „Gesperrt“ und
+    """Name, Beschreibung, Ordnertyp, Prüfintervall, „Erinnerungsmails aus“ und (nur an einer Gliederung der obersten
+    Ebene) „Nicht in „Fälligkeiten je Ordner“ zeigen“. Wird ein Ordner zur Gliederung, bekommt er „Gesperrt“ und
     „Ausgesondert“, und gesperrte, verlorene und ausgesonderte Artikel mit Heimat darin ziehen aus den Systemordnern der
     bisherigen Gliederung in seine (wie beim Verschieben, 1.3). Wer das darf, prüft die Route (1.7 Nr. 2)."""
     alt = ordner(fid)
@@ -243,10 +257,12 @@ def ordner_aendern(fid, d):
     if alt["kind"] == "gliederung" and w["kind"] != "gliederung":
         raise Abgelehnt("Eine Gliederung bleibt eine Gliederung – an ihr hängen „Gesperrt“ und „Ausgesondert“. "
                         "Lege einen neuen Ordner an und verschiebe den Inhalt.", 409)
+    _uebersicht_pruefen(w, alt["parent_id"])
     with db.transaction():
         db.execute("UPDATE mat_folder SET name = ?, description = ?, kind = ?, interval_months = ?, reminders_off = ?, "
-                   "updated_at = ? WHERE id = ?",
-                   (w["name"], w["description"], w["kind"], w["interval_months"], w["reminders_off"], db.now(), fid))
+                   "overview_off = ?, updated_at = ? WHERE id = ?",
+                   (w["name"], w["description"], w["kind"], w["interval_months"], w["reminders_off"], w["overview_off"],
+                    db.now(), fid))
         umgewandelt = w["kind"] == "gliederung" and alt["kind"] != "gliederung"
         if umgewandelt:
             _systemordner_anlegen(fid, alt["demo"])
@@ -284,6 +300,11 @@ def ordner_verschieben(fid, ziel_id):
         journal.eintragen("folder", fid, "verschoben",
                           {"parent_id": alt["parent_id"], "pfad": _pfad_text(alt["parent_id"])},
                           {"parent_id": ziel_id, "pfad": _pfad_text(ziel_id)})
+        # Unter einer anderen Gliederung gilt „Nicht in „Fälligkeiten je Ordner“ zeigen“ nicht mehr (_uebersicht_pruefen) –
+        # zurück auf 0, sonst bliebe ein Wert stehen, den niemand mehr sieht und der beim Zurückschieben wieder wirkte.
+        if alt["overview_off"] and ziel_id is not None:
+            db.execute("UPDATE mat_folder SET overview_off = 0 WHERE id = ?", (fid,))
+            journal.aenderung("folder", fid, {"overview_off": 1}, {"overview_off": 0})
         _systemordner_nachziehen(fid)
         from . import durchgang
         bedingung, args = heimat_im_zweig(fid)
@@ -411,6 +432,7 @@ def ordner_json(o, direkt=None, gesamt=None):
                              "position", "created_at", "updated_at")}
     out["demo"] = bool(o["demo"])
     out["reminders_off"] = bool(o.get("reminders_off"))         # der eigene Wert; geerbt: ordner_inhalt → erinnerungen
+    out["overview_off"] = bool(o.get("overview_off"))
     out["foto"] = katalog.bild_url(o["photo"])
     out["vorschau"] = katalog.bild_url(o["photo"], "thumb")
     out["original"] = katalog.bild_url(o["photo"], "orig")      # „Original“ in der Großansicht (wie beim Produktbild)
