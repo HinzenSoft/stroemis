@@ -912,6 +912,9 @@ table.list.mat-ue td.mat-ue-name { padding-left: calc(6px + var(--ue-einzug)); }
 button.mat-ue-klapp[aria-expanded="true"]::before { content: "▾"; }
 button.mat-ue-klapp[aria-expanded="false"]::before { content: "▸"; }
 button.mat-ue-klapp:focus-visible { outline: 3px solid var(--gelb); outline-offset: 1px; }
+/* „Nicht gezeigt: …“ unter der Tabelle (ausgeblendete Gliederungen, Schritt 40): eine unauffällige Hilfezeile; am Finger
+   ist jeder Link 44 px hoch wie die Brotkrumen. */
+@media (pointer: coarse) { .mat-ue-aus a { display: inline-flex; align-items: center; min-height: 44px; vertical-align: middle; } }
 .mat-pr-ordner { margin: 0 0 6px; font-weight: 600; }
 @container mat-seite (max-width: 600px) {
   table.list.mat-ue tr { padding-left: calc(min(var(--tiefe, 0), 3) * 14px + max(var(--tiefe, 0) - 3, 0) * 6px); }

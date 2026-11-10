@@ -5,7 +5,7 @@ Gliederungen, Prüfnachweise je Ausrüstungsteil, unveränderliche PDF-Prüfprot
 umgesetzt, Phase 2 (mehrere Gliederungen und externe Prüfer in einer Instanz) in drei, Phase 3 und 4 in Lieferungen
 und Wünschen des Nutzers; jede war für sich deploybar. Seit dem 26.10.2026 heißt das Modul „Materialablage“ (im Code,
 in Tabellen und unter `/api/material` weiter `material`). Ältere Abschnitte sagen noch „Modul Material“ – sie bleiben als
-Geschichte stehen. Schemaversion nach der Nachbesserung vor dem Merge: 30; mit der Prüfsumme für den Lebenslauf: 31; mit der Liste nach dem Merge (Teil A): 32; mit der Stufe Redakteur: 33; mit den Riegenkarten-Ausbildern nur mit Konto: 34; mit „Prüfformular eines anderen Produkts übernehmen“: 35; mit der Nachbesserung danach: 36; mit dem Aufräumen: 37; mit dem Formular-Pool je Kategorie: 38; mit den Untergruppen in Prüfformularen: 39.
+Geschichte stehen. Schemaversion nach der Nachbesserung vor dem Merge: 30; mit der Prüfsumme für den Lebenslauf: 31; mit der Liste nach dem Merge (Teil A): 32; mit der Stufe Redakteur: 33; mit den Riegenkarten-Ausbildern nur mit Konto: 34; mit „Prüfformular eines anderen Produkts übernehmen“: 35; mit der Nachbesserung danach: 36; mit dem Aufräumen: 37; mit dem Formular-Pool je Kategorie: 38; mit den Untergruppen in Prüfformularen: 39; mit „Gliederung aus „Fälligkeiten je Ordner“ ausblenden“: 40.
 
 | Lieferung | Inhalt | Stand |
 | --- | --- | --- |
@@ -96,6 +96,7 @@ Geschichte stehen. Schemaversion nach der Nachbesserung vor dem Merge: 30; mit d
 | Kategorie „Schlingen“ statt „Textilmaterial“ | Beispielbestand erkennt die Schlingen-Kategorie unter „Schlingen“ und den früheren Namen („Textilmaterial“, „Bandmaterial“), Petzl-Vorlage unter „Schlingen“; README „Kategorie im Katalog umbenennen“ mit Weg, Folgen und Warnung vor alten ZIPs; Tests | gebaut 09.11.2026 (kein Schemaschritt, Schema bleibt 39), Zweig kategorie-schlingen |
 | Warnung im Katalogimport bei Kategoriewechsel | Je Produkt mit Artikeln, das durch den Import die Kategorie wechselt, eine Warnung (alte → neue Kategorie, Artikel, Prüfformular verloren/anders/gleich, gelöste Zuweisung); Zusammenfassung oben im Bericht samt Hinweis auf eine alte Datei, wenn eine neue Kategorie Produkte aus einer bestehenden aufnimmt; gelöste Produkt-Zuweisungen zählen unter „gelöst“ mit; Oberfläche und Kommandozeile | gebaut 09.11.2026 (kein Schemaschritt, Schema bleibt 39), Zweig import-warnung-kategorie |
 | Import-Warnung: Feinschliff und verschobene Kategorien | Verschiebt eine Katalogdatei (mit Kennung) eine Kategorie, gleiche Warnung und Zählung wie beim Kategoriewechsel (Formularfolgen, gelöste Zuweisungen, Zusammenfassung); im Dialog ein Kasten „Achtung“ mit einer Zeile je alte → neue Kategorie und „Einzelheiten“ zum Aufklappen, „im Bestand“ statt „hier“, Fokus auf dem Bericht und zurück auf den Auslöser, weißer innerer Fokusring auf dem roten Knopf | gebaut 09.11.2026 (kein Schemaschritt, Schema bleibt 39), Zweig import-warnung-feinschliff |
+| Gliederung aus „Fälligkeiten je Ordner“ ausblenden (Schritt 40) | Häkchen „Nicht in „Fälligkeiten je Ordner“ zeigen“ im Dialog „Ordner bearbeiten“ an Gliederungen der obersten Ebene (`mat_folder.overview_off`): der ganze Zweig fehlt in der Tabelle der Übersicht, darunter „Nicht gezeigt: …“; Ordnerleiste, Bestand und alle übrigen Zahlen unverändert; Verschieben unter eine andere Gliederung setzt es zurück | gebaut 10.11.2026 (Schema 40), Zweig uebersicht-ausblenden |
 
 ## Abgleich mit dem Bestand (vor Lieferung 1)
 
@@ -13664,3 +13665,55 @@ oberste Ebene“ ergänzt (Probelauf und echter Lauf, Warnung und Gruppe); neu `
 `test_kommandozeile` und `test_material_katalog.py::test_kategorie_umbenennen` auf den kürzeren Satz angepasst;
 `test_material_importauftrag.py::test_oberflaeche_statisch` prüft `focusVisible: false` am Stand;
 `test_material_formular_pool.py::test_verschieben_loeschen_trigger` erwartet `kategorie_id` in `…/formular-pool/folgen`.
+
+## Gliederung aus „Fälligkeiten je Ordner“ ausblenden (Wunsch des Nutzers, 10.11.2026)
+
+Auftrag `planung/uebersicht-ausblenden/auftrag.md`: Die selbst angelegte oberste Gliederung „Private PSA“ ist keine echte
+Gliederung und soll in der Übersicht nicht erscheinen. Gewählt (Empfehlung): ein Häkchen je Gliederung – kein Name fest im
+Code, keine Automatik. **Schema 40.**
+
+- **Schritt 40** (`models.py`, `SPALTEN_40`, `_schritt_40`): Spalte `mat_folder.overview_off INTEGER NOT NULL DEFAULT 0
+  CHECK (overview_off IN (0, 1))` – wie `reminders_off` (Schritt 11) per `ADD COLUMN`, nur wenn sie fehlt. Rein additiv,
+  kein Journal, am Altbestand ändert sich nichts (alle 0); ein zweiter Lauf ändert nichts. **Rückweg**: Eine Fassung mit
+  Schema 39 übergeht die Spalte (sie liest sie nicht, neue Ordner bekommen die Vorgabe 0).
+- **Dienst** (`services/bestand.py`): `overview_off` gehört zu `ORDNER_FELDER` (ja/nein wie „Erinnerungsmails aus“; fehlt
+  das Feld, bleibt der Wert). `_uebersicht_pruefen`: 1 nur an einer Gliederung der obersten Ebene, sonst 400 „„Nicht in
+  „Fälligkeiten je Ordner“ zeigen“ gibt es nur an Gliederungen der obersten Ebene.“ – beim Anlegen (eine neue Gliederung
+  darf gleich ausgeblendet sein; der Dialog zeigt das Häkchen erst beim Bearbeiten) und beim Bearbeiten. Rechte wie beim
+  Bearbeiten des Ordners (verwalten am Ordner). Journal „geändert“ mit `{"overview_off": 0 → 1}`, beschriftet „In
+  „Fälligkeiten je Ordner“ ausgeblendet“ (`beschriftung.py` und `material.js`, ja/nein). `ordner_verschieben`: Kommt
+  eine ausgeblendete Gliederung unter eine andere, wird das Häkchen 0 (eigener Journaleintrag 1 → 0) – keine Leiche, die
+  beim Zurückschieben wieder wirkte. „Keine Gliederung mehr“ gibt es nicht (eine Gliederung bleibt eine Gliederung, 409).
+  `ordner_json` liefert `overview_off`.
+- **Übersicht** (`services/ueberblick.py`): `ordner_uebersicht` lässt eine ausgeblendete Gliederung samt ihrem Zweig weg,
+  `nicht_gezeigt` nennt sie (`[{id, name, nur_pfad}]`, auch wenn das Konto sie nur als Pfad-Knoten sieht). Die
+  Ordnerleiste (`bestand.baum`), die Kacheln, „Als Nächstes zu prüfen“, Erinnerungen und alle übrigen Zählungen lesen die
+  Spalte nicht.
+- **Oberfläche** (`material.js`): Häkchen „Nicht in „Fälligkeiten je Ordner“ zeigen“ im Reiter „Ordner“ unter
+  „Erinnerungsmails aus“, nur an einer vorhandenen Gliederung der obersten Ebene, mit Hinweis („Die Zahlen dieser
+  Gliederung fehlen dann in der Tabelle der Übersicht, darunter steht nur ihr Name. Ordnerleiste und Bestand bleiben
+  gleich.“); zählt für „ungespeichert“ beim Verlassen über den Reiter „Freigaben“. Unter der Tabelle eine Hilfezeile
+  „Nicht gezeigt: Private PSA“ mit Link auf den Ordner (Pfad-Knoten grau ohne Link) – sonst gingen dort etwa Artikel mit
+  erreichter Lebensdauer unbemerkt verloren; am Finger ist jeder dieser Links 44 px hoch (`material.css`, nur unter
+  `pointer: coarse`). Sind alle Gliederungen ausgeblendet: „Alle Gliederungen sind hier
+  ausgeblendet.“ statt „Noch keine Gliederung“. Das „i“ an „Fälligkeiten je Ordner“ nennt den Schalter. Die Übung kennt
+  `overview_off` (immer aus) und `ordner_ausgeblendet` (leer).
+- **Export und Import des Bestands**: Ordnerfelder wie `reminders_off` gehen in keinen Export und kommen aus keinem Import
+  (CSV, Protokoll-ZIP und Bestandsimport kennen nur Artikel; der Katalogaustausch keinen Bestand) – für `overview_off` gibt
+  es dort deshalb nichts nachzuziehen.
+
+**Schnittstelle**
+
+| Route | Rechte | Änderung |
+| --- | --- | --- |
+| `GET /api/material/start` | wie bisher | `ordner_uebersicht` ohne ausgeblendete Gliederungen und ihren Zweig; neu `ordner_ausgeblendet` (`[{id, name, nur_pfad}]`, Baumreihenfolge) |
+| `PUT /api/material/ordner/<id>`, `POST /api/material/ordner` | wie bisher (verwalten am Ordner bzw. Oberordner) | nimmt `overview_off` (ja/nein; fehlt = unverändert bzw. 0; `null` = nein; anderes → 400); 1 nur an einer Gliederung der obersten Ebene, sonst 400 |
+| `GET /api/material/ordner`, `GET /api/material/ordner/<id>` und jede Antwort mit einem Ordner | wie bisher | `overview_off` (bool) am Ordner (nicht an Pfad-Knoten) |
+| `POST /api/material/ordner/<id>/verschieben` | wie bisher | unter einen anderen Ordner: `overview_off` wird 0 (Journal) |
+
+**Tests**: neu `tests/test_material_uebersicht_aus.py` (Migration frisch mit CHECK und zweitem Lauf, 39 → 40 mit
+Altbestand und zweitem Start; Schalter: Rechte 403, Unterordner und Gliederung in Gliederung 400, Systemordner 409,
+Unsinn 400, Anlegen; Journal und Beschriftung; Übersicht ohne Zweig, `ordner_ausgeblendet`, Kacheln, Fälliges und
+Ordnerleiste gleich; Konto nur mit Unterordner: Pfad-Knoten; `null`; anderes Feld ändern lässt es stehen; Verschieben
+setzt zurück; Oberfläche statisch). Angepasst: `test_material_trennung.bis_schritt` rüstet `SPALTEN_40` nach (ältere
+Stände legen über den Dienst Ordner an), `test_material_untergruppen` erwartet die Endversion statt „39“.

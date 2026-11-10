@@ -363,6 +363,8 @@
     freigabe: "Freigabe Nr.", konto: "Person", recht: "Recht", bis: "bis", notiz_geaendert: "Notiz geändert",
     // Phase 2 · Lieferung 2: Erinnerungen
     reminders_off: "Erinnerungsmails aus",
+    // Schritt 40: Gliederung aus „Fälligkeiten je Ordner“ ausblenden
+    overview_off: "In „Fälligkeiten je Ordner“ ausgeblendet",
     // Phase 2 · Lieferung 3: Bestandsimport und Prüfanleitung aus dem Wiki
     bestandsimport: "Bestandsimport Nr.", datei: "Datei", zeile: "Zeile", zeilen: "Zeilen",
     artikel_angelegt: "Artikel angelegt", schon_im_bestand: "schon im Bestand", nacharbeit: "Nacharbeit (Zeilen)",
@@ -1129,7 +1131,7 @@
     if (v === null || v === undefined || v === "") return '<span class="muted">–</span>';
     if (feld === "recht") return esc(RECHT[v] || v);
     if (Array.isArray(v)) return v.length ? `<ul class="mat-wertliste">${v.map((x) => `<li>${esc(listenWert(x))}</li>`).join("")}</ul>` : "–";
-    if (typeof v === "boolean" || ((feld === "serial_generated" || feld === "active" || feld === "mat_pruefer" || feld === "mat_katalog" || feld === "reminders_off" || feld === "aus_nacharbeit" || feld === "items_have_length") && (v === 0 || v === 1))) return v ? "ja" : "nein";
+    if (typeof v === "boolean" || ((feld === "serial_generated" || feld === "active" || feld === "mat_pruefer" || feld === "mat_katalog" || feld === "reminders_off" || feld === "overview_off" || feld === "aus_nacharbeit" || feld === "items_have_length") && (v === 0 || v === 1))) return v ? "ja" : "nein";
     if (feld === "length_m" && typeof v === "number") return esc(laengeText(v));
     if (feld === "material_kind" || feld === "default_material_kind") return esc(MATERIALART[v] || v);
     if (feld === "kind" || feld === "art") return esc(PRUEFART_KURZ[v] || ORDNERART[v] || ANHANGART[v] || v);
@@ -1365,6 +1367,7 @@
     const kachel = ([s, titel]) => `<a class="mat-kachel s-${s}${z[s] ? "" : " null"}" href="/materialablage/pruefungen?status=${s}#zu-pruefen"><strong>${z[s] || 0}</strong><span>${esc(titel)}</span></a>`;
     const kacheln = [["ueberfaellig", "überfällig"], ["neu", "neu (Eingangs\u00adprüfung)"], ["bald_faellig", `bald fällig (${d.schwelle_tage} Tage)`],
       ["gesperrt", "gesperrt"], ["lebensdauer", "Lebensdauer erreicht"], ["einsatzbereit", "einsatzbereit"]];
+    const ausgeblendet = d.ordner_ausgeblendet || [];
     const bestandTeil = DARF.lesen ? `<div class="mat-kachelrahmen"><div class="mat-kacheln mat-statuskacheln">
         <div class="mat-kachel gesamt"><strong>${d.bestand}</strong><span>Artikel im Bestand</span></div>
         ${[...kacheln.filter(([s]) => z[s]), ...kacheln.filter(([s]) => !z[s])].map(kachel).join("")}
@@ -1372,7 +1375,9 @@
       <div id="mat-runden"></div>
       <div class="mat-nebeneinander"><section class="section"><h2>Fälligkeiten je Ordner${d.ordner_uebersicht.length ? infoKnopf("Fälligkeiten je Ordner", ordnerUebersichtInfo(d.ordner_uebersicht) + mehrDazu("faelligkeiten_je_ordner")) : ""}</h2>
         ${d.ordner_uebersicht.length ? ordnerUebersichtHtml(d.ordner_uebersicht)
+          : ausgeblendet.length ? leer("Alle Gliederungen sind hier ausgeblendet.")
           : leer(DARF.gliederung_anlegen ? "Noch keine Gliederung – lege unter „Bestand“ die erste an." : "Noch keine Gliederung angelegt.")}
+        ${ordnerAusgeblendetHtml(ausgeblendet)}
       </section>
       <section class="section"><h2>Als Nächstes zu prüfen</h2>
         ${d.naechste.length ? artikelTabelle(d.naechste, { pfad: true }) + (d.faellig_gesamt > d.naechste.length ? `<p><a href="/materialablage/pruefungen">Alle ${d.faellig_gesamt} anzeigen →</a></p>` : "")
@@ -1702,8 +1707,13 @@
   }
   const ordnerUebersichtInfo = (zeilen) => `Die Zahlen gelten für den ganzen Zweig. Gesperrte und ausgesonderte Artikel liegen in ihrer Gliederung und zählen dort.
     Nächste Fälligkeit: das früheste Prüfdatum im Zweig – ohne neue (Eingangsprüfung), gesperrte und Artikel am Lebensende, die ihre eigenen Spalten haben.
+    Eine Gliederung, die nicht hierher gehört, blendet aus, wer sie verwaltet: „Bearbeiten“ → „Nicht in „Fälligkeiten je Ordner“ zeigen“. Ihr Name steht dann unter der Tabelle.
     ${zeilen.some((o) => o.nur_pfad) ? "Grau: übergeordnete Ordner, in denen du keine Freigabe hast – nur der Weg zu deinen." : ""}
     ${zeilen.some((o) => o.teilweise) ? "„Gesperrt (deine Artikel)“: deine gesperrten Artikel in einer Gliederung, die du sonst nicht siehst." : ""}`;
+  /* Unter der Tabelle: die ausgeblendeten Gliederungen (overview_off, /start „ordner_ausgeblendet“) – sonst gingen ihre
+     fälligen oder abgelaufenen Artikel hier unbemerkt verloren. Ein Pfad-Knoten (keine eigene Freigabe) ohne Link. */
+  const ordnerAusgeblendetHtml = (liste) => (liste.length ? `<p class="help mat-ue-aus">Nicht gezeigt: ${liste.map((o) => (o.nur_pfad ? pfadKnoten(o.name)
+    : `<a href="/materialablage/ordner/${o.id}">${esc(o.name)}</a>`)).join(", ")}</p>` : "");
   // Auf- und Zuklappen: Eine Zeile ist verborgen, solange einer ihrer Oberordner zugeklappt ist.
   function ordnerUebersichtKlappen(tabelle) {
     if (!tabelle) return;
@@ -2395,6 +2405,12 @@
         auch nicht die Verwalter der Ordner darüber und die Material-Verwaltung. Ablaufende Freigaben melden sich weiter, ebenso
         „Deine PSA“ an die Personen, denen hier etwas zugeordnet ist (abbestellen kann das jede selbst im Profil).</div>
       ${geerbt ? `<div class="help">Ohnehin aus – geerbt von „${esc(geerbt.pfad)}“.</div>` : ""}` : "";
+    // „Nicht in „Fälligkeiten je Ordner“ zeigen“ (Schritt 40) nur an einer vorhandenen Gliederung der obersten Ebene –
+    // darunter enthielten die Zahlen der Gliederung darüber sonst Ausgeblendetes (der Server lehnt es dort ab).
+    const mitUebersicht = !neu && !o.system_kind && o.kind === "gliederung" && !o.parent_id;
+    const uebersichtFeld = mitUebersicht ? `<label class="inline"><input type="checkbox" id="od-uebersicht" ${o.overview_off ? "checked" : ""}> Nicht in „Fälligkeiten je Ordner“ zeigen</label>
+      <div class="help">Die Zahlen dieser Gliederung fehlen dann in der Tabelle der Übersicht, darunter steht nur ihr Name.
+        Ordnerleiste und Bestand bleiben gleich.</div>` : "";
     const formular = `<label for="od-name">Name</label><input type="text" id="od-name" value="${esc(o.name || "")}" maxlength="120">
       <div class="field-row">
         <div><label for="od-kind">Art${infoKnopf("Art", ORDNERART_INFO + mehrDazu("ordnerarten"))}</label><select id="od-kind" ${oben || o.kind === "gliederung" ? "disabled" : ""}>
@@ -2403,6 +2419,7 @@
         <div><label for="od-int">Prüfintervall (Monate)${infoKnopf("Prüfintervall", "Nur zum Verschärfen: Gilt die Herstellervorgabe kürzer, gilt sie." + mehrDazu("pruefintervall"))}</label><input type="number" id="od-int" min="1" max="120" value="${o.interval_months || ""}" placeholder="vom Produkt"></div>
       </div>
       ${erinnerungFeld}
+      ${uebersichtFeld}
       <label for="od-desc">Beschreibung</label><textarea id="od-desc" rows="3" maxlength="2000">${esc(o.description || "")}</textarea>
       ${fotoFeld("od-foto", "Foto", "Foto", o.foto ? o.vorschau || o.foto : "", "JPEG, PNG, WebP oder HEIC vom Telefon; Web- und Vorschaufassung entstehen beim Hochladen.")}`;
     // Die Knopfzeile bleibt letztes Kind des Dialogs – so klebt sie am Telefon unten (app.css). Mit Reitern zeigt sie,
@@ -2435,6 +2452,7 @@
                         interval_months: $("#od-int", body).value || null, description: $("#od-desc", body).value };
         if (!neu && o.kind === "gliederung") daten.kind = "gliederung";
         if (mitErinnerung) daten.reminders_off = $("#od-erinnerung", body).checked;
+        if (mitUebersicht) daten.overview_off = $("#od-uebersicht", body).checked;
         const foto = fotoWahl.datei;
         try {
           const r = oid ? await api(`${API}/ordner/${oid}`, { method: "PUT", body: daten })
@@ -2466,7 +2484,7 @@
     let geaendert = false;
     // Ungespeichert im Reiter „Ordner“: ein Feld anders als beim Öffnen oder ein Foto gewählt bzw. zum Entfernen vorgemerkt.
     const felder = () => JSON.stringify(["od-name", "od-kind", "od-int", "od-desc"].map((id) => $(`#${id}`, body).value)
-      .concat($("#od-erinnerung", body) ? [$("#od-erinnerung", body).checked] : []));
+      .concat(["od-erinnerung", "od-uebersicht"].filter((id) => $(`#${id}`, body)).map((id) => $(`#${id}`, body).checked)));
     const anfang = felder();
     const ungespeichert = () => felder() !== anfang || !!fotoWahl.datei || fotoWahl.entfernen;
     async function verlassenOk() {

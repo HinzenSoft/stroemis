@@ -116,7 +116,7 @@
   /* --- Übungsbestand ------------------------------------------------------------------------------------------------ */
   function ordner(id, name, kind, parent, position, system) {
     return { id, name, kind, parent_id: parent, position: position || 0, system_kind: system || null, description: "",
-             interval_months: null, reminders_off: false, foto: null, original: null, vorschau: null, demo: false,
+             interval_months: null, reminders_off: false, overview_off: false, foto: null, original: null, vorschau: null, demo: false,
              created_at: "2026-01-01T00:00:00+00:00", updated_at: "2026-01-01T00:00:00+00:00" };
   }
   // Ein Übungsprodukt: aus dem Katalog (Rolle), sonst der Platzhalter mit Modell und Bild.
@@ -404,7 +404,7 @@
     return { antraege_offen: 0, aussonderung_empfohlen: [], bestand: summe(n), darf: darf(), erinnerungen: null,
              faellig_gesamt: faellig.length, gliederungen: [ordnerJson(z, ordnerVon(z, ID.gliederung))],
              maengel: [], maengel_gesamt: 0, mailfehler: null, meine_psa: null, meldungen_offen: null, nacharbeit: [],
-             naechste: faellig.map((a) => artikelKurz(z, a, true)), ordner_uebersicht: zeilen, rueckrufe: [],
+             naechste: faellig.map((a) => artikelKurz(z, a, true)), ordner_uebersicht: zeilen, ordner_ausgeblendet: [], rueckrufe: [],
              schwelle_tage: SCHWELLE, status_text: STATUS, zaehlung: n };
   }
   /* Die Ordnerseite zeigt den ganzen Zweig (Wunsch vom 05.11.2026, bestand.ordner_inhalt): je Gruppe – der Ordner selbst,
