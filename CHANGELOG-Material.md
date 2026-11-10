@@ -13730,3 +13730,30 @@ Stände legen über den Dienst Ordner an), `test_material_untergruppen` erwartet
   Gliederungen ausgeblendet sind (Leerzustand „Alle Gliederungen sind hier ausgeblendet.“). Der Weg im Info-Text stimmt
   jetzt mit der Oberfläche überein: „im Ordner „Bearbeiten“ → „Ordner bearbeiten“, Häkchen unter „Erinnerungsmails aus““.
   `test_module_info_i` (M3) erwartet die neue Bedingung.
+
+## Nachzug der Einführungen an 6aaa3e7 (Wunsch des Nutzers, 10.11.2026)
+
+Auftrag `planung/nachzug-1011/auftrag.md`, Teil B: „Und die Tutorials.“ Jede Übung (Materialablage: Grundteil, Prüfer,
+Materialwart, Material-Verwaltung; Strömipedia: Grundteil, Redakteur, Verwaltung; Ankerplätze: Grundteil, Redakteur;
+Riegenkarten: Grundteil, Leitung, Redakteur) im Browser bis „Geschafft“ durchgespielt, je bei 1280×900 (Maus) und
+360×740 (Touch), die Materialablage mit einem Teil der echten Katalogserie („Schlingen“, Teile 01 und 53) und
+Platzhalter-Formularen. Kein Schemaschritt, Schnittstelle unverändert.
+
+- **Materialablage, Systemnummer** (`app/static/js/uebung/material.js`): Die Übungsartikel tragen wie
+  `GET /api/material/artikel/<id>` das Feld `systemnummer` („STR-“ mit der Zahl der Übungsinventarnummer, null bei einer
+  Nummer vom System) und `serial_generated` aus dem Artikel; ein im Teil „Materialwart“ ohne Herstellernummer angelegter
+  Artikel bekommt sie als Seriennummer (wie `bestand.anlegen`; vorher „Ü-SN-…“). Der Schritt „Seriennummer“ heißt jetzt
+  „Trag die Seriennummer des Herstellers ein, hier „Ü-SN-1“. Hat ein Artikel keine, lässt du das Feld leer – dann vergibt
+  das System eine Nummer (STR-…).“ (Feld „Seriennummer des Herstellers“ in der Oberfläche). Die übrigen Schritte passten
+  schon: Editor ohne „Speichern“ (seit 08.11.), Reiter „Prüfformulare“ und „Zuweisen“ (seit 05.11.), „n. z.“ in der
+  Prüfung; Katalogimport und „Fälligkeiten je Ordner“ kommen in keiner Übung vor.
+- **Strömipedia, Ankerplätze, Riegenkarten**: unverändert – Texte, Knöpfe und Abläufe passen zu 6aaa3e7.
+- **Hilfeseite des Editors** (`docs/Editor - Bedienung und Kuerzel.md`): als App-Anleitung ohne Abschnitt „Quellen“;
+  gegen den Editor geprüft und nachgezogen – unter 1024 px steht „☰“ beim Lesen in der Zeile mit „Artikel suchen“, im
+  Editor vorn in der Kopfzeile (seit 02.11.); der Knopf neben dem Ersteller ist ein Blatt („Angaben zur Seite“), kein „i“;
+  der Stand „Speichert …/Gespeichert“ steht links neben dem Umschalter; ist das Bearbeiten nicht mehr erlaubt, speichert
+  der Editor nichts mehr und behält den Text zum Herauskopieren.
+
+**Tests**: `tests/test_einfuehrung_material.py` neu `test_systemnummer` (Feld an den Übungsartikeln, neuer Artikel ohne
+und mit Herstellernummer, keine Anfrage am Server, Datenbank unverändert); `tests/test_wiki_fehlertabelle.py` schneidet
+die Fehlertabelle bis zum Ende der Hilfeseite und prüft, dass es keinen Abschnitt „Quellen“ mehr gibt.

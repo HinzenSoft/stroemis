@@ -25,7 +25,8 @@ zurückkommt, erfährt in der Statuszeile, dass hier nicht mehr gespeichert wird
 im Fenster stehen, zum Herauskopieren.
 
 Einen Speichern-Knopf gibt es nicht: **geschrieben wird von allein**, kurz nach jeder Änderung.
-Links in der Kopfzeile steht, woran man ist („Speichert …“, „Gespeichert“). Im Verlauf entsteht
+In der Kopfzeile steht links neben dem Umschalter, woran man ist („Speichert …“, „Gespeichert“
+mit Uhrzeit). Im Verlauf entsteht
 dabei nicht bei jedem Tastendruck eine Fassung: Der Editor gibt jeder Bearbeitung beim Öffnen ein
 Kennzeichen mit, und alle Zwischenstände dieser einen Bearbeitung landen in derselben Fassung.
 Wer den Editor schließt und kurz darauf wieder öffnet, beginnt damit eine neue Fassung – der Stand
@@ -35,7 +36,9 @@ Einen **Verwerfen**-Knopf gibt es bei einer vorhandenen Seite nicht mehr – ges
 ohnehin schon; einen früheren Stand holt der Verlauf zurück (⋯ › Verlauf). Nur eine neue,
 noch nicht angelegte Seite hat ihn weiterhin: dort ist er das Gegenstück zu **Anlegen**.
 Hat inzwischen jemand anders gespeichert, hört das automatische Schreiben auf und sagt es in
-der Kopfzeile – dann hilft nur neu laden.
+der Kopfzeile – dann hilft nur neu laden. Ebenso, wenn das Bearbeiten nicht mehr erlaubt ist (Stufe
+oder Freigabe entzogen): Eine Meldung sagt es, gespeichert wird nichts mehr, und der Text bleibt
+zum Herauskopieren im Editor stehen.
 
 Rechts steht in beiden Ansichten das Inhaltsverzeichnis, von Überschrift 1 bis Überschrift 5.
 Bis 1180 Pixel Breite rückt die Leiste unter den Artikel – Kommentare und Angaben zur Seite
@@ -43,15 +46,16 @@ bleiben damit erreichbar. Das Inhaltsverzeichnis steht dann im Menü **⋯** (be
 Bearbeiten) und öffnet sich als Dialog über dem Text; ein Tipp auf einen Abschnitt schließt ihn und
 springt dorthin. Weicht am Tablet quer der Knopf des Inhaltsverzeichnisses in **⋯** aus, blendet
 derselbe Eintrag die Gliederung rechts ein oder aus. Unter 1024 Pixeln – Telefon und Tablet im
-Hochformat – wird zusätzlich der Seitenbaum zur Schublade: Der Knopf **☰** in der Kopfzeile fährt
-ihn ein und aus, ein Tippen daneben schließt ihn wieder.
+Hochformat – wird zusätzlich der Seitenbaum zur Schublade: Beim Lesen steht über dem Artikel eine
+Zeile mit **☰** und dem Feld *Artikel suchen*, im Editor steht **☰** vorn in der Kopfzeile. Der
+Knopf fährt den Baum ein und aus, ein Tippen daneben schließt ihn wieder.
 
 Unter der Überschrift steht, wer die Seite angelegt hat, davor sein Profilbild. Ein Klick darauf
 zeigt den Ersteller und alle Mitwirkenden – also alle, von denen eine Fassung im Verlauf steht.
 Der Wiki-Verwaltung steht dort zusätzlich *Ersteller ändern* offen: Wer die Gliederung verlässt,
 soll nicht Ersteller bleiben. Mit dem Namen wechseln auch die Rechte an der Seite – löschen und
-Bearbeiter freigeben. Daneben ein Knopf **i**. Er öffnet rechts die Angaben zur
-Seite: wer sie angelegt und zuletzt geändert hat, wann das war, Wörter, Zeichen, geschätzte
+Bearbeiter freigeben. Daneben steht ein runder Knopf mit einem Blatt, *Angaben zur Seite*. Er öffnet
+rechts die Angaben zur Seite: wer sie angelegt und zuletzt geändert hat, wann das war, Wörter, Zeichen, geschätzte
 Lesezeit sowie die Verweise hierher und von hier. Die rechte Leiste bleibt beim Bearbeiten
 stehen – Kommentare lassen sich also lesen, während man den Text überarbeitet.
 
@@ -486,8 +490,3 @@ erneut gewählt hebt sie wieder auf.
 | :::warning **Trenner falsch gesetzt** – `\|\|\|` muss allein auf einer Zeile stehen, sonst entsteht keine Spalte. ::: |
 | :::warning **Hochstellen mit Leerzeichen** – `^a b^` wirkt nicht; Hoch- und Tiefstellen vertragen keine Leerzeichen. ::: |
 | :::warning **Alles gelöscht** – bleibt nicht einmal die Überschrift stehen, wird nichts geschrieben. Die Überschrift ist der Seitentitel und muss bleiben. ::: |
-
-## Quellen
-
-- Handbuch Corporate Design der DLRG, Stand 09/2024
-- Diese Seite wird mit dem Editor gepflegt und zeigt seinen Stand.
