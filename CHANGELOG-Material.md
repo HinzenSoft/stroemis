@@ -98,6 +98,7 @@ Geschichte stehen. Schemaversion nach der Nachbesserung vor dem Merge: 30; mit d
 | Import-Warnung: Feinschliff und verschobene Kategorien | Verschiebt eine Katalogdatei (mit Kennung) eine Kategorie, gleiche Warnung und Zählung wie beim Kategoriewechsel (Formularfolgen, gelöste Zuweisungen, Zusammenfassung); im Dialog ein Kasten „Achtung“ mit einer Zeile je alte → neue Kategorie und „Einzelheiten“ zum Aufklappen, „im Bestand“ statt „hier“, Fokus auf dem Bericht und zurück auf den Auslöser, weißer innerer Fokusring auf dem roten Knopf | gebaut 09.11.2026 (kein Schemaschritt, Schema bleibt 39), Zweig import-warnung-feinschliff |
 | Gliederung aus „Fälligkeiten je Ordner“ ausblenden (Schritt 40) | Häkchen „Nicht in „Fälligkeiten je Ordner“ zeigen“ im Dialog „Ordner bearbeiten“ an Gliederungen der obersten Ebene (`mat_folder.overview_off`): der ganze Zweig fehlt in der Tabelle der Übersicht, darunter „Nicht gezeigt: …“; Ordnerleiste, Bestand und alle übrigen Zahlen unverändert; Verschieben unter eine andere Gliederung setzt es zurück | gebaut 10.11.2026 (Schema 40), Zweig uebersicht-ausblenden |
 | „Fälligkeiten je Ordner“ zugeklappt | Beim Laden der Übersicht ist jeder Ordner mit Unterordnern zugeklappt, zuerst stehen nur die Gliederungen da (vorher erst ab 30 Zeilen und ab der zweiten Ebene); ein grauer Pfad-Knoten bleibt offen | gebaut 11.11.2026 (kein Schemaschritt, Schema bleibt 40), Zweig ue-zugeklappt |
+| Leerzeilen im Editor löschen | Rücktaste und Entf nehmen in der Strömipedia eine leere Zeile als Ganzes weg – auch zwischen zwei Klappboxen, neben Tabelle oder Hinweis (vorher wehrte der Löschschutz ab) und zwischen zwei Absätzen (vorher blieb sie stehen oder wurde zu zweien) | gebaut 11.11.2026 (kein Schemaschritt) |
 | Kopfleiste der Entwicklung | Auf dev.strömis.de „Entwicklungsserver“ statt „Strömungsrettung“, darunter „dev.strömis.de“; Maskottchen mit Leitkegel als Hut (Kopfleiste, Anmeldung, öffentliche Strömipedia, Hinweisseite ohne Netz); Produktion unverändert | gebaut 11.11.2026 (kein Schemaschritt), Zweig dev-kopf |
 
 ## Abgleich mit dem Bestand (vor Lieferung 1)
@@ -13823,3 +13824,33 @@ das Maskottchen soll spaßig zeigen, dass es ein Testserver ist. Aus drei Entwü
 **Tests**: `tests/test_dev_kopf.py` – mit `STROEMIS_NAME=stroemis-dev` Anmeldung, Seite nach der Anmeldung und
 Hinweisseite mit „Entwicklungsserver“/„dev.strömis.de“ und dem Bild mit Kegel; ohne „-dev“ alles wie bisher; Vorlage der
 öffentlichen Strömipedia; Bild höher als das Maskottchen, oben orange.
+
+## Leerzeilen im Editor löschen (Wunsch des Nutzers, 11.11.2026)
+
+Meldung: „Die Leerzeilen zwischen den Klappboxen lassen sich nicht löschen“ (Bildschirmfoto aus dem Editor).
+
+- **Ursache**: Der Löschschutz (`editor-layout.js`, `loeschenAbwehren`) wehrt Rücktaste und Entf ab, sobald eine
+  Abschnittsmarke oder Tabelle in Reichweite steht. In einer leeren Zeile zwischen zwei Boxen steht auf beiden Seiten
+  eine – die Taste tat nichts außer der Meldung „… lässt sich nicht mit der Taste löschen“. Die Grundbelegung hätte dort
+  auch nicht geholfen: Entf zöge die Marke dahinter in die leere Zeile. Zwischen zwei Absätzen kam die Taste durch,
+  aber nicht an: Die gesetzte Leerzeile (`&nbsp;`) hat eine Fuge auf jeder Seite, ProseMirror zog sie in die Fuge, das
+  Plugin setzte die Fuge neu – es blieb, wie es war, oder aus dem geleerten Zeichen wurde eine zweite Zeile.
+- **Neu** (`leerzeileLoeschen`, vor dem Schutz in `handleKeyDown`): Steht der Schreibstrich in einer leeren Zeile
+  (leerer Absatz, der keine Fuge ist, oder gesetzte Leerzeile – egal an welcher Stelle darin), nehmen Rücktaste und
+  Entf genau diese Zeile weg, bei der gesetzten Leerzeile samt einer Fuge daneben. Marken, Boxen, Tabellen und
+  Überschriften bleiben unberührt (vorher zog Entf am Ende einer Leerzeile die Überschrift darunter hinein – sie wurde
+  zum Absatz). Der Schreibstrich springt ans Ende der Zeile davor (Rücktaste) bzw. an den Anfang der Zeile danach (Entf)
+  und überspringt Marken, Fugen und den Körper zugeklappter Boxen – die bleiben zu. Ein Schritt im Verlauf, Strg+Z
+  bringt die Zeile zurück.
+- **Bleibt**: die letzte Zeile des Artikels und eine Leerzeile als ganzer Inhalt eines Abschnitts (dort wie bisher
+  Schutz bzw. Grundbelegung); eine Fuge selbst (sie ist Trennung, keine Zeile); der Schutz der Boxen, Tabellen und
+  übrigen Abschnitte.
+- Hilfeseite `docs/Editor - Bedienung und Kuerzel.md` (Leerzeilen) und README nachgezogen.
+
+**Tests**: `tests/test_wiki_leerzeile.py` – echter Editor (Toast UI mit den Plugins der Strömipedia) in Chromium,
+echte Tastenereignisse: Leerzeile (`&nbsp;` und `<br>`) zwischen zwei zugeklappten Boxen mit beiden Tasten, Strich am
+Anfang und am Ende → Boxen direkt untereinander, keine Meldung, Strich am Titel bzw. am nächsten Titel, beide Boxen zu;
+Strg+Z; obere Box offen → Strich am Ende ihres Inhalts; zwei Leerzeilen → eine; zwischen Absätzen; vor einer
+Überschrift; vor einer Tabelle hinter einem Hinweis; bleibt als ganzer Inhalt eines Hinweises und als letzter Block;
+Schutz direkt hinter einer Box. Ohne die Änderung schlägt der erste Fall fehl. `tests/rundlauf.html` weiter grün
+(81 Fälle, 47 Verlauf, 13 Zellen).

@@ -410,6 +410,67 @@ window.EDLAYOUT = (function () {
     return treffer ? treffer.art : null;
   }
 
+  /* --- Leerzeilen löschen ------------------------------------------------------------------
+     Eine leere Zeile ließ sich mit Rücktaste und Entf nicht wegnehmen (Wunsch vom 11.11.2026).
+     Zwischen zwei Boxen – oder neben einer Tabelle, einem Hinweis – sah der Schutz oben den
+     Nachbarn in Reichweite und wehrte die Taste ab; die Grundbelegung hülfe dort auch nicht,
+     Entf zöge die Marke dahinter in die leere Zeile und zerschriebe sie. Zwischen zwei Absätzen
+     kam die Taste zwar durch, aber nicht an: Die gesetzte Leerzeile (&nbsp;) hat eine Fuge auf
+     jeder Seite (siehe spaltenPlan), ProseMirror zog sie in die Fuge, das Plugin setzte die Fuge
+     neu – es blieb alles, wie es war, oder aus dem geleerten Zeichen wurde eine zweite Zeile.
+     Deshalb geht jetzt die Zeile als Ganzes, wo auch immer der Schreibstrich in ihr steht: der
+     leere Absatz bzw. die gesetzte Leerzeile samt einer Fuge daneben, damit keine Fuge als leere
+     Zeile übrig bleibt. Marken und Nachbarn bleiben unberührt. Der Schreibstrich springt wie
+     gewohnt ans Ende der Zeile davor (Rücktaste) bzw. an den Anfang der Zeile danach (Entf),
+     überspringt dabei Marken, Fugen und den Körper zugeklappter Boxen – die blieben sonst nicht zu.
+     Stehen bleibt die Zeile, wenn sie der ganze Inhalt eines Abschnitts ist (er stünde sonst
+     leer da) oder der erste bzw. letzte Block des Artikels (sonst käme man vor oder unter einen
+     Block nicht mehr hin) – dann gilt wie bisher die Grundbelegung bzw. der Schutz. Eine Fuge
+     selbst ist keine Zeile, sondern Trennung; für sie bleibt es ebenfalls bei der Grundbelegung. */
+  const leereZeile = (n) => {
+    if (n.type.name !== "paragraph") return false;
+    let leer = true;
+    n.forEach((k) => { if (!k.isText || k.text.trim()) leer = false; });   // trim nimmt auch &nbsp;
+    return leer;
+  };
+  const AUF_ODER_TRENNER = [...OEFFNER_ART, "spalte", "koerper"];
+  const TRENNER_ODER_ENDE = ["spalte", "koerper", "ende"];
+
+  function leerzeileLoeschen(zustand, rueckwaerts, offen, Selection) {
+    const aus = zustand.selection;
+    if (!aus.empty) return null;
+    const $v = aus.$from;
+    if ($v.depth !== 1 || !leereZeile($v.parent)) return null;
+    const plan = spaltenPlan(zustand.doc);
+    const i = plan.kinder.findIndex((k) => k.von === $v.before(1));
+    if (i <= 0 || i >= plan.anz - 1) return null;
+    const fuge = (p, x) => p.kl[x].includes("ed-fuge");
+    if (fuge(plan, i)) return null;
+    if (AUF_ODER_TRENNER.includes(plan.kinder[i - 1].art) && TRENNER_ODER_ENDE.includes(plan.kinder[i + 1].art)) return null;
+    let a = i, e = i;
+    if (!plan.kinder[i].leer) { if (fuge(plan, i + 1)) e = i + 1; else if (fuge(plan, i - 1)) a = i - 1; }
+    const tr = zustand.tr.delete(plan.kinder[a].von, plan.kinder[e].bis);
+    const neu = spaltenPlan(tr.doc);
+    const auf = new Set(offen.map((p) => tr.mapping.map(p)));
+    const versteckt = new Set();
+    neu.akkordeons.forEach((k) => { if (!auf.has(k.vonPos)) for (let x = k.trennung; x <= k.zu; x++) versteckt.add(x); });
+    const ziel = (x, dir) => {
+      const k = neu.kinder[x];
+      if (!k || k.art || versteckt.has(x) || fuge(neu, x)) return null;
+      const s = Selection.findFrom(tr.doc.resolve(dir < 0 ? k.bis : k.von), dir, true);
+      return s && s.from >= k.von && s.to <= k.bis ? s : null;
+    };
+    // Vor der Lücke stehen dieselben Blöcke wie vorher, ab Index a die Blöcke dahinter.
+    const suche = (dir) => {
+      for (let x = dir < 0 ? a - 1 : a; x >= 0 && x < neu.anz; x += dir) { const s = ziel(x, dir); if (s) return s; }
+      return null;
+    };
+    const dir = rueckwaerts ? -1 : 1;
+    const stelle = Math.min(plan.kinder[a].von, tr.doc.content.size);
+    tr.setSelection(suche(dir) || suche(-dir) || Selection.near(tr.doc.resolve(stelle)));
+    return tr.scrollIntoView();
+  }
+
   /* --- Einklappbare Boxen im Editor -------------------------------------------------------
      Im Artikel ist eine Box zu, bis man sie aufklappt. Im Editor war sie immer offen – alles
      darunter stand deshalb um den ganzen Inhalt der Box tiefer als im Artikel, und beim Wechsel
@@ -534,6 +595,10 @@ window.EDLAYOUT = (function () {
           },
           handleKeyDown(sicht, ereignis) {
             if (ereignis.key !== "Backspace" && ereignis.key !== "Delete") return false;
+            let weg;
+            try { weg = leerzeileLoeschen(sicht.state, ereignis.key === "Backspace", this.getState(sicht.state).offen, Selection); }
+            catch (e) { weg = null; }          // im Zweifel wie bisher: Schutz bzw. Grundbelegung
+            if (weg) { sicht.dispatch(weg); return true; }
             let art;
             try { art = loeschenAbwehren(sicht.state, ereignis.key === "Backspace"); }
             catch (e) { return false; }        // im Zweifel lieber nicht dazwischenfunken

@@ -465,7 +465,10 @@ erneut gewählt hebt sie wieder auf.
 - **Leerzeilen**: Zwischen zwei Absätzen steht im Editor kein zusätzlicher Zwischenraum – der
   Abstand ist derselbe wie in der Leseansicht. Wer darüber hinaus Luft möchte, drückt die
   Eingabetaste: Jede weitere leere Zeile bleibt stehen und erscheint auch im Artikel. Gespeichert
-  wird sie als Absatz mit geschütztem Leerzeichen (`&nbsp;`).
+  wird sie als Absatz mit geschütztem Leerzeichen (`&nbsp;`). Weg kommt sie mit Rücktaste oder
+  Entfernen – ein Tastendruck, eine Zeile, auch zwischen zwei Boxen oder neben einer Tabelle; die
+  Nachbarn bleiben dabei, wie sie sind. Stehen bleibt nur die letzte Zeile des Artikels und eine
+  leere Zeile, die den ganzen Inhalt eines Abschnitts bildet.
 - **Tabellen, Callouts, einklappbare Boxen, Spalten und Ausrichtung lassen sich nicht wegtippen**: Entfernen und
   Rücktaste lassen diese Blöcke stehen, auch wenn der Cursor unmittelbar davor oder dahinter
   steht oder sie mit in einer Auswahl liegen (auch beim Ausschneiden, Einfügen oder Übertippen).
