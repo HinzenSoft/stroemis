@@ -270,7 +270,8 @@ Rechte Spalte
 
 Im Editor steht die Box aufgeklappt da – nur so lässt sich ihr Inhalt bearbeiten. Titel und
 Inhalt sind gewöhnlicher Text: hineinklicken und schreiben, kein Dialog. Ein Klick in die Box
-öffnet ihr Menü mit Auflösen (der Inhalt bleibt) und Löschen.
+öffnet ihr Menü mit Auflösen (der Inhalt bleibt) und Löschen. Der Titel lässt sich formatieren –
+fett, kursiv, Code, Link – und erscheint im Artikel genau so.
 
 ```
 :::accordion Titel der Box
@@ -467,8 +468,11 @@ erneut gewählt hebt sie wieder auf.
   Eingabetaste: Jede weitere leere Zeile bleibt stehen und erscheint auch im Artikel. Gespeichert
   wird sie als Absatz mit geschütztem Leerzeichen (`&nbsp;`). Weg kommt sie mit Rücktaste oder
   Entfernen – ein Tastendruck, eine Zeile, auch zwischen zwei Boxen oder neben einer Tabelle; die
-  Nachbarn bleiben dabei, wie sie sind. Stehen bleibt nur die letzte Zeile des Artikels und eine
-  leere Zeile, die den ganzen Inhalt eines Abschnitts bildet.
+  Nachbarn bleiben dabei, wie sie sind. Dafür muss der Cursor nicht in der leeren Zeile stehen:
+  Rücktaste am Anfang der Zeile darunter – auch am Anfang des Titels einer Box – oder Entfernen am
+  Ende der Zeile darüber – bei zugeklappter Box am Ende ihres Titels – nimmt sie ebenso weg, der
+  Cursor bleibt stehen. Stehen bleibt nur die letzte Zeile des Artikels und eine leere Zeile, die
+  den ganzen Inhalt eines Abschnitts bildet.
 - **Tabellen, Callouts, einklappbare Boxen, Spalten und Ausrichtung lassen sich nicht wegtippen**: Entfernen und
   Rücktaste lassen diese Blöcke stehen, auch wenn der Cursor unmittelbar davor oder dahinter
   steht oder sie mit in einer Auswahl liegen (auch beim Ausschneiden, Einfügen oder Übertippen).

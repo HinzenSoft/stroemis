@@ -5,7 +5,9 @@ Zwischen zwei Klappboxen wehrte der Löschschutz (editor-layout.js) Rücktaste u
 stand; zwischen zwei Absätzen kam die Taste durch, änderte aber nichts oder machte aus der gesetzten Leerzeile (&nbsp;)
 zwei. Jetzt nimmt jeder Tastendruck genau eine sichtbare Leerzeile weg – Marken, Boxen und Überschriften bleiben, wie
 sie sind, eine zugeklappte Box bleibt zu. Stehen bleibt die Leerzeile als ganzer Inhalt eines Abschnitts und als
-letzter Block. Geprüft im echten Editor (Toast UI mit den Plugins der Strömipedia) in Chromium über echte
+letzter Block. Nachtrag vom selben Tag: auch von der Nachbarzeile aus – Rücktaste am Anfang der Zeile darunter
+(auch eines Box-Titels), Entf am Ende der Zeile darüber (auch des Titels einer zugeklappten Box); eine Zeile aus
+unsichtbaren Zeichen gilt als leer. Geprüft im echten Editor (Toast UI mit den Plugins der Strömipedia) in Chromium über echte
 Tastenereignisse; die Seite liefert ein kleiner Server aus dem Projektordner. Ohne Chromium übersprungen."""
 import functools
 import http.server
@@ -202,6 +204,47 @@ def _lauf(e):
     e.taste("Backspace")
     s = e.stand()
     assert s["md"] == ":::accordion Eins\nA\n:::\n\nDanach." and s["gemeldet"] == ["akkordeon"], s
+
+    # 10. Nachtrag (Rückmeldung „lässt sich immer noch nicht löschen“): von der Zeile darunter bzw. darüber aus.
+    #     Rücktaste am Anfang des Titels der unteren Box, Entf am Ende des Titels der oberen, zugeklappten Box – die
+    #     Leerzeile geht, der Strich bleibt, beide Boxen bleiben zu, nichts wird gemeldet.
+    for leer in ("&nbsp;", "<br>", "&#8203;"):
+        for taste, block, ende, strich in (("Backspace", 7, False, ["Zwei", 0]), ("Delete", 1, True, ["Eins", 4])):
+            e.setze(ZWEI_BOXEN.format(leer), block, ende)
+            assert e.js("strich()") == strich, e.js("strich()")
+            e.taste(taste)
+            s = e.stand()
+            fall = (leer, taste, s)
+            assert s["md"] == ":::accordion Eins\nA\n:::\n\n:::accordion Zwei\nB\n:::\n\nEnde.", fall
+            assert s["gemeldet"] == [] and s["strich"] == strich and s["zu"] == ["", "A", "", "B"], fall
+
+    # 11. Ist die obere Box offen, liegt unter ihrem Titel ihr Inhalt: Entf am Titelende wehrt wie bisher ab.
+    e.setze(ZWEI_BOXEN.format("&nbsp;"), 3)                              # in „A“ – die Box klappt dabei auf
+    e.js("(() => { const v = sicht(); let o = 0, i = 0; v.state.doc.forEach((k, off) => { if (i++ === 1) o = off + k.nodeSize - 1; });"
+         " v.dispatch(v.state.tr.setSelection(v.state.selection.constructor.create(v.state.doc, o))); })()")
+    e.taste("Delete")
+    s = e.stand()
+    assert s["md"] == ZWEI_BOXEN.format("&nbsp;") and s["gemeldet"] == ["akkordeon"], s
+
+    # 12. Ohne Leerzeile zwischen den Boxen bleibt der Schutz: Rücktaste am Anfang des unteren Titels löscht nichts.
+    e.setze(":::accordion Eins\nA\n:::\n\n:::accordion Zwei\nB\n:::", 6)
+    assert e.js("strich()") == ["Zwei", 0], e.js("strich()")
+    e.taste("Backspace")
+    s = e.stand()
+    assert s["md"] == ":::accordion Eins\nA\n:::\n\n:::accordion Zwei\nB\n:::" and s["gemeldet"] == ["akkordeon"], s
+
+    # 13. Zwischen Absätzen und vor einer Überschrift, von der Nachbarzeile aus. Vorher machte die Rücktaste am Anfang
+    #     von „Text2.“ aus der gesetzten Leerzeile eine zweite.
+    for md, nach, unten in (("Text.\n\n&nbsp;\n\nText2.", "Text.\n\nText2.", "Text2."),
+                            ("Text.\n\n&nbsp;\n\n## Kopf\n\nMehr.", "Text.\n\n## Kopf\n\nMehr.", "Kopf")):
+        e.setze(md, 0)
+        b = e.js("bloecke()")
+        for taste, block, ende, strich in (("Backspace", b.index(unten), False, [unten, 0]),
+                                           ("Delete", 0, True, ["Text.", 5])):
+            e.setze(md, block, ende)
+            e.taste(taste)
+            s = e.stand()
+            assert s["md"] == nach and s["strich"] == strich and s["gemeldet"] == [], (md, taste, s)
 
 
 def test_leerzeilen_loeschen():

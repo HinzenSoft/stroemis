@@ -469,8 +469,27 @@ window.EDMD = (function () {
      Nur am Blockanfang: mitten in einer Aufzählung trennt Toast UI zwei Absätze desselben
      Punktes ebenfalls mit einer solchen Zeile – dort gehört sie zum laufenden Block. */
   const LEERZEILE = (l) => !l.trim() || /^\s*<br\s*\/?>\s*$/i.test(l);
+  /* Bis wohin reicht ein ":::"-Abschnitt, der in Zeile i beginnt? Gezählt wie in der Leseansicht
+     (splitFence in markdown.js): verschachtelte Abschnitte zählen mit, ":::" in einem Codeblock
+     nicht, und ohne Schlusszeile ist es gar kein Abschnitt, sondern ein gewöhnlicher Absatz.
+     Bis 11.11.2026 reichte ein Abschnitt ohne Schlusszeile bis zum Artikelende – etwa ein
+     ":::warning", dessen ":::" am Ende der letzten Textzeile stand statt in einer eigenen. Alles
+     darunter galt dann als EIN Block: Ein neuer Spaltenabschnitt landete am Artikelende statt am
+     Schreibstrich (Rückmeldung des Nutzers), und Blockmenü und Ziehgriff trafen daneben. */
+  const OEFFNET = (l) => /^:::[ \t]*[A-Za-z]/.test(l) && !/:::[ \t]*$/.test(l.slice(3));
+  const zaunEnde = (lines, i, maske) => {
+    if (!OEFFNET(lines[i])) return -1;
+    let tiefe = 1;
+    for (let j = i + 1; j < lines.length; j++) {
+      if (maske[j]) continue;
+      if (OEFFNET(lines[j])) tiefe++;
+      else if (/^:::[ \t]*$/.test(lines[j]) && --tiefe === 0) return j + 1;
+    }
+    return -1;
+  };
   const topLevelBlocks = (md) => {
     const lines = md.split("\n");
+    const maske = MD.fenceMask(lines);
     const blocks = [];
     let i = 0;
     while (i < lines.length) {
@@ -486,10 +505,8 @@ window.EDMD = (function () {
         end = i + 1;
         while (end < lines.length && !/^\$\$[ \t]*$/.test(lines[end])) end++;
         if (end < lines.length) end++;
-      } else if (/^:::[ \t]*[A-Za-z]/.test(lines[i]) && !/:::[ \t]*$/.test(lines[i].slice(3))) {
-        end = i + 1;
-        while (end < lines.length && !/^:::[ \t]*$/.test(lines[end])) end++;
-        if (end < lines.length) end++;
+      } else if ((end = zaunEnde(lines, i, maske)) > 0) {
+        // ein ":::"-Abschnitt mit Schlusszeile: ein Block bis einschließlich dieser Zeile
       } else {
         end = i;
         while (end < lines.length && lines[end].trim()) end++;

@@ -426,29 +426,72 @@ window.EDLAYOUT = (function () {
      Stehen bleibt die Zeile, wenn sie der ganze Inhalt eines Abschnitts ist (er stünde sonst
      leer da) oder der erste bzw. letzte Block des Artikels (sonst käme man vor oder unter einen
      Block nicht mehr hin) – dann gilt wie bisher die Grundbelegung bzw. der Schutz. Eine Fuge
-     selbst ist keine Zeile, sondern Trennung; für sie bleibt es ebenfalls bei der Grundbelegung. */
+     selbst ist keine Zeile, sondern Trennung; für sie bleibt es ebenfalls bei der Grundbelegung.
+     Nachtrag vom selben Tag (Rückmeldung „lässt sich immer noch nicht löschen“): Wer eine leere
+     Zeile wegnehmen will, steht selten in ihr, sondern am Anfang der Zeile darunter und drückt die
+     Rücktaste – oder am Ende der Zeile darüber und drückt Entf. Über einer Box ist „die Zeile
+     darunter“ ihr Titel; bei zugeklappter Box ist „die Zeile darüber“ ihr Titel, denn Körper und
+     Schlussmarke sieht man nicht. Dort wehrte der Schutz die Taste ab. Jetzt geht auch von da aus
+     die leere Zeile (nach denselben Regeln wie oben), und der Schreibstrich bleibt, wo er ist.
+     Als leer gilt auch eine Zeile aus unsichtbaren Zeichen (etwa einem Leerzeichen der Breite null
+     aus kopiertem Text) – man sieht nichts, also soll sie auch wie eine leere Zeile gehen. */
+  const UNSICHTBAR = /[\u00ad\u200b-\u200d\u2060\ufeff]/g;
   const leereZeile = (n) => {
     if (n.type.name !== "paragraph") return false;
     let leer = true;
-    n.forEach((k) => { if (!k.isText || k.text.trim()) leer = false; });   // trim nimmt auch &nbsp;
+    // trim nimmt auch &nbsp;
+    n.forEach((k) => { if (!k.isText || k.text.replace(UNSICHTBAR, "").trim()) leer = false; });
     return leer;
   };
   const AUF_ODER_TRENNER = [...OEFFNER_ART, "spalte", "koerper"];
   const TRENNER_ODER_ENDE = ["spalte", "koerper", "ende"];
+  const fuge = (p, x) => !!p.kl[x] && p.kl[x].includes("ed-fuge");
+
+  /* Die Blöcke [a, e], die mit der leeren Zeile i gehen – null, wenn sie stehen bleibt. */
+  function zeileMitFuge(plan, i) {
+    if (i <= 0 || i >= plan.anz - 1) return null;
+    if (!leereZeile(plan.kinder[i].n) || fuge(plan, i)) return null;
+    if (AUF_ODER_TRENNER.includes(plan.kinder[i - 1].art) && TRENNER_ODER_ENDE.includes(plan.kinder[i + 1].art)) return null;
+    let a = i, e = i;
+    if (!plan.kinder[i].leer) { if (fuge(plan, i + 1)) e = i + 1; else if (fuge(plan, i - 1)) a = i - 1; }
+    return { a, e };
+  }
+
+  /* Welche Zeile sieht man über dem Anfang (Rücktaste) bzw. unter dem Ende (Entf) des Blocks j? */
+  function zeileNebenan(plan, j, rueckwaerts, offen) {
+    if (rueckwaerts) {
+      let k = j - 1;
+      if (k >= 0 && plan.kinder[k].art === "akkordeon") k--;          // Titel: der Öffner gehört zur Box
+      if (k >= 0 && fuge(plan, k)) k--;
+      return k;
+    }
+    let k = j + 1;
+    // Letzte Titelzeile einer zugeklappten Box: darunter sieht man erst, was nach der Box kommt.
+    const box = plan.akkordeons.find((b) => b.auf < j && b.trennung === k);
+    if (box && !offen.includes(box.vonPos)) k = box.zu + 1;
+    if (k < plan.anz && fuge(plan, k)) k++;
+    return k;
+  }
 
   function leerzeileLoeschen(zustand, rueckwaerts, offen, Selection) {
     const aus = zustand.selection;
     if (!aus.empty) return null;
     const $v = aus.$from;
-    if ($v.depth !== 1 || !leereZeile($v.parent)) return null;
+    if ($v.depth !== 1) return null;
     const plan = spaltenPlan(zustand.doc);
-    const i = plan.kinder.findIndex((k) => k.von === $v.before(1));
-    if (i <= 0 || i >= plan.anz - 1) return null;
-    const fuge = (p, x) => p.kl[x].includes("ed-fuge");
-    if (fuge(plan, i)) return null;
-    if (AUF_ODER_TRENNER.includes(plan.kinder[i - 1].art) && TRENNER_ODER_ENDE.includes(plan.kinder[i + 1].art)) return null;
-    let a = i, e = i;
-    if (!plan.kinder[i].leer) { if (fuge(plan, i + 1)) e = i + 1; else if (fuge(plan, i - 1)) a = i - 1; }
+    const j = plan.kinder.findIndex((k) => k.von === $v.before(1));
+    if (j < 0) return null;
+    if (!leereZeile($v.parent)) {
+      if (plan.kinder[j].art || !$v.parent.isTextblock) return null;
+      if ($v.parentOffset !== (rueckwaerts ? 0 : $v.parent.content.size)) return null;
+      const weg = zeileMitFuge(plan, zeileNebenan(plan, j, rueckwaerts, offen));
+      if (!weg) return null;
+      // Der Schreibstrich steht außerhalb des gelöschten Bereichs und wandert von selbst mit.
+      return zustand.tr.delete(plan.kinder[weg.a].von, plan.kinder[weg.e].bis).scrollIntoView();
+    }
+    const weg = zeileMitFuge(plan, j);
+    if (!weg) return null;
+    const { a, e } = weg;
     const tr = zustand.tr.delete(plan.kinder[a].von, plan.kinder[e].bis);
     const neu = spaltenPlan(tr.doc);
     const auf = new Set(offen.map((p) => tr.mapping.map(p)));

@@ -141,7 +141,12 @@ window.MD = (function () {
           return { type: "columnsBlock", raw: f.raw, cols };
         }
         if (f.name === "accordion") {
-          return { type: "accordionBlock", raw: f.raw, title: f.args || "Details", tokens: this.lexer.blockTokens(f.inner + "\n", []) };
+          /* Der Titel ist im Editor ein gewöhnlicher Absatz und lässt sich formatieren – fett, kursiv,
+             Code, Link. Gespeichert steht das als Markdown in der Kopfzeile; bis 11.11.2026 kam es hier
+             als bloßer Text an, und die Leseansicht zeigte die Sternchen (Rückmeldung des Nutzers). */
+          const title = f.args || "Details";
+          return { type: "accordionBlock", raw: f.raw, title, titleTokens: this.lexer.inlineTokens(title),
+                   tokens: this.lexer.blockTokens(f.inner + "\n", []) };
         }
         if (MARKERS.includes(f.name)) {
           return { type: "markerBlock", raw: f.raw, marker: f.name };
@@ -174,7 +179,7 @@ window.MD = (function () {
     },
     renderer(token) {
       if (token.type === "accordionBlock") {
-        return `<details class="accordion"><summary>${esc(token.title)}</summary><div class="accordion-body">${this.parser.parse(token.tokens)}</div></details>`;
+        return `<details class="accordion"><summary>${this.parser.parseInline(token.titleTokens)}</summary><div class="accordion-body">${this.parser.parse(token.tokens)}</div></details>`;
       }
       if (token.type === "markerBlock") {
         // Platzhalter – gefüllt wird er nach dem Rendern (enhance), wo der Seitenbaum bekannt ist.

@@ -99,6 +99,9 @@ Geschichte stehen. Schemaversion nach der Nachbesserung vor dem Merge: 30; mit d
 | Gliederung aus „Fälligkeiten je Ordner“ ausblenden (Schritt 40) | Häkchen „Nicht in „Fälligkeiten je Ordner“ zeigen“ im Dialog „Ordner bearbeiten“ an Gliederungen der obersten Ebene (`mat_folder.overview_off`): der ganze Zweig fehlt in der Tabelle der Übersicht, darunter „Nicht gezeigt: …“; Ordnerleiste, Bestand und alle übrigen Zahlen unverändert; Verschieben unter eine andere Gliederung setzt es zurück | gebaut 10.11.2026 (Schema 40), Zweig uebersicht-ausblenden |
 | „Fälligkeiten je Ordner“ zugeklappt | Beim Laden der Übersicht ist jeder Ordner mit Unterordnern zugeklappt, zuerst stehen nur die Gliederungen da (vorher erst ab 30 Zeilen und ab der zweiten Ebene); ein grauer Pfad-Knoten bleibt offen | gebaut 11.11.2026 (kein Schemaschritt, Schema bleibt 40), Zweig ue-zugeklappt |
 | Leerzeilen im Editor löschen | Rücktaste und Entf nehmen in der Strömipedia eine leere Zeile als Ganzes weg – auch zwischen zwei Klappboxen, neben Tabelle oder Hinweis (vorher wehrte der Löschschutz ab) und zwischen zwei Absätzen (vorher blieb sie stehen oder wurde zu zweien) | gebaut 11.11.2026 (kein Schemaschritt) |
+| Leerzeile von der Nachbarzeile aus löschen | Nachtrag zu „Leerzeilen im Editor löschen“: Rücktaste am Anfang der Zeile darunter (auch eines Box-Titels) und Entf am Ende der Zeile darüber (auch des Titels einer zugeklappten Box) nehmen die leere Zeile weg, der Schreibstrich bleibt; eine Zeile aus unsichtbaren Zeichen gilt als leer | gebaut 11.11.2026 (kein Schemaschritt) |
+| Klappbox-Titel mit Formatierung | Fett, kursiv, Code und Links im Titel einer Klappbox erscheinen in der Leseansicht formatiert (vorher standen die Sternchen da) | gebaut 11.11.2026 (kein Schemaschritt) |
+| Spaltenabschnitt an der Schreibstelle | Ein „:::“ ohne Schlusszeile (etwa ein Hinweis, dessen „:::“ am Ende der letzten Textzeile steht) gilt im Editor nicht mehr als Abschnitt bis zum Artikelende – ein neuer Spaltenabschnitt kommt wieder an den Schreibstrich statt ans Artikelende | gebaut 11.11.2026 (kein Schemaschritt) |
 | Kopfleiste der Entwicklung | Auf dev.strömis.de „Entwicklungsserver“ statt „Strömungsrettung“, darunter „dev.strömis.de“; Maskottchen mit Leitkegel als Hut (Kopfleiste, Anmeldung, öffentliche Strömipedia, Hinweisseite ohne Netz); Produktion unverändert | gebaut 11.11.2026 (kein Schemaschritt), Zweig dev-kopf |
 
 ## Abgleich mit dem Bestand (vor Lieferung 1)
@@ -13854,3 +13857,59 @@ Strg+Z; obere Box offen → Strich am Ende ihres Inhalts; zwei Leerzeilen → ei
 Überschrift; vor einer Tabelle hinter einem Hinweis; bleibt als ganzer Inhalt eines Hinweises und als letzter Block;
 Schutz direkt hinter einer Box. Ohne die Änderung schlägt der erste Fall fehl. `tests/rundlauf.html` weiter grün
 (81 Fälle, 47 Verlauf, 13 Zellen).
+
+### Nachtrag: von der Nachbarzeile aus (Rückmeldung, 11.11.2026)
+
+Meldung: „Die Leerzeile lässt sich immer noch nicht löschen“ (Bildschirmfoto: Leerzeile zwischen den zugeklappten
+Boxen „Restfestigkeiten im Labor“ und „Rutsch- und Haltekräfte“).
+
+- **Ursache**: Gelöscht wurde nur, wenn der Schreibstrich IN der leeren Zeile stand – dahin kommt man nur per Klick.
+  Die üblichen Wege trafen den Schutz: Rücktaste am Anfang des Titels der Box darunter (davor steht ihr Öffner), Entf
+  am Ende des Titels der zugeklappten Box darüber (dahinter stehen ihre unsichtbare Trennmarke und Schlussmarke), und
+  die Pfeiltasten wählen auf dem Weg die Marken aus. Zwischen zwei Absätzen machte die Rücktaste am Anfang der Zeile
+  darunter aus der gesetzten Leerzeile eine zweite.
+- **Neu** (`zeileNebenan`, `zeileMitFuge` in `editor-layout.js`): Rücktaste am Anfang eines obersten Absatzes oder einer
+  Überschrift nimmt die leere Zeile darüber weg – bei einem Box-Titel die Zeile über der Box –, Entf am Ende die
+  leere Zeile darunter – bei der letzten Titelzeile einer zugeklappten Box die Zeile unter der Box. Es gelten dieselben
+  Regeln wie in der Zeile selbst (samt Fuge; bleibt als ganzer Inhalt eines Abschnitts, als erster und letzter Block),
+  der Schreibstrich bleibt stehen, die Boxen bleiben zu. Bei offener Box liegt unter dem Titel ihr Inhalt – dort und
+  ohne leere Zeile dazwischen wehrt der Schutz wie bisher ab. Als leer gilt auch eine Zeile aus unsichtbaren Zeichen
+  (weiches Trennzeichen, Leerzeichen der Breite null, Wortverbinder, BOM) – vorher blieb eine solche Zeile zwischen
+  zwei Boxen stehen. Die Pfeiltasten bleiben, wie sie sind (sie wählen Marken aus, damit man vor und hinter eine Box
+  kommt).
+- Hilfeseite (Leerzeilen) und README nachgezogen.
+
+**Tests**: `tests/test_wiki_leerzeile.py` um vier Fälle erweitert – Rücktaste am Anfang des unteren Titels und Entf am
+Ende des oberen, zugeklappten Titels mit `&nbsp;`, `<br>` und `&#8203;` (Leerzeile weg, Strich bleibt, beide Boxen zu,
+keine Meldung); obere Box offen → Entf am Titelende wehrt ab; ohne Leerzeile → Rücktaste am unteren Titel wehrt ab;
+zwischen Absätzen und vor einer Überschrift von beiden Seiten. Ohne die Änderung schlägt der erste neue Fall fehl.
+
+## Strömipedia: Klappbox-Titel mit Formatierung, Spaltenabschnitt an der Schreibstelle (Rückmeldungen, 11.11.2026)
+
+Meldungen: „Hier werden Sternchen in der Überschrift der Klappbox angezeigt“ (Leseansicht: „\*\*Quellen\*\*“) und
+„Hier lassen sich keine Spaltenabschnitte mehr im Artikel einfügen“ (Editor; darüber ein Absatz, der auf „:::“ endet).
+
+- **Klappbox-Titel** – Ursache: Der Titel ist im Editor ein gewöhnlicher Absatz und lässt sich fett setzen; gespeichert
+  steht das als `:::accordion **Quellen**`. Die Leseansicht (`markdown.js`) setzte die Kopfzeile als bloßen Text ein.
+  Neu: Der Titel wird wie Fließtext gelesen (`inlineTokens`/`parseInline` von marked) und mit dem übrigen Artikel
+  gereinigt – fett, kursiv, Code und Links erscheinen formatiert, Fremdes (etwa `onerror`) fällt heraus. Ebenso die
+  Vorschau alter `$$accordion`-Blöcke im Editor (`wiki.js`). Am gespeicherten Text ändert sich nichts.
+- **Spaltenabschnitt** – Ursache: `EDMD.topLevelBlocks` (`editor-format.js`) nahm jede Zeile, die mit `:::name` beginnt,
+  als Anfang eines Abschnitts bis zur nächsten Zeile `:::` – gab es keine, bis zum Artikelende. Ein Hinweis, dessen
+  `:::` am Ende der letzten Textzeile stand statt in einer eigenen Zeile, machte so den ganzen Rest des Artikels zu
+  EINEM Block. Das Einfügen (`insertMarkdownAtCursor`) setzt einen neuen Block nie mitten in einen mehrzeiligen Block,
+  sondern dahinter – der Spaltenabschnitt landete am Artikelende statt am Schreibstrich. Blockmenü, Ausrichtung und
+  Ziehgriff trafen im Rest des Artikels ebenfalls daneben. Neu (`zaunEnde`): gezählt wie in der Leseansicht
+  (`splitFence`) – verschachtelte Abschnitte zählen mit, `:::` in einem Codeblock nicht, und ohne Schlusszeile ist es
+  ein gewöhnlicher Absatz. Der fehlerhafte Hinweis selbst bleibt Text, wie die Leseansicht ihn zeigt; zur Kiste wird
+  er, wenn das `:::` in eine eigene Zeile kommt (oder man ihn über „Callout“ neu setzt).
+- Hilfeseite (Einklappbare Boxen) und README nachgezogen.
+
+**Tests**: `tests/test_wiki_titel_einfuegen.py` (Chromium, echter Editor): Titel mit `**…**`, `*…*`, Code und Link →
+formatiert, keine Sternchen; ohne Titel „Details“; `<img onerror>` im Titel gereinigt; Editor gibt `**Quellen**`
+unverändert zurück. Hinweis ohne Schlusszeile → jeder Absatz darunter ein eigener Block, die Einfügestelle in
+„Der Schleifknoten hält.“ ist einzeilig (vorher der Rest des Artikels), die Leseansicht unverändert; ein vollständiger
+verschachtelter Abschnitt mit `:::` im Codebeispiel bleibt ein Block; ein offener Abschnitt vor einem vollständigen
+schluckt diesen nicht. Ohne die Änderungen schlagen beide Teile fehl. `tests/rundlauf.html` weiter grün (81 Fälle, 47
+Verlauf, 13 Zellen); `tests/gleichstand.html` unverändert (17 von 18, die Abweichung bei Aufgabenlisten bestand schon
+vorher).

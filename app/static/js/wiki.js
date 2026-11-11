@@ -1896,7 +1896,8 @@
       return [
         // Zugeklappt wie in der Leseansicht – sonst stünde der Text im Editor viel tiefer als im Artikel.
         { type: "openTag", tagName: "details", attributes: { class: "accordion" }, outerNewLine: true },
-        { type: "html", content: `<summary>${MD.esc(title)}</summary><div class="accordion-body">${MD.render(lit.slice(1).join("\n"))}</div>` },
+        // Der Titel mit Formatierung wie in der Leseansicht (markdown.js) – sonst stünden hier die Sternchen.
+        { type: "html", content: `<summary>${MD.reinigen(marked.parseInline(title))}</summary><div class="accordion-body">${MD.render(lit.slice(1).join("\n"))}</div>` },
         { type: "closeTag", tagName: "details", outerNewLine: true },
       ];
     },
