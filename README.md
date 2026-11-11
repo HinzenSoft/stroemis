@@ -258,6 +258,13 @@ verschwinden, Fehler sind zu erwarten, Rückmeldungen an bugs@stroemis.de) – a
 Modul. Erkannt wird die Entwicklung an `STROEMIS_NAME` mit „-dev“ am Ende (setzt `dev-einrichten.sh`; dieselbe Regel wie
 die Sperre der Erinnerungsmails); in der Produktion und lokal ohne „-dev“ erscheint er nie.
 
+Damit man die Entwicklung auch ohne den Hinweis erkennt (Wunsch vom 11.11.2026), steht dort neben dem Zeichen
+„Entwicklungsserver“ statt „Strömungsrettung“ und darunter „dev.strömis.de“ – in der Kopfleiste, auf der Anmeldeseite, in
+der öffentlichen Strömipedia und auf der Hinweisseite ohne Netz. Das Maskottchen trägt dort einen orangefarbenen
+Leitkegel als Hut (`app/static/img/maskottchen-dev.webp`, erzeugt aus `maskottchen.png` mit
+`python3 scripts/maskottchen_dev.py`; `create_app` wählt es, wenn die Entwicklung erkannt ist). Am Telefon steht wie
+in der Produktion nur das Zeichen, der Kegel zeigt dort die Entwicklung. Das App-Symbol behält seine Marke „dev“.
+
 Einmalige Einrichtung:
 
 1. DNS: `dev.xn--strmis-yxa.de` als A-Eintrag (und AAAA, falls vorhanden) auf den VPS.
@@ -1395,6 +1402,8 @@ python tests/test_module_uiux_u1b.py    # UI/UX vor dem Merge, Teil Aussehen: Ko
                                         # Leerzustand, Statusmarken, Reiter, Textknopf, Namen, Tokens, CSS-Hygiene (statisch)
 python tests/test_module_uiux_u3.py     # UI/UX vor dem Merge, Teil U3: Hinweis „Entwicklungsserver“ (nur dev, einmal je Anmeldung),
                                         # Anmeldung, Leitstelle, 403-Weg, Strömipedia, Ankerplätze, Riegenkarten (statisch)
+python tests/test_dev_kopf.py           # Kopfleiste auf dev: „Entwicklungsserver“, „dev.strömis.de“, Maskottchen mit
+                                        # Leitkegel (Anmeldung, Kopfleiste, Hinweisseite); Produktion unverändert
 python tests/test_module_geraetetest_t5.py  # Gerätetest 01.11.2026, Teil 5: Ankerplätze Suche/Liste „in der Nähe“, Standort,
                                         # Bildnamen, Hochlade-Meldung; Leitstelle Suche/Filter/Karten, Spaltenköpfe, Prüffreigabe-Satz
 python tests/test_geraetetest_riegen.py # Gerätetest 01.11.2026, Riegenkarten: Aufklapper „Voraussetzungen“, klebende Reiter, Kopf, ohne Netz,

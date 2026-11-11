@@ -53,7 +53,7 @@
 <header class="bauchbinde">
   {% if maskottchen %}<img src="{{ maskottchen }}" alt="">{% endif %}
   <span class="trenner" aria-hidden="true"></span>
-  <span class="name">Strömungsrettung<small>{{ 'strömis.de dev' if dev else 'strömis.de' }}</small></span>
+  <span class="name">{% if dev %}Entwicklungsserver<small>dev.strömis.de</small>{% else %}Strömungsrettung<small>strömis.de</small>{% endif %}</span>
 </header>
 <main>
   <h1>Keine Verbindung</h1>

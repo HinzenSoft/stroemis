@@ -9,7 +9,7 @@
       <div class="login-marke">
         {% if cfg.MASKOTTCHEN %}<span class="maskottchen"><img src="{{ url_for('static', filename=cfg.MASKOTTCHEN) }}" alt="strömis.de"></span>{% else %}<span class="wortmarke">{% if cfg.WORTMARKE %}<img src="{{ url_for('static', filename='img/dlrg-wortmarke.svg') }}" alt="DLRG">{% else %}DLRG{% endif %}</span>{% endif %}
         <span class="trenner" aria-hidden="true"></span>
-        <span class="funktion">Strömungsrettung<small>strömis.de</small></span>
+        <span class="funktion">{% if dev_umgebung %}Entwicklungsserver<small>dev.strömis.de</small>{% else %}Strömungsrettung<small>strömis.de</small>{% endif %}</span>
       </div>
       <p>Übungsobjekte für die seiltechnische Rettung, Übungsgewässer für die Strömungsrettung und eine gemeinsame Strömipedia – gesammelt und geteilt von Strömungsrettenden.</p>
       {# Seit dem 01.11.2026 gibt es keine Strömipedia ohne Anmeldung mehr – der Verweis darauf entfällt. #}

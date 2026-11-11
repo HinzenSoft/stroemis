@@ -635,6 +635,11 @@ def create_app():
     app.config["MASKOTTCHEN"] = next(
         (f"img/{n}" for n in ("maskottchen.webp", "maskottchen.png", "maskottchen.jpg", "maskottchen.svg")
          if os.path.exists(os.path.join(app.static_folder, "img", n))), "")
+    # Entwicklungsumgebung (dev.strömis.de): dieselbe Figur mit Leitkegel auf dem Helm (scripts/maskottchen_dev.py,
+    # Wunsch vom 11.11.2026) – in Kopfleiste, Anmeldung, öffentlicher Strömipedia und Hinweisseite ohne Netz.
+    if app.config["MASKOTTCHEN"] and module.dev_umgebung() and os.path.exists(
+            os.path.join(app.static_folder, "img", "maskottchen-dev.webp")):
+        app.config["MASKOTTCHEN"] = "img/maskottchen-dev.webp"
     # Versionsstempel des Service Workers (app/pwa.py) – einmal beim Start, nach dem Maskottchen.
     app.config["PWA_STAND"] = pwa.stand(app)
 

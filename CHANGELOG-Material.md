@@ -98,6 +98,7 @@ Geschichte stehen. Schemaversion nach der Nachbesserung vor dem Merge: 30; mit d
 | Import-Warnung: Feinschliff und verschobene Kategorien | Verschiebt eine Katalogdatei (mit Kennung) eine Kategorie, gleiche Warnung und Zählung wie beim Kategoriewechsel (Formularfolgen, gelöste Zuweisungen, Zusammenfassung); im Dialog ein Kasten „Achtung“ mit einer Zeile je alte → neue Kategorie und „Einzelheiten“ zum Aufklappen, „im Bestand“ statt „hier“, Fokus auf dem Bericht und zurück auf den Auslöser, weißer innerer Fokusring auf dem roten Knopf | gebaut 09.11.2026 (kein Schemaschritt, Schema bleibt 39), Zweig import-warnung-feinschliff |
 | Gliederung aus „Fälligkeiten je Ordner“ ausblenden (Schritt 40) | Häkchen „Nicht in „Fälligkeiten je Ordner“ zeigen“ im Dialog „Ordner bearbeiten“ an Gliederungen der obersten Ebene (`mat_folder.overview_off`): der ganze Zweig fehlt in der Tabelle der Übersicht, darunter „Nicht gezeigt: …“; Ordnerleiste, Bestand und alle übrigen Zahlen unverändert; Verschieben unter eine andere Gliederung setzt es zurück | gebaut 10.11.2026 (Schema 40), Zweig uebersicht-ausblenden |
 | „Fälligkeiten je Ordner“ zugeklappt | Beim Laden der Übersicht ist jeder Ordner mit Unterordnern zugeklappt, zuerst stehen nur die Gliederungen da (vorher erst ab 30 Zeilen und ab der zweiten Ebene); ein grauer Pfad-Knoten bleibt offen | gebaut 11.11.2026 (kein Schemaschritt, Schema bleibt 40), Zweig ue-zugeklappt |
+| Kopfleiste der Entwicklung | Auf dev.strömis.de „Entwicklungsserver“ statt „Strömungsrettung“, darunter „dev.strömis.de“; Maskottchen mit Leitkegel als Hut (Kopfleiste, Anmeldung, öffentliche Strömipedia, Hinweisseite ohne Netz); Produktion unverändert | gebaut 11.11.2026 (kein Schemaschritt), Zweig dev-kopf |
 
 ## Abgleich mit dem Bestand (vor Lieferung 1)
 
@@ -13799,3 +13800,26 @@ stand ganz offen da.
 
 **Tests**: `tests/test_material_uebersicht_zu.py` rendert die Tabelle mit Node.js – kleiner Baum: alle Klappknöpfe zu, nur
 die Gliederungen sichtbar; Pfad-Knoten offen, die Gliederung darunter zu. Gegenprobe auf efe0c48: rot.
+
+## Kopfleiste der Entwicklung: „Entwicklungsserver“ und Maskottchen mit Leitkegel (Wunsch des Nutzers, 11.11.2026)
+
+Wunsch: Auf dev.strömis.de soll „Entwicklungsserver“ statt „Strömungsrettung“ stehen, darunter die eigene Adresse, und
+das Maskottchen soll spaßig zeigen, dass es ein Testserver ist. Aus drei Entwürfen (Leitkegel als Hut, Absperrband
+„TEST“, Rundumleuchte) gewählt: **Leitkegel als Hut**.
+
+- **Schriftzug** (`base.html`, `login.html`, `public.html`, `offline.html`): mit `dev_umgebung` (bzw. `dev` auf der
+  Hinweisseite ohne Netz) „Entwicklungsserver“ und „dev.strömis.de“ (öffentliche Strömipedia: „dev.strömis.de ·
+  öffentliche Strömipedia“; Hinweisseite bisher „strömis.de dev“). Unter 720 px weicht der Schriftzug wie bisher, dann
+  zeigt nur das Zeichen die Entwicklung.
+- **Maskottchen** (`app/static/img/maskottchen-dev.webp`, `scripts/maskottchen_dev.py`): die Figur aus `maskottchen.png`
+  mit orangefarbenem Leitkegel (zwei weiße Streifen, Fußplatte) auf dem Helm, 8° geneigt wie der Kopf; die Figur im
+  selben Maßstab wie `maskottchen.webp`, der Kegel obendrauf (229 × 329 px). `create_app` setzt `MASKOTTCHEN` auf diese
+  Datei, wenn `module.dev_umgebung()` gilt und sie vorliegt – so gilt sie auch für die Hinweisseite (data:-Adresse) und
+  den Stand des Service Workers. In der Kopfleiste bleibt das Zeichen 44 bzw. 34 px hoch; die Figur ist dort
+  entsprechend etwas kleiner.
+- Unverändert: Produktion, App-Name und App-Symbole der Entwicklung („strömis.de dev“, Marke „dev“), der Hinweis
+  „Entwicklungsserver“ nach der Anmeldung.
+
+**Tests**: `tests/test_dev_kopf.py` – mit `STROEMIS_NAME=stroemis-dev` Anmeldung, Seite nach der Anmeldung und
+Hinweisseite mit „Entwicklungsserver“/„dev.strömis.de“ und dem Bild mit Kegel; ohne „-dev“ alles wie bisher; Vorlage der
+öffentlichen Strömipedia; Bild höher als das Maskottchen, oben orange.

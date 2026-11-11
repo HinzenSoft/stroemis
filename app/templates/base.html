@@ -21,7 +21,8 @@
   <a class="brand" href="/">
     {% if cfg.MASKOTTCHEN %}<span class="maskottchen"><img src="{{ url_for('static', filename=cfg.MASKOTTCHEN) }}" alt="strömis.de"></span>{% else %}<span class="wortmarke">{% if cfg.WORTMARKE %}<img src="{{ url_for('static', filename='img/dlrg-wortmarke.svg') }}" alt="DLRG">{% else %}DLRG{% endif %}</span>{% endif %}
     <span class="trenner" aria-hidden="true"></span>
-    <span class="funktion">Strömungsrettung<small>strömis.de</small></span>
+    {# Auf dev.strömis.de (module.dev_umgebung) „Entwicklungsserver“ und die eigene Adresse – Wunsch vom 11.11.2026. #}
+    <span class="funktion">{% if dev_umgebung %}Entwicklungsserver<small>dev.strömis.de</small>{% else %}Strömungsrettung<small>strömis.de</small>{% endif %}</span>
   </a>
   {% if user %}
   <nav class="nav" aria-label="Hauptnavigation">
