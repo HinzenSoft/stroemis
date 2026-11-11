@@ -7,7 +7,7 @@ zwei. Jetzt nimmt jeder Tastendruck genau eine sichtbare Leerzeile weg – Marke
 sie sind, eine zugeklappte Box bleibt zu. Stehen bleibt die Leerzeile als ganzer Inhalt eines Abschnitts und als
 letzter Block. Nachtrag vom selben Tag: auch von der Nachbarzeile aus – Rücktaste am Anfang der Zeile darunter
 (auch eines Box-Titels), Entf am Ende der Zeile darüber (auch des Titels einer zugeklappten Box); eine Zeile aus
-unsichtbaren Zeichen gilt als leer. Geprüft im echten Editor (Toast UI mit den Plugins der Strömipedia) in Chromium über echte
+unsichtbaren Zeichen gilt als leer, ebenso eine Überschrift ohne Text („#### “). Geprüft im echten Editor (Toast UI mit den Plugins der Strömipedia) in Chromium über echte
 Tastenereignisse; die Seite liefert ein kleiner Server aus dem Projektordner. Ohne Chromium übersprungen."""
 import functools
 import http.server
@@ -245,6 +245,28 @@ def _lauf(e):
             e.taste(taste)
             s = e.stand()
             assert s["md"] == nach and s["strich"] == strich and s["gemeldet"] == [], (md, taste, s)
+
+    # 14. Zweiter Nachtrag (Rückmeldung mit dem Artikeltext): Die Zeile zwischen den Boxen war eine Überschrift ohne
+    #     Text („#### “). Sie geht wie eine leere Zeile – in ihr wie von den Titeln daneben aus; vorher wehrte der Schutz
+    #     alle vier Wege ab. Eine Überschrift mit Text bleibt.
+    for kopf in ("#### ", "## "):
+        for taste, block, ende, strich in (("Backspace", 5, False, ["Eins", 4]), ("Delete", 5, False, ["Zwei", 0]),
+                                           ("Backspace", 7, False, ["Zwei", 0]), ("Delete", 1, True, ["Eins", 4])):
+            e.setze(ZWEI_BOXEN.format(kopf), block, ende)
+            e.taste(taste)
+            s = e.stand()
+            fall = (kopf, taste, block, s)
+            assert s["md"] == ":::accordion Eins\nA\n:::\n\n:::accordion Zwei\nB\n:::\n\nEnde.", fall
+            assert s["gemeldet"] == [] and s["strich"] == strich and s["zu"] == ["", "A", "", "B"], fall
+    for taste, block, ende, strich in (("Backspace", 1, False, ["Text.", 5]), ("Delete", 1, False, ["Text2.", 0]),
+                                       ("Backspace", 2, False, ["Text2.", 0]), ("Delete", 0, True, ["Text.", 5])):
+        e.setze("Text.\n\n#### \n\nText2.", block, ende)
+        e.taste(taste)
+        s = e.stand()
+        assert s["md"] == "Text.\n\nText2." and s["strich"] == strich and s["gemeldet"] == [], (taste, block, s)
+    e.setze("Text.\n\n## Kopf\n\nText2.", 1)
+    e.taste("Backspace")
+    assert "Kopf" in e.js("md()"), e.js("md()")
 
 
 def test_leerzeilen_loeschen():

@@ -99,7 +99,7 @@ Geschichte stehen. Schemaversion nach der Nachbesserung vor dem Merge: 30; mit d
 | Gliederung aus „Fälligkeiten je Ordner“ ausblenden (Schritt 40) | Häkchen „Nicht in „Fälligkeiten je Ordner“ zeigen“ im Dialog „Ordner bearbeiten“ an Gliederungen der obersten Ebene (`mat_folder.overview_off`): der ganze Zweig fehlt in der Tabelle der Übersicht, darunter „Nicht gezeigt: …“; Ordnerleiste, Bestand und alle übrigen Zahlen unverändert; Verschieben unter eine andere Gliederung setzt es zurück | gebaut 10.11.2026 (Schema 40), Zweig uebersicht-ausblenden |
 | „Fälligkeiten je Ordner“ zugeklappt | Beim Laden der Übersicht ist jeder Ordner mit Unterordnern zugeklappt, zuerst stehen nur die Gliederungen da (vorher erst ab 30 Zeilen und ab der zweiten Ebene); ein grauer Pfad-Knoten bleibt offen | gebaut 11.11.2026 (kein Schemaschritt, Schema bleibt 40), Zweig ue-zugeklappt |
 | Leerzeilen im Editor löschen | Rücktaste und Entf nehmen in der Strömipedia eine leere Zeile als Ganzes weg – auch zwischen zwei Klappboxen, neben Tabelle oder Hinweis (vorher wehrte der Löschschutz ab) und zwischen zwei Absätzen (vorher blieb sie stehen oder wurde zu zweien) | gebaut 11.11.2026 (kein Schemaschritt) |
-| Leerzeile von der Nachbarzeile aus löschen | Nachtrag zu „Leerzeilen im Editor löschen“: Rücktaste am Anfang der Zeile darunter (auch eines Box-Titels) und Entf am Ende der Zeile darüber (auch des Titels einer zugeklappten Box) nehmen die leere Zeile weg, der Schreibstrich bleibt; eine Zeile aus unsichtbaren Zeichen gilt als leer | gebaut 11.11.2026 (kein Schemaschritt) |
+| Leerzeile von der Nachbarzeile aus löschen | Nachtrag zu „Leerzeilen im Editor löschen“: Rücktaste am Anfang der Zeile darunter (auch eines Box-Titels) und Entf am Ende der Zeile darüber (auch des Titels einer zugeklappten Box) nehmen die leere Zeile weg, der Schreibstrich bleibt; eine Zeile aus unsichtbaren Zeichen gilt als leer, ebenso eine Überschrift ohne Text („#### “, zweiter Nachtrag) | gebaut 11.11.2026 (kein Schemaschritt) |
 | Klappbox-Titel mit Formatierung | Fett, kursiv, Code und Links im Titel einer Klappbox erscheinen in der Leseansicht formatiert (vorher standen die Sternchen da) | gebaut 11.11.2026 (kein Schemaschritt) |
 | Spaltenabschnitt an der Schreibstelle | Ein „:::“ ohne Schlusszeile (etwa ein Hinweis, dessen „:::“ am Ende der letzten Textzeile steht) gilt im Editor nicht mehr als Abschnitt bis zum Artikelende – ein neuer Spaltenabschnitt kommt wieder an den Schreibstrich statt ans Artikelende | gebaut 11.11.2026 (kein Schemaschritt) |
 | Kopfleiste der Entwicklung | Auf dev.strömis.de „Entwicklungsserver“ statt „Strömungsrettung“, darunter „dev.strömis.de“; Maskottchen mit Leitkegel als Hut (Kopfleiste, Anmeldung, öffentliche Strömipedia, Hinweisseite ohne Netz); Produktion unverändert | gebaut 11.11.2026 (kein Schemaschritt), Zweig dev-kopf |
@@ -13913,3 +13913,23 @@ verschachtelter Abschnitt mit `:::` im Codebeispiel bleibt ein Block; ein offene
 schluckt diesen nicht. Ohne die Änderungen schlagen beide Teile fehl. `tests/rundlauf.html` weiter grün (81 Fälle, 47
 Verlauf, 13 Zellen); `tests/gleichstand.html` unverändert (17 von 18, die Abweichung bei Aufgabenlisten bestand schon
 vorher).
+
+### Zweiter Nachtrag: Überschrift ohne Text (Rückmeldung, 11.11.2026)
+
+Meldung: „Die Leerzeile lässt sich immer noch nicht löschen“ – diesmal mit dem Artikeltext (Knoten, „Als Markdown
+kopieren“).
+
+- **Ursache**: Die Zeile zwischen den Boxen „Restfestigkeiten im Labor“ und „Rutsch- und Haltekräfte“ ist kein leerer
+  Absatz, sondern eine Überschrift ohne Text (`#### `). Im Editor und im Artikel sieht sie aus wie eine leere Zeile,
+  das Löschen kannte aber nur Absätze – in ihr wie von den Titeln daneben aus wehrte der Schutz ab.
+- **Neu** (`leereZeile` in `editor-layout.js`): Eine Überschrift ohne (sichtbaren) Text gilt als leere Zeile und geht
+  nach denselben Regeln. Eine Überschrift mit Text bleibt unberührt.
+- Mit dem Artikeltext nachgeprüft: Ein Spaltenabschnitt kommt an jeder Textstelle an den Schreibstrich, auch auf dem
+  Stand davor – im jetzigen Text steht kein „:::“ ohne Schlusszeile mehr. Die neun „Spalte 1 / Spalte 2“-Abschnitte
+  am Artikelende stammen von den Versuchen davor.
+- Hilfeseite (Leerzeilen) und README nachgezogen.
+
+**Tests**: `tests/test_wiki_leerzeile.py` Fall 14 – `#### ` und `## ` zwischen zwei Boxen: in der Zeile Rücktaste und
+Entf, Rücktaste am Anfang des unteren Titels, Entf am Ende des oberen, zugeklappten Titels (Zeile weg, Strich wie
+erwartet, beide Boxen zu, keine Meldung); `#### ` zwischen zwei Absätzen von allen vier Seiten; eine Überschrift mit
+Text bleibt. Ohne die Änderung schlägt Fall 14 fehl.

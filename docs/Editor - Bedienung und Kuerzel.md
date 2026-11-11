@@ -471,8 +471,9 @@ erneut gewählt hebt sie wieder auf.
   Nachbarn bleiben dabei, wie sie sind. Dafür muss der Cursor nicht in der leeren Zeile stehen:
   Rücktaste am Anfang der Zeile darunter – auch am Anfang des Titels einer Box – oder Entfernen am
   Ende der Zeile darüber – bei zugeklappter Box am Ende ihres Titels – nimmt sie ebenso weg, der
-  Cursor bleibt stehen. Stehen bleibt nur die letzte Zeile des Artikels und eine leere Zeile, die
-  den ganzen Inhalt eines Abschnitts bildet.
+  Cursor bleibt stehen. Eine Überschrift ohne Text sieht aus wie eine leere Zeile und geht genauso.
+  Stehen bleibt nur die letzte Zeile des Artikels und eine leere Zeile, die den ganzen Inhalt eines
+  Abschnitts bildet.
 - **Tabellen, Callouts, einklappbare Boxen, Spalten und Ausrichtung lassen sich nicht wegtippen**: Entfernen und
   Rücktaste lassen diese Blöcke stehen, auch wenn der Cursor unmittelbar davor oder dahinter
   steht oder sie mit in einer Auswahl liegen (auch beim Ausschneiden, Einfügen oder Übertippen).

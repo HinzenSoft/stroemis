@@ -434,10 +434,13 @@ window.EDLAYOUT = (function () {
      Schlussmarke sieht man nicht. Dort wehrte der Schutz die Taste ab. Jetzt geht auch von da aus
      die leere Zeile (nach denselben Regeln wie oben), und der Schreibstrich bleibt, wo er ist.
      Als leer gilt auch eine Zeile aus unsichtbaren Zeichen (etwa einem Leerzeichen der Breite null
-     aus kopiertem Text) – man sieht nichts, also soll sie auch wie eine leere Zeile gehen. */
+     aus kopiertem Text) – man sieht nichts, also soll sie auch wie eine leere Zeile gehen.
+     Zweiter Nachtrag (Rückmeldung mit dem Artikeltext): Die Zeile zwischen den beiden Boxen war
+     eine Überschrift ohne Text („#### “). Im Editor wie im Artikel sieht sie aus wie eine leere
+     Zeile, also geht sie jetzt auch so – eine Überschrift mit Text bleibt unberührt. */
   const UNSICHTBAR = /[\u00ad\u200b-\u200d\u2060\ufeff]/g;
   const leereZeile = (n) => {
-    if (n.type.name !== "paragraph") return false;
+    if (n.type.name !== "paragraph" && n.type.name !== "heading") return false;
     let leer = true;
     // trim nimmt auch &nbsp;
     n.forEach((k) => { if (!k.isText || k.text.replace(UNSICHTBAR, "").trim()) leer = false; });
