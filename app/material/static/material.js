@@ -1664,19 +1664,19 @@
   /* Fälligkeiten je Ordner: Gliederungen mit ihren Ordnern eingerückt, die Zahlen für den ganzen Zweig – dieselben wie in
      der Ordnerleiste (/start, ordner_uebersicht). Die Systemordner sind keine eigenen Zeilen: Gesperrte und ausgesonderte
      Artikel liegen in ihrer Gliederung und zählen dort. Jede Zahl führt zur Liste genau dieser Artikel (Prüfungen, nach
-     Ordner und Status gefiltert), die nächste Fälligkeit zu allem Fälligen im Ordner, der Name zum Ordner. Ein großer Baum
-     (mehr als UE_GROSS Zeilen) beginnt mit zugeklappten Ordnern ab der zweiten Ebene unter der Gliederung. Bis 600 px
-     Inhaltsbreite wird jede Zeile zur Karte; leere Zahlen entfallen dort. */
+     Ordner und Status gefiltert), die nächste Fälligkeit zu allem Fälligen im Ordner, der Name zum Ordner. Jeder Ordner
+     mit Unterordnern beginnt zugeklappt, zuerst stehen nur die Gliederungen da (Wunsch vom 11.11.2026; vorher erst ab 30
+     Zeilen und ab der zweiten Ebene). Ein grauer Pfad-Knoten bleibt offen – er hat keine Zahlen, zugeklappt stünde nur sein
+     Name da. Bis 600 px Inhaltsbreite wird jede Zeile zur Karte; leere Zahlen entfallen dort. */
   // Kurztitel mit weichen Trennstellen (\u00ad): Am Rechner stehen die Köpfe einzeilig, in der engen Tabelle (601–820 px
   // Inhaltsbreite) dürfen sie dort umbrechen – so bleibt Platz für die Ordnernamen.
   const UE_SPALTEN = [["ueberfaellig", "über\u00adfällig", "überfällig"], ["neu", "neu", "neu (Eingangsprüfung offen)"],
                       ["bald_faellig", "bald fällig", "bald fällig"], ["gesperrt", "ge\u00adsperrt", "gesperrt"],
                       ["lebensdauer", "Lebens\u00addauer erreicht", "Lebensdauer erreicht"]];
-  const UE_GROSS = 30;
   function ordnerUebersichtHtml(zeilen) {
     const nachId = {};
     zeilen.forEach((o) => { nachId[o.id] = o; });
-    const zu = new Set(zeilen.length > UE_GROSS ? zeilen.filter((o) => o.tiefe >= 1 && o.unterordner).map((o) => o.id) : []);
+    const zu = new Set(zeilen.filter((o) => o.unterordner && !o.nur_pfad).map((o) => o.id));
     const vorfahren = (o) => { const weg = []; for (let p = nachId[o.parent_id]; p; p = nachId[p.parent_id]) weg.push(p.id); return weg; };
     const zeile = (o) => {
       const weg = vorfahren(o);

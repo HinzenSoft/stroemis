@@ -97,6 +97,7 @@ Geschichte stehen. Schemaversion nach der Nachbesserung vor dem Merge: 30; mit d
 | Warnung im Katalogimport bei Kategoriewechsel | Je Produkt mit Artikeln, das durch den Import die Kategorie wechselt, eine Warnung (alte → neue Kategorie, Artikel, Prüfformular verloren/anders/gleich, gelöste Zuweisung); Zusammenfassung oben im Bericht samt Hinweis auf eine alte Datei, wenn eine neue Kategorie Produkte aus einer bestehenden aufnimmt; gelöste Produkt-Zuweisungen zählen unter „gelöst“ mit; Oberfläche und Kommandozeile | gebaut 09.11.2026 (kein Schemaschritt, Schema bleibt 39), Zweig import-warnung-kategorie |
 | Import-Warnung: Feinschliff und verschobene Kategorien | Verschiebt eine Katalogdatei (mit Kennung) eine Kategorie, gleiche Warnung und Zählung wie beim Kategoriewechsel (Formularfolgen, gelöste Zuweisungen, Zusammenfassung); im Dialog ein Kasten „Achtung“ mit einer Zeile je alte → neue Kategorie und „Einzelheiten“ zum Aufklappen, „im Bestand“ statt „hier“, Fokus auf dem Bericht und zurück auf den Auslöser, weißer innerer Fokusring auf dem roten Knopf | gebaut 09.11.2026 (kein Schemaschritt, Schema bleibt 39), Zweig import-warnung-feinschliff |
 | Gliederung aus „Fälligkeiten je Ordner“ ausblenden (Schritt 40) | Häkchen „Nicht in „Fälligkeiten je Ordner“ zeigen“ im Dialog „Ordner bearbeiten“ an Gliederungen der obersten Ebene (`mat_folder.overview_off`): der ganze Zweig fehlt in der Tabelle der Übersicht, darunter „Nicht gezeigt: …“; Ordnerleiste, Bestand und alle übrigen Zahlen unverändert; Verschieben unter eine andere Gliederung setzt es zurück | gebaut 10.11.2026 (Schema 40), Zweig uebersicht-ausblenden |
+| „Fälligkeiten je Ordner“ zugeklappt | Beim Laden der Übersicht ist jeder Ordner mit Unterordnern zugeklappt, zuerst stehen nur die Gliederungen da (vorher erst ab 30 Zeilen und ab der zweiten Ebene); ein grauer Pfad-Knoten bleibt offen | gebaut 11.11.2026 (kein Schemaschritt, Schema bleibt 40), Zweig ue-zugeklappt |
 
 ## Abgleich mit dem Bestand (vor Lieferung 1)
 
@@ -13779,3 +13780,22 @@ kleinen, eindeutigen Verbesserungen.
 **Tests**: `tests/einfuehrung_browser.py` prüft in jedem Durchlauf, dass „Schritt n von m“ von Schritt zu Schritt steigt
 (n ≤ m) und dass eine Blase, die einen Anlegen-Knopf der Seite nennt, die Form nennt, die dasteht. Gegenprobe auf dem
 Stand vor der Nachbesserung: rot mit genau den Befunden B1, B2 und dem doppelten Schritt.
+
+## „Fälligkeiten je Ordner“ beginnt zugeklappt (Wunsch des Nutzers, 11.11.2026)
+
+Wunsch: „Die Ordner sollen Standardmäßig eingeklappt sein“ (Bild: Bezirk, zwei Ortsgruppen und „Private PSA“, jede Zeile
+mit ▸). Bisher klappte die Tabelle nur bei mehr als 30 Zeilen zu und dann erst ab der zweiten Ebene; ein kleiner Bestand
+stand ganz offen da.
+
+- **Oberfläche** (`material.js`, `ordnerUebersichtHtml`): Jeder Ordner mit Unterordnern beginnt zugeklappt, unabhängig von
+  der Zahl der Zeilen – zuerst stehen nur die Gliederungen (und ihre Zahlen für den ganzen Zweig) da. ▸ klappt auf wie
+  bisher (`ordnerUebersichtKlappen`). Die Schwelle `UE_GROSS` entfällt.
+- **Ausnahme Pfad-Knoten**: Ein grauer Oberordner, in dem das Konto keine eigene Freigabe hat, bleibt offen. Er hat keine
+  Zahlen; zugeklappt stünde dort nur sein Name, und die eigenen Ordner darunter wären erst nach einem Klick zu sehen. Die
+  Ordner mit Zahlen darunter beginnen wieder zugeklappt.
+- Aufgeklappte Ordner merkt sich die Seite nicht; nach dem Zurückkommen ist die Tabelle wieder zu. Server, Schnittstelle,
+  Ordnerleiste und die Übung sind unverändert (die Übung hat nur eine Gliederung mit zwei Ordnern und zeigt sie jetzt
+  ebenso zugeklappt).
+
+**Tests**: `tests/test_material_uebersicht_zu.py` rendert die Tabelle mit Node.js – kleiner Baum: alle Klappknöpfe zu, nur
+die Gliederungen sichtbar; Pfad-Knoten offen, die Gliederung darunter zu. Gegenprobe auf efe0c48: rot.
