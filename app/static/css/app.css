@@ -2619,6 +2619,16 @@ dialog.us-dlg { width: min(640px, 96vw); }
 .mode-toggle button:disabled { opacity: .45; cursor: not-allowed; }
 .mode-toggle button:focus-visible { outline-offset: -3px; box-shadow: none; }
 @media (hover: hover) and (pointer: fine) { .mode-toggle button:disabled:hover { background: var(--weiss); color: var(--grau); } }
+/* Am Telefon trägt der gesperrte Knopf selbst den Hinweis: gelb „✏ Anna“ statt des blassen „Bearbeiten“, die Marke
+   davor entfällt. Mit ihr passten Umschalter, 💬 und ⋯ nicht mehr in die Zeile, „⋯“ stand allein in einer zweiten
+   (Rückmeldung vom 12.11.2026). Wer nicht bearbeiten darf, hat keinen Umschalter und behält die Marke. */
+#pg-edit .ed-schreiber { display: none; }
+@media (max-width: 640px) {
+  .wiki-head .btn-row:has(#pg-edit .ed-schreiber) .praesenz { display: none; }
+  #pg-edit:has(.ed-schreiber) .ed-wort { display: none; }
+  #pg-edit .ed-schreiber { display: block; max-width: 9em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .mode-toggle #pg-edit:disabled:has(.ed-schreiber) { opacity: 1; background: var(--gelb); color: var(--anthrazit); font-weight: 600; }
+}
 .wiki-editor .toastui-editor-defaultUI { border: 0; }
 .wiki-editor .toastui-editor-ww-container { background: transparent; }
 

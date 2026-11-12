@@ -18,7 +18,7 @@ Breite und dieselbe Kante – beim Wechsel verschiebt sich kein Wort.
 
 **Gleichzeitig bearbeiten geht nicht – und das ist Absicht.** Wer zuerst auf „Bearbeiten“ geht,
 hat den Schreibplatz. Bei allen anderen steht oben „✏ Anna bearbeitet“, und der Knopf „Bearbeiten“
-ist ausgegraut, bis Anna fertig ist. Zusehen kann man trotzdem: Was Anna speichert, erscheint bei
+ist ausgegraut, bis Anna fertig ist. Am Telefon steht stattdessen gelb „✏ Anna“ im Knopf selbst. Zusehen kann man trotzdem: Was Anna speichert, erscheint bei
 den Lesern von selbst im Artikel, alle paar Sekunden, ohne dass die Lesestelle springt. Wer den
 Reiter schließt, gibt den Platz sofort frei; bleibt eine Meldung aus, nach 45 Sekunden – wer dann
 zurückkommt, erfährt in der Statuszeile, dass hier nicht mehr gespeichert wird, und sein Text bleibt

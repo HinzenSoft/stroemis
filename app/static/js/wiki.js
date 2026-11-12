@@ -656,6 +656,21 @@
       ? `${schreiber.name} bearbeitet diese Seite gerade. Sobald die Seite frei ist, lässt sich `
         + "hier wieder bearbeiten."
       : "";
+    /* Am Telefon steht der Schreiber im Knopf selbst („✏ Anna“, gelb) statt in der Marke davor – mit ihr brach „⋯“ in
+       eine zweite Zeile (Rückmeldung vom 12.11.2026). Den ganzen Satz liest die Vorlesehilfe am Knopf. */
+    let wer = ed.querySelector(".ed-schreiber");
+    if (schreiber) {
+      if (!wer) {
+        wer = document.createElement("span");
+        wer.className = "ed-schreiber";
+        ed.appendChild(wer);
+      }
+      wer.textContent = `✏ ${String(schreiber.name || "").trim().split(/\s+/)[0]}`;
+      ed.setAttribute("aria-label", `Bearbeiten – ${schreiber.name} bearbeitet gerade`);
+    } else {
+      if (wer) wer.remove();
+      ed.removeAttribute("aria-label");
+    }
   }
 
   /* Den Schreibplatz verliert nur, wessen Reiter sich lange genug nicht gemeldet hat – Rechner
@@ -1100,7 +1115,7 @@
         ${krumenPfad(crumbs, p)}
         <div class="btn-row">
           ${p.can_edit ? `<div class="mode-toggle" role="group" aria-label="Ansicht wechseln">
-            <button type="button" id="pg-edit" data-mode="bearbeiten" aria-pressed="false">Bearbeiten</button>
+            <button type="button" id="pg-edit" data-mode="bearbeiten" aria-pressed="false"><span class="ed-wort">Bearbeiten</span></button>
             <button type="button" class="on" data-mode="lesen" aria-pressed="true">Lesen</button>
           </div>` : ""}
           <button class="btn secondary small kopfknopf" id="pg-comment" title="Kommentieren – Text markieren oder allgemein zur Seite" aria-label="Kommentieren">${I.kommentar}</button>

@@ -99,6 +99,7 @@ Geschichte stehen. Schemaversion nach der Nachbesserung vor dem Merge: 30; mit d
 | Gliederung aus „Fälligkeiten je Ordner“ ausblenden (Schritt 40) | Häkchen „Nicht in „Fälligkeiten je Ordner“ zeigen“ im Dialog „Ordner bearbeiten“ an Gliederungen der obersten Ebene (`mat_folder.overview_off`): der ganze Zweig fehlt in der Tabelle der Übersicht, darunter „Nicht gezeigt: …“; Ordnerleiste, Bestand und alle übrigen Zahlen unverändert; Verschieben unter eine andere Gliederung setzt es zurück | gebaut 10.11.2026 (Schema 40), Zweig uebersicht-ausblenden |
 | „Fälligkeiten je Ordner“ zugeklappt | Beim Laden der Übersicht ist jeder Ordner mit Unterordnern zugeklappt, zuerst stehen nur die Gliederungen da (vorher erst ab 30 Zeilen und ab der zweiten Ebene); ein grauer Pfad-Knoten bleibt offen | gebaut 11.11.2026 (kein Schemaschritt, Schema bleibt 40), Zweig ue-zugeklappt |
 | Leerzeilen im Editor löschen | Rücktaste und Entf nehmen in der Strömipedia eine leere Zeile als Ganzes weg – auch zwischen zwei Klappboxen, neben Tabelle oder Hinweis (vorher wehrte der Löschschutz ab) und zwischen zwei Absätzen (vorher blieb sie stehen oder wurde zu zweien) | gebaut 11.11.2026 (kein Schemaschritt) |
+| Telefon: Kopfzeile einzeilig, wenn jemand schreibt | Hatte jemand anderes die Seite im Editor offen, brach am Telefon „⋯“ wegen der Marke „✏ Name bearbeitet“ in eine zweite Zeile. Jetzt steht am Telefon gelb „✏ Vorname“ im gesperrten Bearbeiten-Knopf, die Marke entfällt | gebaut 12.11.2026 (kein Schemaschritt) |
 | Umwandeln in Callout behält Formatierung | Markierter Text, über „Umwandeln in … → Callout“ zur Kiste gemacht, verlor Fett, Kursiv, Links und Code; eine Auswahl mitten im Absatz nahm das Markierte sogar aus dem Text. Jetzt kommen die ganzen Absätze unverändert in die Kiste | gebaut 12.11.2026 (kein Schemaschritt) |
 | Callout in Klappbox im Editor | Ein Callout im Inhalt einer Klappbox hatte im Editor keine Farbfläche, das Symbol lag über dem Text und der Rahmen der Box riss auf; jetzt wie im Artikel | gebaut 12.11.2026 (kein Schemaschritt) |
 | Abstand zwischen Callouts | Zwei Callouts direkt untereinander standen 2 × 1,1 em (36 px) auseinander, jetzt so weit wie zwei Absätze (15 px), in Leseansicht und Editor | gebaut 12.11.2026 (kein Schemaschritt) |
@@ -14024,3 +14025,24 @@ Kiste auf dem aktuellen Stand aus wie im Artikel. Aufgefallen ist dabei: Der Tex
 **Tests**: neu `tests/test_wiki_callout_umwandeln.py` (echte App, Chromium) – zwei Absätze in einer Klappbox (Fett,
 Kursiv, Link, Code) und ein einzelnes markiertes Wort im Fließtext umgewandelt, gespeicherter Text Zeichen für Zeichen
 geprüft; ohne die Änderung rot (Auszeichnung weg, „**Mitte**“ aus dem Absatz verschwunden).
+
+## Strömipedia: Kopfzeile am Telefon einzeilig, wenn jemand schreibt (Rückmeldung, 12.11.2026)
+
+Meldung: „Soll die Kopfzeile zweizeilig sein ?“ – Bildschirmfoto vom Telefon (Artikel „Knoten“): links die gelbe Marke
+„✏ Alexander Hinzen bearbeitet“, daneben der blasse Umschalter Bearbeiten/Lesen und 💬, „⋯“ allein in einer zweiten Zeile.
+Die Marke nannte den Nutzer selbst – die Seite war in einem anderen Reiter noch im Editor offen (Schreibplatz je Reiter).
+
+- **Ursache**: Am Finger (`pointer: coarse`) bricht die Knopfreihe um, wenn sie nicht passt. Mit der Marke war sie bei
+  344–430 px zu breit (gemessen 344 px, nachgestellt: Marke allein in der ersten Zeile; Foto des Nutzers: „⋯“ allein in der zweiten). Das einzelne „⋯“ war schon am 22.10.2026 als Fehler behoben
+  (Teilen ins ⋯-Menü), die Marke war dabei nicht bedacht.
+- **Neu** (Entscheidung des Nutzers: „Im Bearbeiten-Knopf“): Bis 640 px Breite steht im gesperrten Knopf gelb
+  „✏ Vorname“ statt des blassen „Bearbeiten“, die Marke davor entfällt (lange Vornamen mit „…“ ab 9 em). Die
+  Vorlesehilfe hört am Knopf „Bearbeiten – Anna Muster bearbeitet gerade“. Wer nicht bearbeiten darf, hat keinen
+  Umschalter und behält die Marke. Am Rechner bleibt es bei Marke und blassem Knopf. `wiki.js` (`bearbeitenKnopfStand`,
+  „Bearbeiten“ als `.ed-wort`), `app.css`.
+- Hilfeseite und README nachgezogen.
+
+**Tests**: neu `tests/test_wiki_kopf_schreiber.py` (echte App, Chromium, Touch) – Schreibplatz in einem zweiten Reiter,
+bei 344, 360, 390 und 430 px alle Knöpfe auf einer Höhe, Knopf gelb mit Vorname, Marke weg, Name für die Vorlesehilfe;
+am Rechner Marke wie bisher; nach dem Freiwerden wieder „Bearbeiten“. Ohne die Änderung rot (344 px: Marke allein in
+der ersten Zeile).
