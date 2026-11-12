@@ -6,7 +6,11 @@ Im Editor trug die Marke der Ausrichtung in der Kiste den Abstand eines Absatzes
 Text darunter stand rund 14 px tiefer – oben 26 statt 12 px Rand. In der Leseansicht behielt der letzte Absatz einer
 Ausrichtung am Kistenende seinen unteren Rand – unten 28 statt 14 px. Jetzt ist der Rand jeder Kiste oben und unten
 gleich, und Editor und Leseansicht setzen jede Zeile auf denselben Pixel. Geprüft in der echten App (Server im Faden,
-angemeldet als Wiki-Verwaltung) in Chromium; ohne Chromium übersprungen."""
+angemeldet als Wiki-Verwaltung) in Chromium; ohne Chromium übersprungen.
+
+Nachtrag vom selben Tag: „Der Abstand zwischen Callouts kann ein normaler Zeilenabstand sein“. Zwei Kisten direkt
+untereinander standen 2 × 1,1 em auseinander (im Raster fallen die Ränder nicht zusammen), jetzt so weit wie zwei
+Absätze – in beiden Ansichten."""
 import os
 import sys
 import time
@@ -25,7 +29,13 @@ KISTEN = [
     ":::info 💡\n:::align center\nNur zentriert.\n:::\n:::",
     ":::warning ⚠️\n**Bremshandprinzip**\n\nEin Halbmastwurf bremst, er blockiert nicht.\n:::",
 ]
-MD = "Anfang.\n\n" + "\n\nZwischen.\n\n".join(KISTEN) + "\n\nEnde."
+# zwei Kisten direkt untereinander (wie „KISS“ und „Grenzen (er)kennen“ im Artikel), danach zwei Absätze zum Vergleich
+PAAR = [
+    ":::success ✅\n**KISS**\n\nDie Kara-8 kommt mit Achter und HMS-Karabiner aus.\n:::",
+    ":::warning ⚠️\n**Grenzen (er)kennen**\n\nDie Kara-8 funktioniert nur in eine Richtung.\n:::",
+]
+MD = ("Anfang.\n\n" + "\n\nZwischen.\n\n".join(KISTEN) + "\n\n" + "\n\n".join(PAAR)
+      + "\n\nEnde eins.\n\nEnde zwei.")
 
 # Zeilen eines Bereichs (oben, unten), ohne die Beschriftung der Marken; Teilstücke einer Zeile zählen einmal.
 ZEILEN = r"""const zeilen = (els) => { const r = document.createRange(), q = [];
@@ -44,6 +54,13 @@ EDITOR = "(() => { " + ZEILEN + r"""
 LESEN = "(() => { " + ZEILEN + r"""
   return [...document.querySelectorAll('.wiki-content .callout')].map((c) => { const b = c.getBoundingClientRect(), z = zeilen([c]);
     return [z.map((x) => x[0] - Math.round(b.top)), Math.round(b.bottom) - z[z.length - 1][1]]; }); })()"""
+# Abstand zwischen den beiden letzten Kisten und zwischen den beiden letzten Absätzen (Kante zu Kante)
+LUECKE = r"""const luecke = (a, b) => Math.round(b.getBoundingClientRect().top - a.getBoundingClientRect().bottom);"""
+LUECKE_LESEN = "(() => { " + LUECKE + r""" const c = [...document.querySelectorAll('.wiki-content > .callout')],
+  p = [...document.querySelectorAll('.wiki-content > p')]; return [luecke(c.at(-2), c.at(-1)), luecke(p.at(-2), p.at(-1))]; })()"""
+LUECKE_EDITOR = "(() => { " + LUECKE + r""" const k = [...document.querySelector('.toastui-editor-ww-container .ProseMirror').children],
+  zu = k.filter((e) => e.classList.contains('co-schluss')), auf = k.filter((e) => e.classList.contains('co-marke') && !e.classList.contains('co-schluss')),
+  p = k.filter((e) => e.tagName === 'P' && /^Ende /.test(e.textContent)); return [luecke(zu.at(-2), auf.at(-1)), luecke(p.at(-2), p.at(-1))]; })()"""
 
 
 def _lauf(u):
@@ -55,15 +72,17 @@ def _lauf(u):
         s.oeffnen(f"/stroemipedia/{slug}", warten=1.5)
         s.ruhe(1.5)
         lesen = s.js(LESEN)
+        luecke_lesen = s.js(LUECKE_LESEN)
         s.klick("#pg-edit")
         assert s.warte("!!document.querySelector('.toastui-editor-ww-container .ProseMirror .co-marke')"), "Editor offen"
         s.ruhe(1.5)
         s.js("(() => { document.activeElement && document.activeElement.blur(); window.scrollTo(0, 0); })()")
         time.sleep(0.5)
         editor = s.js(EDITOR)
+        luecke_editor = s.js(LUECKE_EDITOR)
     finally:
         s.schliessen()
-    assert len(lesen) == len(editor) == len(KISTEN), (lesen, editor)
+    assert len(lesen) == len(editor) == len(KISTEN) + len(PAAR), (lesen, editor)
     for i, (le, ed) in enumerate(zip(lesen, editor)):
         fall = (i + 1, le, ed)
         # oben und unten gleich viel Rand (Zeilenkasten; ±2 px für die Rundung der Schrift)
@@ -72,6 +91,10 @@ def _lauf(u):
         # Editor und Leseansicht: jede Zeile auf demselben Pixel (±1 px)
         assert len(le[0]) == len(ed[0]) and all(abs(a - b) <= 1 for a, b in zip(le[0], ed[0])), fall
         assert abs(le[1] - ed[1]) <= 1, fall
+    # zwei Kisten untereinander: so weit auseinander wie zwei Absätze, im Editor wie in der Leseansicht
+    for kisten, absaetze in (luecke_lesen, luecke_editor):
+        assert absaetze > 8 and abs(kisten - absaetze) <= 1, (luecke_lesen, luecke_editor)
+    assert abs(luecke_lesen[0] - luecke_editor[0]) <= 1, (luecke_lesen, luecke_editor)
 
 
 def test_callout_rand():

@@ -1057,6 +1057,10 @@ progress { width: 100%; height: 10px; accent-color: var(--rot); }
 .callout { margin: 1.1em 0; padding: 10px 14px; border-left: 5px solid var(--grau); background: var(--grau-hell); }
 .callout > :first-child { margin-top: 0; } .callout > :last-child { margin-bottom: 0; }
 .callout h3, .callout h4 { margin-top: 0; }
+/* Zwei Callouts direkt untereinander: dazwischen so viel Luft wie zwischen zwei Absätzen. Im Raster der Leseansicht
+   fallen die Ränder nicht zusammen, sonst stünden 2 × 1,1 em zwischen den Kisten (Rückmeldung vom 12.11.2026). */
+.callout:has(+ .callout) { margin-bottom: .9em; }
+.callout + .callout { margin-top: 0; }
 .callout-info, .callout-tip { border-color: var(--co-info-ka); background: var(--co-info-fl); }
 .callout-warning { border-color: var(--co-warning-ka); background: var(--co-warning-fl); }
 .callout-danger { border-color: var(--co-danger-ka); background: var(--co-danger-fl); }
@@ -2279,6 +2283,9 @@ dialog.us-dlg { width: min(640px, 96vw); }
 .wiki-editor .toastui-editor-ww-container .toastui-editor-contents p.coz-note { --co-flaeche: var(--grau-hell); --co-kante: var(--grau); }
 .wiki-editor .toastui-editor-ww-container .toastui-editor-contents > .co-marke:not(.co-schluss) { padding-top: 6px; margin-top: 1.1em; border-top-right-radius: var(--radius); }
 .wiki-editor .toastui-editor-ww-container .toastui-editor-contents > .co-schluss { padding-bottom: 6px; margin-bottom: 1.1em; border-bottom-right-radius: var(--radius); }
+/* Folgt eine Kiste direkt auf die andere, stehen sie einen Absatzabstand auseinander – wie in der Leseansicht (.callout + .callout). */
+.wiki-editor .toastui-editor-ww-container .toastui-editor-contents > .co-schluss:has(+ .co-marke:not(.co-schluss)) { margin-bottom: .9em; }
+.wiki-editor .toastui-editor-ww-container .toastui-editor-contents > .co-schluss + .co-marke:not(.co-schluss) { margin-top: 0; }
 /* Die Marke ist nur noch ein schmaler Anfasser am oberen und unteren Rand der Kiste.
    Toast UI polstert die Hülle jedes Custom-Blocks; hier wäre das sichtbarer Leerraum und
    die Kiste stünde höher als in der Leseansicht. */

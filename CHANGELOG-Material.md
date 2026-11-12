@@ -99,6 +99,7 @@ Geschichte stehen. Schemaversion nach der Nachbesserung vor dem Merge: 30; mit d
 | Gliederung aus „Fälligkeiten je Ordner“ ausblenden (Schritt 40) | Häkchen „Nicht in „Fälligkeiten je Ordner“ zeigen“ im Dialog „Ordner bearbeiten“ an Gliederungen der obersten Ebene (`mat_folder.overview_off`): der ganze Zweig fehlt in der Tabelle der Übersicht, darunter „Nicht gezeigt: …“; Ordnerleiste, Bestand und alle übrigen Zahlen unverändert; Verschieben unter eine andere Gliederung setzt es zurück | gebaut 10.11.2026 (Schema 40), Zweig uebersicht-ausblenden |
 | „Fälligkeiten je Ordner“ zugeklappt | Beim Laden der Übersicht ist jeder Ordner mit Unterordnern zugeklappt, zuerst stehen nur die Gliederungen da (vorher erst ab 30 Zeilen und ab der zweiten Ebene); ein grauer Pfad-Knoten bleibt offen | gebaut 11.11.2026 (kein Schemaschritt, Schema bleibt 40), Zweig ue-zugeklappt |
 | Leerzeilen im Editor löschen | Rücktaste und Entf nehmen in der Strömipedia eine leere Zeile als Ganzes weg – auch zwischen zwei Klappboxen, neben Tabelle oder Hinweis (vorher wehrte der Löschschutz ab) und zwischen zwei Absätzen (vorher blieb sie stehen oder wurde zu zweien) | gebaut 11.11.2026 (kein Schemaschritt) |
+| Abstand zwischen Callouts | Zwei Callouts direkt untereinander standen 2 × 1,1 em (36 px) auseinander, jetzt so weit wie zwei Absätze (15 px), in Leseansicht und Editor | gebaut 12.11.2026 (kein Schemaschritt) |
 | Callout-Rand symmetrisch | Ein Callout, der mit einer Ausrichtung beginnt oder endet, hatte im Editor oben, in der Leseansicht unten eine halbe Zeile zu viel Rand; jetzt oben und unten gleich, Editor und Leseansicht pixelgleich | gebaut 12.11.2026 (kein Schemaschritt) |
 | Überschrift als Klappbox-Titel | „:::accordion #### Anfertigung“ zeigte die Rauten; Leseansicht und Speichern nehmen sie weg | gebaut 12.11.2026 (kein Schemaschritt) |
 | Leerzeile von der Nachbarzeile aus löschen | Nachtrag zu „Leerzeilen im Editor löschen“: Rücktaste am Anfang der Zeile darunter (auch eines Box-Titels) und Entf am Ende der Zeile darüber (auch des Titels einer zugeklappten Box) nehmen die leere Zeile weg, der Schreibstrich bleibt; eine Zeile aus unsichtbaren Zeichen gilt als leer, ebenso eine Überschrift ohne Text („#### “, zweiter Nachtrag) | gebaut 11.11.2026 (kein Schemaschritt) |
@@ -13965,3 +13966,17 @@ und Leseansicht je Zeile gleich (±1 px); ohne die Änderung rot (Kiste 1: Lesen
 Reparaturhinweis); ohne die Änderung rot. `tests/rundlauf.html` weiter grün (81/47/13), `tests/gleichstand.html`
 unverändert (17 von 18, die Abweichung bei Aufgabenlisten bestand schon vorher).
 
+## Strömipedia: Abstand zwischen zwei Callouts (Rückmeldung, 12.11.2026)
+
+Meldung: „Der Abstand zwischen Callouts kann ein normaler Zeilenabstand sein“ (Bildschirmfoto: „KISS“ und
+„Grenzen (er)kennen“ direkt untereinander).
+
+- **Ursache**: Leseansicht und Editor legen die Blöcke in ein Raster, damit beide dieselben Abstände zeigen; dort fallen
+  Ränder nicht zusammen. Zwei Kisten untereinander standen deshalb 2 × 1,1 em auseinander (36 px), zwei Absätze .9em
+  (15 px).
+- **Neu** (`app.css`): Folgt eine Kiste direkt auf eine andere, hat die erste unten den Absatzabstand (.9em) und die
+  zweite oben keinen Rand (`.callout:has(+ .callout)`, `.callout + .callout`; im Editor dasselbe an Schluss- und
+  Anfangsmarke). Abstände zu Absätzen davor und danach bleiben, wie sie waren.
+
+**Tests**: `tests/test_wiki_callout_rand.py` um zwei Kisten untereinander erweitert – Abstand wie zwischen zwei
+Absätzen (±1 px), Editor wie Leseansicht; ohne die Änderung rot (36 statt 15 px).
