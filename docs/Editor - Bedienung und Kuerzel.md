@@ -143,7 +143,9 @@ fertig ein, die am Ende der meisten Artikel steht.
 
 Markierter Text blendet eine Leiste ein. Links steht **Umwandeln in …** – darüber wird der Absatz
 zu einer Überschrift, einer Liste, einem Zitat, einem Code-Block oder einem Callout; ebenso lassen
-sich Code, Hervorheben sowie Hoch- und Tiefstellen zuweisen.
+sich Code, Hervorheben sowie Hoch- und Tiefstellen zuweisen. Beim Callout kommen die markierten Absätze
+ganz und mit ihrer Formatierung in die Kiste – Fett, Kursiv und Links bleiben erhalten, auch in einer
+einklappbaren Box.
 
 Daneben liegen Fett, Kursiv, Durchgestrichen, Unterstrichen, Textfarbe und Link, dann die
 Ausrichtung und zuletzt Rückgängig und Wiederholen.

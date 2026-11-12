@@ -2254,7 +2254,7 @@
       else if (v === "quote") ed.exec("blockQuote");
       else if (v === "codeblock") ed.exec("codeBlock");
       else if (v === "code") ed.exec("code");
-      else if (v === "callout") return calloutMenu();
+      else if (v === "callout") return zuCallout();
       else if (v === "baustein") return zuBaustein();
       else if (["mark", "sup", "sub"].includes(v)) return applyMark(v);
       state.dirty = true;
@@ -2408,6 +2408,24 @@
                 + "eine Hinweiskiste oder ein Spaltenabschnitt lässt sich nicht teilen.", true);
         }
       }, "", text);
+    };
+
+    /* Das Ausgewählte zu einem Callout machen – wie beim synchronisierten Abschnitt ein Markenpaar um die ganzen
+       Absätze. Vorher kam nur der reine Text der Auswahl in die Kiste: Fett, Kursiv, Links und Listen gingen verloren
+       (Rückmeldung vom 12.11.2026). Die Auswahl wird vor dem Dialog gemerkt, er nimmt dem Editor den Fokus. */
+    const zuCallout = () => {
+      let wahl = null;
+      try { wahl = ed.getSelection(); } catch (e) { /* dann gilt die aktuelle Stelle */ }
+      if (!wahl || wahl[1] <= wahl[0]) return calloutMenu();
+      calloutMenu((kopf) => {
+        const erg = anDerAuswahl(
+          (md, stellen) => EDMD.einfassen(md, Object.assign({ kopf }, stellen)),
+          "Die Stelle lässt sich nicht zuordnen – bitte den Text auswählen, der zum Callout werden soll.", wahl);
+        if (erg && erg.md && erg.erweitert) {
+          toast("Das Callout wurde bis zu den Grenzen der enthaltenen Kästen erweitert – "
+                + "eine Hinweiskiste oder ein Spaltenabschnitt lässt sich nicht teilen.", true);
+        }
+      });
     };
 
     /* Der Zug über mehrere Zellen ist flüchtig. ProseMirror liest seine Auswahl neu aus dem
@@ -4884,7 +4902,9 @@
         if (state.insertBlock) state.insertBlock(text);
         state.dirty = true;
       };
-      const calloutMenu = () => {
+      /* Ohne Argument kommt eine neue Kiste mit Mustertext an die Schreibstelle. „Umwandeln in … → Callout“ gibt
+         „fertig“ mit: Es bekommt die Kopfmarke und fasst die markierten Absätze selbst ein (zuCallout). */
+      const calloutMenu = (fertig) => {
         const kinds = ["info", "tip", "warning", "success", "danger", "note"];
         let kind = "info";
         dialog(`<h2>Callout einfügen</h2>
@@ -4903,12 +4923,10 @@
             });
             body.querySelector("#ck-ok").onclick = () => {
               const emoji = getEmoji();
-              // Ist Text markiert, wird er der Rumpf – sonst löschte das Einfügen ihn.
-              const markiert = (() => { try { return (state.editor.getSelectedText() || "").trim(); } catch (e) { return ""; } })();
               dlg.close();
-              const inner = markiert || (kind === "note"
-                ? "### Hinweise\n\n- Die Erprobung steht noch aus." : "**Titel**\n\nText");
-              insert(hinweisMd(kind, emoji, inner));
+              if (typeof fertig === "function") return fertig(["$$hinweis", hinweisZeile(kind, emoji), "$$"]);
+              insert(hinweisMd(kind, emoji, kind === "note"
+                ? "### Hinweise\n\n- Die Erprobung steht noch aus." : "**Titel**\n\nText"));
             };
           });
       };

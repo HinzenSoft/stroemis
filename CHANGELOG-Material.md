@@ -99,6 +99,7 @@ Geschichte stehen. Schemaversion nach der Nachbesserung vor dem Merge: 30; mit d
 | Gliederung aus „Fälligkeiten je Ordner“ ausblenden (Schritt 40) | Häkchen „Nicht in „Fälligkeiten je Ordner“ zeigen“ im Dialog „Ordner bearbeiten“ an Gliederungen der obersten Ebene (`mat_folder.overview_off`): der ganze Zweig fehlt in der Tabelle der Übersicht, darunter „Nicht gezeigt: …“; Ordnerleiste, Bestand und alle übrigen Zahlen unverändert; Verschieben unter eine andere Gliederung setzt es zurück | gebaut 10.11.2026 (Schema 40), Zweig uebersicht-ausblenden |
 | „Fälligkeiten je Ordner“ zugeklappt | Beim Laden der Übersicht ist jeder Ordner mit Unterordnern zugeklappt, zuerst stehen nur die Gliederungen da (vorher erst ab 30 Zeilen und ab der zweiten Ebene); ein grauer Pfad-Knoten bleibt offen | gebaut 11.11.2026 (kein Schemaschritt, Schema bleibt 40), Zweig ue-zugeklappt |
 | Leerzeilen im Editor löschen | Rücktaste und Entf nehmen in der Strömipedia eine leere Zeile als Ganzes weg – auch zwischen zwei Klappboxen, neben Tabelle oder Hinweis (vorher wehrte der Löschschutz ab) und zwischen zwei Absätzen (vorher blieb sie stehen oder wurde zu zweien) | gebaut 11.11.2026 (kein Schemaschritt) |
+| Umwandeln in Callout behält Formatierung | Markierter Text, über „Umwandeln in … → Callout“ zur Kiste gemacht, verlor Fett, Kursiv, Links und Code; eine Auswahl mitten im Absatz nahm das Markierte sogar aus dem Text. Jetzt kommen die ganzen Absätze unverändert in die Kiste | gebaut 12.11.2026 (kein Schemaschritt) |
 | Callout in Klappbox im Editor | Ein Callout im Inhalt einer Klappbox hatte im Editor keine Farbfläche, das Symbol lag über dem Text und der Rahmen der Box riss auf; jetzt wie im Artikel | gebaut 12.11.2026 (kein Schemaschritt) |
 | Abstand zwischen Callouts | Zwei Callouts direkt untereinander standen 2 × 1,1 em (36 px) auseinander, jetzt so weit wie zwei Absätze (15 px), in Leseansicht und Editor | gebaut 12.11.2026 (kein Schemaschritt) |
 | Callout-Rand symmetrisch | Ein Callout, der mit einer Ausrichtung beginnt oder endet, hatte im Editor oben, in der Leseansicht unten eine halbe Zeile zu viel Rand; jetzt oben und unten gleich, Editor und Leseansicht pixelgleich | gebaut 12.11.2026 (kein Schemaschritt) |
@@ -14002,3 +14003,24 @@ Meldung: „Callouts in Klappboxen funktionieren nicht im Editor“.
 **Tests**: neu `tests/test_wiki_klappbox_callout.py` (echte App, Chromium) – drei Boxen (Text um die Kiste, nur eine
 Kiste, zwei Kisten untereinander), Zeilen und Farbflächen ab der Titelzeile in beiden Ansichten auf ±1 px; ohne die
 Änderung rot (keine Fläche, Text ohne Einzug). `tests/test_wiki_callout_rand.py` weiter grün.
+
+## Strömipedia: „Umwandeln in … → Callout“ behält die Formatierung (Rückmeldung, 12.11.2026)
+
+Meldung: „immernoch kaputt“ zum Callout in der Klappbox „Anfertigung“ der Kara-8 (Artikel „Knoten“), mit Artikeltext
+und Bildschirmfoto. Das Foto zeigt die Darstellung von vor f6f45d6 (keine Fläche, Symbol über dem ersten Buchstaben,
+Rahmen der Box gerissen) – der offene Editor hatte noch das alte Stylesheet; mit dem Artikeltext nachgestellt sieht die
+Kiste auf dem aktuellen Stand aus wie im Artikel. Aufgefallen ist dabei: Der Text in der Kiste war nicht mehr fett.
+
+- **Ursache**: „Umwandeln in … → Callout“ nahm den reinen Text der Auswahl (`getSelectedText`) als Inhalt der neuen
+  Kiste und ersetzte die Auswahl durch sie. Fett, Kursiv, Links und Code gingen verloren; war nur ein Teil eines
+  Absatzes markiert, verschwand dieser Teil aus dem Absatz und stand allein in der Kiste.
+- **Neu** (`wiki.js`, `zuCallout`): wie beim synchronisierten Abschnitt und bei der Ausrichtung fasst ein Markenpaar die
+  markierten Absätze ein (`anDerAuswahl` + `EDMD.einfassen`), ihr Text bleibt unverändert – auch in einer Klappbox.
+  Eine Auswahl mitten im Absatz nimmt den ganzen Absatz, wie die übrigen Umwandlungen in der Leiste. Reicht die
+  Auswahl in einen Kasten hinein, wird bis zu dessen Grenzen erweitert (mit Hinweis). Ohne Auswahl fügt der Dialog wie
+  bisher eine neue Kiste mit Mustertext ein; der Zweig, der die Auswahl als Text übernahm, ist entfallen.
+- Hilfeseite (Leiste beim Markieren) und README nachgezogen.
+
+**Tests**: neu `tests/test_wiki_callout_umwandeln.py` (echte App, Chromium) – zwei Absätze in einer Klappbox (Fett,
+Kursiv, Link, Code) und ein einzelnes markiertes Wort im Fließtext umgewandelt, gespeicherter Text Zeichen für Zeichen
+geprüft; ohne die Änderung rot (Auszeichnung weg, „**Mitte**“ aus dem Absatz verschwunden).
