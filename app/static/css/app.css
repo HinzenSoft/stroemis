@@ -2385,6 +2385,34 @@ dialog.us-dlg { width: min(640px, 96vw); }
 /* Aufzaehlungen in der Box eingerueckt wie im Fliesstext daneben. */
 .wiki-editor .toastui-editor-ww-container .toastui-editor-contents > ul.ak,
 .wiki-editor .toastui-editor-ww-container .toastui-editor-contents > ol.ak { padding-left: 52px; }
+/* Hinweiskiste in einer Box: Außen bleibt der Rahmen der Box, innen liegen Fläche und Kante der Kiste – um den
+   Innenabstand der Box eingerückt, wie das Callout im Inhalt der Box in der Leseansicht. Die Regeln der Box kämen sonst
+   später als die der Kiste und nähmen ihr Fläche, Kante und Einzug (Rückmeldung vom 12.11.2026). Den Rand der Kiste
+   zum Text davor und danach trägt die Marke selbst (--co-oben/--co-unten), weiß, damit der Rahmen der Box durchläuft. */
+.wiki-editor .toastui-editor-ww-container .toastui-editor-contents > .ak:is(.co, .co-marke) {
+  --co-oben: 0px; --co-unten: 0px;
+  border-left: 4px solid var(--grau); border-radius: 0;
+  padding-left: calc(12px + 5px + 14px + var(--lesetext) * 1.56 + 10px); padding-right: calc(12px + 14px);
+  background:
+    linear-gradient(var(--co-kante), var(--co-kante)) 12px var(--co-oben) / 5px calc(100% - var(--co-oben) - var(--co-unten)) no-repeat,
+    linear-gradient(var(--co-flaeche), var(--co-flaeche)) 17px var(--co-oben) / calc(100% - 29px) calc(100% - var(--co-oben) - var(--co-unten)) no-repeat,
+    var(--weiss);
+}
+.wiki-editor .toastui-editor-ww-container .toastui-editor-contents > .ak.co-erst::before { left: calc(12px + 5px + 14px); }
+.wiki-editor .toastui-editor-ww-container .toastui-editor-contents > .ak.co-marke:not(.co-schluss) {
+  --co-oben: 1.1em; margin-top: 0; padding-top: calc(6px + var(--co-oben));
+}
+.wiki-editor .toastui-editor-ww-container .toastui-editor-contents > .ak.co-schluss {
+  --co-unten: 1.1em; margin-bottom: 0; padding-top: 0; padding-bottom: calc(6px + var(--co-unten));
+}
+/* Am Anfang und am Ende der Box kein Rand (wie :first-child/:last-child im Inhalt der Box); zwei Kisten untereinander
+   einen Absatzabstand auseinander (wie .callout + .callout); der Absatz nach der Kiste ohne eigenen Abstand, den trägt
+   schon die Schlussmarke (in der Leseansicht fallen die beiden Ränder zusammen). */
+.wiki-editor .toastui-editor-ww-container .toastui-editor-contents > .ak-mitte + .ak.co-marke:not(.co-schluss),
+.wiki-editor .toastui-editor-ww-container .toastui-editor-contents > .ak.co-schluss + .ak.co-marke:not(.co-schluss) { --co-oben: 0px; }
+.wiki-editor .toastui-editor-ww-container .toastui-editor-contents > .ak.co-schluss:has(+ .ak-schluss) { --co-unten: 0px; }
+.wiki-editor .toastui-editor-ww-container .toastui-editor-contents > .ak.co-schluss:has(+ .ak.co-marke:not(.co-schluss)) { --co-unten: .9em; margin-bottom: 0; }
+.wiki-editor .toastui-editor-ww-container .toastui-editor-contents > .ak.co-schluss + p.ak:not(.co) { padding-top: 0; }
 
 /* Ausrichtung */
 .wiki-editor .toastui-editor-ww-container .toastui-editor-contents > .al-left { text-align: left; }

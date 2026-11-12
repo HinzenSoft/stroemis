@@ -99,6 +99,7 @@ Geschichte stehen. Schemaversion nach der Nachbesserung vor dem Merge: 30; mit d
 | Gliederung aus „Fälligkeiten je Ordner“ ausblenden (Schritt 40) | Häkchen „Nicht in „Fälligkeiten je Ordner“ zeigen“ im Dialog „Ordner bearbeiten“ an Gliederungen der obersten Ebene (`mat_folder.overview_off`): der ganze Zweig fehlt in der Tabelle der Übersicht, darunter „Nicht gezeigt: …“; Ordnerleiste, Bestand und alle übrigen Zahlen unverändert; Verschieben unter eine andere Gliederung setzt es zurück | gebaut 10.11.2026 (Schema 40), Zweig uebersicht-ausblenden |
 | „Fälligkeiten je Ordner“ zugeklappt | Beim Laden der Übersicht ist jeder Ordner mit Unterordnern zugeklappt, zuerst stehen nur die Gliederungen da (vorher erst ab 30 Zeilen und ab der zweiten Ebene); ein grauer Pfad-Knoten bleibt offen | gebaut 11.11.2026 (kein Schemaschritt, Schema bleibt 40), Zweig ue-zugeklappt |
 | Leerzeilen im Editor löschen | Rücktaste und Entf nehmen in der Strömipedia eine leere Zeile als Ganzes weg – auch zwischen zwei Klappboxen, neben Tabelle oder Hinweis (vorher wehrte der Löschschutz ab) und zwischen zwei Absätzen (vorher blieb sie stehen oder wurde zu zweien) | gebaut 11.11.2026 (kein Schemaschritt) |
+| Callout in Klappbox im Editor | Ein Callout im Inhalt einer Klappbox hatte im Editor keine Farbfläche, das Symbol lag über dem Text und der Rahmen der Box riss auf; jetzt wie im Artikel | gebaut 12.11.2026 (kein Schemaschritt) |
 | Abstand zwischen Callouts | Zwei Callouts direkt untereinander standen 2 × 1,1 em (36 px) auseinander, jetzt so weit wie zwei Absätze (15 px), in Leseansicht und Editor | gebaut 12.11.2026 (kein Schemaschritt) |
 | Callout-Rand symmetrisch | Ein Callout, der mit einer Ausrichtung beginnt oder endet, hatte im Editor oben, in der Leseansicht unten eine halbe Zeile zu viel Rand; jetzt oben und unten gleich, Editor und Leseansicht pixelgleich | gebaut 12.11.2026 (kein Schemaschritt) |
 | Überschrift als Klappbox-Titel | „:::accordion #### Anfertigung“ zeigte die Rauten; Leseansicht und Speichern nehmen sie weg | gebaut 12.11.2026 (kein Schemaschritt) |
@@ -13980,3 +13981,24 @@ Meldung: „Der Abstand zwischen Callouts kann ein normaler Zeilenabstand sein�
 
 **Tests**: `tests/test_wiki_callout_rand.py` um zwei Kisten untereinander erweitert – Abstand wie zwischen zwei
 Absätzen (±1 px), Editor wie Leseansicht; ohne die Änderung rot (36 statt 15 px).
+
+## Strömipedia: Callout in einer Klappbox im Editor (Rückmeldung, 12.11.2026)
+
+Meldung: „Callouts in Klappboxen funktionieren nicht im Editor“.
+
+- **Ursache**: Die Blöcke eines Callouts im Inhalt einer Box tragen im Editor die Klassen beider Kästen (`ak` und
+  `co`). Die Regeln der Box stehen später im Stylesheet, bei gleicher Gewichtung gewannen sie: weiße Fläche, graue
+  Kante, 12 px Einzug. Das Callout hatte keine Farbfläche, das Symbol lag über dem ersten Buchstaben, und der Rand an
+  der Anfangsmarke (`margin-top`) riss den Rahmen der Box auf. Einfügen über „/“ war nicht betroffen: Die Kiste landet
+  in der Box.
+- **Neu** (`app.css`, `.ak:is(.co, .co-marke)`): Außen bleibt der Rahmen der Box, innen liegen Kante und Fläche der
+  Kiste als Hintergrund, um den Innenabstand der Box eingerückt; Text und Symbol rücken entsprechend ein. Den Rand der
+  Kiste zum Text davor und danach tragen die Marken als weißen Innenabstand (`--co-oben`/`--co-unten`), damit der
+  Rahmen der Box durchläuft – am Anfang und Ende der Box kein Rand, zwei Kisten untereinander einen Absatzabstand
+  auseinander, der Absatz nach der Kiste ohne eigenen Abstand (in der Leseansicht fallen die Ränder zusammen).
+- Unverändert: Im aufgeklappten Zustand steht die Titelzeile einer Box im Editor 8 px tiefer als im Artikel (die
+  Anfangsmarke der Box); das war schon vorher so.
+
+**Tests**: neu `tests/test_wiki_klappbox_callout.py` (echte App, Chromium) – drei Boxen (Text um die Kiste, nur eine
+Kiste, zwei Kisten untereinander), Zeilen und Farbflächen ab der Titelzeile in beiden Ansichten auf ±1 px; ohne die
+Änderung rot (keine Fläche, Text ohne Einzug). `tests/test_wiki_callout_rand.py` weiter grün.
