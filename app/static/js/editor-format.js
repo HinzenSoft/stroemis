@@ -271,7 +271,8 @@ window.EDMD = (function () {
     if (titel.length !== 1 || titel.length !== roh.length) reparatur("akkordeon");
     // Ohne Titel bleibt die Kopfzeile leer: „:::accordion“ und „:::accordion Details“ sind zwei
     // verschiedene Texte, und das Speichern soll keinen Titel erfinden, den niemand geschrieben hat.
-    out[eintrag.pos] = `:::accordion ${titel.join(" ")}`.trimEnd();
+    // Eine Überschrift als Titel verliert ihre Rauten (MD.klappTitel) – sonst stünden sie in der Kopfzeile.
+    out[eintrag.pos] = `:::accordion ${titel.map(MD.klappTitel).filter(Boolean).join(" ")}`.trimEnd();
     eintrag.pos = null;
   };
   /* Ein "|" in einer Tabellenzelle muss escaped sein, sonst zerlegt der Tabellenparser die

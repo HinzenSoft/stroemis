@@ -144,7 +144,7 @@ window.MD = (function () {
           /* Der Titel ist im Editor ein gewöhnlicher Absatz und lässt sich formatieren – fett, kursiv,
              Code, Link. Gespeichert steht das als Markdown in der Kopfzeile; bis 11.11.2026 kam es hier
              als bloßer Text an, und die Leseansicht zeigte die Sternchen (Rückmeldung des Nutzers). */
-          const title = f.args || "Details";
+          const title = klappTitel(f.args) || "Details";
           return { type: "accordionBlock", raw: f.raw, title, titleTokens: this.lexer.inlineTokens(title),
                    tokens: this.lexer.blockTokens(f.inner + "\n", []) };
         }
@@ -1179,7 +1179,18 @@ window.MD = (function () {
     return () => zeile.getClientRects().length > 0;
   }
 
-  return { render, reinigen, entziffern, buildToc, tocHtml, enhance, scrollToHash, tocScrollspy, istInhaltsbild, istInhaltsmedium,
+  /* Titel einer einklappbaren Box ohne Überschriftszeichen. Steht der Titel im Editor als Überschrift (etwa weil
+     eine Überschrift zur Box wurde), schrieb das Speichern „:::accordion #### Anfertigung“ – und die Leseansicht
+     zeigte die Rauten (Rückmeldung vom 12.11.2026). Eine Überschrift ist im Titel nicht vorgesehen, es bleibt der
+     Text. Nur eine echte Überschriftszeile zählt: Rauten mit Leerzeichen dahinter („#1 Fehler“ bleibt stehen),
+     schließende Rauten nur bei ihr. */
+  function klappTitel(t) {
+    const s = String(t || "").trim();
+    const m = /^#{1,6}(?:[ \t]+|$)/.exec(s);
+    return m ? s.slice(m[0].length).replace(/(?:^|[ \t]+)#+[ \t]*$/, "").trim() : s;
+  }
+
+  return { render, reinigen, entziffern, klappTitel, buildToc, tocHtml, enhance, scrollToHash, tocScrollspy, istInhaltsbild, istInhaltsmedium,
            sucheVerdrahten, suchzeileEinrichten,
            CALLOUTS, CALLOUT_FARBEN, ALIGNS, MARKERS, COLOR_NAMES, VIDEO_RE, AUDIO_RE, esc, allEmojis,
            fenceMask, imageWidth, embedMasse, istBaustein, bausteinElement, bausteinMasse,

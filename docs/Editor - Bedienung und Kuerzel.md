@@ -271,7 +271,8 @@ Rechte Spalte
 Im Editor steht die Box aufgeklappt da – nur so lässt sich ihr Inhalt bearbeiten. Titel und
 Inhalt sind gewöhnlicher Text: hineinklicken und schreiben, kein Dialog. Ein Klick in die Box
 öffnet ihr Menü mit Auflösen (der Inhalt bleibt) und Löschen. Der Titel lässt sich formatieren –
-fett, kursiv, Code, Link – und erscheint im Artikel genau so.
+fett, kursiv, Code, Link – und erscheint im Artikel genau so. Wird eine Überschrift zum Titel,
+bleibt nur ihr Text; die Rauten (`####`) erscheinen nicht im Titel.
 
 ```
 :::accordion Titel der Box

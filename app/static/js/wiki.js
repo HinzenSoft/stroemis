@@ -1892,7 +1892,7 @@
     },
     accordion(node) {
       const lit = (node.literal || "").split("\n");
-      const title = (lit[0] || "Details").trim();
+      const title = MD.klappTitel(lit[0]) || "Details";
       return [
         // Zugeklappt wie in der Leseansicht – sonst stünde der Text im Editor viel tiefer als im Artikel.
         { type: "openTag", tagName: "details", attributes: { class: "accordion" }, outerNewLine: true },

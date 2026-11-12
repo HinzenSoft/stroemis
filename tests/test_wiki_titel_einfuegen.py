@@ -3,7 +3,8 @@ python tests/test_wiki_titel_einfuegen.py  oder  pytest tests/test_wiki_titel_ei
 
 1. Der Titel einer Klappbox ist im Editor ein gewöhnlicher Absatz und lässt sich fett setzen. Gespeichert steht das als
    ":::accordion **Quellen**", und die Leseansicht zeigte die Sternchen. Jetzt trägt der Titel seine Formatierung –
-   gereinigt wie der übrige Artikel.
+   gereinigt wie der übrige Artikel. Nachtrag 12.11.2026: Eine Überschrift als Titel („:::accordion #### Anfertigung“)
+   verliert ihre Rauten – in der Leseansicht und beim Speichern.
 2. Ein ":::warning", dessen ":::" am Ende der letzten Textzeile stand statt in einer eigenen, galt im Editor als
    Abschnitt bis zum Artikelende (EDMD.topLevelBlocks). Ein Spaltenabschnitt, eingefügt irgendwo darunter, landete
    deshalb ganz unten. Jetzt ist ":::" ohne Schlusszeile ein gewöhnlicher Absatz, wie in der Leseansicht.
@@ -49,6 +50,16 @@ def _lauf(e):
     # Im Editor bleibt der Titel ein Absatz, die Sternchen gehen beim Speichern unverändert zurück.
     e.setze(":::accordion **Quellen**\nInhalt\n:::", 0)
     assert e.js("md()") == ":::accordion **Quellen**\nInhalt\n:::", e.js("md()")
+    # Nachtrag 12.11.2026: Eine Überschrift als Titel („:::accordion #### Anfertigung“) zeigte die Rauten. Die
+    # Leseansicht nimmt sie weg, das Speichern schreibt den Titel ohne sie; „#1“ und „C#“ sind keine Überschrift.
+    for kopf, soll in (("#### Anfertigung", "Anfertigung"), ("## Titel ##", "Titel"), ("#### **Fett**", "<strong>Fett</strong>"),
+                       ("#1 Fehler", "#1 Fehler"), ("C# Grundlagen", "C# Grundlagen"), ("####", "Details")):
+        html = e.js(f"MD.render({json.dumps(':::accordion ' + kopf + chr(10) + 'Inhalt' + chr(10) + ':::')})")
+        assert f"<summary>{soll}</summary>" in html, (kopf, html)
+    e.setze(":::accordion #### Anfertigung\nInhalt\n:::", 0)
+    assert e.js("bloecke()")[1] == "Anfertigung", e.js("bloecke()")
+    assert e.js("md()") == ":::accordion Anfertigung\nInhalt\n:::", e.js("md()")
+    assert e.js("EDMD.repariert()") is False, "kein Reparaturhinweis"
 
     # 2. ":::" ohne Schlusszeile
     e.setze(KAPUTT, 0)

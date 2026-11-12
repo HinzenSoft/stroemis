@@ -1218,6 +1218,10 @@ mark.cq { background: var(--markierung); padding: 0 1px; cursor: pointer; border
 }
 .callout-body { flex: 1; min-width: 0; }
 .callout-body > :first-child { margin-top: 0; } .callout-body > :last-child { margin-bottom: 0; }
+/* Steht eine Ausrichtung am Anfang oder Ende der Kiste, liegt der Rand an ihrem ersten bzw. letzten Absatz – die
+   Regel darüber erreicht ihn nicht, und unten blieb eine Zeile Luft (Rückmeldung vom 12.11.2026). */
+.callout-body > [class^="align-"]:first-child > :first-child { margin-top: 0; }
+.callout-body > [class^="align-"]:last-child > :last-child { margin-bottom: 0; }
 /* Oben knapper als unten: der Absatz darüber bringt seinen eigenen Abstand schon mit. */
 .columns { display: grid; gap: 22px; grid-template-columns: repeat(2, minmax(0, 1fr)); margin: .35em 0 1em; }
 .columns.cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
@@ -2303,6 +2307,10 @@ dialog.us-dlg { width: min(640px, 96vw); }
 .wiki-editor .toastui-editor-ww-container .toastui-editor-contents > h3.kasten:not(.kasten-erst) { padding-top: 1.2em; }
 .wiki-editor .toastui-editor-ww-container .toastui-editor-contents > h2.kasten:not(.kasten-erst) { padding-top: 1.4em; }
 .wiki-editor .toastui-editor-ww-container .toastui-editor-contents > .kasten.ed-leerzeile { padding-top: 0; }
+/* Die Marke einer Ausrichtung in der Kiste ist null hoch und trägt keinen Abstand – den trägt der Block darunter
+   selbst. Sonst stand der Text einer Kiste, die mit einer Ausrichtung beginnt, gut eine halbe Zeile tiefer als
+   in der Leseansicht, und der obere Rand wirkte doppelt so groß wie der untere (Rückmeldung vom 12.11.2026). */
+.wiki-editor .toastui-editor-ww-container .toastui-editor-contents > .co.sek-still { padding-top: 0; }
 /* Die Leerzeile, die im Markdown zwei Absätze trennt, ist im Editor ein leerer Absatz –
    nötig fürs Speichern, aber in der Leseansicht steht dort nichts. Zugeklappt stimmt der
    Zeilenfall beider Ansichten überein; wer den Schreibstrich hineinsetzt, sieht die Zeile

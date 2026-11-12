@@ -99,6 +99,8 @@ Geschichte stehen. Schemaversion nach der Nachbesserung vor dem Merge: 30; mit d
 | Gliederung aus „Fälligkeiten je Ordner“ ausblenden (Schritt 40) | Häkchen „Nicht in „Fälligkeiten je Ordner“ zeigen“ im Dialog „Ordner bearbeiten“ an Gliederungen der obersten Ebene (`mat_folder.overview_off`): der ganze Zweig fehlt in der Tabelle der Übersicht, darunter „Nicht gezeigt: …“; Ordnerleiste, Bestand und alle übrigen Zahlen unverändert; Verschieben unter eine andere Gliederung setzt es zurück | gebaut 10.11.2026 (Schema 40), Zweig uebersicht-ausblenden |
 | „Fälligkeiten je Ordner“ zugeklappt | Beim Laden der Übersicht ist jeder Ordner mit Unterordnern zugeklappt, zuerst stehen nur die Gliederungen da (vorher erst ab 30 Zeilen und ab der zweiten Ebene); ein grauer Pfad-Knoten bleibt offen | gebaut 11.11.2026 (kein Schemaschritt, Schema bleibt 40), Zweig ue-zugeklappt |
 | Leerzeilen im Editor löschen | Rücktaste und Entf nehmen in der Strömipedia eine leere Zeile als Ganzes weg – auch zwischen zwei Klappboxen, neben Tabelle oder Hinweis (vorher wehrte der Löschschutz ab) und zwischen zwei Absätzen (vorher blieb sie stehen oder wurde zu zweien) | gebaut 11.11.2026 (kein Schemaschritt) |
+| Callout-Rand symmetrisch | Ein Callout, der mit einer Ausrichtung beginnt oder endet, hatte im Editor oben, in der Leseansicht unten eine halbe Zeile zu viel Rand; jetzt oben und unten gleich, Editor und Leseansicht pixelgleich | gebaut 12.11.2026 (kein Schemaschritt) |
+| Überschrift als Klappbox-Titel | „:::accordion #### Anfertigung“ zeigte die Rauten; Leseansicht und Speichern nehmen sie weg | gebaut 12.11.2026 (kein Schemaschritt) |
 | Leerzeile von der Nachbarzeile aus löschen | Nachtrag zu „Leerzeilen im Editor löschen“: Rücktaste am Anfang der Zeile darunter (auch eines Box-Titels) und Entf am Ende der Zeile darüber (auch des Titels einer zugeklappten Box) nehmen die leere Zeile weg, der Schreibstrich bleibt; eine Zeile aus unsichtbaren Zeichen gilt als leer, ebenso eine Überschrift ohne Text („#### “, zweiter Nachtrag) | gebaut 11.11.2026 (kein Schemaschritt) |
 | Klappbox-Titel mit Formatierung | Fett, kursiv, Code und Links im Titel einer Klappbox erscheinen in der Leseansicht formatiert (vorher standen die Sternchen da) | gebaut 11.11.2026 (kein Schemaschritt) |
 | Spaltenabschnitt an der Schreibstelle | Ein „:::“ ohne Schlusszeile (etwa ein Hinweis, dessen „:::“ am Ende der letzten Textzeile steht) gilt im Editor nicht mehr als Abschnitt bis zum Artikelende – ein neuer Spaltenabschnitt kommt wieder an den Schreibstrich statt ans Artikelende | gebaut 11.11.2026 (kein Schemaschritt) |
@@ -13933,3 +13935,33 @@ kopieren“).
 Entf, Rücktaste am Anfang des unteren Titels, Entf am Ende des oberen, zugeklappten Titels (Zeile weg, Strich wie
 erwartet, beide Boxen zu, keine Meldung); `#### ` zwischen zwei Absätzen von allen vier Seiten; eine Überschrift mit
 Text bleibt. Ohne die Änderung schlägt Fall 14 fehl.
+
+## Strömipedia: Callout-Rand symmetrisch, Überschrift als Klappbox-Titel (Rückmeldungen, 12.11.2026)
+
+Meldungen: „Callouts haben etwas viel oberen Rand, halt ihn symmetrisch zum unteren“ (Bildschirmfoto: Hinweis
+„Missinformationswelle“ im Editor) und „Steuerzeichen tauchen in der Überschrift von Klappboxen auf“ (Bildschirmfoto:
+Box „#### Anfertigung“ in der Leseansicht).
+
+- **Callout-Rand – Ursache**: Der Hinweis „Missinformationswelle“ besteht ganz aus einer Ausrichtung (`:::align justify`
+  in `:::warning`). Im Editor trug deren Marke den Abstand eines Absatzes (`.kasten:not(.kasten-erst)`, .9em) – der
+  Text stand rund 14 px tiefer, oben 26 statt 12 px Rand, unten 13. In der Leseansicht war es umgekehrt: Der letzte
+  Absatz einer Ausrichtung am Kistenende behielt seinen unteren Rand (`.callout-body > :last-child` erreicht ihn
+  nicht), unten 28 statt 14 px.
+- **Neu** (`app.css`): Die Marke einer Ausrichtung in der Kiste ist ohne Abstand (`.co.sek-still`); in der Leseansicht
+  verliert der erste bzw. letzte Absatz einer Ausrichtung am Anfang bzw. Ende der Kiste seinen Rand. Gemessen in der
+  echten App: alle Kisten oben 12, unten 13–14 px, Editor und Leseansicht Zeile für Zeile auf demselben Pixel
+  (Ausrichtung am Anfang, in der Mitte, am Ende, als ganzer Inhalt, ohne Ausrichtung).
+- **Klappbox-Titel – Ursache**: Steht der Titel im Editor als Überschrift (etwa weil eine Überschrift zur Box wurde),
+  schrieb das Speichern `:::accordion #### Anfertigung`, und die Leseansicht zeigte die Rauten.
+- **Neu** (`MD.klappTitel` in `markdown.js`): Eine Überschriftszeile als Titel verliert ihre Rauten – in der Leseansicht
+  (gilt sofort auch für schon gespeicherte Artikel), beim Speichern aus dem Editor (`titelUebernehmen` in
+  `editor-format.js`) und in der alten `$$accordion`-Vorschau (`wiki.js`). Nur eine echte Überschrift zählt: „#1 Fehler“
+  und „C# Grundlagen“ bleiben, wie sie sind; ein Titel nur aus Rauten wird „Details“.
+- Hilfeseite (Einklappbare Boxen) und README nachgezogen.
+
+**Tests**: neu `tests/test_wiki_callout_rand.py` (echte App, Chromium) – fünf Kisten, Rand oben = unten (±2 px), Editor
+und Leseansicht je Zeile gleich (±1 px); ohne die Änderung rot (Kiste 1: Lesen 12/28, Editor 26/13).
+`tests/test_wiki_titel_einfuegen.py` um Überschriften als Titel erweitert (Leseansicht, Speichern ohne Rauten, kein
+Reparaturhinweis); ohne die Änderung rot. `tests/rundlauf.html` weiter grün (81/47/13), `tests/gleichstand.html`
+unverändert (17 von 18, die Abweichung bei Aufgabenlisten bestand schon vorher).
+
