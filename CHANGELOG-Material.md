@@ -99,6 +99,7 @@ Geschichte stehen. Schemaversion nach der Nachbesserung vor dem Merge: 30; mit d
 | Gliederung aus „Fälligkeiten je Ordner“ ausblenden (Schritt 40) | Häkchen „Nicht in „Fälligkeiten je Ordner“ zeigen“ im Dialog „Ordner bearbeiten“ an Gliederungen der obersten Ebene (`mat_folder.overview_off`): der ganze Zweig fehlt in der Tabelle der Übersicht, darunter „Nicht gezeigt: …“; Ordnerleiste, Bestand und alle übrigen Zahlen unverändert; Verschieben unter eine andere Gliederung setzt es zurück | gebaut 10.11.2026 (Schema 40), Zweig uebersicht-ausblenden |
 | „Fälligkeiten je Ordner“ zugeklappt | Beim Laden der Übersicht ist jeder Ordner mit Unterordnern zugeklappt, zuerst stehen nur die Gliederungen da (vorher erst ab 30 Zeilen und ab der zweiten Ebene); ein grauer Pfad-Knoten bleibt offen | gebaut 11.11.2026 (kein Schemaschritt, Schema bleibt 40), Zweig ue-zugeklappt |
 | Leerzeilen im Editor löschen | Rücktaste und Entf nehmen in der Strömipedia eine leere Zeile als Ganzes weg – auch zwischen zwei Klappboxen, neben Tabelle oder Hinweis (vorher wehrte der Löschschutz ab) und zwischen zwei Absätzen (vorher blieb sie stehen oder wurde zu zweien) | gebaut 11.11.2026 (kein Schemaschritt) |
+| Riegenkarten: Ergebnis am Namen, Beschreibung ohne Verlauf | Bestanden/nicht bestanden färbt den Namen grün/rot – überall im Modul, auch in der Matrix (vorher dort nur das Schloss); die Marken daneben sind fort. Über Leistungsbeschreibungen liegt kein Verlauf mehr | gebaut 13.11.2026 (kein Schemaschritt) |
 | Riegenkarten: Katalog beim Import | Beim Import als neuer Lehrgang ließ sich kein Katalog wählen, nachträglich auch nicht. Jetzt dieselbe Auswahl in der Import-Vorschau, und ein Lehrgang ohne Leistungen bietet „Aus Katalog übernehmen“ | gebaut 13.11.2026 (kein Schemaschritt) |
 | Telefon: Kopfzeile einzeilig, wenn jemand schreibt | Hatte jemand anderes die Seite im Editor offen, brach am Telefon „⋯“ wegen der Marke „✏ Name bearbeitet“ in eine zweite Zeile. Jetzt steht am Telefon gelb „✏ Vorname“ im gesperrten Bearbeiten-Knopf, die Marke entfällt | gebaut 12.11.2026 (kein Schemaschritt) |
 | Umwandeln in Callout behält Formatierung | Markierter Text, über „Umwandeln in … → Callout“ zur Kiste gemacht, verlor Fett, Kursiv, Links und Code; eine Auswahl mitten im Absatz nahm das Markierte sogar aus dem Text. Jetzt kommen die ganzen Absätze unverändert in die Kiste | gebaut 12.11.2026 (kein Schemaschritt) |
@@ -14073,3 +14074,25 @@ auswählen/festlegen“.
 unbekannter Katalog legt nichts an, Import in bestehenden Lehrgang mit Katalog 400, nachträglich (Rechte, 404, 400,
 409 beim zweiten Mal); Chromium: Auswahl in der Vorschau, Wahl überlebt das Neuzeichnen, Lehrgang mit Leistungen
 angelegt; leerer Lehrgang → „Aus Katalog übernehmen“ → zwei Leistungen, Knopf weg. Ohne die Änderung rot.
+
+## Riegenkarten: Lehrgangsergebnis als Farbe des Namens, Beschreibung ohne Verlauf (Wünsche, 13.11.2026)
+
+Wünsche: „In der Matrix kann beim Namen vermerkt werden, wenn eine Person bestanden hat oder durchgefallen ist.“ (mit
+Bildschirmfoto der Matrix: am Namen nur das Schloss), dann „Ggf. kann der Name einfach global Rot/Grün eingefärbt werden
+und die Bubbles auch auf anderen Seiten des Moduls entfernt werden“ und „Der Fade bei den Beschreibungen kann entfallen.“
+
+- **Ergebnis am Namen** (`pruefungen.js`): `tnKopfHtml` und der neue `tnNameHtml` färben den Namen nach dem
+  Lehrgangsergebnis – grün (`--ok`) bestanden, rot (`--rot-auf-flaeche`, lesbar auch auf den grauen Zeilen
+  eingefrorener Personen) nicht bestanden – in der Teilnehmerliste (Tabelle und Karten), der Matrix, „je Leistung“,
+  „je Teilnehmende“, den Mängeln, am großen Bild und in der Druckansicht. Die Marken `ergebnisMarkeHtml` sind entfallen;
+  ohne Leitung steht in „je Teilnehmende“ im Feld „Lehrgang“ das Ergebnis als farbiges Wort. Die Farbe trägt es nicht
+  allein: Die Vorlesehilfe hört „, Lehrgang bestanden“ (`.nur-vorlesen`), der Tooltip am Namen nennt es. Vermerkt wird
+  wie bisher in „je Teilnehmende“ (die Matrix bleibt so schmal wie vorher).
+- **Beschreibung ohne Verlauf** (`pruefungen.css`): Der Verlauf über der letzten Zeile der Leistungskarten lag auch auf
+  einer kurzen Beschreibung, die ganz dastand. Jetzt drei Zeilen per `line-clamp`, eine längere endet mit „…“.
+- README nachgezogen.
+
+**Tests**: neu `tests/test_pruefungen_ergebnis_name.py` (echte App, Chromium) – als Leitung und als Ausbilder ohne
+Leitung: Farbe und Vorlesewort je Person in Teilnehmende, Matrix, je Leistung und je TN, keine Ergebnis-Marke mehr;
+Leistungskarten ohne `::after`, die lange Beschreibung nach drei Zeilen abgeschnitten, die kurze ganz. Ohne die Änderung
+rot (Namen grau, vier Marken).

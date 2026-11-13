@@ -111,8 +111,13 @@ p.dlg-tn { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 /* Zähler im Kopf: „3 bestanden · 1 nicht bestanden“ */
 .erg-zaehler .ja { color: var(--ok); }
 .erg-zaehler .nein { color: var(--rot); }
-.erg-marke { margin-left: 6px; vertical-align: middle; }
-/* Spalte „Lehrgang“: zwei runde Knöpfe (Leitung) oder die Marke; darunter wer und wann. */
+/* Lehrgangsergebnis am Namen (Wunsch vom 13.11.2026): grün bestanden, rot nicht bestanden – statt der Marken
+   daneben, überall im Modul. Rot in der dunklen Fassung, damit es auch auf den grauen Zeilen eingefrorener Personen
+   gut lesbar bleibt. */
+:is(.tn-name, .erg-wort).erg-bestanden, .tn-kopfzeile.erg-bestanden :is(.tn-name, .linkbtn) { color: var(--ok); }
+:is(.tn-name, .erg-wort).erg-nicht_bestanden, .tn-kopfzeile.erg-nicht_bestanden :is(.tn-name, .linkbtn) { color: var(--rot-auf-flaeche); }
+.erg-wort { font-weight: 600; }
+/* Spalte „Lehrgang“: zwei runde Knöpfe (Leitung) oder das Ergebnis als Wort; darunter wer und wann. */
 .erg-block { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; min-width: 104px; }
 /* Zeichen mit Wort („👍 bestanden“, UI/UX D14 – vorher runde Knöpfe nur mit dem Zeichen); in der schmalen Spalte
    untereinander. */
@@ -134,7 +139,6 @@ p.dlg-tn { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .erg-knopf.nein.sel { background: var(--rot); border-color: var(--rot); }
 .erg-knopf:disabled { cursor: progress; }
 .erg-von, .erg-leer { font-size: var(--fs-marke); color: var(--grau); }
-.erg-block .erg-marke { margin-left: 0; }
 /* Spalte „Kommentar“: die Zelle ist der Knopf zum Dialog; leer steht „+ Kommentar“. */
 .komm-zelle {
   display: block; width: 100%; min-width: 160px; max-width: 260px; min-height: 52px; padding: 6px 8px;
@@ -267,8 +271,10 @@ p.dlg-tn { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .leistung-karte { border: 1px solid var(--linie); border-left: 4px solid var(--anthrazit); border-radius: var(--radius); padding: 10px 12px; margin: 0 0 10px; display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; }
 .leistung-karte .titel { font-weight: 700; font-size: 1.02rem; overflow-wrap: anywhere; }
 .leistung-karte .titel .badge { margin-left: 6px; }
-.leistung-karte .md-vorschau { grid-column: 1 / -1; font-size: var(--fs-mittel); color: var(--grau); max-height: 4.6em; overflow: hidden; position: relative; }
-.leistung-karte .md-vorschau::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 1.6em; background: linear-gradient(rgba(255,255,255,0), var(--weiss)); }
+/* Drei Zeilen der Beschreibung, eine längere endet mit „…“. Vorher lag ein Verlauf über der letzten Zeile – auch bei
+   einer kurzen, die ganz dastand (Wunsch des Nutzers vom 13.11.2026: „Der Fade kann entfallen“). */
+.leistung-karte .md-vorschau { grid-column: 1 / -1; font-size: var(--fs-mittel); color: var(--grau); overflow: hidden;
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; line-clamp: 3; }
 .leistung-karte .md-vorschau p, .leistung-karte .md-vorschau ul, .leistung-karte .md-vorschau ol { margin: 0 0 .3em; }
 .leistung-karte .md-vorschau :is(h4, h5, h6) { font-size: 1em; margin: 0 0 .2em; color: var(--grau); }
 /* B11: Überschriften der Beschreibungen kommen drei Stufen tiefer an (H1 → H4) – im Dialog und in „je Leistung“ so

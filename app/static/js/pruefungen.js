@@ -180,9 +180,8 @@
     state.lb = null;
     lbBody.innerHTML = `<div class="lb-img lb-profil"><img src="${esc(a)}" alt="${esc(tnName(tn))}"></div>
       <div class="lb-side">${S.schliessenKnopf('id="lb-close"', "close")}
-        <h2>${esc(tnName(tn))}</h2>
-        <div class="lb-meta">${esc(tn.gliederung || "")}${tn.geburtsdatum ? `${tn.gliederung ? "<br>" : ""}geb. ${esc(fmtTag(tn.geburtsdatum))}` : ""}</div>
-        ${ergebnisMarkeHtml(tn)}</div>`;
+        <h2>${tnNameHtml(tn)}</h2>
+        <div class="lb-meta">${esc(tn.gliederung || "")}${tn.geburtsdatum ? `${tn.gliederung ? "<br>" : ""}geb. ${esc(fmtTag(tn.geburtsdatum))}` : ""}</div></div>`;
     $("#lb-close").onclick = () => lb.close();
     if (!lb.open) { lb.showModal(); S.dialogVerlauf(lb); }
   }
@@ -197,22 +196,27 @@
     if (b) { e.preventDefault(); bildDialog(+b.dataset.tid); }
   });
   const schlossHtml = (tn) => (tn.eingefroren ? `<span class="schloss" role="img" aria-label="eingefroren" title="${esc(EINGEFROREN)}">🔒</span>` : "");
-  /* Bild, ggf. Schloss und Name als eine Zeile. nameHtml erlaubt einen Knopf statt des Textes. */
-  function tnKopfHtml(tn, nameHtml) {
-    return `<span class="tn-kopfzeile">${tnBildHtml(tn)}${schlossHtml(tn)}${nameHtml != null ? nameHtml : `<span class="tn-name">${esc(tnName(tn))}</span>`}</span>`;
-  }
   const ERGEBNIS = { bestanden: ["bestanden", "gruen"], nicht_bestanden: ["nicht bestanden", "rot"] };
-  function ergebnisMarkeHtml(tn, opts = {}) {
-    const e = ERGEBNIS[tn.ergebnis];
-    if (!e) return opts.leer ? '<span class="muted erg-leer">–</span>' : "";
-    return `<span class="badge ${e[1]} erg-marke" title="Lehrgang ${e[0]}">${e[0]}</span>`;
+  /* Das Lehrgangsergebnis färbt den Namen – grün bestanden, rot nicht bestanden – überall im Modul; die Marken
+     „bestanden“/„nicht bestanden“ daneben sind entfallen (Wunsch des Nutzers vom 13.11.2026, vorher stand in der Matrix
+     nur das Schloss). Die Farbe trägt es nicht allein: Die Vorlesehilfe hört das Ergebnis als Wort, der Tooltip nennt es. */
+  const ergKlasse = (tn) => (ERGEBNIS[tn.ergebnis] ? ` erg-${tn.ergebnis}` : "");
+  const ergVorlesen = (tn) => (ERGEBNIS[tn.ergebnis] ? `<span class="nur-vorlesen">, Lehrgang ${ERGEBNIS[tn.ergebnis][0]}</span>` : "");
+  const tnNameHtml = (tn) => `<span class="tn-name${ergKlasse(tn)}"${ERGEBNIS[tn.ergebnis] ? ` title="Lehrgang ${ERGEBNIS[tn.ergebnis][0]}"` : ""}>${esc(tnName(tn))}${ergVorlesen(tn)}</span>`;
+  /* Bild, ggf. Schloss und Name als eine Zeile. nameHtml erlaubt einen Knopf statt des Textes – gefärbt wird er über die
+     Klasse der Zeile. */
+  function tnKopfHtml(tn, nameHtml) {
+    return `<span class="tn-kopfzeile${ergKlasse(tn)}">${tnBildHtml(tn)}${schlossHtml(tn)}${nameHtml != null ? nameHtml : tnNameHtml(tn)}</span>`;
   }
   const ergebnisVonHtml = (tn) => (tn.ergebnis ? `<span class="erg-von">von ${esc(kurzName(tn.ergebnis_von_name))} am ${esc(fmtDate(tn.ergebnis_am, true))}</span>` : "");
   /* Spalte „Lehrgang“: Die Leitung sieht „👍 bestanden“/„👎 nicht bestanden“ (der gesetzte ist hervorgehoben), alle
      anderen nur die Marke. Darunter klein, wer das Ergebnis wann vermerkt hat. Das Zeichen steht wie in der großen
      Bewertungswahl immer mit dem Wort (UI/UX vor dem Merge D14 – vorher nur 👍/👎). */
   function ergebnisHtml(tn) {
-    if (!darfLeiten()) return `<div class="erg-block">${ergebnisMarkeHtml(tn, { leer: true })}${ergebnisVonHtml(tn)}</div>`;
+    if (!darfLeiten()) {
+      const e = ERGEBNIS[tn.ergebnis];
+      return `<div class="erg-block">${e ? `<span class="erg-wort${ergKlasse(tn)}">${e[0]}</span>` : '<span class="muted erg-leer">–</span>'}${ergebnisVonHtml(tn)}</div>`;
+    }
     const knopf = (erg, sym, wort, kl) => `<button type="button" class="erg-knopf ${kl}${tn.ergebnis === erg ? " sel" : ""}" data-act="tn-ergebnis" data-tid="${tn.id}" data-erg="${erg}"
         aria-pressed="${tn.ergebnis === erg}" aria-label="Lehrgang ${wort}" title="Lehrgang ${wort}${tn.ergebnis === erg ? " – antippen zum Aufheben" : ""}"><span class="sym" aria-hidden="true">${sym}</span> ${wort}</button>`;
     return `<div class="erg-block"><div class="erg-knoepfe">${knopf("bestanden", "👍", "bestanden", "ja")}${knopf("nicht_bestanden", "👎", "nicht bestanden", "nein")}</div>${ergebnisVonHtml(tn)}</div>`;
@@ -1077,15 +1081,15 @@
     const hinweis = vor.length ? "" : `<p class="leerzustand">Noch keine Voraussetzungen angelegt${leitung ? " – über „Voraussetzungen verwalten“ oder den Import." : "."}</p>`;
     // Der Name ist für die Leitung ein Knopf (Bearbeiten), für alle anderen nur Text.
     const nameHtml = (tn) => (leitung
-      ? `<button type="button" class="linkbtn tn-name" data-act="tn-edit" data-tid="${tn.id}" title="Bearbeiten">${esc(tnName(tn))}</button>`
-      : `<span class="tn-name">${esc(tnName(tn))}</span>`);
+      ? `<button type="button" class="linkbtn tn-name" data-act="tn-edit" data-tid="${tn.id}" title="Bearbeiten">${esc(tnName(tn))}${ergVorlesen(tn)}</button>`
+      : tnNameHtml(tn));
     // Desktop: Tabelle TN × Voraussetzungen, erste Spalte klebt.
     const tabelle = `<div class="table-scroll tn-desktop"><table class="tn-matrix">
       <thead><tr><th>Name</th>${vor.map((v) => `<th title="${esc(v.bezeichnung)}">${esc(v.bezeichnung)}</th>`).join("")}</tr></thead>
       <tbody>${tns.map((tn) => `<tr class="${tn.voraussetzungen_offen ? "offen" : ""}${tn.eingefroren ? " gesperrt" : ""}" data-tid="${tn.id}">
         <td>${tnKopfHtml(tn, nameHtml(tn))}
           <span class="tn-sub">${esc(tn.gliederung || "")}${tn.geburtsdatum ? `${tn.gliederung ? " · " : ""}geb. ${esc(fmtTag(tn.geburtsdatum))}` : ""}</span>
-          ${tn.voraussetzungen_offen ? `<span class="badge rot">${tn.voraussetzungen_offen} offen</span>` : (vor.length ? '<span class="badge gruen">alle erfüllt</span>' : "")}${ergebnisMarkeHtml(tn)}</td>
+          ${tn.voraussetzungen_offen ? `<span class="badge rot">${tn.voraussetzungen_offen} offen</span>` : (vor.length ? '<span class="badge gruen">alle erfüllt</span>' : "")}</td>
         ${vor.map((v) => {
           const st = tn.voraussetzungen[String(v.id)];
           return `<td><div class="vk">
@@ -1099,8 +1103,8 @@
        (Gerätetest B2). Wer sie selbst auf- oder zuklappt oder darin abhakt, behält den Zustand (state.vorKlapp). */
     const vorAuf = (tn) => (state.vorKlapp[tn.id] != null ? state.vorKlapp[tn.id] : tn.voraussetzungen_offen > 0);
     const karten = `<div class="tn-mobil">${tns.map((tn) => `<div class="tn-karte ${tn.voraussetzungen_offen ? "offen" : ""}${tn.eingefroren ? " gesperrt" : ""}">
-      <div class="tn-kopf">${tnKopfHtml(tn, leitung ? `<button type="button" class="linkbtn" data-act="tn-edit" data-tid="${tn.id}">${esc(tnName(tn))}</button>` : null)}
-        ${tn.voraussetzungen_offen ? `<span class="badge rot">${tn.voraussetzungen_offen} offen</span>` : (vor.length ? '<span class="badge gruen">alle erfüllt</span>' : "")}${ergebnisMarkeHtml(tn)}</div>
+      <div class="tn-kopf">${tnKopfHtml(tn, leitung ? `<button type="button" class="linkbtn" data-act="tn-edit" data-tid="${tn.id}">${esc(tnName(tn))}${ergVorlesen(tn)}</button>` : null)}
+        ${tn.voraussetzungen_offen ? `<span class="badge rot">${tn.voraussetzungen_offen} offen</span>` : (vor.length ? '<span class="badge gruen">alle erfüllt</span>' : "")}</div>
       ${tn.gliederung || tn.geburtsdatum ? `<div class="small muted">${esc(tn.gliederung || "")}${tn.geburtsdatum ? `${tn.gliederung ? " · " : ""}geb. ${esc(fmtTag(tn.geburtsdatum))}` : ""}</div>` : ""}
       ${vor.length ? `<details class="vor-klapp" data-tid="${tn.id}"${vorAuf(tn) ? " open" : ""}>
         <summary><span class="vor-klapp-titel">Voraussetzungen</span>
@@ -1907,21 +1911,21 @@
       inhalt = `<div class="table-scroll"><table class="bew-matrix">
         <thead><tr><th class="tn-kopf">Teilnehmende</th>${ls.map((l) => `<th title="${esc(l.bezeichnung)}">${esc(l.bezeichnung)}${l.zeitansatz_sekunden != null ? `<br><span class="muted">Soll ${fmtZeit(l.zeitansatz_sekunden)}</span>` : ""}</th>`).join("")}</tr></thead>
         <tbody>${tns.map((tn) => `<tr class="${tn.eingefroren ? "gesperrt" : ""}">
-          <td>${tnKopfHtml(tn, `<button type="button" class="linkbtn" data-act="bew-zu-tn" data-tid="${tn.id}" title="Ansicht „je Teilnehmende“ für ${esc(tnName(tn))} öffnen">${esc(tnName(tn))}</button>`)}<span class="tn-sub">${esc(tn.gliederung || "")}</span>
+          <td>${tnKopfHtml(tn, `<button type="button" class="linkbtn" data-act="bew-zu-tn" data-tid="${tn.id}" title="Ansicht „je Teilnehmende“ für ${esc(tnName(tn))} öffnen">${esc(tnName(tn))}${ergVorlesen(tn)}</button>`)}<span class="tn-sub">${esc(tn.gliederung || "")}</span>
             ${tn.voraussetzungen_offen ? `<span class="badge rot" title="Voraussetzungen nicht vollständig">${tn.voraussetzungen_offen} Vorauss. offen</span>` : ""}</td>
           ${ls.map((l) => `<td>${zelleHtml(tn, l)}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`;
     } else if (a === "leistung") {
       const l = ls.find((x) => x.id === state.bewLeistung);
       inhalt = `${l.beschreibung_md ? `<details class="beschreibung-kopf"><summary>Prüfungsbeschreibung</summary><div class="md">${md(l.beschreibung_md)}</div></details>` : ""}
         <ul class="zellen-liste">${tns.map((tn) => `<li><button type="button" class="zelle-zeile ${tn.voraussetzungen_offen ? "offen-vor" : ""}${tn.eingefroren ? " gesperrt" : ""}" data-act="zelle" data-tid="${tn.id}" data-lid="${l.id}">
-          <span class="name">${tnKopfHtml(tn)}${ergebnisMarkeHtml(tn)}<small>${esc(tn.gliederung || "")}${tn.voraussetzungen_offen ? `${tn.gliederung ? " · " : ""}${S.plural(tn.voraussetzungen_offen, "Voraussetzung", "Voraussetzungen")} offen` : ""}</small></span>
+          <span class="name">${tnKopfHtml(tn)}<small>${esc(tn.gliederung || "")}${tn.voraussetzungen_offen ? `${tn.gliederung ? " · " : ""}${S.plural(tn.voraussetzungen_offen, "Voraussetzung", "Voraussetzungen")} offen` : ""}</small></span>
           ${zelleHtml(tn, l, { tag: "span" })}
         </button></li>`).join("")}</ul>`;
     } else {
       const tn = tns.find((x) => x.id === state.bewTn);
       // Kopf über der Liste: Bild und Name, der freie Kommentar und (für die Leitung) das Ergebnis.
       const block = `<div class="tn-block${tn.eingefroren ? " gesperrt" : ""}">
-        <div class="tn-block-kopf">${tnBildHtml(tn, "gross")}<div class="tn-block-text"><span class="tn-name-zeile">${schlossHtml(tn)}<span class="tn-name">${esc(tnName(tn))}</span></span>${tn.gliederung ? `<span class="muted tn-gliederung">${esc(tn.gliederung)}</span>` : ""}</div></div>
+        <div class="tn-block-kopf">${tnBildHtml(tn, "gross")}<div class="tn-block-text"><span class="tn-name-zeile">${schlossHtml(tn)}${tnNameHtml(tn)}</span>${tn.gliederung ? `<span class="muted tn-gliederung">${esc(tn.gliederung)}</span>` : ""}</div></div>
         ${tn.eingefroren ? `<p class="notice small">${esc(EINGEFROREN)}</p>` : ""}
         <div class="tn-block-felder">
           <div><span class="feldname">Kommentar</span>${kommentarZelleHtml(tn, { laenge: 200 })}</div>
@@ -2460,7 +2464,7 @@
       g.eintraege.push(m);
     }
     return gruppen.map((g) => `<section class="tn-gruppe">
-      <h3>${tnKopfHtml(tnVoll(g.tn))}${g.tn.gliederung ? ` <span class="muted">· ${esc(g.tn.gliederung)}</span>` : ""}${ergebnisMarkeHtml(tnVoll(g.tn))} <span class="badge grey">${g.eintraege.length}</span></h3>
+      <h3>${tnKopfHtml(tnVoll(g.tn))}${g.tn.gliederung ? ` <span class="muted">· ${esc(g.tn.gliederung)}</span>` : ""} <span class="badge grey">${g.eintraege.length}</span></h3>
       ${g.eintraege.map((m) => mangelKarteHtml(m, opts)).join("")}</section>`).join("");
   }
 
@@ -2562,7 +2566,7 @@
         <div class="druck-filter">${esc([lg.titel, spanne(lg.datum_von, lg.datum_bis), lg.ort].filter(Boolean).join(" · "))}<br>
           ${esc(tn.gliederung || "")}${tn.gliederung ? " · " : ""}${plural(versuche.length, "Bewertung", "Bewertungen")}${tn.ergebnis ? ` · Lehrgang ${ERGEBNIS[tn.ergebnis][0]}` : ""} · Stand ${esc(fmtDate(new Date().toISOString(), true))}</div>
         ${druckAusbilder(lg)}</div>
-      <div class="tn-block-kopf">${tnBildHtml(tn, "gross")}<div class="tn-block-text"><span class="tn-name-zeile">${schlossHtml(tn)}<span class="tn-name">${esc(tnName(tn))}</span></span>${tn.gliederung ? `<span class="muted tn-gliederung">${esc(tn.gliederung)}</span>` : ""}</div></div>
+      <div class="tn-block-kopf">${tnBildHtml(tn, "gross")}<div class="tn-block-text"><span class="tn-name-zeile">${schlossHtml(tn)}${tnNameHtml(tn)}</span>${tn.gliederung ? `<span class="muted tn-gliederung">${esc(tn.gliederung)}</span>` : ""}</div></div>
       ${bewertungenListeHtml(tn, versuche, soll)}`;
     $("#druck-los").onclick = () => window.print();
   }
