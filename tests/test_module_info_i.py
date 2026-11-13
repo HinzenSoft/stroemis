@@ -68,7 +68,7 @@ STELLEN = [
     ("M31", FRG, '<summary>Geerbt von oben <span class="mf-zahl">${geerbt.length}</span>${info("Geerbt von oben", "Freigaben an Oberordnern',
      "Freigaben an Oberordnern gelten"),
     ("R1", RK, '<label>Lehrgangsleitung und Referierende${info("Lehrgangsleitung und Referierende", `Mehrere Personen', "Mehrere Personen können"),
-    ("R2", RK, 'aus Katalog übernehmen (optional)${info("Prüfungsleistungen aus Katalog", `Die Leistungen werden einmalig', "Die Leistungen werden einmalig"),
+    ("R2", RK, 'aus Katalog übernehmen${ohneLeer ? "" : " (optional)"}${info("Prüfungsleistungen aus Katalog", `Die Leistungen werden einmalig', "Die Leistungen werden einmalig"),
     ("R3", RK, '<h1>Prüfungsleistungskataloge${info("Prüfungsleistungskataloge", `Ein Katalog ist eine Vorlage', "Ein Katalog ist eine Vorlage"),
     ("R4", RK, '<label for="kl-zeit">Zeitansatz${info("Zeitansatz", ZEITANSATZ_INFO + mehrDazu("zeitansatz"))}', "Mit Zeitansatz zeigt"),
     ("R5", RK, '<label for="pl-zeit">Zeitansatz${info("Zeitansatz", ZEITANSATZ_INFO + mehrDazu("zeitansatz"))}', "Mit Zeitansatz zeigt"),
@@ -78,7 +78,6 @@ STELLEN = [
     ("W1", WIKI, '<h2>Papierkorb${rows.length ? info("Papierkorb", `Wiederhergestellte Seiten', "Wiederhergestellte Seiten kommen"),
     ("W2", WIKI, '<h3>Bearbeiten erlauben${info("Bearbeiten erlauben", `Freigegebene Redakteure', "Freigegebene Redakteure und Mitglieder bearbeiten"),
     ("W4", WIKI, '<h2>Textfarbe${info("Textfarbe", `Nach dem Handbuch CD', "Nach dem Handbuch CD"),
-    ("W5", WIKI, '<h2>Abschnitt einbinden${info("Abschnitt einbinden", `Zeigt einen synchronisierten', "Zeigt einen synchronisierten Abschnitt"),
     ("W6", WIKI, '<h2>Spalten einfügen${info("Spalten einfügen", `Die Spalten stehen im Editor', "Die Spalten stehen im Editor"),
     ("A1", MAP, '${S.info("Album", `Ein Album ist ein Übungsobjekt oder ein Übungsgewässer.${S.anleitung.mehrDazu(isNew ? "album_neu" : "album_bearbeiten")}`)}</h2>',
      "!Ein Album ist ein Übungsobjekt oder ein Übungsgewässer. Alle"),
@@ -148,8 +147,8 @@ def test_alle_stellen():
     texte = {d: lies(d) for d in {s[1] for s in STELLEN}}
     # R9 (ISC-Anleitung), W3 („Lesen einschränken“) und L5 (Herkunft der Einstellungen) stehen seit UI/UX vor dem Merge C8
     # wieder als sichtbarer Satz da – geprüft in test_module_uiux_u3.py. M19 und M21 entfielen am 04.11.2026 mit der
-    # Prüfanleitung aus der Strömipedia.
-    assert len(STELLEN) == 50
+    # Prüfanleitung aus der Strömipedia, W5 („Abschnitt einbinden“) am 13.11.2026 mit den synchronisierten Abschnitten.
+    assert len(STELLEN) == 49
     # Der alte Satz steht nicht mehr als Hilfezeile da (class="help"/"notice" mit dem Satz) – er ist ins „i“ gewandert;
     # mit „!“ davor: dieses Stück (Markup oder Satzfolge von früher) darf gar nicht mehr vorkommen.
     for nr, datei, neu, alt in STELLEN:

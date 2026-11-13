@@ -442,6 +442,8 @@ def importieren(fh, parent_id, uid):
                 # Erst alle Adressen, dann die Inhalte: Verweise auf eine andere importierte Seite kennen ihren slug.
                 for k, _ in reihe:
                     inhalt = imp.umschreiben(k.inhalt, k.quelle) if k.quelle else k.inhalt
+                    # Ein älterer Export kann noch synchronisierte Abschnitte enthalten – sie sind ausgebaut.
+                    inhalt = api_wiki.sync_abschnitte_aufloesen(inhalt)
                     db.execute("UPDATE wiki_pages SET content = ? WHERE id = ?", (inhalt, k.pid))
                     api_wiki._revision(k.pid, k.titel, inhalt, api_wiki.FORMAT, uid, ts)
                     api_wiki.sync_page_files(k.pid, inhalt)

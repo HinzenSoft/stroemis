@@ -151,19 +151,6 @@ window.MD = (function () {
         if (MARKERS.includes(f.name)) {
           return { type: "markerBlock", raw: f.raw, marker: f.name };
         }
-        /* Synchronisierte Abschnitte: ":::baustein <kennung>" hält den Inhalt an EINER Stelle,
-           ":::einbau <seite>#<kennung>" zeigt ihn anderswo. Der Einbau bleibt hier ein leerer
-           Platzhalter – gefüllt wird er in enhance(), wo die Seite nachgeladen werden kann.
-           Das hat einen Grund: Über die gewöhnliche Schnittstelle gelten die Leserechte der
-           Quellseite von allein. Setzte der Server den Inhalt ein, müsste er dieselbe Prüfung
-           ein zweites Mal nachbauen – und genau dort ist sie schon einmal durchgerutscht. */
-        if (f.name === "baustein") {
-          return { type: "bausteinBlock", raw: f.raw, kennung: f.args.trim(),
-                   tokens: this.lexer.blockTokens(f.inner + "\n", []) };
-        }
-        if (f.name === "einbau") {
-          return { type: "einbauBlock", raw: f.raw, ziel: f.args.trim() };
-        }
         if (f.name === "align") {
           const mode = ALIGNS.has(f.args.toLowerCase()) ? f.args.toLowerCase() : "center";
           return { type: "alignBlock", raw: f.raw, mode, tokens: this.lexer.blockTokens(f.inner + "\n", []) };
@@ -186,12 +173,6 @@ window.MD = (function () {
         if (token.marker === "seitenumbruch") return '<div class="page-break" aria-hidden="true"></div>';
         return `<div class="md-marker" data-marker="${token.marker}"></div>`;
       }
-      if (token.type === "bausteinBlock") {
-        return `<section class="baustein" data-baustein="${esc(token.kennung)}">${this.parser.parse(token.tokens)}</section>`;
-      }
-      if (token.type === "einbauBlock") {
-        return `<div class="einbau" data-ziel="${esc(token.ziel)}"></div>`;
-      }
       if (token.type === "alignBlock") {
         return `<div class="align-${token.mode}">${this.parser.parse(token.tokens)}</div>`;
       }
@@ -206,8 +187,6 @@ window.MD = (function () {
   const accordionRenderer = { name: "accordionBlock", level: "block", renderer: calloutBlock.renderer };
   const alignRenderer = { name: "alignBlock", level: "block", renderer: calloutBlock.renderer };
   const markerRenderer = { name: "markerBlock", level: "block", renderer: calloutBlock.renderer };
-  const bausteinRenderer = { name: "bausteinBlock", level: "block", renderer: calloutBlock.renderer };
-  const einbauRenderer = { name: "einbauBlock", level: "block", renderer: calloutBlock.renderer };
 
   /* Einzeilige Callouts in Tabellenzellen (:::warning <details>…</details> :::) */
   const calloutInline = {
@@ -434,7 +413,7 @@ window.MD = (function () {
 
   marked.use({ gfm: true, breaks: false, renderer,
     extensions: [calloutBlock, columnsRenderer, accordionRenderer, alignRenderer, markerRenderer,
-                 bausteinRenderer, einbauRenderer, calloutInline,
+                 calloutInline,
                  statusMark, colorMark, ...markExtensions] });
 
   /* Eine Zeile, die nur aus "<br>" besteht, ist eine gesetzte Leerzeile. Markdown liest daraus
@@ -583,95 +562,9 @@ window.MD = (function () {
   /* Nachbearbeitung des gerenderten Artikels – für internes und öffentliches Wiki gleich:
      breite Tabellen bekommen einen eigenen Scrollbereich (sonst schieben sie die Spalte auf),
      Codeblöcke einen Kopierknopf, Überschriften einen anklickbaren Anker. */
-  /* Einen eingebundenen Abschnitt einsetzen. Die Quellseite kommt über o.holeSeite – eine
-     Funktion, die der Aufrufer mitbringt (Wiki: die angemeldete Schnittstelle, öffentlicher
-     Bereich: die öffentliche). Damit gelten die Leserechte der Quellseite von allein, und der
-     Unterschied zwischen "gibt es nicht" und "darfst du nicht lesen" bleibt ungesagt: Sonst
-     ließe sich über einen Einbau abfragen, welche Seiten es gibt. */
-  const EINBAU_TIEFE = 3;                 // Baustein im Baustein – irgendwo ist Schluss
-
-  function einbauFuellen(wurzel, o, tiefe, speicher, kette) {
-    const bisher = kette || [];
-    wurzel.querySelectorAll(".einbau[data-ziel]").forEach((el) => {
-      if (el.dataset.gefuellt) return;
-      el.dataset.gefuellt = "1";
-      const teil = String(el.getAttribute("data-ziel") || "").split("#");
-      const slug = (teil[0] || "").trim();
-      const kennung = teil.slice(1).join("#").trim();
-      const sage = (text) => { el.innerHTML = `<div class="einbau-fehlt">${esc(text)}</div>`; };
-      if (!slug || !kennung) return sage("Eingebundener Abschnitt ohne Ziel – erwartet wird „seite#abschnitt“.");
-      /* Bindet ein Abschnitt sich selbst ein – unmittelbar oder über Umwege –, wuchs der Text
-         bis zur Tiefengrenze immer weiter, und derselbe Absatz stand dreifach ineinander da.
-         Die Kette sagt, was auf dem Weg hierher schon eingesetzt wurde. */
-      const ich = `${slug.toLowerCase()}#${kennung.toLowerCase()}`;
-      if (bisher.includes(ich)) {
-        return sage(`„${kennung}“ bindet sich selbst ein – das lässt sich nicht auflösen.`);
-      }
-      if (tiefe >= EINBAU_TIEFE) return sage("Zu viele ineinander eingebundene Abschnitte.");
-      if (typeof o.holeSeite !== "function") return sage(`Eingebundener Abschnitt „${kennung}“ aus „${slug}“.`);
-      /* Fehlschläge NICHT im Zwischenspeicher behalten: Vorher fiel jeder Fehler – Abbruch,
-         Zeitüberschreitung, Serverfehler – auf dieselbe Aussage „gibt es nicht“ zusammen, und
-         weil das Ergebnis liegen blieb, wurde es nicht einmal erneut versucht. */
-      if (!speicher.has(slug)) {
-        speicher.set(slug, Promise.resolve(o.holeSeite(slug))
-          .then((seite) => ({ seite }), (fehler) => { speicher.delete(slug); return { fehler }; }));
-      }
-      speicher.get(slug).then(({ seite, fehler }) => {
-        if (fehler) {
-          const st = fehler && fehler.status;
-          // 404 und 403 bleiben ununterscheidbar: Sonst ließe sich über einen Einbau abfragen,
-          // welche Seiten es gibt. Alles andere ist kein Befund über die Seite, sondern über
-          // die Verbindung – und das gehört auch so gesagt.
-          return sage(st === 404 || st === 403
-            ? `Der eingebundene Abschnitt ist nicht verfügbar: „${slug}“ gibt es nicht oder du darfst die Seite nicht lesen.`
-            : `Der eingebundene Abschnitt aus „${slug}“ ließ sich gerade nicht laden (${(fehler && fehler.message) || "unbekannter Fehler"}). Beim nächsten Aufruf wird es erneut versucht.`);
-        }
-        if (!seite) return sage(`Der eingebundene Abschnitt ist nicht verfügbar: „${slug}“ gibt es nicht oder du darfst die Seite nicht lesen.`);
-        const huelle = document.createElement("div");
-        huelle.innerHTML = render(seite.content);
-        // Groß- und Kleinschreibung darf die Kennung nicht trennen: Wer "Sicherung" einbindet
-        // und "sicherung" geschrieben hat, sah nur "gibt es nicht (mehr)".
-        const kl = kennung.toLowerCase();
-        const quelle = [...huelle.querySelectorAll(".baustein")]
-          .find((b) => String(b.getAttribute("data-baustein") || "").toLowerCase() === kl);
-        if (!quelle) return sage(`Den Abschnitt „${kennung}“ gibt es auf „${seite.title}“ nicht (mehr).`);
-        el.innerHTML = "";
-        const inhalt = document.createElement("div");
-        inhalt.className = "einbau-inhalt";
-        while (quelle.firstChild) inhalt.appendChild(quelle.firstChild);
-        el.appendChild(inhalt);
-        const fuss = document.createElement("div");
-        fuss.className = "einbau-fuss";
-        const a = document.createElement("a");
-        a.href = (o.prefix || "/stroemipedia/") + seite.slug;
-        a.textContent = seite.title;
-        fuss.append(document.createTextNode("Aus "), a);
-        el.appendChild(fuss);
-        einbauFuellen(inhalt, o, tiefe + 1, speicher, bisher.concat(ich));   // Baustein im Baustein
-        /* Links, Inhaltsverzeichnis und Scrollspy entstehen VOR enhance und kennen den
-           eingebundenen Text deshalb nicht: Seine Überschriften fehlten im Verzeichnis, seine
-           internen Links luden im Wiki die ganze Anwendung neu und führten im öffentlichen
-           Bereich auf /stroemipedia/… und damit zur Anmeldung.
-           Das kommt VOR der Nachbearbeitung: buildToc vergibt die Kennungen der Überschriften,
-           und ohne Kennung bekommt eine Überschrift keinen Anker. */
-        if (typeof o.nachInhalt === "function") { try { o.nachInhalt(inhalt); } catch (e) { /* egal */ } }
-        /* Und jetzt dasselbe wie für den eigenen Text der Seite. Ohne das stand im Einbau der
-           rohe Vorsatz "@cols=2:" als Zellentext, breite Tabellen sprengten die Spalte, Code
-           hatte keinen Kopierknopf und Bilder kein Vollbild. */
-        nachbearbeiten(inhalt);
-      });
-    });
-  }
-
   /* Alles, was aus dem gerenderten HTML erst den fertigen Artikel macht: Bildunterschrift und
      Vollbild, verbundene Tabellenzellen, Scrollbereich, Kopierknopf am Code, Sortierknöpfe und
-     die Anker an den Überschriften.
-
-     Eigene Funktion, weil das auch für EINGEBUNDENEN Text gilt. Der trifft erst später ein –
-     einbauFuellen läuft asynchron und wurde als erste Zeile von enhance angestoßen, alles
-     Weitere lief synchron darüber hinweg. Im Einbau stand deshalb der rohe Vorsatz "@cols=2:"
-     als Zellentext, Codeblöcke hatten keinen Kopierknopf, Bilder kein Vollbild und
-     Überschriften keinen Anker. */
+     die Anker an den Überschriften. */
   /* Der Rahmen eines HTML-Bausteins – in Leseansicht und Editor derselbe. "allow-scripts" ohne
      "allow-same-origin": der Baustein darf sein eigenes Skript ausführen, bekommt aber nie
      Cookies, Sitzung oder DOM dieser Seite zu sehen (siehe _EMBED_CSP in app/__init__.py, die
@@ -886,7 +779,6 @@ window.MD = (function () {
 
   function enhance(root, opts) {
     const o = opts || {};
-    einbauFuellen(root, o, 0, new Map());
 
     // Platzhalter aus :::toc und :::unterseiten füllen
     root.querySelectorAll(".md-marker[data-marker=toc]").forEach((el) => {
@@ -903,8 +795,6 @@ window.MD = (function () {
         : '<div class="muted small">Diese Seite hat keine Unterseiten.</div>';
     });
 
-    // Zuletzt der Rest: Was hier steht, ist schon da. Der eingebundene Text bekommt
-    // dieselbe Behandlung, sobald er eintrifft (siehe einbauFuellen).
     nachbearbeiten(root);
   }
 

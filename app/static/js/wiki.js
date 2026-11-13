@@ -1162,22 +1162,7 @@
     if (first && first.tagName === "H1" && first.textContent.trim().toLowerCase() === p.title.trim().toLowerCase()) first.remove();
     wireLinks(art);
     renderRail(MD.buildToc(art));
-    // Eingebundene Abschnitte holen sich ihre Quellseite über die gewöhnliche Schnittstelle –
-    // damit gelten deren Leserechte, ohne dass sie hier ein zweites Mal geprüft werden müssten.
-    MD.enhance(art, { children: children(p.id),
-                      // leise=1: Die Quellseite eines Einbaus wird gelesen, nicht besucht – sie
-                      // gehört nicht in „Zuletzt besucht“.
-                      holeSeite: (slug) => api(`/api/wiki/pages/${encodeURIComponent(slug)}?leise=1`).then((d) => d.page),
-                      /* Eingebundener Text trifft erst nach dem Zeichnen ein. Seine Links
-                         müssen dieselbe Behandlung bekommen wie die eigenen – sonst lädt ein
-                         Klick darin die ganze Anwendung neu –, und seine Überschriften gehören
-                         ins Verzeichnis. */
-                      nachInhalt: (el) => {
-                        wireLinks(el);
-                        renderRail(MD.buildToc(art));
-                        if (state.spy) state.spy();
-                        state.spy = MD.tocScrollspy(art, tocEl);
-                      } });
+    MD.enhance(art, { children: children(p.id) });
     if (state.spy) state.spy();
     state.spy = MD.tocScrollspy(art, tocEl);
   }
@@ -1224,21 +1209,8 @@
   /* Löschen legt in den Papierkorb – von dort wiederherstellbar. */
   async function trashPage(p) {
     const n = children(p.id).length;
-    /* Liegt auf der Seite ein synchronisierter Abschnitt, den andere einbinden, reißt das
-       Löschen dort ein Loch – und das erfährt man sonst erst, wenn jemand die andere Seite
-       aufschlägt. Die Rückfrage nannte bisher nur die Unterseiten. */
-    let sync = "";
-    try {
-      const k = await holeKatalog(true);
-      const meine = k.filter((b) => b.slug === p.slug && b.verwendungen);
-      const seiten = [...new Set(meine.flatMap((b) => b.seiten || []))];
-      if (seiten.length) {
-        sync = ` Synchronisierte Abschnitte dieser Seite werden auf ${seiten.length === 1 ? "einer anderen Seite" : seiten.length + " anderen Seiten"}`
-             + ` gezeigt (${seiten.slice(0, 4).join(", ")}${seiten.length > 4 ? ", …" : ""}) – dort fehlt der Text danach.`;
-      }
-    } catch (e) { /* ohne Auskunft wird nicht behauptet, es sei nirgends */ }
     if (!(await S.confirm(
-      `Seite „${p.title}“ in den Papierkorb legen?${n ? ` ${n} Unterseite${n > 1 ? "n kommen" : " kommt"} mit.` : ""}${sync}`,
+      `Seite „${p.title}“ in den Papierkorb legen?${n ? ` ${n} Unterseite${n > 1 ? "n kommen" : " kommt"} mit.` : ""}`,
       "In den Papierkorb"))) return;
     try {
       await api(`/api/wiki/pages/${p.id}`, { method: "DELETE" });
@@ -1395,11 +1367,8 @@
     try {
       const d = await api(`/api/wiki/pages/${p.id}/backlinks`);
       if (!d.pages.length || state.current !== p) return;   // inzwischen weitergeblättert
-      /* Ein Einbau ist kein gewöhnlicher Verweis: Die andere Seite ZEIGT den Text dieser hier.
-         Beides in einer Liste hieß, dass niemand erkennen konnte, wen eine Änderung mitreißt. */
       box.innerHTML = `<div class="children-list"><strong>Was hierher verweist</strong><ul>${d.pages.map((k) =>
-        `<li>${k.einbau ? '<span title="Diese Seite bindet einen Abschnitt von hier ein">⇄ </span>' : ""}`
-        + `<a href="/stroemipedia/${esc(k.slug)}">${k.icon ? esc(k.icon) + " " : ""}${esc(k.title)}</a></li>`).join("")}</ul></div>`;
+        `<li><a href="/stroemipedia/${esc(k.slug)}">${k.icon ? esc(k.icon) + " " : ""}${esc(k.title)}</a></li>`).join("")}</ul></div>`;
       wireLinks(box);
     } catch (e) { /* Rückverweise sind Beiwerk */ }
   }
@@ -1503,9 +1472,7 @@
     try {
       const d = await api(`/api/wiki/pages/${p.id}/backlinks`);
       const liste = (titel, seiten) => `<div class="rail-title">${titel} (${seiten.length})</div>` + (seiten.length
-        ? `<ul class="info-links">${seiten.map((q) => `<li>`
-            + (q.einbau ? '<span title="bindet einen Abschnitt von hier ein">⇄ </span>' : "")
-            + `<a href="/stroemipedia/${esc(q.slug)}">${q.icon ? esc(q.icon) + " " : ""}${esc(q.title)}</a></li>`).join("")}</ul>`
+        ? `<ul class="info-links">${seiten.map((q) => `<li><a href="/stroemipedia/${esc(q.slug)}">${q.icon ? esc(q.icon) + " " : ""}${esc(q.title)}</a></li>`).join("")}</ul>`
         : '<p class="muted small">keine</p>');
       const ziel = $("#info-verweise");
       if (!ziel) return;
@@ -1867,7 +1834,7 @@
   /* Die reinen Umwandlungen zwischen Markdown und Editorformat stehen in
      editor-format.js, die Darstellung der Abschnitte in editor-layout.js. */
   const { toEditorMd, fromEditorMd, SNIPPETS, hinweisKopf, hinweisZeile, hinweisMd,
-          bausteinMd, einbauMd, HINWEIS_NAME, ABSCHNITT_AUF } = window.EDMD;
+          HINWEIS_NAME, ABSCHNITT_AUF } = window.EDMD;
   const layoutPlugin = window.EDLAYOUT.layoutPlugin;
   const zellenAuswahl = window.EDLAYOUT.zellenAuswahl;
   const markenSchuetzen = window.EDLAYOUT.markenSchuetzen;
@@ -1982,25 +1949,6 @@
     ausrichtung(node) {
       const mode = MD.ALIGNS.has((node.literal || "").trim().toLowerCase()) ? node.literal.trim().toLowerCase() : "center";
       return sektionsMarke("ausrichtung", ALIGN_NAME[mode]);
-    },
-    /* Synchronisierte Abschnitte: Der Baustein ist ein gewöhnlicher Abschnitt mit Marke – sein
-       Inhalt wird hier bearbeitet. Der Einbau zeigt fremden Text; er ist deshalb kein Inhalt,
-       sondern ein Schild mit Herkunft. Geändert wird dort, wo der Baustein steht. */
-    baustein(node) {
-      return sektionsMarke("baustein", `Baustein „${(node.literal || "").trim() || "abschnitt"}“`);
-    },
-    einbau(node) {
-      const ziel = (node.literal || "").trim();
-      const teil = ziel.split("#");
-      const wo = (teil[0] || "").trim(), was = (teil[1] || "").trim();
-      /* Den Seitentitel zeigen, nicht die Adresse: Im Schild stand „ankertechnik-2“, wo die
-         Seite „Ankertechnik“ heißt. Der Baum führt beides, also ist der Titel zur Hand. */
-      const seite = wo && state.pages ? state.pages.find((x) => x.slug === wo) : null;
-      const text = wo && was ? `Abschnitt „${was}“ aus „${seite ? seite.title : wo}“` : "Einbau ohne Ziel";
-      return [{ type: "openTag", tagName: "div", outerNewLine: true, classNames: ["ed-einbau", "ed-marker"] },
-              { type: "html", content: `<strong>${MD.esc(text)}</strong>`
-                + `<div class="muted small">Der Text steht auf der anderen Seite und wird dort geändert.</div>` },
-              { type: "closeTag", tagName: "div", outerNewLine: true }];
     },
     toc() {
       return [{ type: "openTag", tagName: "div", outerNewLine: true, classNames: ["inline-toc", "ed-marker"] },
@@ -2151,9 +2099,6 @@
     akkordeon: ico('<rect x="2.5" y="3" width="11" height="10" rx="1"/><path d="M2.5 6.5h11"/><path d="M5 4.75l1.2 1L5 6.75" fill="none"/>'),
     emoji:     ico('<circle cx="8" cy="8" r="5.8"/><circle class="voll" cx="6" cy="6.6" r=".9"/><circle class="voll" cx="10" cy="6.6" r=".9"/><path d="M5.4 9.6a3.1 3.1 0 005.2 0"/>'),
     farbtopf:  ico('<path d="M6.5 2.5l6 6-5 5a1.4 1.4 0 01-2 0l-4-4a1.4 1.4 0 010-2z"/><path d="M13.5 11.5s1.5 1.7 1.5 2.6a1.5 1.5 0 01-3 0c0-.9 1.5-2.6 1.5-2.6z" class="voll"/>'),
-    /* Der synchronisierte Abschnitt: ein Kasten mit zwei entgegengesetzten Pfeilen – der
-       Inhalt liegt hier und erscheint anderswo mit. */
-    synchron:  ico('<rect x="2.5" y="2.5" width="11" height="11" rx="1"/><path d="M5 6.3h6M9.6 4.8l1.4 1.5-1.4 1.5M11 9.7H5M6.4 8.2L5 9.7l1.4 1.5"/>'),
     /* Der HTML-Baustein: ein Fenster mit Titelleiste – eine eigene Seite im Artikel. */
     baustein:  ico('<rect x="2.5" y="3" width="11" height="10" rx="1"/><path d="M2.5 6h11"/><circle class="voll" cx="4.6" cy="4.5" r=".7"/><circle class="voll" cx="6.6" cy="4.5" r=".7"/>'),
     griff:     ico('<circle class="voll" cx="6" cy="4" r="1.1"/><circle class="voll" cx="10" cy="4" r="1.1"/><circle class="voll" cx="6" cy="8" r="1.1"/><circle class="voll" cx="10" cy="8" r="1.1"/><circle class="voll" cx="6" cy="12" r="1.1"/><circle class="voll" cx="10" cy="12" r="1.1"/>'),
@@ -2260,7 +2205,6 @@
           <option value="quote">Zitat</option>
           <option value="codeblock">Code-Block</option>
           <option value="callout">Callout</option>
-          <option value="baustein">Synchronisierter Abschnitt</option>
         </optgroup>
         <optgroup label="Auszeichnung">
           <option value="code">Code</option>
@@ -2310,7 +2254,6 @@
       else if (v === "codeblock") ed.exec("codeBlock");
       else if (v === "code") ed.exec("code");
       else if (v === "callout") return zuCallout();
-      else if (v === "baustein") return zuBaustein();
       else if (["mark", "sup", "sub"].includes(v)) return applyMark(v);
       state.dirty = true;
     };
@@ -2437,36 +2380,7 @@
                    + "klicken, der ausgerichtet werden soll.");
     };
 
-    /* Das Ausgewählte zu einem synchronisierten Abschnitt machen: ein Markenpaar darum, sonst
-       nichts. Die Auswahl wird VOR dem Dialog gemerkt – ein modaler Dialog nimmt dem Editor den
-       Fokus, und danach wäre nicht mehr zu erfahren, was markiert war. */
-    const zuBaustein = () => {
-      let wahl = null, text = "";
-      try { wahl = ed.getSelection(); } catch (e) { /* dann gilt die aktuelle Stelle */ }
-      // Der markierte Text ist der beste Vorschlag für die Kennung – meistens steht dort eine
-      // Überschrift. Vorher war das Feld immer leer, und jeder dachte sich einen Namen aus.
-      try { text = (ed.getSelectedText() || "").split("\n").find((z) => z.trim()) || ""; }
-      catch (e) { /* dann eben ohne Vorschlag */ }
-      hideBubble();
-      const leer = !wahl || wahl[1] <= wahl[0];
-      bausteinDialog((kennung) => {
-        if (leer) return insert(bausteinMd(kennung));
-        const erg = anDerAuswahl(
-          (md, stellen) => EDMD.einfassen(md, Object.assign({ kopf: ["$$baustein", kennung, "$$"] }, stellen)),
-          "Die Stelle lässt sich nicht zuordnen – bitte den Text auswählen, der zum Abschnitt "
-          + "werden soll.", wahl);
-        /* Wurde die Auswahl aufgerundet, steht mehr im Abschnitt als markiert war. Ein
-           Abschnitt lässt sich nicht teilen – aber das gehört gesagt, sonst erscheint anderswo
-           unbemerkt mehr Text als gedacht. */
-        if (erg && erg.md && erg.erweitert) {
-          toast("Der Abschnitt wurde bis zu den Grenzen der enthaltenen Kästen erweitert – "
-                + "eine Hinweiskiste oder ein Spaltenabschnitt lässt sich nicht teilen.", true);
-        }
-      }, "", text);
-    };
-
-    /* Das Ausgewählte zu einem Callout machen – wie beim synchronisierten Abschnitt ein Markenpaar um die ganzen
-       Absätze. Vorher kam nur der reine Text der Auswahl in die Kiste: Fett, Kursiv, Links und Listen gingen verloren
+    /* Das Ausgewählte zu einem Callout machen – wie bei der Ausrichtung ein Markenpaar um die ganzen Absätze. Vorher kam nur der reine Text der Auswahl in die Kiste: Fett, Kursiv, Links und Listen gingen verloren
        (Rückmeldung vom 12.11.2026). Die Auswahl wird vor dem Dialog gemerkt, er nimmt dem Editor den Fokus. */
     const zuCallout = () => {
       let wahl = null;
@@ -2634,10 +2548,6 @@
         run: () => insert("$$toc\n$$\n") },
       { t: "Unterseiten", d: "Liste der Unterseiten an dieser Stelle", k: "kinder navigation",
         run: () => insert("$$unterseiten\n$$\n") },
-      { t: "Synchronisierter Abschnitt", d: "Teil dieser Seite, der auch anderswo erscheinen kann",
-        k: "baustein wiederverwenden", run: () => zuBaustein() },
-      { t: "Abschnitt einbinden", d: "Synchronisierten Abschnitt einer anderen Seite anzeigen",
-        k: "einbau baustein uebernehmen", run: () => einbauDialog() },
       { t: "Emoji", d: "Emoji auswählen und einfügen", k: "symbol smiley", run: () => emojiInsertDialog() },
       { t: "Datum", d: "Heutiges Datum einfügen", k: "zeit heute",
         run: () => ed.replaceSelection(new Date().toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric" })) },
@@ -2646,159 +2556,6 @@
       { t: "Statusmarke", d: "Farbige Marke, z. B. „in Prüfung“", k: "badge label",
         run: () => ed.replaceSelection("{status:offen}") },
     ];
-    /* --- Synchronisierte Abschnitte -----------------------------------------------------
-       Der Baustein bekommt eine Kennung, unter der ihn andere Seiten ansprechen. Sie steht
-       im gespeicherten Text und soll deshalb schlicht bleiben: Kleinbuchstaben, Ziffern,
-       Striche. Ein Titel voller Umlaute und Leerzeichen wäre in ":::einbau seite#kennung"
-       nicht wiederzuerkennen. */
-    const alsKennung = (roh) => String(roh || "").toLowerCase().trim()
-      .replace(/[äöüß]/g, (c) => ({ "ä": "ae", "ö": "oe", "ü": "ue", "ß": "ss" }[c]))
-      // Übrige Diakritika abtrennen statt auf "-" abzubilden: aus "Prüfstück-Größé" wird sonst
-      // "pruefstueck-groess-", aus "Cañon" ein "ca-on".
-      .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
-      // Erst kürzen, dann die Randstriche wegnehmen – andersherum konnte die Kennung auf
-      // einem Strich enden, sobald der Schnitt mitten in ein Wort fiel.
-      .replace(/[^a-z0-9]+/g, "-").slice(0, 48).replace(/^-+|-+$/g, "");
-
-    /* Alle Kennungen, die im Editor gerade stehen – in der Markenform "$$baustein\nkennung\n$$".
-       Gebraucht für die Eindeutigkeitsprüfung: Zwei Abschnitte mit derselben Kennung auf einer
-       Seite sind möglich, eingebunden wird aber immer stumm der obere, und der zweite ist von
-       außen unerreichbar. Zeilen in Codeblöcken zählen nicht mit – ein Beispiel ist kein
-       Abschnitt. */
-    const bausteineImEditor = () => {
-      let md;
-      try { md = ed.getMarkdown(); } catch (e) { return []; }
-      const zeilen = md.split("\n");
-      const raus = [];
-      let zaun = null;
-      for (let i = 0; i < zeilen.length; i++) {
-        const f = /^\s{0,3}(`{3,}|~{3,})/.exec(zeilen[i]);
-        if (f) { zaun = zaun && zeilen[i].trim().startsWith(zaun) ? null : (zaun || f[1]); continue; }
-        if (zaun) continue;
-        if (/^\$\$baustein[ \t]*$/.test(zeilen[i]) && /^\$\$[ \t]*$/.test(zeilen[i + 2] || "")) {
-          const k = (zeilen[i + 1] || "").trim();
-          if (k) raus.push(k);
-        }
-      }
-      return raus;
-    };
-
-    /* Der Dialog vergibt die Kennung. "aufKennung" bekommt sie; "vorgabe" ist die heutige
-       Kennung beim Umbenennen, "ausText" ein Textstück, aus dem ein Vorschlag entsteht. */
-    function bausteinDialog(aufKennung, vorgabe, ausText) {
-      const umbenennen = !!vorgabe;
-      const vorhanden = bausteineImEditor().filter((k) => k !== vorgabe);
-      // Eine schon vergebene Kennung durchzählen, statt sie abzulehnen: "regel", "regel-2", …
-      const freieKennung = (k) => {
-        if (!k || !vorhanden.includes(k)) return k;
-        for (let n = 2; n < 100; n++) if (!vorhanden.includes(`${k}-${n}`)) return `${k}-${n}`;
-        return k;
-      };
-      const start = vorgabe || freieKennung(alsKennung(ausText || ""));
-      dialog(`<h2>${umbenennen ? "Kennung ändern" : "Synchronisierter Abschnitt"}</h2>
-        <p class="help">${umbenennen
-          ? "Unter dieser Kennung sprechen andere Seiten den Abschnitt an."
-          : aufKennung
-          ? "Das Ausgewählte wird zu einem synchronisierten Abschnitt – am Text selbst ändert sich dabei nichts."
-          : "Dieser Teil der Seite lässt sich auf anderen Seiten einbinden. Geändert wird er immer hier – überall sonst erscheint der geänderte Text mit."}</p>
-        <label for="bs-name">Kennung</label>
-        <input type="text" id="bs-name" placeholder="z. B. sicherung-am-ufer" autocomplete="off" value="${esc(start)}">
-        <p class="help" id="bs-vorschau"></p>
-        <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button>
-        <button class="btn" id="bs-ok" type="button">${umbenennen ? "Übernehmen" : "Abschnitt anlegen"}</button></div>`,
-        (dlg, body) => {
-          const feld = body.querySelector("#bs-name");
-          const vor = body.querySelector("#bs-vorschau");
-          const zeigen = () => {
-            const k = alsKennung(feld.value);
-            /* Auf einer neuen Seite gibt es state.current noch nicht – der Zugriff auf .slug
-               warf dort einen Fehler, und die Vorschau blieb leer. Von einer gelesenen Seite
-               kommend zeigte sie sogar den Slug der VORIGEN Seite, also eine falsche Adresse. */
-            const slug = (state.current && state.current.slug) || "diese-seite";
-            if (!k) { vor.textContent = ""; return; }
-            vor.textContent = vorhanden.includes(k)
-              ? `Diese Kennung gibt es auf der Seite schon – bitte eine andere wählen.`
-              : `Wird angesprochen als: ${slug}#${k}`;
-          };
-          feld.addEventListener("input", zeigen);
-          zeigen();
-          feld.focus();
-          feld.select();
-          feld.addEventListener("keydown", (e) => {
-            if (e.key === "Enter") { e.preventDefault(); body.querySelector("#bs-ok").click(); }
-          });
-          body.querySelector("#bs-ok").onclick = () => {
-            const k = alsKennung(feld.value);
-            if (!k) return S.feldFehler(feld, "Bitte eine Kennung angeben.");
-            if (vorhanden.includes(k)) {
-              return toast(`Auf dieser Seite gibt es „${k}“ schon. Zwei gleiche Kennungen `
-                           + `lassen sich nicht auseinanderhalten – eingebunden würde immer der obere.`, true);
-            }
-            dlg.close();
-            if (aufKennung) aufKennung(k);
-            else insert(bausteinMd(k));
-          };
-        });
-    }
-
-    /* Ohne Rückruf wird der Einbau eingefügt; mit Rückruf bekommt dieser das Ziel
-       ("seite#kennung") – so ändert das Blockmenü das Ziel eines vorhandenen Einbaus. */
-    function einbauDialog(aufZiel, vorgabe) {
-      dialog(`<h2>Abschnitt einbinden${info("Abschnitt einbinden", `Zeigt einen synchronisierten Abschnitt einer anderen Seite. Der Text wird
-          dort gepflegt und erscheint hier immer in seinem neuesten Stand. Aufgeführt ist, was
-          gespeichert ist – ein eben erst angelegter Abschnitt erscheint erst nach dem Speichern
-          seiner Seite.${mehrDazu("abschnitt_einbinden")}`)}</h2>
-        <label for="eb-search">Abschnitt suchen</label>
-        <input type="search" id="eb-search" placeholder="Kennung, Seite oder Text …" autocomplete="off">
-        <ul class="link-pages bausteinliste" id="eb-liste"><li class="muted small">Wird gelesen …</li></ul>
-        <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button>
-        <button class="btn" id="eb-ok" type="button">${aufZiel ? "Übernehmen" : "Einfügen"}</button></div>`,
-        (dlg, body) => {
-          const suche = body.querySelector("#eb-search");
-          const liste = body.querySelector("#eb-liste");
-          let alle = [], ziel = String(vorgabe || "").trim() || null;
-          const EB_MAX = 60;
-          const zeigen = () => {
-            const q = suche.value.trim().toLowerCase();
-            const passt = (b) => !q || b.kennung.toLowerCase().includes(q)
-              || b.title.toLowerCase().includes(q) || (b.auszug || "").toLowerCase().includes(q);
-            const treffer = alle.filter(passt);
-            if (!alle.length) {
-              liste.innerHTML = '<li class="muted small">Es gibt noch keinen synchronisierten '
-                + 'Abschnitt. Lege einen an: Text auswählen, dann „/“ und „Synchronisierter Abschnitt“.</li>';
-              return;
-            }
-            const sicht = treffer.slice(0, EB_MAX);
-            liste.innerHTML = sicht.length
-              ? sicht.map((b) => {
-                  const z = `${b.slug}#${b.kennung}`;
-                  const wie = b.verwendungen === 1 ? "auf 1 Seite eingebunden"
-                    : b.verwendungen ? `auf ${S.plural(b.verwendungen, "Seite", "Seiten")} eingebunden` : "noch nirgends eingebunden";
-                  return `<li><button type="button" data-ziel="${esc(z)}" class="${z === ziel ? "sel" : ""}">`
-                    + `<strong>${esc(b.kennung)}</strong><span class="bl-quelle">aus ${esc(b.title)} · ${esc(wie)}</span>`
-                    + (b.auszug ? `<span class="bl-auszug">${esc(b.auszug)}</span>` : "")
-                    + `</button></li>`;
-                }).join("")
-                + (treffer.length > sicht.length
-                   ? `<li class="muted small">… und ${treffer.length - sicht.length} weitere – bitte suchen.</li>` : "")
-              : '<li class="muted small">Kein passender Abschnitt.</li>';
-            liste.querySelectorAll("button[data-ziel]").forEach((b) => b.onclick = () => {
-              ziel = b.dataset.ziel;
-              liste.querySelectorAll("button").forEach((x) => x.classList.toggle("sel", x === b));
-            });
-          };
-          suche.addEventListener("input", zeigen);
-          holeKatalog().then((k) => { alle = k; zeigen(); })
-            .catch(() => { liste.innerHTML = '<li class="muted small">Die Liste lässt sich gerade nicht lesen.</li>'; });
-          body.querySelector("#eb-ok").onclick = () => {
-            if (!ziel) return S.feldFehler(suche, "Bitte einen Abschnitt wählen.");
-            dlg.close();
-            if (aufZiel) aufZiel(ziel);
-            else insert(einbauMd(ziel.split("#")[0], ziel.split("#").slice(1).join("#")));
-          };
-        });
-    }
-
     const menu = document.createElement("div");
     menu.className = "ed-slash hidden";
     document.body.appendChild(menu);
@@ -3285,16 +3042,9 @@
         return !!(top && (top.classList.contains("toastui-editor-custom-block") || top.querySelector("img, video, audio, iframe")));
       })();
       // Auf welchem Block steht der Cursor? Gebraucht, wenn die Marke nicht in den Text kommt:
-      // Auf einem Schild (Einbau, Abschnittsmarke, Bild) gibt es keine Textstelle, in die sich
-      // eine Marke setzen ließe. Dann kommt der neue Block direkt HINTER dieses Schild – nicht
-      // ans Dokumentende, wo ihn niemand sucht. Beim Einbau heißt das: auf DIESER Seite, unter
-      // dem eingebundenen Abschnitt; der eingebundene Text selbst gehört zur Quellseite.
+      // Auf einem Schild (Abschnittsmarke, Bild) gibt es keine Textstelle, in die sich eine Marke setzen ließe. Dann
+      // kommt der neue Block direkt HINTER dieses Schild – nicht ans Dokumentende, wo ihn niemand sucht.
       const blockIdx = currentTopIndex();
-      const aufEinbau = (() => {
-        const sel = document.getSelection();
-        const top = sel && sel.anchorNode ? topElFor(sel.anchorNode) : null;
-        return !!(top && top.querySelector(".ed-einbau"));
-      })();
       try {
         if (!atomAusgewaehlt) ed.replaceSelection(INSERT_TOKEN);
         md = ed.getMarkdown();
@@ -3308,7 +3058,6 @@
         const ziel = blockIdx >= 0 ? zb[blockIdx] : null;
         if (ziel) {
           setMd(entleere([...zl.slice(0, ziel.end), "", ...body.split("\n"), "", ...zl.slice(ziel.end)]).join("\n"));
-          if (aufEinbau) toast("Der eingebundene Abschnitt wird auf seiner Quellseite geändert – der Text steht jetzt darunter.");
         } else {                                       // gar kein Block unter dem Cursor: ans Ende
           setMd(rein.replace(/\n+$/, "") + "\n\n" + body + "\n");
         }
@@ -3633,10 +3382,9 @@
 
     /* Marken gehören zu einem Abschnitt: die öffnende Marke, beliebig viele Spaltenmarken und
        die schließende. Wer eine davon anfasst, meint immer den ganzen Abschnitt. */
-    const MARKEN = ["spalten", "spalte", "ausrichtung", "hinweis", "akkordeon", "koerper", "baustein", "ende"];
-    // Dieselbe Liste wie EDMD.ABSCHNITT_AUF – ohne den Baustein bekam dessen Schlussmarke das
-    // Menü eines losen Blocks („löschen“, „duplizieren“) statt das des Abschnitts.
-    const istOeffner = (k) => k === "spalten" || k === "ausrichtung" || k === "hinweis" || k === "akkordeon" || k === "baustein";
+    const MARKEN = ["spalten", "spalte", "ausrichtung", "hinweis", "akkordeon", "koerper", "ende"];
+    // Dieselbe Liste wie EDMD.ABSCHNITT_AUF.
+    const istOeffner = (k) => k === "spalten" || k === "ausrichtung" || k === "hinweis" || k === "akkordeon";
     const sektion = (blocks, index) => {
       const b = blocks[index];
       if (!b || !MARKEN.includes(b.kind)) return null;
@@ -3661,12 +3409,8 @@
         else if (k === "spalte" && tiefe === 1) spalten.push(j);
       }
       const kindAuf = blocks[auf].kind;
-      /* Der Baustein ist eine eigene Art. Ohne ihn fiel er in den Zweig „align“, und das
-         Blockmenü zeigte ihm die Ausrichtungsknöpfe: Ein Klick auf „Mittig“ ersetzte
-         "$$baustein sicherung" durch "$$ausrichtung center" – die Kennung war weg und jeder
-         Einbau auf anderen Seiten zeigte fortan ins Leere. */
       const art = kindAuf === "spalten" ? "columns" : kindAuf === "hinweis" ? "hinweis"
-        : kindAuf === "akkordeon" ? "akkordeon" : kindAuf === "baustein" ? "baustein" : "align";
+        : kindAuf === "akkordeon" ? "akkordeon" : "align";
       return { art, auf, zu, spalten: art === "columns" ? spalten : [] };
     };
 
@@ -3687,7 +3431,7 @@
     };
 
     /* Zu einem gewöhnlichen Block: die Marke, die den ihn umgebenden Abschnitt eröffnet. */
-    const MARKE_SEL = ".sek-spalten, .sek-ausrichtung, .sek-hinweis, .sek-akkordeon, .sek-baustein";
+    const MARKE_SEL = ".sek-spalten, .sek-ausrichtung, .sek-hinweis, .sek-akkordeon";
     const umgebenderAbschnitt = (top) => {
       const el = pm();
       if (!el || !top) return null;
@@ -3733,28 +3477,10 @@
                + `<span class="sep"></span>`;
         } else if (sek.art === "akkordeon") {
           html = `<span class="lbl" title="Einklappbare Box">${I.akkordeon}</span><span class="sep"></span>`;
-        } else if (sek.art === "baustein") {
-          // Ausdrücklich OHNE Ausrichtungsknöpfe – siehe sektion(). Geändert wird hier nur die
-          // Kennung; unter ihr sprechen andere Seiten den Abschnitt an.
-          const kennung = (blocks[sek.auf].lines[1] || "").trim();
-          const v = verwendungVon(kennung);
-          const wo = !v ? "" : v.anzahl === 0 ? " · noch nirgends eingebunden"
-            : v.anzahl === 1 ? ` · eingebunden auf ${v.seiten[0] || "1 Seite"}`
-            : ` · eingebunden auf ${S.plural(v.anzahl, "Seite", "Seiten")}`;
-          html = `<span class="lbl" title="Synchronisierter Abschnitt „${esc(kennung)}“${esc(wo)}">⇄ ${esc(kennung)}${esc(wo)}</span>`
-               + btn("data-act", "kennung", "Kennung ändern", I.stift)
-               + `<span class="sep"></span>`;
         } else {
           const mode = (blocks[sek.auf].lines[1] || "").trim();
           html = AUSRICHTUNGEN.map(([m, sym, t]) => btn("data-mode", m, t, sym, m === mode ? "on" : "")).join("")
                + `<span class="sep"></span>`;
-        }
-        /* Einen ganzen Abschnitt zum Baustein machen, ohne ihn zu ziehen. Das war der
-           schwierigste Fall überhaupt: Die Schlussmarke ist im Editor null Pixel hoch, eine
-           gezogene Auswahl endet deshalb immer vor ihr – und wer mehr zog, nahm den Absatz
-           dahinter mit. Hier steht der Abschnitt schon fest. */
-        if (sek.art !== "baustein" && sek.zu >= 0) {
-          html += btn("data-act", "sync", "Zum synchronisierten Abschnitt machen", I.synchron);
         }
         html += btn("data-act", "loesen", "Abschnitt auflösen, Inhalt behalten", I.aufloesen)
               + btn("data-act", "weg", "Abschnitt samt Inhalt löschen", I.papierkorb, "danger");
@@ -3784,58 +3510,10 @@
           });
           box.querySelectorAll("[data-mode]").forEach((x) => x.onclick = () =>
             rewriteBloecke([{ index: sek.auf, text: `$$ausrichtung\n${x.dataset.mode}\n$$` }]));
-          /* Vor jedem Knopf, der die Verbindung kappt: Wie viele Seiten hängen daran, und
-             welche. Ohne diese Frage verschwand der Abschnitt, und die einbindenden Seiten
-             zeigten erst beim nächsten Aufruf „gibt es nicht (mehr)“ – wer ihn aufgelöst hat,
-             erfuhr nie, wen er damit trifft. */
-          const bausteinKennung = () => (blocks[sek.auf].lines[1] || "").trim();
-          const darfKappen = async (was) => {
-            if (sek.art !== "baustein") return true;
-            const v = verwendungVon(bausteinKennung());
-            if (!v || !v.anzahl) return true;
-            const wo = v.seiten.length
-              ? ` (${v.seiten.slice(0, 4).join(", ")}${v.seiten.length > 4 ? ", …" : ""})`
-              : "";
-            return S.confirm(
-              `„${bausteinKennung()}“ wird auf ${S.plural(v.anzahl, "Seite", "Seiten")}`
-              + `${wo} eingebunden. Dort steht der Text danach nicht mehr.`,
-              "Trotzdem", "", { titel: `Abschnitt „${bausteinKennung()}“ trotzdem ${was}?` });
-          };
-          const kenn = box.querySelector("[data-act=kennung]");
-          if (kenn) kenn.onclick = async () => {
-            const alt = bausteinKennung();
-            hideCtx();
-            if (!(await darfKappen("umbenennen"))) return;
-            bausteinDialog((neu) => {
-              if (neu === alt) return;
-              rewriteBloecke([{ index: sek.auf, text: `$$baustein\n${neu}\n$$` }]);
-              /* Andere Seiten sprechen den Abschnitt über die alte Kennung an. Sie hier
-                 mitzuziehen ginge nur über den Server; bis dahin ist die Ansage das Mindeste –
-                 sonst brechen die Einbauten still. */
-              const v = verwendungVon(alt);
-              if (v && v.anzahl) {
-                toast(`Kennung geändert. ${v.anzahl === 1 ? "Eine Seite bindet" : v.anzahl + " Seiten binden"} `
-                      + `„${alt}“ ein – dort muss jetzt ebenfalls „${neu}“ stehen.`, true);
-              }
-            }, alt);
-          };
-          const sync = box.querySelector("[data-act=sync]");
-          if (sync) sync.onclick = () => {
-            hideCtx();
-            bausteinDialog((kennung) => {
-              const von = blocks[sek.auf].start, bis = blocks[sek.zu].end;
-              setMd(entleere([...lines.slice(0, von), "$$baustein", kennung, "$$", "",
-                              ...lines.slice(von, bis), "", "$$ende", "$$",
-                              ...lines.slice(bis)]).join("\n"));
-              state.dirty = true;
-            }, "", blocks[sek.auf].lines[1] || "");
-          };
-          box.querySelector("[data-act=loesen]").onclick = async () => {
-            if (!(await darfKappen("auflösen"))) return;
+          box.querySelector("[data-act=loesen]").onclick = () => {
             rewriteBloecke([sek.auf, ...sek.spalten, ...(sek.zu < 0 ? [] : [sek.zu])].map((i) => ({ index: i, text: null })));
           };
-          box.querySelector("[data-act=weg]").onclick = async () => {
-            if (!(await darfKappen("löschen"))) return;
+          box.querySelector("[data-act=weg]").onclick = () => {
             if (sek.zu < 0) {
               // Ohne Schlussmarke ist nicht zu erkennen, wo der Abschnitt endet – dann nur die
               // Marken entfernen, statt womöglich den halben Artikel zu löschen.
@@ -3848,8 +3526,7 @@
             state.dirty = true; hideCtx();
           };
         }, sek.art === "hinweis" ? "Hinweis" : sek.art === "columns" ? "Spalten"
-           : sek.art === "akkordeon" ? "Einklappbare Box"
-           : sek.art === "baustein" ? "Synchronisierter Abschnitt" : "Ausrichtung");
+           : sek.art === "akkordeon" ? "Einklappbare Box" : "Ausrichtung");
       }
 
       // Geschlossene Blöcke: die einklappbare Box – und Altbestand aus Browser-Entwürfen,
@@ -3864,22 +3541,11 @@
       } else if (b.kind === "align") {
         const mode = b.lines[1].trim();
         html = AUSRICHTUNGEN.map(([m, sym, t]) => btn("data-mode", m, t, sym, m === mode ? "on" : "")).join("") + `<span class="sep"></span>`;
-      } else if (b.kind === "einbau") {
-        /* Der Einbau war bisher nur zu duplizieren und zu löschen – das Ziel ließ sich nicht
-           ändern, und zur Quelle kam man nur über die Suche. Beides gehört hierher: Der Einbau
-           ist im Editor ein Schild, sein ganzer Inhalt IST das Ziel. */
-        const ziel = (b.lines[1] || "").trim();
-        const seite = state.pages.find((x) => x.slug === ziel.split("#")[0]);
-        html = `<span class="lbl" title="Eingebundener Abschnitt ${esc(ziel)}">⇄ ${esc(ziel.split("#").slice(1).join("#"))}`
-             + `<span class="muted"> aus ${esc(seite ? seite.title : ziel.split("#")[0])}</span></span>`
-             + btn("data-act", "ziel", "Anderen Abschnitt einbinden", I.ersetzen)
-             + btn("data-act", "quelle", "Quellseite in neuem Tab öffnen", I.extern)
-             + `<span class="sep"></span>`;
       }
       const bearbeitbar = ["columns", "callout", "align"].includes(b.kind);
       html += (bearbeitbar ? btn("data-act", "edit", "Inhalt bearbeiten", I.stift) : "")
-            + (b.kind === "einbau" ? "" : btn("data-act", "dup", "Duplizieren", I.duplizieren))
-            + btn("data-act", "del", b.kind === "einbau" ? "Einbau entfernen" : "Block löschen", I.papierkorb, "danger");
+            + btn("data-act", "dup", "Duplizieren", I.duplizieren)
+            + btn("data-act", "del", "Block löschen", I.papierkorb, "danger");
       // Ohne Maus gibt es keinen Ziehgriff – dann verschieben zwei Knöpfe den Block.
       if (window.matchMedia("(max-width: 760px), (pointer: coarse)").matches) {
         html += `<span class="sep"></span>${btn("data-move", -1, "Nach oben", "↑", "num")}${btn("data-move", 1, "Nach unten", "↓", "num")}`;
@@ -3899,18 +3565,6 @@
         box.querySelectorAll("[data-mode]").forEach((x) => x.onclick = () => rewriteBlock(index, ["$$align", x.dataset.mode, ...b.lines.slice(2)].join("\n")));
         const edit = box.querySelector("[data-act=edit]");
         if (edit) edit.onclick = () => blockEditDialog(index);
-        const zielKnopf = box.querySelector("[data-act=ziel]");
-        if (zielKnopf) zielKnopf.onclick = () => {
-          hideCtx();
-          einbauDialog((ziel) => rewriteBlock(index, `$$einbau\n${ziel}\n$$`), (b.lines[1] || "").trim());
-        };
-        const quelle = box.querySelector("[data-act=quelle]");
-        if (quelle) quelle.onclick = () => {
-          const slug = (b.lines[1] || "").trim().split("#")[0];
-          hideCtx();
-          // Neuer Tab: Im Editor stehen ungespeicherte Änderungen, ein Seitenwechsel verlöre sie.
-          if (slug) window.open(S.ziel(`/stroemipedia/${encodeURIComponent(slug)}`), "_blank", "noopener");
-        };
         const dup = box.querySelector("[data-act=dup]");
         if (dup) dup.onclick = () => rewriteBlock(index, b.lines.join("\n") + "\n\n" + b.lines.join("\n"));
         box.querySelector("[data-act=del]").onclick = () => rewriteBlock(index, null);
@@ -3920,7 +3574,7 @@
           hideCtx();
           moveBlock(index, ziel, schritt < 0);
         });
-      }, b.kind === "einbau" ? "Eingebundener Abschnitt" : "Block");
+      }, "Block");
     };
 
     const tableMenu = (cell) => {
@@ -4568,8 +4222,7 @@
     let schutzZuletzt = 0;
     const SCHUTZ_NAME = { tabelle: "Die Tabelle", ausrichtung: "Der Ausrichtungsblock",
                           hinweis: "Die Hinweiskiste", akkordeon: "Die einklappbare Box",
-                          spalten: "Der Spaltenabschnitt", baustein: "Der synchronisierte Abschnitt",
-                          einbau: "Der eingebundene Abschnitt" };
+                          spalten: "Der Spaltenabschnitt" };
     const onSchutz = (e) => {
       const jetzt = Date.now();
       if (jetzt - schutzZuletzt < 2500) return;
@@ -4837,33 +4490,6 @@
     }
   }
 
-  /* Der Katalog aller synchronisierten Abschnitte – einmal je Dialogöffnung vom Server.
-     Er kommt fertig: Kennung, Seite, Auszug und die Zahl der Seiten, die den Abschnitt schon
-     einbinden. Vorher stand hier nichts dergleichen, und der Dialog behalf sich mit zwei
-     Listen – erst eine Seite wählen, dann sehen, ob darauf überhaupt ein Abschnitt liegt.
-     Wer die Kennung kannte, aber nicht die Seite, kam nie ans Ziel. */
-  let bausteinKatalog = null;
-  const holeKatalog = async (frisch) => {
-    if (!frisch && bausteinKatalog) return bausteinKatalog;
-    const d = await api("/api/wiki/bausteine");
-    bausteinKatalog = d.bausteine || [];
-    return bausteinKatalog;
-  };
-  // Nach jedem Speichern ist der Katalog veraltet – eine neue Kennung, eine geänderte.
-  const katalogVergessen = () => { bausteinKatalog = null; };
-
-  /* Wie oft der Abschnitt „kennung“ dieser Seite anderswo eingebunden ist – und wo.
-     Liefert null, wenn es dazu (noch) keine Auskunft gibt; dann wird nicht behauptet,
-     es sei nirgends. */
-  const verwendungVon = (kennung) => {
-    if (!bausteinKatalog || !state.current) return null;
-    const slug = String(state.current.slug || "").toLowerCase();
-    const k = String(kennung || "").toLowerCase();
-    const t = bausteinKatalog.find((b) => b.slug.toLowerCase() === slug
-                                       && b.kennung.toLowerCase() === k);
-    return t ? { anzahl: t.verwendungen, seiten: t.seiten || [] } : null;
-  };
-
   function openEditor(p) {
     shell.classList.remove("uebersicht");
     if (state.spy) { try { state.spy(); } catch (e) { /* egal */ } state.spy = null; }
@@ -4882,10 +4508,6 @@
     editorCleanup.push(() => { lebt = false; });
     hideFab();
     document.body.classList.add("editing");
-    /* Den Katalog der synchronisierten Abschnitte gleich holen: Das Blockmenü fragt ihn ohne
-       Warten ab, um vor dem Umbenennen oder Löschen zu warnen. Schlägt es fehl, gibt es eben
-       keine Zahl – dann wird auch nicht behauptet, der Abschnitt sei nirgends eingebunden. */
-    holeKatalog(true).catch(() => { bausteinKatalog = null; });
     state.editorSeite = isNew ? null : p.id;
     state.editorNeu = !!isNew;
     state.editorKonflikt = false;
@@ -5398,11 +5020,9 @@
         gespeichertAnzeige = `Gespeichert ${uhrzeit()}${EDMD.repariert() ? " – unvollständige Marken entfernt" : ""}`;
         // Während der Anfrage weitergeschrieben: Das Neue ist noch nicht gespeichert, der Nachschlag kommt.
         stand(editorStand() !== md ? "Ungespeichert" : gespeichertAnzeige, EDMD.repariert());
-        // Der Baustein wiegt schwerer als ein Spaltenabschnitt: Mit ihm verschwindet die
-        // Kennung, über die andere Seiten ihn einbinden. Das gehört gesagt, auch beim
-        // automatischen Speichern, wo sonst nur die Statuszeile spricht.
+        // Fehlte einem Abschnitt eine Marke, gehört das gesagt – auch beim automatischen Speichern, wo sonst nur die
+        // Statuszeile spricht.
         if (EDMD.repariert()) toast(EDMD.reparaturText(), true);
-        katalogVergessen();
         // Ändert die Überschrift den Titel, ändert sich auch die Adresse – ohne Seitenwechsel.
         if (location.pathname !== `/stroemipedia/${r.page.slug}`) history.replaceState(null, "", `/stroemipedia/${r.page.slug}`);
         return true;
@@ -5465,7 +5085,6 @@
         p.version = r.page.version; p.title = r.page.title; p.slug = r.page.slug;
         gesichert = md;
         entwurfAbgleichen(md);
-        katalogVergessen();
         return true;
       } catch (e) { return false; }
     };
@@ -5568,7 +5187,6 @@
         destroyEditor();
         // Fehlt einem Abschnitt eine Marke, verschwindet er beim Speichern – das darf nicht
         // stillschweigend passieren, deshalb geht der Hinweis der Erfolgsmeldung vor.
-        katalogVergessen();
         toast(EDMD.repariert() ? "Gespeichert. " + EDMD.reparaturText()
                                : (isNew ? "Seite angelegt" : "Gespeichert"), EDMD.repariert());
         await loadTree();

@@ -284,7 +284,7 @@ def test_zuletzt_besucht():
         assert z["material"]["href"] == f"/materialablage/artikel/{t.art[0]}" and z["material"]["titel"].startswith("M-")
         assert z["material"]["zusatz"] == "Testwerk HMS Beta" and z["wiki"]["titel"] == "Platzhalter Seite"
         assert all(e["modulname"] for e in d["zuletzt"])
-        # Leise Abrufe (Einbau, Nachziehen) sind kein Besuch.
+        # Leise Abrufe (Nachziehen) sind kein Besuch.
         s2 = seite(adm, "Platzhalter Leise")
         assert u.get(f"/api/wiki/pages/{s2['slug']}?leise=1").status_code == 200
         assert "Platzhalter Leise" not in json.dumps(u.get("/api/start").json["zuletzt"])
@@ -405,9 +405,8 @@ def test_abschnitte_und_suche():
         assert "Geheim" not in json.dumps(p) and "Zweiter" not in json.dumps(p)
         d = t.person.get("/api/start").json
         assert d["lesemodus"] and [x["title"] for x in d["abschnitte"]] == ["Platzhalter Abschnitt"]
-        # Besuche im Lesemodus zählen für „Zuletzt besucht“ (nicht beim leisen Einbau).
+        # Besuche im Lesemodus zählen für „Zuletzt besucht“.
         assert t.person.get(f"/api/public/pages/{kinder[1]['slug']}").status_code == 200
-        assert t.person.get(f"/api/public/pages/{kinder[2]['slug']}?leise=1").status_code == 200
         assert [e["titel"] for e in t.person.get("/api/start").json["zuletzt"]] == ["Platzhalter Kind 1"]
         # Suchfeld der Startseite: GET-Formular zur Strömipedia mit „suche“; wiki.js und public.js lesen den Parameter.
         html = mitglied.get("/").get_data(as_text=True)
@@ -416,7 +415,8 @@ def test_abschnitte_und_suche():
         for datei in ("app/static/js/wiki.js", "app/static/js/public.js"):
             js = lies(datei)
             assert 'new URLSearchParams(location.search).get("suche")' in js and 'searchInput.dispatchEvent(new Event("input"))' in js
-        assert 'holeSeite: (slug) => get(`/api/public/pages/${encodeURIComponent(slug)}?leise=1`)' in lies("app/static/js/public.js")
+        # Den leisen Abruf eingebundener Abschnitte gibt es seit ihrem Ausbau (13.11.2026) nicht mehr.
+        assert "leise=1" not in lies("app/static/js/public.js")
         # Übersicht der Strömipedia: Karten statt Liste, volle Breite (Klasse uebersicht).
         wiki = lies("app/static/js/wiki.js")
         assert '<ul class="wiki-karten">${roots.map(karte).join("")}</ul>' in wiki and 'shell.classList.add("uebersicht")' in wiki

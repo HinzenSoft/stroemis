@@ -53,7 +53,7 @@ window.EDMD = (function () {
   };
 
   // Marken, die einen Abschnitt eröffnen – Spalten, Ausrichtung, Hinweis. "$$ende" schließt alle.
-  const ABSCHNITT_AUF = new Set(["$$spalten", "$$ausrichtung", "$$hinweis", "$$akkordeon", "$$baustein"]);
+  const ABSCHNITT_AUF = new Set(["$$spalten", "$$ausrichtung", "$$hinweis", "$$akkordeon"]);
 
   function wandleBloecke(lines) {
     const out = [];
@@ -90,31 +90,6 @@ window.EDMD = (function () {
         marke("$$spalten");
         teileSpalten(body).forEach((teil, k) => { if (k) marke("$$spalte"); out.push(...wandleBloecke(teil)); });
         marke("$$ende");
-        i = end; continue;
-      }
-      /* Synchronisierte Abschnitte. Der Baustein hält den Inhalt und verhält sich wie jeder
-         andere Abschnitt; der Einbau hat keinen eigenen Inhalt, nur ein Ziel – er wird deshalb
-         zu einer einzelnen Marke ohne "$$ende". Steht im Rumpf doch etwas, bleibt die Zeile
-         :::-Text, sonst ginge dieser Inhalt beim Speichern verloren. */
-      /* Ohne Kennung oder mit "#" darin ist der Abschnitt nicht ansprechbar: Das Ziel eines
-         Einbaus wird an "#" zerlegt, und was dahinter steht, ist dann nicht die Kennung.
-         Solche Zeilen bleiben :::-Text, statt dass der Editor eine Kennung erfindet – vorher
-         schrieb er stillschweigend "abschnitt" hinein, und schon bloßes Öffnen und Speichern
-         änderte den Artikel und gab ihm eine Adresse, die niemand vergeben hat.
-         Dieselbe "$$"-Vorsicht wie bei Hinweis und Box: Ein "$$ende" im Rumpf schlösse den
-         Abschnitt beim Zurückwandeln an der falschen Stelle. */
-      if (name === "baustein" && args.trim() && args.indexOf("#") < 0
-          && !body.some((l) => l.trim().startsWith("$$"))) {
-        marke("$$baustein", args.trim());
-        out.push(...wandleBloecke(body));
-        marke("$$ende");
-        i = end; continue;
-      }
-      /* Ohne Ziel keine Marke: Toast UI lässt die leere Rumpfzeile fallen, die Marke hat dann
-         nur noch zwei Zeilen – und beim Speichern erkennt sie sich selbst nicht mehr. Aus
-         ":::einbau" wurde so "$$einbau", also Markensyntax mitten im gespeicherten Artikel. */
-      if (name === "einbau" && args.trim() && !body.some((l) => l.trim())) {
-        marke("$$einbau", args.trim());
         i = end; continue;
       }
       if (name === "align") {
@@ -254,10 +229,8 @@ window.EDMD = (function () {
 
   /* Meldet, ob beim letzten Rückwandeln unvollständige Abschnitte begradigt wurden – dann
      hat jemand eine Marke gelöscht, und der Abschnitt verschwindet beim Speichern.
-     Gemerkt wird auch, WELCHE Art betroffen war: Ein zerfallener Baustein wiegt schwerer als
-     ein zerfallener Spaltenabschnitt, denn mit ihm verschwindet die Kennung, über die andere
-     Seiten ihn einbinden. Vorher war das ein bloßer Schalter, und die Meldung sprach in jedem
-     Fall von „Spalten- oder Ausrichtungsabschnitt“. */
+     Gemerkt wird auch, WELCHE Art betroffen war: Beim Spaltenabschnitt steht der Inhalt danach untereinander, das
+     sagt die Meldung eigens. */
   const reparaturArten = new Set();
   const reparatur = (art) => reparaturArten.add(art || "abschnitt");
   /* Der Titel einer einklappbaren Box steht im Editor als gewöhnlicher Absatz zwischen
@@ -326,11 +299,11 @@ window.EDMD = (function () {
         line = line.replace(/(\|[ \t]*)((?:@(?:cols|rows)=\d+:)+)/g,
                             (ganz, strich, praefix) => strich + praefix.replace(/@(?:cols|rows)=1:/g, ""));
       }
-      if (!open && (m = /^\$\$(spalten|spalte|ausrichtung|hinweis|akkordeon|koerper|baustein|einbau|ende)[ \t]*$/.exec(line))) {
+      if (!open && (m = /^\$\$(spalten|spalte|ausrichtung|hinweis|akkordeon|koerper|ende)[ \t]*$/.exec(line))) {
         const art = m[1];
         // Vorbedingung statt Nachbesserung: ohne das schließende "$$" ist das kein Block,
         // sondern gewöhnlicher Text, den jemand genau so getippt hat.
-        const rumpfZeilen = ["ausrichtung", "hinweis", "baustein", "einbau"].includes(art) ? 1 : 0;
+        const rumpfZeilen = ["ausrichtung", "hinweis"].includes(art) ? 1 : 0;
         if (!/^\$\$[ \t]*$/.test(lines[i + 1 + rumpfZeilen] || "")) { out.push(line); continue; }
         let arg = "";
         if (rumpfZeilen) { arg = (lines[i + 1] || "").trim(); i++; }
@@ -348,14 +321,7 @@ window.EDMD = (function () {
           const emoji = kopf.slice(1).join(" ");
           out.push(`:::${ck in MD.CALLOUTS ? ck : "info"}${emoji ? " " + emoji : ""}`);
           stapel.push({ art: "callout", start: out.length - 1 });
-        } else if (art === "baustein") {
-          // Leere Kennung: Der Nutzer hat sie im Editor entfernt. "abschnitt" ist dann ein
-          // Notbehelf, damit der Abschnitt nicht zerfällt – erfunden wird sie nur noch hier,
-          // nie beim bloßen Öffnen eines vorhandenen Artikels.
-          out.push(`:::baustein ${arg || "abschnitt"}`);
-          stapel.push({ art: "baustein", start: out.length - 1 });
         }
-        else if (art === "einbau") { out.push(`:::einbau ${arg}`.trimEnd(), ":::"); }
         else if (art === "spalte") { if (oben && oben.art === "columns") { out.push("|||"); oben.trenner.push(out.length - 1); } else reparatur("spalten"); }
         else if (art === "koerper") { if (oben && oben.art === "accordion") titelUebernehmen(out, oben); else reparatur("akkordeon"); }
         else if (stapel.length) {
@@ -390,7 +356,7 @@ window.EDMD = (function () {
     /* Fehlt die Schlussmarke, wird der Abschnitt AUFGELÖST: Öffnungszeile und Spaltentrenner
        fallen weg, der Inhalt bleibt gewöhnlicher Text – genau das sagen Editor und Statuszeile
        („Marken entfernt, Inhalt bleibt“). Früher wurde er stattdessen bis zum Dokumentende
-       geschlossen und zog alles Folgende mit in den Hinweis, die Spalten oder den Baustein.
+       geschlossen und zog alles Folgende mit in den Hinweis oder die Spalten.
        Von oben nach unten abbauen: Der zuletzt geöffnete Abschnitt liegt am weitesten hinten,
        sein Herausnehmen verschiebt die Zeilen der früheren nicht. */
     while (stapel.length) {
@@ -449,17 +415,13 @@ window.EDMD = (function () {
     fehler: "## Typische Fehler\n\n| Fehler |\n| --- |\n| **Fehlername** – Erklärung des Fehlers und seiner Folgen. |\n",
   };
 
-  // Ein synchronisierter Abschnitt und sein Einbau – in der Marken-Schreibweise des Editors.
-  const bausteinMd = (kennung) =>
-    `$$baustein\n${(kennung || "abschnitt").trim()}\n$$\n\nInhalt, der auch auf anderen Seiten erscheinen soll.\n\n$$ende\n$$\n`;
-  const einbauMd = (slug, kennung) => `$$einbau\n${slug}#${kennung}\n$$\n`;
 
 
   /* --- Zerlegung in oberste Blöcke -----------------------------------------------------
      Reine Textarbeit, aber die Grundlage für alles, was einen Block im Editor einer Stelle im
      Markdown zuordnet: Blockmenü, Ziehgriff, Ausrichtung. Deshalb steht sie hier und nicht im
      Editor – hier ist sie prüfbar. */
-  const MARKEN_RE = /^\$\$(callout|columns|accordion|align|toc|unterseiten|seitenumbruch|spalten|spalte|ausrichtung|hinweis|akkordeon|koerper|baustein|einbau|ende)[ \t]*$/;
+  const MARKEN_RE = /^\$\$(callout|columns|accordion|align|toc|unterseiten|seitenumbruch|spalten|spalte|ausrichtung|hinweis|akkordeon|koerper|ende)[ \t]*$/;
   // Zeilenanfänge, bei denen mehrere Zeilen zu EINEM Block im Editor gehören.
   const MEHRZEILIG = /^\s{0,3}(?:[-*+][ \t]|\d+[.)][ \t]|>|\||#{1,6}[ \t])/;
   /* Eine Zeile aus nichts als "<br>" ist im Editor ein leerer Absatz und zählt dort nicht
@@ -620,10 +582,9 @@ window.EDMD = (function () {
   }
 
   /* --- Einen Bereich in ein Markenpaar fassen -------------------------------------------
-     Für den synchronisierten Abschnitt: Die ausgewählten Blöcke bekommen ein Markenpaar um
-     sich, am Inhalt ändert sich dabei nichts – keine Zeile wird umgeschrieben, keine vorhandene
-     Marke entfernt. Das unterscheidet es von der Ausrichtung, die umschaltet und aufräumt.
-     "kopf" sind die Zeilen der öffnenden Marke, etwa ["$$baustein", "sicherung", "$$"].
+     Für „Umwandeln in … → Callout“: Die ausgewählten Blöcke bekommen ein Markenpaar um sich, am Inhalt ändert sich
+     dabei nichts – keine Zeile wird umgeschrieben, keine vorhandene Marke entfernt. Das unterscheidet es von der
+     Ausrichtung, die umschaltet und aufräumt. "kopf" sind die Zeilen der öffnenden Marke, etwa ["$$hinweis", "info 💡", "$$"].
      Liefert { md } oder { fehler }. */
   /* Eine Auswahl, die einen Abschnitt nur halb erwischt, auf ganze Abschnitte aufrunden.
      Der Normalfall „ein Absatz und die Hinweiskiste darunter“ scheiterte früher an einer
@@ -713,10 +674,6 @@ window.EDMD = (function () {
      Leer heißt: nichts war kaputt. */
   const reparaturText = () => {
     if (!reparaturArten.size) return "";
-    if (reparaturArten.has("baustein")) {
-      return "Einem synchronisierten Abschnitt fehlte eine Marke – sie wurden entfernt, der "
-           + "Inhalt bleibt. Seiten, die ihn einbinden, finden ihn jetzt nicht mehr.";
-    }
     if (reparaturArten.has("columns")) {
       return "Einem Spaltenabschnitt fehlte eine Marke – die Marken wurden entfernt, der Inhalt "
            + "bleibt erhalten und steht jetzt untereinander.";
@@ -728,6 +685,6 @@ window.EDMD = (function () {
   return { toEditorMd, fromEditorMd, repariert: () => reparaturArten.size > 0, reparaturText,
            topLevelBlocks, entleere,
            MARKEN_RE, ausrichten, einfassen, ausgleichen,
-           SNIPPETS, hinweisMd, akkordeonMd, bausteinMd, einbauMd, hinweisKopf, hinweisZeile,
+           SNIPPETS, hinweisMd, akkordeonMd, hinweisKopf, hinweisZeile,
            HINWEIS_NAME, ABSCHNITT_AUF };
 })();

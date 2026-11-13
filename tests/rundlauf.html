@@ -106,26 +106,6 @@ const KORPUS = {
   spaltenCode: ":::columns\n```\na|||b\n```\n|||\nRechts\n:::",
   ausrichtung: ":::align center\nMittig\n:::\n\n:::align right\nRechts\n:::\n\n:::align justify\nBlocksatz mit etwas mehr Text.\n:::",
   marken: ":::toc\n:::\n\n:::unterseiten\n:::\n\n:::seitenumbruch\n:::",
-  baustein: ":::baustein sicherung\nInhalt des Bausteins.\n:::",
-  bausteinMitKiste: ":::baustein technik\n:::info \u{1F4A1}\nHinweis im Baustein\n:::\n\nDanach.\n:::",
-  einbau: ":::einbau ankertechnik#sicherung\n:::",
-  einbauImText: "Davor.\n\n:::einbau ankertechnik#sicherung\n:::\n\nDanach.",
-  einbauOhneZiel: ":::einbau\n:::",
-  bausteinInSpalten: ":::columns\n:::baustein links\nA\n:::\n|||\nRechts\n:::",
-  /* Eine Kennung ist Pflicht und darf kein "#" enthalten – sonst ist der Abschnitt nicht
-     ansprechbar, denn das Ziel eines Einbaus wird an "#" zerlegt. Solche Zeilen bleiben
-     :::-Text; vorher schrieb der Editor stillschweigend "abschnitt" hinein und gab dem
-     Abschnitt damit eine Adresse, die niemand vergeben hat. */
-  bausteinOhneKennung: ":::baustein\nInhalt\n:::",
-  bausteinKennungMitRaute: ":::baustein a#b\nInhalt\n:::",
-  // Dieselbe "$$"-Vorsicht wie bei Hinweis und Box (siehe boxMitDollar).
-  bausteinMitDollar: ":::baustein formel\n```\n$$latex\n```\n:::",
-  bausteinInKiste: ":::info \u{1F4A1}\n:::baustein drin\nText in Kiste und Baustein\n:::\n:::",
-  bausteinInBox: ":::accordion Titel\n:::baustein drin\nText in Box und Baustein\n:::\n:::",
-  bausteinZweimalGleich: ":::baustein doppelt\nErster\n:::\n\n:::baustein doppelt\nZweiter\n:::",
-  bausteinUmSpalten: ":::baustein quer\n:::columns\nLinks\n|||\nRechts\n:::\n:::",
-  einbauInSpalten: ":::columns\n:::einbau seite#teil\n:::\n|||\nRechts\n:::",
-  einbauEingerueckt: "Davor.\n\n  :::einbau seite#teil\n  :::\n\nDanach.",
   gemischt: "# Titel\n\n:::columns\n### Links\n\n* a\n* b\n|||\n:::accordion Rechts\n:::info 💡\ntief verschachtelt\n:::\n:::\n:::\n\nSchluss.",
   ohneSchluss: ":::info 💡\nText ohne Abschluss",
   waise: "Text\n\n|||\n\nMehr Text",
@@ -169,15 +149,13 @@ const rundlauf = (md) => {
    Umbrüche, Linien und Auszeichnungen in seiner eigenen Schreibweise. Für alle anderen gilt die
    Invariante strenger, als sie bisher geprüft wurde: Nicht nur Runde 1 und 2 müssen gleich sein,
    schon Runde 1 darf am Ausgangstext kein Byte ändern. Vorher verglich der Prüfstand nur eins
-   gegen zwei – deshalb fiel nie auf, dass aus ":::baustein" ein ":::baustein abschnitt" wurde
-   und aus ":::einbau" ein "$$einbau". */
+   gegen zwei – deshalb fiel lange nicht auf, wenn der Editor beim bloßen Öffnen und Speichern etwas hinzuerfand. */
 const BEGRADIGT = new Set([
   "absatz", "listeGeschachtelt", "zitat", "linie", "codeTilde", "tabelleAusrichtung",
   "tabellePipeCode", "tabelleMarken", "tabelleVerbundenKopf", "auszeichnungen", "links",
   "hinweisListeTief", "hinweisEingerueckt", "hinweisEinzeilig", "boxLeer", "waise",
   "htmlMarken", "bildUnterschrift", "leerzeilen", "leerzeileVorAbschnitt", "absatzUmbrochen",
   "absatzUmbrochenMitMarken", "umbruchVorListe", "zitatUmbrochen", "zitatZweiAbsaetze",
-  "einbauEingerueckt",
 ]);
 
 const raus = document.getElementById("ergebnis");
@@ -408,18 +386,18 @@ pruefe("eine gesetzte Leerzeile neben einer Marke überlebt das Speichern", () =
   return fehlt.join("\n");
 });
 
-/* --- Synchronisierte Abschnitte ------------------------------------------------------- */
+/* --- Abschnittsmarken ----------------------------------------------------------------- */
 
 pruefe("in die Marke eines Abschnitts lässt sich nicht hineinschreiben", () => {
   /* Das Schild einer Marke ist ein Custom-Block, und sein Text ist das Argument der Marke –
-     bei „$$baustein / sicherung“ die Kennung. Geriet der Schreibstrich hinein, schrieb jede
+     bei „$$ausrichtung / center“ die Ausrichtung. Geriet der Schreibstrich hinein, schrieb jede
      Eingabe dort hinein; bei mehr als einer Zeile zerfiel der ganze Abschnitt beim Speichern.
      Das Getippte gehört hinter das Schild, also an den Anfang des Abschnitts. */
-  EDVERLAUF.laden(ed2, EDMD.toEditorMd(":::baustein sicherung\nDer Text.\n:::"));
+  EDVERLAUF.laden(ed2, EDMD.toEditorMd(":::align center\nDer Text.\n:::"));
   const view = ed2.wwEditor.view;
   let pos = -1;
   view.state.doc.descendants((n, p) => {
-    if (pos < 0 && n.type.name === "customBlock" && String(n.attrs.info).trim() === "baustein") pos = p + 1;
+    if (pos < 0 && n.type.name === "customBlock" && String(n.attrs.info).trim() === "ausrichtung") pos = p + 1;
     return pos < 0;
   });
   if (pos < 0) return "die Marke steckt nicht als Custom-Block im Dokument";
@@ -428,7 +406,7 @@ pruefe("in die Marke eines Abschnitts lässt sich nicht hineinschreiben", () => 
   const drin = view.someProp("handleTextInput", (f) => f(view, pos, pos, "x"));
   const md = EDMD.fromEditorMd(ed2.getMarkdown());
   if (!drin) return "die Eingabe lief ungebremst in die Marke";
-  if (!/^:::baustein sicherung$/m.test(md)) return "die Kennung hat gelitten:\n" + md;
+  if (!/^:::align center$/m.test(md)) return "die Marke hat gelitten:\n" + md;
   return /(^|\n)x(\n|$)/.test(md) ? "" : "das Getippte ist nicht im Abschnitt gelandet:\n" + md;
 });
 
@@ -533,10 +511,7 @@ pruefe("eine leere Auswahl ergibt weiter einen leeren Punkt", () => {
    Steht der Schreibstrich unmittelbar neben einem Abschnitt, ist er mit einem Tastendruck
    weg – und mit ihm beim Speichern der ganze Abschnitt. Geprüft wird über denselben Weg,
    den auch der Browser nimmt: handleKeyDown des Layout-Plugins. Liefert es true, ist die
-   Taste abgewehrt.
-   Der Einbau kam hier lange nicht vor: Er stand zwar in der Liste der geschützten Arten,
-   aber geschuetzteKnoten hatte für ihn keinen Zweig – er ist eine einzelne Marke ohne
-   Schlussmarke und fiel deshalb durch alle. Die Rücktaste räumte ihn kommentarlos weg. */
+   Taste abgewehrt. */
 const schutzProbe = (md, wohin) => {
   ed2.setMarkdown(EDMD.toEditorMd(md), false);
   const view = ed2.wwEditor.view;
@@ -562,20 +537,6 @@ const schutzProbe = (md, wohin) => {
   return { unveraendert: view.state.doc.childCount === vorher, gemeldet };
 };
 
-pruefe("die Rücktaste löscht einen eingebundenen Abschnitt nicht", () => {
-  const e = schutzProbe(":::einbau seite#teil\n:::\n\nDanach.", "Danach.");
-  if (e.fehler) return e.fehler;
-  if (!e.unveraendert) return "der Einbau wurde gelöscht";
-  return e.gemeldet === "einbau" ? "" : "gemeldet wurde: " + e.gemeldet;
-});
-
-pruefe("die Rücktaste löscht die Schlussmarke eines Bausteins nicht", () => {
-  const e = schutzProbe(":::baustein teil\nInhalt\n:::\n\nDanach.", "Danach.");
-  if (e.fehler) return e.fehler;
-  if (!e.unveraendert) return "die Schlussmarke wurde gelöscht";
-  return e.gemeldet === "baustein" ? "" : "gemeldet wurde: " + e.gemeldet;
-});
-
 /* Gegenprobe: Zwischen zwei gewöhnlichen Absätzen darf der Schutz schweigen – sonst wäre er
    kein Schutz, sondern eine kaputte Taste. Ob ProseMirror die beiden Absätze dann wirklich
    zusammenzieht, prüft dieser Aufbau nicht: Die nachgebaute Taste erreicht die Grundbelegung
@@ -585,7 +546,7 @@ pruefe("zwischen zwei Absätzen wehrt nichts ab", () => {
   return e.fehler || (e.gemeldet ? "ohne Grund abgewehrt: " + e.gemeldet : "");
 });
 
-/* Auswahl in einen synchronisierten Abschnitt fassen – dieselben Stellen wie bei der
+/* Auswahl in eine Hinweiskiste fassen („Umwandeln in … → Callout“) – dieselben Stellen wie bei der
    Ausrichtung (siehe ausricht), nur fasst EDMD.einfassen ein, statt umzuschalten. */
 const einfass = (probe) => {
   const zeilen = probe.split("\n");
@@ -593,20 +554,20 @@ const einfass = (probe) => {
   const endeZeile = zeilen.findIndex((z) => z.includes("\u00bb"));
   const md = zeilen.map((z) => z.split("\u00ab").join("").split("\u00bb").join("")).join("\n");
   const amBlockanfang = endeZeile > markeZeile && zeilen[endeZeile].trimStart().startsWith("\u00bb");
-  return EDMD.einfassen(md, { markeZeile, endeZeile, amBlockanfang, kopf: ["$$baustein", "kennung", "$$"] });
+  return EDMD.einfassen(md, { markeZeile, endeZeile, amBlockanfang, kopf: ["$$hinweis", "warning ⚠️", "$$"] });
 };
 
 pruefe("das Ausgewählte wird eingefasst, ohne sich zu ändern", () =>
   gleich(einfass("A\n\n«B\n\nC»\n\nD"),
-         "A\n\n$$baustein\nkennung\n$$\n\nB\n\nC\n\n$$ende\n$$\n\nD"));
+         "A\n\n$$hinweis\nwarning ⚠️\n$$\n\nB\n\nC\n\n$$ende\n$$\n\nD"));
 
 pruefe("Tabelle und Bild überstehen das Einfassen Zeile für Zeile", () =>
   gleich(einfass("«| A | B |\n| --- | --- |\n| 1 | 2 |\n\n![B](/media/wiki/x.jpg)»"),
-         "$$baustein\nkennung\n$$\n\n| A | B |\n| --- | --- |\n| 1 | 2 |\n\n![B](/media/wiki/x.jpg)\n\n$$ende\n$$"));
+         "$$hinweis\nwarning ⚠️\n$$\n\n| A | B |\n| --- | --- |\n| 1 | 2 |\n\n![B](/media/wiki/x.jpg)\n\n$$ende\n$$"));
 
 pruefe("ein vorhandener Abschnitt wandert vollständig mit hinein", () =>
   gleich(einfass("«$$hinweis\ninfo 💡\n$$\n\nIn der Kiste\n\n$$ende\n$$»"),
-         "$$baustein\nkennung\n$$\n\n$$hinweis\ninfo 💡\n$$\n\nIn der Kiste\n\n$$ende\n$$\n\n$$ende\n$$"));
+         "$$hinweis\nwarning ⚠️\n$$\n\n$$hinweis\ninfo 💡\n$$\n\nIn der Kiste\n\n$$ende\n$$\n\n$$ende\n$$"));
 
 /* Aufrunden statt Ablehnen. Die Schlussmarke ist im Editor null Pixel hoch, eine gezogene
    Auswahl endet deshalb immer vor ihr – der Normalfall "Absatz plus Hinweiskiste" scheiterte
@@ -614,11 +575,11 @@ pruefe("ein vorhandener Abschnitt wandert vollständig mit hinein", () =>
    die Grenzen bis zur fehlenden Marke, und "erweitert" sagt es an. */
 pruefe("eine Auswahl, die in einem Abschnitt beginnt, wird nach vorn erweitert", () =>
   gleich(einfass("$$hinweis\ninfo 💡\n$$\n\n«In der Kiste\n\n$$ende\n$$\n\nDanach»"),
-         "$$baustein\nkennung\n$$\n\n$$hinweis\ninfo 💡\n$$\n\nIn der Kiste\n\n$$ende\n$$\n\nDanach\n\n$$ende\n$$"));
+         "$$hinweis\nwarning ⚠️\n$$\n\n$$hinweis\ninfo 💡\n$$\n\nIn der Kiste\n\n$$ende\n$$\n\nDanach\n\n$$ende\n$$"));
 
 pruefe("Absatz plus Hinweiskiste – der häufigste Fall überhaupt", () =>
   gleich(einfass("«Davor\n\n$$hinweis\ninfo 💡\n$$\n\nIn der Kiste»\n\n$$ende\n$$"),
-         "$$baustein\nkennung\n$$\n\nDavor\n\n$$hinweis\ninfo 💡\n$$\n\nIn der Kiste\n\n$$ende\n$$\n\n$$ende\n$$"));
+         "$$hinweis\nwarning ⚠️\n$$\n\nDavor\n\n$$hinweis\ninfo 💡\n$$\n\nIn der Kiste\n\n$$ende\n$$\n\n$$ende\n$$"));
 
 pruefe("die Erweiterung wird gemeldet, die passgenaue Auswahl nicht", () => {
   const eng = einfass("A\n\n«B\n\nC»\n\nD");
@@ -638,7 +599,7 @@ pruefe("eine Auswahl über eine Spaltengrenze wird abgelehnt", () => {
    nicht mehr auf Tiefe null. Deshalb ist die Ansage an den Nutzer Pflicht. */
 pruefe("von Spalte 1 bis hinter den Abschnitt erweitert auf den ganzen Abschnitt", () =>
   gleich(einfass("$$spalten\n$$\n\n«Links\n\n$$spalte\n$$\n\nRechts\n\n$$ende\n$$\n\nDanach»"),
-         "$$baustein\nkennung\n$$\n\n$$spalten\n$$\n\nLinks\n\n$$spalte\n$$\n\nRechts\n\n$$ende\n$$\n\nDanach\n\n$$ende\n$$"));
+         "$$hinweis\nwarning ⚠️\n$$\n\n$$spalten\n$$\n\nLinks\n\n$$spalte\n$$\n\nRechts\n\n$$ende\n$$\n\nDanach\n\n$$ende\n$$"));
 
 pruefe("fehlt dem Abschnitt die Schlussmarke, wird nicht geraten", () => {
   const erg = einfass("«$$hinweis\ninfo 💡\n$$\n\nIn der Kiste»\n\nDanach");

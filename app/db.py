@@ -520,7 +520,10 @@ NACHARBEITEN = {
 # danach als neu, und die App trägt sie einmalig wieder ein. DERIVED_VERSION dabei hochzählen.
 # 2: wiki_page_files enthielt an Umlauten abgeschnittene Dateinamen (zu enge Fundstelle im Text).
 # 3: Seitenverweise (wiki_page_links) kamen dazu.
-DERIVED_VERSION = 5   # 5: eingebundene Abschnitte zählen jetzt als Verweis
+# 5: eingebundene Abschnitte zählten als Verweis.
+# 6: synchronisierte Abschnitte ausgebaut (13.11.2026) – beim Neuaufbau löst die App ihre Marken im
+#    Bestand auf (api_wiki.sync_abschnitte_bestand_aufloesen), ein Einbau wird dabei ein Link.
+DERIVED_VERSION = 6
 DERIVED_TABLES = ("wiki_page_files", "wiki_page_links")
 # Tabellen und Spalten aus entfernten Funktionen – werden beim Start einmalig abgeräumt.
 # pegel_stationen: Die automatische Pegelzuordnung (PegelAlarm) ist wieder ausgebaut –

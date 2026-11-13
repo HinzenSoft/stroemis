@@ -133,7 +133,7 @@ def test_aufloesung_je_modul_mit_den_rechten_der_stroemipedia():
         assert verweise(red, "/riegenkarten") == {}
         w = seite(adm, "Strömipedia", "# Strömipedia\n\nPlatzhalter\n")
         lf = seite(adm, "Lesen und Finden", "# Lesen und Finden\n\n## Kopfzeile einer Seite\n\nPlatzhalter\n", w["id"])
-        ed = seite(adm, "Der Editor", "# Der Editor\n\n## Auswahlleiste\n\n```\n## Synchronisierte Abschnitte\n```\n", w["id"])
+        ed = seite(adm, "Der Editor", "# Der Editor\n\n## Auswahlleiste\n\n```\n## Callouts, Spalten und Boxen\n```\n", w["id"])
         tf = seite(adm, "Teilen und Freigaben", "# Teilen und Freigaben\n\n## Bearbeiten erlauben\n", w["id"])
         ok(adm.put(f"/api/wiki/pages/{tf['id']}/restrict", json={"read_restricted": True}))
         a = seite(adm, "Ankerplätze", "# Ankerplätze\n\nPlatzhalter\n")
@@ -157,7 +157,7 @@ def test_aufloesung_je_modul_mit_den_rechten_der_stroemipedia():
         assert "seite" not in v                                                 # Menüeintrag entfallen (02.11.2026)
         assert v["editor"] == f"/stroemipedia/{ed['slug']}"
         assert v["textfarbe"] == f"/stroemipedia/{ed['slug']}#auswahlleiste"
-        assert v["abschnitt_einbinden"] == f"/stroemipedia/{ed['slug']}"        # Überschrift nur im Codeblock
+        assert v["spalten"] == f"/stroemipedia/{ed['slug']}"                    # Überschrift nur im Codeblock
         assert "bearbeiten_erlauben" not in v                                  # lesebeschränkt = nie freigegeben
         assert "papierkorb" not in v                                           # Seite fehlt
         assert verweise(adm, "/stroemipedia") == v                              # auch für die Wiki-Verwaltung

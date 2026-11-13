@@ -1006,10 +1006,6 @@ progress { width: 100%; height: 10px; accent-color: var(--rot); }
 .link-pages:empty { display: none; }
 .link-pages li { border-bottom: 1px solid var(--linie); }
 .link-pages li:last-child { border-bottom: 0; }
-/* Die Auswahlliste der synchronisierten Abschnitte ist höher als die gewöhnliche Seitenliste:
-   Hier ist zu entscheiden, WAS man einbindet, nicht nur wo es herkommt. Die Regeln für ihre
-   Einträge stehen weiter unten – sie müssen NACH der gemeinsamen Menüregel kommen. */
-.bausteinliste { max-height: 320px; }
 /* Adresse im Link-Kontextmenü */
 .ed-link-url { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--grau); font-size: var(--fs-klein); }
 /* Anhänge im Artikel */
@@ -1038,22 +1034,6 @@ progress { width: 100%; height: 10px; accent-color: var(--rot); }
 .wiki-content u, .toastui-editor-contents u { text-underline-offset: 2px; }
 .wiki-content sub, .wiki-content sup, .toastui-editor-contents sub, .toastui-editor-contents sup { font-size: .75em; line-height: 0; }
 .toastui-editor-contents .tui-widget { white-space: pre-wrap; }
-/* Synchronisierte Abschnitte. Der Baustein sieht in seiner Heimatseite aus wie gewöhnlicher
-   Text – er IST dort der Inhalt. Der Einbau zeigt fremden Text und sagt das auch: abgesetzt,
-   mit Herkunft darunter. */
-.baustein { display: block; }
-.einbau { margin: 1.1em 0; padding: 10px 14px; border-left: 3px dashed var(--wasser); background: var(--co-info-fl); }
-.einbau > .einbau-inhalt > :first-child { margin-top: 0; }
-.einbau > .einbau-inhalt > :last-child { margin-bottom: 0; }
-.einbau-fuss { margin-top: 8px; color: var(--grau); font-size: var(--fs-klein); }
-/* Ein Einbau, der nicht aufgeht, ist ein Befund und kein Kleingedrucktes: Vorher stand dort
-   grauer Kleintext, den man beim Lesen überflog – und die Seite wirkte bloß lückenhaft. */
-.einbau-fehlt { color: var(--co-warning-ka); font-size: var(--fs-mittel); font-weight: 500; }
-/* In der Verlaufsansicht läuft keine Nachbearbeitung; der Einbau bliebe ein leerer
-   gestrichelter Streifen. Der Text kommt aus dem Ziel selbst, ganz ohne Skript. */
-.einbau:empty::after { content: "Eingebundener Abschnitt: " attr(data-ziel); color: var(--grau); font-size: var(--fs-mittel); }
-/* Im Editor ist der Einbau kein Inhalt, sondern ein Schild: Geändert wird er anderswo. */
-.ed-einbau { margin: 1.1em 0; padding: 8px 12px; border-left: 3px dashed var(--wasser); background: var(--co-info-fl); }
 .callout { margin: 1.1em 0; padding: 10px 14px; border-left: 5px solid var(--grau); background: var(--grau-hell); }
 .callout > :first-child { margin-top: 0; } .callout > :last-child { margin-bottom: 0; }
 .callout h3, .callout h4 { margin-top: 0; }
@@ -1511,20 +1491,10 @@ details.accordion .accordion-body > :first-child { margin-top: 0; } details.acco
    muss NACH der gemeinsamen Menüregel stehen – die setzt display:block, und damit liefen Name
    und Erklärung ineinander („Überschrift 1Große Abschnittsüberschrift“), die Erklärung brach
    mitten im Wort um und lief in den nächsten Eintrag. Beide bekommen ihre eigene Zeile, die
-   Erklärung darf umbrechen – gekürzt wird sie nicht: Bei „Synchronisierten Abschnitt einer
-   anderen Seite anzeigen“ stünde sonst genau das Ende nicht mehr da, auf das es ankommt. */
+   Erklärung darf umbrechen – gekürzt wird sie nicht: Bei „Eigenständige HTML-Seite einbetten (z. B. interaktive
+   Grafik)“ stünde sonst genau das Ende nicht mehr da, auf das es ankommt. */
 .ed-slash button { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; line-height: 1.35; }
 .ed-slash button strong { font-weight: 600; }
-/* Dasselbe für die Auswahlliste der synchronisierten Abschnitte: Kennung, darunter Herkunft und
-   Verwendungszahl, darunter ein Auszug. Auch diese Regel muss NACH der gemeinsamen Menüregel
-   stehen – die setzt display:block, und dann stand „regelblockaus Pruefquelle“ in einer Zeile. */
-.bausteinliste button { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; line-height: 1.35; padding: 8px 10px; }
-.bausteinliste button strong { font-weight: 600; }
-.bausteinliste .bl-quelle { color: var(--grau); font-size: var(--fs-klein); }
-.bausteinliste .bl-auszug {
-  color: var(--grau); font-size: var(--fs-klein);
-  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
-}
 .ed-slash button span { font-size: var(--fs-klein); color: var(--grau); max-width: 100%; }
 /* Antwort des Mailservers nach einer Probemail – zum Lesen und Weitergeben, deshalb als
    Kasten mit ganzem Text statt als Kurzhinweis, der nach drei Sekunden weg ist. */
@@ -1876,7 +1846,7 @@ details:is(.menue, .mat-menue, .zeilenmenue)[open] > summary::after { transform:
 /* Toast UI polstert jede Custom-Block-Hülle. In unseren Marken steckt darin nichts als der
    schmale Anfasser – die Polsterung blieb als leerer Streifen von gut dreißig Pixeln stehen,
    mit einer Linie darin, sobald die Maus darüberfuhr. Abgestellt war das bisher einzeln je
-   Markenart, und Ausrichtung und Baustein fehlten in der Aufzählung. Jetzt entscheidet die
+   Markenart, und die Ausrichtung fehlte in der Aufzählung. Jetzt entscheidet die
    Marke selbst: Wo eine steckt, wird weder gepolstert noch gerahmt. Der Rahmen ist der Grund
    für die Linien, die an Ausrichtung und Spalten noch zu sehen waren: Toast UI zeichnet um
    jede Hülle ein hellviolettes Rechteck, und mit weggenommener Polsterung blieb davon ein
@@ -2450,18 +2420,6 @@ dialog.us-dlg { width: min(640px, 96vw); }
 /* Nur der untere Abstand: Den oberen schreibt die Messung des Plugins – er ist die Höhe
    der längsten Spalte und hält die Rasterzeile auf. */
 .wiki-editor .toastui-editor-ww-container .toastui-editor-contents > .sp-fuss { margin-bottom: 1em; }
-/* Der Baustein ist die eine Marke, deren Beschriftung dastehen soll: Sie sagt, dass dieser
-   Teil der Seite anderswo eingebunden ist – wer ihn ändert, ändert ihn dort mit. */
-.wiki-editor .toastui-editor-ww-container .toastui-editor-contents > .sek-teil .sek-marke {
-  height: auto; margin: .6em 0 .2em; color: var(--wasser);
-}
-.wiki-editor .toastui-editor-ww-container .toastui-editor-contents > .sek-teil .sek-marke::after {
-  opacity: .4; margin-left: 8px;
-}
-.wiki-editor .toastui-editor-ww-container .toastui-editor-contents > .sek-teil-auf .sek-marke > span {
-  position: static; width: auto; height: auto; overflow: visible; clip-path: none;
-  font-size: var(--fs-marke); letter-spacing: .02em; text-transform: uppercase;
-}
 @media (hover: hover) and (pointer: fine) {
   .wiki-editor .toastui-editor-ww-container .toastui-editor-contents > .sek-still:hover .sek-marke,
   .wiki-editor .toastui-editor-ww-container .toastui-editor-contents > .sp-kopf:hover .sek-marke,

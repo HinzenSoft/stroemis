@@ -36,10 +36,9 @@ def konto(app, adm, mail, name, rechte=None):
 def aufbau(tmp):
     """Ein kleines Wiki aus Platzhaltern:
 
-    offen        selbst freigegeben; bindet die Datei datei_offen ein, verlinkt die interne Seite und baut einen
-                 Abschnitt der internen Seite ein
+    offen        selbst freigegeben; bindet die Datei datei_offen ein und verlinkt die interne Seite
     abschnitt    freigegeben samt Unterseiten → kind → enkel erben die Freigabe
-    intern       nicht freigegeben, mit eigener Datei, Baustein, Kommentar, Bearbeiter und Verlauf
+    intern       nicht freigegeben, mit eigener Datei, Kommentar, Bearbeiter und Verlauf
     unter_intern selbst freigegeben, aber unter der internen Seite – deren Titel darf nirgends auftauchen
     geheim       lesebeschränkt; darunter gesperrt_offen, das (Altbestand) als öffentlich markiert ist – die
                  Beschränkung wiegt schwerer
@@ -74,11 +73,10 @@ def aufbau(tmp):
     datei_offen, datei_intern, datei_weg = datei("platzhalter-offen.jpg"), datei("platzhalter-intern.jpg"), \
         datei("platzhalter-weg.jpg")
     intern = seite("Platzhalter Intern", "# Platzhalter Intern\n\nINTERN-MARKE Text.\n\n"
-                   f"![bild]({datei_intern})\n\n:::baustein teil\nINTERN-BAUSTEIN-TEXT\n:::\n")
+                   f"![bild]({datei_intern})\n")
     adm.put(f"/api/wiki/pages/{intern['id']}", json={"content": intern["content"] + "\nINTERN-FASSUNG-ZWEI\n"})
     offen = seite("Platzhalter Offen", "# Platzhalter Offen\n\nOFFEN-MARKE Text.\n\n"
-                  f"![bild]({datei_offen})\n\n[zur internen Seite](/wiki/{intern['slug']})\n\n"
-                  f":::einbau {intern['slug']}#teil\n:::\n")
+                  f"![bild]({datei_offen})\n\n[zur internen Seite](/wiki/{intern['slug']})\n")
     teilen(offen)
     abschnitt = seite("Platzhalter Abschnitt", "ABSCHNITT-MARKE")
     teilen(abschnitt, kinder=True)
@@ -103,7 +101,7 @@ def aufbau(tmp):
     oeffentlich = {"offen": offen, "abschnitt": abschnitt, "kind": kind, "enkel": enkel, "unter_intern": unter_intern}
     nicht = {"intern": intern, "geheim": geheim, "gesperrt_offen": gesperrt_offen, "weg": weg}
     # Was ein Konto ohne Stufe im Wiki nie zu sehen bekommen darf.
-    merkmale = ["Platzhalter Intern", "INTERN-MARKE", "INTERN-BAUSTEIN-TEXT", "INTERN-FASSUNG-ZWEI",
+    merkmale = ["Platzhalter Intern", "INTERN-MARKE", "INTERN-FASSUNG-ZWEI",
                 "Platzhalter Geheim", "GEHEIM-MARKE", "Platzhalter Gesperrt Offen", "GESPERRT-MARKE",
                 "Platzhalter Weg", "WEG-MARKE", "KOMMENTAR-INTERN", "KOMMENTAR-OFFEN",
                 datei_intern.rsplit("/", 1)[1], datei_weg.rsplit("/", 1)[1],
@@ -280,7 +278,7 @@ def test_rundum():
                             assert a.status_code == 200 and 'data-modus="lesemodus"' in text, url
                             assert b.status_code == 302 and "/login" in b.headers["Location"], url
         assert geprueft >= {"wiki.tree", "wiki.get_page", "wiki.update_page", "wiki.trash", "wiki.purge_page",
-                            "wiki.revisions", "wiki.get_revision", "wiki.restore_revision", "wiki.bausteine",
+                            "wiki.revisions", "wiki.get_revision", "wiki.restore_revision",
                             "wiki.templates", "wiki.upload_file", "wiki.reorder", "wiki.set_share",
                             "wiki_public.public_page", "wiki_public.public_search", "wiki_public.public_index",
                             "pages.wiki", "pages.wiki_page", "pages.media"}, geprueft

@@ -604,7 +604,9 @@ def create_app():
     with app.app_context():
         new_tables = db.init_db()
         if new_tables & {"wiki_page_files", "wiki_page_links"}:
-            # einmalig: Anhänge und Seitenverweise vorhandener Seiten zuordnen
+            # einmalig: Marken synchronisierter Abschnitte auflösen (ausgebaut am 13.11.2026, db.DERIVED_VERSION 6),
+            # danach Anhänge und Seitenverweise vorhandener Seiten zuordnen – aus dem umgeschriebenen Text
+            api_wiki.sync_abschnitte_bestand_aufloesen()
             api_wiki.backfill_page_files()
         auth.ensure_admin()
     # Was jetzt in der Konfiguration steht, kommt aus Umgebung und Vorgaben. Diese Kopie ist die

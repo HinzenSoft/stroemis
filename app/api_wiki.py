@@ -331,28 +331,12 @@ def sync_page_files(pid, content):
 # Interne Links: /stroemipedia/<slug> und – in Seiten und Fassungen von vor der Umbenennung (26.10.2026), die nicht
 # umgeschrieben werden – /wiki/<slug>. Beide zählen gleich (Rückverweise, wiki_page_links).
 _LINK_REF_RE = re.compile(r"\]\(\s*/(?:stroemipedia|wiki)/([A-Za-z0-9][A-Za-z0-9\-_]*)")
-# Ein eingebundener Abschnitt (":::einbau seite#abschnitt") ist ein Verweis wie jeder andere –
-# er zählt sogar schwerer: Wer den Abschnitt auf der Quellseite ändert, ändert ihn hier mit.
-# Über die Rückverweise sieht man dort, wen das betrifft, bevor man ihn anfasst.
-# Bis zu drei Leerzeichen Einzug – genau so weit, wie der Renderer den Block noch erkennt.
-# Ohne diese Nachsicht wurde ein eingerückter Einbau zwar angezeigt, aber nie als Rückverweis
-# erfasst: Jede Warnung vor dem Löschen der Quelle hätte ihn übersehen.
-_EINBAU_REF_RE = re.compile(r"^[ \t]{0,3}:::[ \t]*einbau[ \t]+([A-Za-z0-9][A-Za-z0-9\-_]*)[ \t]*#",
-                            re.MULTILINE)
-# Dieselbe Zeile, aber vollständig: Seite und Kennung. Grundlage für die Verwendungszahl.
-_EINBAU_ZIEL_RE = re.compile(r"^[ \t]{0,3}:::[ \t]*einbau[ \t]+([A-Za-z0-9][A-Za-z0-9\-_]*)"
-                             r"[ \t]*#[ \t]*(\S[^\n]*?)[ \t]*$", re.MULTILINE)
-# Die Kopfzeile eines synchronisierten Abschnitts.
-_BAUSTEIN_RE = re.compile(r"^[ \t]{0,3}:::[ \t]*baustein[ \t]+(\S[^\n]*?)[ \t]*$", re.MULTILINE)
 _ZAUN_RE = re.compile(r"^[ \t]{0,3}(`{3,}|~{3,})")
 
 
 def _ohne_code(content):
-    """Der Seiteninhalt ohne die Zeilen in Codeblöcken.
-
-    Ein ":::baustein beispiel" in einem Codebeispiel ist Text, kein Abschnitt – der Renderer
-    löst ihn zu Recht nie auf. Ohne diese Maske bot der Einbau-Dialog genau solche Zeilen als
-    wählbaren Abschnitt an, und der Einbau blieb danach für immer leer."""
+    """Der Seiteninhalt ohne die Zeilen in Codeblöcken – eine Überschrift oder ":::"-Marke in einem Codebeispiel ist
+    Text, kein Abschnitt."""
     raus, zaun = [], None
     for zeile in (content or "").split("\n"):
         m = _ZAUN_RE.match(zeile)
@@ -365,10 +349,92 @@ def _ohne_code(content):
 
 
 def link_refs(content):
-    """Alle Wiki-Seiten, auf die ein Inhalt verweist – als slug. Links und eingebundene Abschnitte."""
-    text = content or ""
-    return ({m.group(1).lower() for m in _LINK_REF_RE.finditer(text)}
-            | {m.group(1).lower() for m in _EINBAU_REF_RE.finditer(text)})
+    """Alle Wiki-Seiten, auf die ein Inhalt verweist – als slug."""
+    return {m.group(1).lower() for m in _LINK_REF_RE.finditer(content or "")}
+
+
+# Synchronisierte Abschnitte sind ausgebaut (Auftrag des Nutzers vom 13.11.2026). Ihre Marken in vorhandenem Text löst
+# sync_abschnitte_aufloesen auf: ":::baustein kennung" … ":::" verliert nur das Markenpaar, der Text bleibt, wo er steht;
+# ":::einbau seite#kennung" + ":::" wird ein Link auf die Seite (Entscheidung des Nutzers: Link statt Kopie).
+_MARKE_AUF_RE = re.compile(r"^:::[ \t]*([A-Za-z]+)[ \t]*(.*?)[ \t]*$")
+_MARKE_ZU_RE = re.compile(r"^:::[ \t]*$")
+_SYNC_MARKE_RE = re.compile(r"^[ \t]{0,3}:::[ \t]*(?:baustein|einbau)\b", re.MULTILINE | re.IGNORECASE)
+
+
+def _md_linktext(text):
+    return re.sub(r"([\\\[\]])", r"\\\1", text)
+
+
+def _einbau_link(ziel):
+    seite, _, kennung = ziel.partition("#")
+    seite, kennung = seite.strip(), kennung.strip()
+    row = db.query("SELECT title, slug FROM wiki_pages WHERE slug = ? COLLATE NOCASE AND deleted_at IS NULL",
+                   (seite,), one=True) if seite else None
+    if row is None and seite:
+        row = db.query("SELECT p.title, p.slug FROM wiki_slugs s JOIN wiki_pages p ON p.id = s.page_id "
+                       "WHERE s.slug = ? COLLATE NOCASE AND p.deleted_at IS NULL", (seite,), one=True)
+    abschnitt = f"Abschnitt „{kennung}“" if kennung else "Abschnitt"
+    if row is None:
+        return f"→ {abschnitt} auf der Seite „{seite}“" if seite else f"→ {abschnitt}"
+    return f"→ {abschnitt} auf der Seite [{_md_linktext(row['title'])}](/stroemipedia/{row['slug']})"
+
+
+def sync_abschnitte_aufloesen(content):
+    """Die Marken synchronisierter Abschnitte aus einem Seiteninhalt entfernen (siehe oben). Codeblöcke bleiben
+    unberührt, verschachtelte ":::"-Abschnitte zählen mit wie im Renderer (splitFence). Wo eine Marke zwischen zwei
+    Textzeilen wegfällt, bleibt eine Leerzeile – sonst wüchsen die Absätze zusammen; neben einer anderen Marke ("…:::",
+    "|||") braucht es keine. Ohne Marken: unverändert."""
+    if not content or not _SYNC_MARKE_RE.search(content):
+        return content
+    zeilen = content.split("\n")
+    code = _ohne_code(content).split("\n")
+    stapel, raus = [], []
+
+    def text(z):
+        return bool(z.strip()) and not re.match(r"^[ \t]{0,3}(?::::|\|\|\|[ \t]*$)", z)
+
+    def luecke(i):
+        if raus and text(raus[-1]) and i + 1 < len(zeilen) and text(zeilen[i + 1]):
+            raus.append("")
+
+    for i, z in enumerate(zeilen):
+        rein = re.sub(r"^[ \t]{0,3}", "", z)
+        if code[i] != z or not rein.startswith(":::"):
+            raus.append(z)
+            continue
+        auf = _MARKE_AUF_RE.match(rein)
+        if auf and not re.search(r":::[ \t]*$", rein[3:]):
+            name = auf.group(1).lower()
+            if name == "baustein":
+                stapel.append(True)
+                luecke(i)
+            elif name == "einbau":
+                stapel.append(True)
+                if raus and text(raus[-1]):
+                    raus.append("")
+                raus.append(_einbau_link(auf.group(2)))
+            else:
+                stapel.append(False)
+                raus.append(z)
+        elif _MARKE_ZU_RE.match(rein) and stapel:
+            if stapel.pop():
+                luecke(i)
+            else:
+                raus.append(z)
+        else:
+            raus.append(z)
+    return "\n".join(raus)
+
+
+def sync_abschnitte_bestand_aufloesen():
+    """Einmalig beim Start (mit db.DERIVED_VERSION 6): alle Seiten, auch im Papierkorb, ohne synchronisierte
+    Abschnitte. Still – ohne Fassung im Verlauf (Entscheidung des Nutzers); die Versionsnummer zählt hoch, damit ein
+    noch offener Editor nicht den alten Stand darüberschreibt. Beliebig oft wiederholbar."""
+    with db.transaction():
+        for r in db.query("SELECT id, content FROM wiki_pages WHERE content LIKE '%:::%'"):
+            neu = sync_abschnitte_aufloesen(r["content"])
+            if neu != r["content"]:
+                db.execute("UPDATE wiki_pages SET content = ?, version = version + 1 WHERE id = ?", (neu, r["id"]))
 
 
 def sync_page_links(pid, content):
@@ -640,89 +706,6 @@ def search():
     return jsonify(results=readable(results)[:30], terms=terms)
 
 
-_TRENNZEILE_RE = re.compile(r"^[ \t]*\|[ \t:\-|]+\|[ \t]*$")
-
-
-def _auszug(zeilen):
-    """Ein lesbarer Anriss aus Markdown-Zeilen – für die Auswahlliste im Einbau-Dialog.
-
-    Die Rohschreibweise taugt dort nicht: Tabellenstriche, Rautenzeichen und Linkklammern
-    füllen den Platz, ohne etwas zu sagen. Gekürzt wird auf das, woran man den Abschnitt
-    wiedererkennt."""
-    text = []
-    for z in zeilen:
-        if _TRENNZEILE_RE.match(z) or z.strip().startswith(":::") or z.strip().startswith("```"):
-            continue
-        z = re.sub(r"!\[[^\]]*\]\([^)]*\)", "", z)          # Bilder ganz weg
-        z = re.sub(r"\[([^\]]*)\]\([^)]*\)", r"\1", z)       # Links: nur der Text
-        z = re.sub(r"^[ \t]*[#>*+\-]+[ \t]*", "", z)          # Überschrift, Zitat, Aufzählung
-        # Der Vorsatz verbundener Zellen ("@cols=2:") ist Steuerzeichen, kein Text.
-        z = re.sub(r"@(?:cols|rows)=\d{1,3}:", "", z)
-        z = z.replace("|", " ").replace("*", "").replace("`", "")
-        text.append(z)
-    roh = plain_text(" ".join(text))
-    return roh[:160] + ("…" if len(roh) > 160 else "")
-
-
-def _bausteine_von(content):
-    """Alle synchronisierten Abschnitte eines Seiteninhalts – als (kennung, auszug).
-
-    Gelesen wird der gespeicherte Text, nicht die Anzeige. Der Auszug ist der Rumpf des
-    Abschnitts, damit im Einbau-Dialog zu erkennen ist, was man einbindet; ohne ihn stand dort
-    nur eine Kennung, und wer sie nicht selbst vergeben hat, musste raten."""
-    zeilen = _ohne_code(content).split("\n")
-    raus = []
-    for i, zeile in enumerate(zeilen):
-        m = _BAUSTEIN_RE.match(zeile)
-        if not m:
-            continue
-        tiefe, ende = 1, len(zeilen)
-        for j in range(i + 1, len(zeilen)):
-            z = zeilen[j].strip()
-            if z == ":::":
-                tiefe -= 1
-                if not tiefe:
-                    ende = j
-                    break
-            elif z.startswith(":::") and len(z) > 3:
-                tiefe += 1
-        auszug = _auszug(zeilen[i + 1:ende])
-        raus.append((m.group(1), auszug))
-    return raus
-
-
-@bp.get("/bausteine")
-@wiki_required
-def bausteine():
-    """Alle synchronisierten Abschnitte, die der Nutzer lesen darf – mit Auszug und der Zahl
-    der Seiten, die sie einbinden.
-
-    Vorher gab es das nicht, und der Einbau-Dialog behalf sich mit zwei Listen: erst eine Seite
-    wählen, dann sehen, ob darauf überhaupt ein Abschnitt liegt. Wer die Kennung kannte, aber
-    nicht die Seite, kam nie ans Ziel – und jeder Probeklick lud eine ganze Seite und trug einen
-    Besuch ein, der „Zuletzt besucht“ verwässerte.
-
-    Gezählt wird nur über Seiten, die der Nutzer lesen darf. Eine höhere Zahl auszuweisen als
-    Seiten zu nennen sind, verriete die Existenz beschränkter Seiten."""
-    rows = readable(db.query(
-        "SELECT id, title, slug, content, parent_id, created_by FROM wiki_pages "
-        "WHERE deleted_at IS NULL AND content LIKE '%:::%'"))
-    # Erst alle Einbauten sammeln: Sie stehen auf ANDEREN Seiten als der Abschnitt selbst.
-    verwendung = {}
-    for r in rows:
-        for m in _EINBAU_ZIEL_RE.finditer(_ohne_code(r["content"])):
-            verwendung.setdefault((m.group(1).lower(), m.group(2).lower()), []).append(r["title"])
-    katalog = []
-    for r in rows:
-        for kennung, auszug in _bausteine_von(r["content"]):
-            seiten = verwendung.get((r["slug"].lower(), kennung.lower()), [])
-            katalog.append({"slug": r["slug"], "title": r["title"], "kennung": kennung,
-                            "auszug": auszug, "verwendungen": len(seiten),
-                            "seiten": sorted(set(seiten))})
-    katalog.sort(key=lambda b: (b["title"].lower(), b["kennung"].lower()))
-    return jsonify(bausteine=katalog)
-
-
 @bp.get("/pages/<slug>")
 @wiki_required
 def get_page(slug):
@@ -731,9 +714,8 @@ def get_page(slug):
         return jsonify(error="Seite nicht gefunden"), 404
     if not can_read(p):
         return jsonify(error="Diese Seite ist nur für freigegebene Nutzer sichtbar."), 403
-    # Besuch vermerken – Grundlage für „Zuletzt besucht“ auf der Startseite. Nicht bei leise=1:
-    # So holen das Live-Nachziehen und der Einbau fremder Abschnitte ihre Quellseiten, und ein
-    # eingebauter Baustein ist kein Besuch der Seite, aus der er stammt.
+    # Besuch vermerken – Grundlage für „Zuletzt besucht“ auf der Startseite. Nicht bei leise=1: So holt das
+    # Live-Nachziehen die Seite, und das ist kein neuer Besuch.
     if not request.args.get("leise"):
         db.execute("INSERT INTO wiki_views (user_id, page_id, seen_at) VALUES (?,?,?) "
                    "ON CONFLICT(user_id, page_id) DO UPDATE SET seen_at = excluded.seen_at",
@@ -1307,20 +1289,11 @@ def backlinks(pid):
     if not can_read(p):
         return jsonify(error="Diese Seite ist nur für freigegebene Nutzer sichtbar."), 403
     rows = db.query(
-        "SELECT DISTINCT q.id, q.title, q.slug, q.icon, q.content, q.parent_id, q.created_by "
+        "SELECT DISTINCT q.id, q.title, q.slug, q.icon, q.parent_id, q.created_by "
         "FROM wiki_page_links l JOIN wiki_pages q ON q.id = l.page_id "
         f"WHERE l.target_slug IN ({_ALLE_NAMEN}) AND q.id != ? AND q.deleted_at IS NULL "
         "ORDER BY q.title COLLATE NOCASE", (pid, pid, pid))
-    # Ein Einbau ist mehr als ein Verweis: Die andere Seite ZEIGT den Text dieser hier. Wer
-    # ihn ändert, ändert ihn dort mit; wer ihn löscht, reißt dort ein Loch. In der Tabelle
-    # stehen beide Arten nebeneinander, die Oberfläche warf sie in einen Topf.
-    namen = {p["slug"].lower()} | {r["slug"].lower() for r in db.query(
-        "SELECT slug FROM wiki_slugs WHERE page_id = ?", (pid,))}
-    herein = []
-    for r in readable(rows):
-        zeigt = {m.group(1).lower() for m in _EINBAU_REF_RE.finditer(_ohne_code(r["content"]))} & namen
-        herein.append({"id": r["id"], "title": r["title"], "slug": r["slug"],
-                       "icon": r["icon"], "einbau": bool(zeigt)})
+    herein = [{"id": r["id"], "title": r["title"], "slug": r["slug"], "icon": r["icon"]} for r in readable(rows)]
     # Ausgehende Verweise stehen in derselben Tabelle, nur andersherum gelesen – die Angaben
     # zur Seite zeigen beide Richtungen. Ziel ist die Seite, die den Namen heute trägt oder
     # früher trug (siehe _ALLE_NAMEN).
@@ -2169,9 +2142,8 @@ def public_page(slug):
     p = _get_page(slug)
     if not p or not is_public(p):
         return jsonify(error="Diese Seite ist nicht für alle Angemeldeten freigegeben."), 404
-    # Besuch vermerken wie get_page – „Zuletzt besucht“ der Startseite (app/start.py) auch im Lesemodus. Nicht bei
-    # leise=1: So holt der Leser die Quellseiten eingebauter Abschnitte (public.js), das ist kein Besuch.
-    if not request.args.get("leise") and wiki_lesemodus():
+    # Besuch vermerken wie get_page – „Zuletzt besucht“ der Startseite (app/start.py) auch im Lesemodus.
+    if wiki_lesemodus():
         db.execute("INSERT INTO wiki_views (user_id, page_id, seen_at) VALUES (?,?,?) "
                    "ON CONFLICT(user_id, page_id) DO UPDATE SET seen_at = excluded.seen_at",
                    (current_user()["id"], p["id"], db.now()))

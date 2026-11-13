@@ -250,7 +250,6 @@ Platzhaltertext mit einem Verweis auf die [zweite Übungsseite](/stroemipedia/ue
         .map((p) => Object.assign(kurz(p), { updated_at: p.updated_at, updated_by_name: name(p.updated_by) })) })],
     ["GET", "/api/wiki/search", (m, b, z, url) => suche(z, url.searchParams.get("q"))],
     ["GET", "/api/wiki/templates", (m, b, z) => ({ pages: lebende(z).filter((p) => p.is_template).map(kurz) })],
-    ["GET", "/api/wiki/bausteine", () => ({ bausteine: [] })],
     ["GET", "/api/wiki/users", () => ({ users: PERSONEN.map((u) => ({ id: u.id, name: u.name, gliederung: u.gliederung })) })],
     ["GET", "/api/wiki/favorites", (m, b, z) => ({ pages: z.favoriten.map((id) => seite(z, id)).filter(Boolean).map(kurz) })],
 
@@ -318,7 +317,7 @@ Platzhaltertext mit einem Verweis auf die [zweite Übungsseite](/stroemipedia/ue
       const p = seite(z, +m[1]);
       if (!p) return ohneSeite;
       const raus = new Set(verweiseVon(p));
-      return { pages: verweisenAuf(z, p).map((q) => Object.assign(kurz(q), { einbau: false })),
+      return { pages: verweisenAuf(z, p).map(kurz),
                outgoing: lebende(z).filter((q) => q.id !== p.id && namenVon(q).some((s) => raus.has(s))).map(kurz) };
     }],
     ["GET", /^\/api\/wiki\/pages\/(\d+)\/attachments$/, (m, b, z) => (seite(z, +m[1]) ? { files: [] } : ohneSeite)],

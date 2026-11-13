@@ -25,7 +25,7 @@ window.EDLAYOUT = (function () {
   // 48 Pixeln, während der Artikel daneben sauber gestapelt war.
   const SP_SCHMAL = "(max-width: 640px)";
   const schmalesGeraet = () => typeof matchMedia === "function" && matchMedia(SP_SCHMAL).matches;
-  const OEFFNER_ART = ["spalten", "ausrichtung", "hinweis", "akkordeon", "baustein"];
+  const OEFFNER_ART = ["spalten", "ausrichtung", "hinweis", "akkordeon"];
   // Eine Länge aus Prozent und Pixeln – so lassen sich die Spaltenbreiten beliebig tief
   // ineinander rechnen, ohne dass der Ausdruck wächst.
   const laenge = (p, x) => (Math.abs(x) < 0.01 ? `${+p.toFixed(4)}%`
@@ -206,13 +206,6 @@ window.EDLAYOUT = (function () {
             z = lauf(trennung + 1, zu, geo, z, [...ohne, "ak", "kasten"]);
           }
           stelle(zu, [...erbe, "ak-marke", "ak-schluss"]);
-        } else if (k.art === "baustein") {
-          // Ein Baustein ändert am Aussehen nichts – er markiert nur, welcher Teil der Seite
-          // anderswo eingebunden wird. Sein Inhalt bleibt gewöhnlicher Text im Fluss. Ohne
-          // diesen Zweig fiele er in den letzten und würde als Spaltenabschnitt gesetzt.
-          stelle(i, [...erbe, "sek-teil", "sek-teil-auf"]);
-          z = lauf(i + 1, zu, geo, z, erbe);
-          stelle(zu, [...erbe, "sek-teil"]);
         } else {
           const grenzen = [i, ...trenner.filter((j) => kinder[j].art === "spalte"), zu];
           const n = grenzen.length - 1;
@@ -329,11 +322,8 @@ window.EDLAYOUT = (function () {
      steht. Beim Abschnitt ist es schlimmer als es aussieht: Verschwindet nur eine seiner
      Marken, löst sich beim Speichern der ganze Abschnitt auf – der Inhalt bleibt, der Kasten
      ist fort. Entfernen und Rücktaste lassen diese Blöcke deshalb stehen. Weg kommen sie über
-     ihr eigenes Menü ("Tabelle löschen", "Block löschen", "Abschnitt löschen").
-     Auch der synchronisierte Abschnitt und der Einbau: Verschwindet eine ihrer Marken, zerfällt
-     beim Speichern der Abschnitt – und mit ihm die Kennung, über die andere Seiten ihn
-     einbinden. Vorher waren beide ausgenommen und ließen sich mit der Rücktaste wegräumen. */
-  const GESCHUETZT_AUF = ["spalten", "ausrichtung", "hinweis", "akkordeon", "baustein", "einbau"];
+     ihr eigenes Menü ("Tabelle löschen", "Block löschen", "Abschnitt löschen"). */
+  const GESCHUETZT_AUF = ["spalten", "ausrichtung", "hinweis", "akkordeon"];
 
   function geschuetzteKnoten(doc) {
     const raus = [];
@@ -347,12 +337,6 @@ window.EDLAYOUT = (function () {
       } else if (art === "ende") {
         const auf = stapel.pop();
         if (GESCHUETZT_AUF.includes(auf)) eintrag(auf);
-      } else if (art === "einbau") {
-        /* Der Einbau ist eine einzelne Marke ohne Schlussmarke und steht deshalb in keinem
-           der anderen Zweige. Ihn bloß in GESCHUETZT_AUF zu führen half nichts: Die Liste
-           wird nur in den Zweigen darüber abgefragt, und keiner traf zu – die Rücktaste
-           räumte den Einbau weiter kommentarlos weg. */
-        eintrag("einbau");
       } else if (art === "spalte") {
         if (stapel[stapel.length - 1] === "spalten") eintrag("spalten");
       } else if (art === "koerper") {
@@ -841,15 +825,15 @@ window.EDLAYOUT = (function () {
 
   /* --- Die Schilder der Abschnittsmarken sind kein Schreibgrund ------------------------
      Ein Schild ist ein Custom-Block, und sein Text ist das Argument der Marke: bei
-     "$$baustein / sicherung" die Kennung. Gerät der Schreibstrich hinein – über die
-     Pfeiltasten ist das ein Tastendruck –, schreibt jede Eingabe dort hinein. Aus der Kennung
-     wurde dann "Erster Absatz.\n\nZweiter Absatz.sicherung", und beim Speichern zerfiel der
+     "$$ausrichtung / center" die Ausrichtung. Gerät der Schreibstrich hinein – über die
+     Pfeiltasten ist das ein Tastendruck –, schreibt jede Eingabe dort hinein. Aus dem Argument
+     wurde dann "Erster Absatz.\n\nZweiter Absatz.center", und beim Speichern zerfiel der
      ganze Abschnitt: Die Marke war nicht mehr als solche zu erkennen, der Rumpf stand als
-     roher "$$baustein"-Text im Artikel und das Gegenstück fehlte.
+     roher "$$"-Text im Artikel und das Gegenstück fehlte.
      Statt die Eingabe wortlos zu schlucken, wandert sie dorthin, wo sie hingehört: unmittelbar
      hinter das Schild – bei einer öffnenden Marke ist das der Anfang des Abschnitts. */
   const MARKE_INFO = new Set(["spalten", "spalte", "ausrichtung", "hinweis", "akkordeon",
-                              "koerper", "baustein", "einbau", "ende"]);
+                              "koerper", "ende"]);
   const markeUm = ($pos) => {
     for (let d = $pos.depth; d > 0; d--) {
       const knoten = $pos.node(d);

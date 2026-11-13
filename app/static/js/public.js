@@ -30,8 +30,7 @@
 
   async function get(path) {
     let r;
-    // Der Status gehört an den Fehler – sonst ist "gibt es nicht" von "gerade nicht
-    // erreichbar" nicht zu unterscheiden (siehe einbauFuellen in markdown.js).
+    // Der Status gehört an den Fehler – sonst ist "gibt es nicht" von "gerade nicht erreichbar" nicht zu unterscheiden.
     try { r = await fetch(path, { credentials: "same-origin" }); }
     catch (e) { const netz = new Error("Keine Verbindung zum Server."); netz.status = 0; throw netz; }
     const d = await r.json().catch(() => ({}));
@@ -127,24 +126,12 @@
     internUmbiegen(art);
     wire(content);
     const items = MD.buildToc(art);
-    // Eingebundene Abschnitte nur aus dem öffentlichen Bestand: Ist die Quellseite nicht
-    // freigegeben, antwortet die Schnittstelle gar nicht erst mit ihr.
     const verzeichnisZeichnen = (liste) => {
       tocEl.innerHTML = liste.length ? `<div class="rail-title">Inhalt</div>${MD.tocHtml(liste)}` : "";
       if (stopSpy) stopSpy();
       stopSpy = MD.tocScrollspy(art, tocEl);
     };
-    MD.enhance(art, { children: (d.tree || []).filter((t) => t.parent_id === p.id), prefix,
-                      // leise: Die Quellseite eines eingebauten Abschnitts ist kein Besuch („Zuletzt besucht“ der Startseite).
-                      holeSeite: (slug) => get(`/api/public/pages/${encodeURIComponent(slug)}?leise=1`).then((r) => r.page),
-                      /* Eingebundener Text trifft erst nach dem Zeichnen ein. Ohne dieselbe
-                         Behandlung führten seine internen Links auf /stroemipedia/… und damit zur
-                         Anmeldung, und seine Überschriften fehlten im Verzeichnis. */
-                      nachInhalt: (el) => {
-                        internUmbiegen(el);
-                        wire(el);
-                        verzeichnisZeichnen(MD.buildToc(art));
-                      } });
+    MD.enhance(art, { children: (d.tree || []).filter((t) => t.parent_id === p.id), prefix });
     verzeichnisZeichnen(items);
     if (!MD.scrollToHash(content)) window.scrollTo(0, 0);
   }

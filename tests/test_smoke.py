@@ -613,12 +613,8 @@ def test_everything():
         assert c3.get(f"/api/wiki/pages/{privsub['slug']}").status_code == 403
         assert not any(p["slug"] == "nur-intern" for p in c3.get("/api/wiki/tree").json["pages"])
         assert c3.get("/api/wiki/search?q=geheimwort").json["results"] == []
-        # Auch nicht über den Katalog der synchronisierten Abschnitte: Die Liste kommt aus dem
-        # Seiteninhalt, also muss sie durch dieselbe Rechteprüfung wie die Suche.
-        c2.put(f"/api/wiki/pages/{priv['id']}",
-               json={"content": "# Nur intern\ngeheimwort\n\n:::baustein geheimteil\nText\n:::"})
-        assert not any(b["kennung"] == "geheimteil" for b in c3.get("/api/wiki/bausteine").json["bausteine"])
-        assert any(b["kennung"] == "geheimteil" for b in c2.get("/api/wiki/bausteine").json["bausteine"])
+        # Den Katalog der synchronisierten Abschnitte gibt es nicht mehr (ausgebaut am 13.11.2026).
+        assert c2.get("/api/wiki/bausteine").status_code == 404
         assert c3.get(f"/api/wiki/pages/{priv['id']}/revisions").status_code == 403
         assert c3.get(f"/api/wiki/pages/{priv['id']}/comments").status_code == 403
         assert c3.get(f"/api/wiki/pages/{priv['id']}/export").status_code == 403
@@ -735,47 +731,6 @@ def test_haertung():
         assert adm.put(f"/api/wiki/pages/{eigen['id']}/creator",
                        json={"user_id": uid1}).json["page"]["created_by"] == uid1
         c1.put(f"/api/wiki/pages/{eigen['id']}/editors", json={"user_ids": [uid2]})
-
-        # --- Synchronisierte Abschnitte: der Einbau zählt als Verweis ------------------------
-        # Wer einen Baustein ändert, ändert ihn auf allen Seiten mit, die ihn einbinden. Über
-        # die Rückverweise der Quellseite sieht man, wen das betrifft – vor dem Ändern.
-        q = c1.post("/api/wiki/pages", json={"title": "Bausteinquelle", "format": "markdown",
-                                             "content": ":::baustein sicherung\nText\n:::"}).json["page"]
-        c1.post("/api/wiki/pages", json={"title": "Bausteinnutzer", "format": "markdown",
-                                         "content": ":::einbau bausteinquelle#sicherung\n:::"})
-        rueck = c1.get(f"/api/wiki/pages/{q['id']}/backlinks").json["pages"]
-        assert [x["title"] for x in rueck] == ["Bausteinnutzer"], rueck
-        # Und zwar als EINBAU, nicht als gewöhnlicher Verweis: Die andere Seite zeigt den Text
-        # dieser hier, sie erwähnt sie nicht bloß. Vorher lag beides in einem Topf.
-        assert rueck[0]["einbau"] is True, rueck
-
-        # --- Der Katalog der synchronisierten Abschnitte -------------------------------------
-        # Ohne ihn behalf sich der Einbau-Dialog mit zwei Listen: erst eine Seite wählen, dann
-        # sehen, ob darauf überhaupt ein Abschnitt liegt. Wer die Kennung kannte, aber nicht die
-        # Seite, kam nie ans Ziel – und jeder Probeklick lud eine ganze Seite und trug einen
-        # Besuch ein, der „Zuletzt besucht“ verwässerte.
-        kat = c1.get("/api/wiki/bausteine").json["bausteine"]
-        treffer = [b for b in kat if b["slug"] == "bausteinquelle"]
-        assert len(treffer) == 1, kat
-        assert treffer[0]["kennung"] == "sicherung"
-        assert treffer[0]["auszug"] == "Text"
-        assert treffer[0]["verwendungen"] == 1
-        assert treffer[0]["seiten"] == ["Bausteinnutzer"]
-
-        # Ein ":::baustein" in einem Codebeispiel ist Text, kein Abschnitt – der Renderer löst
-        # ihn zu Recht nie auf. Böte der Katalog ihn an, bliebe der Einbau für immer leer.
-        c1.post("/api/wiki/pages", json={"title": "Bausteinbeispiel", "format": "markdown",
-                                         "content": "```\n:::baustein nurbeispiel\nText\n:::\n```"})
-        kat = c1.get("/api/wiki/bausteine").json["bausteine"]
-        assert not [b for b in kat if b["kennung"] == "nurbeispiel"], kat
-
-        # Ein eingerückter Einbau wird angezeigt (der Renderer erlaubt bis zu drei Leerzeichen) –
-        # also muss er auch als Rückverweis zählen. Sonst übersieht ihn jede Warnung.
-        c1.post("/api/wiki/pages", json={"title": "Bausteinnutzer eingerueckt", "format": "markdown",
-                                         "content": "Davor.\n\n  :::einbau bausteinquelle#sicherung\n  :::"})
-        kat = c1.get("/api/wiki/bausteine").json["bausteine"]
-        treffer = [b for b in kat if b["slug"] == "bausteinquelle"][0]
-        assert treffer["verwendungen"] == 2, treffer
 
         # --- Seiten sind immer Markdown ------------------------------------------------------
         # Früher gab es daneben das Format "html" (aus Docmost übernommene Seiten), und wer nur

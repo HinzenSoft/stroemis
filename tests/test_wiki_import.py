@@ -237,7 +237,10 @@ def test_regeln():
         assert s["2 Zwei"]["content"].startswith("# 2 Zwei\n\nOhne Titelzeile.")
         assert s["Zehn fett"]["content"] == "# Zehn *fett*\n\nTEXT ZEHN\n"            # BOM und CRLF weg, Titel ohne Stern
         assert f"[zur Zehn](/stroemipedia/{s['Zehn fett']['slug']}#abs)" in s["2 Zwei"]["content"]
-        assert "(https://example.org/x.png)" in s["2 Zwei"]["content"] and ":::einbau fremde-seite#teil" in s["2 Zwei"]["content"]
+        assert "(https://example.org/x.png)" in s["2 Zwei"]["content"]
+        # Synchronisierte Abschnitte sind ausgebaut (13.11.2026): ein Einbau aus einem älteren Export wird ein Hinweis
+        assert "\n\n→ Abschnitt „teil“ auf der Seite „fremde-seite“" in s["2 Zwei"]["content"], s["2 Zwei"]["content"]
+        assert ":::einbau" not in s["2 Zwei"]["content"] and ":::\n" not in s["2 Zwei"]["content"]
         u = s["Unter"]["content"]
         neu = [x["file"] for x in zeilen(t.app, "SELECT file FROM wiki_page_files WHERE page_id = ?", (s["Unter"]["id"],))]
         png_neu = [x for x in neu if x.endswith(".png")]

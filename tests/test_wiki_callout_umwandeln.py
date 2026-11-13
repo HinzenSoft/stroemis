@@ -4,7 +4,7 @@ python tests/test_wiki_callout_umwandeln.py  oder  pytest tests/test_wiki_callou
 
 Vorher kam nur der reine Text der Auswahl (getSelectedText) in die Kiste: aus „**Karabiner sofort schließen**“ wurde
 gewöhnlicher Text, Kursiv, Links und Code gingen ebenso verloren. Jetzt fasst ein Markenpaar die markierten Absätze ein
-(wie beim synchronisierten Abschnitt und der Ausrichtung) – ihr Text bleibt Zeichen für Zeichen, wie er war, auch in
+(wie bei der Ausrichtung) – ihr Text bleibt Zeichen für Zeichen, wie er war, auch in
 einer Klappbox. Eine Auswahl mitten im Absatz nimmt den ganzen Absatz, wie die übrigen Umwandlungen. Geprüft in der
 echten App (Server im Faden, angemeldet als Wiki-Verwaltung) in Chromium, am gespeicherten Text; ohne Chromium
 übersprungen."""

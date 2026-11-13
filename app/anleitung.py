@@ -51,7 +51,6 @@ TABELLEN = {
         "papierkorb": ("Papierkorb, Export und Import", "papierkorb"),
         "bearbeiten_erlauben": ("Teilen und Freigaben", "bearbeiten-erlauben"),
         "textfarbe": ("Der Editor", "auswahlleiste"),
-        "abschnitt_einbinden": ("Der Editor", "synchronisierte-abschnitte"),
         "spalten": ("Der Editor", "callouts-spalten-und-boxen"),
     }),
     "karte": ("Ankerplätze", {

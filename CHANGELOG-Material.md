@@ -99,6 +99,7 @@ Geschichte stehen. Schemaversion nach der Nachbesserung vor dem Merge: 30; mit d
 | Gliederung aus „Fälligkeiten je Ordner“ ausblenden (Schritt 40) | Häkchen „Nicht in „Fälligkeiten je Ordner“ zeigen“ im Dialog „Ordner bearbeiten“ an Gliederungen der obersten Ebene (`mat_folder.overview_off`): der ganze Zweig fehlt in der Tabelle der Übersicht, darunter „Nicht gezeigt: …“; Ordnerleiste, Bestand und alle übrigen Zahlen unverändert; Verschieben unter eine andere Gliederung setzt es zurück | gebaut 10.11.2026 (Schema 40), Zweig uebersicht-ausblenden |
 | „Fälligkeiten je Ordner“ zugeklappt | Beim Laden der Übersicht ist jeder Ordner mit Unterordnern zugeklappt, zuerst stehen nur die Gliederungen da (vorher erst ab 30 Zeilen und ab der zweiten Ebene); ein grauer Pfad-Knoten bleibt offen | gebaut 11.11.2026 (kein Schemaschritt, Schema bleibt 40), Zweig ue-zugeklappt |
 | Leerzeilen im Editor löschen | Rücktaste und Entf nehmen in der Strömipedia eine leere Zeile als Ganzes weg – auch zwischen zwei Klappboxen, neben Tabelle oder Hinweis (vorher wehrte der Löschschutz ab) und zwischen zwei Absätzen (vorher blieb sie stehen oder wurde zu zweien) | gebaut 11.11.2026 (kein Schemaschritt) |
+| Strömipedia: synchronisierte Abschnitte ausgebaut | `:::baustein`/`:::einbau` samt Editor, Dialogen, Katalog und Rückverweis-Kennzeichen entfernt; der Bestand wird beim ersten Start still umgeschrieben (Text bleibt, Einbau → Link) | gebaut 13.11.2026 (db.DERIVED_VERSION 6) |
 | Strömipedia: Verzeichnis leerer Seiten | Eine Seite ohne eigenen Text zeigt alle Unterseiten über alle Ebenen mit ihren Hauptabschnitten als Sprungziele statt der kurzen Liste „Unterseiten“ | gebaut 13.11.2026 (kein Schemaschritt) |
 | Riegenkarten: Ergebnis am Namen, Beschreibung ohne Verlauf | Bestanden/nicht bestanden färbt den Namen grün/rot – überall im Modul, auch in der Matrix (vorher dort nur das Schloss); die Marken daneben sind fort. Über Leistungsbeschreibungen liegt kein Verlauf mehr | gebaut 13.11.2026 (kein Schemaschritt) |
 | Riegenkarten: Katalog beim Import | Beim Import als neuer Lehrgang ließ sich kein Katalog wählen, nachträglich auch nicht. Jetzt dieselbe Auswahl in der Import-Vorschau, und ein Lehrgang ohne Leistungen bietet „Aus Katalog übernehmen“ | gebaut 13.11.2026 (kein Schemaschritt) |
@@ -14118,3 +14119,39 @@ ohne eigenen Text“.
 Mitglied (die beschränkte Unterseite nur für die Verwaltung), Überschrift im Codeblock und H3 zählen nicht, Fett im Titel
 als Text, der zweite gleichnamige Abschnitt springt an die richtige Stelle; Seite mit Text: kurze Liste. Ohne die Änderung
 rot.
+
+## Strömipedia: synchronisierte Abschnitte ausgebaut (Auftrag, 13.11.2026)
+
+Auftrag: „Entferne die Funktion synchronisierter Abschnitte“ (davor die Meldung „Wenn ich einen Abschnitt in einen
+synchronisierten Abschnitt kopiere, verschwindet er“ – nachgestellt ließ sich das nicht; mit dem Ausbau ist es
+hinfällig). Entscheidungen des Nutzers: eingebundene Abschnitte durch einen Link ersetzen, Bestand still umschreiben
+(ohne Fassung im Verlauf), zuerst das Verzeichnis leerer Seiten.
+
+- **Bestand** (`api_wiki.sync_abschnitte_aufloesen`, einmalig über `db.DERIVED_VERSION` 6 vor dem Neuaufbau der
+  Verweise, `sync_abschnitte_bestand_aufloesen`): `:::baustein kennung` … `:::` verliert nur das Markenpaar, der Text
+  bleibt, wo er steht; `:::einbau seite#kennung` + `:::` wird „→ Abschnitt „kennung“ auf der Seite [Titel](/stroemipedia/
+  slug)“ – über die heutige oder eine frühere Adresse (`wiki_slugs`), Klammern im Titel maskiert, fehlt die Seite, ohne
+  Link. Codeblöcke bleiben unberührt, verschachtelte `:::`-Kästen und einzeilige Kisten zählen wie im Renderer; wo eine
+  Marke zwischen zwei Textzeilen wegfällt, bleibt eine Leerzeile. Alle Seiten, auch im Papierkorb; die Versionsnummer
+  zählt hoch (ein noch offener Editor schreibt nicht darüber), keine Fassung im Verlauf. Ältere Fassungen bleiben, wie
+  sie waren. Der ZIP-Import löst Marken aus älteren Exporten ebenso auf.
+- **Ausgebaut** (nach „Keine Leichen“): Endpunkt `GET /api/wiki/bausteine` samt Auszug, Einbau-Muster in den
+  Verweisen und das Kennzeichen `einbau` (⇄) der Rückverweise; `leise=1` am öffentlichen Leser (nur für Einbauten);
+  im Renderer `bausteinBlock`/`einbauBlock` und `einbauFuellen` (samt `holeSeite`/`nachInhalt` in wiki.js und
+  public.js); im Editor die Marken `$$baustein`/`$$einbau` (editor-format.js, editor-layout.js), „Umwandeln in … →
+  Synchronisierter Abschnitt“, die Einträge „Synchronisierter Abschnitt“ und „Abschnitt einbinden“ im „/“-Menü, der
+  Kennungs- und der Einbinden-Dialog, Kennung ändern / „Zum synchronisierten Abschnitt machen“ / Rückfragen im
+  Abschnittsmenü, das Blockmenü des Einbaus, die Papierkorb-Warnung, der Katalog im Editor; CSS (`.baustein`,
+  `.einbau*`, `.ed-einbau`, `.bausteinliste`, `.sek-teil*`); die Übungsdaten (`/api/wiki/bausteine`); der Hilfe-Link
+  „abschnitt_einbinden“. Der HTML-Baustein (hochgeladene HTML-Datei) ist eine andere Funktion und bleibt.
+- README und Hilfeseite des Editors nachgezogen. Der Artikel „Der Editor“ in der Strömipedia (Abschnitt
+  „Synchronisierte Abschnitte“) liegt nicht im Repository und ist nicht nachgezogen.
+
+**Tests**: neu `tests/test_wiki_sync_ausbau.py` – Auflösen (elf Fälle, wiederholbar, ohne Marken unverändert) und der
+Startschritt an einem Bestand mit Version 5 (Inhalt, Version +1, keine Fassung, Papierkorb, Rückverweis als gewöhnlicher
+Link, Katalog 404, zweiter Start ändert nichts). Angepasst: `test_smoke` (Katalog 404 statt Rechteprüfung, Einbau-Teil
+entfällt), `test_wiki_import` (Einbau wird Hinweis), `test_wiki_lesemodus`, `test_module_info_i` (W5 entfällt; R2 an
+die gemeinsame Katalogauswahl angepasst – auf 1f0d5bd rot), `test_module_startseite`, `test_module_anleitung`
+(Codeblock-Fall über „spalten“), `tests/rundlauf.html` (Baustein-/Einbau-Fälle entfallen, Markenschutz über die
+Ausrichtung, Einfassen über die Hinweiskiste: 67 Fälle, 45 Verlauf, 13 Zellen grün), `tests/gleichstand.html`
+unverändert 17 von 18.
