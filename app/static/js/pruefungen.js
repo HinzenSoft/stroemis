@@ -503,6 +503,16 @@
     liste.addEventListener("click", (e) => { const b = e.target.closest("[data-weg]"); if (b) b.closest(".ausb-zeile").remove(); });
   }
 
+  /* Die Auswahl „Prüfungsleistungen aus Katalog übernehmen“ – beim Anlegen, beim Import als neuer Lehrgang (seit der
+     Rückmeldung vom 13.11.2026, vorher fehlte sie dort) und nachträglich in einem Lehrgang ohne Leistungen. */
+  function katalogAuswahlHtml(kataloge, id, gewaehlt, ohneLeer) {
+    if (!kataloge.length) return "";
+    return `<label for="${id}">Prüfungsleistungen aus Katalog übernehmen${ohneLeer ? "" : " (optional)"}${info("Prüfungsleistungen aus Katalog", `Die Leistungen werden einmalig in diesen Lehrgang kopiert – eine spätere Änderung am Katalog wirkt sich nicht mehr
+        aus. Weitere Leistungen lassen sich jederzeit einzeln ergänzen, auch während der Lehrgang schon läuft.${mehrDazu("katalog_vorlage")}`)}</label>
+      <select id="${id}">${ohneLeer ? "" : '<option value="">– Keine Vorlage, leer beginnen –</option>'}
+        ${kataloge.map((k) => `<option value="${k.id}" ${String(k.id) === String(gewaehlt || "") ? "selected" : ""}>${esc(k.titel)} (${plural(k.leistungen_anzahl, "Leistung", "Leistungen")})</option>`).join("")}</select>`;
+  }
+
   async function lehrgangDialog(lg, nachher) {
     lg = lg || {};
     const neu = !lg.id;
@@ -530,10 +540,7 @@
       <div class="btn-row"><button type="button" class="btn secondary small" id="ausb-plus"><span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Person<span class="k-anlegen"> anlegen</span></span></button></div>
       <div class="feld-kopf"><label for="lg-besch">Beschreibung / Bemerkungen</label>${diktatKnopf("lg-besch")}</div>
       <textarea id="lg-besch" placeholder="Ablauf, Treffpunkt, Besonderheiten …">${esc(lg.beschreibung)}</textarea>
-      ${neu && kataloge.length ? `<label for="lg-katalog">Prüfungsleistungen aus Katalog übernehmen (optional)${info("Prüfungsleistungen aus Katalog", `Die Leistungen werden einmalig in diesen Lehrgang kopiert – eine spätere Änderung am Katalog wirkt sich nicht mehr
-        aus. Weitere Leistungen lassen sich jederzeit einzeln ergänzen, auch während der Lehrgang schon läuft.${mehrDazu("katalog_vorlage")}`)}</label>
-      <select id="lg-katalog"><option value="">– Keine Vorlage, leer beginnen –</option>
-        ${kataloge.map((k) => `<option value="${k.id}">${esc(k.titel)} (${plural(k.leistungen_anzahl, "Leistung", "Leistungen")})</option>`).join("")}</select>` : ""}
+      ${neu ? katalogAuswahlHtml(kataloge, "lg-katalog") : ""}
       <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button>
         <button class="btn" id="lg-save" type="button">${neu ? "Lehrgang anlegen" : "Speichern"}</button></div>`,
       (dlg, body) => {
@@ -1399,7 +1406,10 @@
     const leitung = darfLeiten();
     const kopf = `<div class="abschnittskopf"><h2>Prüfungsleistungen</h2>
       ${leitung ? '<div class="btn-row"><button class="btn small" data-act="pl-neu"><span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Prüfungsleistung<span class="k-anlegen"> anlegen</span></span></button></div>' : ""}</div>`;
-    if (!ls.length) return kopf + '<div class="leerzustand"><strong>Noch keine Prüfungsleistungen</strong>Alle Teilnehmenden bekommen für jede Leistung ein Bewertungsfeld in der Matrix.</div>';
+    // Ohne Leistungen lässt sich ein Katalog nachträglich übernehmen – etwa in einen importierten Lehrgang (Wunsch vom
+    // 13.11.2026). Kataloge sieht erst ein Redakteur; eine Mitglied-Leitung legt die Leistungen einzeln an.
+    if (!ls.length) return kopf + `<div class="leerzustand"><strong>Noch keine Prüfungsleistungen</strong>Alle Teilnehmenden bekommen für jede Leistung ein Bewertungsfeld in der Matrix.
+      ${leitung && darfAnlegen() ? '<div class="btn-row"><button class="btn secondary small" data-act="pl-katalog">Aus Katalog übernehmen</button></div>' : ""}</div>`;
     return kopf + ls.map((l, i) => leistungKarteHtml(l, i, ls.length, leitung, "pl")).join("");
   }
 
@@ -1782,6 +1792,29 @@
           finally { knopf.disabled = false; }
         };
       }, ["wide"]);
+  }
+
+  async function katalogUebernehmen() {
+    const kataloge = await katalogeLaden(true);
+    if (!kataloge.length) { toast("Es gibt noch keinen Katalog – unter „Kataloge“ lässt sich einer anlegen.", true); return; }
+    dialogOeffnen(`<h2>Aus Katalog übernehmen</h2>
+      ${katalogAuswahlHtml(kataloge, "pl-katalog-wahl", "", true)}
+      <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button>
+        <button class="btn" id="pl-katalog-ok" type="button">Übernehmen</button></div>`,
+    (dlg, body) => {
+      $("#pl-katalog-ok", body).onclick = async (ev) => {
+        const knopf = ev.currentTarget;
+        if (knopf.disabled) return;
+        knopf.disabled = true;
+        try {
+          const r = await api(`${API}/lehrgaenge/${state.lehrgang.id}/katalog`, { method: "POST",
+            body: { katalog_id: +$("#pl-katalog-wahl", body).value } });
+          dlg.close();
+          toast(`${plural(r.leistungen_neu, "Prüfungsleistung", "Prüfungsleistungen")} übernommen`);
+          await loadDetail(); renderLehrgangSeite();
+        } catch (e) { S.fehlschlag(knopf, e, body); }
+      };
+    });
   }
 
   async function leistungLoeschen(l) {
@@ -2557,10 +2590,12 @@
   function importDialog(lehrgang) {
     let datei = null, zuordnung = null, vorschau = null;
     let eigene = {};      // vom Nutzer geänderte Lehrgangsfelder – überleben ein Neuzeichnen der Vorschau
+    let kataloge = [], katalogWahl = "";      // Vorlage für einen neuen Lehrgang, wie beim Anlegen
     const felderLesen = (body) => {
       if (lehrgang || !$("#imp-titel", body)) return;
       eigene = { titel: $("#imp-titel", body).value, nummer: $("#imp-nummer", body).value, ort: $("#imp-ort", body).value,
                  datum_von: $("#imp-von", body).value, datum_bis: $("#imp-bis", body).value };
+      if ($("#imp-katalog", body)) katalogWahl = $("#imp-katalog", body).value;
     };
 
     // Die Anleitung für den ISC steht als Satz da – man braucht sie zum Handeln, sie gehört nicht hinter ein „i“ (UI/UX vor
@@ -2594,6 +2629,7 @@
       if (zuordnung) fd.append("zuordnung", JSON.stringify(zuordnung));
       try {
         vorschau = await api(`${API}/import/vorschau`, { method: "POST", body: fd });
+        if (!lehrgang) kataloge = await katalogeLaden();
         schrittVorschau();
       } catch (e) {
         toast(e.message, true);
@@ -2622,7 +2658,8 @@
               <div><label for="imp-ort">Ort</label><input type="text" id="imp-ort" value="${esc(lgd.ort || "")}"></div>
               <div><label for="imp-von">Datum von</label><input type="date" id="imp-von" value="${esc(lgd.datum_von || "")}"></div>
               <div><label for="imp-bis">Datum bis</label><input type="date" id="imp-bis" value="${esc(lgd.datum_bis || "")}"></div>
-            </div></div>`}
+            </div>
+            ${katalogAuswahlHtml(kataloge, "imp-katalog", katalogWahl)}</div>`}
         <h3 class="abgesetzt">Spalten und Zuordnung</h3>
         <p class="help">Die Zuordnung wurde aus den Spaltentiteln erkannt und lässt sich hier korrigieren – die Vorschau rechnet dann neu.</p>
         <table class="import-spalten"><thead><tr><th>Spalte</th><th>Beispiele</th><th>Zuordnung</th></tr></thead>
@@ -2666,11 +2703,13 @@
             fd.append("file", datei, datei.name);
             if (lehrgang) fd.append("lehrgang_id", String(lehrgang.id));
             if (zuordnung) fd.append("zuordnung", JSON.stringify(zuordnung));
+            if (!lehrgang && $("#imp-katalog", body) && $("#imp-katalog", body).value) fd.append("katalog_id", $("#imp-katalog", body).value);
             try {
               const r = await api(`${API}/import`, { method: "POST", body: fd });
               const lg = r.lehrgang;
               const nicht = r.ausbilder_nicht_uebernommen || [];
               const meldung = `Import: ${r.angelegt} angelegt, ${r.aktualisiert} aktualisiert, ${r.voraussetzungen_neu} neue Voraussetzungen, ${r.ausbilder_neu} neue Referierende`
+                + (r.leistungen_neu ? `, ${plural(r.leistungen_neu, "Prüfungsleistung", "Prüfungsleistungen")} aus dem Katalog` : "")
                 + ((r.warnungen || []).length ? ` – ${plural(r.warnungen.length, "Hinweis", "Hinweise")}` : "")
                 + (nicht.length ? `. ${NICHT_UEBERNOMMEN}${nicht.map((a) => a.name).join(", ")}` : "");
               if (!lehrgang) {
@@ -2758,6 +2797,7 @@
         case "vor-verwalten": return voraussetzungenDialog();
         case "vk-verlauf": return verlaufDialog(tid, +b.dataset.vid);
         case "pl-neu": return leistungDialog(null);
+        case "pl-katalog": return katalogUebernehmen();
         case "pl-edit": return leistungDialog((state.lehrgang.leistungen || []).find((l) => l.id === lid));
         case "pl-del": return leistungLoeschen((state.lehrgang.leistungen || []).find((l) => l.id === lid));
         case "pl-hoch": return leistungVerschieben(lid, -1);

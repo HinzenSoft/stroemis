@@ -918,18 +918,44 @@ def create_lehrgang():
              vals["beschreibung"], vals["status"], uid, name, ts, ts))
         _ausbilder_schreiben(lid, ausbilder)
         if katalog:
-            for i, p in enumerate(db.query("SELECT * FROM pruef_katalog_leistungen WHERE katalog_id = ? "
-                                           "ORDER BY sortierung, id", (katalog["id"],))):
-                neue_leistung = db.execute(
-                    "INSERT INTO pruef_leistungen (lehrgang_id, bezeichnung, beschreibung_md, "
-                    "zeitansatz_sekunden, sortierung) VALUES (?,?,?,?,?)",
-                    (lid, p["bezeichnung"], p["beschreibung_md"], p["zeitansatz_sekunden"], i))
-                # Die Kriterienliste ist Teil der Leistungsvorlage, wie bei Beschreibung/Zeitansatz.
-                for j, k in enumerate(db.query("SELECT * FROM pruef_katalog_kriterien WHERE katalog_leistung_id = ? "
-                                               "ORDER BY sortierung, id", (p["id"],))):
-                    db.execute("INSERT INTO pruef_kriterien (leistung_id, bezeichnung, sortierung) VALUES (?,?,?)",
-                              (neue_leistung, k["bezeichnung"], j))
+            _katalog_kopieren(lid, katalog)
     return jsonify(lehrgang=_lehrgang_detail(lid)), 201
+
+
+def _katalog_kopieren(lid, katalog):
+    """Die Leistungen eines Katalogs samt Kriterien in einen Lehrgang ohne Leistungen kopieren – beim Anlegen, beim
+    Import als neuer Lehrgang und nachträglich in einen leeren (katalog_uebernehmen). Liefert die Anzahl."""
+    leistungen = db.query("SELECT * FROM pruef_katalog_leistungen WHERE katalog_id = ? ORDER BY sortierung, id",
+                          (katalog["id"],))
+    for i, p in enumerate(leistungen):
+        neue_leistung = db.execute(
+            "INSERT INTO pruef_leistungen (lehrgang_id, bezeichnung, beschreibung_md, "
+            "zeitansatz_sekunden, sortierung) VALUES (?,?,?,?,?)",
+            (lid, p["bezeichnung"], p["beschreibung_md"], p["zeitansatz_sekunden"], i))
+        # Die Kriterienliste ist Teil der Leistungsvorlage, wie bei Beschreibung/Zeitansatz.
+        for j, k in enumerate(db.query("SELECT * FROM pruef_katalog_kriterien WHERE katalog_leistung_id = ? "
+                                       "ORDER BY sortierung, id", (p["id"],))):
+            db.execute("INSERT INTO pruef_kriterien (leistung_id, bezeichnung, sortierung) VALUES (?,?,?)",
+                      (neue_leistung, k["bezeichnung"], j))
+    return len(leistungen)
+
+
+@bp.post("/lehrgaenge/<int:lid>/katalog")
+@pruefer_required
+def katalog_uebernehmen(lid):
+    """Einen Katalog nachträglich übernehmen – etwa in einen importierten Lehrgang (Wunsch des Nutzers vom 13.11.2026).
+    Nur solange der Lehrgang keine Prüfungsleistungen hat: Sonst stünden gleichnamige doppelt da. Die Leitung darf es,
+    den Katalog sehen muss sie dafür auch (ab Redakteur, _katalog_lesen)."""
+    _lehrgang(lid)
+    _leitung(lid)
+    katalog = _katalog(_ganzzahl(json_body().get("katalog_id"), "Katalog"))
+    with db.transaction():
+        if db.query("SELECT 1 FROM pruef_leistungen WHERE lehrgang_id = ? LIMIT 1", (lid,), one=True):
+            raise Abgelehnt("Der Lehrgang hat schon Prüfungsleistungen – einen Katalog gibt es nur für einen Lehrgang "
+                            "ohne. Weitere Leistungen einzeln anlegen.", 409)
+        n = _katalog_kopieren(lid, katalog)
+        db.execute("UPDATE pruef_lehrgaenge SET updated_at = ? WHERE id = ?", (db.now(), lid))
+    return jsonify(lehrgang=_lehrgang_detail(lid), leistungen_neu=n)
 
 
 @bp.get("/lehrgaenge/<int:lid>")
@@ -1972,6 +1998,15 @@ def import_uebernehmen():
     nicht 39 halbe Teilnehmende hinterlässt. Bestehende Teilnehmende (gleicher Schlüssel) werden
     ergänzt statt verdoppelt; ein Haken aus der Datei setzt einen manuell gesetzten nie zurück."""
     f, lehrgang, zuordnung = _import_eingaben()     # prüft Leitung bzw. Redaktion
+    # Katalog als Vorlage – nur für einen neuen Lehrgang, wie beim Anlegen (Rückmeldung vom 13.11.2026: beim Import
+    # gab es die Auswahl nicht). Vor dem Lesen der Datei nachgeschlagen, damit ein unbekannter Katalog nichts anlegt.
+    katalog = None
+    kid = (request.form.get("katalog_id") or "").strip()
+    if kid:
+        if lehrgang is not None:
+            raise Abgelehnt("Einen Katalog gibt es beim Import nur für einen neuen Lehrgang – in einen bestehenden "
+                            "ohne Leistungen über „Aus Katalog übernehmen“ im Reiter „Leistungen“.")
+        katalog = _katalog(_ganzzahl(kid, "Katalog"))
     imp = _import_modul()
     ergebnis = _analysieren(f, zuordnung)
     kopf = dict(ergebnis.get("lehrgang") or {})
@@ -1983,7 +2018,7 @@ def import_uebernehmen():
             [_NICHT_UEBERNOMMEN + ", ".join(a["name"] for a in nicht_uebernommen) + "."] if nicht_uebernommen else [])))
     uid, name = _ich()
     ts = db.now()
-    angelegt = aktualisiert = voraussetzungen_neu = ausbilder_neu = 0
+    angelegt = aktualisiert = voraussetzungen_neu = ausbilder_neu = leistungen_neu = 0
     with db.transaction():
         if lehrgang is None:
             titel = (kopf.get("titel") or "").strip()[:200] or os.path.splitext(os.path.basename(f.filename))[0][:200]
@@ -1994,6 +2029,8 @@ def import_uebernehmen():
                 (titel, (kopf.get("nummer") or "")[:60], von, bis,
                  (kopf.get("ort") or "")[:200], "", "geplant", uid, name, ts, ts))
             _ausbilder_schreiben(lid, _leitung_ergaenzen([], auch_verwaltung=True))
+            if katalog:
+                leistungen_neu = _katalog_kopieren(lid, katalog)
         else:
             lid = lehrgang["id"]
             # Leere Lehrgangsfelder aus der Datei füllen, gefüllte nicht anfassen. Das Datumspaar
@@ -2092,7 +2129,7 @@ def import_uebernehmen():
                            "user_id, user_name, zeit, quelle) VALUES (?,?,1,?,?,?,'import')", (tid, vid, uid, name, ts))
     current_app.logger.info("Excel-Import in Lehrgang %s durch %s: %s neu, %s aktualisiert", lid, name, angelegt, aktualisiert)
     return jsonify(lehrgang=_lehrgang_detail(lid), angelegt=angelegt, aktualisiert=aktualisiert,
-                   voraussetzungen_neu=voraussetzungen_neu, ausbilder_neu=ausbilder_neu,
+                   voraussetzungen_neu=voraussetzungen_neu, ausbilder_neu=ausbilder_neu, leistungen_neu=leistungen_neu,
                    ausbilder_nicht_uebernommen=nicht_uebernommen, warnungen=warnungen), 201
 
 
@@ -2101,7 +2138,8 @@ def import_uebernehmen():
 # Durchführung. Lesen und beim Anlegen eines Lehrgangs wählen dürfen Redakteure und die Verwaltung (_katalog_lesen),
 # anlegen ebenso; ändern und löschen ein Redakteur nur seine eigenen, die Verwaltung alle (_katalog_pflegen) – es
 # gibt anders als beim Lehrgang keine Leitung, die dafür geradestünde. Eine Änderung am Katalog wirkt sich nie auf einen
-# schon angelegten Lehrgang aus: create_lehrgang() kopiert die Zeilen nur einmal hinein (wie kopieren()).
+# schon angelegten Lehrgang aus: _katalog_kopieren() kopiert die Zeilen nur einmal hinein (wie kopieren()) – beim
+# Anlegen, beim Import als neuer Lehrgang oder nachträglich in einen Lehrgang ohne Leistungen.
 
 @bp.get("/kataloge")
 @pruefer_required

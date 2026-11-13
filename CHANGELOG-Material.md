@@ -99,6 +99,7 @@ Geschichte stehen. Schemaversion nach der Nachbesserung vor dem Merge: 30; mit d
 | Gliederung aus „Fälligkeiten je Ordner“ ausblenden (Schritt 40) | Häkchen „Nicht in „Fälligkeiten je Ordner“ zeigen“ im Dialog „Ordner bearbeiten“ an Gliederungen der obersten Ebene (`mat_folder.overview_off`): der ganze Zweig fehlt in der Tabelle der Übersicht, darunter „Nicht gezeigt: …“; Ordnerleiste, Bestand und alle übrigen Zahlen unverändert; Verschieben unter eine andere Gliederung setzt es zurück | gebaut 10.11.2026 (Schema 40), Zweig uebersicht-ausblenden |
 | „Fälligkeiten je Ordner“ zugeklappt | Beim Laden der Übersicht ist jeder Ordner mit Unterordnern zugeklappt, zuerst stehen nur die Gliederungen da (vorher erst ab 30 Zeilen und ab der zweiten Ebene); ein grauer Pfad-Knoten bleibt offen | gebaut 11.11.2026 (kein Schemaschritt, Schema bleibt 40), Zweig ue-zugeklappt |
 | Leerzeilen im Editor löschen | Rücktaste und Entf nehmen in der Strömipedia eine leere Zeile als Ganzes weg – auch zwischen zwei Klappboxen, neben Tabelle oder Hinweis (vorher wehrte der Löschschutz ab) und zwischen zwei Absätzen (vorher blieb sie stehen oder wurde zu zweien) | gebaut 11.11.2026 (kein Schemaschritt) |
+| Riegenkarten: Katalog beim Import | Beim Import als neuer Lehrgang ließ sich kein Katalog wählen, nachträglich auch nicht. Jetzt dieselbe Auswahl in der Import-Vorschau, und ein Lehrgang ohne Leistungen bietet „Aus Katalog übernehmen“ | gebaut 13.11.2026 (kein Schemaschritt) |
 | Telefon: Kopfzeile einzeilig, wenn jemand schreibt | Hatte jemand anderes die Seite im Editor offen, brach am Telefon „⋯“ wegen der Marke „✏ Name bearbeitet“ in eine zweite Zeile. Jetzt steht am Telefon gelb „✏ Vorname“ im gesperrten Bearbeiten-Knopf, die Marke entfällt | gebaut 12.11.2026 (kein Schemaschritt) |
 | Umwandeln in Callout behält Formatierung | Markierter Text, über „Umwandeln in … → Callout“ zur Kiste gemacht, verlor Fett, Kursiv, Links und Code; eine Auswahl mitten im Absatz nahm das Markierte sogar aus dem Text. Jetzt kommen die ganzen Absätze unverändert in die Kiste | gebaut 12.11.2026 (kein Schemaschritt) |
 | Callout in Klappbox im Editor | Ein Callout im Inhalt einer Klappbox hatte im Editor keine Farbfläche, das Symbol lag über dem Text und der Rahmen der Box riss auf; jetzt wie im Artikel | gebaut 12.11.2026 (kein Schemaschritt) |
@@ -14046,3 +14047,29 @@ Die Marke nannte den Nutzer selbst – die Seite war in einem anderen Reiter noc
 bei 344, 360, 390 und 430 px alle Knöpfe auf einer Höhe, Knopf gelb mit Vorname, Marke weg, Name für die Vorlesehilfe;
 am Rechner Marke wie bisher; nach dem Freiwerden wieder „Bearbeiten“. Ohne die Änderung rot (344 px: Marke allein in
 der ersten Zeile).
+
+## Riegenkarten: Katalog beim Import und nachträglich (Rückmeldung, 13.11.2026)
+
+Meldung: „Bei den Riegenkarten lässt sich ein Katalog bei Erstellung eines Lehrgangs durch Import nicht
+auswählen/festlegen“.
+
+- **Ursache**: Die Auswahl „Prüfungsleistungen aus Katalog übernehmen“ stand nur im Dialog „Lehrgang anlegen“; die
+  Import-Route kannte keinen Katalog. Nachträglich ließ sich ein Katalog nirgends übernehmen – ein importierter Lehrgang
+  bekam seine Leistungen nur einzeln.
+- **Neu** (Entscheidungen des Nutzers: „In der Import-Vorschau“, „Ja, solange leer“):
+  - Import-Vorschau eines neuen Lehrgangs: dieselbe Auswahl unter Titel, Nummer, Ort und Datum (`katalogAuswahlHtml`,
+    gemeinsam mit „Lehrgang anlegen“); die Wahl übersteht ein Neuzeichnen der Vorschau. `POST /api/pruefungen/import`
+    nimmt `katalog_id` – nur ohne `lehrgang_id` (sonst 400 mit Verweis auf „Aus Katalog übernehmen“), ein unbekannter
+    Katalog legt nichts an (404, vor dem Lesen der Datei). Die Meldung nennt die übernommenen Leistungen
+    (`leistungen_neu`).
+  - Reiter „Leistungen“ eines Lehrgangs ohne Leistungen: „Aus Katalog übernehmen“ (grau, im Leerzustand) für die
+    Leitung ab Redakteur – Kataloge sieht erst ein Redakteur. Neu `POST /api/pruefungen/lehrgaenge/<id>/katalog`
+    (`{katalog_id}`): Leitung nötig (fremder Lehrgang 404), hat der Lehrgang schon Leistungen, 409.
+  - Kopie an einer Stelle: `_katalog_kopieren()` für Anlegen, Import und nachträglich (Leistungen samt Kriterien).
+- README nachgezogen. Der Hilfeartikel „Lehrgänge“ (Abschnitt „Prüfungsleistungen aus einem Katalog“) liegt in der
+  Strömipedia und ist nicht nachgezogen.
+
+**Tests**: neu `tests/test_pruefungen_katalog_import.py` – Server: Import mit Katalog (Leistungen samt Kriterien),
+unbekannter Katalog legt nichts an, Import in bestehenden Lehrgang mit Katalog 400, nachträglich (Rechte, 404, 400,
+409 beim zweiten Mal); Chromium: Auswahl in der Vorschau, Wahl überlebt das Neuzeichnen, Lehrgang mit Leistungen
+angelegt; leerer Lehrgang → „Aus Katalog übernehmen“ → zwei Leistungen, Knopf weg. Ohne die Änderung rot.
