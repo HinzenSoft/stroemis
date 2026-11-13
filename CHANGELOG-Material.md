@@ -99,6 +99,7 @@ Geschichte stehen. Schemaversion nach der Nachbesserung vor dem Merge: 30; mit d
 | Gliederung aus „Fälligkeiten je Ordner“ ausblenden (Schritt 40) | Häkchen „Nicht in „Fälligkeiten je Ordner“ zeigen“ im Dialog „Ordner bearbeiten“ an Gliederungen der obersten Ebene (`mat_folder.overview_off`): der ganze Zweig fehlt in der Tabelle der Übersicht, darunter „Nicht gezeigt: …“; Ordnerleiste, Bestand und alle übrigen Zahlen unverändert; Verschieben unter eine andere Gliederung setzt es zurück | gebaut 10.11.2026 (Schema 40), Zweig uebersicht-ausblenden |
 | „Fälligkeiten je Ordner“ zugeklappt | Beim Laden der Übersicht ist jeder Ordner mit Unterordnern zugeklappt, zuerst stehen nur die Gliederungen da (vorher erst ab 30 Zeilen und ab der zweiten Ebene); ein grauer Pfad-Knoten bleibt offen | gebaut 11.11.2026 (kein Schemaschritt, Schema bleibt 40), Zweig ue-zugeklappt |
 | Leerzeilen im Editor löschen | Rücktaste und Entf nehmen in der Strömipedia eine leere Zeile als Ganzes weg – auch zwischen zwei Klappboxen, neben Tabelle oder Hinweis (vorher wehrte der Löschschutz ab) und zwischen zwei Absätzen (vorher blieb sie stehen oder wurde zu zweien) | gebaut 11.11.2026 (kein Schemaschritt) |
+| Strömipedia: Verzeichnis leerer Seiten | Eine Seite ohne eigenen Text zeigt alle Unterseiten über alle Ebenen mit ihren Hauptabschnitten als Sprungziele statt der kurzen Liste „Unterseiten“ | gebaut 13.11.2026 (kein Schemaschritt) |
 | Riegenkarten: Ergebnis am Namen, Beschreibung ohne Verlauf | Bestanden/nicht bestanden färbt den Namen grün/rot – überall im Modul, auch in der Matrix (vorher dort nur das Schloss); die Marken daneben sind fort. Über Leistungsbeschreibungen liegt kein Verlauf mehr | gebaut 13.11.2026 (kein Schemaschritt) |
 | Riegenkarten: Katalog beim Import | Beim Import als neuer Lehrgang ließ sich kein Katalog wählen, nachträglich auch nicht. Jetzt dieselbe Auswahl in der Import-Vorschau, und ein Lehrgang ohne Leistungen bietet „Aus Katalog übernehmen“ | gebaut 13.11.2026 (kein Schemaschritt) |
 | Telefon: Kopfzeile einzeilig, wenn jemand schreibt | Hatte jemand anderes die Seite im Editor offen, brach am Telefon „⋯“ wegen der Marke „✏ Name bearbeitet“ in eine zweite Zeile. Jetzt steht am Telefon gelb „✏ Vorname“ im gesperrten Bearbeiten-Knopf, die Marke entfällt | gebaut 12.11.2026 (kein Schemaschritt) |
@@ -14096,3 +14097,24 @@ und die Bubbles auch auf anderen Seiten des Moduls entfernt werden“ und „Der
 Leitung: Farbe und Vorlesewort je Person in Teilnehmende, Matrix, je Leistung und je TN, keine Ergebnis-Marke mehr;
 Leistungskarten ohne `::after`, die lange Beschreibung nach drei Zeilen abgeschnitten, die kurze ganz. Ohne die Änderung
 rot (Namen grau, vier Marken).
+
+## Strömipedia: Verzeichnis leerer Seiten (Wunsch, 13.11.2026)
+
+Wunsch: „Bei ‚leeren‘ Seiten soll ein detailliertes Inhaltsverzeichnis der einzelnen Unterseiten angezeigt werden“ (Seite
+„Anleitungen“ mit vier Unterseiten, darunter nur die kurze Liste). Entscheidungen des Nutzers: „Baum + Abschnitte“, „nur
+ohne eigenen Text“.
+
+- **Neu** (`wiki.js`, `verzeichnisZeigen`): Ist der gezeichnete Artikel leer (kein Text, kein Bild, keine Tabelle), wird
+  die Liste „Unterseiten“ zum Verzeichnis „Inhalt“: alle Unterseiten aus dem Seitenbaum über alle Ebenen, eingerückt, je
+  Seite ihre Hauptabschnitte in einer Zeile mit „·“. Hauptabschnitte sind die oberste Überschriftenebene unter dem Titel
+  (eine erste H1 gleich dem Titel zählt wie beim Lesen nicht). Der Baum steht sofort da, die Abschnitte kommen nach.
+- **Server** (`api_wiki.py`): `GET /api/wiki/pages/<id>/verzeichnis` liefert je lesbarer Unterseite (alle Ebenen, ohne
+  Papierkorb, `readable()`) nur die Überschriftenzeilen außerhalb von Codeblöcken und ob die Seite mit einer Überschrift
+  beginnt. Die Anker bildet der Browser mit `MD.buildToc` aus denselben Überschriften wie beim Lesen der Unterseite –
+  auch doppelte Namen („hinweise-2“) treffen.
+- Seiten mit Text behalten die kurze Liste der direkten Unterseiten. README nachgezogen.
+
+**Tests**: neu `tests/test_wiki_verzeichnis.py` (echte App, Chromium) – Baum mit Abschnitten als Wiki-Verwaltung und als
+Mitglied (die beschränkte Unterseite nur für die Verwaltung), Überschrift im Codeblock und H3 zählen nicht, Fett im Titel
+als Text, der zweite gleichnamige Abschnitt springt an die richtige Stelle; Seite mit Text: kurze Liste. Ohne die Änderung
+rot.

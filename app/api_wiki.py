@@ -741,6 +741,40 @@ def get_page(slug):
     return jsonify(page=page_json(p))
 
 
+_UEBERSCHRIFT_RE = re.compile(r"^ {0,3}#{1,6}(?:[ \t]|$)")
+
+
+@bp.get("/pages/<int:pid>/verzeichnis")
+@wiki_required
+def verzeichnis(pid):
+    """Die Überschriftenzeilen aller lesbaren Unterseiten über alle Ebenen – für das Inhaltsverzeichnis einer Seite ohne
+    eigenen Text (Wunsch des Nutzers vom 13.11.2026). Nur die Zeilen: Den Baum kennt der Browser schon, und die Anker der
+    Abschnitte bildet er wie beim Lesen der Unterseite selbst (MD.buildToc). "titelzeile" sagt, ob die Seite mit einer
+    Überschrift beginnt – nur dann nimmt die Ansicht eine gleichlautende erste Überschrift als Seitentitel heraus."""
+    p = _get_page(pid)
+    if not p:
+        return jsonify(error="Seite nicht gefunden"), 404
+    if not can_read(p):
+        return jsonify(error="Diese Seite ist nur für freigegebene Nutzer sichtbar."), 403
+    kinder = {}
+    for r in db.query("SELECT * FROM wiki_pages WHERE deleted_at IS NULL"):
+        kinder.setdefault(r["parent_id"], []).append(r)
+    unter, stapel, gesehen = [], [pid], {pid}
+    while stapel:
+        for r in kinder.get(stapel.pop(), []):
+            if r["id"] not in gesehen:
+                gesehen.add(r["id"])
+                unter.append(r)
+                stapel.append(r["id"])
+    seiten = []
+    for r in readable(unter):
+        zeilen = _ohne_code(r["content"]).split("\n")
+        erste = next((z for z in zeilen if z.strip()), "")
+        seiten.append({"id": r["id"], "titelzeile": bool(_UEBERSCHRIFT_RE.match(erste)),
+                       "ueberschriften": [z.strip() for z in zeilen if _UEBERSCHRIFT_RE.match(z)]})
+    return jsonify(seiten=seiten)
+
+
 @bp.post("/pages")
 @wiki_required
 def create_page():

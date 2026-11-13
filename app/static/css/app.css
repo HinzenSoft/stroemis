@@ -1069,6 +1069,15 @@ progress { width: 100%; height: 10px; accent-color: var(--rot); }
 .children-list { margin-top: 30px; border-top: 1px solid var(--linie); padding-top: 12px; }
 .children-list ul { columns: 2; list-style: none; padding: 0; margin: 6px 0; }
 .children-list li { padding: 2px 0; break-inside: avoid; }
+/* Verzeichnis einer Seite ohne eigenen Text (Wunsch vom 13.11.2026): die Unterseiten als Baum in einer Spalte, je Seite
+   ihre Hauptabschnitte in einer Zeile mit „·“ dazwischen. */
+.children-list.verzeichnis ul { columns: auto; margin: 0; }
+.children-list.verzeichnis ul ul { padding-left: 20px; }
+.children-list.verzeichnis > ul > li { padding-top: 8px; }
+.children-list.verzeichnis .vz-seite { font-weight: 600; }
+.children-list.verzeichnis .vz-abschnitte { display: flex; flex-wrap: wrap; font-size: var(--fs-klein); }
+.children-list.verzeichnis .vz-abschnitte li { padding: 0; }
+.children-list.verzeichnis .vz-abschnitte li + li::before { content: "·"; margin: 0 .45em; color: var(--grau); }
 .wiki-editor textarea.plain { min-height: 480px; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: var(--fs-mittel); }
 .rev-list li { padding: 6px 0; border-bottom: 1px solid var(--linie); display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
 .wiki-menu-btn { display: none; }

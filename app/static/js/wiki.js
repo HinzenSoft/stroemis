@@ -1128,13 +1128,14 @@
         aria-label="Symbol der Seite ändern">${p.icon ? esc(p.icon) : "＋"}</button>` : (p.icon ? `<span class="page-icon" aria-hidden="true">${esc(p.icon)}</span>` : "")}<h1 class="seitentitel">${esc(p.title)} ${pubBadge}</h1></div>
       ${autorZeile(p)}
       <article class="wiki-content" id="article"></article>
-      ${kids.length ? `<div class="children-list"><strong>Unterseiten</strong><ul>${kids.map((k) => `<li><a href="/stroemipedia/${esc(k.slug)}">${k.icon ? esc(k.icon) + " " : ""}${esc(k.title)}</a></li>`).join("")}</ul></div>` : ""}
+      ${kids.length ? `<div class="children-list" id="pg-unterseiten"><strong>Unterseiten</strong><ul>${kids.map((k) => `<li><a href="/stroemipedia/${esc(k.slug)}">${k.icon ? esc(k.icon) + " " : ""}${esc(k.title)}</a></li>`).join("")}</ul></div>` : ""}
       <div id="pg-backlinks"></div>
       <div id="pg-attachments"></div>`;
 
     artikelZeichnen(p);
     wireLinks(content);
     kopfBeobachten();
+    verzeichnisZeigen(p);
 
     const ed = $("#pg-edit"); if (ed) ed.onclick = () => bearbeitenStarten(p);
     // Der Kopf ist neu – Anwesenheitsmarke und Knopfstand kommen aus dem letzten Herzschlag.
@@ -1179,6 +1180,45 @@
                       } });
     if (state.spy) state.spy();
     state.spy = MD.tocScrollspy(art, tocEl);
+  }
+
+  /* Eine Seite ohne eigenen Text – etwa „Anleitungen“, die nur Unterseiten sammelt – zeigt statt der kurzen Liste
+     „Unterseiten“ ein ausführliches Verzeichnis: alle Unterseiten über alle Ebenen, je Seite ihre Hauptabschnitte als
+     Sprungziele (Wunsch des Nutzers vom 13.11.2026). Der Baum steht sofort da, die Abschnitte kommen nach. Ihre Anker
+     bildet MD.buildToc aus denselben Überschriften wie beim Lesen der Unterseite – so springt der Link genau dorthin. */
+  const artikelLeer = (art) => !art.textContent.trim() && !art.querySelector("img, video, iframe, table, hr, figure");
+  async function verzeichnisZeigen(p) {
+    const liste = $("#pg-unterseiten"), art = $("#article");
+    if (!liste || !art || !artikelLeer(art)) return;
+    const zeichnen = (abschnitte) => {
+      const zweig = (pid) => children(pid).map((k) => {
+        const ab = abschnitte.get(k.id) || [], unter = children(k.id);
+        return `<li><a class="vz-seite" href="/stroemipedia/${esc(k.slug)}">${k.icon ? esc(k.icon) + " " : ""}${esc(k.title)}</a>`
+          + (ab.length ? `<ul class="vz-abschnitte">${ab.map((a) => `<li><a href="/stroemipedia/${esc(k.slug)}#${esc(a.id)}">${esc(a.text)}</a></li>`).join("")}</ul>` : "")
+          + (unter.length ? `<ul>${zweig(k.id)}</ul>` : "") + "</li>";
+      }).join("");
+      liste.className = "children-list verzeichnis";
+      liste.innerHTML = `<strong>Inhalt</strong><ul>${zweig(p.id)}</ul>`;
+      wireLinks(liste);
+    };
+    zeichnen(new Map());
+    let d;
+    try { d = await api(`/api/wiki/pages/${p.id}/verzeichnis`); } catch (e) { return; }   // dann bleibt der Baum ohne Abschnitte
+    if (state.current !== p || !liste.isConnected) return;
+    const abschnitte = new Map();
+    (d.seiten || []).forEach((s) => {
+      const k = state.pages.find((x) => x.id === s.id);
+      if (!k) return;
+      const div = document.createElement("div");
+      div.innerHTML = MD.render(s.ueberschriften.join("\n\n"));
+      // wie artikelZeichnen: eine erste Überschrift gleich dem Titel ist der Seitentitel, kein Abschnitt
+      const erste = div.firstElementChild;
+      if (s.titelzeile && erste && erste.tagName === "H1" && erste.textContent.trim().toLowerCase() === k.title.trim().toLowerCase()) erste.remove();
+      const items = MD.buildToc(div);
+      const oben = Math.min(...items.map((i) => i.level));
+      abschnitte.set(s.id, items.filter((i) => i.level === oben));
+    });
+    zeichnen(abschnitte);
   }
 
   /* Löschen legt in den Papierkorb – von dort wiederherstellbar. */
