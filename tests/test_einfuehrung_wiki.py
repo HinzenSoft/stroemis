@@ -39,7 +39,7 @@ def test_statisch():
     for zeile in wiki.splitlines():
         if re.search(r"location\.href\s*=(?!=)|location\.replace\(|location\.assign\(|window\.open\(", zeile):
             assert "S.ziel(" in zeile or "/login" in zeile, zeile.strip()
-    assert wiki.count("S.ziel(") >= 7
+    assert wiki.count("S.ziel(") >= 6           # 13.11.2026: „Quelle öffnen“ der Einbindung mit den synchronisierten Abschnitten fort
     uebung = lies("app/static/js/uebung/wiki.js")
     assert not re.search(r"https?://", uebung), "keine fremden Adressen"
     assert "/media/" not in uebung, "keine Medien – Bilder nur unter /static/uebung/"
