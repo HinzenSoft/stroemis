@@ -1850,6 +1850,26 @@
     state.bewAnsicht = a;
     try { localStorage.setItem(ANSICHT_KEY(), a); } catch (e) { /* egal */ }
   }
+  /* Reihenfolge in „je Leistung“ (Wunsch des Nutzers vom 14.11.2026): nach Name (Nachname, Vorname) oder „Offene
+     zuerst“ – noch nicht bestanden (keine Bewertung oder mangelhaft, Nachprüfung offen), darin nach Name; Gesperrte
+     (Lehrgangsergebnis vermerkt) ans Ende. Gemerkt je Gerät für alle Lehrgänge. */
+  const SORT_KEY = "pruef:leistung-sort";
+  function bewSortLesen() {
+    let s = null;
+    try { s = localStorage.getItem(SORT_KEY); } catch (e) { /* egal */ }
+    return s === "offen" ? "offen" : "name";
+  }
+  const nachName = (a, b) => (a.name || "").localeCompare(b.name || "", "de", { sensitivity: "base" })
+    || (a.vorname || "").localeCompare(b.vorname || "", "de", { sensitivity: "base" }) || a.id - b.id;
+  function leistungReihenfolge(tns, lid, art) {
+    const rang = (tn) => {
+      if (art !== "offen") return 0;
+      if (tn.eingefroren) return 2;
+      const z = tn.leistungen[String(lid)];
+      return /bestanden$/.test(z ? z.status : "offen") ? 1 : 0;
+    };
+    return tns.slice().sort((a, b) => rang(a) - rang(b) || nachName(a, b));
+  }
 
   /* Eine Zelle der Matrix: Symbol, Kurztext, darunter Prüfer und Zeit. In der Matrix ist sie
      selbst der Knopf; in den Listen „je Leistung“/„je TN“ liegt sie in einer Knopfzeile und
@@ -1899,7 +1919,8 @@
         <button type="button" role="tab" data-act="bew-ansicht" data-a="leistung" class="${a === "leistung" ? "sel" : ""}">je Leistung</button>
         <button type="button" role="tab" data-act="bew-ansicht" data-a="tn" class="${a === "tn" ? "sel" : ""}">je Teilnehmende</button>
       </div>
-      ${a === "leistung" ? `<select id="bew-sel-leistung" aria-label="Prüfungsleistung">${ls.map((l) => `<option value="${l.id}" ${l.id === state.bewLeistung ? "selected" : ""}>${esc(l.bezeichnung)}${l.zeitansatz_sekunden != null ? ` (Soll ${fmtZeit(l.zeitansatz_sekunden)})` : ""}</option>`).join("")}</select>` : ""}
+      ${a === "leistung" ? `<select id="bew-sel-leistung" aria-label="Prüfungsleistung">${ls.map((l) => `<option value="${l.id}" ${l.id === state.bewLeistung ? "selected" : ""}>${esc(l.bezeichnung)}${l.zeitansatz_sekunden != null ? ` (Soll ${fmtZeit(l.zeitansatz_sekunden)})` : ""}</option>`).join("")}</select>
+        <select id="bew-sort" aria-label="Reihenfolge"><option value="name"${bewSortLesen() === "name" ? " selected" : ""}>Nach Name</option><option value="offen"${bewSortLesen() === "offen" ? " selected" : ""}>Offene zuerst</option></select>` : ""}
       ${a === "tn" ? `<select id="bew-sel-tn" aria-label="Teilnehmende">${tns.map((t) => `<option value="${t.id}" ${t.id === state.bewTn ? "selected" : ""}>${esc(tnName(t))}${t.gliederung ? ` (${esc(t.gliederung)})` : ""}</option>`).join("")}</select>
         <button type="button" class="btn secondary small" data-act="bew-tn-druck" title="Alle Leistungen dieser Person mit Kommentaren und Bildern drucken oder als PDF speichern">Druckansicht</button>` : ""}
     </div>`;
@@ -1917,7 +1938,7 @@
     } else if (a === "leistung") {
       const l = ls.find((x) => x.id === state.bewLeistung);
       inhalt = `${l.beschreibung_md ? `<details class="beschreibung-kopf"><summary>Prüfungsbeschreibung</summary><div class="md">${md(l.beschreibung_md)}</div></details>` : ""}
-        <ul class="zellen-liste">${tns.map((tn) => `<li><button type="button" class="zelle-zeile ${tn.voraussetzungen_offen ? "offen-vor" : ""}${tn.eingefroren ? " gesperrt" : ""}" data-act="zelle" data-tid="${tn.id}" data-lid="${l.id}">
+        <ul class="zellen-liste">${leistungReihenfolge(tns, l.id, bewSortLesen()).map((tn) => `<li><button type="button" class="zelle-zeile ${tn.voraussetzungen_offen ? "offen-vor" : ""}${tn.eingefroren ? " gesperrt" : ""}" data-act="zelle" data-tid="${tn.id}" data-lid="${l.id}">
           <span class="name">${tnKopfHtml(tn)}<small>${esc(tn.gliederung || "")}${tn.voraussetzungen_offen ? `${tn.gliederung ? " · " : ""}${S.plural(tn.voraussetzungen_offen, "Voraussetzung", "Voraussetzungen")} offen` : ""}</small></span>
           ${zelleHtml(tn, l, { tag: "span" })}
         </button></li>`).join("")}</ul>`;
@@ -2011,6 +2032,7 @@
   function bewertungBinden() {
     const sl = $("#bew-sel-leistung"); if (sl) sl.onchange = () => { state.bewLeistung = +sl.value; renderReiter(); };
     const st = $("#bew-sel-tn"); if (st) st.onchange = () => { state.bewTn = +st.value; renderReiter(); };
+    const so = $("#bew-sort"); if (so) so.onchange = () => { try { localStorage.setItem(SORT_KEY, so.value); } catch (e) { /* egal */ } renderReiter(); };
   }
 
   /* ==========================================================================================

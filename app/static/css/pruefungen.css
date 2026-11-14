@@ -295,6 +295,7 @@ p.dlg-tn { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .bew-umschalter .c-tabs { margin: 0; flex: 1 1 260px; max-width: 420px; }
 .bew-umschalter .c-tabs button { padding: 9px 6px; font-size: var(--fs-mittel); }
 .bew-umschalter select { width: auto; flex: 1 1 200px; max-width: 100%; }
+.bew-umschalter #bew-sort { flex: 0 1 auto; }
 .pruef .bew-matrix td { padding: 3px; }
 .pruef .bew-matrix th { text-align: center; }
 .pruef .bew-matrix th.tn-kopf { text-align: left; }

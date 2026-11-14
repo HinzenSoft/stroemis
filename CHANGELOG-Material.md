@@ -14155,3 +14155,19 @@ die gemeinsame Katalogauswahl angepasst – auf 1f0d5bd rot), `test_module_start
 (Codeblock-Fall über „spalten“), `tests/rundlauf.html` (Baustein-/Einbau-Fälle entfallen, Markenschutz über die
 Ausrichtung, Einfassen über die Hinweiskiste: 67 Fälle, 45 Verlauf, 13 Zellen grün), `tests/gleichstand.html`
 unverändert 17 von 18.
+
+## Riegenkarten: „je Leistung“ sortieren (Wunsch, 14.11.2026)
+
+Wunsch: „In der je Leistung Seite soll nach Teilnehmernamen oder nach offenen Prüfungen sortieren können“. Entscheidung
+des Nutzers: „Noch nicht bestanden zuerst“.
+
+- **Neu** (`pruefungen.js`, `leistungReihenfolge`): Neben der Auswahl der Leistung steht „Nach Name“ / „Offene zuerst“.
+  „Nach Name“ ordnet nach Nachname, dann Vorname (vorher: Reihenfolge des Anlegens bzw. Imports). „Offene zuerst“ stellt
+  nach vorn, wer die Leistung noch nicht bestanden hat (keine Bewertung oder zuletzt mangelhaft, Nachprüfung offen),
+  dahinter die Bestandenen, ans Ende die Gesperrten (Lehrgangsergebnis vermerkt); je Gruppe nach Name. Die Wahl gilt je
+  Gerät für alle Lehrgänge (`localStorage` `pruef:leistung-sort`). Matrix und „je Teilnehmende“ bleiben unverändert.
+- README nachgezogen.
+
+**Tests**: neu `tests/test_pruefungen_leistung_sortierung.py` (echte App, Chromium, Telefon) – fünf Personen, nicht
+alphabetisch angelegt: „Nach Name“ als Vorgabe, „Offene zuerst“ (offen, mangelhaft vorn; bestanden, Nachprüfung
+bestanden; gesperrt am Ende), kein seitliches Rollen, die Wahl übersteht das Neuladen.
