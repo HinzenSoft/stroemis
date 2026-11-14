@@ -93,7 +93,11 @@
     mangelhaft: { sym: "👎", txt: "mangelhaft" },
     nachpruefung_bestanden: { sym: "👍", txt: "bestanden", np: true },
     nachpruefung_mangelhaft: { sym: "👎", txt: "mangelhaft", np: true },
+    // Versuch ohne Bewertung (14.11.2026): Kriterien, Zeit oder Kommentar stehen schon, bestanden/mangelhaft noch nicht.
+    in_arbeit: { sym: "✎", txt: "in Arbeit" },
+    nachpruefung_in_arbeit: { sym: "✎", txt: "in Arbeit", np: true },
   };
+  const ERG_TEXT = { bestanden: "👍 bestanden", mangelhaft: "👎 mangelhaft", "": "✎ in Arbeit" };
   // Der erste Versuch heißt „Versuch 1“, alles danach sind Nachprüfungen (so legt es der Server an).
   const versuchTitel = (v) => (v.ist_nachpruefung ? `Nachprüfung ${Math.max(1, v.versuch_nr - 1)}` : `Versuch ${v.versuch_nr}`);
   // Gerenderte Beschreibungen tragen keine id-Attribute: Ein <div id="bw-wahl"> im Text stünde
@@ -118,7 +122,6 @@
      Warteschlange, wie bei der App ohne Netz (nur ein Hinweis). Der Status 0 kommt von S.api („keine Antwort“). */
   const NICHT_GESPEICHERT = "Nicht gespeichert – keine Verbindung.";
   const schreibFehler = (e) => (e && e.status === 0 ? Object.assign(new Error(NICHT_GESPEICHERT), { status: 0 }) : e);
-  const groesseText = (b) => (b >= 1048576 ? `${(b / 1048576).toFixed(1).replace(".", ",")} MB` : `${Math.max(1, Math.round(b / 1024))} kB`);
   const isVideo = (f) => /^video\//.test(f.type) || /\.(mp4|m4v|mov|webm)$/i.test(f.name || "");
   const plural = S.plural;              // „1 Bild“, „3 Bilder“ – app-weit in common.js (UI/UX vor dem Merge, A11)
   // Ein Kommentar in einer Matrixzelle: ein Satz reicht, der Rest steht im Dialog.
@@ -1881,7 +1884,7 @@
     const sub = z ? `${esc(kurzName(z.geprueft_von_name))} · ${esc(fmtDate(z.geprueft_am, true))}${z.letzte_zeit_sekunden != null ? ` · ${fmtZeit(z.letzte_zeit_sekunden)}` : ""}` : "";
     // Eingefrorene Zellen (Lehrgangsergebnis vermerkt) sind gedämpft und öffnen den Dialog nur lesend.
     const gesperrt = !!tn.eingefroren;
-    const titel = z ? `${def.np ? "Nachprüfung " : ""}${def.txt} – geprüft von ${z.geprueft_von_name} am ${fmtDate(z.geprueft_am, true)}${z.versuche > 1 ? ` (${z.versuche} Versuche)` : ""}`
+    const titel = z ? `${def.np ? "Nachprüfung " : ""}${def.txt} – ${/in_arbeit$/.test(status) ? "angefangen" : "geprüft"} von ${z.geprueft_von_name} am ${fmtDate(z.geprueft_am, true)}${z.versuche > 1 ? ` (${z.versuche} Versuche)` : ""}`
       : (gesperrt ? "Nicht abgenommen – eingefroren" : "Noch nicht abgenommen – antippen zum Bewerten");
     const alsSpan = opts.tag === "span";
     const klasse = `zelle st-${status}${gesperrt ? " gesperrt" : ""}`;
@@ -2066,14 +2069,14 @@
     const bearbeitet = v.bearbeitet_am ? ` · <span title="Ursprünglicher Stand im Verlauf">bearbeitet von ${esc(v.bearbeitet_von_name)} am ${esc(fmtDate(v.bearbeitet_am, true))}</span>` : "";
     return `<div class="versuch-karte ${v.ergebnis}" data-vid="${v.id}">
       <div class="vk-kopf"><span>${versuchTitel(v)}</span>
-        <span class="erg ${v.ergebnis}">${v.ergebnis === "bestanden" ? "👍 bestanden" : "👎 mangelhaft"}</span>
+        <span class="erg ${v.ergebnis || "in-arbeit"}">${ERG_TEXT[v.ergebnis]}</span>
         ${v.zeit_sekunden != null ? `<span class="zeit">Zeit ${fmtZeit(v.zeit_sekunden)}${opts.soll != null ? ` <span class="muted">(Soll ${fmtZeit(opts.soll)})</span>` : ""}</span>` : ""}</div>
       ${v.kommentar ? `<div class="kommentar">${esc(v.kommentar)}</div>` : ""}
       ${kriterienErgebnisHtml(v.leistung_id, v.kriterien)}
       ${medienGridHtml(v.medien, { loeschbar: !!opts.onMedienWeg, onDelete: opts.onMedienWeg })}
-      <div class="abnahme">abgenommen von ${esc(v.geprueft_von_name)} am ${esc(fmtDate(v.geprueft_am, true))}${bearbeitet}</div>
+      <div class="abnahme">${v.ergebnis ? "abgenommen" : "angefangen"} von ${esc(v.geprueft_von_name)} am ${esc(fmtDate(v.geprueft_am, true))}${bearbeitet}</div>
       ${v.verlauf && v.verlauf.length ? `<details class="staende"><summary>Frühere Stände (${v.verlauf.length})</summary><ul>${v.verlauf.map((s) => `<li>
-        ${s.ergebnis === "bestanden" ? "👍 bestanden" : "👎 mangelhaft"}${s.zeit_sekunden != null ? ` · ${fmtZeit(s.zeit_sekunden)}` : ""}${s.kommentar ? ` · „${esc(s.kommentar)}“` : ""}
+        ${ERG_TEXT[s.ergebnis]}${s.zeit_sekunden != null ? ` · ${fmtZeit(s.zeit_sekunden)}` : ""}${s.kommentar ? ` · „${esc(s.kommentar)}“` : ""}
         <span class="muted">– von ${esc(s.von_name)}, galt ${esc(fmtDate(s.stand_ab, true))} bis ${esc(fmtDate(s.ersetzt_am, true))}</span></li>`).join("")}</ul></details>` : ""}
       ${opts.knoepfe ? `<div class="btn-row">
         <button type="button" class="btn secondary small" data-v-edit="${v.id}">Bearbeiten</button>
@@ -2086,7 +2089,8 @@
 
   function formularHtml(modus, l) {
     const v = modus.versuch || {};
-    const titel = modus.art === "edit" ? `${versuchTitel(v)} bearbeiten` : modus.art === "np" ? "Nachprüfung durchführen" : "Neue Bewertung";
+    const titel = modus.art === "edit" ? (v.ergebnis ? `${versuchTitel(v)} bearbeiten` : `${versuchTitel(v)} – in Arbeit`)
+      : modus.art === "np" ? "Nachprüfung durchführen" : "Neue Bewertung";
     return `<h3 id="bw-form-titel">${titel}</h3>
       ${l.zeitansatz_sekunden != null ? `<div class="stoppuhr">
         <div class="su-zeile"><span class="su-anzeige" aria-live="off">00:00.0</span><span class="su-soll">Soll ${fmtZeit(l.zeitansatz_sekunden)}</span></div>
@@ -2118,11 +2122,11 @@
       <label>Medien</label>
       <button type="button" class="btn secondary medien-knopf" id="bw-medien-knopf">Foto/Video aufnehmen oder wählen</button>
       <input type="file" id="bw-dateien" class="hidden" accept="image/*,video/*,.heic,.heif,.mp4,.mov,.m4v,.webm" multiple>
-      <ul class="medien-wahl" id="bw-medien-liste"></ul>
+      ${v.medien && v.medien.length && !v.ergebnis ? `<div id="bw-medien-da">${medienGridHtml(v.medien, { loeschbar: true, onDelete: modus.onMedienWeg })}</div>` : ""}
       <div class="help">Bilder (auch HEIC) und Videos bis ${STROEMIS.maxUploadMb >= 1024 ? `${(STROEMIS.maxUploadMb / 1024).toFixed(STROEMIS.maxUploadMb % 1024 ? 1 : 0).replace(".", ",")} GB` : `${STROEMIS.maxUploadMb} MB`} je Hochladevorgang.</div>
       <div class="up-stand hidden" id="bw-up"><span class="up-text small muted"></span><progress max="100" value="0"></progress></div>
-      <div class="dlg-actions"><button class="btn secondary" id="bw-abbruch" type="button">Abbrechen</button>
-        <button class="btn" id="bw-save" type="button">${modus.art === "edit" ? "Änderung speichern" : "Bewertung speichern"}</button></div>`;
+      <div class="dlg-actions bw-fuss"><span class="bw-stand" id="bw-stand" role="status">${modus.versuch ? "Gespeichert" : "Wird beim Eintragen gespeichert"}</span>
+        <button class="btn secondary" id="bw-schliessen" type="button">Schließen</button></div>`;
   }
 
   /* Standbild aus einem Video ziehen (Canvas) – wie posterFor in map.js: Der Server nimmt es als
@@ -2267,6 +2271,8 @@
     if (gesperrt) modus = null;
     else if (opts.edit) modus = { art: "edit", versuch: versuche.find((v) => v.id === opts.edit) || letzter };
     else if (!letzter) modus = { art: "neu" };
+    // Ein Versuch in Arbeit (noch ohne Bewertung) öffnet sich gleich zum Weitermachen.
+    else if (!letzter.ergebnis) modus = { art: "edit", versuch: letzter };
     else if (letzter.ergebnis === "mangelhaft" && (opts.nachpruefung || suHier)) modus = { art: "np" };
     // Läuft für eine bestandene Zelle eine Stoppuhr (im Bearbeiten-Formular gestartet), muss sie
     // wieder erreichbar sein – die Übersicht hat keine Uhr.
@@ -2274,12 +2280,15 @@
     const npMoeglich = !gesperrt && !!(letzter && letzter.ergebnis === "mangelhaft" && !modus);
 
     const neuZeichnen = async (o) => { await loadDetail().catch(() => {}); renderLehrgangSeite(); bewertungsDialog(tid, lid, o || {}); };
-    const onMedienWeg = gesperrt ? null : () => neuZeichnen();
+    const onMedienWeg = gesperrt ? null : () => neuZeichnen(modus && modus.versuch ? { edit: modus.versuch.id, sitzung: opts.sitzung } : {});
+    if (modus) modus.onMedienWeg = onMedienWeg;
+    // Den Versuch in Arbeit zeigt das Formular selbst – nicht noch einmal als Karte darüber.
+    const karten = versuche.filter((v) => !(modus && modus.versuch === v && !v.ergebnis));
 
     const html = `<div class="dlg-kopf"><h2 class="dlg-tn">${tnKopfHtml(tn)}</h2><p class="leistung">${esc(l.bezeichnung)}${l.zeitansatz_sekunden != null ? ` · Sollzeit ${fmtZeit(l.zeitansatz_sekunden)}` : ""}${tn.gliederung ? ` · ${esc(tn.gliederung)}` : ""}${tn.ergebnis ? ` · Lehrgang ${ERGEBNIS[tn.ergebnis][0]}` : ""}</p></div>
       ${gesperrt ? `<p class="notice">${esc(EINGEFROREN)}</p>` : ""}
       ${l.beschreibung_md ? `<details class="beschreibung"><summary>Prüfungsbeschreibung</summary><div class="md">${md(l.beschreibung_md)}</div></details>` : ""}
-      ${versuche.length ? `<h3>Bisherige Versuche</h3>${versuche.map((v) => versuchKarteHtml(v, v === letzter, { soll: l.zeitansatz_sekunden, knoepfe: !gesperrt, onMedienWeg })).join("")}` : ""}
+      ${karten.length ? `<h3>Bisherige Versuche</h3>${karten.map((v) => versuchKarteHtml(v, v === letzter, { soll: l.zeitansatz_sekunden, knoepfe: !gesperrt, onMedienWeg })).join("")}` : ""}
       <div class="abschluss">
       ${modus ? formularHtml(modus, l)
         : gesperrt ? `<p class="help">${versuche.length ? "Die Bewertungen sind eingefroren." : "Diese Leistung wurde nicht abgenommen; neue Bewertungen sind eingefroren."}</p>
@@ -2293,7 +2302,7 @@
     dialogOeffnen(html, (dlg, body) => {
       const urls = [];
       let suWeg = () => {};
-      const aufraeumen = () => { suWeg(); urls.forEach((u) => URL.revokeObjectURL(u)); };
+      let aufraeumen = () => { suWeg(); urls.forEach((u) => URL.revokeObjectURL(u)); };
       state.dlgAufraeumen = aufraeumen;
       dlg.addEventListener("close", () => { if (state.dlgAufraeumen === aufraeumen) { aufraeumen(); state.dlgAufraeumen = null; } }, { once: true });
 
@@ -2333,13 +2342,110 @@
       const wahl = $("#bw-wahl", form), komm = $("#bw-komm", form), kommLabel = $("#bw-komm-label", form), zeitfeld = $("#bw-zeit", form);
       const gewaehlt = () => { const s = wahl.querySelector(".sel"); return s ? s.dataset.erg : null; };
       const pflichtZeigen = () => { kommLabel.textContent = gewaehlt() === "mangelhaft" ? "Kommentar (Pflicht bei mangelhaft)" : "Kommentar"; if (gewaehlt() !== "mangelhaft") komm.classList.remove("fehler"); };
+
+      /* Automatisch speichern (Wunsch des Nutzers vom 14.11.2026): Kriterien und Bewertung sofort, Zeit und Kommentar
+         kurz nach dem Tippen bzw. beim Verlassen des Felds, Medien beim Auswählen. Ohne Bewertung entsteht ein Versuch
+         „in Arbeit“; „mangelhaft“ zählt erst mit Kommentar. Die Kennung „sitzung“ hält alle Speicherungen eines Öffnens
+         als eine Änderung im Verlauf zusammen. Die Anfragen laufen nacheinander (kette), nie zwei zugleich. */
+      const sitzung = opts.sitzung || `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`;
+      let versuchId = modus.versuch ? modus.versuch.id : null;
+      let gespeichertErg = modus.versuch ? modus.versuch.ergebnis : "";
+      let kette = Promise.resolve(), takt = null, schmutzig = false, veraendert = false;
+      const standEl = $("#bw-stand", form);
+      const stand = (art, text) => { standEl.className = `bw-stand${art ? ` ${art}` : ""}`; standEl.textContent = text; };
+      const kriterienLesen = () => {
+        const k = {};
+        $$(".krit-zeile", form).forEach((btn) => {
+          if (btn.dataset.stand === "ja") k[btn.dataset.kid] = true;
+          else if (btn.dataset.stand === "nein") k[btn.dataset.kid] = false;
+        });
+        return k;
+      };
+      async function jetztSpeichern(mitAnlegen) {
+        if (!schmutzig && !mitAnlegen) return;
+        schmutzig = false;
+        const erg = gewaehlt(), kommentar = komm.value.trim(), kriterien = kriterienLesen();
+        const body = { kommentar, kriterien, sitzung };
+        // Unlesbare Zeit: Fehler am Feld, alles andere wird trotzdem gespeichert.
+        const z = zeitLesen(zeitfeld.value);
+        if (z.ok) body.zeit_sekunden = z.wert;
+        else { zeitfeld.classList.add("fehler"); S.feldFehler(zeitfeld, "Zeit bitte als mm:ss angeben, z. B. 02:30 – oder nur Ziffern: 230."); }
+        // „mangelhaft“ ohne Kommentar: Die Wahl wartet auf den Kommentar; ein gespeichertes „mangelhaft“ behält seinen.
+        if (erg === "mangelhaft" && !kommentar) {
+          komm.classList.add("fehler");
+          S.feldFehler(komm, "Bei „mangelhaft“ ist ein Kommentar Pflicht – die Bewertung wird gespeichert, sobald er dasteht.");
+          if (gespeichertErg === "mangelhaft") delete body.kommentar;
+        } else if (erg) body.ergebnis = erg;
+        if (!versuchId && !mitAnlegen && !body.ergebnis && !kommentar && body.zeit_sekunden == null && !Object.keys(kriterien).length) {
+          return stand("", "Wird beim Eintragen gespeichert");
+        }
+        stand("", "Speichert …");
+        try {
+          let versuch;
+          if (!versuchId) {
+            versuch = (await api(`${API}/teilnehmer/${tid}/leistungen/${lid}/versuche`,
+              { method: "POST", body: { ...body, ergebnis: body.ergebnis || "", nachpruefung: modus.art === "np" } })).versuch;
+          } else {
+            versuch = (await api(`${API}/versuche/${versuchId}`, { method: "PUT", body })).versuch;
+          }
+          versuchId = versuch ? versuch.id : null;
+          gespeichertErg = versuch ? versuch.ergebnis : "";
+          veraendert = true;
+          if (versuch && versuch.ergebnis) {
+            // Eine für diese Zelle noch laufende Stoppuhr ist mit der Bewertung erledigt.
+            const s = suLesen();
+            if (s && s.tid === tid && s.lid === lid) suLoeschen();
+          }
+          const uhr = new Date().toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
+          stand("ok", !versuch ? "Alles entfernt – kein Versuch gespeichert" : versuch.ergebnis ? `Gespeichert ${uhr}` : `Gespeichert ${uhr} – in Arbeit, noch ohne Bewertung`);
+          return versuch;
+        } catch (e) {
+          // Ohne Netz bleibt alles Eingegebene im Dialog stehen; die nächste Änderung (oder Schließen) versucht es erneut.
+          schmutzig = true;
+          if (/Kommentar/i.test(e.message)) { komm.classList.add("fehler"); S.feldFehler(komm, e.message); }
+          stand("fehler", schreibFehler(e).message);
+          throw e;
+        }
+      }
+      const speichern = (mitAnlegen) => {
+        clearTimeout(takt); takt = null;
+        const lauf = kette.then(() => jetztSpeichern(mitAnlegen));
+        kette = lauf.catch(() => {});
+        return lauf;
+      };
+      const geaendert = (sofort) => {
+        schmutzig = true;
+        clearTimeout(takt);
+        if (sofort) speichern().catch(() => {});
+        else { stand("", "Ungespeichert …"); takt = setTimeout(() => speichern().catch(() => {}), 800); }
+      };
+      // Schließen, neu Zeichnen oder Wechsel in einen anderen Dialog: noch Offenes speichern, danach die Seite nachziehen.
+      const vorher = aufraeumen;
+      aufraeumen = () => {
+        vorher();
+        if (schmutzig) speichern().catch(() => toast(`${tnName(tn)} – ${l.bezeichnung}: ${NICHT_GESPEICHERT}`, true));
+        kette.then(async () => { if (veraendert) { await loadDetail().catch(() => {}); renderLehrgangSeite(); } });
+      };
+      state.dlgAufraeumen = aufraeumen;
+
       $$("button", wahl).forEach((b) => b.onclick = () => {
         $$("button", wahl).forEach((x) => { x.classList.toggle("sel", x === b); x.setAttribute("aria-pressed", String(x === b)); });
         S.feldOk(wahl);
         pflichtZeigen();
+        // Läuft die Stoppuhr dieser Zelle noch und ist das Zeitfeld leer, gilt die gemessene Zeit – wer bewertet,
+        // hat das Stoppen nur übersprungen, nicht die Messung verworfen.
+        const laufend = suLesen();
+        if (laufend && laufend.tid === tid && laufend.lid === lid && !zeitfeld.value.trim()) $('[data-su="stopp"]', form).click();
+        geaendert(true);
+        if (b.dataset.erg === "mangelhaft" && !komm.value.trim()) komm.focus();
       });
-      komm.addEventListener("input", () => { if (komm.value.trim()) komm.classList.remove("fehler"); });
-      zeitfeld.addEventListener("input", () => zeitfeld.classList.remove("fehler"));
+      komm.addEventListener("input", () => { if (komm.value.trim()) komm.classList.remove("fehler"); geaendert(); });
+      komm.addEventListener("blur", () => { if (schmutzig) speichern().catch(() => {}); });
+      zeitfeld.addEventListener("input", () => { zeitfeld.classList.remove("fehler"); geaendert(); });
+      zeitfeld.addEventListener("blur", () => { if (schmutzig) speichern().catch(() => {}); });
+      // „Stopp“ trägt die gemessene Zeit ein (stoppuhrEinrichten) – sie gilt sofort.
+      const stopp = $('[data-su="stopp"]', form);
+      if (stopp) stopp.addEventListener("click", () => geaendert(true));
       // Kriterien: ein Tipp wechselt nicht bewertet → erfüllt → nicht erfüllt → nicht bewertet.
       const kritListe = $("#bw-kriterien", form);
       if (kritListe) kritListe.addEventListener("click", (e) => {
@@ -2352,80 +2458,31 @@
         const name = `${btn.querySelector(".krit-text").textContent}: ${KRIT_TEXT[naechster]}`;
         btn.setAttribute("aria-label", name);
         $("#bw-krit-ansage", form).textContent = name;
+        geaendert(true);
       });
 
-      // Medien auswählen: Vorschau, Größe, einzeln entfernbar. Die Dateien liegen im Speicher,
-      // bis die Bewertung gespeichert ist – erst dann gibt es einen Versuch, zu dem sie gehören.
-      let dateien = [];
-      const liste = $("#bw-medien-liste", form), inp = $("#bw-dateien", form);
-      const listeZeichnen = () => {
-        liste.innerHTML = dateien.map((f, i) => {
-          let vorschau = '<span class="video-icon" aria-hidden="true">🎬</span>';
-          if (!isVideo(f)) { const u = URL.createObjectURL(f); urls.push(u); vorschau = `<img src="${u}" alt="">`; }
-          return `<li>${vorschau}<span class="name">${esc(f.name)}<small>${groesseText(f.size)}${isVideo(f) ? " · Video" : ""}</small></span>
-            ${S.entfernenKnopf(`data-weg="${i}"`, `${f.name} entfernen`)}</li>`;
-        }).join("");
-        $$("[data-weg]", liste).forEach((b) => b.onclick = () => { dateien.splice(+b.dataset.weg, 1); listeZeichnen(); });
-      };
-      $("#bw-medien-knopf", form).onclick = () => { inp.value = ""; inp.click(); };
-      inp.onchange = () => { dateien = dateien.concat(Array.from(inp.files || [])); listeZeichnen(); };
-
-      $("#bw-abbruch", form).onclick = () => { if (modus.art === "neu") dlg.close(); else bewertungsDialog(tid, lid, { uebersicht: true }); };
-      $("#bw-save", form).onclick = async (ev) => {
-        const knopf = ev.currentTarget;
-        if (knopf.disabled) return;
-        const erg = gewaehlt();
-        // Fehler an der Stelle (S.feldFehler), nicht als Toast (Gerätetest FT7, designsprache „Fehler am Feld“).
-        if (!erg) { wahl.scrollIntoView({ block: "center" }); return S.feldFehler(wahl, "Bitte „bestanden“ oder „mangelhaft“ wählen."); }
-        // Läuft die Stoppuhr noch und ist das Zeitfeld leer, gilt die gemessene Zeit – wer
-        // direkt speichert, hat das Stoppen nur übersprungen, nicht die Messung verworfen.
-        const laufend = suLesen();
-        if (laufend && laufend.tid === tid && laufend.lid === lid && !zeitfeld.value.trim()) {
-          zeitfeld.value = fmtZeit(Math.round((Date.now() - laufend.start) / 1000));
-        }
-        const z = zeitLesen(zeitfeld.value);
-        if (!z.ok) { zeitfeld.classList.add("fehler"); return S.feldFehler(zeitfeld, "Zeit bitte als mm:ss angeben, z. B. 02:30 – oder nur Ziffern: 230."); }
-        const kommentar = komm.value.trim();
-        // Pflichtkommentar schon hier – der Server prüft es ebenfalls (siehe catch unten).
-        if (erg === "mangelhaft" && !kommentar) { komm.classList.add("fehler"); return S.feldFehler(komm, "Bei „mangelhaft“ ist ein Kommentar Pflicht."); }
-        // Kriterien-Stand aus den Knöpfen lesen – ohne Kriterienliste liefert das ein leeres Objekt,
-        // was der Server als „nichts zu ändern“ versteht.
-        const kriterien = {};
-        $$(".krit-zeile", form).forEach((btn) => {
-          if (btn.dataset.stand === "ja") kriterien[btn.dataset.kid] = true;
-          else if (btn.dataset.stand === "nein") kriterien[btn.dataset.kid] = false;
-        });
-        knopf.disabled = true;
+      // Medien: sofort hochladen – gibt es noch keinen Versuch, entsteht einer in Arbeit, zu dem sie gehören.
+      const inp = $("#bw-dateien", form), medienKnopf = $("#bw-medien-knopf", form);
+      medienKnopf.onclick = () => { inp.value = ""; inp.click(); };
+      inp.onchange = async () => {
+        const dateien = Array.from(inp.files || []);
+        if (!dateien.length) return;
+        medienKnopf.disabled = true;
         try {
-          let versuch;
-          if (modus.art === "edit") {
-            versuch = (await api(`${API}/versuche/${modus.versuch.id}`, { method: "PUT", body: { ergebnis: erg, zeit_sekunden: z.wert, kommentar, kriterien } })).versuch;
-          } else {
-            versuch = (await api(`${API}/teilnehmer/${tid}/leistungen/${lid}/versuche`,
-              { method: "POST", body: { ergebnis: erg, zeit_sekunden: z.wert, kommentar, nachpruefung: modus.art === "np", kriterien } })).versuch;
-          }
-          if (dateien.length) {
-            try {
-              const r = await medienHochladen(versuch.id, dateien, $("#bw-up", form));
-              if (r.errors.length) toast(r.errors.join(" "), true);
-            } catch (e) { toast(e.message, true); }
-          }
-          // Eine für diese Zelle noch laufende Stoppuhr ist mit dem Speichern erledigt.
-          const s = suLesen();
-          if (s && s.tid === tid && s.lid === lid) suLoeschen();
-          const wer = modus.art === "edit" ? `bearbeitet von ${versuch.bearbeitet_von_name || versuch.geprueft_von_name} am ${fmtDate(versuch.bearbeitet_am || versuch.geprueft_am, true)}`
-                                            : `abgenommen von ${versuch.geprueft_von_name} am ${fmtDate(versuch.geprueft_am, true)}`;
-          toast(`Gespeichert – ${wer}`);
-          await loadDetail().catch(() => {});
-          renderLehrgangSeite();
-          if (modus.art === "edit") bewertungsDialog(tid, lid);
-          else dlg.close();
-        } catch (e) {
-          // Ohne Netz bleibt alles Eingegebene im Dialog stehen – „Nicht gespeichert – keine Verbindung.“ (W1).
-          if (/Kommentar/i.test(e.message)) { komm.classList.add("fehler"); S.feldFehler(komm, e.message); }
-          else S.fehlschlag(knopf, schreibFehler(e));
-        } finally { knopf.disabled = false; }
+          schmutzig = true;
+          const v = await speichern(!versuchId);
+          const vid = (v && v.id) || versuchId;
+          if (!vid) return;
+          const r = await medienHochladen(vid, dateien, $("#bw-up", form));
+          if (r.errors.length) toast(r.errors.join(" "), true);
+          else toast(`${plural(r.medien.length, "Datei", "Dateien")} hochgeladen`);
+          veraendert = true;
+          neuZeichnen({ edit: vid, sitzung });
+        } catch (e) { S.fehlschlag(medienKnopf, schreibFehler(e)); }
+        finally { medienKnopf.disabled = false; }
       };
+
+      $("#bw-schliessen", form).onclick = () => dlg.close();
       if (modus.art === "np" || modus.art === "edit") $("#bw-form-titel", form).scrollIntoView({ block: "start" });
     }, ["pruef-dlg"]);
   }
@@ -2515,12 +2572,12 @@
     return `${tn.kommentar ? `<div class="versuch-karte"><div class="vk-kopf">Kommentar</div><div class="kommentar">${esc(tn.kommentar)}</div></div>` : ""}
       ${versuche.length ? versuche.map((v) => `<div class="versuch-karte ${v.ergebnis}">
         <div class="vk-kopf"><span>${esc(v.leistung_bezeichnung)}</span><span class="muted">${versuchTitel(v)}</span>
-          <span class="erg ${v.ergebnis}">${v.ergebnis === "bestanden" ? "👍 bestanden" : "👎 mangelhaft"}</span>
+          <span class="erg ${v.ergebnis || "in-arbeit"}">${ERG_TEXT[v.ergebnis]}</span>
           ${v.zeit_sekunden != null ? `<span class="zeit">Zeit ${fmtZeit(v.zeit_sekunden)}${soll(v.leistung_id) != null ? ` <span class="muted">(Soll ${fmtZeit(soll(v.leistung_id))})</span>` : ""}</span>` : ""}</div>
         ${v.kommentar ? `<div class="kommentar">${esc(v.kommentar)}</div>` : ""}
         ${kriterienErgebnisHtml(v.leistung_id, v.kriterien)}
         ${medienGridHtml(v.medien)}
-        <div class="abnahme">abgenommen von ${esc(v.geprueft_von_name)} am ${esc(fmtDate(v.geprueft_am, true))}${v.bearbeitet_am ? ` · bearbeitet von ${esc(v.bearbeitet_von_name)} am ${esc(fmtDate(v.bearbeitet_am, true))}` : ""}</div>
+        <div class="abnahme">${v.ergebnis ? "abgenommen" : "angefangen"} von ${esc(v.geprueft_von_name)} am ${esc(fmtDate(v.geprueft_am, true))}${v.bearbeitet_am ? ` · bearbeitet von ${esc(v.bearbeitet_von_name)} am ${esc(fmtDate(v.bearbeitet_am, true))}` : ""}</div>
       </div>`).join("") : '<p class="leerzustand">Noch keine Bewertungen.</p>'}`;
   }
 

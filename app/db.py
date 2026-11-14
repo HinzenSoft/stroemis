@@ -339,7 +339,7 @@ CREATE TABLE IF NOT EXISTS pruef_versuche (
   leistung_id         INTEGER NOT NULL REFERENCES pruef_leistungen(id) ON DELETE CASCADE,
   versuch_nr          INTEGER NOT NULL,
   ist_nachpruefung    INTEGER NOT NULL DEFAULT 0,
-  ergebnis            TEXT NOT NULL,              -- bestanden | mangelhaft
+  ergebnis            TEXT NOT NULL,              -- bestanden | mangelhaft | '' (in Arbeit: noch ohne Bewertung)
   zeit_sekunden       INTEGER,
   kommentar           TEXT NOT NULL DEFAULT '',
   geprueft_von        INTEGER REFERENCES users(id) ON DELETE SET NULL,
@@ -348,6 +348,7 @@ CREATE TABLE IF NOT EXISTS pruef_versuche (
   bearbeitet_von      INTEGER REFERENCES users(id) ON DELETE SET NULL,
   bearbeitet_von_name TEXT NOT NULL DEFAULT '',
   bearbeitet_am       TEXT,
+  bearbeitung_sitzung TEXT,                       -- Dialog, der zuletzt bearbeitet hat (ein Verlaufseintrag je Öffnen)
   UNIQUE (teilnehmer_id, leistung_id, versuch_nr)
 );
 
@@ -453,6 +454,9 @@ MIGRATIONS = [
     ("pruef_teilnehmer", "ergebnis_am", "TEXT"),
     # Prüfungen: die Leitung ist ein eigenes Kennzeichen, nicht mehr nur ein Wort in der Funktion.
     ("pruef_ausbilder", "ist_leitung", "INTEGER NOT NULL DEFAULT 0"),
+    # Riegenkarten, 14.11.2026: Der Bewertungsdialog speichert von selbst. Alle Speicherungen eines Öffnens sind eine
+    # Änderung – die Kennung des Dialogs sagt, ob der Stand vor dem Öffnen schon im Verlauf steht.
+    ("pruef_versuche", "bearbeitung_sitzung", "TEXT"),
     # Rechte-Matrix statt Rollen: je Modul eine Stufe (damals 0 kein Zugriff, 1 Mitglied, 2 Verwaltung – seit Schritt 33
     # der Materialablage ist Verwaltung 3, 2 heißt Redakteur). Die Nacharbeit überträgt role/is_pruefer, danach fallen
     # beide Spalten (OBSOLETE_COLUMNS).

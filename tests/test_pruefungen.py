@@ -426,7 +426,11 @@ def test_pruefungen():
         assert r.status_code == 400 and "Kommentar" in r.json["error"], (r.status_code, r.get_json())
         assert pr.post(basis, json={"ergebnis": "mangelhaft"}).status_code == 400
         assert pr.post(basis, json={"ergebnis": "geht so", "kommentar": "x"}).status_code == 400
-        assert pr.post(basis, json={"kommentar": "x"}).status_code == 400
+        # Ohne Bewertung entsteht ein Versuch in Arbeit (14.11.2026); ganz geleert fällt er wieder weg.
+        r = pr.post(basis, json={"kommentar": "x"})
+        assert r.status_code == 201 and r.json["versuch"]["ergebnis"] == "", r.get_json()
+        r = pr.put(f"/api/pruefungen/versuche/{r.json['versuch']['id']}", json={"kommentar": ""})
+        assert r.status_code == 200 and r.json["versuch"] is None, r.get_json()
         assert pr.post(basis, json={"ergebnis": "bestanden", "zeit_sekunden": "abc"}).status_code == 400
         assert pr.post(basis, json={"ergebnis": "bestanden", "zeit_sekunden": -3}).status_code == 400
         assert pr.get(basis).json["versuche"] == [], "abgewiesene Bewertungen dürfen nichts hinterlassen"

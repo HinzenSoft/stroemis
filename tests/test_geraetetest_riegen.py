@@ -91,7 +91,8 @@ def test_w1_w2_voraussetzung_setzen():
     assert 'toast(`Gespeichert – ${tn ? `${tnName(tn)}: ` : ""}„${v ? v.bezeichnung : "Voraussetzung"}“ ${erfuellt ? "erfüllt" : "nicht erfüllt"}`);' in vs
     assert "if (neu && hatteFokus) neu.focus({ preventScroll: true });" in vs
     # Bewertung, Kommentar, Ergebnis ohne Netz mit derselben Meldung.
-    assert rk.count("S.fehlschlag(knopf, schreibFehler(e));") >= 3
+    # Die Bewertung speichert seit dem 14.11.2026 von selbst und meldet „ohne Netz“ im Stand neben „Schließen“.
+    assert rk.count("S.fehlschlag(knopf, schreibFehler(e));") >= 2 and 'stand("fehler", schreibFehler(e).message);' in rk
     assert ".vk-zeile .vk-text small { display: block; font-size: var(--fs-mittel);" in css
     assert ".vk-stand.speichert {" in css
 
@@ -128,7 +129,10 @@ def test_ft6_ft7_ft4():
     assert '${st ? `<button type="button" class="btn secondary small vk-verlauf"' in rk
     # FT7
     assert '<div class="bew-wahl" id="bw-wahl" role="group" aria-labelledby="bw-wahl-label" tabindex="-1">' in rk
-    assert 'S.feldFehler(wahl, "Bitte „bestanden“ oder „mangelhaft“ wählen.")' in rk and "S.feldOk(wahl);" in rk
+    # Seit dem automatischen Speichern (14.11.2026) ist die Bewertung keine Pflicht mehr (Versuch in Arbeit); der
+    # Fehler am Feld bleibt für den Pflichtkommentar bei „mangelhaft“.
+    assert 'S.feldFehler(wahl, "Bitte „bestanden“ oder „mangelhaft“ wählen.")' not in rk and "S.feldOk(wahl);" in rk
+    assert 'S.feldFehler(komm, "Bei „mangelhaft“ ist ein Kommentar Pflicht – die Bewertung wird gespeichert, sobald er dasteht.")' in rk
     assert 'S.feldFehler(komm, e.message)' in rk
     # FT4: Reihenfolge, Voraussetzungen und Kriterien melden sich.
     assert rk.count('toast("Reihenfolge gespeichert");') == 2

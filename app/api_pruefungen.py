@@ -28,6 +28,9 @@ eingabefehler_abfangen(bp)
 
 STATUS_WERTE = ("geplant", "laufend", "abgeschlossen")
 ERGEBNISSE = ("bestanden", "mangelhaft")
+# Ein Versuch „in Arbeit“ (Wunsch des Nutzers vom 14.11.2026): Kriterien, Zeit, Kommentar oder Medien stehen schon, die
+# Bewertung noch nicht. Die Zelle bleibt offen, bis bestanden oder mangelhaft dasteht.
+IN_ARBEIT = ""
 # Längster erlaubter Zeitwert: ein Tag. Eine Prüfungsleistung, die länger dauert, gibt es nicht –
 # alles darüber ist ein Tippfehler („1200:00“ statt „12:00“) und soll als solcher auffallen.
 MAX_SEKUNDEN = 24 * 3600
@@ -310,7 +313,7 @@ def _zellstatus(letzter):
     """Status einer Zelle (TN × Leistung) – maßgeblich ist der letzte Versuch."""
     if not letzter:
         return "offen"
-    return ("nachpruefung_" if letzter["ist_nachpruefung"] else "") + letzter["ergebnis"]
+    return ("nachpruefung_" if letzter["ist_nachpruefung"] else "") + (letzter["ergebnis"] or "in_arbeit")
 
 
 def _extra(text):
@@ -627,18 +630,20 @@ def _tn_json(tid):
 
 
 # Lehrgang mit Fortschrittszahlen. Alles als Unterabfragen, damit die Liste eine Abfrage bleibt.
-# Eine „Zelle“ ist ein Paar (Teilnehmer, Leistung); abgenommen heißt: mindestens ein Versuch.
-# Offener Mangel: der Versuch mit der höchsten Nummer seiner Zelle ist mangelhaft.
+# Eine „Zelle“ ist ein Paar (Teilnehmer, Leistung); abgenommen heißt: mindestens ein bewerteter Versuch.
+# Offener Mangel: der bewertete Versuch mit der höchsten Nummer seiner Zelle ist mangelhaft – eine Nachprüfung, die
+# noch in Arbeit ist, erledigt ihn nicht.
 _LEHRGANG_SQL = (
     "SELECT l.*, "
     "  (SELECT COUNT(*) FROM pruef_teilnehmer t WHERE t.lehrgang_id = l.id) AS tn_anzahl, "
     "  (SELECT COUNT(*) FROM pruef_leistungen p WHERE p.lehrgang_id = l.id) AS leistungen_anzahl, "
     "  (SELECT COUNT(DISTINCT v.teilnehmer_id || ':' || v.leistung_id) FROM pruef_versuche v "
-    "     JOIN pruef_teilnehmer t ON t.id = v.teilnehmer_id WHERE t.lehrgang_id = l.id) AS zellen_abgenommen, "
+    "     JOIN pruef_teilnehmer t ON t.id = v.teilnehmer_id WHERE t.lehrgang_id = l.id AND v.ergebnis <> '') AS zellen_abgenommen, "
     "  (SELECT COUNT(*) FROM pruef_versuche v JOIN pruef_teilnehmer t ON t.id = v.teilnehmer_id "
     "     WHERE t.lehrgang_id = l.id AND v.ergebnis = 'mangelhaft' "
     "       AND v.versuch_nr = (SELECT MAX(v2.versuch_nr) FROM pruef_versuche v2 "
-    "                           WHERE v2.teilnehmer_id = v.teilnehmer_id AND v2.leistung_id = v.leistung_id)"
+    "                           WHERE v2.teilnehmer_id = v.teilnehmer_id AND v2.leistung_id = v.leistung_id "
+    "                             AND v2.ergebnis <> '')"
     "  ) AS offene_maengel, "
     "  (SELECT COUNT(*) FROM pruef_teilnehmer t WHERE t.lehrgang_id = l.id AND EXISTS ("
     "     SELECT 1 FROM pruef_voraussetzungen vo WHERE vo.lehrgang_id = l.id AND NOT EXISTS ("
@@ -1508,7 +1513,7 @@ def _zellen_versuche(tid, lid):
 
 
 def _bewertung_pruefen(ergebnis, kommentar):
-    if ergebnis not in ERGEBNISSE:
+    if ergebnis != IN_ARBEIT and ergebnis not in ERGEBNISSE:
         raise Abgelehnt("Bitte „bestanden“ oder „mangelhaft“ wählen.")
     if ergebnis == "mangelhaft" and not kommentar:
         raise Abgelehnt(KOMMENTAR_PFLICHT)
@@ -1527,7 +1532,9 @@ def zelle_versuche(tid, lid):
 @pruefer_required
 def create_versuch(tid, lid):
     """Bewertung anlegen. Der erste Versuch ist die Prüfung; jeder weitere ist eine Nachprüfung und
-    nur nach einem mangelhaften Versuch erlaubt. Der Erstversuch bleibt unangetastet stehen."""
+    nur nach einem mangelhaften Versuch erlaubt. Der Erstversuch bleibt unangetastet stehen. Ohne „ergebnis“
+    (leer) entsteht ein Versuch in Arbeit – der Dialog legt ihn beim ersten Haken, der ersten Zeit oder dem
+    ersten Medium an und ergänzt die Bewertung später über PUT."""
     t, _ = _zelle(tid, lid)
     _eingefroren_pruefen(t)
     d = json_body()
@@ -1588,24 +1595,55 @@ def create_versuch(tid, lid):
 @pruefer_required
 def update_versuch(vid):
     """Bewertung ändern. Der bisherige Stand wandert in den Verlauf – mit dem, der ihn geschrieben
-    hatte, und dem Zeitraum, in dem er galt; die Zeile bekommt „bearbeitet von … am …“."""
+    hatte, und dem Zeitraum, in dem er galt; die Zeile bekommt „bearbeitet von … am …“.
+
+    Der Dialog speichert von selbst (14.11.2026) und schickt dazu die Kennung „sitzung“ seines Öffnens mit:
+    Schreibt dieselbe Person im selben Dialog noch einmal, steht der Stand vor dem Öffnen schon im Verlauf –
+    die Zeile wird dann nur nachgeführt. Ein Versuch in Arbeit hat noch keinen Stand, der in den Verlauf
+    gehörte; wer ihn bewertet, gilt als Prüfer mit dem Zeitpunkt der Bewertung. Wird ein Versuch in Arbeit
+    ganz leer (kein Haken, keine Zeit, kein Kommentar, kein Medium), fällt er weg – Antwort versuch: null."""
     v = _versuch(vid)
     _eingefroren_pruefen(_tn(v["teilnehmer_id"]))
     d = json_body()
     ergebnis = sfield(d, "ergebnis").strip() if "ergebnis" in d else v["ergebnis"]
     kommentar = sfield(d, "kommentar").strip()[:5000] if "kommentar" in d else v["kommentar"]
     zeit = _sekunden(d.get("zeit_sekunden")) if "zeit_sekunden" in d else v["zeit_sekunden"]
+    sitzung = sfield(d, "sitzung").strip()[:64] or None
     _bewertung_pruefen(ergebnis, kommentar)
+    in_arbeit = v["ergebnis"] == IN_ARBEIT
+    if ergebnis == IN_ARBEIT and not in_arbeit:
+        raise Abgelehnt("Eine abgegebene Bewertung lässt sich nicht zurücknehmen – nur ändern oder (als Leitung) löschen.")
     # Die Kriterien-Haken hängen an keinem Verlauf und laufen unabhängig von den übrigen Feldern:
     # Wer nur ankreuzt, ohne Ergebnis/Kommentar/Zeit zu ändern, soll das trotzdem speichern können.
     # Geschrieben werden sie aber erst NACH dem bedingten UPDATE unten, in derselben Transaktion –
     # sonst wären sie bei einem 409 schon überschrieben, obwohl die Antwort „nichts geändert“ sagt.
     kriterien = _kriterien_map(d, v["leistung_id"]) if "kriterien" in d else None
+    GEAENDERT = ("Diese Bewertung wurde inzwischen von jemand anderem geändert – bitte die Seite neu "
+                 "laden und die Änderung noch einmal eintragen.")
     if (ergebnis, kommentar, zeit) == (v["ergebnis"], v["kommentar"], v["zeit_sekunden"]):
-        if kriterien is not None:
-            with db.transaction():
+        with db.transaction():
+            if kriterien is not None:
                 _kriterien_schreiben(vid, kriterien)
-        return jsonify(versuch=_versuch_json(v))      # nichts geändert – kein Verlaufseintrag
+            if in_arbeit and _leer_entfernen(v):
+                return jsonify(versuch=None)
+        return jsonify(versuch=_versuch_json(_versuch(vid)))      # sonst nichts geändert – kein Verlaufseintrag
+    uid, name = _ich()
+    ts = db.now()
+    if in_arbeit:
+        # Noch keine Bewertung: kein Verlauf, kein „bearbeitet“. Mit der Bewertung wird, wer sie abgibt, der Prüfer.
+        abnahme = ", geprueft_von = ?, geprueft_von_name = ?, geprueft_am = ?" if ergebnis else ""
+        with db.transaction():
+            n = db.execute_zeilen(
+                "UPDATE pruef_versuche SET ergebnis = ?, zeit_sekunden = ?, kommentar = ?" + abnahme +
+                " WHERE id = ? AND ergebnis = '' AND kommentar = ?",
+                (ergebnis, zeit, kommentar, *((uid, name, ts) if ergebnis else ()), vid, v["kommentar"]))
+            if not n:
+                raise Abgelehnt(GEAENDERT, 409)
+            if kriterien is not None:
+                _kriterien_schreiben(vid, kriterien)
+            if not ergebnis and _leer_entfernen(_versuch(vid)):
+                return jsonify(versuch=None)
+        return jsonify(versuch=_versuch_json(_versuch(vid)))
     # Sonst stünde eine Nachprüfung hinter einer bestandenen Prüfung – ein Stand, den es beim
     # Anlegen nie geben kann und den die Mängelübersicht nicht deuten könnte. Die Bedingung
     # steckt im UPDATE selbst: Zwischen einer getrennten Abfrage und dem Schreiben könnte ein
@@ -1613,8 +1651,8 @@ def update_versuch(vid):
     keine_spaetere = ergebnis == "bestanden" and v["ergebnis"] != "bestanden"
     KEIN_SPAETERER = ("Auf diese Bewertung folgt schon eine Nachprüfung – sie lässt sich nicht mehr auf "
                       "„bestanden“ ändern. Bitte zuerst die Nachprüfung löschen.")
-    uid, name = _ich()
-    ts = db.now()
+    # Derselbe Dialog derselben Person: Der Stand vor dem Öffnen steht schon im Verlauf.
+    nachfuehren = bool(sitzung and v["bearbeitung_sitzung"] == sitzung and v["bearbeitet_von"] == uid and v["bearbeitet_am"])
     with db.transaction():
         bedingung = (" AND NOT EXISTS (SELECT 1 FROM pruef_versuche s WHERE s.teilnehmer_id = ? AND s.leistung_id = ? "
                      "AND s.versuch_nr > ?)" if keine_spaetere else "")
@@ -1627,22 +1665,32 @@ def update_versuch(vid):
         # Der zweite trifft die Zeile nicht mehr und bekommt den Hinweis statt eines stummen Verlusts.
         n = db.execute_zeilen(
             "UPDATE pruef_versuche SET ergebnis = ?, zeit_sekunden = ?, kommentar = ?, bearbeitet_von = ?, "
-            "bearbeitet_von_name = ?, bearbeitet_am = ? WHERE id = ? AND ergebnis = ? AND kommentar = ? "
-            "AND COALESCE(bearbeitet_am, '') = COALESCE(?, '')" + bedingung,
-            (ergebnis, zeit, kommentar, uid, name, ts, vid, v["ergebnis"], v["kommentar"], v["bearbeitet_am"], *args))
+            "bearbeitet_von_name = ?, bearbeitet_am = ?, bearbeitung_sitzung = ? WHERE id = ? AND ergebnis = ? "
+            "AND kommentar = ? AND COALESCE(bearbeitet_am, '') = COALESCE(?, '')" + bedingung,
+            (ergebnis, zeit, kommentar, uid, name, ts, sitzung, vid, v["ergebnis"], v["kommentar"], v["bearbeitet_am"],
+             *args))
         if not n:
             if keine_spaetere and db.query("SELECT 1 FROM pruef_versuche WHERE teilnehmer_id = ? AND leistung_id = ? "
                                            "AND versuch_nr > ?", args, one=True):
                 raise Abgelehnt(KEIN_SPAETERER, 409)
-            raise Abgelehnt("Diese Bewertung wurde inzwischen von jemand anderem geändert – bitte die Seite neu "
-                            "laden und die Änderung noch einmal eintragen.", 409)
+            raise Abgelehnt(GEAENDERT, 409)
         if kriterien is not None:
             _kriterien_schreiben(vid, kriterien)
-        db.execute("INSERT INTO pruef_versuch_verlauf (versuch_id, ergebnis, zeit_sekunden, kommentar, von_user_id, "
-                   "von_name, stand_ab, ersetzt_am) VALUES (?,?,?,?,?,?,?,?)",
-                   (vid, v["ergebnis"], v["zeit_sekunden"], v["kommentar"], alt_von, alt_name,
-                    v["bearbeitet_am"] or v["geprueft_am"], ts))
+        if not nachfuehren:
+            db.execute("INSERT INTO pruef_versuch_verlauf (versuch_id, ergebnis, zeit_sekunden, kommentar, von_user_id, "
+                       "von_name, stand_ab, ersetzt_am) VALUES (?,?,?,?,?,?,?,?)",
+                       (vid, v["ergebnis"], v["zeit_sekunden"], v["kommentar"], alt_von, alt_name,
+                        v["bearbeitet_am"] or v["geprueft_am"], ts))
     return jsonify(versuch=_versuch_json(_versuch(vid)))
+
+
+def _leer_entfernen(v):
+    """Einen ganz leeren Versuch in Arbeit löschen (in der laufenden Transaktion) – wer im Dialog nur einen Haken
+    gesetzt und wieder weggenommen hat, soll keine Zelle „in Arbeit“ hinterlassen. Die Bedingungen stehen im DELETE."""
+    return bool(db.execute_zeilen(
+        "DELETE FROM pruef_versuche WHERE id = ? AND ergebnis = '' AND kommentar = '' AND zeit_sekunden IS NULL "
+        "AND NOT EXISTS (SELECT 1 FROM pruef_versuch_kriterien WHERE versuch_id = ?) "
+        "AND NOT EXISTS (SELECT 1 FROM pruef_medien WHERE versuch_id = ?)", (v["id"], v["id"], v["id"])))
 
 
 @bp.delete("/versuche/<int:vid>")
@@ -1766,15 +1814,17 @@ def maengel(lid):
             continue
         zelle = zellen[(v["teilnehmer_id"], v["leistung_id"])]
         letzter = zelle[-1]
-        ist_letzter = letzter["id"] == v["id"]
+        # Maßgeblich ist der letzte bewertete Versuch: Eine Nachprüfung in Arbeit lässt den Mangel offen.
+        massgeblich = [x for x in zelle if x["ergebnis"] != IN_ARBEIT][-1]
+        ist_letzter = massgeblich["id"] == v["id"]
         if ist_letzter:
             np_status = "offen"
-        elif letzter["ergebnis"] == "bestanden":
+        elif massgeblich["ergebnis"] == "bestanden":
             np_status = "bestanden"
         else:
             np_status = "erneut_mangelhaft"
         zellstatus = _zellstatus(letzter)
-        if nur_offen and not (ist_letzter and zellstatus in ("mangelhaft", "nachpruefung_mangelhaft")):
+        if nur_offen and not ist_letzter:
             continue
         treffer.append((v, np_status, zellstatus))
     versuche = _versuche_json([t[0] for t in treffer])

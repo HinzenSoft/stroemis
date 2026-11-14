@@ -115,7 +115,7 @@
   // Sichtbar ist ein Lehrgang, in dem das Konto als Ausbilder steht; leiten darf es mit dem Kennzeichen „Leitung“.
   const sichtbar = (z, lid) => z.ausbilder.some((a) => a.lehrgang_id === lid && a.user_id === ich().id);
   const darfLeiten = (z, lid) => z.ausbilder.some((a) => a.lehrgang_id === lid && a.user_id === ich().id && a.ist_leitung);
-  const zellstatus = (v) => (v ? (v.ist_nachpruefung ? "nachpruefung_" : "") + v.ergebnis : "offen");
+  const zellstatus = (v) => (v ? (v.ist_nachpruefung ? "nachpruefung_" : "") + (v.ergebnis || "in_arbeit") : "offen");
   const versucheVon = (z, tid, lid) => z.versuche.filter((v) => v.teilnehmer_id === tid && v.leistung_id === lid)
     .sort((a, b) => a.versuch_nr - b.versuch_nr);
 
@@ -123,8 +123,8 @@
     const tns = z.teilnehmer.filter((t) => t.lehrgang_id === lg.id);
     const ls = z.leistungen.filter((l) => l.lehrgang_id === lg.id);
     const vor = z.voraussetzungen.filter((v) => v.lehrgang_id === lg.id);
-    const letzte = {};          // je Zelle der Versuch mit der höchsten Nummer
-    z.versuche.filter((v) => tns.some((t) => t.id === v.teilnehmer_id)).forEach((v) => {
+    const letzte = {};          // je Zelle der bewertete Versuch mit der höchsten Nummer (in Arbeit zählt nicht)
+    z.versuche.filter((v) => v.ergebnis && tns.some((t) => t.id === v.teilnehmer_id)).forEach((v) => {
       const k = `${v.teilnehmer_id}:${v.leistung_id}`;
       if (!letzte[k] || letzte[k].versuch_nr < v.versuch_nr) letzte[k] = v;
     });
@@ -214,7 +214,7 @@
   }
   const zeitWert = (w) => (Number.isInteger(w) && w >= 0 && w <= 86400 ? w : null);
   const bewertungPruefen = (ergebnis, kommentar) => {
-    if (ergebnis !== "bestanden" && ergebnis !== "mangelhaft") return { status: 400, error: ERGEBNIS_WAEHLEN };
+    if (ergebnis !== "" && ergebnis !== "bestanden" && ergebnis !== "mangelhaft") return { status: 400, error: ERGEBNIS_WAEHLEN };
     if (ergebnis === "mangelhaft" && !kommentar) return { status: 400, error: KOMMENTAR_PFLICHT };
     return null;
   };
@@ -415,16 +415,31 @@
       const [t, fehler] = tnPruefen(z, v.teilnehmer_id);
       if (fehler) return fehler;
       if (t.ergebnis) return { status: 409, error: EINGEFROREN };
+      // Wie update_versuch: ein Versuch in Arbeit ohne Verlauf (mit der Bewertung wird, wer bewertet, der Prüfer), sonst
+      // ein Verlaufseintrag je Öffnen des Dialogs (sitzung); ganz leer fällt ein Versuch in Arbeit weg.
       const ergebnis = text(d, "ergebnis", 20) || v.ergebnis;
       const kommentar = "kommentar" in d ? text(d, "kommentar", 5000) : v.kommentar;
       const falsch = bewertungPruefen(ergebnis, kommentar);
       if (falsch) return falsch;
+      const zeit = "zeit_sekunden" in d ? zeitWert(d.zeit_sekunden) : v.zeit_sekunden;
       const am = jetzt();
-      v.verlauf = (v.verlauf || []).concat({ ergebnis: v.ergebnis, zeit_sekunden: v.zeit_sekunden, kommentar: v.kommentar,
-        von_name: v.bearbeitet_von_name || v.geprueft_von_name, stand_ab: v.bearbeitet_am || v.geprueft_am, ersetzt_am: am });
-      Object.assign(v, { ergebnis, kommentar, zeit_sekunden: "zeit_sekunden" in d ? zeitWert(d.zeit_sekunden) : v.zeit_sekunden,
-        bearbeitet_von_name: ich().name, bearbeitet_am: am });
       if (d.kriterien && typeof d.kriterien === "object") v.kriterien = kriterienMap(z, d, v.leistung_id);
+      if (!v.ergebnis) {
+        if (ergebnis) Object.assign(v, { geprueft_von_name: ich().name, geprueft_am: am });
+        Object.assign(v, { ergebnis, kommentar, zeit_sekunden: zeit });
+        if (!ergebnis && !kommentar && zeit == null && !Object.keys(v.kriterien || {}).length) {
+          z.versuche.splice(z.versuche.indexOf(v), 1);
+          return { versuch: null };
+        }
+        return { versuch: versuchJson(z, v) };
+      }
+      if (ergebnis === v.ergebnis && kommentar === v.kommentar && zeit === v.zeit_sekunden) return { versuch: versuchJson(z, v) };
+      const sitzung = text(d, "sitzung", 64);
+      if (!(sitzung && v.sitzung === sitzung && v.bearbeitet_am)) {
+        v.verlauf = (v.verlauf || []).concat({ ergebnis: v.ergebnis, zeit_sekunden: v.zeit_sekunden, kommentar: v.kommentar,
+          von_name: v.bearbeitet_von_name || v.geprueft_von_name, stand_ab: v.bearbeitet_am || v.geprueft_am, ersetzt_am: am });
+      }
+      Object.assign(v, { ergebnis, kommentar, zeit_sekunden: zeit, bearbeitet_von_name: ich().name, bearbeitet_am: am, sitzung });
       return { versuch: versuchJson(z, v) };
     }],
     // Reiter „Mängel“: alle mangelhaften Versuche mit dem Stand der Nachprüfung (wie maengel()).
@@ -448,15 +463,16 @@
       rows.filter((v) => v.ergebnis === "mangelhaft").forEach((v) => {
         const zelle = versucheVon(z, v.teilnehmer_id, v.leistung_id);
         const letzter = zelle[zelle.length - 1];
-        const istLetzter = letzter.id === v.id;
+        const massgeblich = zelle.filter((x) => x.ergebnis).pop();      // eine Nachprüfung in Arbeit lässt den Mangel offen
+        const istLetzter = massgeblich.id === v.id;
         const zs = zellstatus(letzter);
-        if (nurOffen && !(istLetzter && (zs === "mangelhaft" || zs === "nachpruefung_mangelhaft"))) return;
+        if (nurOffen && !istLetzter) return;
         const t = tnVon(z, v.teilnehmer_id);
         const l = leistungVon(z, v.leistung_id);
         maengel.push({ versuch: versuchJson(z, v),
           teilnehmer: { id: t.id, name: t.name, vorname: t.vorname, gliederung: t.gliederung },
           leistung: { id: l.id, bezeichnung: l.bezeichnung, zeitansatz_sekunden: l.zeitansatz_sekunden },
-          nachpruefung_status: istLetzter ? "offen" : letzter.ergebnis === "bestanden" ? "bestanden" : "erneut_mangelhaft",
+          nachpruefung_status: istLetzter ? "offen" : massgeblich.ergebnis === "bestanden" ? "bestanden" : "erneut_mangelhaft",
           zellstatus: zs });
       });
       return { maengel, teilnehmer: tnSortiert(tns).map((t) => ({ id: t.id, name: t.name, vorname: t.vorname })),
@@ -533,11 +549,11 @@
         { ziel: "[data-reiter=bewertung]", text: "Bewertet wird im Reiter „Bewertung“. Tippe darauf.",
           warten: { klick: "[data-reiter=bewertung]" } },
         { ziel: zelle, text: "Tippe auf eine Zelle, um die Leistung zu bewerten.", warten: { klick: zelle } },
-        { ziel: "#bw-kriterien .krit-zeile", text: "Kreuz die Kriterien an.", warten: { klick: "#bw-kriterien .krit-zeile" } },
+        { ziel: "#bw-kriterien .krit-zeile", text: "Kreuz die Kriterien an – jeder Haken wird sofort gespeichert, auch ohne Bewertung.",
+          warten: { anfrage: `POST ${API}/teilnehmer/${TN[0]}/leistungen/${LEI[0]}/versuche` }, probe: { klick: "#bw-kriterien .krit-zeile" } },
         { ziel: "#bw-wahl button[data-erg=bestanden]", text: "Wähle „bestanden“. Bei „mangelhaft“ ist ein Kommentar Pflicht.",
-          warten: { klick: "#bw-wahl button[data-erg=bestanden]" } },
-        { ziel: "#bw-save", text: "Speichere die Bewertung.",
-          warten: { anfrage: `POST ${API}/teilnehmer/${TN[0]}/leistungen/${LEI[0]}/versuche` }, probe: { klick: "#bw-save" } },
+          warten: { anfrage: /^PUT \/api\/pruefungen\/versuche\/\d+$/ }, probe: { klick: "#bw-wahl button[data-erg=bestanden]" } },
+        { ziel: "#bw-schliessen", text: "Schließ den Dialog – gespeichert ist schon alles.", warten: { klick: "#bw-schliessen" } },
         { ziel: bewerteteZelle, text: "In der Zelle steht jetzt, wer wann abgenommen hat." },
       ] },
       { titel: "Mängel", start: `/riegenkarten/${LG}#maengel`, schritte: [

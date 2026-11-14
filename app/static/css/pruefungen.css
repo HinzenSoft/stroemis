@@ -317,6 +317,8 @@ p.dlg-tn { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .zelle.st-bestanden .txt, .zelle.st-nachpruefung_bestanden .txt { color: var(--ok); }
 .zelle.st-mangelhaft, .zelle.st-nachpruefung_mangelhaft { background: var(--rot-hell); border-color: var(--rot); }
 .zelle.st-mangelhaft .txt, .zelle.st-nachpruefung_mangelhaft .txt { color: var(--rot-auf-flaeche); }
+/* Versuch in Arbeit (14.11.2026): angefangen, noch ohne Bewertung – gelbe Fläche, gestrichelter Rand. */
+.zelle.st-in_arbeit, .zelle.st-nachpruefung_in_arbeit { background: var(--co-warning-fl); border-style: dashed; border-color: var(--co-warning-ka); }
 /* Listenform („je Leistung“ / „je TN“): Name links, Status rechts – eine Zeile je Eintrag. */
 .zellen-liste { list-style: none; margin: 0; padding: 0; }
 .zellen-liste li { border-bottom: 1px solid var(--linie); }
@@ -363,6 +365,12 @@ dialog.pruef-dlg { width: min(720px, 96vw); }
 .versuch-karte .vk-kopf { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; font-weight: 700; }
 .versuch-karte .vk-kopf .erg.bestanden { color: var(--ok); }
 .versuch-karte .vk-kopf .erg.mangelhaft { color: var(--rot); }
+.versuch-karte .vk-kopf .erg.in-arbeit { color: var(--grau); font-style: italic; }
+/* Automatisch speichern: der Stand links neben „Schließen“. */
+.bw-fuss { align-items: center; }
+.bw-stand { margin-right: auto; font-size: var(--fs-klein); color: var(--grau); }
+.bw-stand.ok { color: var(--ok); }
+.bw-stand.fehler { color: var(--rot-auf-flaeche); font-weight: 600; }
 .versuch-karte .vk-kopf .zeit { font-variant-numeric: tabular-nums; font-weight: 400; color: var(--grau); }
 .versuch-karte .kommentar { white-space: pre-wrap; margin: 4px 0; font-size: var(--fs-mittel); }
 .versuch-karte .abnahme { font-size: var(--fs-klein); color: var(--grau); margin-top: 4px; }

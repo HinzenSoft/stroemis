@@ -14171,3 +14171,44 @@ des Nutzers: „Noch nicht bestanden zuerst“.
 **Tests**: neu `tests/test_pruefungen_leistung_sortierung.py` (echte App, Chromium, Telefon) – fünf Personen, nicht
 alphabetisch angelegt: „Nach Name“ als Vorgabe, „Offene zuerst“ (offen, mangelhaft vorn; bestanden, Nachprüfung
 bestanden; gesperrt am Ende), kein seitliches Rollen, die Wahl übersteht das Neuladen.
+
+## Riegenkarten: Versuch „in Arbeit“ und automatisches Speichern (Wunsch, 14.11.2026)
+
+Wünsche: „Riegenkarte, Kriterien abhaken und speichern können ohne zwingend die Bewertung anzugeben“ und „Speichern auch
+ohne den Speichern-Button zu drücken“. Entscheidungen des Nutzers: Versuch „in Arbeit“; alles im Formular speichert von
+selbst; ein Verlaufseintrag je Öffnen; ein Versuch in Arbeit bleibt (löschbar), das Lehrgangsergebnis lässt sich trotzdem
+vermerken.
+
+- **Versuch in Arbeit** (`api_pruefungen.py`, `IN_ARBEIT`): `ergebnis` darf leer sein (`''`, die Spalte bleibt
+  `NOT NULL`, kein Tabellenumbau). Zellstatus `in_arbeit` bzw. `nachpruefung_in_arbeit`; „abgenommen“
+  (`zellen_abgenommen`) und offene Mängel (`offene_maengel`, Mängelübersicht) rechnen nur mit bewerteten Versuchen – eine
+  Nachprüfung in Arbeit lässt den Mangel offen. Neben einem Versuch in Arbeit entsteht kein zweiter (409); weiter geht es
+  mit ihm. Mit der Bewertung wird, wer sie abgibt, Prüfer mit diesem Zeitpunkt; bis dahin kein Verlauf und kein
+  „bearbeitet“. Eine abgegebene Bewertung lässt sich nicht auf „ohne“ zurücksetzen (400). Ein ganz leerer Versuch in Arbeit
+  (kein Haken, keine Zeit, kein Kommentar, kein Medium) wird beim Speichern gelöscht (`_leer_entfernen`, Antwort
+  `versuch: null`).
+- **Ein Verlaufseintrag je Öffnen**: Der Dialog schickt eine Kennung `sitzung` mit; neue Spalte
+  `pruef_versuche.bearbeitung_sitzung` (Migration). Schreibt dieselbe Person mit derselben Kennung erneut, wird die Zeile
+  nur nachgeführt – der Stand vor dem Öffnen steht schon im Verlauf. Eine andere Person oder ein neues Öffnen schreibt
+  wie bisher einen Eintrag.
+- **Dialog** (`pruefungen.js`, `bewertungsDialog`): statt „Abbrechen“/„Bewertung speichern“ ein Stand
+  (`#bw-stand`, `role="status"`) und „Schließen“. Kriterien und Bewertung speichern sofort, Zeit und Kommentar 0,8 s nach
+  dem Tippen oder beim Verlassen des Felds, „Stopp“ der Stoppuhr sofort; Medien werden beim Auswählen hochgeladen (ohne
+  Versuch entsteht zuerst einer in Arbeit). Die Anfragen laufen nacheinander. „mangelhaft“ ohne Kommentar: Fehler am
+  Kommentar, die Wahl wird gespeichert, sobald er dasteht. Schließen (auch Esc) speichert noch Offenes und zieht danach
+  die Seite nach; scheitert es, sagt ein Toast „Nicht gespeichert – keine Verbindung.“. Ein Versuch in Arbeit öffnet
+  sich gleich zum Weitermachen, seine Medien stehen im Formular. Wählt man die Bewertung bei laufender Stoppuhr und leerem
+  Zeitfeld, gilt die gemessene Zeit (wie früher beim Speichern). Zellen in Arbeit: „✎ in Arbeit“, gelb gestrichelt;
+  Karten und Druckansicht „✎ in Arbeit“, „angefangen von … am …“. `groesseText` (Vorschau der wartenden Medien) ist mit
+  der Vorschau entfallen.
+- **Einführung** (`uebung/pruefungen.js`): Übungsdaten wie am Server; Ablauf „Bewerten“ – Haken (gespeichert als
+  Versuch in Arbeit), „bestanden“, „Schließen“.
+- README nachgezogen.
+
+**Tests**: neu `tests/test_pruefungen_in_arbeit.py` – am Server Versuch in Arbeit (Zellstatus, nicht abgenommen, kein
+zweiter Versuch, kein Verlauf), Prüfer = wer bewertet, kein Zurücksetzen, Verlauf je Sitzung und Person, leerer Versuch
+fällt weg, Nachprüfung in Arbeit (Mangel offen, Zähler), Löschen nur Leitung, Lehrgangsergebnis trotz Versuch in Arbeit;
+in der echten App am Telefon: Haken speichert sofort, Kommentar nach dem Tippen, „mangelhaft“ wartet auf den Kommentar,
+Bearbeiten mit zwei Speicherungen = ein Verlaufseintrag, Esc mitten im Tippen speichert noch. Angepasst:
+`test_pruefungen.py` (ohne Bewertung jetzt 201 statt 400), `test_geraetetest_riegen.py` (kein Pflichtfeld Bewertung
+mehr, „ohne Netz“ im Stand).
