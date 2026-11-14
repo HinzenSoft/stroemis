@@ -275,8 +275,10 @@ def test_riegenkarten_a10_c6_c7_c11_d13_d14_d15():
     assert "⏱" not in rk and "📋" not in rk
     assert '<span class="sym" aria-hidden="true">${sym}</span> ${wort}</button>' in rk
     assert 'knopf("nicht_bestanden", "👎", "nicht bestanden", "nein")' in rk
-    # Seit dem Gerätetest (FT7) als Fehler an der Wahl statt als Toast.
-    assert 'S.feldFehler(wahl, "Bitte „bestanden“ oder „mangelhaft“ wählen.")' in rk
+    # Seit dem Gerätetest (FT7) als Fehler am Feld statt als Toast; seit dem automatischen Speichern (14.11.2026) ist die
+    # Bewertung keine Pflicht mehr (Versuch in Arbeit) – der Fehler steht am Pflichtkommentar bei „mangelhaft“.
+    assert 'S.feldFehler(wahl, "Bitte „bestanden“ oder „mangelhaft“ wählen.")' not in rk
+    assert 'S.feldFehler(komm, "Bei „mangelhaft“ ist ein Kommentar Pflicht' in rk and 'toast("Bitte „bestanden“' not in rk
     assert "`🔒 eingefroren" not in rk
     # D13: Listen nach der Inhaltsbreite; C11: Duo – Inhalt in der rechten Hälfte.
     assert "main.leitstelle, main.pruef { container: liste / inline-size; }" in css
