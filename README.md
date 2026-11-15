@@ -258,6 +258,8 @@ Nach jeder Anmeldung zeigt die Entwicklung einmal den Hinweis „Entwicklungsser
 verschwinden, Fehler sind zu erwarten, Rückmeldungen an bugs@stroemis.de) – auf der ersten Seite danach, egal welches
 Modul. Erkannt wird die Entwicklung an `STROEMIS_NAME` mit „-dev“ am Ende (setzt `dev-einrichten.sh`; dieselbe Regel wie
 die Sperre der Erinnerungsmails); in der Produktion und lokal ohne „-dev“ erscheint er nie.
+Derselbe Hinweis steht dort auch in der Mail „dein Konto ist freigegeben“ (Wunsch vom 15.11.2026): Dies ist der
+Entwicklungsserver, nicht die eigentliche Plattform – samt der Adresse für Fehlermeldungen, wenn eine eingestellt ist.
 
 Damit man die Entwicklung auch ohne den Hinweis erkennt (Wunsch vom 11.11.2026), steht dort neben dem Zeichen
 „Entwicklungsserver“ statt „Strömungsrettung“ und darunter „dev.strömis.de“ – in der Kopfleiste, auf der Anmeldeseite, in

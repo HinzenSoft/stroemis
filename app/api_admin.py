@@ -3,7 +3,7 @@ import secrets
 
 from flask import Blueprint, current_app, jsonify
 
-from . import db, einfuehrung, einstellungen, medienpflege, start
+from . import db, einfuehrung, einstellungen, medienpflege, module, start
 from .auth import (EMAIL_RE, MIN_PW, MODULE, STUFEN_JE_MODUL, VERWALTUNG, VORGABE_NEU, admin_required, can_reset,
                    clear_attempts, current_user, eingabefehler_abfangen, json_body, public_user, send_reset_mail)
 from .images import delete_avatar
@@ -412,13 +412,27 @@ def approve_user(uid):
     try:
         mailed = send_mail(u["email"], f"{cfg['SITE_NAME']} – dein Konto ist freigegeben",
                            f"Hallo {u['name'] or u['email']},\n\ndein Konto bei {cfg['SITE_NAME']} wurde freigegeben. "
-                           f"Du kannst dich jetzt anmelden:\n\n{cfg['BASE_URL'].rstrip('/')}/login\n")
+                           f"Du kannst dich jetzt anmelden:\n\n{cfg['BASE_URL'].rstrip('/')}/login\n"
+                           + (_dev_hinweis_mail(cfg) if module.dev_umgebung() else ""))
     except Exception as exc:
         current_app.logger.error("Freigabe-Mail an %s fehlgeschlagen: %s", u["email"], exc)
     # mailserver: ob überhaupt einer eingerichtet ist – die Leitstelle unterscheidet so „keine E-Mail: kein Mailserver“
     # von „Versand gescheitert“ (Rechte-Hinweis H6; mailed ist in beiden Fällen false).
     return jsonify(user=public_user(db.query("SELECT * FROM users WHERE id = ?", (uid,), one=True)), mailed=bool(mailed),
                    mailserver=bool(cfg.get("SMTP_HOST")))
+
+
+def _dev_hinweis_mail(cfg):
+    """Auf dev (module.dev_umgebung) der Hinweis „Entwicklungsserver“ auch in der Freigabe-Mail – derselbe Wortlaut wie im
+    Dialog nach jeder Anmeldung (base.html), Wunsch vom 15.11.2026."""
+    text = ("\nWichtig: Dies ist der Entwicklungsserver von strömis.de, nicht die eigentliche Plattform. Hier werden neue "
+            "Funktionen erprobt, bevor sie auf die eigentliche Plattform kommen.\n\n"
+            "- Daten können sich jederzeit ändern, verschwinden oder neu auftauchen.\n"
+            "- Es kann und wird zu Fehlern und Problemen kommen.\n")
+    if cfg.get("FEHLER_EMAIL"):
+        text += (f"\nFehler und Verbesserungsvorschläge bitte mit Screenshot und/oder Beschreibung an "
+                 f"{cfg['FEHLER_EMAIL']} schicken.\n")
+    return text
 
 
 @bp.post("/users/<int:uid>/reject")

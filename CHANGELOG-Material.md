@@ -14212,3 +14212,16 @@ in der echten App am Telefon: Haken speichert sofort, Kommentar nach dem Tippen,
 Bearbeiten mit zwei Speicherungen = ein Verlaufseintrag, Esc mitten im Tippen speichert noch. Angepasst:
 `test_pruefungen.py` (ohne Bewertung jetzt 201 statt 400), `test_geraetetest_riegen.py` (kein Pflichtfeld Bewertung
 mehr, „ohne Netz“ im Stand).
+
+## Leitstelle: Freigabe-Mail auf dev mit Hinweis „Entwicklungsserver“ (Wunsch, 15.11.2026)
+
+Wunsch: In der Willkommensmail bei der Freigabe von Konten auf dem Testserver soll wie bei jeder Anmeldung ausdrücklich
+stehen, dass es der Testserver und nicht die Produktion ist.
+
+- **Neu** (`api_admin.py`, `_dev_hinweis_mail`): Auf dev (`module.dev_umgebung`) hängt die Mail „dein Konto ist
+  freigegeben“ den Hinweis an – „Dies ist der Entwicklungsserver von strömis.de, nicht die eigentliche Plattform“, die
+  beiden Punkte aus dem Dialog nach der Anmeldung und, wenn eingestellt, die Adresse für Fehlermeldungen. In der
+  Produktion bleibt die Mail unverändert.
+- README nachgezogen.
+
+**Tests**: neu `tests/test_freigabe_mail_dev.py` – Freigabe auf dev mit Hinweis und Fehleradresse, in der Produktion ohne.
