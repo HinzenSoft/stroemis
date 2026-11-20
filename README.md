@@ -246,6 +246,24 @@ Einmalige Einrichtung:
 Bis diese Secrets gesetzt sind, schlägt der Workflow beim ersten Lauf fehl – manuelles Deployment per SSH
 funktioniert unverändert genauso wie bisher.
 
+### Tests bei jedem Pull Request
+
+`.github/workflows/tests.yml` (seit dem 20.11.2026) lässt die ganze Testsuite bei jedem Pull Request, bei jedem
+Push nach `main` oder `dev` und von Hand über „Run workflow“ laufen: jede `tests/test_*.py` als eigenes Skript wie
+unter „Entwicklung ohne Docker“, je Kern eine gleichzeitig, höchstens 15 Minuten je Datei. Ein Lauf dauert rund
+zehn Minuten (gemessen 9½ Minuten auf vier Kernen). Dazu kommen Python 3.12 wie im Image, die Systempakete für
+WeasyPrint, ffmpeg und pytest 9.1.1 – `test_pruefungen_import` nimmt `pytest.raises` auch als Skript; ins Image
+gehört pytest nicht. Was Chromium unter `/home/harness` braucht, meldet dort „übersprungen“: Die Browser-Teile, die
+Abgleiche mit den Wiki-Artikeln auf dem Entwicklungsrechner und die Prüfstände `tests/*.html` laufen weiter nur
+dort. Rote Dateien stehen am Ende des Logs mit ihrem Protokoll zum Aufklappen. Die Actions sind wie beim Deploy
+auf feste Commits gepinnt.
+
+Damit ein Pull Request erst mit grünen Tests nach `main` (und damit in die Produktion) geht – auch mit Auto-Merge:
+unter **Settings → Rules → Rulesets** eine Regel für `main` mit „Require status checks to pass“ und dem Check
+`Tests` anlegen (er steht zur Auswahl, sobald der Workflow einmal gelaufen ist), dann unter **Settings → General →
+Pull Requests** „Allow auto-merge“ einschalten. Ein direkter Push nach `main` wird weiterhin sofort ausgerollt; die
+Tests laufen dann nur daneben.
+
 ### Entwicklungsumgebung (dev.strömis.de)
 
 Der Zweig `dev` läuft genauso wie die Produktion, nur getrennt: eigener Klon auf demselben VPS, eigene `.env`,
