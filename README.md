@@ -254,10 +254,13 @@ unter „Entwicklung ohne Docker“, je Kern eine gleichzeitig, höchstens 15 Mi
 zehn Minuten (gemessen 9½ Minuten auf vier Kernen). Dazu kommen Python 3.12 wie im Image, die Systempakete für
 WeasyPrint, ffmpeg und für die Tests allein pytest 9.1.1 und poppler-utils – `test_pruefungen_import` nimmt
 `pytest.raises` auch als Skript, und `pdf_seiten` liest Protokolle mit `pdftotext` (ohne fiele es auf pypdf zurück,
-das Leerzeichen vor Satzzeichen setzt); ins Image gehört beides nicht. Was Chromium unter `/home/harness` braucht, meldet dort „übersprungen“: Die Browser-Teile, die
-Abgleiche mit den Wiki-Artikeln auf dem Entwicklungsrechner und die Prüfstände `tests/*.html` laufen weiter nur
-dort. Rote Dateien stehen am Ende des Logs mit ihrem Protokoll zum Aufklappen. Die Actions sind wie beim Deploy
-auf feste Commits gepinnt.
+das Leerzeichen vor Satzzeichen setzt); ins Image gehört beides nicht. Die Browser-Tests und die Prüfstände
+`tests/*.html` (`tests/test_pruefstaende_html.py`) laufen seit dem 20.11.2026 mit: mit `tests/cdp_treiber.py` und dem
+Google Chrome des Runners – fehlt es, scheitert der Lauf, statt sie still zu überspringen. Weiter nur auf dem
+Entwicklungsrechner laufen die Migrationen aus der Kopie einer Datenbank auf Stand 7 (`MATERIAL_KOPIE_STAND_7`), die
+Abgleiche mit den Wiki-Artikeln unter `/home/harness` und die PDF/A-Prüfung mit veraPDF (`st-vera`) – sie melden
+„übersprungen“ bzw. entfallen still. Rote Dateien stehen am Ende des Logs mit ihrem Protokoll zum Aufklappen. Die
+Actions sind wie beim Deploy auf feste Commits gepinnt.
 
 Damit ein Pull Request erst mit grünen Tests nach `main` (und damit in die Produktion) geht – auch mit Auto-Merge:
 unter **Settings → Rules → Rulesets** eine Regel für `main` mit „Require status checks to pass“ und dem Check
@@ -1346,7 +1349,9 @@ je Modul `tests/test_einfuehrung_<modul>.py`; Befunde nennen Ablauf, Schritt und
 („Unbeantwortete Anfragen“). Neue programmatische Seitenwechsel im Modul gehen über `S.ziel(…)`. Bekommt eine Seite einen
 Übungszweig, gehört ihr Endpunkt in `UEBUNGSSEITEN` (sonst „In der Übung nicht verfügbar“). Ändern sich Abläufe
 (Titel, Startadresse des ersten), gehören sie auch in `TEILE`. Die Browser-Tests laufen mit Chromium über
-`/home/harness/devtools/cdp` (Hilfe `tests/einfuehrung_browser.py`); ohne Chromium melden sie „übersprungen“.
+`/home/harness/devtools/cdp` (Hilfe `tests/einfuehrung_browser.py`), wo der fehlt – etwa in GitHub Actions – über
+`tests/cdp_treiber.py` (nur Standardbibliothek; welches Chromium, sagt `CHROMIUM`, sonst das erste von
+`google-chrome`, `chromium`, `chromium-browser`); ohne Chromium melden sie „übersprungen“.
 
 ## DLRG-Wortmarke einsetzen
 
@@ -1397,6 +1402,7 @@ pip install -r requirements.txt
 python run.py                 # http://127.0.0.1:8080, Daten in ./data
 python tests/test_smoke.py    # Rauchtest über die API (Login, Upload, EXIF, Rechte, Wiki, Reset)
                               # und Härtungstest (Freigaben, alte Adressen, Anmeldebremse, Grenzen)
+python tests/test_pruefstaende_html.py  # die Prüfstände tests/*.html in Chromium (wie per Doppelklick), rot bei jeder roten Zeile
 python tests/test_wiki_lesemodus.py    # Wiki-Lesemodus: Konto ohne Wiki-Stufe sieht genau die freigegebenen Seiten, ohne Anmeldung nichts (alle Wiki-Routen)
 python tests/test_rechte_redakteur.py  # Stufe Redakteur: Mitglied/Redakteur/Verwaltung je Endpunkt, Sichtbarkeit der Riegenkarten, Schritt 33
 python tests/test_rechte_ausbilder.py  # Riegenkarten-Ausbilder nur mit Konto: Anlegen/Bearbeiten, Kontosuche, Import-Zuordnung, Schritt 34
@@ -1562,7 +1568,7 @@ WeasyPrint (Protokolle der Materialablage) braucht außerhalb von Docker die Sys
 
 `tests/rundlauf.html` prüft die zentrale Invariante des Editors – Markdown öffnen und speichern darf kein Byte ändern – über einen Korpus aus 67 Fällen. Ein zweiter Abschnitt prüft den Rückgängig-Verlauf (ein Strg+Z direkt nach dem Laden darf am Dokument nichts ändern, eigene Änderungen müssen weiterhin rückgängig zu machen sein), gesetzte Leerzeilen, das Auflösen unvollständiger Abschnitte und die Grenzen des Renderers: Aufgabenlisten behalten ihr Kästchen, Formulare und Stilblöcke aus dem Seitentext kommen nicht durch. Ein dritter Abschnitt prüft die zusammengefassten Zellen: dass ein Zug über mehrere Zellen überhaupt eine Zellauswahl ergibt (das Bündel von Toast UI ist an dieser Stelle fehlerhaft übersetzt und wird geflickt), dass Verbinden und Teilen die erwartete Schreibweise ergeben und dass die Leseansicht daraus `colspan` und `rowspan` macht – mit Gegenproben, die ohne die Reparatur beziehungsweise ohne die Nachbearbeitung fehlschlagen müssen. Die Datei lädt die Projektskripte über relative Pfade; ein Doppelklick genügt, ein Server ist nicht nötig.
 
-`tests/gleichstand.html` hält Leseansicht und Editor nebeneinander und misst für 17 Bausteine Schriftgröße, Schnitt, Farbe, Auszeichnung, Ausrichtung und den linken Textanfang – die Probe darauf, dass der Editor zeigt, was der Artikel später zeigt.
+`tests/gleichstand.html` hält Leseansicht und Editor nebeneinander und misst für 18 Bausteine Schriftgröße, Schnitt, Farbe, Auszeichnung, Ausrichtung und den linken Textanfang – die Probe darauf, dass der Editor zeigt, was der Artikel später zeigt.
 
 `tests/nachgeholtes_speichern.html` prüft, dass das automatische Speichern niemals die falsche Seite trifft: Ein Speichervorgang, der seinen eigenen Editor überlebt, weil die Anfrage hängt und man inzwischen die Seite gewechselt hat, darf den Text der neuen Seite nicht unter der Kennung der alten ablegen. Die Datei fährt das Wiki mit einem nachgestellten Server hoch, der jede Schreibanfrage so lange festhält, bis der Test sie freigibt – der Ablauf hängt damit an keiner Laufzeit. Auch hier genügt ein Doppelklick.
 
