@@ -252,8 +252,9 @@ funktioniert unverändert genauso wie bisher.
 Push nach `main` oder `dev` und von Hand über „Run workflow“ laufen: jede `tests/test_*.py` als eigenes Skript wie
 unter „Entwicklung ohne Docker“, je Kern eine gleichzeitig, höchstens 15 Minuten je Datei. Ein Lauf dauert rund
 zehn Minuten (gemessen 9½ Minuten auf vier Kernen). Dazu kommen Python 3.12 wie im Image, die Systempakete für
-WeasyPrint, ffmpeg und pytest 9.1.1 – `test_pruefungen_import` nimmt `pytest.raises` auch als Skript; ins Image
-gehört pytest nicht. Was Chromium unter `/home/harness` braucht, meldet dort „übersprungen“: Die Browser-Teile, die
+WeasyPrint, ffmpeg und für die Tests allein pytest 9.1.1 und poppler-utils – `test_pruefungen_import` nimmt
+`pytest.raises` auch als Skript, und `pdf_seiten` liest Protokolle mit `pdftotext` (ohne fiele es auf pypdf zurück,
+das Leerzeichen vor Satzzeichen setzt); ins Image gehört beides nicht. Was Chromium unter `/home/harness` braucht, meldet dort „übersprungen“: Die Browser-Teile, die
 Abgleiche mit den Wiki-Artikeln auf dem Entwicklungsrechner und die Prüfstände `tests/*.html` laufen weiter nur
 dort. Rote Dateien stehen am Ende des Logs mit ihrem Protokoll zum Aufklappen. Die Actions sind wie beim Deploy
 auf feste Commits gepinnt.

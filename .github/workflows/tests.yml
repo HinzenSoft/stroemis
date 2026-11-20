@@ -37,12 +37,14 @@ jobs:
           cache-dependency-path: requirements.txt
 
       # Was das Dockerfile neben den Python-Paketen mitbringt: Pango und HarfBuzz für WeasyPrint, DejaVu als
-      # Ersatzschrift, ffmpeg für Videos (dort statisch aus mwader/static-ffmpeg, hier aus Ubuntu).
+      # Ersatzschrift, ffmpeg für Videos (dort statisch aus mwader/static-ffmpeg, hier aus Ubuntu). Dazu für die
+      # Tests allein poppler-utils: test_material.pdf_seiten liest Protokolle mit pdftotext wie auf dem
+      # Entwicklungsrechner; ohne fiele es auf pypdf zurück, das „Titel“, als „Titel“ , liest.
       - name: Systempakete
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            libpango-1.0-0 libpangoft2-1.0-0 libharfbuzz-subset0 fonts-dejavu-core ffmpeg
+            libpango-1.0-0 libpangoft2-1.0-0 libharfbuzz-subset0 fonts-dejavu-core ffmpeg poppler-utils
       # pytest gehört nicht ins Image, die Tests brauchen es aber: test_pruefungen_import nimmt pytest.raises, auch
       # wenn es als Skript läuft. Dieselbe Fassung wie auf dem Entwicklungsrechner.
       - name: Python-Pakete
