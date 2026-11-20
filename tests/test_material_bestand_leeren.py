@@ -443,7 +443,8 @@ def test_abbruch_per_signal():
                 .replace("def halt(conn):", "def halt(conn, b):").replace("echt(conn)", "echt(conn, b)")
                 .replace("dev-zuruecksetzen", BEFEHL).replace("--ja-alles-loeschen", SCHALTER))
         assert "bestand_leeren" in kind and BEFEHL in kind and "echt(conn, b)" in kind
-        env = dict(os.environ, DATA_DIR=tmp, **DEV)
+        # -S lässt site weg: Ohne PYTHONPATH fände das Kind in einer venv (.venv) weder Flask noch Pillow.
+        env = dict(os.environ, DATA_DIR=tmp, PYTHONPATH=os.pathsep.join(sys.path), **DEV)
         p = subprocess.Popen([sys.executable, "-S", "-c", kind], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
                              env=env, cwd=REPO)
         try:

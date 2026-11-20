@@ -288,8 +288,9 @@ def _kind_toeten(tmp, wo):
         fh.write(katalog_zip(2))
     skript = KIND.format(tests=os.path.dirname(os.path.abspath(__file__)), tmp=tmp, wo=wo, marke=marke, zip=zip_pfad)
     protokoll = open(os.path.join(tmp, "kind.log"), "wb")
+    # -S lässt site weg: Ohne PYTHONPATH fände das Kind in einer venv (.venv) weder Flask noch Pillow.
     kind = subprocess.Popen([sys.executable, "-S", "-c", skript], stdout=subprocess.PIPE, stderr=protokoll,
-                            env=dict(os.environ))
+                            env=dict(os.environ, PYTHONPATH=os.pathsep.join(sys.path)))
     try:
         probe = ""
         if wo == "uebernehmen":
