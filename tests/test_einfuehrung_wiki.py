@@ -122,7 +122,9 @@ def _router_export_echt(u):
         assert s.warte("document.querySelector('h1.seitentitel')?.textContent.startsWith('Übung: Seite lesen')", 5)
         s.sammeln()
         vorher = len(s.anfragen)
-        assert s.klick("#pg-more") is None
+        s.ruhe()                       # wie vor dem Klick im Menü: erst wenn Blase und Bildlauf stehen
+        befund = s.klick("#pg-more")
+        assert befund is None, befund
         assert s.warte("Boolean(document.querySelector('.menue-schwebend button[data-a=\"export\"]'))", 5)
         s.ruhe()
         assert s.klick('.menue-schwebend button[data-a="export"]') is None
