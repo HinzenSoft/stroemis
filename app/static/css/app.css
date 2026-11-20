@@ -2168,7 +2168,10 @@ dialog.us-dlg { width: min(640px, 96vw); }
    dazwischen – im Editor trennte sie der Rand des Absatzes um eine halbe Zeile. */
 .wiki-editor .toastui-editor-ww-container .toastui-editor-contents li > p:has(+ ul),
 .wiki-editor .toastui-editor-ww-container .toastui-editor-contents li > p:has(+ ol) { margin-bottom: 0; }
-.wiki-editor .toastui-editor-contents .task-list-item { margin-left: -24px; padding-left: 24px; }
+/* Aufgaben wie in der Leseansicht (.wiki-content li:has(> input[type=checkbox])): um 1,35em nach links, dann 24 px
+   Kästchen und 8 px Abstand – der Text beginnt an derselben Stelle (tests/gleichstand.html, „aufgaben“). Das Kästchen
+   von Toast UI steht am linken Rand des Punktes und rückt mit. */
+.wiki-editor .toastui-editor-contents .task-list-item { margin-left: -1.35em; padding-left: 32px; }
 .wiki-editor .toastui-editor-contents .task-list-item::before { content: ""; }
 @media print { .wiki-main { max-width: none; } }
 
