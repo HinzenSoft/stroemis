@@ -423,7 +423,8 @@ def _kind_abbrechen(tmp, signum):
     Liefert (Rückgabewert, Ausgabe)."""
     import select
     import subprocess
-    env = dict(os.environ, DATA_DIR=tmp, **DEV)
+    # -S lässt site weg: Ohne PYTHONPATH fände das Kind in einer venv (.venv) weder Flask noch Pillow.
+    env = dict(os.environ, DATA_DIR=tmp, PYTHONPATH=os.pathsep.join(sys.path), **DEV)
     kind = subprocess.Popen([sys.executable, "-S", "-c", KIND], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
                             env=env, cwd=REPO)
     try:

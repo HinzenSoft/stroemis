@@ -35,6 +35,9 @@ def make_app(tmp):
     os.environ.update({
         "DATA_DIR": tmp, "COOKIE_SECURE": "false", "BASE_URL": "http://localhost",
         "ADMIN_EMAIL": "admin@example.org", "ADMIN_PASSWORD": "geheim123",
+        # TESTING steht erst nach create_app() – zu spät für medienpflege.starten(). Ohne den Schalter liefe der
+        # Videolauf im Hintergrund und schriebe noch in den Datenordner, während TemporaryDirectory ihn löscht.
+        "VIDEOPFLEGE": "0",
     })
     from app import create_app
     app = create_app()
