@@ -164,8 +164,13 @@ def fuer_produkt(pid, user=None, meldungen=True):
     paare += [("document", r["id"]) for r in db.query("SELECT id FROM mat_product_document WHERE product_id = ?", (pid,))]
     if meldungen:
         from .rechte import darf_meldung, ist_material_verwaltung
+        # Die Meldung, über die das Produkt kam – auch, wenn eine Recherche aus ihr mehrere Produkte anlegte und es
+        # nur im Eintrag „eingepflegt“ steht („produkte“, recherche.uebernehmen).
         meldungen_ids = [r["id"] for r in db.query(
-            "SELECT id, created_by, folder_id FROM mat_product_request WHERE product_id = ?", (pid,))
+            "SELECT id, created_by, folder_id FROM mat_product_request WHERE product_id = ? OR id IN (SELECT entity_id "
+            "FROM mat_audit a WHERE a.entity = 'request' AND a.action = 'eingepflegt' AND a.after_json LIKE "
+            "'%\"produkte\"%' AND EXISTS (SELECT 1 FROM json_each(a.after_json, '$.produkte') WHERE value = ?)) "
+            "ORDER BY id", (pid, pid))
             if darf_meldung(r, user)]
         paare += [("request", m) for m in meldungen_ids]
         # Die Recherche per Claude API zur Meldung (entity „recherche“) nur für die Material-Verwaltung (B2 A).

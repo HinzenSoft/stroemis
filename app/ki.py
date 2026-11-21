@@ -59,7 +59,6 @@ ARTEN = {
                       "gesamt_sek": 20 * 60},
 }
 LAUFEND = ("wartet", "laeuft")
-STATUS = ("wartet", "laeuft", "fertig", "fehlgeschlagen", "abgebrochen", "uebernommen")
 PULS_SEK = 10
 TOT_NACH = 120
 PAUSEN_MAX = 5

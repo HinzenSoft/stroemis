@@ -649,6 +649,9 @@ def test_lauf_und_uebernahme():
             assert any(e["entity"] == "recherche" for e in j), [e["entity"] for e in j]
             jw = k["wart"].get(f"/api/material/produkte/{p1['id']}").json["produkt"]["journal"]
             assert any(e["entity"] == "request" for e in jw) and not any(e["entity"] == "recherche" for e in jw)
+            # Auch am zweiten Produkt aus derselben Meldung stehen Meldung und Recherche.
+            j2 = kat.get(f"/api/material/produkte/{p2['id']}").json["produkt"]["journal"]
+            assert {e["entity"] for e in j2} >= {"product", "document", "request", "recherche"}, {e["entity"] for e in j2}
             # Nach der Übernahme kein neuer Start (Meldung erledigt).
             r = kat.post(f"/api/material/meldungen/{mid}/recherche", json={"domains": ["hersteller.test"]}, headers=H)
             assert r.status_code == 409 and "erledigt" in r.json["error"]
