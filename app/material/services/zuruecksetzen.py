@@ -25,6 +25,10 @@ einer, bricht der Befehl ab, bevor er etwas ändert; sonst hält er dessen Sperr
 bekommt 409. Nach dem COMMIT leert er DATA_DIR/katalog-import (Aufträge, Berichte, Dateien von Probeläufen beziehen sich
 auf den geleerten Katalog); die Sperrdatei bleibt.
 
+Recherche per Claude API (services/recherche.py, 21.11.2026): Ihre Läufe stehen im Kernschema (ki_laeufe), gehören aber zu
+Meldungen des Moduls – in derselben exklusiven Transaktion werden die Zeilen der Art „mat_recherche“ gelöscht (andere
+Arten bleiben), nach dem COMMIT ihre Ordner unter DATA_DIR/ki.
+
 Ablauf (zuruecksetzen):
   1. Das frische Schema entsteht zuerst in einer Vorlage im Speicher: models.migrieren auf einer leeren Datenbank, die
      nur die übrigen Tabellen dieser Datenbank kennt (ohne Zeilen). So läuft dieselbe Migration wie bei einer neuen
@@ -64,8 +68,9 @@ from urllib.parse import urlsplit
 
 from flask import current_app
 
+from ... import ki
 from .. import models
-from . import ZONE, erinnerung, importauftrag
+from . import ZONE, erinnerung, importauftrag, recherche
 
 # Positivliste für BASE_URL (adresse_frei): Hosts der Entwicklung beginnen mit „dev.“, lokal läuft run.py.
 DEV_VORSATZ = "dev."
@@ -173,9 +178,17 @@ def bestand(conn):
             "trigger": arten.get("trigger", 0), "indizes": arten.get("index", 0), "views": arten.get("view", 0),
             "medien": [(rel, *_groesse(p)) for rel, p in _medien()], "db_bytes": seiten * seite,
             "katalogimport": importauftrag.zwischendaten(),
+            "recherchen": _recherchen(conn),
             "konten": conn.execute("SELECT COUNT(*) FROM users").fetchone()[0],
             "demo_konten": conn.execute("SELECT email, name FROM users WHERE lower(email) LIKE ? ORDER BY email",
                                         ("%" + DEMO_POSTFACH,)).fetchall()}
+
+
+def _recherchen(conn):
+    """Läufe der Recherche per Claude API (ki_laeufe, Art der Materialablage) – sie gehen mit dem Modul."""
+    if not conn.execute("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'ki_laeufe'").fetchone():
+        return 0
+    return conn.execute("SELECT COUNT(*) FROM ki_laeufe WHERE art = ?", (recherche.ART,)).fetchone()[0]
 
 
 def _mb(n):
@@ -210,6 +223,8 @@ def trocken_text(b, ziel):
     n, g = b["katalogimport"]
     zeilen += ["", f"Würde danach geleert: {importauftrag.ORDNER} (Aufträge des Katalogimports) – "
                    + (f"{n} Dateien, {_mb(g)}" if n else "leer")]
+    zeilen.append(f"Würde mitgelöscht: {b['recherchen']} Läufe der Recherche per Claude API samt ihren Dateien unter "
+                  f"{ki.ORDNER}/")
     if importauftrag.laeuft():
         zeilen.append("ACHTUNG Gerade läuft ein Katalogimport – der echte Lauf bräche jetzt ab, ohne etwas zu ändern.")
     frei = shutil.disk_usage(current_app.config["DATA_DIR"]).free
@@ -229,6 +244,8 @@ def bericht_text(e):
     zeilen += [f"  {rel:<15} {n} Dateien, {_mb(g)} verschoben" for rel, n, g in b["medien"] if n]
     if b["katalogimport"][0]:
         zeilen.append(f"  {importauftrag.ORDNER:<15} {b['katalogimport'][0]} Dateien geleert (Aufträge des Katalogimports)")
+    if b["recherchen"]:
+        zeilen.append(f"  {b['recherchen']} Läufe der Recherche per Claude API samt ihren Dateien gelöscht")
     zeilen += [f"Geleert: {len(b['zeilen'])} Tabellen mit {sum(b['zeilen'].values())} Zeilen, "
                f"{len(b['volltext'])} Volltextindizes; Schema frisch angelegt (Version {e['version']})."]
     if e.get("start_fehler"):
@@ -494,6 +511,7 @@ def zuruecksetzen(jetzt=None):
                     verschoben.append((quelle, ziel))
                 _leeren(conn)
                 _anlegen(conn, vorlage)
+                ki_laeufe = recherche.dev_leeren(conn)      # ihre Meldungen gehen mit dem Modul
                 version = int(conn.execute("SELECT wert FROM mat_meta WHERE schluessel = 'schema_version'").fetchone()[0])
                 if version != models.SCHEMA_VERSION:
                     raise sqlite3.DatabaseError(f"Schemaversion {version} statt {models.SCHEMA_VERSION}")
@@ -509,6 +527,8 @@ def zuruecksetzen(jetzt=None):
             importauftrag.leeren_unter_sperre()
         except OSError as exc:                          # das Zurücksetzen selbst ist geschehen
             log.warning("Aufträge des Katalogimports nicht geleert: %s", exc)
+        for lid in ki_laeufe:
+            ki.ordner_entfernen(lid)
     finally:
         conn.close()
         if vorlage is not None:

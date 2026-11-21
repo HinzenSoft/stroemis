@@ -22,6 +22,12 @@ den sie gemacht wurde (rechte.darf_meldung) – eine Meldung nennt Material und 
 zeigt sie nur, wer den Ordner sieht (die Material-Verwaltung immer); sonst steht nur die Gliederung da. Die Mail an die
 Material-Verwaltung nennt nur die Gliederung – eine Mail ist schlechter geschützt als die Seite.
 
+Seit dem 21.11.2026 kann die Material-Verwaltung eine offene Meldung per Claude API recherchieren lassen
+(services/recherche.py): Der Vorschlag steht am Lauf (app/ki.py, ki_laeufe), nicht an der Meldung. Übernimmt sie ihn,
+legt recherche.uebernehmen die Produkte an und erledigt die Meldung über _abschliessen wie produkt_anlegen. Erledigen,
+Zuordnen und Ablehnen brechen eine laufende Recherche ab; das Löschen einer Meldung entfernt Inhalt und Dateien ihrer
+Läufe (die Zeilen bleiben fürs Kontingent).
+
 Verschickt wird über mailprotokoll.senden (Phase 4 · L1): Ohne Mailserver, unter der Umgebungssperre (dev) und an
 DEMO-Adressen geht nichts hinaus; was der Mailserver nicht annimmt, steht im Mailfehler-Protokoll (Rolle Verwaltung
 bzw. Melder, Ordner der Meldung – nur die Material-Verwaltung sieht diese Zeilen)."""
@@ -247,8 +253,10 @@ def meldung_json(r):
 
 # --- Abarbeiten (nur die Material-Verwaltung, routes.py prüft das) ------------------------------------
 
-def _abschliessen(mid, status, pid, antwort):
-    """Innerhalb der Transaktion: Nur eine offene Meldung lässt sich erledigen – wer zweitens kommt, erfährt es."""
+def _abschliessen(mid, status, pid, antwort, produkte=None):
+    """Innerhalb der Transaktion: Nur eine offene Meldung lässt sich erledigen – wer zweitens kommt, erfährt es.
+    produkte: alle Produkte, die aus der Meldung entstanden (Übernahme einer Recherche mit mehreren Ausführungen) – das
+    Journal nennt sie; product_id bleibt das eine, das der Melder gemeint hat."""
     uid, name = akteur()
     if not db.execute_zeilen(
             "UPDATE mat_product_request SET status = ?, product_id = ?, answer = ?, resolved_by = ?, resolved_by_name = ?, "
@@ -256,12 +264,21 @@ def _abschliessen(mid, status, pid, antwort):
         if not db.query("SELECT 1 FROM mat_product_request WHERE id = ?", (mid,), one=True):
             raise Abgelehnt("Diese Meldung hat ihr Melder inzwischen gelöscht.", 404)
         raise Abgelehnt("Diese Meldung ist schon erledigt. Bitte neu laden.", 409)
-    journal.eintragen("request", mid, status, {"status": "offen"}, {"status": status, "product_id": pid, "answer": antwort})
+    nachher = {"status": status, "product_id": pid, "answer": antwort}
+    if produkte:
+        nachher["produkte"] = list(produkte)
+    journal.eintragen("request", mid, status, {"status": "offen"}, nachher)
 
 
 def _antwort(d, pflicht=False):
     return text(d, "antwort", "Begründung" if pflicht else "Antwort an den Melder", ANTWORT_MAX, pflicht=pflicht,
                 einzeilig=False)
+
+
+def _recherche_beenden(mid):
+    """Eine laufende Recherche zu dieser Meldung bricht ab – erledigt braucht sie niemand mehr (recherche.py)."""
+    from . import recherche
+    recherche.meldung_erledigt(mid)
 
 
 def produkt_anlegen(mid, d):
@@ -279,6 +296,7 @@ def produkt_anlegen(mid, d):
             raise Abgelehnt("Diese Meldung ist schon erledigt. Bitte neu laden.", 409)
         pid = katalog.produkt_anlegen(d, bestandteile=bestandteile)
         _abschliessen(mid, "eingepflegt", pid, antwort)
+    _recherche_beenden(mid)
     _melder_benachrichtigen(meldung(mid))
     return pid
 
@@ -291,6 +309,7 @@ def zuordnen(mid, d):
     antwort = _antwort(d)
     with db.transaction(sofort=True):
         _abschliessen(mid, "eingepflegt", pid, antwort)
+    _recherche_beenden(mid)
     _melder_benachrichtigen(meldung(mid))
 
 
@@ -299,6 +318,7 @@ def ablehnen(mid, d):
     antwort = _antwort(d, pflicht=True)
     with db.transaction(sofort=True):
         _abschliessen(mid, "abgelehnt", None, antwort)
+    _recherche_beenden(mid)
     _melder_benachrichtigen(meldung(mid))
 
 
@@ -319,6 +339,9 @@ def loeschen(mid):
                                                                          "product_id")}, None)
     for f in json.loads(r["photos_json"] or "[]"):
         delete_photo_files(katalog.medien_dir(), f)
+    # Recherchen zu ihr: Inhalt und Dateien weg, die Zeilen bleiben fürs Kontingent (recherche.py).
+    from . import recherche
+    recherche.meldung_geloescht(mid)
 
 
 # --- Mails ----------------------------------------------------------------------------------------------
@@ -367,8 +390,9 @@ def _verwaltung_benachrichtigen(r):
                 r["folder_id"])
 
 
-def _melder_benachrichtigen(r):
-    """Bescheid an den Melder – nicht, wenn er seine Meldung selbst erledigt hat."""
+def _melder_benachrichtigen(r, produkte=None):
+    """Bescheid an den Melder – nicht, wenn er seine Meldung selbst erledigt hat. produkte: alle Produkte aus der
+    Meldung (Übernahme einer Recherche) – mit mehr als einem nennt die Mail alle."""
     if not r["created_by"] or r["created_by"] == r["resolved_by"]:
         return
     u = db.query("SELECT id, email, name, active FROM users WHERE id = ?", (r["created_by"],), one=True)
@@ -382,7 +406,14 @@ def _melder_benachrichtigen(r):
         p = katalog.produkt(r["product_id"])
         name = katalog.produktname(p) + (f" ({p['article_no']})" if p["article_no"] else "")
         betreff = f"{cfg['SITE_NAME']} – „{gemeldet}“ ist im Katalog"
-        zeilen.append(f"das von dir gemeldete Produkt ist jetzt im Katalog: {name}.")
+        weitere = [x for x in (db.query("SELECT * FROM mat_product WHERE id = ?", (pid,), one=True)
+                               for pid in (produkte or ()) if pid != r["product_id"]) if x]
+        if weitere:
+            zeilen.append("das von dir gemeldete Produkt ist jetzt im Katalog, in mehreren Ausführungen:")
+            zeilen += [f"  {katalog.produktname(x)}" + (f" ({x['article_no']})" if x["article_no"] else "")
+                       for x in [p] + weitere]
+        else:
+            zeilen.append(f"das von dir gemeldete Produkt ist jetzt im Katalog: {name}.")
         if r["answer"]:
             zeilen += ["", f"Anmerkung von {r['resolved_by_name']}:", r["answer"]]
         # Kam die Meldung aus der Nacharbeit eines Bestandsimports, führt der Link dorthin (Phase 2 · L3).

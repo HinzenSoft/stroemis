@@ -69,15 +69,17 @@ def _einmal(app):
     """Eine Runde: die Einstellungen aus dem Browser über die Konfiguration legen (Schalter, Mailserver, BASE_URL und
     SITE_NAME wie in einer Anfrage – sonst gälte der Stand vom Start des Prozesses), dann erinnerung.tageslauf_versuchen.
     Vorher die Frist der offenen Nacharbeit aus Bestandsimporten (ein Monat – der Start der App allein käme dafür zu
-    selten; geschrieben wird nur, wenn etwas abgelaufen ist) und abgelaufene Aufträge des Katalogimports im Hintergrund
-    (importauftrag.aufraeumen, wirft nie). Ausnahmen werden geloggt."""
+    selten; geschrieben wird nur, wenn etwas abgelaufen ist), abgelaufene Aufträge des Katalogimports im Hintergrund
+    (importauftrag.aufraeumen, wirft nie) und Läufe der Recherche per Claude API samt ihren Dateien (recherche.aufraeumen,
+    wirft nie). Ausnahmen werden geloggt."""
     from .. import einstellungen
-    from .services import bestandsimport, erinnerung, importauftrag
+    from .services import bestandsimport, erinnerung, importauftrag, recherche
     with app.app_context():
         try:
             einstellungen.anwenden()
             bestandsimport.aufraeumen()
             importauftrag.aufraeumen()
+            recherche.aufraeumen()
             return erinnerung.tageslauf_versuchen()
         except Exception as exc:
             app.logger.exception("Tageslauf: %s", exc)

@@ -409,6 +409,9 @@
     // Formular-Pool (Schritt 38): Formular, Heimat, Zuweisungen
     formular: "Prüfformular", formular_id: "Prüfformular Nr.", heimat: "im Pool von", entstanden: "entstanden aus",
     versionen: "Versionen", titel: "Titel", kategorie: "Kategorie", bisher: "bisher", vorlage: "Vorlage Nr.",
+    // Recherche per Claude API an einer Produktmeldung (21.11.2026, entity „recherche“)
+    domains: "Herstellerseiten", bemerkung_mit: "Bemerkung mitgeschickt", ki_modell: "Modell (Claude API)",
+    effort: "Aufwand", ki_lauf: "Recherche Nr.", belegt: "vorbelegte Felder", produkte: "Produkte",
   };
   // Die Beschriftung eines Feldes in einem Journaleintrag – wie beschriftung.feld_name: „description“ ist am Produkt der
   // kurze Zusatz hinter dem Namen und heißt dort seit dem Wunsch vom 18.10.2026 „Bemerkung“; an Ordnern und in den
@@ -456,11 +459,14 @@
                    // Schritt 38: Formular-Pool – am Formular, am Produkt und an der Kategorie
                    zugewiesen: "zugewiesen", zuweisung_geloest: "Zuweisung gelöst",
                    formular_zugewiesen: "Prüfformular zugewiesen", formular_zuweisung_geloest: "Zuweisung des Prüfformulars gelöst",
-                   standard_gesetzt: "Standard-Prüfformular gesetzt", standard_geloest: "Standard-Prüfformular gelöst" };
+                   standard_gesetzt: "Standard-Prüfformular gesetzt", standard_geloest: "Standard-Prüfformular gelöst",
+                   // Recherche per Claude API an einer Produktmeldung (21.11.2026)
+                   recherche_gestartet: "Recherche gestartet", recherche_beendet: "Recherche beendet",
+                   recherche_uebernommen: "Recherche übernommen" };
   const RECHT = { lesen: "lesen", pruefen: "prüfen", verwalten: "verwalten" };
   const ENTITAET = { item: "Artikel", product: "Produkt", document: "Dokument", form: "Formular", folder: "Ordner",
                      category: "Kategorie", user: "Konto", inspection: "Prüfung", round: "Durchgang", request: "Produktmeldung",
-                     formular: "Prüfformular" };
+                     formular: "Prüfformular", recherche: "Recherche (Claude API)" };
 
   /* Warum hier nicht geprüft werden kann – als HTML. obj: der Ordner, Artikel oder die Prüfung (mit „darf“); ohne obj
      gilt die Frage für das ganze Konto (Seite „Prüfungen“). Prüfen braucht seit Phase 2 dreierlei: das Häkchen

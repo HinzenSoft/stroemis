@@ -80,7 +80,7 @@ BLEIBT = ("mat_category", "mat_product", "mat_product_component", "mat_product_d
 TEILWEISE = ("mat_audit", "mat_meta")
 # Journal (mat_audit.entity): diese Einträge gehören zum Bestand, die übrigen zum Katalog bzw. zu Konten.
 JOURNAL_BESTAND = ("item", "folder", "inspection", "round")
-JOURNAL_BLEIBT = ("product", "category", "document", "form", "formular", "request", "user")
+JOURNAL_BLEIBT = ("product", "category", "document", "form", "formular", "request", "recherche", "user")
 # Merker des Beispielbestands in mat_meta (der große seit 25.10.2026, der kleine davor).
 MERKER = ("beispielbestand_gross", "beispielbestand")
 # Die DEMO-Konten aus scripts/material_beispielbestand.py (_konten_roh) – genau diese Adressen, nicht jede @example.invalid.

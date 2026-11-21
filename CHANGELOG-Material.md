@@ -113,6 +113,7 @@ Geschichte stehen. Schemaversion nach der Nachbesserung vor dem Merge: 30; mit d
 | Klappbox-Titel mit Formatierung | Fett, kursiv, Code und Links im Titel einer Klappbox erscheinen in der Leseansicht formatiert (vorher standen die Sternchen da) | gebaut 11.11.2026 (kein Schemaschritt) |
 | Spaltenabschnitt an der Schreibstelle | Ein „:::“ ohne Schlusszeile (etwa ein Hinweis, dessen „:::“ am Ende der letzten Textzeile steht) gilt im Editor nicht mehr als Abschnitt bis zum Artikelende – ein neuer Spaltenabschnitt kommt wieder an den Schreibstrich statt ans Artikelende | gebaut 11.11.2026 (kein Schemaschritt) |
 | Kopfleiste der Entwicklung | Auf dev.strömis.de „Entwicklungsserver“ statt „Strömungsrettung“, darunter „dev.strömis.de“; Maskottchen mit Leitkegel als Hut (Kopfleiste, Anmeldung, öffentliche Strömipedia, Hinweisseite ohne Netz); Produktion unverändert | gebaut 11.11.2026 (kein Schemaschritt), Zweig dev-kopf |
+| Recherche per Claude API an Produktmeldungen | Material-Verwaltung lässt zu einer offenen Meldung recherchieren (Claude API, gemeinsamer Baustein `app/ki.py`, Tabelle `ki_laeufe` im Kernschema): Vorschlag je Ausführung mit Fundstellen nach den Katalogregeln, Downloads nur von Herstellerdomains, Dokumentprüfung je PDF, Übernahme mehrerer Ausführungen auf einmal; nur mit `ANTHROPIC_API_KEY`. Schnittstelle (KERN) – die Oberfläche folgt | gebaut 21.11.2026 (kein Schemaschritt der Materialablage, Schema bleibt 40) |
 
 ## Abgleich mit dem Bestand (vor Lieferung 1)
 
@@ -14225,3 +14226,65 @@ stehen, dass es der Testserver und nicht die Produktion ist.
 - README nachgezogen.
 
 **Tests**: neu `tests/test_freigabe_mail_dev.py` – Freigabe auf dev mit Hinweis und Fehleradresse, in der Produktion ohne.
+
+## Recherche per Claude API an Produktmeldungen – KERN (Wunsch, 21.11.2026)
+
+Wunsch: An „Produkt melden“ soll eine Recherche per Claude API hängen – Katalogfelder mit Fundstelle nach den
+Katalogregeln, Dateien wie beim Katalogimport, Ergebnis nur als Vorschlag, übernommen durch einen Menschen. Entwurf
+`planung/material-phase4/entwurf_meldung_recherche.md`, Entscheidungen des Nutzers vom 21.11.2026 (Abschnitt 6): gemeinsamer
+Baustein mit dem späteren Artikelentwurf der Strömipedia, D2 B, E2 B, E4 B, E5 B, K1 Plan B, Kontingent 20, sonst A.
+Dieser Teil ist der Server (KERN); die Oberfläche (Knopf an der Meldungskarte, Startdialog, Vorschlagsdialog,
+Produktdialog mit Dateiwahl) folgt als eigener Auftrag.
+
+- **Gemeinsamer Baustein** `app/ki.py` und Tabelle **`ki_laeufe`** im Kernschema (`app/db.py`, additiv, `IF NOT
+  EXISTS`): Art ohne CHECK (nur nicht leer, erlaubte Arten in `ki.ARTEN`), Status mit `beendet_am`-CHECK, eindeutiger
+  Teilindex „höchstens ein laufender Lauf je Art“, Bezug als Text (`mat_meldung:<id>`). Client-Fabrik `ki.CLIENT`
+  (Schlüssel nur aus `os.environ`, das SDK sucht keine anderen Zugangsdaten; SDK-Log auf WARNING), `verfuegbar()`,
+  Preise von Opus 5.5 und `kosten_cent` aus `usage` (je Durchgang nach `usage.iterations`, Ausweichmodell erkannt),
+  Kontingent je Kalendermonat deutscher Zeit (`MATERIAL_RECHERCHE_JE_MONAT`, Vorgabe 20, jeder Start zählt), Start unter
+  `BEGIN IMMEDIATE`, Daemon-Thread mit Anfragekontext, Puls-Thread (Lebenszeichen alle 10 s, Abbruch-Kennzeichen,
+  Zeitgrenze 20 Minuten – schließt einen hängenden Stream), tote Läufe nach 120 s, Ordner je Lauf
+  `DATA_DIR/ki/<id>` (0700). Gesprächsschleife mit Ereignis-Schleife des Streams und `get_final_message()`, Inhalt
+  unverändert angehängt, `pause_turn` höchstens 5, eigene Werkzeuge (alle Ergebnisse in einer Nutzernachricht, Fehler als
+  `is_error`), `refusal` mit Kategorie, `max_tokens`, eine Nachfrage, unlesbares Werkzeug-JSON höchstens zweimal neu.
+  Fehlerkette des SDK als Sätze ohne Schlüssel und Rohantwort (ins Protokoll Klasse, Status, `request-id`).
+- **Recherche** (`services/recherche.py`): Aufruf 1 mit Websuche frei (höchstens 8), Abruf nur Herstellerdomains, Links
+  der Meldung und `web.archive.org` (höchstens 12), adaptives Denken, Effort `high`, `fallbacks: "default"` (Beta
+  `server-side-fallback-2026-07-01`), Zwischenspeicher auf der Anweisung, Ergebnis über das eigene Werkzeug
+  `ergebnis_abgeben` (ohne `strict`, Eingabe im Code geprüft, bei Verstoß Fehlerliste als `is_error`, höchstens zweimal);
+  Regelauszug wörtlich aus REGELN.md in `services/recherche_regeln.md` (Stand im Kopf). Downloads
+  (`services/recherche_netz.py`): nur https, Herstellerdomains samt Subdomains, Webarchiv nur mit Original dort (Roh-Fassung
+  `…id_/`), DNS aufgelöst und nur öffentliche Adressen, Verbindung zu genau der geprüften Adresse, Weiterleitungen von
+  Hand (höchstens 3, jede neu geprüft), Magic Bytes, Größe beim Lesen, 60 s je Datei, PDF mit pypdf geprüft. Aufruf 2 je
+  PDF (gleicher Inhalt einmal) mit Structured Output: zu welchen Artikelnummern, Version, Datum, Normen, Lebensdauer,
+  Prüfintervall, UKCA (Umfang nach F1 A). Zusammenführen im Code: Norm aus der passenden Erklärung + Zusatz der Seite
+  (ohne CE, UKCA zuletzt, Einschränkungen als Hinweis), Lebensdauer textil min(Hersteller, 10) bzw. 10 mit Vermerk,
+  Edelrid 10, Metall leer, Intervall 12 mit Vermerk ohne Zitat, Werte von Nicht-Herstellerquellen nie vorbelegt, gleiche
+  SHA-256 einmal, Dubletten gegen den Katalog je Ausführung, Dateien „gehört nicht dazu“ nicht angeboten (F3 A).
+- **Übernahme** mehrerer Ausführungen (E4 B): `POST …/recherche/uebernehmen` legt alle gewählten Produkte über
+  `katalog.produkt_anlegen` in einer Transaktion an und erledigt die Meldung (`product_id` = die gemeldete
+  Artikelnummer, sonst die erste; Journal „eingepflegt“ nennt alle; Mail an den Melder nennt bei mehreren alle); danach
+  Dateien je Produkt (`dokument_anlegen`, `produkt_bild_setzen`), Teilfehler in der Antwort; `…/nachladen` hängt nur
+  Fehlendes an (gleiche SHA-256 und Art am Produkt bzw. Bild schon gesetzt → übersprungen). Ausführungen, die schon im
+  Katalog stehen, sind nicht anlegbar (409 mit dem vorhandenen Produkt).
+- **Routen** (`routes_recherche.py`, alle nur Material-Verwaltung, ohne Schlüssel 503): Start (202), Stand, Abbrechen,
+  Datei ausliefern (CSP mit sandbox, nosniff, no-store), Übernehmen, Nachladen. `GET /meldungen` trägt für die
+  Material-Verwaltung mit Schlüssel je Meldung `recherche` und oben `recherche_moeglich`.
+- **Journal** (entity `recherche`, nur für die Material-Verwaltung, auch am Produkt): „Recherche gestartet“,
+  „Recherche beendet“, „Recherche übernommen“ – Beschriftungen in `beschriftung.py` und `material.js`.
+- **Wechselwirkungen**: Meldung löschen → Inhalt und Dateien der Läufe weg (die Zeilen bleiben fürs Kontingent);
+  Erledigen, Zuordnen, Ablehnen bricht einen laufenden Lauf ab; Kontolöschung → „(gelöschtes Konto)“; Tageslauf räumt
+  tote Läufe und Dateien (30 Tage nach dem Erledigen); `dev-zuruecksetzen` löscht die Läufe der Recherche samt Ordnern,
+  `dev-bestand-leeren` lässt sie (entity `recherche` in `JOURNAL_BLEIBT`). Übung: unverändert (kein Feld, kein Knopf).
+- **Kein Schemaschritt** der Materialablage: Schritt 41 aus dem Entwurf entfällt, alles Meldungs-Eigene steht in
+  `eingabe_json`/`ergebnis_json`. `requirements.txt`: `anthropic==1.17.0` (letzte 1.x). `.env.example`,
+  `docker-compose.yml` (Kommentar) und README („Recherche per Claude API (Materialablage)“ samt Zeile fürs Verzeichnis der
+  Verarbeitungstätigkeiten) nachgezogen.
+
+**Tests**: neu `tests/test_ki.py` (Tabelle, Schlüssel, Kosten, Kontingent, Gesprächsschleife, Abbruch, Zeitgrenze, tote
+Läufe, gleichzeitige Starts, echter SDK-Client gegen einen MockTransport für Parameter und Fehlerkette, Kontolöschung,
+statisch: Schlüssel nur in `app/ki.py`) und `tests/test_material_recherche.py` (Downloads gegen einen lokalen
+HTTPS-Server mit eigenem Zertifikat und eingesetztem Auflöser, ganzer Lauf über die Routen, Vorschlag, Mehrfach-Übernahme
+mit Teilfehler und Nachladen, Rechte je Rolle, Kontingent, eine app-weit, Erledigen bricht ab, Fotos ohne EXIF, Meldung
+löschen, Kontolöschung, dev-bestand-leeren, dev-zuruecksetzen, Tageslauf, Zusammenführen nach den Katalogregeln).
+Keine echten API-Aufrufe.

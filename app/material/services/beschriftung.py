@@ -95,6 +95,9 @@ FELD = {
     # Formular-Pool (Schritt 38): Formular, Heimat, Zuweisungen
     "formular": "Prüfformular", "formular_id": "Prüfformular Nr.", "heimat": "im Pool von", "entstanden": "entstanden aus",
     "versionen": "Versionen", "titel": "Titel", "kategorie": "Kategorie", "bisher": "bisher", "vorlage": "Vorlage Nr.",
+    # Recherche per Claude API an einer Produktmeldung (21.11.2026, entity „recherche“)
+    "domains": "Herstellerseiten", "bemerkung_mit": "Bemerkung mitgeschickt", "ki_modell": "Modell (Claude API)",
+    "effort": "Aufwand", "ki_lauf": "Recherche Nr.", "belegt": "vorbelegte Felder", "produkte": "Produkte",
 }
 AKTION = {
     "angelegt": "angelegt", "geaendert": "geändert", "geloescht": "gelöscht", "verschoben": "verschoben",
@@ -145,10 +148,13 @@ AKTION = {
     "zugewiesen": "zugewiesen", "zuweisung_geloest": "Zuweisung gelöst",
     "formular_zugewiesen": "Prüfformular zugewiesen", "formular_zuweisung_geloest": "Zuweisung des Prüfformulars gelöst",
     "standard_gesetzt": "Standard-Prüfformular gesetzt", "standard_geloest": "Standard-Prüfformular gelöst",
+    # Recherche per Claude API an einer Produktmeldung (21.11.2026)
+    "recherche_gestartet": "Recherche gestartet", "recherche_beendet": "Recherche beendet",
+    "recherche_uebernommen": "Recherche übernommen",
 }
 ENTITAET = {"item": "Artikel", "product": "Produkt", "document": "Dokument", "form": "Formular", "folder": "Ordner",
             "category": "Kategorie", "user": "Konto", "inspection": "Prüfung", "round": "Durchgang",
-            "request": "Produktmeldung", "formular": "Prüfformular"}
+            "request": "Produktmeldung", "formular": "Prüfformular", "recherche": "Recherche (Claude API)"}
 # Wie PRUEFART_KURZ in material.js: im Journal kurz („periodisch“ statt „periodische Prüfung“).
 PRUEFART_KURZ = PRUEFARTEN
 SPERRZUSTAND = {"frei": "frei", "gesperrt": "gesperrt", "verloren": "verloren (gesperrt)", "ausgesondert": "ausgesondert"}
@@ -156,7 +162,7 @@ RECHT = {"lesen": "lesen", "pruefen": "prüfen", "verwalten": "verwalten"}
 PERSON = "(Person)"
 # „mat_katalog“ bleibt für alte Einträge stehen (das Häkchen gibt es seit Schritt 10 nicht mehr).
 _JA_NEIN = ("serial_generated", "active", "mat_pruefer", "mat_katalog", "notiz_geaendert", "reminders_off", "overview_off",
-            "items_have_length", "aus_nacharbeit", "is_set", "freigegeben")
+            "items_have_length", "aus_nacharbeit", "is_set", "freigegeben", "bemerkung_mit")
 # Werte der Set-Felder (Schritt 21, K2; Altbestand vor Schritt 26) – wie wert() in material.js.
 SET_WERTE = {"lock_cause": {"eigen": "eigener Grund", "set": "mit dem Set"},
              "verbleib": {"aussondern": "mit aussondern", "weiterfuehren": "entnommen und weitergeführt"},

@@ -157,14 +157,20 @@ def fuer_produkt(pid, user=None, meldungen=True):
     """Journal eines Produkts: seine Stammdaten (seit Schritt 38 auch, welches Prüfformular ihm zugewiesen wurde), seine
     Dokumente und die Meldungen, über die es in den Katalog kam – diese nur, soweit das Konto die Meldung sehen darf
     (rechte.darf_meldung: Melder, Material-Verwaltung, wer den Ordner der Meldung sieht). meldungen=False lässt
-    sie ganz weg. Die Versionen früherer spezifischer Formulare stehen seit dem Formular-Pool auf der Formularseite."""
+    sie ganz weg. Die Versionen früherer spezifischer Formulare stehen seit dem Formular-Pool auf der Formularseite.
+    Die Einträge einer Recherche per Claude API zu diesen Meldungen (entity „recherche“) sieht nur die
+    Material-Verwaltung."""
     paare = [("product", pid)]
     paare += [("document", r["id"]) for r in db.query("SELECT id FROM mat_product_document WHERE product_id = ?", (pid,))]
     if meldungen:
-        from .rechte import darf_meldung
-        paare += [("request", r["id"]) for r in db.query(
+        from .rechte import darf_meldung, ist_material_verwaltung
+        meldungen_ids = [r["id"] for r in db.query(
             "SELECT id, created_by, folder_id FROM mat_product_request WHERE product_id = ?", (pid,))
             if darf_meldung(r, user)]
+        paare += [("request", m) for m in meldungen_ids]
+        # Die Recherche per Claude API zur Meldung (entity „recherche“) nur für die Material-Verwaltung (B2 A).
+        if ist_material_verwaltung(user):
+            paare += [("recherche", m) for m in meldungen_ids]
     return lesen(paare)
 
 

@@ -11,6 +11,8 @@ services:
     container_name: ${STROEMIS_NAME:-stroemis}
     restart: unless-stopped
     env_file: .env
+    # Aus der .env kommt auch ANTHROPIC_API_KEY (Recherche per Claude API an Produktmeldungen, nur dort gesetzt; ohne ihn
+    # fehlt die Funktion). Dafür braucht der Container ausgehend HTTPS zu api.anthropic.com und zu den Herstellerseiten.
     # Auf allen Schnittstellen veröffentlicht, damit der Reverse-Proxy (TLS, Domain – siehe README)
     # auch von einem anderen Rechner aus erreicht. Achtung: Docker öffnet den Port an einer
     # ufw-Firewall vorbei, und wer den Container direkt erreicht, kann die Weiterleitungs-

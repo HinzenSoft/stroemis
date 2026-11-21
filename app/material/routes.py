@@ -22,13 +22,13 @@ import sqlite3
 from flask import (Blueprint, abort, current_app, g, jsonify, redirect, render_template, request, send_file,
                    send_from_directory, url_for)
 
-from .. import db, einfuehrung
+from .. import db, einfuehrung, ki
 from ..auth import attempts_exceeded, current_user, eingabefehler_abfangen, json_body, login_required, note_attempt
 from . import models
 from .services import (Abgelehnt, anhang, bestand, bestandsimport, durchgang, eingabe, globalprotokoll, globalsuche,
                        journal, katalog, kennung, medien as medien_dienst, meldung, protokoll, pruefung, search,
                        unterschrift)
-from .services import anleitung, antrag, erinnerung, mailprotokoll, mangel, psa, rueckruf, stueckliste
+from .services import anleitung, antrag, erinnerung, mailprotokoll, mangel, psa, recherche, rueckruf, stueckliste
 from .services import status as st
 from .services import ueberblick
 from .services.bestand import FremdeDublette
@@ -715,7 +715,8 @@ def meldungen():
     die Material-Verwaltung alle, sonst die eigenen und die aus Ordnern, die er sieht; „offen“ zählt ebenso.
     Standard: Material-Verwaltung und Lesende (Führungskraft) sehen alle davon (offene zuerst), Materialwarte ihre
     eigenen (alle Stände); „eigene=1“ bzw. „eigene=0“ wählt ausdrücklich. Abarbeiten („bearbeiten“) darf nur die
-    Material-Verwaltung."""
+    Material-Verwaltung. Nur für sie und nur mit API-Schlüssel (routes_recherche.py) trägt jede Meldung „recherche“ (der
+    jüngste Lauf, kurz, oder null) und die Antwort „recherche_moeglich“ (Kontingent, Grund) – sonst fehlen beide."""
     u = current_user()
     if not u:
         return jsonify(error="Nicht angemeldet"), 401
@@ -727,8 +728,17 @@ def meldungen():
         alle = ist_material_verwaltung() or not sicht().irgendwo("verwalten")
     filter_ = request.args.get("status") if request.args.get("status") in meldung.FILTER else ("offen" if alle else "alle")
     rows = meldung.liste(filter_, None if alle else u["id"])
-    return jsonify(meldungen=[meldung.meldung_json(r) for r in rows], alle=alle, filter=filter_,
-                   bearbeiten=alle and ist_material_verwaltung(), offen=meldung.anzahl_offen() if alle else None)
+    liste = [meldung.meldung_json(r) for r in rows]
+    bearbeiten = alle and ist_material_verwaltung()
+    extra = {}
+    if bearbeiten and ki.verfuegbar():
+        ki.tote_aufraeumen()
+        laeufe = recherche.je_meldung([r["id"] for r in rows])
+        for m in liste:
+            m["recherche"] = laeufe.get(m["id"])
+        extra["recherche_moeglich"] = recherche.moeglich()
+    return jsonify(meldungen=liste, alle=alle, filter=filter_, bearbeiten=bearbeiten,
+                   offen=meldung.anzahl_offen() if alle else None, **extra)
 
 
 @api.post("/meldungen")
@@ -1402,3 +1412,4 @@ from . import routes_psa  # noqa: E402,F401
 from . import routes_antrag  # noqa: E402,F401
 from . import routes_mailfehler  # noqa: E402,F401
 from . import routes_bericht  # noqa: E402,F401
+from . import routes_recherche  # noqa: E402,F401
