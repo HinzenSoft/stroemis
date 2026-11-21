@@ -294,10 +294,11 @@ def ordner_entfernen(lauf_id):
 
 # --- Start, Abbruch, Ende -------------------------------------------------------------------------------------------
 
-def starten(art, bezug, eingabe, arbeit, effort="", beendet=None, mit_ordner=False):
+def starten(art, bezug, eingabe, arbeit, effort="", beendet=None, mit_ordner=False, vor_start=None):
     """Einen Lauf anlegen und im Hintergrund starten; liefert die Zeile. arbeit(lauf) läuft im Thread und liefert das
-    Ergebnis (ein JSON-fähiges dict) – oder wirft Abgebrochen bzw. LaufFehler. beendet(lauf, status) läuft danach im
-    selben Thread (Journal des Moduls). Wirft KiFehler: 503 ohne Schlüssel, 409 wenn schon einer dieser Art läuft
+    Ergebnis (ein JSON-fähiges dict) – oder wirft Abgebrochen bzw. LaufFehler. vor_start(zeile) läuft nach dem Anlegen
+    und vor dem Thread in der Anfrage (Journal „gestartet“ des Moduls – so steht es vor allem, was der Lauf schreibt);
+    beendet(lauf, status) läuft am Ende im Thread. Wirft KiFehler: 503 ohne Schlüssel, 409 wenn schon einer dieser Art läuft
     (lauf = dessen Zeile), 429 bei erschöpftem Kontingent."""
     if art not in ARTEN:
         raise KiFehler("Unbekannte Art eines KI-Laufs.", 500)
@@ -333,6 +334,11 @@ def starten(art, bezug, eingabe, arbeit, effort="", beendet=None, mit_ordner=Fal
             log.warning("KI-Lauf %s: Ordner ließ sich nicht anlegen: %s", lid, exc)
             _beenden_zeile(lid, "fehlgeschlagen", None, "Der Ablageordner ließ sich nicht anlegen.", [])
             raise KiFehler("Der Ablageordner für die Recherche ließ sich nicht anlegen.", 500)
+    if vor_start:
+        try:
+            vor_start(zeile(lid))
+        except Exception:                          # noqa: BLE001 – der Lauf soll daran nicht scheitern
+            log.exception("KI-Lauf %s: Vorarbeit gescheitert", lid)
     app = current_app._get_current_object()
     t = threading.Thread(target=_ausfuehren, args=(app, lid, arbeit, beendet), name=f"ki-{art}-{lid}", daemon=True)
     with _LAEUFER_SPERRE:
@@ -525,18 +531,20 @@ class Lauf:
                 with self.client().beta.messages.stream(**anfrage) as stream:
                     with self._sperre:
                         self._stream = stream
-                    for _ereignis in stream:
-                        self.pruefen()
-                    msg = stream.get_final_message()
-                return msg
-            except Abgebrochen:
+                    try:
+                        for _ereignis in stream:
+                            self.pruefen()
+                    except ValueError:
+                        # Nur der Iterator wirft so bei unlesbarem Werkzeug-JSON – nicht get_final_message.
+                        if self._abbruch.is_set():
+                            raise Abgebrochen(self._grund or "Abgebrochen.")
+                        versuche += 1
+                        if versuche > 2:
+                            raise LaufFehler("Die Antwort ließ sich nicht lesen (ungültiges JSON eines Werkzeugs).")
+                        continue
+                    return stream.get_final_message()
+            except (Abgebrochen, LaufFehler):
                 raise
-            except ValueError:
-                if self._abbruch.is_set():
-                    raise Abgebrochen(self._grund or "Abgebrochen.")
-                versuche += 1
-                if versuche > 2:
-                    raise LaufFehler("Die Antwort ließ sich nicht lesen (ungültiges JSON eines Werkzeugs).")
             except Exception:
                 # Ein Stream, den der Puls geschlossen hat, endet mit irgendeiner Ausnahme des HTTP-Clients.
                 if self._abbruch.is_set():

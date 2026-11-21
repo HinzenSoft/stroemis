@@ -46,8 +46,8 @@ from . import recherche_netz as netz
 
 ART = "mat_recherche"
 EFFORT = "high"
-MAX_TOKENS = 32000
-MAX_TOKENS_PRUEFUNG = 16000
+MAX_TOKENS = 64000                   # Denken zählt mit (Effort „high“); gestreamt, bezahlt wird nur, was entsteht
+MAX_TOKENS_PRUEFUNG = 32000
 BETAS = ["server-side-fallback-2026-07-01"]
 SUCHEN = 8
 ABRUFE = 12
@@ -75,9 +75,6 @@ AN_ANTHROPIC = ("An Anthropic (Claude API) gehen Hersteller, Modell, Artikelnumm
                 "Meldung, ihre Links (ohne Abfrageteil), die Herstellerseiten, die Kategorien des Katalogs und die "
                 "Produkte dieses Herstellers im Katalog – mit Häkchen auch die Fotos (ohne Metadaten) und die "
                 "Bemerkung. Nie: Namen, E-Mail-Adressen, Ordner, Gliederung.")
-
-# Tests setzen hier eine Ersatzfunktion ein (wie meldung.HINTERGRUND): starten(art, bezug, eingabe, arbeit, …).
-STARTEN = ki.starten
 
 
 def bezug(mid):
@@ -519,19 +516,22 @@ def starten(mid, d):
     bemerkung = wahr(d, "bemerkung", "Bemerkung mitschicken")
     alt = ki.letzter(ART, bezug(mid))
     eingabe = eingabe_bauen(m, domains, fotos, bemerkung)
+
+    def vor_start(z):
+        # Der neue Vorschlag ersetzt den alten: dessen Dateien gehen jetzt (H1 A).
+        if alt and alt["status"] in ("fertig", "fehlgeschlagen", "abgebrochen"):
+            ki.ordner_entfernen(alt["id"])
+        with db.transaction():
+            journal.eintragen("recherche", mid, "recherche_gestartet", None,
+                              {"domains": domains, "fotos": len(eingabe["fotos"]), "bemerkung_mit": eingabe["bemerkung"],
+                               "ki_modell": ki.MODELL, "effort": EFFORT, "ki_lauf": z["id"]})
     try:
-        z = STARTEN(ART, bezug(mid), eingabe, partial(_arbeit, mid), effort=EFFORT, beendet=_beendet, mit_ordner=True)
+        return ki.starten(ART, bezug(mid), eingabe, partial(_arbeit, mid), effort=EFFORT, beendet=_beendet,
+                       mit_ordner=True, vor_start=vor_start)
     except ki.KiFehler as exc:
         if exc.code == 409 and exc.lauf:
             raise Abgelehnt(laeuft_text(exc.lauf), 409)
         raise Abgelehnt(str(exc), exc.code)
-    if alt and alt["status"] in ("fertig", "fehlgeschlagen", "abgebrochen"):
-        ki.ordner_entfernen(alt["id"])
-    with db.transaction():
-        journal.eintragen("recherche", mid, "recherche_gestartet", None,
-                          {"domains": domains, "fotos": len(eingabe["fotos"]), "bemerkung_mit": eingabe["bemerkung"],
-                           "ki_modell": ki.MODELL, "effort": EFFORT, "ki_lauf": z["id"]})
-    return z
 
 
 def laeuft_text(z):
