@@ -1268,6 +1268,7 @@ def test_nichts_aus_b():
         kennungen = {"iid": t.art_b["id"], "mid": b.meldung, "aid": b.anhang_id, "token": b.token, "gid": b.freigabe,
                      "kid": ids["karabiner"], "did": 999999, "ruid": 999999, "anid": 999999, "filename": "material.js", "sid": 999999,
                      "uid": t.wart_b_id,                    # „Rechte ändern“ je Person (02.11.2026)
+                     "n": 1,                                # Datei einer Recherche (21.11.2026)
                      "jahr": _heute().year,                 # Jahresbericht (P4-L1) über („ordner“/„export“, fid)
                      "art": "web", "dateiname": "x.jpg", "mfid": b.mailfehler,
                      ("produkte", "pid"): ids["hms"], ("produkt", "pid"): ids["hms"],
@@ -1287,7 +1288,10 @@ def test_nichts_aus_b():
                 r = w.get(url)
                 assert r.status_code < 500, (url, r.status_code)
                 if fremd:
-                    soll = 200 if regel.endpoint == "material.qr_ziel" else 404
+                    # Die Recherche-Routen (21.11.2026) prüfen erst die Rolle: an jeden außer der Material-Verwaltung 403,
+                    # ohne nach der Meldung zu sehen – verrät also nichts über B.
+                    soll = (200 if regel.endpoint == "material.qr_ziel"
+                            else 403 if regel.endpoint.startswith("material_api.recherche_") else 404)
                     assert r.status_code == soll, (url, r.status_code, r.data[:300])
                 ohne_merkmale(b, url, r.data)
                 gelesen += 1

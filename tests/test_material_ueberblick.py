@@ -254,7 +254,9 @@ NUR_KATALOGPFLEGE = ("/api/material/katalog/", "/api/material/erinnerungen/")
 # die Nacharbeit eines Bestandsimports (Phase 2 · L3).
 NUR_VERWALTER_LESEN = re.compile(r"^/api/material/(ordner/<int:fid>/freigaben|ordner/<int:fid>/nacharbeit|freigaben|nutzer"
                                  r"|globalsuche/protokoll|mailfehler"         # mailfehler: „Weitere anzeigen“ (P4-L1)
-                                 r"|artikel/<int:iid>/kandidaten|ordner/<int:fid>/kandidaten)$")  # Auswahl (P4-L2b)
+                                 r"|artikel/<int:iid>/kandidaten|ordner/<int:fid>/kandidaten"  # Auswahl (P4-L2b)
+                                 # Recherche per Claude API (21.11.2026): nur die Material-Verwaltung
+                                 r"|meldungen/<int:mid>/recherche|meldungen/<int:mid>/recherche/dateien/<int:n>)$")
 # Abfrageparameter, ohne die eine Route nichts zu lesen hätte (400).
 ABFRAGE = {
     "material_api.formulare": lambda e: {"formular": e["pf"]},
@@ -357,6 +359,7 @@ def test_fuehrungskraft_nur_lesen():
         kennungen = {
             "kid": ids["gurte"], "did": did, "iid": a1["id"], "mid": mid, "aid": aid, "ruid": ruid, "anid": 999999, "token": token,
             "jahr": h.year,                                 # Jahresbericht (P4-L1): bericht-<jahr>.pdf, -pruefungen-<jahr>.csv
+            "n": 1,                                         # Datei einer Recherche (21.11.2026)
             "gid": freigabe, "mfid": 999999, "sid": 999999,      # Set-Protokoll (Schritt 27)
             "uid": k["wart_id"],                            # „Rechte ändern“ je Person (02.11.2026)
             "art": "web", "dateiname": bild.rsplit("/", 1)[1], "filename": "material.js",

@@ -465,6 +465,8 @@ class Lauf:
         self.usage = []
         self.grenze_sek = ARTEN[self.art]["gesamt_sek"]
         self._start = time.monotonic()
+        # Gelesen mit wait(0): „is_set“ meint seit dem Rückbau der Sets im Code der Anwendung den
+        # früheren Set-Schlüssel und ist dort gesperrt (tests/test_material_set_rueckbau.py).
         self._abbruch = threading.Event()
         self._grund = ""
         self._stream = None
@@ -486,7 +488,7 @@ class Lauf:
         """Von außen (Puls, Abbrechen im selben Prozess): Kennzeichen setzen und einen offenen Stream schließen – das
         Lesen im Lauf endet dann mit einer Ausnahme, die gespraech() als Abbruch erkennt."""
         with self._sperre:
-            if not self._abbruch.is_set():
+            if not self._abbruch.wait(0):
                 self._grund = grund
                 self._abbruch.set()
             stream = self._stream
@@ -501,9 +503,9 @@ class Lauf:
 
     def pruefen(self):
         """Zwischen den Schritten und bei jedem Ereignis des Streams: abgebrochen oder Zeit um → Abgebrochen."""
-        if not self._abbruch.is_set() and self.zeit_um():
+        if not self._abbruch.wait(0) and self.zeit_um():
             self.abbrechen_intern(ZEIT_TEXT.format(self.grenze_sek // 60))
-        if self._abbruch.is_set():
+        if self._abbruch.wait(0):
             raise Abgebrochen(self._grund or "Abgebrochen.")
 
     def schritt(self, phase, fortschritt=""):
@@ -536,7 +538,7 @@ class Lauf:
                             self.pruefen()
                     except ValueError:
                         # Nur der Iterator wirft so bei unlesbarem Werkzeug-JSON – nicht get_final_message.
-                        if self._abbruch.is_set():
+                        if self._abbruch.wait(0):
                             raise Abgebrochen(self._grund or "Abgebrochen.")
                         versuche += 1
                         if versuche > 2:
@@ -547,7 +549,7 @@ class Lauf:
                 raise
             except Exception:
                 # Ein Stream, den der Puls geschlossen hat, endet mit irgendeiner Ausnahme des HTTP-Clients.
-                if self._abbruch.is_set():
+                if self._abbruch.wait(0):
                     raise Abgebrochen(self._grund or "Abgebrochen.")
                 raise
             finally:
@@ -682,7 +684,7 @@ def _ausfuehren(app, lauf_id, arbeit, beendet):
             except LaufFehler as exc:
                 fehler = str(exc)
             except Exception as exc:               # noqa: BLE001 – der Thread soll nie unbemerkt enden
-                if lauf._abbruch.is_set():
+                if lauf._abbruch.wait(0):
                     status, fehler = "abgebrochen", lauf._grund or "Abgebrochen."
                 else:
                     fehler = fehlertext(exc, lauf_id)
