@@ -2344,6 +2344,22 @@ def test_monatsangaben():
 
 # --- Lieferung 3: Nachweis ----------------------------------------------------------------------------------
 
+ST_VERA = "/home/harness/devtools/bin/st-vera"
+
+
+def pdfa_pruefer():
+    """Der Aufruf, mit dem die Tests ein PDF als PDF/A prüfen (Datei als letztes Argument; bestanden: Rückgabewert 0 und
+    „PASS“ in der Ausgabe) – st-vera auf dem Entwicklungsrechner, sonst veraPDF selbst, wenn VERAPDF den Aufruf nennt
+    (in GitHub Actions: java -cp …/* org.verapdf.apps.GreenfieldCliWrapper, siehe tests/verapdf/pom.xml); sonst None,
+    dann prüfen die Tests nur die Kennung in den XMP-Daten."""
+    import shlex
+    if os.path.exists(ST_VERA):
+        return [ST_VERA]
+    if os.environ.get("VERAPDF"):
+        return shlex.split(os.environ["VERAPDF"]) + ["--format", "text"]
+    return None
+
+
 def pdf_seiten(pfad):
     """Text je Seite – mit pdftotext (poppler-utils), wie im Auftrag; fehlt es, mit pypdf."""
     import shutil
