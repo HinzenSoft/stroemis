@@ -456,7 +456,7 @@ table.list.mat-artikel th.mat-wahlspalte, table.list.mat-artikel td.mat-wahlspal
 .mat-ue-ausf legend { font-weight: 600; padding: 0 4px; }
 .mat-ue-ausf.aus > :not(legend, .mat-ue-an) { opacity: .55; }
 .mat-ue-ausf.nicht { color: var(--grau); }
-.mat-ue-bild img { width: 48px; height: 48px; object-fit: contain; border: 1px solid var(--linie); background: var(--weiss); }
+.mat-ue-bild img { width: 56px; height: 56px; object-fit: contain; border: 1px solid var(--linie); background: var(--weiss); }
 .mat-ue-nicht { margin: 6px 0; overflow-wrap: anywhere; }
 /* Änderungsanträge (Entscheidungen vom 21.10.2026; seit dem 24.10.2026 eigene Seite im Bestand): dieselben Karten und
    Marken wie die Produktmeldungen; je Sammelantrag die Liste „Feld: alt → neu“. */

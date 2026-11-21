@@ -461,7 +461,7 @@ def startdaten(m):
     """Was der Startdialog zeigt: Vorschlag der Domains, Zahl der Fotos, Bemerkung (zur Kontrolle), Links, Hinweis."""
     return {"domains": domains_vorschlag(m), "fotos": len(_fotos(m)), "bemerkung": m["note"] or "",
             "links": [_link_ohne_abfrage(x) for x in json.loads(m["links_json"] or "[]")],
-            "an_anthropic": AN_ANTHROPIC}
+            "datenschutz": AN_ANTHROPIC}
 
 
 def _katalog_kontext(m):

@@ -8481,7 +8481,7 @@
   }
 
   /* Startdialog: die Herstellerseite(n) bestätigen (vorbelegt), Fotos und Bemerkung nur mit Häkchen (Vorgabe aus; die
-     Bemerkung steht zur Kontrolle darüber), was an Anthropic geht, und das Kontingent. Fehler am Feld (400) bzw. als
+     Bemerkung steht zur Kontrolle darüber), was an die Claude API geht, und das Kontingent. Fehler am Feld (400) bzw. als
      Satz über der Knopfzeile (409, 429, 503 – der Knopf ist dann ausgegraut). Ein neuer Lauf ersetzt den Vorschlag. */
   async function rechercheStartDialog(m, danach) {
     let d;
@@ -8497,7 +8497,7 @@
       ${s.fotos ? `<label class="inline"><input type="checkbox" id="rs-fotos"> ${esc(plural(s.fotos, "Foto", "Fotos"))} mitschicken</label>` : ""}
       ${s.bemerkung ? `<div class="mat-feldkopf">Bemerkung des Melders</div><p class="mat-text mat-recherche-bemerkung">${esc(s.bemerkung)}</p>
         <label class="inline"><input type="checkbox" id="rs-bemerkung"> Bemerkung mitschicken</label>` : ""}
-      <p class="help">${esc(s.an_anthropic)}</p>
+      <p class="help">${esc(s.datenschutz)}</p>
       <p class="help">Kontingent: noch ${k.rest} von ${k.grenze} in diesem Monat.</p>
       ${grundSatz("rs-grund", grund)}
       <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button><button class="btn" id="rs-ok" type="button"${knopfAus("rs-grund", grund)}>Recherchieren</button></div>`,

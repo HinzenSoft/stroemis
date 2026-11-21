@@ -441,7 +441,7 @@ def test_lauf_und_uebernahme():
             r = kat.get(f"/api/material/meldungen/{mid}/recherche")
             assert r.status_code == 200 and r.json["recherche"] is None and r.json["moeglich"]["an"], r.get_json()
             assert r.json["start"]["domains"] == ["hersteller.test"] and r.json["start"]["fotos"] == 0
-            assert r.json["start"]["bemerkung"].startswith("Gehört") and "Anthropic" in r.json["start"]["an_anthropic"]
+            assert r.json["start"]["bemerkung"].startswith("Gehört") and "Anthropic" in r.json["start"]["datenschutz"]
             assert r.json["start"]["links"] == ["https://hersteller.test/produkt", "https://haendler.test/angebot"]
             # Eingaben
             for falsch, teil in (({"domains": []}, "1 bis 3"), ({"domains": ["a.test", "b.test", "c.test", "d.test"]},

@@ -14327,6 +14327,8 @@ Statuszeile ganz.
 - **Schnittstelle**: Der kurze Stand eines übernommenen Laufs (`recherche` in `GET /meldungen` und `GET …/recherche`)
   trägt `produkte` (`id`, `manufacturer`, `model`, `description`, `article_no`) – nur Produkte, die es noch gibt und die
   nicht nach der Übernahme entstanden (SQLite vergibt die Kennung eines gelöschten Produkts neu).
+  Der Satz für den Startdialog heißt in `start` jetzt `datenschutz` (vorher `an_anthropic`) – die Oberfläche nennt den
+  Anbieter nicht im Code (Test „Schlüssel nur in `app/ki.py`“).
 - Der bisherige Weg „Produkt anlegen“ an der Karte bleibt, wie er ist; Übung unverändert (kein Feld, kein Knopf).
 
 **Tests**: `tests/test_material_recherche.py` – `produkte` im Stand (auch nach Löschen und neu vergebener Kennung) und
