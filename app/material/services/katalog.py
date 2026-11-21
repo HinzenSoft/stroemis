@@ -917,9 +917,16 @@ def _dokument_werte(d, alt=None, datei=None):
     return w
 
 
-def dokument_anlegen(pid, d, datei=None, ersetzt=None, kid=None):
+class _SchonDa(Exception):
+    """dokument_anlegen mit ohne_doppelte: dieser Inhalt in dieser Art hängt schon am Produkt."""
+
+
+def dokument_anlegen(pid, d, datei=None, ersetzt=None, kid=None, ohne_doppelte=False):
     """Ein Dokument am Produkt pid – oder an der Kategorie kid, dann gilt es für alle Produkte darin und in
-    ihren Unterkategorien. Mit ersetzt: die neue Version eines vorhandenen (am selben Ziel)."""
+    ihren Unterkategorien. Mit ersetzt: die neue Version eines vorhandenen (am selben Ziel). ohne_doppelte: Hängt
+    derselbe Inhalt (SHA-256) in derselben Art schon am Produkt, entsteht nichts und das Ergebnis ist None – geprüft in
+    der Schreibtransaktion des Einfügens, damit zwei gleichzeitige Anfragen nicht beide anlegen (Übernahme einer
+    Recherche, Prüfung Sicherheit vom 21.11.2026, Befund 4)."""
     if ersetzt:
         pid, kid = ersetzt["product_id"], ersetzt["category_id"]
     if kid:
@@ -939,6 +946,10 @@ def dokument_anlegen(pid, d, datei=None, ersetzt=None, kid=None):
             if ersetzt and db.query("SELECT 1 FROM mat_product_document WHERE replaces_id = ? LIMIT 1",
                                     (ersetzt["id"],), one=True):
                 raise Abgelehnt("Zu diesem Dokument gibt es schon eine neuere Version – bitte diese ersetzen.", 409)
+            if ohne_doppelte and pid and sha and db.query(
+                    "SELECT 1 FROM mat_product_document WHERE product_id = ? AND sha256 = ? AND kind = ? LIMIT 1",
+                    (pid, sha, w["kind"]), one=True):
+                raise _SchonDa()
             did = db.execute(
                 "INSERT INTO mat_product_document (product_id, category_id, kind, title, file_path, url, mime, size, sha256, "
                 "version, valid_from, replaces_id, uploaded_by, uploaded_by_name, uploaded_at) "
@@ -954,11 +965,13 @@ def dokument_anlegen(pid, d, datei=None, ersetzt=None, kid=None):
             nachher.update({"category_id": kid} if kid else {"product_id": pid})
             journal.eintragen("document", did, "neue_version" if ersetzt else "angelegt",
                               {"ersetzt": ersetzt["id"]} if ersetzt else None, nachher)
-    except BaseException:
+    except BaseException as exc:
         if zwischen:
             _entfernen(zwischen)
         if name:
             _datei_freigeben(name)
+        if isinstance(exc, _SchonDa):
+            return None
         raise
     return did
 

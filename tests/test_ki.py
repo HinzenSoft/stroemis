@@ -5,9 +5,12 @@ Antworten als echte SDK-Typen über BetaMessage.model_validate), für Parameter 
 SDK-Client gegen einen MockTransport von httpx2 – so ist auch geprüft, dass das SDK die Parameter annimmt und den
 Verlauf (Inhalt der Antworten unverändert) serialisiert. Geprüft: Tabelle ki_laeufe (CHECKs, „einer je Art“), Schlüssel,
 Kosten, Kontingent je Kalendermonat deutscher Zeit, Gesprächsschleife (pause_turn ≤ 5, eigene Werkzeuge mit is_error in
-einer Nutzernachricht, refusal mit Kategorie, max_tokens, Nachfrage, unlesbares JSON), Ausweichmodell, Abbruch (im
-selben Prozess, über das Kennzeichen, mitten in einem hängenden Stream, Zeitgrenze), tote Läufe, gleichzeitige Starts,
-Fehlerkette ohne Schlüssel im Text, Kontolöschung, Leeren. Alle Angaben hier sind Platzhalter."""
+einer Nutzernachricht, refusal mit Kategorie, max_tokens, Nachfrage, unlesbares JSON, dasselbe Werkzeug zweimal
+gescheitert), Ausweichmodell, Abbruch (im selben Prozess, über das Kennzeichen, mitten in einem hängenden Stream,
+Zeitgrenze – auch mit dem echten SDK-Client gegen einen lokalen, schweigenden SSE-Server), Zwischenstand der Kosten
+eines abgebrochenen Streams („mindestens“), größter Abstand der Stream-Ereignisse im Protokoll (samt ping), tote Läufe
+(mit Nacharbeit des Moduls), gleichzeitige Starts, Fehlerkette ohne Schlüssel im Text, Kontolöschung, Leeren. Alle
+Angaben hier sind Platzhalter."""
 import json
 import logging
 import os
@@ -17,6 +20,7 @@ import tempfile
 import threading
 import time
 from datetime import datetime, timezone
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from types import SimpleNamespace
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -47,11 +51,19 @@ def werkzeug(name, eingabe, kennung="toolu_1"):
 class _Strom:
     """Was beta.messages.stream liefert: Kontextmanager, iterierbar (Ereignisse), get_final_message(), close().
     haengen: die Iteration blockiert ohne Ereignis, bis jemand close() ruft – wie ein Stream, der auf Server-Werkzeuge
-    wartet; danach eine Ausnahme wie beim abgerissenen Lesen. fehler: eine Ausnahme statt der Antwort."""
+    wartet; danach eine Ausnahme wie beim abgerissenen Lesen. fehler: eine Ausnahme statt der Antwort. teil: der
+    Zwischenstand (current_message_snapshot) wie beim SDK nach message_start – ohne teil wirft er wie dort."""
 
-    def __init__(self, antwort, ereignisse=3, haengen=False, fehler=None):
+    def __init__(self, antwort, ereignisse=3, haengen=False, fehler=None, teil=None):
         self.antwort, self.ereignisse, self.haengen, self.fehler = antwort, ereignisse, haengen, fehler
+        self.teil = teil
         self.geschlossen = threading.Event()
+
+    @property
+    def current_message_snapshot(self):
+        assert self.teil is not None
+        from anthropic.types.beta import BetaMessage
+        return BetaMessage.model_validate(self.teil)
 
     def __enter__(self):
         return self
@@ -417,6 +429,17 @@ def test_gespraech():
                 finally:
                     ki.CLIENT = alt
                 assert z["status"] == status, (fehlversuche, dict(z))
+            # Dasselbe eigene Werkzeug scheitert zweimal (bzw. Claude ruft zweimal ein unbekanntes): Schluss, statt bis
+            # zur Rundengrenze bezahlte Runden zu drehen.
+            for name in ("kaputt", "gibtsnicht"):
+                a = Attrappe([nachricht([werkzeug(name, {}, f"toolu_{i}")], stop="tool_use") for i in range(5)])
+                alt = einsetzen(a)
+                try:
+                    z = lauf_starten(gespraech_arbeit(anfrage(), {"kaputt": kaputt}))
+                finally:
+                    ki.CLIENT = alt
+                assert z["status"] == "fehlgeschlagen" and "2-mal gescheitert" in z["fehler"] \
+                    and len(a.anfragen) == 2, (name, dict(z), len(a.anfragen))
             # Grenze der Runden.
             a = Attrappe([nachricht([werkzeug("eins", {"x": 1})], stop="tool_use")] * 5)
             alt = einsetzen(a)
@@ -469,6 +492,36 @@ def test_abbruch_und_tote():
                 assert z["status"] == "abgebrochen" and z["beendet_am"] and z["fehler"] == "Abgebrochen.", (weg, dict(z))
                 assert strom.geschlossen.is_set() and ende == ["abgebrochen"] and not os.path.isdir(ki.ordner(z["id"]))
                 assert not ki.abbrechen(z["id"])                       # läuft nicht mehr
+            # Abbruch mitten in einer Antwort: Ihr Zwischenstand (Eingabe aus message_start, bisherige Ausgabe) zählt als
+            # Zeile „unvollstaendig“ – die Kosten sind dann „mindestens“ (Prüfung Ablauf, Befund 5).
+            teil = nachricht([], stop=None, usage={"input_tokens": 500_000, "output_tokens": 30_000})
+            a = Attrappe([nachricht([text("p")], stop="pause_turn"), _Strom(None, haengen=True, teil=teil)])
+            alt = einsetzen(a)
+            try:
+                z = ki.starten("mat_recherche", "mat_meldung:1", {}, gespraech_arbeit(anfrage()))
+                for _ in range(200):
+                    if len(a.stroeme) == 2:
+                        break
+                    time.sleep(0.01)
+                assert ki.abbrechen(z["id"]) and ki.warten(z["id"], 10)
+            finally:
+                ki.CLIENT = alt
+            z = ki.zeile(z["id"])
+            usage = json.loads(z["usage_json"])
+            assert z["status"] == "abgebrochen" and len(usage) == 2 and usage[1]["unvollstaendig"] \
+                and usage[1]["eingabe"] == 500_000 and "unvollstaendig" not in usage[0], usage
+            assert z["kosten_cent"] == ki.kosten_cent(usage) >= 260 and ki.unvollstaendig(usage) \
+                and ki.kosten_text(z["kosten_cent"], True).startswith("mindestens ca. ") and not ki.unvollstaendig(
+                    usage[:1]), z["kosten_cent"]
+            # Unlesbares Werkzeug-JSON mitten im Stream: Auch der verworfene Versuch zählt (mit Zwischenstand).
+            a = Attrappe([_Strom(None, fehler=ValueError("kaputt"), teil=teil), nachricht([text("ok")])])
+            alt = einsetzen(a)
+            try:
+                z = lauf_starten(gespraech_arbeit(anfrage()))
+            finally:
+                ki.CLIENT = alt
+            assert z["status"] == "fertig" and [u.get("unvollstaendig", False) for u in json.loads(z["usage_json"])] \
+                == [True, False], z["usage_json"]
             # Zeitgrenze
             ki.ARTEN["mat_recherche"]["gesamt_sek"] = 0.3
             a = Attrappe([_Strom(nachricht([text("nie")]), haengen=True)])
@@ -507,10 +560,16 @@ def test_abbruch_und_tote():
             lebend = db.execute("INSERT INTO ki_laeufe (art, bezug, status, gestartet_am, lebenszeichen_am) VALUES "
                                 "('anders', '', 'laeuft', ?, ?)", (alt_zeit, alt_zeit))
             ki._LAEUFER[lebend] = None
+            nach_tod = []
+            alt_nach = dict(ki._NACH_TOD)
+            ki.bei_tod("mat_recherche", lambda z: nach_tod.append((z["id"], z["status"], z["fehler"])))
             try:
                 assert ki.tote_aufraeumen() == [tot]
             finally:
                 ki._LAEUFER.pop(lebend, None)
+                ki._NACH_TOD.clear()
+                ki._NACH_TOD.update(alt_nach)
+            assert nach_tod == [(tot, "abgebrochen", ki.TOT_TEXT)], nach_tod
             z = ki.zeile(tot)
             assert z["status"] == "abgebrochen" and z["fehler"] == ki.TOT_TEXT and not os.path.isdir(ki.ordner(tot))
             assert ki.zeile(frisch)["status"] == "laeuft" and ki.zeile(lebend)["status"] == "laeuft"
@@ -668,6 +727,116 @@ def test_echter_client_und_fehlerkette():
     print("Echter SDK-Client und Fehlerkette bestanden.")
 
 
+class _StummeApi(BaseHTTPRequestHandler):
+    """Ein lokaler Ersatz der API (http://127.0.0.1): sendet message_start und dann – je nach Modus – nichts mehr bis
+    zum Schließen nach schliessen_nach Sekunden (wie eine lange Phase der Server-Werkzeuge ohne ping), oder ping alle
+    ping Sekunden und am Ende die Antwort. Prüfung Sicherheit vom 21.11.2026, Befund 2 / Probe 11."""
+    protocol_version = "HTTP/1.1"
+    modus = {"ping": None, "schliessen_nach": 4.0, "anfragen": 0}
+
+    def log_message(self, *a):
+        pass
+
+    def _schreiben(self, daten):
+        self.wfile.write(f"{len(daten):x}\r\n".encode() + daten + b"\r\n")
+        self.wfile.flush()
+
+    def do_POST(self):
+        self.rfile.read(int(self.headers.get("Content-Length") or 0))
+        _StummeApi.modus["anfragen"] += 1
+        self.send_response(200)
+        self.send_header("Content-Type", "text/event-stream")
+        self.send_header("Transfer-Encoding", "chunked")
+        self.end_headers()
+        n = nachricht([], stop="end_turn", usage={"input_tokens": 123_000, "output_tokens": 1})
+        alles = _sse(n, [text("fertig")]).split(b"\n\n")
+        try:
+            self._schreiben(alles[0] + b"\n\n")                     # message_start
+            t0, ping = time.monotonic(), self.modus["ping"]
+            while time.monotonic() - t0 < self.modus["schliessen_nach"]:
+                time.sleep(ping or 0.05)
+                if ping:
+                    self._schreiben(b'event: ping\ndata: {"type": "ping"}\n\n')
+            if ping:
+                self._schreiben(b"\n\n".join(alles[1:]))
+                self._schreiben(b"")
+        except OSError:
+            return
+        self.close_connection = True
+
+
+def test_echter_client_abbruch():
+    """Mit dem echten SDK-Client (anthropic 1.17.0) gegen einen lokalen SSE-Server, der nach message_start schweigt:
+    Abbrechen und die Zeitgrenze beenden den Lauf sofort – der Puls erreicht den Socket über das SDK und weckt das
+    blockierte recv mit shutdown() (vorher erst, wenn der Server schloss). Der Zwischenstand aus message_start zählt
+    („mindestens“). Mit ping alle 0,2 s steht im Protokoll ein größter Abstand unter 1 s – gemessen an den rohen
+    Ereignissen, denn das SDK reicht ping nicht durch."""
+    import anthropic
+
+    from app import ki
+    httpd = ThreadingHTTPServer(("127.0.0.1", 0), _StummeApi)
+    httpd.daemon_threads = True
+    threading.Thread(target=httpd.serve_forever, daemon=True).start()
+    basis = f"http://127.0.0.1:{httpd.server_address[1]}"
+    alt_client, alt_puls, alt_grenze = ki.CLIENT, ki.PULS_SEK, ki.ARTEN["mat_recherche"]["gesamt_sek"]
+    ki.CLIENT = lambda: anthropic.Anthropic(api_key=SCHLUESSEL, base_url=basis, max_retries=0)
+    ki.PULS_SEK = 0.05
+    protokoll = []
+
+    class Fang(logging.Handler):
+        def emit(self, record):
+            protokoll.append(record.getMessage())
+    fang = Fang()
+    logger = logging.getLogger("app.ki")
+    alt_stufe = logger.level
+    logger.setLevel(logging.INFO)
+    logger.addHandler(fang)
+    with tempfile.TemporaryDirectory() as tmp:
+        app = app_mit_schluessel(tmp)
+        ctx = im_kontext(app)
+        try:
+            _StummeApi.modus.update(ping=None, schliessen_nach=6.0)
+            for weg in ("abbrechen", "zeitgrenze"):
+                ki.ARTEN["mat_recherche"]["gesamt_sek"] = 0.6 if weg == "zeitgrenze" else alt_grenze
+                vorher = _StummeApi.modus["anfragen"]
+                t0 = time.monotonic()
+                z = ki.starten("mat_recherche", "mat_meldung:1", {}, gespraech_arbeit(anfrage()))
+                for _ in range(300):
+                    if _StummeApi.modus["anfragen"] > vorher:
+                        break
+                    time.sleep(0.01)
+                time.sleep(0.3)
+                if weg == "abbrechen":
+                    assert ki.abbrechen(z["id"])
+                assert ki.warten(z["id"], 10), weg
+                dauer = time.monotonic() - t0
+                z = ki.zeile(z["id"])
+                assert z["status"] == "abgebrochen" and dauer < 3.0, (weg, dauer, dict(z))
+                assert ("Zeitgrenze" in z["fehler"]) == (weg == "zeitgrenze"), z["fehler"]
+                usage = json.loads(z["usage_json"])
+                assert usage and usage[-1]["unvollstaendig"] and usage[-1]["eingabe"] == 123_000, usage
+            ki.ARTEN["mat_recherche"]["gesamt_sek"] = alt_grenze
+            # Mit ping: Der Lauf endet normal; der größte Abstand liegt bei den 0,2 s der pings, nicht bei 1 s.
+            _StummeApi.modus.update(ping=0.2, schliessen_nach=1.0)
+            protokoll.clear()
+            z = lauf_starten(gespraech_arbeit(anfrage()))
+            assert z["status"] == "fertig", dict(z)
+            zeile_log = [p for p in protokoll if "größter Abstand" in p]
+            assert len(zeile_log) == 1, protokoll
+            import re
+            abstand = float(re.search(r"Streams ([\d.]+) s", zeile_log[0]).group(1))
+            assert abstand < 0.8, zeile_log
+        finally:
+            ctx.pop()
+            logger.removeHandler(fang)
+            logger.setLevel(alt_stufe)
+            ki.CLIENT, ki.PULS_SEK = alt_client, alt_puls
+            ki.ARTEN["mat_recherche"]["gesamt_sek"] = alt_grenze
+            httpd.shutdown()
+            httpd.server_close()
+    print("Echter SDK-Client: Abbruch, Zeitgrenze und Abstand der Ereignisse bestanden.")
+
+
 def test_konto_leeren_statisch():
     """Kontolöschung setzt den Namen, Leeren entfernt Inhalt und Ordner (die Zeile bleibt), der Schlüssel kommt nur
     aus der Umgebung und nur in app/ki.py vor."""
@@ -737,4 +906,5 @@ if __name__ == "__main__":
     test_gespraech()
     test_abbruch_und_tote()
     test_echter_client_und_fehlerkette()
+    test_echter_client_abbruch()
     test_konto_leeren_statisch()

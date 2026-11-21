@@ -124,9 +124,11 @@ class Server:
 
 def netz_einsetzen(server, privat=None):
     """Auflöser (alle Testnamen → 127.0.0.1, ausgewählte auf private Adressen), Zulassung nur für 127.0.0.1 (sonst die
-    echte Regel) und ein TLS-Kontext, der dem Testzertifikat traut. Liefert den alten Stand."""
+    echte Regel), ein TLS-Kontext, der dem Testzertifikat traut, und der Port des Servers neben 443. Liefert den alten
+    Stand."""
     from app.material.services import recherche_netz as netz
-    alt = (netz.AUFLOESER, netz.ADRESSE_ERLAUBT, netz.KONTEXT)
+    alt = (netz.AUFLOESER, netz.ADRESSE_ERLAUBT, netz.KONTEXT, netz.PORTE)
+    netz.PORTE = (443, server.port)
     privat = privat or {"intern.hersteller.test": "10.0.0.5", "privat.hersteller.test": "192.168.1.2",
                         "linklocal.hersteller.test": "169.254.169.254"}
 
@@ -141,7 +143,7 @@ def netz_einsetzen(server, privat=None):
 
 def netz_zurueck(alt):
     from app.material.services import recherche_netz as netz
-    netz.AUFLOESER, netz.ADRESSE_ERLAUBT, netz.KONTEXT = alt
+    netz.AUFLOESER, netz.ADRESSE_ERLAUBT, netz.KONTEXT, netz.PORTE = alt
 
 
 PDF_A = pdf("Gebrauchsanleitung")
@@ -373,8 +375,19 @@ def pruefung_antwort(url, server):
     return json.dumps(basis)
 
 
+def abruf(server, kennung, pfad, host="hersteller.test"):
+    """Ein web_fetch mit Ergebnis (Server-Werkzeug) – die Seite gilt danach als abgerufen."""
+    url = server.url(host, pfad)
+    return [{"type": "server_tool_use", "id": kennung, "name": "web_fetch", "input": {"url": url}},
+            {"type": "web_fetch_tool_result", "tool_use_id": kennung, "content": {
+                "type": "web_fetch_result", "url": url, "retrieved_at": "2026-11-21T10:00:00Z",
+                "content": {"type": "document", "source": {"type": "text", "media_type": "text/plain",
+                                                           "data": "Produktseite (Platzhalter)"}}}}]
+
+
 def antworter(server, kategorie_id, stand):
-    """Aufruf 1: erst ein Schemaverstoß (mit Websuche davor), dann das Ergebnis; Aufruf 2 je PDF nach Adresse."""
+    """Aufruf 1: erst ein Schemaverstoß (mit Websuche und Abruf der Produktseite davor), dann das Ergebnis; Aufruf 2 je
+    PDF nach Adresse."""
     def antwort(anfrage, nr):
         if (anfrage.get("output_config") or {}).get("format"):
             frage = anfrage["messages"][0]["content"][-1]["text"]
@@ -387,6 +400,7 @@ def antworter(server, kategorie_id, stand):
                 {"type": "server_tool_use", "id": "srvtoolu_1", "name": "web_search", "input": {"query": "Probe"}},
                 {"type": "web_search_tool_result", "tool_use_id": "srvtoolu_1",
                  "content": {"type": "web_search_tool_result_error", "error_code": "unavailable"}},
+                *abruf(server, "srvtoolu_2", "/produkt"),
                 werkzeug("ergebnis_abgeben", {"gemeinsam": {}, "ausfuehrungen": []}, "toolu_1")], stop="tool_use",
                 usage={"input_tokens": 20000, "output_tokens": 3000,
                        "server_tool_use": {"web_search_requests": 1, "web_fetch_requests": 0}})

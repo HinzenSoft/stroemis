@@ -69,6 +69,8 @@ DOKUMENTARTEN = ("gebrauchsanleitung", "konformitaetserklaerung", "pruefanweisun
 PHASEN = {"recherche": "Recherche läuft", "dateien": "Dateien werden geladen", "pruefen": "Dateien werden geprüft",
           "zusammenfuehren": "Vorschlag wird zusammengestellt"}
 KEIN_LAUF = "Zu dieser Meldung gibt es keine Recherche."
+NICHT_SICHER = "Dokument nicht sicher zugeordnet"
+NICHT_ABGERUFEN = "Seite im Gespräch nicht abgerufen"
 NACHFRAGE = ("Bitte gib das Ergebnis jetzt mit dem Werkzeug ergebnis_abgeben ab – auch wenn wenig belegt ist (dann "
              "Werte null mit Beleg-Art nicht_belegt und ein Hinweis).")
 AN_ANTHROPIC = ("An Anthropic (Claude API) gehen Hersteller, Modell, Artikelnummer, Norm und Kategorie-Vorschlag der "
@@ -272,8 +274,8 @@ class _Pruefer:
             if pflicht:
                 self.fehler.append(f"{wo}: Adresse fehlt")
             return ""
-        if not re.match(r"^https?://[^\s/]+", v) or re.search(r"\s", v):
-            self.fehler.append(f"{wo}: keine http(s)-Adresse")
+        if not re.match(r"^https?://[^\s/]+", v) or not netz.sauber(v):
+            self.fehler.append(f"{wo}: keine http(s)-Adresse (ohne Zugangsdaten, Leer- und Steuerzeichen, Backslash)")
             return ""
         return v
 
@@ -293,7 +295,8 @@ class _Pruefer:
                 self.fehler.append(f"{wo}.wert: ganze Zahl (1 bis 600) oder null erwartet")
                 w = None
         elif art == "materialart":
-            if w is not None and w not in MATERIALARTEN:
+            # Erst der Typ: eine Liste oder ein Objekt als Schlüssel des dict wäre ein TypeError (Befund 3).
+            if w is not None and (not isinstance(w, str) or w not in MATERIALARTEN):
                 self.fehler.append(f"{wo}.wert: eine von {list(MATERIALARTEN)} oder null")
                 w = None
         elif art == "liste":
@@ -331,6 +334,13 @@ class _Pruefer:
                         "sprache": self.text(f"{w}.sprache", d.get("sprache"), 40),
                         "quelle_url": self.adresse(f"{w}.quelle_url", d.get("quelle_url"))})
         return out
+
+
+def _liste(v):
+    """Hinweise und Rückfragen: eine Liste – ein einzelner Text ist eine Zeile (nicht jedes Zeichen eine)."""
+    if isinstance(v, str):
+        return [v]
+    return v if isinstance(v, list) else []
 
 
 def ergebnis_pruefen(e):
@@ -393,8 +403,8 @@ def ergebnis_pruefen(e):
                                                                if d["url"]}
     if len(urls) > MAX_DOKUMENTE:
         p.fehler.append(f"dokumente: zusammen höchstens {MAX_DOKUMENTE} verschiedene Dokumente")
-    hinweise = [p.text("hinweise", x, 1000) for x in (e.get("hinweise") or []) if isinstance(x, str)][:30]
-    rueck = [p.text("rueckfragen", x, 1000) for x in (e.get("rueckfragen") or []) if isinstance(x, str)][:30]
+    hinweise = [p.text("hinweise", x, 1000) for x in _liste(e.get("hinweise")) if isinstance(x, str)][:30]
+    rueck = [p.text("rueckfragen", x, 1000) for x in _liste(e.get("rueckfragen")) if isinstance(x, str)][:30]
     for feld in set(e) - {"gemeinsam", "ausfuehrungen", "hinweise", "rueckfragen"}:
         p.fehler.append(f"{feld}: unbekanntes Feld")
     return {"gemeinsam": gem, "ausfuehrungen": aus, "hinweise": [h for h in hinweise if h],
@@ -420,19 +430,22 @@ def _schluessel(hersteller):
 
 def domains_vorschlag(m):
     """Vorbelegung für den Startdialog (E1 A): Domains der letzten Recherche zum selben Hersteller, dann Hosts der Links
-    der Meldung, in denen der Herstellername steckt. Höchstens DOMAINS_MAX."""
-    out = []
+    der Meldung, in denen der Herstellername steckt (gemeinsame Endungen wie github.io nie – domain_lesen). Höchstens
+    DOMAINS_MAX → (Domains, die davon aus einem Link der Meldung stammen)."""
+    out, aus_links = [], []
     schl = _schluessel(m["manufacturer"])
     r = db.query("SELECT eingabe_json FROM ki_laeufe WHERE art = ? AND json_extract(eingabe_json, '$.hersteller_schluessel')"
                  " = ? ORDER BY id DESC LIMIT 1", (ART, schl), one=True) if schl else None
     for d in (ki.json_lesen(r["eingabe_json"], {}) or {}).get("domains", []) if r else []:
-        if d not in out:
+        if d not in out and netz.domain_lesen(d) == d:
             out.append(d)
     for link in json.loads(m["links_json"] or "[]"):
         d = netz.domain_lesen(_host(link))
         if d and schl and len(schl) >= 3 and schl in re.sub(r"[\W_]+", "", d.casefold()) and d not in out:
             out.append(d)
-    return out[:DOMAINS_MAX]
+            aus_links.append(d)
+    out = out[:DOMAINS_MAX]
+    return out, [d for d in aus_links if d in out]
 
 
 def domains_lesen(d):
@@ -443,6 +456,9 @@ def domains_lesen(d):
         raise Abgelehnt("„Herstellerseite“: bitte 1 bis 3 Domains angeben (etwa hersteller.de).")
     out = []
     for x in roh:
+        if netz.gemeinsam(x):
+            raise Abgelehnt(f"„{x[:80]}“ ist eine gemeinsame Endung vieler fremder Seiten – bitte die Domain des "
+                            "Herstellers angeben (etwa hersteller.de).")
         dom = netz.domain_lesen(x)
         if not dom:
             raise Abgelehnt(f"„{x[:80]}“ ist keine Domain (etwa hersteller.de).")
@@ -458,8 +474,10 @@ def _fotos(m):
 
 
 def startdaten(m):
-    """Was der Startdialog zeigt: Vorschlag der Domains, Zahl der Fotos, Bemerkung (zur Kontrolle), Links, Hinweis."""
-    return {"domains": domains_vorschlag(m), "fotos": len(_fotos(m)), "bemerkung": m["note"] or "",
+    """Was der Startdialog zeigt: Vorschlag der Domains (und welche davon aus einem Link der Meldung stammen – der
+    Melder kann sie beliebig gesetzt haben), Zahl der Fotos, Bemerkung (zur Kontrolle), Links, Hinweis."""
+    domains, aus_links = domains_vorschlag(m)
+    return {"domains": domains, "domains_aus_links": aus_links, "fotos": len(_fotos(m)), "bemerkung": m["note"] or "",
             "links": [_link_ohne_abfrage(x) for x in json.loads(m["links_json"] or "[]")],
             "datenschutz": AN_ANTHROPIC}
 
@@ -525,6 +543,12 @@ def starten(mid, d):
             journal.eintragen("recherche", mid, "recherche_gestartet", None,
                               {"domains": domains, "fotos": len(eingabe["fotos"]), "bemerkung_mit": eingabe["bemerkung"],
                                "ki_modell": ki.MODELL, "effort": EFFORT, "ki_lauf": z["id"]})
+        # Wettlauf mit Erledigen/Ablehnen (Prüfung Ablauf vom 21.11.2026, Befund 4): Wer die Meldung zwischen der
+        # Prüfung oben und dem Anlegen der Zeile erledigt hat, fand noch keinen Lauf zum Abbrechen – jetzt steht die
+        # Zeile, also hier noch einmal lesen. Wer danach erledigt, findet sie (meldung_erledigt).
+        m_jetzt = db.query("SELECT status FROM mat_product_request WHERE id = ?", (mid,), one=True)
+        if not m_jetzt or m_jetzt["status"] != "offen":
+            ki.abbrechen(z["id"])
     try:
         return ki.starten(ART, bezug(mid), eingabe, partial(_arbeit, mid), effort=EFFORT, beendet=_beendet,
                        mit_ordner=True, vor_start=vor_start)
@@ -579,13 +603,16 @@ def _nachricht(lauf):
 
 
 def _foto_block(datei):
-    """Die Web-Fassung eines Meldungsfotos, noch einmal ohne Metadaten gespeichert (EXIF-frei) – als Bildblock."""
+    """Die Web-Fassung eines Meldungsfotos, noch einmal ohne Metadaten gespeichert – ohne EXIF, XMP, ICC und auch ohne
+    den JPEG-Kommentar (Pillow schriebe info["comment"] mit; Befund 5) – als Bildblock."""
     from PIL import Image
     pfad = os.path.join(katalog.medien_dir(), "web", os.path.splitext(os.path.basename(datei))[0] + ".jpg")
     try:
         with Image.open(pfad) as bild:
             puffer = io.BytesIO()
-            bild.convert("RGB").save(puffer, "JPEG", quality=85)
+            rgb = bild.convert("RGB")
+            rgb.info = {}
+            rgb.save(puffer, "JPEG", quality=85)
     except OSError:
         return None
     return {"type": "image", "source": {"type": "base64", "media_type": "image/jpeg",
@@ -611,7 +638,11 @@ def _recherche(lauf):
     stand = {"ergebnis": None, "verstoesse": 0}
 
     def abgeben(eingabe):
-        ergebnis, fehler = ergebnis_pruefen(eingabe)
+        try:
+            ergebnis, fehler = ergebnis_pruefen(eingabe)
+        except Exception:                           # noqa: BLE001 – zählt als Verstoß (Befund 3)
+            current_app.logger.exception("Recherche %s: Eingabe von ergebnis_abgeben nicht lesbar", lauf.id)
+            ergebnis, fehler = None, ["Eingabe nicht lesbar – bitte genau nach dem Schema abgeben."]
         if not fehler:
             stand["ergebnis"] = ergebnis
             return ki.Antwort("Ergebnis angenommen.", ende=True)
@@ -620,10 +651,50 @@ def _recherche(lauf):
             raise ki.LaufFehler("Das Ergebnis entsprach auch nach zwei Korrekturen nicht dem Schema.")
         return ki.Antwort(json.dumps({"fehler": fehler[:40]}, ensure_ascii=False), fehler=True)
 
-    lauf.gespraech(_anfrage_recherche(lauf), {"ergebnis_abgeben": abgeben}, nachfrage=NACHFRAGE)
+    anfrage = _anfrage_recherche(lauf)
+    lauf.gespraech(anfrage, {"ergebnis_abgeben": abgeben}, nachfrage=NACHFRAGE)
     if stand["ergebnis"] is None:
         raise ki.LaufFehler("Claude hat kein Ergebnis abgegeben.")
-    return stand["ergebnis"]
+    # Welche Seiten Claude wirklich gelesen hat – nur deren Werte können „hersteller“ bzw. „webarchiv“ sein.
+    return dict(stand["ergebnis"], abgerufen=sorted(abgerufen(anfrage["messages"])))
+
+
+def _teil(b, k):
+    return b.get(k) if isinstance(b, dict) else getattr(b, k, None)
+
+
+def adresse_schluessel(url):
+    """Eine Adresse zum Vergleichen: Schema und Host klein, ohne Anker und abschließenden Schrägstrich."""
+    try:
+        t = urlsplit(url.strip())
+        port = t.port
+    except (ValueError, AttributeError):
+        return ""
+    return (f"{t.scheme.lower()}://{(t.hostname or '').lower()}{f':{port}' if port else ''}{t.path.rstrip('/')}"
+            + (f"?{t.query}" if t.query else ""))
+
+
+def abgerufen(nachrichten):
+    """Die Adressen, die Claude im Gespräch mit web_fetch wirklich gelesen hat: je Ergebnisblock ohne Fehler die
+    Adresse des Ergebnisses und die des Aufrufs (Hinweis 1 der Prüfungen vom 21.11.2026). Suchtreffer zählen nicht –
+    von ihnen kennt Claude nur einen Ausschnitt."""
+    aufrufe, out = {}, set()
+    for n in nachrichten:
+        if _teil(n, "role") != "assistant" or not isinstance(_teil(n, "content"), list):
+            continue
+        for b in _teil(n, "content"):
+            typ = _teil(b, "type")
+            if typ == "server_tool_use" and _teil(b, "name") == "web_fetch":
+                aufrufe[_teil(b, "id")] = (_teil(b, "input") or {}).get("url") \
+                    if isinstance(_teil(b, "input"), dict) else None
+            elif typ == "web_fetch_tool_result":
+                inhalt = _teil(b, "content")
+                if _teil(inhalt, "type") != "web_fetch_result":
+                    continue
+                for u in (_teil(inhalt, "url"), aufrufe.get(_teil(b, "tool_use_id"))):
+                    if isinstance(u, str) and adresse_schluessel(u):
+                        out.add(adresse_schluessel(u))
+    return out
 
 
 def _dateiliste(ergebnis):
@@ -664,7 +735,8 @@ def _laden(lauf, dateien):
         e["stand"] = netz.archiv_stand(a[0]) if a and e["quelle"] == "webarchiv" else None
         try:
             frist = time.monotonic() + netz.GESAMT_SEK
-            e["datei"] = netz.herunterladen(e["url"], domains, lauf.ordner, bild=e["bild"], frist=frist)._asdict()
+            e["datei"] = netz.herunterladen(e["url"], domains, lauf.ordner, bild=e["bild"], frist=frist,
+                                            pruefen=lauf.pruefen, merken=lauf.download_merken)._asdict()
             e["fehler"] = ""
         except netz.Fehler as exc:
             e["datei"], e["fehler"] = None, str(exc)
@@ -744,20 +816,36 @@ def _pruefen(lauf, ergebnis, dateien):
                 "messages": [{"role": "user", "content": inhalt + [{"type": "text", "text": frage}]}],
             }
             msg = lauf.gespraech(anfrage, runden=3)
-            text = next((b.text for b in msg.content if getattr(b, "type", None) == "text"), "")
-            e["pruefung"] = pruefung_lesen(json.loads(text), nummern)
+            e["pruefung"] = pruefung_lesen(_pruef_json(msg), nummern)
             e["pruefung_fehler"] = ""
         except ki.Abgebrochen:
             raise
         except ki.LaufFehler as exc:
             e["pruefung"], e["pruefung_fehler"] = None, str(exc)
-        except (ValueError, KeyError, TypeError):
+        except (ValueError, KeyError, TypeError, AttributeError):
             e["pruefung"], e["pruefung_fehler"] = None, "Die Antwort der Prüfung ließ sich nicht lesen."
         except Exception as exc:                    # noqa: BLE001 – Fehler des SDK nur für diese Datei
             lauf.pruefen()
             e["pruefung"], e["pruefung_fehler"] = None, ki.fehlertext(exc, lauf.id)
         for gleich in je_sha[e["datei"]["sha256"]][1:]:
             gleich["pruefung"], gleich["pruefung_fehler"] = e["pruefung"], e["pruefung_fehler"]
+
+
+def _pruef_json(msg):
+    """Das JSON der Dokumentprüfung aus einer Antwort. Wich sie mitten in der Ausgabe auf das Ausweichmodell aus, steht
+    vorn die abgebrochene Teilausgabe, dann der fallback-Block, dann die Antwort des Ausweichmodells (Befund 1 der
+    Prüfung Ablauf): zuerst der Text nach dem Block, hilfsweise Teil und Rest zusammen (der Teil geht dem
+    Ausweichmodell als Anfang zu). Wirft ValueError."""
+    def text(bloecke):
+        return "".join(getattr(b, "text", "") or "" for b in bloecke if getattr(b, "type", None) == "text")
+    for kandidat in (text(ki.gueltig(msg)), text(msg.content or [])):
+        try:
+            p = json.loads(kandidat)
+        except ValueError:
+            continue
+        if isinstance(p, dict):
+            return p
+    raise ValueError("keine lesbare Prüfung")
 
 
 def pruefung_lesen(p, nummern):
@@ -828,26 +916,48 @@ def _beendet(lauf, status):
         nachher["dateien"] = sum(1 for f in v["dateien"] if f.get("datei"))
     elif z and z["fehler"]:
         nachher["grund"] = z["fehler"]
+    # Ohne angemeldetes Konto (es wurde während des Laufs gelöscht, ki._ausfuehren) steht der Eintrag ohne Kennung da.
     with db.transaction():
-        journal.eintragen("recherche", mid, "recherche_beendet", None, nachher)
+        journal.eintragen("recherche", mid, "recherche_beendet", None, nachher,
+                          name=z["gestartet_von_name"] if z else None)
+
+
+def _tot(z):
+    """Nach tote_aufraeumen (Neustart, Deploy): „Recherche beendet“ im Journal nachtragen – im Namen dessen, der
+    gestartet hat, nicht dessen, dessen Anfrage gerade aufräumt."""
+    mid = _mid(z["bezug"]) if z else None
+    if not mid or not db.query("SELECT 1 FROM mat_product_request WHERE id = ?", (mid,), one=True):
+        return
+    with db.transaction():
+        journal.eintragen("recherche", mid, "recherche_beendet", None,
+                          {"status": z["status"], "ki_lauf": z["id"], "grund": z["fehler"]},
+                          fuer=(z["gestartet_von"], z["gestartet_von_name"] or "System"))
+
+
+ki.bei_tod(ART, _tot)
 
 
 # --- Zusammenführen --------------------------------------------------------------------------------------------------
 
-def _feld(wert, b, domains, vermerk="", vorbelegen=True):
+def _feld(wert, b, domains, vermerk="", vorbelegen=True, gelesen=None):
     """Ein Feld des Vorschlags. Die Beleg-Art entscheidet der Server nach der Adresse – eine Angabe von Claude zählt
-    nur nach unten (eine Händlerseite wird nie „hersteller“). Nur Werte vom Hersteller oder aus seinem Archivstand
-    werden vorbelegt."""
+    nur nach unten (eine Händlerseite wird nie „hersteller“). „hersteller“ bzw. „webarchiv“ nur, wenn Claude die Seite
+    im Gespräch wirklich abgerufen hat oder sie eine geladene Datei ist (gelesen: Schlüssel dieser Adressen; None: nicht
+    geprüft) – sonst höchstens „nur_identifikation“. Nur Werte vom Hersteller oder aus seinem Archivstand werden
+    vorbelegt."""
     b = b or {}
     q = netz.quelle(b.get("quelle_url"), domains) if b.get("quelle_url") else None
     angabe = b.get("beleg", "nicht_belegt")
+    vermerke = [vermerk] if vermerk else []
     if wert is None or wert == "" or wert == [] or angabe == "nicht_belegt":
         art = "nicht_belegt"
     elif angabe == "nur_identifikation" or q in (None, "fremd"):
         art = "nur_identifikation"
+    elif gelesen is not None and adresse_schluessel(b["quelle_url"]) not in gelesen:
+        art = "nur_identifikation"
+        vermerke.append(NICHT_ABGERUFEN)
     else:
         art = q
-    vermerke = [vermerk] if vermerk else []
     if art == "webarchiv":
         a = netz.archiv_original(b.get("quelle_url"))
         vermerke.append(f"Webarchiv, Stand {netz.archiv_stand(a[0])}" if a else "Webarchiv")
@@ -862,15 +972,18 @@ def _fest(wert, vermerk, beleg="einordnung"):
             "zitat": "", "vermerk": vermerk}
 
 
-def _doc_feld(wert, f, stelle, vermerk=""):
-    """Ein Feld aus einem geprüften Dokument des Herstellers (Aufruf 2)."""
+def _doc_feld(wert, f, stelle, vermerk="", sicher=True):
+    """Ein Feld aus einem geprüften Dokument des Herstellers (Aufruf 2). sicher=False: Die Prüfung ordnete das Dokument
+    nicht sicher zu („unklar“) – dann mit Fundstelle und Vermerk, aber nicht vorbelegt (Befund 2 der Prüfung Ablauf)."""
     seite = stelle.get("seite")
     fundstelle = f"{f['titel']}" + (f", Version {f['pruefung']['version']}" if f["pruefung"].get("version") else "") \
         + (f", S. {seite}" if seite else "")
     vermerke = [vermerk] if vermerk else []
     if f["quelle"] == "webarchiv":
         vermerke.append(f"Webarchiv, Stand {f['stand']}")
-    return {"wert": wert, "vorbelegt": True, "beleg": f["quelle"], "quelle_url": f["url"], "fundstelle": fundstelle,
+    if not sicher:
+        vermerke.append(NICHT_SICHER)
+    return {"wert": wert, "vorbelegt": sicher, "beleg": f["quelle"], "quelle_url": f["url"], "fundstelle": fundstelle,
             "zitat": stelle.get("zitat") or "", "vermerk": "; ".join(vermerke)}
 
 
@@ -938,16 +1051,26 @@ def _quelle_text(f, stelle):
     return (voll, False) if len(voll) <= QUELLE_MAX else (kopf[:QUELLE_MAX], True)
 
 
-def _lebensdauer(material, hersteller, docs, f1, hinweise):
+def _lebensdauer(material, hersteller, docs, f1, hinweise, unklar=()):
     """(lifetime_years, lifetime_source) nach den Katalogregeln: textil min(Herstellerzahl, 10), ohne Zahl 10 mit
-    Vermerk, Edelrid überall 10; Metall leer; sonstiges nur mit Herstellerangabe."""
+    Vermerk, Edelrid überall 10; Metall leer; sonstiges nur mit Herstellerangabe. docs: Dokumente, die laut Prüfung
+    sicher dazugehören; unklar: solche, bei denen das offen ist – deren Zahl steht nur ohne Vorbelegung da (statt der 10
+    nach Katalogregel: Die Zahl könnte die eines anderen Modells sein, der Mensch entscheidet)."""
     zahl = None
     for f in docs:
         if f["pruefung"]["lebensdauer"]["jahre"]:
             zahl = (f["pruefung"]["lebensdauer"]["jahre"], f)
             break
+    unsicher = next(((f["pruefung"]["lebensdauer"]["jahre"], f) for f in unklar
+                     if f["pruefung"]["lebensdauer"]["jahre"]), None)
     if material == "metall_hardware":
         return (_fest(None, "Metall: keine Lebensdauer (Katalogregel)"), _fest("", ""))
+    lj_u = quelle_u = None
+    if unsicher:
+        jahre_u, fu = unsicher
+        stelle_u = fu["pruefung"]["lebensdauer"]
+        lj_u = _doc_feld(jahre_u, fu, stelle_u, sicher=False)
+        quelle_u = _doc_feld(_quelle_text(fu, stelle_u)[0], fu, stelle_u, sicher=False)
     if zahl:
         jahre, f = zahl
         stelle = f["pruefung"]["lebensdauer"]
@@ -967,7 +1090,13 @@ def _lebensdauer(material, hersteller, docs, f1, hinweise):
     if material == "textil":
         if katalog._einheitlich(hersteller) == "edelrid":
             return (_fest(LEBENSDAUER_MAX, "Edelrid: überall 10 Jahre (Katalogregel)", lj["beleg"] if jahre else "einordnung"),
-                    quelle_feld if jahre else _fest("", ""))
+                    quelle_feld if jahre else quelle_u or _fest("", ""))
+        if jahre is None and lj_u:
+            jahre_u = lj_u["wert"]
+            if jahre_u > LEBENSDAUER_MAX:
+                lj_u = dict(lj_u, wert=LEBENSDAUER_MAX, vermerk=f"Hersteller: {jahre_u} Jahre – höchstens 10 "
+                                                                 f"(Katalogregel); {lj_u['vermerk']}")
+            return (lj_u, quelle_u)
         if jahre is None:
             return (_fest(LEBENSDAUER_MAX, "keine Herstellerangabe – 10 Jahre nach Katalogregel"), _fest("", ""))
         if jahre > LEBENSDAUER_MAX:
@@ -975,17 +1104,25 @@ def _lebensdauer(material, hersteller, docs, f1, hinweise):
                     quelle_feld)
         return (dict(lj, wert=jahre), quelle_feld)
     # sonstiges (oder unbekannt): nur mit Herstellerangabe
+    if jahre is None and lj_u:
+        return (lj_u, quelle_u)
     if jahre is None:
         return (_fest(None, "keine Herstellerangabe"), _fest("", ""))
     return (dict(lj, wert=jahre), quelle_feld)
 
 
-def _intervall(docs, f1):
-    for f in docs:
-        s = f["pruefung"]["pruefintervall"]
-        if s["monate"] and s["zitat"]:
-            v = "" if s["monate"] == INTERVALL else f"Hersteller: {s['monate']} Monate – im Katalog überall 12"
-            return _doc_feld(INTERVALL, f, s, v)
+def _intervall(docs, f1, unklar=()):
+    """Das Prüfintervall: im Katalog überall 12, mit dem Zitat des Herstellers (docs: sicher zugeordnete Dokumente,
+    dann die Seite aus der Recherche). Steht es nur in einem Dokument mit Zuordnung „unklar“: mit dessen Fundstelle,
+    aber nicht vorbelegt."""
+    for sicher, liste in ((True, docs), (False, unklar)):
+        if not sicher and f1.get("vorbelegt") and f1.get("zitat"):
+            break
+        for f in liste:
+            s = f["pruefung"]["pruefintervall"]
+            if s["monate"] and s["zitat"]:
+                v = "" if s["monate"] == INTERVALL else f"Hersteller: {s['monate']} Monate – im Katalog überall 12"
+                return _doc_feld(INTERVALL, f, s, v, sicher=sicher)
     if f1.get("vorbelegt") and f1.get("zitat"):
         v = "" if f1["wert"] == INTERVALL else f"Hersteller: {f1['wert']} Monate – im Katalog überall 12"
         return dict(f1, wert=INTERVALL, vermerk="; ".join(x for x in (f1["vermerk"], v) if x))
@@ -1005,8 +1142,16 @@ def _im_katalog(hersteller, modell, nr):
 
 
 def zusammenfuehren(ergebnis, dateien, eingabe, usage=()):
-    """Der Vorschlag aus Recherche, Dateien und Dokumentprüfung – deterministisch, ohne weiteren Aufruf."""
+    """Der Vorschlag aus Recherche, Dateien und Dokumentprüfung – deterministisch, ohne weiteren Aufruf. Kennt das
+    Ergebnis die abgerufenen Seiten (abgerufen, _recherche), zählen als Fundstelle eines Herstellers nur sie und die
+    geladenen Dateien."""
     domains = eingabe["domains"]
+    gelesen = None
+    if ergebnis.get("abgerufen") is not None:
+        gelesen = set(ergebnis["abgerufen"]) | {adresse_schluessel(e["url"]) for e in dateien if e.get("datei")}
+
+    def belegt(wert, b, vermerk=""):
+        return _feld(wert, b, domains, vermerk, gelesen=gelesen)
     m = eingabe["meldung"]
     gem = ergebnis["gemeinsam"]
     hinweise = list(ergebnis["hinweise"])
@@ -1061,10 +1206,10 @@ def zusammenfuehren(ergebnis, dateien, eingabe, usage=()):
 
     aus = []
     for i, a in enumerate(ergebnis["ausfuehrungen"]):
-        nr_feld = _feld(a["artikelnummer"]["wert"], a["artikelnummer"], domains)
+        nr_feld = belegt(a["artikelnummer"]["wert"], a["artikelnummer"])
         if nr_feld["beleg"] == "nur_identifikation":
             nr_feld["vermerk"] = "; ".join(x for x in (nr_feld["vermerk"], "Händlernummern nie als Artikelnummer") if x)
-        bem = _feld(a["bemerkung"]["wert"], a["bemerkung"], domains)
+        bem = belegt(a["bemerkung"]["wert"], a["bemerkung"])
         if bem["wert"] and len(bem["wert"]) > katalog.BESCHREIBUNG_MAX:
             bem.update(vorbelegt=False, vermerk=f"länger als {katalog.BESCHREIBUNG_MAX} Zeichen – bitte kürzen")
         aus.append({"nr": i + 1, "roh": a, "felder": {"article_no": nr_feld, "description": bem}})
@@ -1075,13 +1220,13 @@ def zusammenfuehren(ergebnis, dateien, eingabe, usage=()):
     hersteller_roh = wert_oder(gem["hersteller"], m["hersteller"])
     schreibweise = next((h for h in eingabe["katalog"]["hersteller"]
                          if katalog._einheitlich(h) == katalog._einheitlich(hersteller_roh)), None)
-    hersteller = _feld(schreibweise or hersteller_roh, gem["hersteller"], domains,
-                       "Schreibweise wie im Katalog" if schreibweise else "")
+    hersteller = belegt(schreibweise or hersteller_roh, gem["hersteller"],
+                        "Schreibweise wie im Katalog" if schreibweise else "")
     if schreibweise:
         hersteller["vorbelegt"] = True
     elif not hersteller["vorbelegt"]:
         hersteller = _fest(m["hersteller"], "aus der Meldung", hersteller["beleg"])
-    modell = _feld(gem["modell"]["wert"], gem["modell"], domains)
+    modell = belegt(gem["modell"]["wert"], gem["modell"])
     if not modell["vorbelegt"]:
         modell = _fest(m["modell"], "aus der Meldung", modell["beleg"])
     kats = {k["id"] for k in eingabe["katalog"]["kategorien"]}
@@ -1092,7 +1237,7 @@ def zusammenfuehren(ergebnis, dateien, eingabe, usage=()):
         kategorie = _fest(m["kategorie"]["id"], "Vorschlag des Melders")
     else:
         kategorie = _fest(None, "bitte wählen", "nicht_belegt")
-    mat = _feld(gem["materialart"]["wert"], gem["materialart"], domains)
+    mat = belegt(gem["materialart"]["wert"], gem["materialart"])
     if not mat["vorbelegt"] and gem["materialart"]["wert"]:
         mat = _fest(gem["materialart"]["wert"], "Einordnung der Recherche")
     if not mat["wert"] and kategorie["wert"]:
@@ -1102,27 +1247,34 @@ def zusammenfuehren(ergebnis, dateien, eingabe, usage=()):
     gemeinsam = {"manufacturer": hersteller, "model": modell, "category_id": kategorie, "material_kind": mat}
 
     # Felder, die je Ausführung verschieden sein können: Materialart, Norm, Lebensdauer, Intervall.
-    seite_gem = _feld(gem["normen_seite"]["wert"], gem["normen_seite"], domains)
-    lj_gem = _feld(gem["lebensdauer_jahre"]["wert"], gem["lebensdauer_jahre"], domains)
-    iv_gem = _feld(gem["pruefintervall_monate"]["wert"], gem["pruefintervall_monate"], domains)
+    seite_gem = belegt(gem["normen_seite"]["wert"], gem["normen_seite"])
+    lj_gem = belegt(gem["lebensdauer_jahre"]["wert"], gem["lebensdauer_jahre"])
+    iv_gem = belegt(gem["pruefintervall_monate"]["wert"], gem["pruefintervall_monate"])
     for e in aus:
         i, ab = e["nr"] - 1, e["roh"]["abweichend"]
         nr = e["felder"]["article_no"]["wert"]
         geprueft = [f for f in liste if f.get("pruefung") and f["art"] != "produktbild" and _gilt_fuer(f, i, nr)]
-        erkl = [f for f in geprueft if f["art"] == "konformitaetserklaerung" and f["pruefung"]["passt"] == "ja"]
-        texte = [f for f in geprueft if f["pruefung"]["passt"] != "nein"]
+        # Werte vorbelegen nur aus Dokumenten, die laut Prüfung sicher dazugehören; „unklar“ nur mit Fundstelle und
+        # Vermerk, nicht vorbelegt (Befund 2 der Prüfung Ablauf vom 21.11.2026, Empfehlung).
+        texte = [f for f in geprueft if f["pruefung"]["passt"] == "ja"]
+        unklar = [f for f in geprueft if f["pruefung"]["passt"] == "unklar"]
+        erkl = [f for f in texte if f["art"] == "konformitaetserklaerung"]
         material = mat
         if "materialart" in ab:
-            fm = _feld(ab["materialart"]["wert"], ab["materialart"], domains)
+            fm = belegt(ab["materialart"]["wert"], ab["materialart"])
             if fm["wert"]:
                 material = fm if fm["vorbelegt"] else _fest(fm["wert"], "Einordnung der Recherche")
-        seite = _feld(ab["normen_seite"]["wert"], ab["normen_seite"], domains) if "normen_seite" in ab else seite_gem
+        seite = belegt(ab["normen_seite"]["wert"], ab["normen_seite"]) if "normen_seite" in ab else seite_gem
         ukca_doc = any(f["pruefung"]["ukca"]["genannt"] for f in texte)
-        lj_f1 = _feld(ab["lebensdauer_jahre"]["wert"], ab["lebensdauer_jahre"], domains) \
-            if "lebensdauer_jahre" in ab else lj_gem
-        lj, quelle = _lebensdauer(material["wert"], hersteller["wert"], texte, lj_f1, hinweise)
+        for f in unklar:
+            if f["pruefung"]["ukca"]["genannt"] and not ukca_doc:
+                h = f"„{f['titel']}“ ({NICHT_SICHER.lower()}) nennt UKCA – bitte prüfen."
+                if h not in hinweise:
+                    hinweise.append(h)
+        lj_f1 = belegt(ab["lebensdauer_jahre"]["wert"], ab["lebensdauer_jahre"]) if "lebensdauer_jahre" in ab else lj_gem
+        lj, quelle = _lebensdauer(material["wert"], hersteller["wert"], texte, lj_f1, hinweise, unklar)
         e["felder"].update(material_kind=material, norm=_norm(erkl, seite, ukca_doc, hinweise),
-                           lifetime_years=lj, lifetime_source=quelle, interval_months=_intervall(texte, iv_gem))
+                           lifetime_years=lj, lifetime_source=quelle, interval_months=_intervall(texte, iv_gem, unklar))
         e["im_katalog"] = _im_katalog(hersteller["wert"], modell["wert"], nr)
         e["anlegbar"] = e["im_katalog"] is None
         e["dateien"] = [f["n"] for f in liste if f["art"] != "produktbild" and f["anbieten"] and _gilt_fuer(f, i, nr)]
@@ -1158,8 +1310,9 @@ def status_json(z, voll=False):
            "phase_text": PHASEN.get(z["phase"], "") if z["status"] in ki.LAUFEND else "",
            "fortschritt": z["fortschritt"], "gestartet_am": z["gestartet_am"], "beendet_am": z["beendet_am"],
            "von": z["gestartet_von_name"], "fehler": z["fehler"], "kosten_cent": z["kosten_cent"],
-           "kosten": ki.kosten_text(z["kosten_cent"]), "modell": z["modell"],
-           "ausweichmodell": ki.ausweichmodell(usage)}
+           # „mindestens“: eine Antwort brach mitten im Stream ab, ihr Verbrauch ist nur zum Teil bekannt (Befund 5).
+           "kosten": ki.kosten_text(z["kosten_cent"], ki.unvollstaendig(usage)), "modell": z["modell"],
+           "kosten_unvollstaendig": ki.unvollstaendig(usage), "ausweichmodell": ki.ausweichmodell(usage)}
     erg = None
     if z["status"] == "uebernommen":
         # Für den Satz an der Karte („Aus der Recherche angelegt: …“): die Produkte der Übernahme, die es noch gibt. Die
@@ -1179,7 +1332,19 @@ def status_json(z, voll=False):
         erg = erg if erg is not None else ki.json_lesen(z["ergebnis_json"], {}) or {}
         out["vorschlag"] = erg.get("vorschlag") if z["status"] in ("fertig", "uebernommen") else None
         out["uebernahme"] = erg.get("uebernahme")
+        if out["vorschlag"] and z["status"] == "fertig":
+            _katalog_jetzt(out["vorschlag"])
     return out
+
+
+def _katalog_jetzt(v):
+    """„Steht schon im Katalog“ gilt für den Stand von jetzt, nicht den beim Zusammenführen: Ein inzwischen gelöschtes
+    Produkt lässt sich wieder anlegen, ein inzwischen angelegtes nicht (Befund 3 der Prüfung Ablauf)."""
+    gem = v["gemeinsam"]
+    for a in v["ausfuehrungen"]:
+        a["im_katalog"] = _im_katalog(gem["manufacturer"]["wert"], gem["model"]["wert"],
+                                      a["felder"]["article_no"]["wert"])
+        a["anlegbar"] = a["im_katalog"] is None
 
 
 def moeglich():
@@ -1258,11 +1423,12 @@ def _plan_lesen(d, v):
         gesehen.add(nr)
         a = je_nr[nr]
         daten = {k: gem[k] for k in katalog.PRODUKT_FELDER if k in gem}
+        # Es zählt nur der Katalog von jetzt mit den Werten der Anfrage – nicht „im_katalog“ aus dem Vorschlag (das
+        # Produkt kann inzwischen gelöscht, die Artikelnummer im Dialog korrigiert sein; Befund 3 der Prüfung Ablauf).
         da = _im_katalog(w.get("manufacturer", gem.get("manufacturer")), w.get("model", gem.get("model")),
                          w.get("article_no", a["felder"]["article_no"]["wert"]))
-        if a.get("im_katalog") or da:
-            name = (da or a["im_katalog"])["name"]
-            raise Abgelehnt(f"Ausführung {nr} steht schon im Katalog ({name}) – sie lässt sich nicht anlegen.", 409)
+        if da:
+            raise Abgelehnt(f"Ausführung {nr} steht schon im Katalog ({da['name']}) – sie lässt sich nicht anlegen.", 409)
         daten.update({k: w[k] for k in katalog.PRODUKT_FELDER if k in w})
         dateien = w.get("dateien", [])
         if not isinstance(dateien, list) or any(isinstance(x, bool) or x not in angeboten
@@ -1321,7 +1487,7 @@ def uebernehmen(mid, d):
             "dateien": [f"{DOKUMENT_NAMEN.get(je_n[n]['art'], je_n[n]['art'])}: {je_n[n]['sha256']}"
                         for n in sorted({n for e in ergebnis for n in e["dateien"] + ([e["bild"]] if e["bild"] else [])})]})
     meldung_dienst._melder_benachrichtigen(meldung_dienst.meldung(mid), produkte=pids)
-    return _antwort(mid, z["id"], _anhaengen(z["id"], ergebnis, v))
+    return _antwort(mid, z["id"], _anhaengen(z["id"], ergebnis, v, erg["uebernahme"]["am"]))
 
 
 def nachladen(mid):
@@ -1334,7 +1500,8 @@ def nachladen(mid):
     erg = ki.json_lesen(z["ergebnis_json"], {}) or {}
     if z["status"] != "uebernommen" or not erg.get("uebernahme"):
         raise Abgelehnt("Diese Recherche ist noch nicht übernommen.", 409)
-    return _antwort(mid, z["id"], _anhaengen(z["id"], erg["uebernahme"]["produkte"], erg["vorschlag"]))
+    return _antwort(mid, z["id"], _anhaengen(z["id"], erg["uebernahme"]["produkte"], erg["vorschlag"],
+                                             erg["uebernahme"].get("am") or "9999"))
 
 
 def _antwort(mid, lauf_id, anhaengen):
@@ -1349,10 +1516,13 @@ def _antwort(mid, lauf_id, anhaengen):
             "anhaengen": anhaengen, "recherche": status_json(z)}
 
 
-def _anhaengen(lauf_id, produkte, v):
+def _anhaengen(lauf_id, produkte, v, am):
     """Die gewählten Dateien je Produkt über katalog.dokument_anlegen (Dokumente; derselbe Inhalt liegt nur einmal auf
-    der Platte) bzw. katalog.produkt_bild_setzen (Bild) – dieselben Prüfungen wie ein Upload. Idempotent: gleiche
-    SHA-256 und Art schon am Produkt, ein Bild schon gesetzt → übersprungen. Fehler je Datei, nie für alle."""
+    der Platte) bzw. katalog.produkt_bild_setzen (Bild) – dieselben Prüfungen wie ein Upload. Idempotent, auch bei zwei
+    gleichzeitigen Anfragen (Doppelklick, zweiter Tab): gleiche SHA-256 und Art schon am Produkt – geprüft in der
+    Schreibtransaktion des Einfügens –, ein Bild schon gesetzt → übersprungen. Fehler je Datei, nie für alle. am: Zeit
+    der Übernahme – ein Produkt, das erst danach entstand, ist ein anderes mit wieder vergebener Kennung (SQLite ohne
+    AUTOINCREMENT), wie in status_json."""
     ordner = ki.ordner(lauf_id)
     je_n = {f["n"]: f for f in v["dateien"]}
     out = {"angehaengt": 0, "uebersprungen": 0, "fehler": []}
@@ -1363,7 +1533,7 @@ def _anhaengen(lauf_id, produkte, v):
                               "fehler": text})
 
     for e in produkte:
-        p = db.query("SELECT * FROM mat_product WHERE id = ?", (e["product_id"],), one=True)
+        p = db.query("SELECT * FROM mat_product WHERE id = ? AND created_at <= ?", (e["product_id"], am), one=True)
         if not p:
             fehler(e, None, "Das Produkt gibt es nicht mehr.")
             continue
@@ -1380,17 +1550,19 @@ def _anhaengen(lauf_id, produkte, v):
                 continue
             try:
                 with open(pfad, "rb") as fh:
-                    katalog.dokument_anlegen(p["id"], {"kind": f["art"], "title": f["titel"][:200],
-                                                       "version": (f.get("version") or "")[:40],
-                                                       "valid_from": f.get("gueltig_ab") or heute().isoformat()},
-                                             datei=FileStorage(stream=fh, filename=f["sha256"] + f["endung"]))
-                out["angehaengt"] += 1
+                    neu = katalog.dokument_anlegen(p["id"], {"kind": f["art"], "title": f["titel"][:200],
+                                                             "version": (f.get("version") or "")[:40],
+                                                             "valid_from": f.get("gueltig_ab") or heute().isoformat()},
+                                                   datei=FileStorage(stream=fh, filename=f["sha256"] + f["endung"]),
+                                                   ohne_doppelte=True)
+                out["angehaengt" if neu else "uebersprungen"] += 1
                 da.add((f["sha256"], f["art"]))
             except Abgelehnt as exc:
                 fehler(e, n, str(exc))
         if e.get("bild"):
             n = e["bild"]
-            if p["image"]:
+            # frisch gelesen: Eine gleichzeitige Anfrage kann das Bild eben gesetzt haben.
+            if db.query("SELECT image FROM mat_product WHERE id = ?", (p["id"],), one=True)["image"]:
                 out["uebersprungen"] += 1
                 continue
             pfad = os.path.join(ordner, je_n[n]["sha256"] + je_n[n]["endung"])
@@ -1402,7 +1574,11 @@ def _anhaengen(lauf_id, produkte, v):
                     katalog.produkt_bild_setzen(p["id"], FileStorage(stream=fh, filename="bild" + je_n[n]["endung"]))
                 out["angehaengt"] += 1
             except Abgelehnt as exc:
-                fehler(e, n, str(exc))
+                if exc.code == 409 and db.query("SELECT image FROM mat_product WHERE id = ?", (p["id"],),
+                                                one=True)["image"]:
+                    out["uebersprungen"] += 1            # die andere Anfrage war schneller
+                else:
+                    fehler(e, n, str(exc))
     return out
 
 

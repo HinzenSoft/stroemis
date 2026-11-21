@@ -14,15 +14,18 @@ steht, was für alle gleich ist:
     eindeutiger Index) – und startet einen Daemon-Thread im selben Arbeitsprozess mit App- und Anfragekontext (das
     Journal der Module schreibt mit dem Konto, das gestartet hat). Ein zweiter Thread, der Puls, schreibt alle
     PULS_SEK ein Lebenszeichen und liest das Abbruch-Kennzeichen; ist es gesetzt oder die Zeitgrenze der Art
-    überschritten, schließt er den offenen Stream – der Lauf endet dann „abgebrochen“, auch mitten in einer langen
-    Antwort. Ohne Lebenszeichen seit TOT_NACH Sekunden gilt ein Lauf als tot (Neustart, Deploy): tote_aufraeumen()
-    bei jeder Statusabfrage, jedem Start und im Tageslauf.
+    überschritten, schließt er den offenen Stream und einen offenen Download (download_merken) – mit shutdown() auf dem
+    Socket, denn close() allein weckt ein blockiertes recv nicht –, der Lauf endet dann „abgebrochen“, auch mitten in
+    einer langen Antwort. Ohne Lebenszeichen seit TOT_NACH Sekunden gilt ein Lauf als tot (Neustart, Deploy):
+    tote_aufraeumen() bei jeder Statusabfrage, jedem Start und im Tageslauf; das Modul erfährt es über bei_tod().
   - Die Gesprächsschleife Lauf.gespraech(): streamt jede Antwort (Ereignis-Schleife, dann get_final_message()), hängt
     sie unverändert an (nach einem Ausweichen mitten in der Ausgabe ohne das, was das ablehnende Modell vor dem
     fallback-Block schrieb), setzt nach pause_turn fort (höchstens PAUSEN_MAX), führt eigene Werkzeuge aus (alle Ergebnisse
-    in EINER Nutzernachricht, Fehler als is_error), beendet max_tokens und refusal sauber und hält Grenzen für Runden
-    und Gesamtzeit ein. Verbrauch und Kosten stehen nach jeder Antwort in der Zeile – auch ein abgebrochener Lauf
-    zeigt, was er gekostet hat.
+    in EINER Nutzernachricht, Fehler als is_error; scheitert dasselbe Werkzeug zweimal, endet der Lauf), beendet
+    max_tokens und refusal sauber und hält Grenzen für Runden und Gesamtzeit ein. Verbrauch und Kosten stehen nach jeder
+    Antwort in der Zeile; bricht eine Antwort mitten im Stream ab, zählt ihr Zwischenstand als Zeile „unvollstaendig“ –
+    die Kosten sind dann „mindestens“. Je Lauf steht der größte Abstand zwischen zwei Ereignissen des Streams (rohe
+    Ereignisse samt ping) im Protokoll des Servers – Grundlage, um die Lese-Zeitgrenze später zu senken.
   - Ein Ordner je Lauf für Downloads (DATA_DIR/ki/<Kennung>/, 0700): weg mit dem Lauf, wenn er nicht fertig wird.
 
 Was hinausging, hält eingabe_json fest (Nachweis); das Ergebnis steht in ergebnis_json. Das Modul entscheidet, was davon
@@ -31,6 +34,7 @@ import json
 import logging
 import os
 import shutil
+import socket
 import threading
 import time
 from collections import namedtuple
@@ -70,6 +74,7 @@ GELOESCHT = "(gelöschtes Konto)"
 TOT_TEXT = "Unterbrochen – der Server wurde neu gestartet."
 ZEIT_TEXT = "Abgebrochen nach {} Minuten (Zeitgrenze)."
 UNERWARTET = "Unerwarteter Fehler – Einzelheiten stehen im Protokoll des Servers."
+WERKZEUG_FEHLER_MAX = 2                # so oft darf dasselbe eigene Werkzeug in einem Gespräch scheitern
 
 # Was ein eigenes Werkzeug zurückgibt: der Inhalt für das tool_result, ob es ein Fehler ist (is_error) und ob das
 # Gespräch damit endet (das Ergebnis ist abgegeben).
@@ -77,6 +82,7 @@ Antwort = namedtuple("Antwort", "inhalt fehler ende", defaults=(False, False))
 
 _LAEUFER = {}                          # Kennung → Lauf dieses Arbeitsprozesses, solange sein Thread lebt
 _LAEUFER_SPERRE = threading.Lock()
+_NACH_TOD = {}                         # Art → f(zeile): was das Modul nachträgt, wenn tote_aufraeumen einen Lauf beendet
 
 
 class KiFehler(Exception):
@@ -205,11 +211,16 @@ def kosten_cent(usage_liste):
     return int(round(summe))
 
 
-def kosten_text(cent):
-    """„ca. 1,80 $“ – leer ohne Angabe."""
+def kosten_text(cent, mindestens=False):
+    """„ca. 1,80 $“ – leer ohne Angabe; mindestens: „mindestens ca. 1,80 $“ (eine Antwort brach mitten im Stream ab)."""
     if cent is None:
         return ""
-    return f"ca. {cent // 100},{cent % 100:02d} $"
+    return f"{'mindestens ' if mindestens else ''}ca. {cent // 100},{cent % 100:02d} $"
+
+
+def unvollstaendig(usage_liste):
+    """Fehlt in den Kosten etwas? Ja, wenn eine Antwort mitten im Stream abbrach (ihr Zwischenstand ist nur ein Teil)."""
+    return any(isinstance(z, dict) and z.get("unvollstaendig") for z in usage_liste or ())
 
 
 def ausweichmodell(usage_liste):
@@ -405,7 +416,7 @@ def tote_aufraeumen():
     entfernen. Läufe, deren Thread in diesem Prozess noch lebt, nie. Liefert die Kennungen."""
     grenze_zeit = (datetime.now(timezone.utc) - timedelta(seconds=TOT_NACH)).replace(microsecond=0).isoformat()
     tot = []
-    for r in db.query(f"SELECT id FROM ki_laeufe WHERE status IN ({_in(LAUFEND)}) "
+    for r in db.query(f"SELECT id, art FROM ki_laeufe WHERE status IN ({_in(LAUFEND)}) "
                       "AND COALESCE(lebenszeichen_am, gestartet_am) < ?", (grenze_zeit,)):
         with _LAEUFER_SPERRE:
             if r["id"] in _LAEUFER:
@@ -415,7 +426,19 @@ def tote_aufraeumen():
                              (TOT_TEXT, db.now(), r["id"], grenze_zeit)):
             ordner_entfernen(r["id"])
             tot.append(r["id"])
+            nach = _NACH_TOD.get(r["art"])
+            if nach:
+                try:
+                    nach(zeile(r["id"]))
+                except Exception:                  # noqa: BLE001 – das Aufräumen soll daran nicht scheitern
+                    log.exception("KI-Lauf %s: Nacharbeit nach dem Tod gescheitert", r["id"])
     return tot
+
+
+def bei_tod(art, f):
+    """Ein Modul meldet an, was es nachträgt, wenn tote_aufraeumen einen seiner Läufe beendet (etwa „Recherche beendet“
+    im Journal) – f(zeile) läuft im Kontext dessen, der aufräumt (Anfrage, Start, Tageslauf), nicht im Lauf."""
+    _NACH_TOD[art] = f
 
 
 def aufraeumen():
@@ -470,8 +493,12 @@ class Lauf:
         self._abbruch = threading.Event()
         self._grund = ""
         self._stream = None
+        self._download = None              # Socket eines laufenden Downloads (download_merken)
         self._client = None
         self._sperre = threading.Lock()
+        self.abstand_max = 0.0             # größter Abstand zwischen zwei Ereignissen eines Streams (Sekunden)
+        self.ereignisse = 0
+        self._zuletzt = None
 
     @property
     def ordner(self):
@@ -485,18 +512,30 @@ class Lauf:
     # Abbruch ------------------------------------------------------------------------------------------------
 
     def abbrechen_intern(self, grund):
-        """Von außen (Puls, Abbrechen im selben Prozess): Kennzeichen setzen und einen offenen Stream schließen – das
-        Lesen im Lauf endet dann mit einer Ausnahme, die gespraech() als Abbruch erkennt."""
+        """Von außen (Puls, Abbrechen im selben Prozess): Kennzeichen setzen, einen offenen Stream und einen offenen
+        Download beenden – das Lesen im Lauf endet dann mit einer Ausnahme, die gespraech() bzw. der Download als Abbruch
+        erkennt. Vor close() kommt shutdown() auf den Socket: close() aus einem anderen Thread weckt ein blockiertes recv
+        nicht (Prüfung Sicherheit vom 21.11.2026, Befunde 1 und 2)."""
         with self._sperre:
             if not self._abbruch.wait(0):
                 self._grund = grund
                 self._abbruch.set()
-            stream = self._stream
+            stream, download = self._stream, self._download
+        _socket_beenden(download)
         if stream is not None:
+            _socket_beenden(_stream_socket(stream))
             try:
                 stream.close()
             except Exception:                    # noqa: BLE001 – schließen darf nicht scheitern
                 pass
+
+    def download_merken(self, sock):
+        """Der Socket des Downloads, der gerade läuft (None: keiner) – damit der Puls ihn beenden kann. Kam der Abbruch
+        schon vorher, endet er sofort."""
+        with self._sperre:
+            self._download = sock
+        if sock is not None and self._abbruch.wait(0):
+            _socket_beenden(sock)
 
     def zeit_um(self):
         return time.monotonic() - self._start > self.grenze_sek
@@ -514,10 +553,55 @@ class Lauf:
         db.execute(f"UPDATE ki_laeufe SET status = 'laeuft', phase = ?, fortschritt = ?, lebenszeichen_am = ? "
                    f"WHERE id = ? AND status IN ({_in(LAUFEND)})", (phase, fortschritt, db.now(), self.id))
 
-    def _verbrauch_merken(self, msg):
-        self.usage.append(verbrauch(msg))
+    def _verbrauch_merken(self, msg, unvollstaendig=False):
+        z = verbrauch(msg)
+        if unvollstaendig:
+            z["unvollstaendig"] = True
+        self.usage.append(z)
         db.execute("UPDATE ki_laeufe SET usage_json = ?, kosten_cent = ? WHERE id = ?",
                    (json.dumps(self.usage, ensure_ascii=False), kosten_cent(self.usage), self.id))
+
+    def _teilverbrauch(self, stream):
+        """Eine Antwort brach mitten im Stream ab (Abbruch, Zeitgrenze, unlesbares Werkzeug-JSON, Fehler): Der
+        Zwischenstand des SDK (message_start trägt die Eingabe, message_delta die bisherige Ausgabe) zählt als Zeile
+        „unvollstaendig“ – ohne ihn fehlte gerade die teuerste Runde. Wirft nie."""
+        try:
+            schnappschuss = stream.current_message_snapshot
+        except Exception:                        # noqa: BLE001 – vor message_start gibt es keinen (AssertionError)
+            return
+        if getattr(schnappschuss, "usage", None) is None:
+            return
+        try:
+            self._verbrauch_merken(schnappschuss, unvollstaendig=True)
+        except Exception:                        # noqa: BLE001
+            log.exception("KI-Lauf %s: Zwischenstand des Verbrauchs nicht gespeichert", self.id)
+
+    def _ereignis(self):
+        """Ein Ereignis des Streams ist da: Abstand zum vorigen (bzw. zum Senden der Anfrage) messen."""
+        jetzt = time.monotonic()
+        if self._zuletzt is not None:
+            self.abstand_max = max(self.abstand_max, jetzt - self._zuletzt)
+        self._zuletzt = jetzt
+        self.ereignisse += 1
+
+    def _rohe_ereignisse_messen(self, stream):
+        """Das SDK reicht ping nicht durch (anthropic 1.17.0: _streaming.Stream überspringt sie) – gemessen wird deshalb
+        an den rohen SSE-Ereignissen. Fehlt der Weg (andere Fassung, Attrappe), misst die Ereignis-Schleife. Liefert, ob
+        roh gemessen wird."""
+        roh = getattr(stream, "_raw_stream", None)
+        lesen = getattr(roh, "_iter_events", None)
+        if not callable(lesen):
+            return False
+
+        def gemessen():
+            for sse in lesen():
+                self._ereignis()
+                yield sse
+        try:
+            roh._iter_events = gemessen
+        except Exception:                        # noqa: BLE001 – nur eine Messung
+            return False
+        return True
 
     # Gespräch ------------------------------------------------------------------------------------------------
 
@@ -529,12 +613,17 @@ class Lauf:
         versuche = 0
         while True:
             self.pruefen()
+            stream, fertig = None, False
+            self._zuletzt = time.monotonic()
             try:
                 with self.client().beta.messages.stream(**anfrage) as stream:
                     with self._sperre:
                         self._stream = stream
+                    roh = self._rohe_ereignisse_messen(stream)
                     try:
                         for _ereignis in stream:
+                            if not roh:
+                                self._ereignis()
                             self.pruefen()
                     except ValueError:
                         # Nur der Iterator wirft so bei unlesbarem Werkzeug-JSON – nicht get_final_message.
@@ -544,7 +633,9 @@ class Lauf:
                         if versuche > 2:
                             raise LaufFehler("Die Antwort ließ sich nicht lesen (ungültiges JSON eines Werkzeugs).")
                         continue
-                    return stream.get_final_message()
+                    msg = stream.get_final_message()
+                    fertig = True
+                    return msg
             except (Abgebrochen, LaufFehler):
                 raise
             except Exception:
@@ -555,6 +646,11 @@ class Lauf:
             finally:
                 with self._sperre:
                     self._stream = None
+                if self._zuletzt is not None:               # auch das Schweigen bis zum Abbruch zählt
+                    self.abstand_max = max(self.abstand_max, time.monotonic() - self._zuletzt)
+                    self._zuletzt = None
+                if stream is not None and not fertig:
+                    self._teilverbrauch(stream)
 
     def gespraech(self, anfrage, werkzeuge=None, runden=20, nachfrage=None):
         """Die Gesprächsschleife. anfrage: Parameter für client.beta.messages.stream; anfrage["messages"] wächst mit
@@ -568,6 +664,7 @@ class Lauf:
         werkzeuge = werkzeuge or {}
         pausen = 0
         nachgefragt = False
+        gescheitert = {}
         for _ in range(runden):
             msg = self._streamen(anfrage)
             self._verbrauch_merken(msg)
@@ -589,7 +686,7 @@ class Lauf:
             if grund == "tool_use" and aufrufe:
                 ergebnisse, fertig = [], False
                 for b in aufrufe:
-                    a = self._werkzeug(werkzeuge, b)
+                    a = self._werkzeug(werkzeuge, b, gescheitert)
                     ergebnis = {"type": "tool_result", "tool_use_id": b.id, "content": a.inhalt}
                     if a.fehler:
                         ergebnis["is_error"] = True
@@ -606,17 +703,49 @@ class Lauf:
             return msg
         raise LaufFehler(f"Mehr als {runden} Runden – abgebrochen.")
 
-    def _werkzeug(self, werkzeuge, block):
+    def _werkzeug(self, werkzeuge, block, gescheitert):
+        """Ein eigenes Werkzeug ausführen. Scheitert dasselbe (oder ruft Claude dasselbe unbekannte) zum
+        WERKZEUG_FEHLER_MAX-ten Mal, endet das Gespräch – sonst wiederholte sich Claude bis zur Rundengrenze, und jede
+        Runde schickt den ganzen Verlauf erneut (Prüfung Sicherheit vom 21.11.2026, Befund 3)."""
         f = werkzeuge.get(block.name)
-        if f is None:
-            return Antwort(f"Unbekanntes Werkzeug „{block.name}“.", fehler=True)
         try:
-            return f(block.input)
+            if f is not None:
+                return f(block.input)
         except (Abgebrochen, LaufFehler):
             raise
         except Exception:                        # noqa: BLE001 – ein Fehler im Werkzeug geht als is_error zurück
             log.exception("KI-Lauf %s: Werkzeug %s gescheitert", self.id, block.name)
-            return Antwort("Das Werkzeug ist gescheitert.", fehler=True)
+        gescheitert[block.name] = gescheitert.get(block.name, 0) + 1
+        if gescheitert[block.name] >= WERKZEUG_FEHLER_MAX:
+            raise LaufFehler(f"Das Werkzeug „{str(block.name)[:60]}“ ist {gescheitert[block.name]}-mal gescheitert – "
+                             "abgebrochen.")
+        if f is None:
+            return Antwort(f"Unbekanntes Werkzeug „{block.name}“.", fehler=True)
+        return Antwort("Das Werkzeug ist gescheitert.", fehler=True)
+
+
+def gueltig(msg):
+    """Die Blöcke einer Antwort, die gelten: nach einem Ausweichen mitten in der Ausgabe nur die nach dem letzten
+    fallback-Block (davor schrieb das Modell, das abgelehnt hat), sonst alle."""
+    return _nach_ausweichen(list(getattr(msg, "content", None) or []))[1]
+
+
+def _socket_beenden(sock):
+    """Ein blockiertes recv in einem anderen Thread wecken: shutdown() (close() allein tut das nicht). Wirft nie."""
+    if sock is None:
+        return
+    try:
+        sock.shutdown(socket.SHUT_RDWR)
+    except (OSError, ValueError):
+        pass
+
+
+def _stream_socket(stream):
+    """Der Socket unter einem Stream des SDK (httpx2/httpcore2: response.extensions["network_stream"]) – oder None."""
+    try:
+        return stream.response.extensions["network_stream"].get_extra_info("socket")
+    except Exception:                            # noqa: BLE001 – andere Fassung, Attrappe, HTTP/2
+        return None
 
 
 def _nach_ausweichen(inhalt):
@@ -695,8 +824,19 @@ def _ausfuehren(app, lauf_id, arbeit, beendet):
                 status = _beenden_zeile(lauf_id, status, ergebnis, _schluessel_weg(fehler), lauf.usage)
             except Exception:                      # noqa: BLE001
                 log.exception("KI-Lauf %s: Endstand ließ sich nicht schreiben", lauf_id)
+            if lauf.ereignisse:
+                log.info("KI-Lauf %s: größter Abstand zwischen zwei Ereignissen des Streams %.1f s (%d Ereignisse, "
+                         "Status %s)", lauf_id, lauf.abstand_max, lauf.ereignisse, status)
             if status != "fertig":
                 ordner_entfernen(lauf_id)
+            # Das Konto, das gestartet hat, kann inzwischen gelöscht sein (die Kennung ist dann NULL): Der Eintrag
+            # der Nacharbeit steht dann ohne Kennung da, sonst scheiterte er am Fremdschlüssel des Journals.
+            try:
+                r = zeile(lauf_id)
+                g.user = (db.query("SELECT * FROM users WHERE id = ?", (r["gestartet_von"],), one=True)
+                          if r and r["gestartet_von"] else None)
+            except Exception:                      # noqa: BLE001
+                g.user = None
             if beendet:
                 try:
                     beendet(lauf, status)
