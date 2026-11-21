@@ -1153,7 +1153,9 @@ def status_json(z, voll=False):
     if not z:
         return None
     usage = ki.json_lesen(z["usage_json"], []) or []
-    out = {"id": z["id"], "status": z["status"], "phase": z["phase"], "phase_text": PHASEN.get(z["phase"], ""),
+    # phase bleibt am Ende stehen (wo es scheiterte), der Text dazu nur, solange der Lauf läuft.
+    out = {"id": z["id"], "status": z["status"], "phase": z["phase"],
+           "phase_text": PHASEN.get(z["phase"], "") if z["status"] in ki.LAUFEND else "",
            "fortschritt": z["fortschritt"], "gestartet_am": z["gestartet_am"], "beendet_am": z["beendet_am"],
            "von": z["gestartet_von_name"], "fehler": z["fehler"], "kosten_cent": z["kosten_cent"],
            "kosten": ki.kosten_text(z["kosten_cent"]), "modell": z["modell"],

@@ -759,7 +759,8 @@ def test_rechte_und_wechselwirkungen():
                 assert not dict(b.getexif()) and "exif" not in b.info, b.info
             assert a.anfragen[1]["messages"][-1]["content"].startswith("Bitte gib das Ergebnis")   # einmal nachgefragt
             r = kat.get(f"/api/material/meldungen/{mid2}/recherche")
-            assert r.json["recherche"]["status"] == "fehlgeschlagen" and r.json["recherche"]["vorschlag"] is None
+            assert r.json["recherche"]["status"] == "fehlgeschlagen" and r.json["recherche"]["vorschlag"] is None \
+                and r.json["recherche"]["phase"] == "recherche" and r.json["recherche"]["phase_text"] == ""
             assert r.json["recherche"]["eingabe"]["fotos"] == 1 and r.json["start"]["domains"] == ["hersteller.test"]
             # Kontingent erschöpft: 429 mit Monat und Zahlen.
             os.environ["MATERIAL_RECHERCHE_JE_MONAT"] = "2"
