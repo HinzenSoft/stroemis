@@ -652,6 +652,20 @@ def test_lauf_und_uebernahme():
             # Auch am zweiten Produkt aus derselben Meldung stehen Meldung und Recherche.
             j2 = kat.get(f"/api/material/produkte/{p2['id']}").json["produkt"]["journal"]
             assert {e["entity"] for e in j2} >= {"product", "document", "request", "recherche"}, {e["entity"] for e in j2}
+            # Die Liste nennt die angelegten Produkte (Satz an der Karte, Oberfläche vom 21.11.2026) – ein gelöschtes nicht
+            # mehr, auch wenn SQLite seine Kennung einem neueren Produkt gibt.
+            liste = kat.get("/api/material/meldungen?status=erledigt").json["meldungen"]
+            lauf_kurz = next(x for x in liste if x["id"] == mid)["recherche"]
+            assert [p["id"] for p in lauf_kurz["produkte"]] == [p1["id"], p2["id"]] \
+                and lauf_kurz["produkte"][1]["article_no"] == "PR-2", lauf_kurz
+            assert kat.delete(f"/api/material/produkte/{p2['id']}", headers=H).status_code == 200
+            neu = kat.post("/api/material/produkte", json={"category_id": ids["gurte"], "manufacturer": "Andere",
+                                                            "model": "Platzhalter", "material_kind": "textil",
+                                                            "lifetime_years": 10}, headers=H).json["produkt"]
+            with app.app_context():
+                db.execute("UPDATE mat_product SET created_at = '2099-01-01T00:00:00+00:00' WHERE id = ?", (neu["id"],))
+            r = kat.get(f"/api/material/meldungen/{mid}/recherche").json["recherche"]
+            assert [p["id"] for p in r["produkte"]] == [p1["id"]], (neu["id"], p2["id"], r["produkte"])
             # Nach der Übernahme kein neuer Start (Meldung erledigt).
             r = kat.post(f"/api/material/meldungen/{mid}/recherche", json={"domains": ["hersteller.test"]}, headers=H)
             assert r.status_code == 409 and "erledigt" in r.json["error"]

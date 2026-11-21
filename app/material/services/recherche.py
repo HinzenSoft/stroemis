@@ -1160,11 +1160,23 @@ def status_json(z, voll=False):
            "von": z["gestartet_von_name"], "fehler": z["fehler"], "kosten_cent": z["kosten_cent"],
            "kosten": ki.kosten_text(z["kosten_cent"]), "modell": z["modell"],
            "ausweichmodell": ki.ausweichmodell(usage)}
+    erg = None
+    if z["status"] == "uebernommen":
+        # Für den Satz an der Karte („Aus der Recherche angelegt: …“): die Produkte der Übernahme, die es noch gibt. Die
+        # Kennung eines gelöschten Produkts kann SQLite wieder vergeben (INTEGER PRIMARY KEY ohne AUTOINCREMENT) – ein
+        # Produkt, das erst nach der Übernahme entstand, ist ein anderes.
+        erg = ki.json_lesen(z["ergebnis_json"], {}) or {}
+        ue = erg.get("uebernahme") or {}
+        ids = [e["product_id"] for e in ue.get("produkte", [])]
+        je_id = {p["id"]: dict(p) for p in db.query(
+            "SELECT id, manufacturer, model, description, article_no FROM mat_product WHERE created_at <= ? AND id IN "
+            f"({','.join('?' * len(ids))})", (ue.get("am") or "", *ids))} if ids else {}
+        out["produkte"] = [je_id[i] for i in ids if i in je_id]
     if voll:
         e = ki.json_lesen(z["eingabe_json"], {}) or {}
         out["eingabe"] = {k: e[k] for k in ("meldung", "domains", "abruf_domains", "bemerkung") if k in e}
         out["eingabe"]["fotos"] = len(e.get("fotos") or [])
-        erg = ki.json_lesen(z["ergebnis_json"], {}) or {}
+        erg = erg if erg is not None else ki.json_lesen(z["ergebnis_json"], {}) or {}
         out["vorschlag"] = erg.get("vorschlag") if z["status"] in ("fertig", "uebernommen") else None
         out["uebernahme"] = erg.get("uebernahme")
     return out
