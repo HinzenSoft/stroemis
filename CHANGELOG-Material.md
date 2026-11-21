@@ -113,7 +113,7 @@ Geschichte stehen. Schemaversion nach der Nachbesserung vor dem Merge: 30; mit d
 | Klappbox-Titel mit Formatierung | Fett, kursiv, Code und Links im Titel einer Klappbox erscheinen in der Leseansicht formatiert (vorher standen die Sternchen da) | gebaut 11.11.2026 (kein Schemaschritt) |
 | Spaltenabschnitt an der Schreibstelle | Ein „:::“ ohne Schlusszeile (etwa ein Hinweis, dessen „:::“ am Ende der letzten Textzeile steht) gilt im Editor nicht mehr als Abschnitt bis zum Artikelende – ein neuer Spaltenabschnitt kommt wieder an den Schreibstrich statt ans Artikelende | gebaut 11.11.2026 (kein Schemaschritt) |
 | Kopfleiste der Entwicklung | Auf dev.strömis.de „Entwicklungsserver“ statt „Strömungsrettung“, darunter „dev.strömis.de“; Maskottchen mit Leitkegel als Hut (Kopfleiste, Anmeldung, öffentliche Strömipedia, Hinweisseite ohne Netz); Produktion unverändert | gebaut 11.11.2026 (kein Schemaschritt), Zweig dev-kopf |
-| Recherche per Claude API an Produktmeldungen | Material-Verwaltung lässt zu einer offenen Meldung recherchieren (Claude API, gemeinsamer Baustein `app/ki.py`, Tabelle `ki_laeufe` im Kernschema): Vorschlag je Ausführung mit Fundstellen nach den Katalogregeln, Downloads nur von Herstellerdomains, Dokumentprüfung je PDF, Übernahme mehrerer Ausführungen auf einmal; nur mit `ANTHROPIC_API_KEY`. Schnittstelle (KERN) – die Oberfläche folgt | gebaut 21.11.2026 (kein Schemaschritt der Materialablage, Schema bleibt 40) |
+| Recherche per Claude API an Produktmeldungen | Material-Verwaltung lässt zu einer offenen Meldung recherchieren (Claude API, gemeinsamer Baustein `app/ki.py`, Tabelle `ki_laeufe` im Kernschema): Vorschlag je Ausführung mit Fundstellen nach den Katalogregeln, Downloads nur von Herstellerdomains, Dokumentprüfung je PDF, Übernahme mehrerer Ausführungen auf einmal; nur mit `ANTHROPIC_API_KEY`. Schnittstelle (KERN) und Oberfläche (Knopf und Statuszeile an der Meldung, Startdialog, „Vorschlag ansehen“, Übernahme) | gebaut 21.11.2026 (kein Schemaschritt der Materialablage, Schema bleibt 40) |
 
 ## Abgleich mit dem Bestand (vor Lieferung 1)
 
@@ -14233,8 +14233,7 @@ Wunsch: An „Produkt melden“ soll eine Recherche per Claude API hängen – K
 Katalogregeln, Dateien wie beim Katalogimport, Ergebnis nur als Vorschlag, übernommen durch einen Menschen. Entwurf
 `planung/material-phase4/entwurf_meldung_recherche.md`, Entscheidungen des Nutzers vom 21.11.2026 (Abschnitt 6): gemeinsamer
 Baustein mit dem späteren Artikelentwurf der Strömipedia, D2 B, E2 B, E4 B, E5 B, K1 Plan B, Kontingent 20, sonst A.
-Dieser Teil ist der Server (KERN); die Oberfläche (Knopf an der Meldungskarte, Startdialog, Vorschlagsdialog,
-Produktdialog mit Dateiwahl) folgt als eigener Auftrag.
+Dieser Teil ist der Server (KERN); die Oberfläche steht im folgenden Abschnitt.
 
 - **Gemeinsamer Baustein** `app/ki.py` und Tabelle **`ki_laeufe`** im Kernschema (`app/db.py`, additiv, `IF NOT
   EXISTS`): Art ohne CHECK (nur nicht leer, erlaubte Arten in `ki.ARTEN`), Status mit `beendet_am`-CHECK, eindeutiger
@@ -14289,3 +14288,48 @@ HTTPS-Server mit eigenem Zertifikat und eingesetztem Auflöser, ganzer Lauf übe
 mit Teilfehler und Nachladen, Rechte je Rolle, Kontingent, eine app-weit, Erledigen bricht ab, Fotos ohne EXIF, Meldung
 löschen, Kontolöschung, dev-bestand-leeren, dev-zuruecksetzen, Tageslauf, Zusammenführen nach den Katalogregeln).
 Keine echten API-Aufrufe.
+
+## Recherche per Claude API an Produktmeldungen – OBERFLÄCHE (21.11.2026)
+
+Fortsetzung des KERN (Auftrag `planung/material-phase4/auftrag_ki_recherche_oberflaeche.md`). Nur die Material-Verwaltung
+und nur mit `ANTHROPIC_API_KEY` – ohne das Feld `recherche_moeglich` (anderer Rolle, Übung, kein Schlüssel) fehlen Knopf und
+Statuszeile ganz.
+
+- **Karte der Meldung** (Produktmeldungen): an einer offenen Meldung der graue Knopf **„Recherchieren lassen“** neben
+  „Produkt anlegen“, „Vorhandenes zuordnen“, „Ablehnen“ – nach einem Lauf „Erneut recherchieren“. Geht gerade kein Start
+  (Kontingent aufgebraucht, eine Recherche läuft woanders), ist er `aria-disabled` und der Grund steht als Satz über der
+  Knopfzeile. Darunter eine **Statuszeile** (kein Kasten): läuft (`role="status"`, „Recherche läuft – Dateien werden
+  geprüft (2 von 5)“, Textknopf „Abbrechen“ mit Rückfrage), fertig (Datum, Name, Kosten, grauer Knopf „Vorschlag
+  ansehen“), gescheitert bzw. abgebrochen (mit Grund und Kosten), übernommen („Aus der Recherche vom … angelegt: …“ mit
+  Links zu den Produkten, auch an der erledigten Meldung). Solange ein Lauf wartet oder läuft und die Seite sichtbar ist,
+  fragt sie alle 5 s nach; am Ende meldet ein Toast „fertig“, „abgebrochen“ oder „gescheitert“ und die Liste zeichnet
+  sich neu (der Fokus bleibt auf seinem Knopf).
+- **Startdialog** „Recherche für „Hersteller Modell““: Feld „Herstellerseite“ (1–3 Domains, vorbelegt), Häkchen „n Fotos
+  mitschicken“ und „Bemerkung mitschicken“ nur, wenn es sie gibt, Vorgabe aus; die Bemerkung steht darüber zur Kontrolle.
+  Sichtbar, was an Anthropic geht, und das Kontingent („noch 19 von 20 in diesem Monat“); ersetzt die Recherche einen
+  Vorschlag, sagt ein Satz es. 400 am Feld, 409/429/503 als Satz über der Knopfzeile (Knopf aus).
+- **Dialog „Vorschlag ansehen“** (breit, am Telefon Karten): „Gemeinsam“ als Tabelle Feld | Vorschlag | Fundstelle (Link,
+  Zitat, Marke „belegt“ / „Webarchiv“ / „nur Identifikation“ / „nicht belegt“, Vermerk; „wird nicht vorbelegt“ am Wert),
+  „Ausführungen“ (Artikelnummer, Bemerkung, abweichende Felder, Bild, „steht schon im Katalog als …“), „Dateien“ (Art,
+  Version, gültig ab, Größe, Herkunft samt Webarchiv-Stand, Prüfergebnis „gehört zu …“ / „gehört nicht dazu: …“, „liegt
+  schon im Katalog als …“, „Öffnen“; nicht geladene mit Grund und Link), Hinweise, Rückfragen, Ausweichmodell. Hauptaktion
+  „Produkte anlegen“ (bei einer anlegbaren Ausführung „Produkt anlegen“) nur an einer offenen Meldung mit fertigem
+  Vorschlag; an einer übernommenen grau „Fehlendes nachladen“.
+- **Übernahme** in einem Dialog für alle Ausführungen: die gemeinsamen Felder aus den **Bausteinen des Produktdialogs**
+  (`produktFelderHtml`/`produktFelderVerdrahten`, aus `produktDialog` herausgelöst – dort unverändert), vorbelegt nur
+  `vorbelegt: true`, die Fundstelle als Hilfetext am Feld. Je Ausführung Häkchen „anlegen“ (vorgewählt die gemeldete
+  Artikelnummer, ohne sie bzw. wenn sie fehlt alle anlegbaren), Artikelnummer (mit Warnung „schon vergeben“) und
+  Bemerkung, die je Ausführung verschiedenen Felder, Häkchen „Bild übernehmen“; Ausführungen im Katalog ohne Häkchen mit
+  Link. „Dateien aus der Recherche“ mit Vorwahl laut Prüfung, je Datei für die Ausführungen laut `gehoert_zu`; nicht
+  angebotene mit Grund und Link. „Anmerkung für den Melder“ wie bisher. Danach Toast („2 Produkte angelegt, 5 Dateien
+  angehängt“); fehlen Dateien, zeigt der Dialog sie mit grauem Knopf „Fehlendes nachladen“. Fehler „Ausführung n …“ an
+  der Ausführung.
+- **Schnittstelle**: Der kurze Stand eines übernommenen Laufs (`recherche` in `GET /meldungen` und `GET …/recherche`)
+  trägt `produkte` (`id`, `manufacturer`, `model`, `description`, `article_no`) – nur Produkte, die es noch gibt und die
+  nicht nach der Übernahme entstanden (SQLite vergibt die Kennung eines gelöschten Produkts neu).
+- Der bisherige Weg „Produkt anlegen“ an der Karte bleibt, wie er ist; Übung unverändert (kein Feld, kein Knopf).
+
+**Tests**: `tests/test_material_recherche.py` – `produkte` im Stand (auch nach Löschen und neu vergebener Kennung) und
+`test_oberflaeche_statisch` (Knopf nur mit `recherche_moeglich`, eine rote Hauptaktion je Dialog, Nachfragen nur bei
+laufendem Lauf und sichtbarer Seite, Feldbausteine des Produktdialogs, Links nur http(s), keine Touch-Regeln außerhalb
+von `pointer: coarse`); `tests/test_material_beschreibung.py` liest die Felder seitdem aus `produktFelderHtml`.

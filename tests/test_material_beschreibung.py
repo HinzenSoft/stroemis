@@ -437,8 +437,9 @@ def test_oberflaeche_statisch():
     # der Prüfformular-Übernahme (Schritt 35): Produktlinks (produktLinks) und gewähltes Produkt im Dialog; 28 seit dem
     # Formular-Pool (Schritt 38): die zwei Stellen der Übernahme sind weg, dazu „Gilt für“ der Formularseite, die
     # aufgeklappte Liste „gilt für n Produkte“, die Zeile im Dialog „Zuweisen“ und „zugewiesen: …“ der Seite
-    # „Prüfformulare“.
-    assert len(stellen) == js.count("${nameHtml(") == 28, (len(stellen), js.count("${nameHtml("))
+    # „Prüfformulare“; 30 seit der Recherche an Produktmeldungen (21.11.2026): die angelegten Produkte (Karte, Vorschlag,
+    # Ergebnis der Übernahme) und das Produkt einer fehlenden Datei.
+    assert len(stellen) == js.count("${nameHtml(") == 30, (len(stellen), js.count("${nameHtml("))
     assert all(name == zusatz for name, _, zusatz in stellen), stellen
     assert not re.search(r"\$\{zusatzHtml\([^)]*\)\}(</strong>|</a>)", js)      # nie im Link, nie in <strong>
     # Die Katalogliste wie im Bildschirmfoto: Name fett im roten Link, dann grau Zusatz und Artikelnummer.
@@ -509,8 +510,12 @@ def test_bemerkung_heisst_so():
     js = _lesen("app/material/static/material.js")
     # Der Produktdialog: Feld „Bemerkung“, Hinweis und Meldung vor dem Senden mit demselben Wort, kein „Beschreibung“.
     a = js.index("async function produktDialog(p, opt)")
-    # Seit P4-L2 O1 stehen die Felder in „formular“ (für den Reiter „Produkt“), dialog(`…`) setzt sie ein.
+    # Seit P4-L2 O1 stehen die Felder in „formular“ (für den Reiter „Produkt“), dialog(`…`) setzt sie ein; seit der
+    # Recherche an Produktmeldungen (21.11.2026) baut produktFelderHtml sie (auch für die Übernahme einer Recherche).
     dialog = js[js.index("const formular = `", a):js.index("(dlg, body) =>", a)]
+    assert "${produktFelderHtml(p, kats)}" in dialog
+    f = js.index("function produktFelderHtml(p, kats, opt)")
+    dialog += js[f:js.index("function produktFelderVerdrahten(", f)]
     assert '<label for="pd-desc">Bemerkung</label><input type="text" id="pd-desc"' in dialog, dialog[:2000]
     assert "Die bisherige Bemerkung hat ${beschreibung.length} Zeichen" in dialog
     assert "Beschreibung" not in dialog, dialog

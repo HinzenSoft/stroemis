@@ -929,9 +929,60 @@ def test_statisch():
     print("Statische Prüfungen der Recherche bestanden.")
 
 
+def _quelle(text, anfang, ende):
+    a = text.index(anfang)
+    return text[a:text.index(ende, a + len(anfang))]
+
+
+def test_oberflaeche_statisch():
+    """Oberfläche (21.11.2026): Knopf und Statuszeile an der Karte nur mit recherche_moeglich bzw. Lauf; Knopfsprache der
+    neuen Dialoge (genau eine rote Hauptaktion bzw. keine, nur graue Nebenknöpfe, keine „…“, kein btn ghost); Nachfragen
+    alle 5 s nur bei laufendem Lauf und sichtbarer Seite; die Übernahme nutzt die Feldbausteine des Produktdialogs;
+    Links aus dem Netz nur http(s); keine Touch-Regeln außerhalb von (pointer: coarse)."""
+    wurzel = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    with open(os.path.join(wurzel, "app", "material", "static", "material.js"), encoding="utf-8") as fh:
+        js = fh.read()
+    with open(os.path.join(wurzel, "app", "material", "static", "material.css"), encoding="utf-8") as fh:
+        css = fh.read()
+    karte = _quelle(js, "function meldeKarte(m, bearbeiten, moeglich)", "\n  async function meldungen()")
+    assert "if (moeglich && !rechercheLaeuft(m.recherche))" in karte
+    assert ('class="btn secondary small" data-act="recherche" data-id="${m.id}"${knopfAus(`mr-grund-${m.id}`, grund)}>'
+            '${m.recherche ? "Erneut recherchieren" : "Recherchieren lassen"}</button>') in karte
+    assert "grundSatz(`mr-grund-${m.id}`, grund)" in karte and "${bearbeiten ? rechercheZeile(m) : \"\"}" in karte
+    assert "meldeKarte(m, d.bearbeiten, d.recherche_moeglich)" in js
+    zeile = _quelle(js, "function rechercheZeile(m)", "\n  }\n")
+    assert 'role="status"' in zeile and 'class="lnk" data-act="recherche-abbrechen"' in zeile
+    assert 'class="btn secondary small" data-act="vorschlag"' in zeile
+    # Nachfragen: nur mit laufendem Lauf, nur sichtbar, alle 5 s.
+    seite = _quelle(js, "  async function meldungen() {", "\n  /* --- Änderungsanträge im Bestand")
+    assert 'document.visibilityState !== "visible"' in seite and "}, 5000);" in seite
+    assert 'document.addEventListener("visibilitychange", beobachten);' in seite
+    assert "{ endgueltig: false }" in _quelle(seite, '"recherche-abbrechen": async', "},\n")
+    # Je Dialog genau eine rote Hauptaktion (class="btn" ohne secondary) – bzw. keine im Ergebnis der Übernahme.
+    for name, haupt in (("async function rechercheStartDialog(", 1), ("async function vorschlagDialog(", 1),
+                        ("function uebernahmeDialog(", 1), ("function anhaengenErgebnis(", 0)):
+        f = _quelle(js, name, "\n  }\n")
+        assert len(re.findall(r'class="btn"', f)) == haupt, name
+        assert "btn ghost" not in f and "btn danger" not in f and "…</button>" not in f, name
+    assert ">Recherchieren</button>" in js and '"Produkt anlegen" : "Produkte anlegen"' in js and ">Anlegen</button>" in js
+    assert '<button class="btn secondary" id="ue-nach" type="button">Fehlendes nachladen</button>' in js
+    # Die Übernahme nimmt die Felder und Prüfungen des Produktdialogs.
+    ue = _quelle(js, "function uebernahmeDialog(", "\n  }\n")
+    assert 'produktFelderHtml(p, kats, { ohne: ["article_no", "description", ...je], quelle })' in ue
+    assert "produktFelderVerdrahten(body, kats, { neu: true })" in ue and "artikelnummerPruefen(" in ue
+    pd = _quelle(js, "async function produktDialog(p, opt)", "\n  }\n")
+    assert "${produktFelderHtml(p, kats)}" in pd and "produktFelderVerdrahten(body, kats," in pd
+    assert "const fremdLink = (url, text) => (/^https?:\\/\\//i.test(url || \"\")" in js
+    # CSS der Recherche: keine Tippflächen-Regeln (die stehen app-weit unter pointer: coarse).
+    block = _quelle(css, "/* Recherche per Claude API an einer Meldung", "/* Änderungsanträge")
+    assert "44px" not in block and ":hover" not in block
+    print("Oberfläche der Recherche (statisch) bestanden.")
+
+
 if __name__ == "__main__":
     test_downloads()
     test_zusammenfuehren_regeln()
     test_lauf_und_uebernahme()
     test_rechte_und_wechselwirkungen()
     test_statisch()
+    test_oberflaeche_statisch()
