@@ -256,10 +256,12 @@ WeasyPrint, ffmpeg und für die Tests allein pytest 9.1.1 und poppler-utils – 
 `pytest.raises` auch als Skript, und `pdf_seiten` liest Protokolle mit `pdftotext` (ohne fiele es auf pypdf zurück,
 das Leerzeichen vor Satzzeichen setzt); ins Image gehört beides nicht. Die Browser-Tests und die Prüfstände
 `tests/*.html` (`tests/test_pruefstaende_html.py`) laufen seit dem 20.11.2026 mit: mit `tests/cdp_treiber.py` und dem
-Google Chrome des Runners – fehlt es, scheitert der Lauf, statt sie still zu überspringen. Weiter nur auf dem
-Entwicklungsrechner laufen die Migrationen aus der Kopie einer Datenbank auf Stand 7 (`MATERIAL_KOPIE_STAND_7`), die
-Abgleiche mit den Wiki-Artikeln unter `/home/harness` und die PDF/A-Prüfung mit veraPDF (`st-vera`) – sie melden
-„übersprungen“ bzw. entfallen still. Rote Dateien stehen am Ende des Logs mit ihrem Protokoll zum Aufklappen. Die
+Google Chrome des Runners – fehlt es, scheitert der Lauf, statt sie still zu überspringen. Seit dem 21.11.2026 prüft
+veraPDF die PDFs der Materialablage auch dort als PDF/A (auf dem Entwicklungsrechner `st-vera`): Version und Bezug
+stehen in `tests/verapdf/pom.xml` (Maven Central), den Aufruf bekommen die Tests in `VERAPDF`
+(`test_material.pdfa_pruefer`). Weiter nur auf dem Entwicklungsrechner laufen die Migrationen aus der Kopie einer
+Datenbank auf Stand 7 (`MATERIAL_KOPIE_STAND_7`) und die Abgleiche mit den Wiki-Artikeln unter `/home/harness` – sie
+melden „übersprungen“ bzw. entfallen still. Rote Dateien stehen am Ende des Logs mit ihrem Protokoll zum Aufklappen. Die
 Actions sind wie beim Deploy auf feste Commits gepinnt.
 
 Damit ein Pull Request erst mit grünen Tests nach `main` (und damit in die Produktion) geht – auch mit Auto-Merge:

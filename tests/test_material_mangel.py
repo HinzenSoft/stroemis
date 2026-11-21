@@ -25,7 +25,8 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from PIL import Image  # noqa: E402
 from test_material import (H, _heute, festschreiben, freigeben, gliederung, jpeg, make_app, neuer_artikel,  # noqa: E402
-                           neues_konto, pdf_seiten, starten, unterschreiben, mails_abfangen, mails_zurueck)
+                           neues_konto, pdf_seiten, pdfa_pruefer, starten, unterschreiben, mails_abfangen,
+                           mails_zurueck)
 from test_material_erinnerung import umwelt  # noqa: E402
 from test_material_meine_psa import LISTE, aufbau, melden, post_mangel, zuordnen  # noqa: E402
 from test_material_trennung import bis_schritt, endversion, erinnerungslog_wie_schritt_11, sql, zeilen  # noqa: E402
@@ -36,7 +37,6 @@ MELDUNG = {"id", "created_at", "inhalt", "description", "fotos", "melder", "offe
 # Eine KOPIE einer Datenbank auf Stand 7 für den Pfad 7 → 13 (test_migration_13) – nur, wenn angegeben; die Quelle
 # bleibt unberührt.
 KOPIE_STAND_7 = os.environ.get("MATERIAL_KOPIE_STAND_7") or ""
-ST_VERA = "/home/harness/devtools/bin/st-vera"
 
 
 # --- Helfer ---------------------------------------------------------------------------------------------------------
@@ -980,10 +980,10 @@ def test_lebenslauf():
         assert "fuehrung" in text and "Zweite Zeile äöüß" in text and '<b>fett</b>' in text
         assert geheim not in text and "Platzhalterwort" not in text
         # PDF/A-3b bleibt gültig (veraPDF, wenn vorhanden – sonst die Kennung in den XMP-Daten).
-        if os.path.exists(ST_VERA):
+        if pruefer := pdfa_pruefer():
             import subprocess
             for datei in (pfad, os.path.join(tmp, "wart.pdf")):
-                v = subprocess.run([ST_VERA, datei], capture_output=True, text=True, timeout=300)
+                v = subprocess.run(pruefer + [datei], capture_output=True, text=True, timeout=300)
                 assert v.returncode == 0 and "PASS" in v.stdout, (datei, v.stdout[-800:], v.stderr[-800:])
     print("Lebenslauf bestanden.")
 

@@ -55,11 +55,19 @@ jobs:
         run: |
           echo "CHROMIUM=$(command -v google-chrome)" >> "$GITHUB_ENV"
           google-chrome --version
+      # PDF/A-Prüfung der Protokolle und Berichte wie auf dem Entwicklungsrechner (dort st-vera): veraPDF mit fester
+      # Version aus Maven Central (tests/verapdf/pom.xml), mit Java und Maven des Runners. VERAPDF nennt den Tests den
+      # Aufruf (tests/test_material.py, pdfa_pruefer); startet veraPDF nicht, scheitert schon dieser Schritt.
+      - name: veraPDF für die PDF/A-Prüfung
+        run: |
+          mvn -B -q -f tests/verapdf/pom.xml dependency:copy-dependencies \
+            -DoutputDirectory="$RUNNER_TEMP/verapdf" -DincludeScope=runtime
+          echo "VERAPDF=java -cp $RUNNER_TEMP/verapdf/* org.verapdf.apps.GreenfieldCliWrapper" >> "$GITHUB_ENV"
+          java -cp "$RUNNER_TEMP/verapdf/*" org.verapdf.apps.GreenfieldCliWrapper --version
 
       # Je Kern eine Testdatei gleichzeitig, jede mit eigenem Protokoll und höchstens 15 Minuten. Was nur auf dem
-      # Entwicklungsrechner liegt, entfällt: die Kopie einer Datenbank auf Stand 7 (MATERIAL_KOPIE_STAND_7), die
-      # Wiki-Artikel unter /home/harness und veraPDF (st-vera). Am Ende stehen die Protokolle der roten Dateien
-      # aufklappbar im Log.
+      # Entwicklungsrechner liegt, entfällt: die Kopie einer Datenbank auf Stand 7 (MATERIAL_KOPIE_STAND_7) und die
+      # Wiki-Artikel unter /home/harness. Am Ende stehen die Protokolle der roten Dateien aufklappbar im Log.
       - name: Testsuite
         run: |
           logs="$RUNNER_TEMP/testlogs"

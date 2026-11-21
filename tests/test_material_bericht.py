@@ -22,12 +22,11 @@ from zoneinfo import ZoneInfo
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from test_material import (H, _flach, _heute, festschreiben, freigeben, gliederung, jpeg, katalog_grund,  # noqa: E402
-                           neuer_artikel, neues_konto, pdf_seiten, protokoll_zeile, pruef_formulare, punkte_von,
+                           neuer_artikel, neues_konto, pdf_seiten, pdfa_pruefer, protokoll_zeile, pruef_formulare, punkte_von,
                            starten, umgebung)
 from test_material_export import CSP_PDF, csv_lesen  # noqa: E402
 
 ZONE = ZoneInfo("Europe/Berlin")
-ST_VERA = "/home/harness/devtools/bin/st-vera"
 
 
 # --- Hilfen --------------------------------------------------------------------------------------------------------
@@ -469,9 +468,9 @@ def test_pdf_und_csv():
         nachher = set(os.listdir(os.path.join(tmp, "pdf"))) if os.path.isdir(os.path.join(tmp, "pdf")) else set()
         assert nachher == vorher
         assert journal_zahl(app) == journal_vorher
-        # PDF/A-3b mit veraPDF (bin/st-vera), wenn es da ist.
-        if os.path.exists(ST_VERA):
-            lauf = subprocess.run([ST_VERA, pfad], capture_output=True, text=True, timeout=300)
+        # PDF/A-3b mit veraPDF (st-vera oder VERAPDF, siehe test_material.pdfa_pruefer), wenn es da ist.
+        if pruefer := pdfa_pruefer():
+            lauf = subprocess.run(pruefer + [pfad], capture_output=True, text=True, timeout=300)
             assert lauf.returncode == 0 and "PASS" in lauf.stdout, (lauf.returncode, lauf.stdout[-800:], lauf.stderr[-800:])
         # Mit Haken: Prüferliste und Aussonderer, eigener Dateiname.
         r, seiten = pdf_text(f, f"/materialablage/ordner/{gid}/bericht-{J}-mit-pruefern.pdf", pfad)
