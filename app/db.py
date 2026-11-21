@@ -193,6 +193,38 @@ CREATE TABLE IF NOT EXISTS einstellungen (
   geaendert_von INTEGER
 );
 
+-- Läufe über die Claude API (app/ki.py, seit 21.11.2026): einer je Recherche bzw. Entwurf, gemeinsam für alle Module.
+-- Welche Arten es gibt, steht in ki.ARTEN – bewusst kein CHECK auf art, damit eine neue Art keinen Tabellenumbau braucht.
+-- bezug nennt, wozu der Lauf gehört („mat_meldung:5“), als Text ohne Fremdschlüssel: Der Kern kennt die Module nicht.
+-- Die Zeilen bleiben, auch wenn ihr Bezug verschwindet (dann ohne Inhalt) – über sie zählt das Kontingent je Monat.
+CREATE TABLE IF NOT EXISTS ki_laeufe (
+  id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+  art                TEXT NOT NULL CHECK (art <> ''),
+  bezug              TEXT NOT NULL DEFAULT '',
+  status             TEXT NOT NULL CHECK (status IN ('wartet', 'laeuft', 'fertig', 'fehlgeschlagen', 'abgebrochen',
+                                                     'uebernommen')),
+  phase              TEXT NOT NULL DEFAULT '',
+  fortschritt        TEXT NOT NULL DEFAULT '',
+  eingabe_json       TEXT NOT NULL DEFAULT '{}',   -- was an die API ging (Nachweis)
+  ergebnis_json      TEXT,                         -- erst bei fertig
+  fehler             TEXT NOT NULL DEFAULT '',
+  modell             TEXT NOT NULL DEFAULT '',
+  effort             TEXT NOT NULL DEFAULT '',
+  usage_json         TEXT NOT NULL DEFAULT '[]',   -- Verbrauch je Aufruf
+  kosten_cent        INTEGER,                      -- Schätzung in US-Cent
+  abbrechen          INTEGER NOT NULL DEFAULT 0 CHECK (abbrechen IN (0, 1)),
+  gestartet_von      INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  gestartet_von_name TEXT NOT NULL DEFAULT '',
+  gestartet_am       TEXT NOT NULL,
+  lebenszeichen_am   TEXT,
+  beendet_am         TEXT,
+  CHECK ((status IN ('wartet', 'laeuft')) = (beendet_am IS NULL))
+);
+CREATE INDEX IF NOT EXISTS idx_ki_laeufe_art ON ki_laeufe(art, gestartet_am);
+CREATE INDEX IF NOT EXISTS idx_ki_laeufe_bezug ON ki_laeufe(bezug, id);
+-- Höchstens ein laufender Lauf je Art in der ganzen Anwendung.
+CREATE UNIQUE INDEX IF NOT EXISTS ux_ki_laeufe_einer ON ki_laeufe(art) WHERE status IN ('wartet', 'laeuft');
+
 -- --- Prüfungen: Lehrgänge, Teilnehmende, Voraussetzungen, Prüfungsleistungen, Versuche, Medien ----------
 -- Wer etwas gesetzt, geprüft oder hochgeladen hat, steht als Kennung UND als Name in der Zeile: Die
 -- Nachvollziehbarkeit einer Prüfung darf nicht daran hängen, dass das Konto des Prüfers noch besteht.

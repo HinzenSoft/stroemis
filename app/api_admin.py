@@ -3,7 +3,7 @@ import secrets
 
 from flask import Blueprint, current_app, jsonify
 
-from . import db, einfuehrung, einstellungen, medienpflege, module, start
+from . import db, einfuehrung, einstellungen, ki, medienpflege, module, start
 from .auth import (EMAIL_RE, MIN_PW, MODULE, STUFEN_JE_MODUL, VERWALTUNG, VORGABE_NEU, admin_required, can_reset,
                    clear_attempts, current_user, eingabefehler_abfangen, json_body, public_user, send_reset_mail)
 from .images import delete_avatar
@@ -321,6 +321,8 @@ def delete_user(uid):
         # Entwürfe, Meldungen und Suchprotokoll ohne Namen – vor dem Löschen, solange der
         # Kontoverweis noch auflösbar ist.
         mat_loeschung.konto_loeschen_vorbereiten(uid)
+        # KI-Läufe (app/ki.py): der Name dessen, der gestartet hat, wird „(gelöschtes Konto)“.
+        ki.konto_loeschen(uid)
         # Grenzstein im Journal am Konto: users.id wird nach dem Löschen der höchsten Kennung neu vergeben – der
         # Verlauf eines Nachfolgers mit derselben Kennung beginnt nach diesem Eintrag (journal.lesen schneidet an der
         # letzten Löschung, unabhängig von der Uhrzeit). Ohne Inhalt, nur Aktion und Handelnder.

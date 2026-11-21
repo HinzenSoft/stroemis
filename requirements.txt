@@ -21,3 +21,7 @@ weasyprint==70.0
 pydyf==0.12.1
 segno==1.6.6
 tzdata==2026.4
+# Läufe über die Claude API (app/ki.py: Recherche an „Produkt melden“, später Artikelentwürfe der Strömipedia) – nur
+# gebraucht, wenn ANTHROPIC_API_KEY gesetzt ist; importiert erst beim ersten Lauf. Die letzte Fassung der Reihe 1.x
+# (20.10.2026); 2.x ist eine neue Hauptversion und wäre ein eigener Schritt.
+anthropic==1.17.0
