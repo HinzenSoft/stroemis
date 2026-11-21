@@ -376,6 +376,28 @@ def test_gespraech():
                 ki.CLIENT = alt
             assert z["status"] == "fertig" and ki.ausweichmodell(json.loads(z["usage_json"])) == "claude-opus-4-8"
 
+            # Ausweichen mitten in der Ausgabe: Was das ablehnende Modell vor dem fallback-Block schrieb (Denken,
+            # Werkzeugaufruf, Server-Aufruf ohne Ergebnis), geht nicht zurück und wird nicht ausgeführt.
+            fb = {"type": "fallback", "from": {"model": "claude-opus-5-5"}, "to": {"model": "claude-opus-4-8"},
+                  "trigger": {"type": "refusal", "category": "cyber"}}
+            a = Attrappe([
+                nachricht([{"type": "thinking", "thinking": "", "signature": "alt"}, text("Teil davor"),
+                           werkzeug("eins", {"x": 9}, "toolu_alt"),
+                           {"type": "server_tool_use", "id": "srvtoolu_x", "name": "web_search", "input": {"query": "q"}},
+                           fb, text("weiter"), werkzeug("eins", {"x": 2}, "toolu_neu")], stop="tool_use",
+                          modell="claude-opus-4-8"),
+                nachricht([text("fertig")])])
+            alt = einsetzen(a)
+            gesehen.clear()
+            try:
+                z = lauf_starten(gespraech_arbeit(anfrage(), {"eins": lambda e: gesehen.append(e) or ki.Antwort("ok")}))
+            finally:
+                ki.CLIENT = alt
+            assert z["status"] == "fertig" and gesehen == [{"x": 2}], (dict(z), gesehen)
+            zurueck = a.anfragen[1]["messages"][1]["content"]
+            assert [b.type for b in zurueck] == ["text", "fallback", "text", "tool_use"] and zurueck[3].id == "toolu_neu"
+            assert [r["tool_use_id"] for r in a.anfragen[1]["messages"][2]["content"]] == ["toolu_neu"]
+
             # Nachfrage: einmal, wenn Claude ohne Ergebnis aufhört – dann ist Schluss.
             a = Attrappe([nachricht([text("fertig ohne Werkzeug")])] * 3)
             alt = einsetzen(a)

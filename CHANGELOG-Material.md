@@ -14245,7 +14245,8 @@ Produktdialog mit Dateiwahl) folgt als eigener Auftrag.
   `BEGIN IMMEDIATE`, Daemon-Thread mit Anfragekontext, Puls-Thread (Lebenszeichen alle 10 s, Abbruch-Kennzeichen,
   Zeitgrenze 20 Minuten – schließt einen hängenden Stream), tote Läufe nach 120 s, Ordner je Lauf
   `DATA_DIR/ki/<id>` (0700). Gesprächsschleife mit Ereignis-Schleife des Streams und `get_final_message()`, Inhalt
-  unverändert angehängt, `pause_turn` höchstens 5, eigene Werkzeuge (alle Ergebnisse in einer Nutzernachricht, Fehler als
+  unverändert angehängt (nach einem Ausweichen mitten in der Ausgabe ohne Denk- und Werkzeugblöcke vor dem
+  `fallback`-Block, wie die SDK-Doku verlangt), `pause_turn` höchstens 5, eigene Werkzeuge (alle Ergebnisse in einer Nutzernachricht, Fehler als
   `is_error`), `refusal` mit Kategorie, `max_tokens`, eine Nachfrage, unlesbares Werkzeug-JSON höchstens zweimal neu.
   Fehlerkette des SDK als Sätze ohne Schlüssel und Rohantwort (ins Protokoll Klasse, Status, `request-id`).
 - **Recherche** (`services/recherche.py`): Aufruf 1 mit Websuche frei (höchstens 8), Abruf nur Herstellerdomains, Links

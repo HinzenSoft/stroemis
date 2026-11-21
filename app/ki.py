@@ -18,7 +18,8 @@ steht, was für alle gleich ist:
     Antwort. Ohne Lebenszeichen seit TOT_NACH Sekunden gilt ein Lauf als tot (Neustart, Deploy): tote_aufraeumen()
     bei jeder Statusabfrage, jedem Start und im Tageslauf.
   - Die Gesprächsschleife Lauf.gespraech(): streamt jede Antwort (Ereignis-Schleife, dann get_final_message()), hängt
-    sie unverändert an, setzt nach pause_turn fort (höchstens PAUSEN_MAX), führt eigene Werkzeuge aus (alle Ergebnisse
+    sie unverändert an (nach einem Ausweichen mitten in der Ausgabe ohne das, was das ablehnende Modell vor dem
+    fallback-Block schrieb), setzt nach pause_turn fort (höchstens PAUSEN_MAX), führt eigene Werkzeuge aus (alle Ergebnisse
     in EINER Nutzernachricht, Fehler als is_error), beendet max_tokens und refusal sauber und hält Grenzen für Runden
     und Gesamtzeit ein. Verbrauch und Kosten stehen nach jeder Antwort in der Zeile – auch ein abgebrochener Lauf
     zeigt, was er gekostet hat.
@@ -556,7 +557,8 @@ class Lauf:
 
     def gespraech(self, anfrage, werkzeuge=None, runden=20, nachfrage=None):
         """Die Gesprächsschleife. anfrage: Parameter für client.beta.messages.stream; anfrage["messages"] wächst mit
-        (jede Antwort unverändert angehängt – Denkblöcke bleiben, wie sie kamen). werkzeuge: {Name: f(input) ->
+        (jede Antwort unverändert angehängt – Denkblöcke bleiben, wie sie kamen; nur nach einem Ausweichen mitten in der
+        Ausgabe ohne die Denk- und Werkzeugblöcke des ablehnenden Modells, _nach_ausweichen). werkzeuge: {Name: f(input) ->
         Antwort} für eigene Werkzeuge; endet eines mit ende=True, ist das Gespräch fertig. nachfrage: Text, der einmal
         nachgeschickt wird, wenn Claude ohne Ergebnis aufhört. Liefert die letzte Antwort.
 
@@ -575,13 +577,14 @@ class Lauf:
                 raise LaufFehler(f"Claude hat die Anfrage abgelehnt (Kategorie: {kat or 'ohne Angabe'}).")
             if grund == "max_tokens":
                 raise LaufFehler("Die Antwort wurde zu lang und ist abgeschnitten (max_tokens).")
-            anfrage["messages"].append({"role": "assistant", "content": msg.content})
+            zurueck, gueltig = _nach_ausweichen(msg.content)
+            anfrage["messages"].append({"role": "assistant", "content": zurueck})
             if grund == "pause_turn":
                 pausen += 1
                 if pausen > PAUSEN_MAX:
                     raise LaufFehler(f"Mehr als {PAUSEN_MAX} Fortsetzungen (pause_turn) – abgebrochen.")
                 continue
-            aufrufe = [b for b in msg.content if getattr(b, "type", None) == "tool_use"]
+            aufrufe = [b for b in gueltig if getattr(b, "type", None) == "tool_use"]
             if grund == "tool_use" and aufrufe:
                 ergebnisse, fertig = [], False
                 for b in aufrufe:
@@ -613,6 +616,23 @@ class Lauf:
         except Exception:                        # noqa: BLE001 – ein Fehler im Werkzeug geht als is_error zurück
             log.exception("KI-Lauf %s: Werkzeug %s gescheitert", self.id, block.name)
             return Antwort("Das Werkzeug ist gescheitert.", fehler=True)
+
+
+def _nach_ausweichen(inhalt):
+    """(was zurückgeht, was gilt) einer Antwort. Normalfall: alles unverändert. Wich die Antwort mitten in der Ausgabe auf
+    ein anderes Modell aus (fallback-Block), gehen vor dem letzten fallback-Block keine Denk- und tool_use-Blöcke und
+    keine Server-Werkzeugaufrufe ohne ihr Ergebnis zurück – Text, gepaarte Server-Werkzeuge, der fallback-Block selbst
+    (an seiner Stelle) und alles danach schon (SDK-Doku „Echoing fallback turns back“). Ausgeführt werden nur die
+    Werkzeugaufrufe nach dem Block: davor hat das Modell gesprochen, das abgelehnt hat."""
+    stellen = [i for i, b in enumerate(inhalt) if getattr(b, "type", None) == "fallback"]
+    if not stellen:
+        return inhalt, inhalt
+    grenze = stellen[-1]
+    vorher = inhalt[:grenze]
+    beantwortet = {getattr(b, "tool_use_id", None) for b in vorher if str(getattr(b, "type", "")).endswith("_result")}
+    behalten = [b for b in vorher if getattr(b, "type", None) not in ("thinking", "redacted_thinking", "tool_use")
+                and not (getattr(b, "type", None) == "server_tool_use" and b.id not in beantwortet)]
+    return behalten + list(inhalt[grenze:]), list(inhalt[grenze:])
 
 
 def _puls(app, lauf, stopp):
