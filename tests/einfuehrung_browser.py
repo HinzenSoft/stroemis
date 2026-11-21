@@ -11,8 +11,10 @@ Test (kein „test_“ im Namen). Genutzt von tests/test_einfuehrung_browser.py 
 
 Server: werkzeug.serving.make_server im Faden (freier Port, Datenordner in einem eigenen Temp-Ordner, nie Mails – kein
 SMTP_HOST); jede Anfrage, die ihn erreicht, steht in Umgebung.protokoll (Methode, Pfad, Referer). Konten über die Nutzerverwaltung: je Rolle eines (KONTEN), welcher Teil welches Konto nimmt, sagt
-KONTO_JE_TEIL. Chromium über /home/harness/devtools/cdp/cdp.py mit freiem CDP-Port und eigenem Profil unter
-/home/harness/cdp-profile (das snap-Chromium liest /tmp nicht); Touch per Emulation (pointer: coarse, mobil, Tippen als
+KONTO_JE_TEIL. Chromium über den Treiber des Entwicklungsrechners (/home/harness/devtools/cdp/cdp.py mit dem
+snap-Chromium, Profil unter /home/harness/cdp-profile – es liest /tmp nicht), wo der fehlt über tests/cdp_treiber.py
+mit dem ersten Chromium, das jener findet (Profil im Temp-Ordner) – so auch in GitHub Actions; welcher, sagt treiber().
+Je Seite ein freier CDP-Port und ein eigenes Profil; Touch per Emulation (pointer: coarse, mobil, Tippen als
 Geste), sonst Maus (pointer: fine, hover). Alle Anfragen kommen aus Network.requestWillBeSent ins Netzprotokoll.
 
 durchlauf(modul, teil, breite, hoehe, touch) führt alle Schritte eines Teils aus – je Schritt die probe der Übungsdatei
@@ -72,9 +74,28 @@ def frei():
         return s.getsockname()[1]
 
 
+def treiber():
+    """Das Modul mit Browser und anmelden: der Treiber des Entwicklungsrechners, wenn er samt chromium-browser da ist,
+    sonst tests/cdp_treiber.py, wenn es ein Chromium findet – oder None."""
+    if os.path.isfile(os.path.join(CDP, "cdp.py")) and shutil.which("chromium-browser"):
+        if CDP not in sys.path:
+            sys.path.insert(0, CDP)
+        import cdp
+        return cdp
+    import cdp_treiber
+    return cdp_treiber if cdp_treiber.chromium() else None
+
+
+def profilordner():
+    """Wohin die Profile der Seiten kommen: beim Treiber des Entwicklungsrechners nach PROFILE (das snap-Chromium liest
+    /tmp nicht), sonst in den Temp-Ordner."""
+    t = treiber()
+    return PROFILE if t is not None and t.__name__ == "cdp" else os.path.join(tempfile.gettempdir(), "cdp-profile")
+
+
 def uebersprungen():
-    """Ohne Chromium und Treiber laufen die Browser-Tests nicht – sie melden „übersprungen“ und enden mit rc 0."""
-    return not (os.path.isfile(os.path.join(CDP, "cdp.py")) and shutil.which("chromium-browser"))
+    """Ohne Chromium laufen die Browser-Tests nicht – sie melden „übersprungen“ und enden mit rc 0."""
+    return treiber() is None
 
 
 def mail(rolle):
@@ -185,13 +206,12 @@ class Seite:
     """Ein Chromium mit einem angemeldeten Konto."""
 
     def __init__(self, umgebung, rolle, breite, hoehe, touch):
-        if CDP not in sys.path:
-            sys.path.insert(0, CDP)
-        from cdp import Browser, anmelden
+        t = treiber()
+        Browser, anmelden = t.Browser, t.anmelden
         self.u, self.rolle, self.touch = umgebung, rolle, touch
         self.breite, self.hoehe = breite, hoehe
         self.port = frei()
-        self.profil = os.path.join(PROFILE, f"einfuehrung-{self.port}")
+        self.profil = os.path.join(profilordner(), f"einfuehrung-{self.port}")
         self.b = Browser(port=self.port, breite=breite, hoehe=hoehe, profil=self.profil, zusatz=() if touch else MAUS)
         self.b.rufen("Emulation.setDeviceMetricsOverride", width=breite, height=hoehe, deviceScaleFactor=1, mobile=touch)
         self.b.rufen("Emulation.setTouchEmulationEnabled", enabled=touch, maxTouchPoints=5 if touch else 1)

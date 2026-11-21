@@ -20,7 +20,7 @@ import time
 WURZEL = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(WURZEL, "tests"))
 
-from einfuehrung_browser import CDP, frei, uebersprungen  # noqa: E402
+from einfuehrung_browser import frei, treiber, uebersprungen  # noqa: E402
 
 SEITE = """<!doctype html><html lang="de"><head><meta charset="utf-8">
 <link rel="stylesheet" href="/static/vendor/toastui/toastui-editor.min.css">
@@ -81,8 +81,7 @@ class _Seite(http.server.SimpleHTTPRequestHandler):
 
 class Editor:
     def __enter__(self):
-        sys.path.insert(0, CDP)
-        from cdp import Browser
+        Browser = treiber().Browser
         self.server = http.server.ThreadingHTTPServer(("127.0.0.1", frei()), functools.partial(_Seite, directory=WURZEL))
         threading.Thread(target=self.server.serve_forever, daemon=True).start()
         self.b = Browser(port=frei())

@@ -211,7 +211,10 @@ def ziehen(s, von, nach, anteil=0.75, halten=0.0, esc=False, waehrend=None):
             while time.time() < ende and not im_bild(lage(s, nach, anteil)[1]):
                 s.b.warten(0.03)
             assert im_bild(lage(s, nach, anteil)[1]), ("Bildlauf am Rand holt das Ziel nicht ins Bild", nach)
-            hin(x0, s.hoehe * 0.5, 2)            # aus dem Randbereich, dann aufs Ziel
+            # Aus dem Randbereich, dann aufs Ziel – auf dessen Höhe, nicht in die Bildmitte: Liegt die Mitte in der oberen
+            # Hälfte des Ziels, rückt die gezogene Zeile davor, und das Ziel springt um eine Karte aus dem Bild (am
+            # Telefon; ob schon, wenn gemessen wird, hängt davon ab, wie schnell Chromium zeichnet).
+            hin(x0, lage(s, nach, anteil)[1], 2)
             x1, y1 = lage(s, nach, anteil)
         assert 60 < y1 < s.hoehe - 60, ("Ziel nicht im Bild", nach, y1)
         hin(x1, y1)
@@ -226,6 +229,9 @@ def ziehen(s, von, nach, anteil=0.75, halten=0.0, esc=False, waehrend=None):
     if esc:
         s.taste()
     if s.touch:
+        # Vor dem Loslassen kurz stillhalten wie ein Finger, der ablegt. Hebt er noch in Bewegung ab, schluckt Chromium
+        # (kopflos, seit Version 153 beobachtet) den nächsten Tipp – er brachte dann kein click, erst der zweite.
+        s.b.warten(0.15)
         s.b.rufen("Input.dispatchTouchEvent", type="touchEnd", touchPoints=[])
     else:
         s.b.rufen("Input.dispatchMouseEvent", type="mouseReleased", x=stand[0], y=stand[1], button="left", buttons=0, clickCount=1)
