@@ -421,7 +421,10 @@ table.list.mat-artikel th.mat-wahlspalte, table.list.mat-artikel td.mat-wahlspal
 .mat-mstatus.m-abgelehnt { background: var(--rot); color: var(--weiss); }
 /* Recherche per Claude API an einer Meldung (21.11.2026): die Statuszeile unter der Knopfzeile – eine Zeile, kein
    Kasten; „Vorschlag ansehen“ rechts daneben, am Telefon darunter. Die Dialoge „Vorschlag ansehen“ und „Produkte aus der
-   Recherche anlegen“ (.mat-vorschlag) sind breit; ihre Tabellen werden wie jede table.list am Telefon zu Karten. */
+   Recherche anlegen“ (.mat-vorschlag) sind breit; ihre Tabellen werden zu Karten, wenn der DIALOG schmaler als 640 px
+   ist (Container „vorschlag“, V4 der Browserprüfung vom 21.11.2026 – nicht schon bei 860 px Fensterbreite wie sonst
+   table.list in app.css); leere Zellen zeigen in der Tabelle „–“ und fehlen in der Karte (V3). Die Knopfzeile steht
+   als letztes Kind von .dlg-body und klebt am Finger (app.css) und bei schmalem Fenster unten (V3). */
 .mat-recherche-zeile { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; margin: 8px 0 0; font-size: var(--fs-klein);
   overflow-wrap: anywhere; }
 .mat-recherche-zeile .btn { font-size: var(--fs-klein); }
@@ -438,7 +441,36 @@ table.list.mat-artikel th.mat-wahlspalte, table.list.mat-artikel td.mat-wahlspal
 .mat-vs-dateien th:nth-child(6) { width: 22%; }
 .mat-vs-dateien th:last-child { width: 88px; }
 .mat-vs-feld { font-weight: 600; }
-@media (max-width: 860px) { table.list.mat-vs-tabelle td:empty { display: none; } }   /* als Karte (app.css): leere Zellen weg */
+.mat-vorschlag { container: vorschlag / inline-size; }
+.mat-vorschlag h2:focus { outline: none; box-shadow: none; }       /* Fokus beim Öffnen und nach dem Wechsel (B1, V9) */
+.mat-vs-tabelle td:empty:not(.tabelle-aktionen)::after { content: "–"; color: var(--grau); }
+@media (max-width: 860px) {
+  table.list.mat-vs-tabelle { display: table; }
+  table.list.mat-vs-tabelle thead { display: table-header-group; }
+  table.list.mat-vs-tabelle tbody { display: table-row-group; }
+  table.list.mat-vs-tabelle tr { display: table-row; padding: 0; border-bottom: 0; }
+  table.list.mat-vs-tabelle td { display: table-cell; border-bottom: 1px solid var(--linie); padding: 8px; }
+  table.list.mat-vs-tabelle td[data-l]::before { content: none; }
+}
+@container vorschlag (max-width: 640px) {
+  table.list.mat-vs-tabelle, table.list.mat-vs-tabelle tbody, table.list.mat-vs-tabelle tr, table.list.mat-vs-tabelle td { display: block; }
+  table.list.mat-vs-tabelle thead { display: none; }
+  table.list.mat-vs-tabelle tr { padding: 10px 0 12px; border-bottom: 1px solid var(--linie); }
+  table.list.mat-vs-tabelle td { border: 0; padding: 2px 0; }
+  table.list.mat-vs-tabelle td[data-l]::before { content: attr(data-l) ": "; color: var(--grau); font-size: var(--fs-klein); }
+  table.list.mat-vs-tabelle td.tabelle-aktionen { padding-top: 8px; }
+  table.list.mat-vs-tabelle td:empty { display: none; }
+}
+@media (max-width: 640px) {
+  dialog .dlg-body:has(> .mat-vorschlag) { padding-bottom: 0; }
+  dialog .dlg-body:has(> .mat-vorschlag) > .dlg-actions:last-child { position: sticky; bottom: 0; z-index: 2; background: var(--weiss);
+    padding: 10px 0 20px; }
+}
+/* Steht unten die Leiste der Führung, endet der (mittig stehende) Dialog über ihr. */
+html.fuehrung-leiste dialog:has(.mat-vorschlag) .dlg-body { max-height: min(80dvh, calc(100dvh - 2 * var(--fuehrung-hoehe, 0px) - 16px)); }
+.mat-recherche-datenschutz p, .mat-recherche-datenschutz ul { margin: 0; }
+.mat-recherche-datenschutz ul { padding-left: 1.2em; }
+.mat-vorschlag textarea[data-einzeilig] { min-height: 0; resize: vertical; }     /* zwei Zeilen (rows=2), nicht 90 px */
 .mat-vs-adresse a { color: var(--grau); }
 .mat-vs-ausf { border-top: 1px solid var(--linie); padding: 10px 0 4px; }
 .mat-vs-ausf-kopf { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }

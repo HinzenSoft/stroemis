@@ -455,7 +455,9 @@ def test_lauf_und_uebernahme():
             r = kat.get(f"/api/material/meldungen/{mid}/recherche")
             assert r.status_code == 200 and r.json["recherche"] is None and r.json["moeglich"]["an"], r.get_json()
             assert r.json["start"]["domains"] == ["hersteller.test"] and r.json["start"]["fotos"] == 0
-            assert r.json["start"]["bemerkung"].startswith("Gehört") and "Anthropic" in r.json["start"]["datenschutz"]
+            ds = r.json["start"]["datenschutz"]
+            assert r.json["start"]["bemerkung"].startswith("Gehört") and "Anthropic" in ds["titel"] \
+                and len(ds["gesendet"]) == 4 and ds["nie"].startswith("Nie:"), ds
             assert r.json["start"]["links"] == ["https://hersteller.test/produkt", "https://haendler.test/angebot"]
             # Eingaben
             for falsch, teil in (({"domains": []}, "1 bis 3"), ({"domains": ["a.test", "b.test", "c.test", "d.test"]},
@@ -739,13 +741,20 @@ def test_rechte_und_wechselwirkungen():
             # Noch keine Recherche: Abbrechen, Übernehmen, Nachladen, Datei → 404.
             for art, weg, d in wege[2:]:
                 assert aufruf(kat, art, weg, d).status_code == 404, weg
-            # Ohne Schlüssel: 503 für die Material-Verwaltung, 403 für alle anderen, kein Feld in der Liste.
+            # Ohne Schlüssel: Start und Abbrechen 503 für die Material-Verwaltung; was schon da ist, bleibt lesbar (ohne
+            # Aufruf der API – V2 der Browserprüfung): GET 200 ohne Startdaten, die übrigen wie mit Schlüssel (hier 404,
+            # es gibt noch keinen Lauf). 403 für alle anderen; die Liste trägt „recherche“, aber kein „recherche_moeglich“.
             os.environ.pop("ANTHROPIC_API_KEY")
             for art, weg, d in wege:
-                assert aufruf(kat, art, weg, d).status_code == 503, weg
+                code = 503 if weg in (basis, basis + "/abbrechen") and art == "post" else 200 if art == "get" \
+                    and weg == basis else 404
+                assert aufruf(kat, art, weg, d).status_code == code, (weg, code)
                 assert aufruf(k["wart"], art, weg, d).status_code == 403, weg
+            r = kat.get(basis)
+            assert r.json["start"] is None and r.json["moeglich"]["eingerichtet"] is False \
+                and not r.json["moeglich"]["an"], r.json
             r = kat.get("/api/material/meldungen")
-            assert "recherche_moeglich" not in r.json and all("recherche" not in x for x in r.json["meldungen"])
+            assert "recherche_moeglich" not in r.json and all("recherche" in x for x in r.json["meldungen"])
             os.environ["ANTHROPIC_API_KEY"] = SCHLUESSEL
 
             # Eine app-weit: Während eine läuft (hängt), 409 für jede andere Meldung; Erledigen bricht sie ab.
@@ -960,12 +969,15 @@ def test_oberflaeche_statisch():
         css = fh.read()
     karte = _quelle(js, "function meldeKarte(m, bearbeiten, moeglich)", "\n  async function meldungen()")
     assert "if (moeglich && !rechercheLaeuft(m.recherche))" in karte
-    assert ('class="btn secondary small" data-act="recherche" data-id="${m.id}"${knopfAus(`mr-grund-${m.id}`, grund)}>'
+    assert ('class="btn secondary small" data-act="recherche" data-id="${m.id}"${grund ? knopfAus("mr-grund", grund) : ""}>'
             '${m.recherche ? "Erneut recherchieren" : "Recherchieren lassen"}</button>') in karte
-    assert "grundSatz(`mr-grund-${m.id}`, grund)" in karte and "${bearbeiten ? rechercheZeile(m) : \"\"}" in karte
-    assert "meldeKarte(m, d.bearbeiten, d.recherche_moeglich)" in js
-    zeile = _quelle(js, "function rechercheZeile(m)", "\n  }\n")
-    assert 'role="status"' in zeile and 'class="lnk" data-act="recherche-abbrechen"' in zeile
+    # Der Sperrgrund steht einmal über der Liste (V6), nicht je Karte.
+    assert "grundSatz(" not in karte and "${bearbeiten ? rechercheZeile(m, moeglich) : \"\"}" in karte
+    assert "meldeKarte(m, d.bearbeiten, d.recherche_moeglich)" in js and "${rechercheSperre(d, liste)}" in js
+    sperre = _quelle(js, "function rechercheSperre(d, liste)", "\n  }\n")
+    assert 'class="notice mat-recherche-sperre" id="mr-grund"' in sperre
+    zeile = _quelle(js, "function rechercheZeile(m, moeglich)", "\n  }\n")
+    assert 'role="status"' in zeile and '${moeglich ? `<button type="button" class="lnk" data-act="recherche-abbrechen"' in zeile
     assert 'class="btn secondary small" data-act="vorschlag"' in zeile
     # Nachfragen: nur mit laufendem Lauf, nur sichtbar, alle 5 s.
     seite = _quelle(js, "  async function meldungen() {", "\n  /* --- Änderungsanträge im Bestand")
@@ -974,15 +986,21 @@ def test_oberflaeche_statisch():
     assert "{ endgueltig: false }" in _quelle(seite, '"recherche-abbrechen": async', "},\n")
     # Je Dialog genau eine rote Hauptaktion (class="btn" ohne secondary) – bzw. keine im Ergebnis der Übernahme.
     for name, haupt in (("async function rechercheStartDialog(", 1), ("async function vorschlagDialog(", 1),
-                        ("function uebernahmeDialog(", 1), ("function anhaengenErgebnis(", 0)):
+                        ("function uebernahmeDialog(", 1), ("function anhaengenErgebnis(", 1)):
         f = _quelle(js, name, "\n  }\n")
         assert len(re.findall(r'class="btn"', f)) == haupt, name
         assert "btn ghost" not in f and "btn danger" not in f and "…</button>" not in f, name
     assert ">Recherchieren</button>" in js and '"Produkt anlegen" : "Produkte anlegen"' in js and ">Anlegen</button>" in js
-    assert '<button class="btn secondary" id="ue-nach" type="button">Fehlendes nachladen</button>' in js
+    # Im Teilfehler-Dialog ist „Fehlendes nachladen“ die Hauptaktion (V5), im Vorschlag nur, wenn etwas fehlt.
+    assert '<button class="btn" id="ue-nach" type="button">Fehlendes nachladen</button>' in js
+    assert "${fehlt ? '<button class=\"btn secondary\" id=\"vs-nach\" type=\"button\">Fehlendes nachladen</button>' : \"\"}" in js
+    # Fokus nach dem Wechsel des Dialoginhalts (B1, V9), Fehler an der Artikelnummer über S.feldFehler (B2).
+    assert '$("h2", body).focus({ preventScroll: true });' in _quelle(js, "function uebernahmeDialog(", "\n  }\n")
+    assert "S.feldFehler(art, e.message)" in js and "nach.focus();" in js
+    assert '.mat-ue-felder", fs).inert = !an;' in js and 'dlg.addEventListener("cancel", escFrage);' in js
     # Die Übernahme nimmt die Felder und Prüfungen des Produktdialogs.
     ue = _quelle(js, "function uebernahmeDialog(", "\n  }\n")
-    assert 'produktFelderHtml(p, kats, { ohne: ["article_no", "description", ...je], quelle })' in ue
+    assert 'produktFelderHtml(p, kats, { ohne: ["article_no", "description", ...je], quelle, mehrzeilig: true })' in ue
     assert "produktFelderVerdrahten(body, kats, { neu: true })" in ue and "artikelnummerPruefen(" in ue
     pd = _quelle(js, "async function produktDialog(p, opt)", "\n  }\n")
     assert "${produktFelderHtml(p, kats)}" in pd and "produktFelderVerdrahten(body, kats," in pd
@@ -990,6 +1008,8 @@ def test_oberflaeche_statisch():
     # CSS der Recherche: keine Tippflächen-Regeln (die stehen app-weit unter pointer: coarse).
     block = _quelle(css, "/* Recherche per Claude API an einer Meldung", "/* Änderungsanträge")
     assert "44px" not in block and ":hover" not in block
+    # Karten nach der Dialogbreite (V4), nicht nach der Fensterbreite.
+    assert ".mat-vorschlag { container: vorschlag / inline-size; }" in block and "@container vorschlag (max-width: 640px)" in block
     print("Oberfläche der Recherche (statisch) bestanden.")
 
 

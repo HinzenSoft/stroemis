@@ -4829,7 +4829,9 @@
   /* Die Felder eines Produkts (Kategorie bis Fundstelle der Lebensdauer) – im Produktdialog und, ohne Artikelnummer und
      Bemerkung, als gemeinsame Felder der Übernahme einer Recherche (uebernahmeDialog, 21.11.2026): dieselben Felder,
      Grenzen und Hilfen an einer Stelle. opt.ohne: Felder, die fehlen (Schlüssel wie in der Schnittstelle); opt.quelle:
-     je Feld fertiges HTML für einen Hilfetext unter dem Feld (die Fundstelle eines vorbelegten Werts).
+     je Feld fertiges HTML für einen Hilfetext unter dem Feld (die Fundstelle eines vorbelegten Werts); opt.mehrzeilig:
+     Norm und Fundstelle der Lebensdauer als zweizeiliges Feld (Übernahme: lange vorbelegte Werte stehen ganz da, V8 der
+     Browserprüfung vom 21.11.2026 – Enter bricht nicht um, der Server macht ohnehin eine Zeile daraus).
      Beschreibung (sichtbar „Bemerkung“): ein Feld wie die anderen – halb breit, der Hilfetext daneben –, eine Zeile,
      höchstens BESCHREIBUNG_MAX Zeichen (der Server prüft beim Speichern, katalog.beschreibung). Eine ältere, längere
      wird nie still gekürzt: Das Feld zeigt sie ganz (in einer Zeile – ein Textfeld verschluckte Zeilenumbrüche sonst
@@ -4844,6 +4846,8 @@
     // Die Fundstelle unter dem Feld, vom Feld aus vorgelesen.
     const q = (k) => (quelle[k] ? `<div class="help mat-fundstelle" id="${PRODUKT_FELD_ID[k]}-quelle">${quelle[k]}</div>` : "");
     const zu = (k) => (quelle[k] ? ` aria-describedby="${PRODUKT_FELD_ID[k]}-quelle"` : "");
+    const textfeld = (id, w, attrs) => (opt.mehrzeilig ? `<textarea id="${id}" rows="2" data-einzeilig${attrs}>${esc(w || "")}</textarea>`
+      : `<input type="text" id="${id}" value="${esc(w || "")}"${attrs}>`);
     const zeile = (zellen, klasse) => (zellen.filter(Boolean).length ? `<div class="field-row${klasse ? ` ${klasse}` : ""}">${zellen.filter(Boolean).join("")}</div>` : "");
     const beschreibung = String(p.description || "").replace(/\s+/g, " ").trim();
     const zuLang = beschreibung.length > BESCHREIBUNG_MAX;
@@ -4855,11 +4859,11 @@
       ${zuLang ? `<div class="notice mat-beschr-alt" id="pd-desc-alt"><p><strong>Bitte kürzen:</strong> Die bisherige Bemerkung hat ${beschreibung.length} Zeichen, hinter den Namen passen höchstens ${BESCHREIBUNG_MAX}. Gespeichert wird erst, wenn sie kürzer ist – Ausführliches gehört in ein Dokument am Produkt. Bisher:</p>
         <p class="mat-text">${esc(p.description)}</p></div>` : ""}` : ""}
       ${zeile([mit("article_no") && `<div><label for="pd-art">Artikelnummer des Herstellers</label><input type="text" id="pd-art" value="${esc(p.article_no || "")}" maxlength="80" ${TASTATUR_NUMMER}><div class="help" id="pd-art-hilfe"></div></div>`,
-        mit("norm") && `<div><label for="pd-norm">Norm</label><input type="text" id="pd-norm" value="${esc(p.norm || "")}" maxlength="200" ${TASTATUR_NUMMER}${zu("norm")}>${q("norm")}</div>`])}
+        mit("norm") && `<div><label for="pd-norm">Norm</label>${textfeld("pd-norm", p.norm, ` maxlength="200" ${TASTATUR_NUMMER}${zu("norm")}`)}${q("norm")}</div>`])}
       ${zeile([mit("material_kind") && `<div><label for="pd-mk">Materialart</label><select id="pd-mk"${zu("material_kind")}>${Object.entries(MATERIALART).map(([w, t]) => `<option value="${w}" ${p.material_kind === w ? "selected" : ""}>${esc(t)}</option>`).join("")}</select>${q("material_kind")}</div>`,
         mit("interval_months") && `<div><label for="pd-int">Prüfintervall (Monate)</label><input type="number" id="pd-int" min="1" max="120" value="${p.interval_months || ""}"${zu("interval_months")}><div class="help" id="pd-int-hilfe"></div>${q("interval_months")}</div>`])}
       ${zeile([mit("lifetime_years") && `<div><label for="pd-ld">Lebensdauer (Jahre)</label><input type="number" id="pd-ld" min="1" max="50" value="${p.lifetime_years || ""}"${zu("lifetime_years")}><div class="help" id="pd-ld-hilfe"></div>${q("lifetime_years")}</div>`,
-        mit("lifetime_source") && `<div><label for="pd-lq">Fundstelle der Lebensdauer</label><input type="text" id="pd-lq" value="${esc(p.lifetime_source || "")}" maxlength="300" placeholder="z. B. Gebrauchsanleitung, Kap. 9"${zu("lifetime_source")}>${q("lifetime_source")}</div>`])}`;
+        mit("lifetime_source") && `<div><label for="pd-lq">Fundstelle der Lebensdauer</label>${textfeld("pd-lq", p.lifetime_source, ` maxlength="300" placeholder="z. B. Gebrauchsanleitung, Kap. 9"${zu("lifetime_source")}`)}${q("lifetime_source")}</div>`])}`;
   }
   /* Hilfen und Prüfungen der Felder aus produktFelderHtml: Intervall und Lebensdauer je Kategorie und Materialart (Metall
      ohne Lebensdauer), neu angelegt übernimmt eine gewählte Kategorie Materialart und Norm (opt.vorgaben: gleich beim
@@ -8141,14 +8145,14 @@
   function meldeKarte(m, bearbeiten, moeglich) {
     const wer = (name) => (name ? ` von ${person(name)}` : "");
     const knoepfe = [];
-    let grund = null;
     if (bearbeiten && m.status === "offen") {
       knoepfe.push(`<button type="button" class="btn secondary small" data-act="anlegen" data-id="${m.id}">Produkt anlegen</button>`,
                    `<button type="button" class="btn secondary small" data-act="zuordnen" data-id="${m.id}">Vorhandenes zuordnen</button>`,
                    `<button type="button" class="btn secondary small" data-act="ablehnen" data-id="${m.id}">Ablehnen</button>`);
+      // Ausgegraut verweist der Knopf auf den einen Satz über der Liste (#mr-grund, V6) – nicht je Karte derselbe Satz.
       if (moeglich && !rechercheLaeuft(m.recherche)) {
-        grund = moeglich.an ? "" : moeglich.grund;
-        knoepfe.push(`<button type="button" class="btn secondary small" data-act="recherche" data-id="${m.id}"${knopfAus(`mr-grund-${m.id}`, grund)}>${m.recherche ? "Erneut recherchieren" : "Recherchieren lassen"}</button>`);
+        const grund = moeglich.an ? "" : moeglich.grund;
+        knoepfe.push(`<button type="button" class="btn secondary small" data-act="recherche" data-id="${m.id}"${grund ? knopfAus("mr-grund", grund) : ""}>${m.recherche ? "Erneut recherchieren" : "Recherchieren lassen"}</button>`);
       }
     }
     if (m.eigen && DARF.verwalten && m.status === "eingepflegt" && m.produkt) {
@@ -8166,9 +8170,8 @@
         ${m.produkt ? `<a href="/materialablage/katalog/produkt/${m.produkt.id}">${nameHtml(m.produkt)}</a>${zusatzHtml(m.produkt)}` : '<span class="muted">Produkt inzwischen gelöscht</span>'}
         ${m.answer ? `<br><span class="mat-text">${esc(m.answer)}</span>` : ""}</p>` : ""}
       ${m.status === "abgelehnt" ? `<p class="mat-meldung-ergebnis">Abgelehnt${wer(m.resolved_by_name)} am ${esc(fmtTag(m.resolved_at))}: <span class="mat-text">${esc(m.answer)}</span></p>` : ""}
-      ${grund !== null ? grundSatz(`mr-grund-${m.id}`, grund) : ""}
       ${knoepfe.length ? `<div class="btn-row">${knoepfe.join("")}</div>` : ""}
-      ${bearbeiten ? rechercheZeile(m) : ""}
+      ${bearbeiten ? rechercheZeile(m, moeglich) : ""}
     </article>`;
   }
 
@@ -8191,7 +8194,7 @@
       // „Artikel anlegen“ nur in der eigenen Liste des Materialwarts: Steht ein gemeldetes Produkt im Katalog, legt er dort
       // den Artikel an (der Ordner wird im Formular gewählt). Für die Material-Verwaltung, die Meldungen abarbeitet, und
       // in „alle“ gehörte der Knopf nicht zur Seite (UI/UX vor dem Merge, B13).
-      const hilfe = d.bearbeiten ? "Materialwarte melden hier Produkte, die ihnen beim Anlegen von Artikeln im Katalog fehlen. „Produkt anlegen“ übernimmt ihre Angaben in den Produktdialog. Der Melder bekommt eine Mail, sobald das Produkt im Katalog ist – oder deine Begründung, wenn du ablehnst."
+      const hilfe = d.bearbeiten ? `Materialwarte melden hier Produkte, die ihnen beim Anlegen von Artikeln im Katalog fehlen. „Produkt anlegen“ übernimmt ihre Angaben in den Produktdialog. Der Melder bekommt eine Mail, sobald das Produkt im Katalog ist – oder deine Begründung, wenn du ablehnst.${d.recherche_moeglich ? " Mit „Recherchieren lassen“ sucht Claude Angaben und Dateien beim Hersteller – du entscheidest, was übernommen wird." : ""}`
         : d.alle ? "Materialwarte melden hier Produkte, die ihnen beim Anlegen von Artikeln im Katalog fehlen; die Material-Verwaltung nimmt sie auf oder lehnt sie mit Begründung ab."
           : "Produkte, die du beim Anlegen von Artikeln als fehlend gemeldet hast. Du bekommst eine Mail, sobald die Material-Verwaltung sie bearbeitet hat.";
       seitenTitel(d.alle ? "Produktmeldungen" : "Deine Produktmeldungen");
@@ -8199,6 +8202,7 @@
           <div class="btn-row"><a class="btn secondary" href="/materialablage/katalog">Katalog</a>${DARF.verwalten && !d.alle && !d.bearbeiten ? '<a class="btn secondary" href="/materialablage/artikel/neu"><span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Artikel<span class="k-anlegen"> anlegen</span></span></a>' : ""}</div></div>
         <p class="help">${hilfe}${DARF.verwalten && !DARF.katalog ? ` <button type="button" class="lnk" data-act="eigene">${d.alle ? "Nur deine zeigen" : "Alle Meldungen zeigen"}</button>` : ""}</p>
         <div class="c-tabs mat-filter" role="group" aria-label="Status">${[["offen", "offen"], ["erledigt", "erledigt"], ["alle", "alle"]].map(([w, t]) => `<button type="button" class="${w === filter ? "sel" : ""}" data-act="filter" data-f="${w}" aria-pressed="${w === filter}">${t}${w === "offen" && d.offen ? ` (${d.offen})` : ""}</button>`).join("")}</div>
+        ${rechercheSperre(d, liste)}
         ${liste.length ? liste.map((m) => meldeKarte(m, d.bearbeiten, d.recherche_moeglich)).join("") : leer(filter === "offen" ? "Keine offenen Meldungen." : "Keine Meldungen.")}`;
       aktionen = {
         filter: (b) => {
@@ -8457,19 +8461,31 @@
   // „Recherche läuft – Dateien werden geprüft (2 von 5)“; in der ersten Phase (und solange er wartet) nur der Anfang.
   const rechercheStand = (r) => `Recherche läuft${r.phase_text && r.phase !== "recherche" ? ` – ${r.phase_text}` : ""}${r.fortschritt ? ` (${r.fortschritt})` : ""}`;
   // Nach einem Ausweichen auf ein anderes Modell sind die Kosten nur geschätzt (mit den Preisen des eigentlichen Modells).
-  const rechercheKosten = (r) => (r.kosten ? ` · ${esc(r.kosten)}${r.ausweichmodell ? " (geschätzt)" : ""}` : "");
-  const rechercheVom = (r) => `Recherche vom ${esc(fmtZeit(r.gestartet_am))}${r.von ? ` (${person(r.von)})` : ""}`;
+  // Ohne Kosten (abgebrochen, bevor etwas gefragt war) steht nichts da – nicht „ca. 0,00 $“.
+  const rechercheKosten = (r) => (r.kosten && r.kosten_cent ? ` · ${esc(r.kosten)}${r.ausweichmodell ? " (geschätzt)" : ""}` : "");
+  // Zeit und Name als Einheit: Am Telefon brach „07:39 (⏎Name)“ sonst mitten darin um.
+  const rechercheVom = (r) => `Recherche vom <span class="name-einheit">${esc(fmtZeit(r.gestartet_am))}${r.von ? ` (${person(r.von)})` : ""}</span>`;
   // Ein Link nur auf http(s) – Adressen aus einer Recherche stammen aus dem Netz.
   const fremdLink = (url, text) => (/^https?:\/\//i.test(url || "") ? `<a href="${esc(url)}" target="_blank" rel="noopener noreferrer">${text || esc(kurzLink(url))}</a>` : text || "");
   const produktLinks = (liste) => liste.map((p) => `<a href="/materialablage/katalog/produkt/${p.id}">${nameHtml(p)}</a>${zusatzHtml(p)}${artNrKurz(p.article_no)}`).join(", ");
 
-  // Die Statuszeile unter der Knopfzeile – eine Zeile, kein zweiter Kasten.
-  function rechercheZeile(m) {
+  /* Warum „Recherchieren lassen“ ausgegraut ist (Kontingent aufgebraucht, es läuft schon eine): EIN Satz über der Liste
+     (V6 der Browserprüfung vom 21.11.2026 – vorher derselbe Satz an jeder offenen Karte); die Knöpfe verweisen mit
+     aria-describedby darauf, ein Klick hebt ihn hervor (Klick-Abfang bei knopfGrund). Nur, wenn ein solcher Knopf da ist. */
+  function rechercheSperre(d, liste) {
+    const k = d.recherche_moeglich;
+    if (!d.bearbeiten || !k || k.an || !liste.some((m) => m.status === "offen" && !rechercheLaeuft(m.recherche))) return "";
+    return `<p class="notice mat-recherche-sperre" id="mr-grund" aria-live="polite">${esc(k.grund)}</p>`;
+  }
+
+  // Die Statuszeile unter der Knopfzeile – eine Zeile, kein zweiter Kasten. Ohne API-Schlüssel (moeglich fehlt) bleibt
+  // sie lesbar, nur „Abbrechen“ fehlt (V2 der Browserprüfung).
+  function rechercheZeile(m, moeglich) {
     const r = m.recherche;
     if (!r) return "";
     if (rechercheLaeuft(r)) {
       return `<p class="mat-recherche-zeile"><span class="mat-recherche-stand" role="status">${esc(rechercheStand(r))}</span>
-        <button type="button" class="lnk" data-act="recherche-abbrechen" data-id="${m.id}">Abbrechen</button></p>`;
+        ${moeglich ? `<button type="button" class="lnk" data-act="recherche-abbrechen" data-id="${m.id}">Abbrechen</button>` : ""}</p>`;
     }
     const ansehen = `<button type="button" class="btn secondary small" data-act="vorschlag" data-id="${m.id}">Vorschlag ansehen</button>`;
     if (r.status === "fertig") return `<div class="mat-recherche-zeile"><span>${rechercheVom(r)}${rechercheKosten(r)}</span>${ansehen}</div>`;
@@ -8483,6 +8499,9 @@
   /* Startdialog: die Herstellerseite(n) bestätigen (vorbelegt), Fotos und Bemerkung nur mit Häkchen (Vorgabe aus; die
      Bemerkung steht zur Kontrolle darüber), was an die Claude API geht, und das Kontingent. Fehler am Feld (400) bzw. als
      Satz über der Knopfzeile (409, 429, 503 – der Knopf ist dann ausgegraut). Ein neuer Lauf ersetzt den Vorschlag. */
+  // Was an die Claude API geht – als kurze Liste statt eines Absatzes (V7 der Browserprüfung).
+  const datenschutzHtml = (d) => (d && d.gesendet ? `<div class="help mat-recherche-datenschutz"><p>${esc(d.titel)}</p>
+      <ul>${d.gesendet.map((x) => `<li>${esc(x)}</li>`).join("")}</ul><p>${esc(d.nie)}</p></div>` : "");
   async function rechercheStartDialog(m, danach) {
     let d;
     try { d = await api(rechercheUrl(m)); } catch (e) { toast(e.message, true); return; }
@@ -8492,12 +8511,13 @@
     dialog(`<h2>Recherche für „${esc(meldungName(m))}“</h2>
       ${r && r.status === "fertig" ? `<p>Die neue Recherche ersetzt den Vorschlag vom ${esc(fmtZeit(r.gestartet_am))}.</p>` : ""}
       <label for="rs-domains">Herstellerseite</label>
-      <input type="text" id="rs-domains" value="${esc(s.domains.join(", "))}" ${TASTATUR_ADRESSE} aria-describedby="rs-domains-hilfe">
+      <input type="text" id="rs-domains" value="${esc(s.domains.join(", "))}" ${TASTATUR_ADRESSE} aria-describedby="rs-domains-hilfe${(s.domains_aus_links || []).length ? " rs-domains-herkunft" : ""}">
       <div class="help" id="rs-domains-hilfe">Eine bis drei Domains, durch Komma getrennt, z. B. hersteller.de. Nur dort (und auf den Seiten der Links der Meldung) ruft Claude Seiten ab und lädt der Server Dateien.</div>
+      ${(s.domains_aus_links || []).length ? `<p class="help mat-recherche-herkunft" id="rs-domains-herkunft">Aus einem Link der Meldung: ${s.domains_aus_links.map((x) => `<span class="mat-ganz">${esc(x)}</span>`).join(", ")} – bitte prüfen, ob die Seite wirklich dem Hersteller gehört.</p>` : ""}
       ${s.fotos ? `<label class="inline"><input type="checkbox" id="rs-fotos"> ${esc(plural(s.fotos, "Foto", "Fotos"))} mitschicken</label>` : ""}
       ${s.bemerkung ? `<div class="mat-feldkopf">Bemerkung des Melders</div><p class="mat-text mat-recherche-bemerkung">${esc(s.bemerkung)}</p>
         <label class="inline"><input type="checkbox" id="rs-bemerkung"> Bemerkung mitschicken</label>` : ""}
-      <p class="help">${esc(s.datenschutz)}</p>
+      ${datenschutzHtml(s.datenschutz)}
       <p class="help">Kontingent: noch ${k.rest} von ${k.grenze} in diesem Monat.</p>
       ${grundSatz("rs-grund", grund)}
       <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button><button class="btn" id="rs-ok" type="button"${knopfAus("rs-grund", grund)}>Recherchieren</button></div>`,
@@ -8545,8 +8565,9 @@
     return teile.join(" / ");
   };
   function vorschlagWert(k, f, kats) {
+    // Leer: eine leere Zelle – die Tabelle zeigt dort „–“ (CSS), die Karte am Telefon blendet sie aus (V3).
     const w = f ? f.wert : null;
-    if (w === null || w === undefined || w === "") return '<span class="muted">–</span>';
+    if (w === null || w === undefined || w === "") return "";
     const text = k === "category_id" ? esc(katPfad(kats, w) || `Kategorie ${w}`) : k === "material_kind" ? esc(MATERIALART[w] || w)
       : k === "interval_months" ? esc(plural(+w, "Monat", "Monate")) : k === "lifetime_years" ? esc(plural(+w, "Jahr", "Jahre"))
         : `<span class="mat-text">${esc(w)}</span>`;
@@ -8578,8 +8599,8 @@
   function dateiZeile(m, f) {
     return `<tr><td data-l="Datei" class="mat-k-titel"><strong>${esc(f.titel)}</strong><div class="small muted">${dateiArt(f)}${f.sprache ? ` · ${esc(f.sprache)}` : ""}</div>
         <div class="small mat-vs-adresse">${fremdLink(f.url)}</div></td>
-      <td data-l="Version">${esc(f.version || "–")}</td><td data-l="Gültig ab">${esc(fmtTag(f.gueltig_ab) || "–")}</td>
-      <td data-l="Größe">${f.datei ? `${esc(groesse(f.groesse))}${f.seiten ? ` · ${esc(plural(f.seiten, "Seite", "Seiten"))}` : ""}` : "–"}</td>
+      <td data-l="Version">${esc(f.version || "")}</td><td data-l="Gültig ab">${esc(fmtTag(f.gueltig_ab) || "")}</td>
+      <td data-l="Größe">${f.datei ? `${esc(groesse(f.groesse))}${f.seiten ? ` · ${esc(plural(f.seiten, "Seite", "Seiten"))}` : ""}` : ""}</td>
       <td data-l="Herkunft">${dateiHerkunft(f)}</td><td data-l="Prüfung">${dateiPruefung(f)}</td>
       <td class="tabelle-aktionen">${f.datei ? `<a class="btn secondary small" href="${esc(rechercheDatei(m, f.n))}" target="_blank" rel="noopener" aria-label="${esc(`${f.titel} öffnen`)}">Öffnen</a>` : ""}</td></tr>`;
   }
@@ -8603,7 +8624,10 @@
         ${bild && bild.datei ? `<a class="mat-vs-bild" href="${esc(rechercheDatei(m, bild.n))}" target="_blank" rel="noopener"><img src="${esc(rechercheDatei(m, bild.n))}" alt="${esc(`Bild ${nr || `der Ausführung ${a.nr}`}`)}" loading="lazy"></a>` : ""}</div>
         ${vorschlagTabelle(["article_no", "description", ...je].filter((k) => a.felder[k]).map((k) => vorschlagZeile(k, a.felder[k], kats)).join(""))}</section>`;
     };
-    dialog(`<div class="mat-vorschlag"><h2>Vorschlag für „${esc(meldungName(m))}“</h2>
+    // V1: Nichts anlegbar an einer offenen Meldung – ein Satz mit dem Weg; V5: „Fehlendes nachladen“ nur, wenn etwas fehlt.
+    const nichts = r.status === "fertig" && m.status === "offen" && !anlegbar.length;
+    const fehlt = r.status === "uebernommen" && r.fehlt > 0;
+    dialog(`<div class="mat-vorschlag"><h2 tabindex="-1">Vorschlag für „${esc(meldungName(m))}“</h2>
       <p class="small muted">${rechercheVom(r)}${rechercheKosten(r)}${(e.domains || []).length ? ` · Herstellerseite ${esc(e.domains.join(", "))}` : ""}${mit ? ` · mit ${esc(mit)}` : ""}</p>
       ${r.status === "uebernommen" ? `<p>Übernommen: ${(r.produkte || []).length ? produktLinks(r.produkte) : '<span class="muted">Produkte inzwischen gelöscht</span>'}</p>` : ""}
       ${v.ausweichmodell ? `<p class="notice">Geantwortet hat auch das Ausweichmodell ${esc(v.ausweichmodell)} – die Kosten sind nur geschätzt.</p>` : ""}
@@ -8616,8 +8640,12 @@
         <tbody>${v.dateien.map((f) => dateiZeile(m, f)).join("")}</tbody></table>` : leer("Keine Dateien gefunden.")}
       ${v.hinweise.length ? `<h3>Hinweise</h3><ul class="mat-vs-liste">${v.hinweise.map((h) => `<li>${esc(h)}</li>`).join("")}</ul>` : ""}
       ${v.rueckfragen.length ? `<h3>Rückfragen an den Hersteller</h3><ul class="mat-vs-liste">${v.rueckfragen.map((h) => `<li>${esc(h)}</li>`).join("")}</ul>` : ""}
-      <div class="dlg-actions"><button class="btn secondary" data-close type="button">Schließen</button>${r.status === "uebernommen" ? '<button class="btn secondary" id="vs-nach" type="button">Fehlendes nachladen</button>' : ""}${geht ? `<button class="btn" id="vs-anlegen" type="button">${anlegbar.length === 1 ? "Produkt anlegen" : "Produkte anlegen"}</button>` : ""}</div></div>`,
+      ${nichts ? '<p class="notice">Alle Ausführungen stehen schon im Katalog – es gibt nichts anzulegen. Nutze „Vorhandenes zuordnen“ an der Meldung.</p>' : ""}
+      ${r.status === "uebernommen" ? `<p class="help">${fehlt ? `${esc(plural(r.fehlt, "gewählte Datei hängt", "gewählte Dateien hängen"))} noch nicht am Produkt.` : "Alle gewählten Dateien sind angehängt."}</p>` : ""}</div>
+      <div class="dlg-actions"><button class="btn secondary" data-close type="button">Schließen</button>${fehlt ? '<button class="btn secondary" id="vs-nach" type="button">Fehlendes nachladen</button>' : ""}${geht ? `<button class="btn" id="vs-anlegen" type="button">${anlegbar.length === 1 ? "Produkt anlegen" : "Produkte anlegen"}</button>` : ""}</div>`,
     (dlg, body) => {
+      // V9: Der Fokus beginnt an der Überschrift (vorher auf dem ersten Link der Tabelle).
+      $("h2", body).focus({ preventScroll: true });
       if ($("#vs-anlegen", body)) $("#vs-anlegen", body).onclick = () => uebernahmeDialog(m, r, kats, danach);
       if ($("#vs-nach", body)) $("#vs-nach", body).onclick = (ev) => nachladen(m, ev.currentTarget, body, danach);
     });
@@ -8633,10 +8661,11 @@
   // Je Feld das Eingabeelement wie im Produktdialog (Grenzen wie dort); attrs: weiteres Attribut-HTML.
   const AUSF_EINGABE = {
     material_kind: (id, w, attrs) => `<select id="${id}" data-feld="material_kind"${attrs}>${Object.entries(MATERIALART).map(([x, t]) => `<option value="${x}" ${w === x ? "selected" : ""}>${esc(t)}</option>`).join("")}</select>`,
-    norm: (id, w, attrs) => `<input type="text" id="${id}" data-feld="norm" maxlength="200" value="${esc(w || "")}" ${TASTATUR_NUMMER}${attrs}>`,
+    // Norm und Fundstelle zweizeilig (V8): Lange vorbelegte Werte stehen ganz da; Enter bricht nicht um (data-einzeilig).
+    norm: (id, w, attrs) => `<textarea id="${id}" data-feld="norm" rows="2" maxlength="200" data-einzeilig ${TASTATUR_NUMMER}${attrs}>${esc(w || "")}</textarea>`,
     interval_months: (id, w, attrs) => `<input type="number" id="${id}" data-feld="interval_months" min="1" max="120" value="${esc(w || "")}"${attrs}>`,
     lifetime_years: (id, w, attrs) => `<input type="number" id="${id}" data-feld="lifetime_years" min="1" max="50" value="${esc(w || "")}"${attrs}>`,
-    lifetime_source: (id, w, attrs) => `<input type="text" id="${id}" data-feld="lifetime_source" maxlength="300" value="${esc(w || "")}"${attrs}>`,
+    lifetime_source: (id, w, attrs) => `<textarea id="${id}" data-feld="lifetime_source" rows="2" maxlength="300" data-einzeilig${attrs}>${esc(w || "")}</textarea>`,
   };
   const AUSF_LABEL = { material_kind: "Materialart", norm: "Norm", interval_months: "Prüfintervall (Monate)", lifetime_years: "Lebensdauer (Jahre)",
                        lifetime_source: "Fundstelle der Lebensdauer" };
@@ -8675,7 +8704,8 @@
       }
       const grund = !f.anbieten ? f.fehler || (f.pruefung && f.pruefung.passt === "nein" ? `gehört nicht dazu: ${f.pruefung.begruendung || "ohne Begründung"}` : "nicht angeboten")
         : "gehört nur zu Ausführungen, die schon im Katalog stehen";
-      return `<p class="small mat-ue-nicht">${esc(f.titel)} <span class="muted">(${art})</span> – ${esc(grund)}${f.url ? ` · ${fremdLink(f.url, "Link")}` : ""}</p>`;
+      // Der Titel selbst ist der Link zur Quelle (V7: vorher dreimal „Link“).
+      return `<p class="small mat-ue-nicht">${f.url ? fremdLink(f.url, esc(f.titel)) : esc(f.titel)} <span class="muted">(${art})</span> – ${esc(grund)}</p>`;
     };
     const ausfuehrung = (a) => {
       const f = a.felder;
@@ -8693,34 +8723,52 @@
       const bild = a.bild ? v.dateien.find((x) => x.n === a.bild) : null;
       return `<fieldset class="mat-ue-ausf" data-nr="${a.nr}"><legend>Ausführung ${a.nr}</legend>
         <label class="inline mat-ue-an"><input type="checkbox" class="ue-an" ${vorgewaehlt.has(a.nr) ? "checked" : ""}> anlegen</label>
-        <div class="field-row"><div><label for="${id("art")}">Artikelnummer des Herstellers</label><input type="text" id="${id("art")}" class="ue-art" maxlength="80" value="${esc(wert(f.article_no) || "")}" ${TASTATUR_NUMMER}${zu("article_no")}>${hilfe("article_no")}<div class="help" id="${id("art")}-hilfe"></div></div>
+        <div class="mat-ue-felder"><div class="field-row"><div><label for="${id("art")}">Artikelnummer des Herstellers</label><input type="text" id="${id("art")}" class="ue-art" maxlength="80" value="${esc(wert(f.article_no) || "")}" ${TASTATUR_NUMMER}${zu("article_no")}>${hilfe("article_no")}<div class="help" id="${id("art")}-hilfe"></div></div>
           <div><label for="${id("desc")}">Bemerkung</label><input type="text" id="${id("desc")}" class="ue-desc" maxlength="${BESCHREIBUNG_MAX}" value="${esc(wert(f.description) || "")}" ${TASTATUR_NAME}${zu("description")}>${hilfe("description")}</div></div>
         ${reihen.join("")}
         ${bild && bild.anbieten ? `<label class="inline mat-ue-bild"><input type="checkbox" class="ue-bild" ${bild.vorgewaehlt ? "checked" : ""}> Bild übernehmen <img src="${esc(rechercheDatei(m, bild.n))}" alt="" loading="lazy"></label>` : ""}
-        <p class="error mat-ue-fehler" role="alert" hidden></p></fieldset>`;
+        <p class="error mat-ue-fehler" role="alert" hidden></p></div></fieldset>`;
     };
     const titel = anlegbar.length === 1 ? "Produkt aus der Recherche anlegen" : "Produkte aus der Recherche anlegen";
-    dialog(`<div class="mat-vorschlag"><h2>${titel}</h2>
+    dialog(`<div class="mat-vorschlag"><h2 tabindex="-1">${titel}</h2>
       <p class="help">Für „${esc(meldungName(m))}“. Vorbelegt ist nur, was die Recherche belegt hat – prüfe jedes Feld; die Fundstelle steht darunter.</p>
       <h3>Gemeinsam</h3>
-      ${produktFelderHtml(p, kats, { ohne: ["article_no", "description", ...je], quelle })}
+      ${produktFelderHtml(p, kats, { ohne: ["article_no", "description", ...je], quelle, mehrzeilig: true })}
       <h3>Ausführungen</h3>
       ${v.ausfuehrungen.map(ausfuehrung).join("")}
       <fieldset class="mat-variante-doks mat-ue-dateien"><legend>Dateien aus der Recherche</legend>
         ${dokumente.length ? dokumente.map(dateiWahl).join("") : '<p class="help">Die Recherche hat keine Dokumente gefunden.</p>'}</fieldset>
       <label for="ue-antwort">Anmerkung für den Melder (optional, steht in seiner Mail)</label><textarea id="ue-antwort" rows="2" maxlength="1000"></textarea>
-      ${grundSatz("ue-grund", vorgewaehlt.size ? "" : "Wähle mindestens eine Ausführung.")}
-      <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button><button class="btn" id="ue-ok" type="button"${knopfAus("ue-grund", vorgewaehlt.size ? "" : "Wähle mindestens eine Ausführung.")}>Anlegen</button></div></div>`,
+      ${grundSatz("ue-grund", vorgewaehlt.size ? "" : "Wähle mindestens eine Ausführung.")}</div>
+      <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button><button class="btn" id="ue-ok" type="button"${knopfAus("ue-grund", vorgewaehlt.size ? "" : "Wähle mindestens eine Ausführung.")}>Anlegen</button></div>`,
     (dlg, body) => {
       const felder = produktFelderVerdrahten(body, kats, { neu: true });
       const knopf = $("#ue-ok", body);
       const kasten = $$(".mat-ue-ausf:not(.nicht)", body);
-      // Abgewählt: die Felder der Ausführung ruhen (ausgegraut), und ohne gewählte Ausführung ist „Anlegen“ aus.
+      // B1: Der Inhalt des offenen Dialogs wurde ersetzt (der gedrückte Knopf ist weg) – der Fokus gehört in den Dialog.
+      $("h2", body).focus({ preventScroll: true });
+      $$("textarea[data-einzeilig]", body).forEach((t) => t.addEventListener("keydown", (e) => { if (e.key === "Enter") e.preventDefault(); }));
+      // V9: Esc fragt nach, wenn schon etwas geändert ist – nur solange dieser Inhalt im Dialog steht.
+      let geaendert = false;
+      body.addEventListener("input", () => { geaendert = true; });
+      body.addEventListener("change", () => { geaendert = true; });
+      const escFrage = (e) => {
+        if (!body.contains(knopf)) { dlg.removeEventListener("cancel", escFrage); return; }
+        if (!geaendert) return;
+        e.preventDefault();
+        confirm("Eingaben verwerfen? Die Produkte werden dann nicht angelegt.", "Verwerfen", "Weiter bearbeiten", { endgueltig: false })
+          .then((ja) => { if (ja) dlg.close(); });
+      };
+      dlg.addEventListener("cancel", escFrage);
+      dlg.addEventListener("close", () => dlg.removeEventListener("cancel", escFrage), { once: true });
+      // Abgewählt: die Felder der Ausführung ruhen (ausgegraut und inert – auch ihre Links), und ohne gewählte
+      // Ausführung ist „Anlegen“ aus.
       const wahl = () => {
         kasten.forEach((fs) => {
           const an = $(".ue-an", fs).checked;
           fs.classList.toggle("aus", !an);
-          $$("input:not(.ue-an), select", fs).forEach((el) => { el.disabled = !an; });
+          $(".mat-ue-felder", fs).inert = !an;
+          $$("input:not(.ue-an), select, textarea", fs).forEach((el) => { el.disabled = !an; });
         });
         knopfGrund(knopf, kasten.some((fs) => $(".ue-an", fs).checked) ? "" : "Wähle mindestens eine Ausführung.");
       };
@@ -8757,9 +8805,16 @@
           const fs = t && $(`.mat-ue-ausf[data-nr="${t[1]}"]`, body);
           if (fs) {
             knopf.disabled = false;
-            const el = $(".mat-ue-fehler", fs);
-            if (el) { el.textContent = e.message; el.hidden = false; } else toast(e.message, true);
-            fs.scrollIntoView({ block: "nearest" });
+            // B2: Betrifft der Fehler die Artikelnummer (schon im Katalog, vergeben), steht er am Feld – aria-invalid,
+            // Satz darunter, Fokus; sonst als Satz in der Ausführung, der Fokus auf ihre Artikelnummer.
+            const art = $(".ue-art", fs);
+            if (art && /Artikelnummer|im Katalog|vergeben/i.test(e.message)) S.feldFehler(art, e.message);
+            else {
+              const el = $(".mat-ue-fehler", fs);
+              el.textContent = e.message; el.hidden = false;
+              fs.scrollIntoView({ block: "nearest" });
+              if (art) art.focus({ preventScroll: true });
+            }
           } else S.fehlschlag(knopf, e, body);
           if (e.status === 409 && /erledigt|zwischenzeitlich/.test(e.message)) await danach();
         }
@@ -8773,9 +8828,14 @@
     const produkt = (pid) => res.produkte.find((x) => x.id === pid);
     dialog(`<h2>Nicht alle Dateien angehängt</h2>
       <p>Angelegt: ${produktLinks(res.produkte)}. ${a.angehaengt ? `${esc(plural(a.angehaengt, "Datei", "Dateien"))} angehängt` : "Keine Datei angehängt"}${a.uebersprungen ? `, ${esc(plural(a.uebersprungen, "war", "waren"))} schon da` : ""}. Es fehlen:</p>
-      <ul class="mat-vs-liste">${a.fehler.map((f) => { const p = produkt(f.product_id); return `<li><strong>${esc(f.titel || "Datei")}</strong>${p ? ` an ${nameHtml(p)}${zusatzHtml(p)}${artNrKurz(p.article_no)}` : ""}: ${esc(f.fehler)}${f.url ? ` · ${fremdLink(f.url, "Link")}` : ""}</li>`; }).join("")}</ul>
-      <div class="dlg-actions"><button class="btn secondary" data-close type="button">Schließen</button><button class="btn secondary" id="ue-nach" type="button">Fehlendes nachladen</button></div>`,
-    (dlg, body) => { $("#ue-nach", body).onclick = (ev) => nachladen(m, ev.currentTarget, body, danach); });
+      <ul class="mat-vs-liste">${a.fehler.map((f) => { const p = produkt(f.product_id); const titel = `<strong>${esc(f.titel || "Datei")}</strong>`; return `<li>${f.url ? fremdLink(f.url, titel) : titel}${p ? ` an ${nameHtml(p)}${zusatzHtml(p)}${artNrKurz(p.article_no)}` : ""}: ${esc(f.fehler)}</li>`; }).join("")}</ul>
+      <div class="dlg-actions"><button class="btn secondary" data-close type="button">Schließen</button><button class="btn" id="ue-nach" type="button">Fehlendes nachladen</button></div>`,
+    (dlg, body) => {
+      // V5: „Fehlendes nachladen“ ist hier die Hauptaktion; B1: der Fokus steht auf ihr (der Dialog ersetzte den vorigen).
+      const nach = $("#ue-nach", body);
+      nach.onclick = (ev) => nachladen(m, ev.currentTarget, body, danach);
+      nach.focus();
+    });
   }
   async function nachladen(m, knopf, body, danach) {
     knopf.disabled = true;

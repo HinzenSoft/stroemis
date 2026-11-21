@@ -1,7 +1,9 @@
 """Routen der Recherche per Claude API an einer Produktmeldung (services/recherche.py, app/ki.py; 21.11.2026).
 
-Alles nur für die Material-Verwaltung (B1 A, B2 A – katalog_required); ohne ANTHROPIC_API_KEY antworten alle mit 503
-und GET /meldungen nennt keine Recherche. Unbekannte Meldungen: 404 wie überall. Die Dateien eines Vorschlags liefert
+Alles nur für die Material-Verwaltung (B1 A, B2 A – katalog_required). Ohne ANTHROPIC_API_KEY antworten nur Start und
+Abbrechen mit 503 – was schon da ist (Stand, Vorschlag, Dateien, Übernahme, Nachladen), braucht keinen Aufruf der API
+und bleibt erreichbar (Browserprüfung vom 21.11.2026, V2); GET /meldungen trägt dann „recherche“, aber kein
+„recherche_moeglich“ (kein Knopf „Recherchieren lassen“). Unbekannte Meldungen: 404 wie überall. Die Dateien eines Vorschlags liefert
 eine eigene Route aus (die Medienroute kennt nur Dateien mit Dokumentzeile) – mit denselben Kopfzeilen wie ein
 Herstellerdokument (strenge CSP mit sandbox, nosniff, nie in einem gemeinsamen Zwischenspeicher).
 
@@ -27,7 +29,8 @@ NICHT_EINGERICHTET = "Die Recherche per Claude API ist nicht eingerichtet (kein 
 
 
 def _verfuegbar(f):
-    """503 ohne Schlüssel – nach der Rechteprüfung (katalog_required steht außen), damit niemand sonst etwas erfährt."""
+    """503 ohne Schlüssel – nach der Rechteprüfung (katalog_required steht außen), damit niemand sonst etwas erfährt.
+    Nur an Start und Abbrechen: Nur sie hätten mit der API zu tun."""
     @wraps(f)
     def wrapper(*a, **kw):
         if not ki.verfuegbar():
@@ -47,7 +50,6 @@ def recherche_starten(mid):
 
 @api.get("/meldungen/<int:mid>/recherche")
 @katalog_required
-@_verfuegbar
 def recherche_lesen(mid):
     return jsonify(recherche.lesen(mid))
 
@@ -63,7 +65,6 @@ def recherche_abbrechen(mid):
 
 @api.get("/meldungen/<int:mid>/recherche/dateien/<int:n>")
 @katalog_required
-@_verfuegbar
 def recherche_datei(mid, n):
     ordner, name, mime = recherche.datei(mid, n)
     resp = send_from_directory(ordner, name, mimetype=mime, as_attachment=False, download_name=name, max_age=0)
@@ -77,7 +78,6 @@ def recherche_datei(mid, n):
 
 @api.post("/meldungen/<int:mid>/recherche/uebernehmen")
 @katalog_required
-@_verfuegbar
 def recherche_uebernehmen(mid):
     """Legt die gewählten Ausführungen als Produkte an und erledigt die Meldung (201); schon übernommen: hängt nur
     fehlende Dateien an (200)."""
@@ -87,6 +87,5 @@ def recherche_uebernehmen(mid):
 
 @api.post("/meldungen/<int:mid>/recherche/nachladen")
 @katalog_required
-@_verfuegbar
 def recherche_nachladen(mid):
     return jsonify(recherche.nachladen(mid))

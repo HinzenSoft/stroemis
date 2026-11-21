@@ -362,7 +362,7 @@ def test_gespraech():
             for antwort, teil in ((nachricht([], stop="refusal", stop_details={"type": "refusal", "category": "cyber"}),
                                    "Kategorie: cyber"),
                                   (nachricht([], stop="refusal"), "ohne Angabe"),
-                                  (nachricht([text("abgeschnitten")], stop="max_tokens"), "max_tokens")):
+                                  (nachricht([text("abgeschnitten")], stop="max_tokens"), "zu lang und ist abgeschnitten")):
                 a = Attrappe([antwort])
                 alt = einsetzen(a)
                 try:

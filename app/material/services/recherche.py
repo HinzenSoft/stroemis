@@ -73,10 +73,13 @@ NICHT_SICHER = "Dokument nicht sicher zugeordnet"
 NICHT_ABGERUFEN = "Seite im Gespräch nicht abgerufen"
 NACHFRAGE = ("Bitte gib das Ergebnis jetzt mit dem Werkzeug ergebnis_abgeben ab – auch wenn wenig belegt ist (dann "
              "Werte null mit Beleg-Art nicht_belegt und ein Hinweis).")
-AN_ANTHROPIC = ("An Anthropic (Claude API) gehen Hersteller, Modell, Artikelnummer, Norm und Kategorie-Vorschlag der "
-                "Meldung, ihre Links (ohne Abfrageteil), die Herstellerseiten, die Kategorien des Katalogs und die "
-                "Produkte dieses Herstellers im Katalog – mit Häkchen auch die Fotos (ohne Metadaten) und die "
-                "Bemerkung. Nie: Namen, E-Mail-Adressen, Ordner, Gliederung.")
+# Was an Anthropic geht – der Startdialog zeigt es als kurze Liste (Browserprüfung vom 21.11.2026, V7).
+AN_ANTHROPIC = {"titel": "An Anthropic (Claude API) gehen:",
+                "gesendet": ["Hersteller, Modell, Artikelnummer, Norm und Kategorie-Vorschlag der Meldung",
+                             "ihre Links (ohne Abfrageteil) und die Herstellerseiten",
+                             "die Kategorien des Katalogs und die Produkte dieses Herstellers im Katalog",
+                             "mit Häkchen: die Fotos (ohne Metadaten) und die Bemerkung"],
+                "nie": "Nie: Namen, E-Mail-Adressen, Ordner, Gliederung."}
 
 
 def bezug(mid):
@@ -1334,7 +1337,26 @@ def status_json(z, voll=False):
         out["uebernahme"] = erg.get("uebernahme")
         if out["vorschlag"] and z["status"] == "fertig":
             _katalog_jetzt(out["vorschlag"])
+        if out["vorschlag"] and out["uebernahme"]:
+            out["fehlt"] = fehlend(out["uebernahme"], out["vorschlag"])
     return out
+
+
+def fehlend(ue, v):
+    """Wie viele der bei der Übernahme gewählten Dateien noch nicht am Produkt hängen (gleiche SHA-256 und Art, Bild
+    gesetzt) – nur an Produkten, die es noch gibt. Danach richtet sich „Fehlendes nachladen“ (V5)."""
+    je_n = {f["n"]: f for f in v.get("dateien", [])}
+    n = 0
+    for e in ue.get("produkte", []):
+        p = db.query("SELECT id, image FROM mat_product WHERE id = ? AND created_at <= ?",
+                     (e["product_id"], ue.get("am") or "9999"), one=True)
+        if not p:
+            continue
+        da = {(r["sha256"], r["kind"]) for r in db.query(
+            "SELECT sha256, kind FROM mat_product_document WHERE product_id = ?", (p["id"],))}
+        n += sum(1 for x in e["dateien"] if x in je_n and (je_n[x].get("sha256"), je_n[x]["art"]) not in da)
+        n += 1 if e.get("bild") and not p["image"] else 0
+    return n
 
 
 def _katalog_jetzt(v):
@@ -1353,7 +1375,9 @@ def moeglich():
     da = ki.laufend(ART)
     grund = laeuft_text(da) if da else ("" if k["rest"] else
                                       f"Kontingent für {k['monat']} aufgebraucht ({k['verbraucht']} von {k['grenze']}).")
-    return dict(k, an=not grund, grund=grund)
+    if not ki.verfuegbar():
+        grund = "Die Recherche per Claude API ist nicht eingerichtet (kein API-Schlüssel)."
+    return dict(k, an=not grund, grund=grund, eingerichtet=ki.verfuegbar())
 
 
 def je_meldung(mids):
@@ -1372,7 +1396,7 @@ def lesen(mid):
     m = meldung_dienst.meldung(mid)
     ki.tote_aufraeumen()
     return {"recherche": status_json(_lauf(mid), voll=True), "moeglich": moeglich(),
-            "start": startdaten(m) if m["status"] == "offen" else None}
+            "start": startdaten(m) if m["status"] == "offen" and ki.verfuegbar() else None}
 
 
 def abbrechen(mid):

@@ -715,8 +715,9 @@ def meldungen():
     die Material-Verwaltung alle, sonst die eigenen und die aus Ordnern, die er sieht; „offen“ zählt ebenso.
     Standard: Material-Verwaltung und Lesende (Führungskraft) sehen alle davon (offene zuerst), Materialwarte ihre
     eigenen (alle Stände); „eigene=1“ bzw. „eigene=0“ wählt ausdrücklich. Abarbeiten („bearbeiten“) darf nur die
-    Material-Verwaltung. Nur für sie und nur mit API-Schlüssel (routes_recherche.py) trägt jede Meldung „recherche“ (der
-    jüngste Lauf, kurz, oder null) und die Antwort „recherche_moeglich“ (Kontingent, Grund) – sonst fehlen beide."""
+    Material-Verwaltung. Nur für sie trägt jede Meldung „recherche“ (der jüngste Lauf, kurz, oder null) und – nur mit
+    API-Schlüssel (routes_recherche.py) – die Antwort „recherche_moeglich“ (Kontingent, Grund); ohne Schlüssel bleiben
+    vorhandene Läufe lesbar, nur der Start fehlt."""
     u = current_user()
     if not u:
         return jsonify(error="Nicht angemeldet"), 401
@@ -731,12 +732,13 @@ def meldungen():
     liste = [meldung.meldung_json(r) for r in rows]
     bearbeiten = alle and ist_material_verwaltung()
     extra = {}
-    if bearbeiten and ki.verfuegbar():
+    if bearbeiten:
         ki.tote_aufraeumen()
         laeufe = recherche.je_meldung([r["id"] for r in rows])
         for m in liste:
             m["recherche"] = laeufe.get(m["id"])
-        extra["recherche_moeglich"] = recherche.moeglich()
+        if ki.verfuegbar():
+            extra["recherche_moeglich"] = recherche.moeglich()
     return jsonify(meldungen=liste, alle=alle, filter=filter_, bearbeiten=bearbeiten,
                    offen=meldung.anzahl_offen() if alle else None, **extra)
 

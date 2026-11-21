@@ -674,7 +674,8 @@ class Lauf:
                 kat = getattr(details, "category", None)
                 raise LaufFehler(f"Claude hat die Anfrage abgelehnt (Kategorie: {kat or 'ohne Angabe'}).")
             if grund == "max_tokens":
-                raise LaufFehler("Die Antwort wurde zu lang und ist abgeschnitten (max_tokens).")
+                log.warning("KI-Lauf %s: Antwort abgeschnitten (max_tokens)", self.id)
+                raise LaufFehler("Die Antwort wurde zu lang und ist abgeschnitten – bitte erneut versuchen.")
             zurueck, gueltig = _nach_ausweichen(msg.content)
             anfrage["messages"].append({"role": "assistant", "content": zurueck})
             if grund == "pause_turn":

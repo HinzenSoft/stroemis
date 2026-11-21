@@ -21,6 +21,12 @@ ab, bleibt das Konto samt allem stehen:
   Set-Prüfungen      (bis Schritt 26, nur noch beendete): Name des Eröffners bleibt (Prüfnachweis, per Trigger
                      unveränderlich); die Kennung setzt die Datenbank auf NULL
   Produktmeldungen   Name des Melders und des Bearbeiters „(gelöschtes Konto)“
+  KI-Läufe           (Recherche per Claude API an Produktmeldungen, ki_laeufe – app/ki.konto_loeschen, aufgerufen von
+                     api_admin.delete_user) Name dessen, der gestartet hat, „(gelöschtes Konto)“, die Kennung setzt die
+                     Datenbank auf NULL; endet ein laufender Lauf danach, steht „Recherche beendet“ ohne Kennung im
+                     Journal. Unabhängig vom Konto: Löscht der Melder die Meldung, werden Eingabe und Vorschlag geleert
+                     und die Dateien entfernt (die Zeile bleibt fürs Kontingent); die Dateien eines übernommenen
+                     Vorschlags gehen 30 Tage nach dem Erledigen (Tageslauf)
   Bestandsimporte    Name dessen, der importiert hat (mat_import), und dessen, der eine Zeile der Nacharbeit erledigt
                      hat (mat_import_row), „(gelöschtes Konto)“ – Arbeitsdaten; der Nachweis steht im Journal
   Suchprotokoll      Name „(gelöschtes Konto)“ (nach zwölf Monaten ohnehin weg)

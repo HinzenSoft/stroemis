@@ -401,6 +401,19 @@ def test_uebernahme_robust():
                 ki.CLIENT = alt
             v = kat.get(f"/api/material/meldungen/{mid}/recherche").json["recherche"]["vorschlag"]
             assert not v["ausfuehrungen"][2]["anlegbar"]
+            # V2: Ohne Schlüssel bleiben Vorschlag, Dateien und Statuszeile lesbar; nur der Start fehlt.
+            os.environ.pop("ANTHROPIC_API_KEY")
+            try:
+                r = kat.get(f"/api/material/meldungen/{mid}/recherche")
+                assert r.status_code == 200 and r.json["recherche"]["vorschlag"] and r.json["start"] is None, r.json
+                assert kat.get(f"/api/material/meldungen/{mid}/recherche/dateien/1").status_code == 200
+                liste = kat.get("/api/material/meldungen").json
+                assert "recherche_moeglich" not in liste \
+                    and next(x for x in liste["meldungen"] if x["id"] == mid)["recherche"]["status"] == "fertig"
+                assert kat.post(f"/api/material/meldungen/{mid}/recherche", headers=H,
+                                json={"domains": ["hersteller.test"]}).status_code == 503
+            finally:
+                os.environ["ANTHROPIC_API_KEY"] = SCHLUESSEL
             assert kat.delete(f"/api/material/produkte/{pr9}", headers=H).status_code == 200
             v = kat.get(f"/api/material/meldungen/{mid}/recherche").json["recherche"]["vorschlag"]
             assert v["ausfuehrungen"][2]["anlegbar"] and v["ausfuehrungen"][2]["im_katalog"] is None, v["ausfuehrungen"][2]
@@ -417,6 +430,7 @@ def test_uebernahme_robust():
                                                     {"nr": 1, "article_no": "PR-1", "dateien": [n_anl, n_erkl]}]})
             assert r.status_code == 201 and len(r.json["anhaengen"]["fehler"]) == 2, r.get_json()          # A3
             produkte = {p["article_no"]: p["id"] for p in r.json["produkte"]}
+            assert kat.get(f"/api/material/meldungen/{mid}/recherche").json["recherche"]["fehlt"] == 2       # V5
             os.rename(pfad_erkl + ".beiseite", pfad_erkl)
             # S4: zwei gleichzeitige „Nachladen“ – das Fenster zwischen „schon da?“ und dem Einfügen gedehnt.
             original = katalog._datei_schreiben
@@ -448,6 +462,7 @@ def test_uebernahme_robust():
                     arten = [d["kind"] for d in db.query("SELECT kind FROM mat_product_document WHERE product_id = ? "
                                                          "ORDER BY kind", (pid,))]
                     assert arten == ["gebrauchsanleitung", "konformitaetserklaerung"], (pid, arten)
+            assert kat.get(f"/api/material/meldungen/{mid}/recherche").json["recherche"]["fehlt"] == 0
             # O1: PR-1 löschen, ein neues Produkt bekommt dieselbe Kennung (SQLite ohne AUTOINCREMENT).
             pid1 = produkte["PR-1"]
             with app.app_context():
